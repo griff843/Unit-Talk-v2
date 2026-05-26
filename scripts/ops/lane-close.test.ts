@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   ensureCloseoutMergeLock,
   mapFailuresToCode,
+  repairMergedLaneManifest,
   releaseCloseoutLocks,
   remediationForCode,
   requireCloseCommitSha,
@@ -51,6 +52,24 @@ function withTempCloseoutState(
     run({
       leaseRegistryDir: path.join(dir, 'leases'),
       mergeLockPath: path.join(dir, 'merge-lock.json'),
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function withTempRepairState(
+  run: (paths: { repoRoot: string; artifactRoot: string; tokenPath: string }) => void,
+): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-lane-repair-'));
+  try {
+    const tokenPath = path.join(dir, '.out', 'ops', 'preflight', 'codex', 'utv2-1001.json');
+    fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+    fs.writeFileSync(tokenPath, '{}\n');
+    run({
+      repoRoot: dir,
+      artifactRoot: path.join(dir, '.out', 'ops', 'lane-close-repair'),
+      tokenPath: '.out/ops/preflight/codex/utv2-1001.json',
     });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -272,6 +291,104 @@ test('lane close uses an existing matching merge lock even with acquire requeste
   });
 });
 
+test('repair merged lane replaces stale SHA with authoritative PR merge SHA', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const result = repairMergedLaneManifest(
+      createManifest({
+        status: 'merged',
+        commit_sha: 'stale-sha',
+        preflight_token: tokenPath,
+      }),
+      {
+        repoRoot,
+        artifactRoot,
+        now: new Date('2026-05-26T04:00:00.000Z'),
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'authoritative-sha',
+        }),
+      },
+    );
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.manifest.status, 'merged');
+    assert.strictEqual(result.manifest.commit_sha, 'authoritative-sha');
+    assert.ok(result.changed_fields.includes('commit_sha'));
+    assert.ok(result.artifact_path);
+    assert.ok(fs.existsSync(result.artifact_path ?? ''));
+  });
+});
+
+test('repair merged lane emits repair artifact and safe token when preflight token is missing', () => {
+  withTempRepairState(({ repoRoot, artifactRoot }) => {
+    const result = repairMergedLaneManifest(
+      createManifest({
+        status: 'in_review',
+        commit_sha: null,
+        preflight_token: '.out/ops/preflight/codex/missing-token.json',
+      }),
+      {
+        repoRoot,
+        artifactRoot,
+        now: new Date('2026-05-26T04:05:00.000Z'),
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'merged-sha',
+        }),
+      },
+    );
+    const artifact = JSON.parse(fs.readFileSync(result.artifact_path ?? '', 'utf8')) as {
+      preflight_repair?: string;
+      next?: { preflight_token?: string };
+    };
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.manifest.status, 'merged');
+    assert.strictEqual(result.manifest.commit_sha, 'merged-sha');
+    assert.strictEqual(result.manifest.preflight_token, 'dispatch-auto');
+    assert.ok(result.changed_fields.includes('preflight_token'));
+    assert.match(artifact.preflight_repair ?? '', /preflight token repaired/);
+    assert.strictEqual(artifact.next?.preflight_token, 'dispatch-auto');
+  });
+});
+
+test('repair merged lane no-ops already done lanes', () => {
+  const manifest = createManifest({ status: 'done', commit_sha: null });
+  const result = repairMergedLaneManifest(manifest, {
+    fetchPr: () => {
+      throw new Error('fetch should not be called for done lanes');
+    },
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'already_closed');
+  assert.strictEqual(result.outcome, 'already_closed');
+  assert.strictEqual(result.manifest, manifest);
+  assert.deepStrictEqual(result.changed_fields, []);
+});
+
+test('repair merged lane refuses unmerged PRs without changing manifest', () => {
+  const manifest = createManifest({ status: 'in_review', commit_sha: null });
+  const result = repairMergedLaneManifest(manifest, {
+    fetchPr: () => ({
+      url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+      state: 'open',
+      merged: false,
+      mergeSha: null,
+    }),
+  });
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'pr_not_merged');
+  assert.strictEqual(result.outcome, 'blocked');
+  assert.strictEqual(result.manifest, manifest);
+  assert.deepStrictEqual(result.changed_fields, []);
+});
+
 test('lane close acquire request does not override another held merge lock', () => {
   withTempCloseoutState(({ mergeLockPath }) => {
     acquireMergeLock(
@@ -469,3 +586,17 @@ for (const code of allFailureCodes) {
     );
   });
 }
+
+test('post-merge lane close workflow delegates to repair-merged lane closeout', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+
+  assert.match(workflow, /pnpm ops:lane-close "\$ISSUE_ID" --repair-merged --explain/);
+  assert.match(workflow, /Bind proof artifacts to merge SHA/);
+  assert.match(workflow, /git add docs\/06_status\/proof\/"\$ISSUE_ID"\//);
+  assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID"/);
+  assert.doesNotMatch(workflow, /manifest\.status = 'done'/);
+  assert.match(workflow, /git add "\$MANIFEST_PATH"/);
+});

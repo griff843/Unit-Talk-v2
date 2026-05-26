@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
-import { evaluateBranchDiscipline, evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
+import {
+  evaluateBranchDiscipline,
+  evaluateIssueReferences,
+  extractIssueIds,
+  normalizeProofOutputForIssueBinding,
+} from './branch-discipline-guard.js';
 import { ROOT } from './shared.js';
 
 type WorkflowDocument = Record<string, unknown>;
@@ -17,6 +22,10 @@ function readWorkflowYaml(name: string): WorkflowDocument {
   const parsed = parseYaml(readWorkflow(name)) as unknown;
   assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed), `${name} must parse as a YAML object`);
   return parsed as WorkflowDocument;
+}
+
+function readClaudeCommand(name: string): string {
+  return fs.readFileSync(path.join(ROOT, '.claude', 'commands', name), 'utf8');
 }
 
 function objectField(input: WorkflowDocument, key: string): WorkflowDocument {
@@ -147,6 +156,69 @@ test('branch discipline accepts a single matching branch issue reference', () =>
   assert.deepStrictEqual(result.issue_ids, ['UTV2-123']);
 });
 
+test('branch discipline ignores historical issue ids in fenced proof output', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix(ops): UTV2-1172 branch discipline proof handling',
+    branch: 'codex/utv2-1172-proof-aware-branch-discipline',
+    body: [
+      '## Summary',
+      'Fixes proof parsing for UTV2-1172.',
+      '',
+      '## Verification',
+      '```text',
+      'TAP version 13',
+      'ok 1 UTV2-866 live DB proof output',
+      '# tests 1',
+      '```',
+    ].join('\n'),
+    commits: 'fix(ops): UTV2-1172 proof-aware branch discipline',
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'single_issue_reference');
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-1172']);
+});
+
+test('branch discipline ignores marked proof sections and TAP lines', () => {
+  const body = [
+    '## Summary',
+    'Only UTV2-1172 is prose.',
+    '',
+    '## Live-DB proof',
+    '[proof] UTV2-866 legacy closeout fixture',
+    'not ok 2 UTV2-901 historical fixture',
+    '# fail 1',
+    '',
+    '## Merge order',
+    'No overlapping files.',
+  ].join('\n');
+
+  assert.doesNotMatch(normalizeProofOutputForIssueBinding(body), /UTV2-866|UTV2-901/);
+
+  const result = evaluateBranchDiscipline({
+    title: 'fix(ops): UTV2-1172 branch discipline proof handling',
+    branch: 'codex/utv2-1172-proof-aware-branch-discipline',
+    body,
+    commits: 'fix(ops): UTV2-1172 proof-aware branch discipline',
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-1172']);
+});
+
+test('branch discipline still fails mismatched prose issue references', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix(ops): UTV2-1172 branch discipline proof handling',
+    branch: 'codex/utv2-1172-proof-aware-branch-discipline',
+    body: 'This also changes UTV2-999 in normal prose.',
+    commits: 'fix(ops): UTV2-1172 proof-aware branch discipline',
+  });
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'multiple_issue_references');
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-1172', 'UTV2-999']);
+});
+
 test('session start state cache writes only to ignored local output', () => {
   const hook = fs.readFileSync(path.join(ROOT, '.claude', 'hooks', 'session-start.sh'), 'utf8');
 
@@ -257,4 +329,95 @@ test('CI avoids duplicate verify jobs for codex PR branches', () => {
   assert.ok(on.pull_request !== undefined, 'CI must still run for pull requests');
   assert.match(stringField(concurrency, 'group'), /pull_request\.number/);
   assert.strictEqual(concurrency['cancel-in-progress'], true);
+});
+
+test('loop-dispatch requires live governor commands before every cycle', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+
+  const phase0 = command.slice(command.indexOf('## Phase 0:'), command.indexOf('## Phase 1:'));
+  const cycleStart = command.slice(command.indexOf('### Cycle start'), command.indexOf('### After each cycle'));
+
+  for (const required of [
+    'pnpm ops:merge-risk',
+    'pnpm ops:execution-state',
+    'pnpm ops:lane-maximizer',
+    'pnpm ops:orchestration-reconcile --current --json',
+  ]) {
+    assert.match(phase0, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(cycleStart, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.match(command, /hard fail or block/i);
+  assert.doesNotMatch(command, /codex-health-check\.ts/);
+  assert.doesNotMatch(command, /Run `pnpm ops:reconcile`/);
+});
+
+test('loop-dispatch bookends cycles with reconciliation and repair command reporting', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+  const cycleEnd = command.slice(command.indexOf('### Cycle-end reconciliation'), command.indexOf('### Cycle limit'));
+
+  assert.match(cycleEnd, /pnpm ops:orchestration-reconcile --current --json/);
+  assert.match(cycleEnd, /Repair command: \{first repair_plan action command \| none available\}/);
+  assert.match(command, /Start and end every cycle with `ops:orchestration-reconcile --current --json`/);
+});
+
+test('loop-dispatch summary exposes live executor state and recommendations', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+  const summary = command.slice(command.indexOf('LOOP-DISPATCH — SESSION COMPLETE'), command.indexOf('## --dry-run behavior'));
+
+  assert.match(summary, /Active lanes:\s+Claude \{N\}, Codex \{N\}, Unknown \{N\}/);
+  assert.match(summary, /Available slots:\s+Claude \{N\}, Codex \{N\}/);
+  assert.match(summary, /Blocked lanes:\s+\{issue IDs or none\}/);
+  assert.match(summary, /CI\/PM waiting:\s+\{PR numbers and reason or none\}/);
+  assert.match(summary, /Recommendations:\s+\{execution-state and lane-maximizer next recommendations\}/);
+});
+
+test('loop-dispatch delegates executor limits to concurrency config', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+
+  assert.match(command, /docs\/governance\/CONCURRENCY_CONFIG\.json/);
+  assert.match(command, /CONCURRENCY_CONFIG\.json owns lane limits/);
+  assert.doesNotMatch(command, /Claude slots at cap \(2\/2\)/);
+  assert.doesNotMatch(command, /max 2 Claude/);
+  assert.doesNotMatch(command, /max 4 Codex/);
+});
+
+test('dispatch surfaces share live governor and reconciliation gates', () => {
+  for (const name of ['dispatch.md', 'dispatch-board.md', 'loop-dispatch.md']) {
+    const command = readClaudeCommand(name);
+
+    for (const required of [
+      'pnpm ops:merge-risk',
+      'pnpm ops:execution-state',
+      'pnpm ops:lane-maximizer',
+      'pnpm ops:orchestration-reconcile --current --json',
+    ]) {
+      assert.match(command, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${name} missing ${required}`);
+    }
+
+    assert.match(command, /Repair command: \{first repair_plan action command \| none available\}/, `${name} must surface one repair command`);
+  }
+});
+
+test('dispatch surfaces delegate lane counts and forbidden combinations to config', () => {
+  for (const name of ['dispatch.md', 'dispatch-board.md']) {
+    const command = readClaudeCommand(name);
+
+    assert.match(command, /docs\/governance\/CONCURRENCY_CONFIG\.json/, `${name} must cite concurrency config`);
+    assert.match(command, /forbidden-combination|forbidden combination/i, `${name} must preserve forbidden-combination handling`);
+    assert.doesNotMatch(command, /max 2 Claude/i);
+    assert.doesNotMatch(command, /max 4 Codex/i);
+    assert.doesNotMatch(command, /up to 2 Claude/i);
+    assert.doesNotMatch(command, /up to 4 Codex/i);
+  }
+});
+
+test('active dispatch docs do not reference stale lane files or reconcile commands', () => {
+  for (const name of ['dispatch.md', 'dispatch-board.md', 'loop-dispatch.md']) {
+    const command = readClaudeCommand(name);
+
+    assert.doesNotMatch(command, /\.claude\/lanes\.json/);
+    assert.doesNotMatch(command, /pnpm ops:reconcile\b/);
+    assert.doesNotMatch(command, /codex-health-check\.ts/);
+  }
 });

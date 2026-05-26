@@ -18,6 +18,8 @@ export type BranchDisciplineResult = {
 
 const ISSUE_PATTERN = /\b(?:UTV2|UNI)-\d+\b/gi;
 const EXEMPT_BRANCH_PREFIXES = ['dependabot/', 'renovate/', 'github-actions/'] as const;
+const PROOF_SECTION_HEADING_PATTERN =
+  /^(?:#{1,6}\s*)?(?:verification|proof|evidence|test output|tap output|logs?|live-db proof|runtime proof)\b/i;
 
 export function extractIssueIds(text: string): string[] {
   const seen = new Set<string>();
@@ -59,6 +61,41 @@ export function evaluateIssueReferences(text: string): BranchDisciplineResult {
   };
 }
 
+export function normalizeProofOutputForIssueBinding(text: string): string {
+  const withoutFencedBlocks = text.replace(/```[\s\S]*?```/g, '\n');
+  const lines = withoutFencedBlocks.split(/\r?\n/);
+  const kept: string[] = [];
+  let inProofSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^#{1,6}\s+\S/.test(trimmed)) {
+      inProofSection = PROOF_SECTION_HEADING_PATTERN.test(trimmed.replace(/^#{1,6}\s+/, ''));
+      if (!inProofSection) {
+        kept.push(line);
+      }
+      continue;
+    }
+
+    if (inProofSection) {
+      continue;
+    }
+
+    if (
+      /^TAP version \d+\b/i.test(trimmed) ||
+      /^(?:ok|not ok) \d+\b/i.test(trimmed) ||
+      /^#\s+(?:tests|suites|pass|fail|cancelled|skipped|todo|duration)\b/i.test(trimmed) ||
+      /^\[(?:proof|verification|test|tap|log|runtime|db)\]/i.test(trimmed)
+    ) {
+      continue;
+    }
+
+    kept.push(line);
+  }
+
+  return kept.join('\n');
+}
+
 export function evaluateBranchDiscipline(input: {
   title?: string;
   body?: string;
@@ -78,7 +115,12 @@ export function evaluateBranchDiscipline(input: {
   }
 
   const branchIssueIds = extractIssueIds(branch);
-  const issueIds = extractIssueIds([input.title ?? '', input.body ?? '', branch, input.commits ?? ''].join('\n'));
+  const issueIds = extractIssueIds([
+    input.title ?? '',
+    normalizeProofOutputForIssueBinding(input.body ?? ''),
+    branch,
+    input.commits ?? '',
+  ].join('\n'));
 
   if (branchIssueIds.length !== 1) {
     return {

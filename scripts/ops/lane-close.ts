@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   emitJson,
@@ -5,6 +8,7 @@ import {
   type LaneManifest,
   readManifest,
   requireIssueId,
+  validatePreflightTokenPathValue,
   writeManifest,
   type TruthCheckResult,
 } from './shared.js';
@@ -38,6 +42,24 @@ export type CloseoutFailureCode =
   | 'infra_error';        // missing token, manifest, or schema error
 
 export type CloseoutOutcome = 'closed' | 'already_closed' | 'closed_with_warnings' | 'blocked';
+
+export interface RepairMergedPrInfo {
+  url: string;
+  state: string | null;
+  merged: boolean;
+  mergeSha: string | null;
+}
+
+export interface RepairMergedManifestResult {
+  ok: boolean;
+  code: CloseoutFailureCode | 'already_closed' | 'repaired';
+  outcome: CloseoutOutcome | 'repaired';
+  manifest: LaneManifest;
+  artifact_path: string | null;
+  changed_fields: string[];
+  remediation: string;
+  pr: RepairMergedPrInfo | null;
+}
 
 /**
  * Maps a truth-check result to the most specific CloseoutFailureCode.
@@ -103,6 +125,7 @@ export function remediationForCode(code: CloseoutFailureCode): string {
 
 const MISSING_COMMIT_SHA_MESSAGE =
   'ERROR: Lane close requires commit_sha — run ops:truth-check first';
+const REPAIR_PREFLIGHT_TOKEN = 'dispatch-auto';
 
 export function requireCloseCommitSha(manifest: LaneManifest): void {
   if (manifest.status === 'done') {
@@ -152,6 +175,117 @@ export function releaseCloseoutLocks(
   return { warnings };
 }
 
+export function repairMergedLaneManifest(
+  manifest: LaneManifest,
+  options: {
+    fetchPr?: (prUrl: string) => RepairMergedPrInfo;
+    now?: Date;
+    repoRoot?: string;
+    artifactRoot?: string;
+  } = {},
+): RepairMergedManifestResult {
+  if (manifest.status === 'done') {
+    return {
+      ok: true,
+      code: 'already_closed',
+      outcome: 'already_closed',
+      manifest,
+      artifact_path: null,
+      changed_fields: [],
+      remediation: 'Lane is already done; repair mode made no changes.',
+      pr: null,
+    };
+  }
+
+  if (!manifest.pr_url) {
+    return repairBlocked(manifest, 'infra_error', 'Manifest has no pr_url to repair from.');
+  }
+
+  const pr = (options.fetchPr ?? fetchMergedPrInfo)(manifest.pr_url);
+  if (!pr.merged || !pr.mergeSha) {
+    return {
+      ok: false,
+      code: pr.merged ? 'missing_merge_sha' : 'pr_not_merged',
+      outcome: 'blocked',
+      manifest,
+      artifact_path: null,
+      changed_fields: [],
+      remediation: pr.merged
+        ? 'GitHub reports the PR merged but did not return a merge commit SHA; repair refused.'
+        : 'GitHub does not report the PR as merged; repair refused and manifest was not changed.',
+      pr,
+    };
+  }
+
+  const now = (options.now ?? new Date()).toISOString();
+  const next: LaneManifest = {
+    ...manifest,
+    status: 'merged',
+    commit_sha: pr.mergeSha,
+    pr_url: pr.url,
+    heartbeat_at: now,
+    truth_check_history: manifest.truth_check_history ?? [],
+  };
+  const changedFields: string[] = [];
+  recordChanged(changedFields, manifest.status, next.status, 'status');
+  recordChanged(changedFields, manifest.commit_sha, next.commit_sha, 'commit_sha');
+  recordChanged(changedFields, manifest.pr_url, next.pr_url, 'pr_url');
+
+  const preflightRepair = repairPreflightToken(next, options.repoRoot ?? process.cwd());
+  if (preflightRepair.changed) {
+    changedFields.push('preflight_token');
+  }
+
+  const historyEntry = {
+    checked_at: now,
+    verdict: 'pass' as const,
+    merge_sha: pr.mergeSha,
+    failures: [],
+    runner: 'ops:lane-close --repair-merged',
+    source: 'github_pr_merge_commit_repair',
+    pr_url: pr.url,
+    repaired_fields: changedFields,
+  };
+  next.truth_check_history = [...next.truth_check_history, historyEntry];
+  changedFields.push('truth_check_history');
+
+  const artifactPath = writeRepairArtifact({
+    issueId: manifest.issue_id,
+    artifactRoot: options.artifactRoot ?? path.join(options.repoRoot ?? process.cwd(), '.out', 'ops', 'lane-close-repair'),
+    payload: {
+      schema_version: 1,
+      repaired_at: now,
+      issue_id: manifest.issue_id,
+      pr,
+      changed_fields: changedFields,
+      previous: {
+        status: manifest.status,
+        commit_sha: manifest.commit_sha,
+        pr_url: manifest.pr_url,
+        preflight_token: manifest.preflight_token,
+      },
+      next: {
+        status: next.status,
+        commit_sha: next.commit_sha,
+        pr_url: next.pr_url,
+        preflight_token: next.preflight_token,
+      },
+      preflight_repair: preflightRepair.reason,
+    },
+  });
+
+  return {
+    ok: true,
+    code: 'repaired',
+    outcome: 'repaired',
+    manifest: next,
+    artifact_path: artifactPath,
+    changed_fields: changedFields,
+    remediation: 'Manifest repaired from authoritative GitHub merge state; closeout truth-check still runs before lane closure.',
+    pr,
+  };
+}
+
 export function ensureCloseoutMergeLock(
   manifest: LaneManifest,
   options: {
@@ -197,7 +331,7 @@ async function main(): Promise<void> {
   const issueId = requireIssueId(positionals[0] ?? '');
 
   try {
-    const manifest = readManifest(issueId);
+    let manifest = readManifest(issueId);
     const lock = ensureCloseoutMergeLock(manifest, {
       acquireLock: !bools.has('no-acquire-lock'),
     });
@@ -214,6 +348,35 @@ async function main(): Promise<void> {
       });
       process.exit(1);
     }
+
+    if (bools.has('repair-merged')) {
+      const repair = repairMergedLaneManifest(manifest);
+      if (!repair.ok) {
+        emitJson({
+          ok: false,
+          code: repair.code,
+          outcome: repair.outcome,
+          remediation: repair.remediation,
+          issue_id: issueId,
+          pr: repair.pr,
+        });
+        process.exit(1);
+      }
+      if (repair.code === 'already_closed') {
+        emitJson({
+          ok: true,
+          code: 'lane_closed' as CloseoutFailureCode,
+          outcome: 'already_closed' satisfies CloseoutOutcome,
+          issue_id: issueId,
+          status: manifest.status,
+          remediation: repair.remediation,
+        });
+        process.exit(0);
+      }
+      writeManifest(repair.manifest);
+      manifest = repair.manifest;
+    }
+
     requireCloseCommitSha(manifest);
 
     const result = await runTruthCheck({
@@ -274,6 +437,86 @@ async function main(): Promise<void> {
       message: error instanceof Error ? error.message : String(error),
     });
     process.exit(1);
+  }
+}
+
+function repairBlocked(
+  manifest: LaneManifest,
+  code: CloseoutFailureCode,
+  remediation: string,
+): RepairMergedManifestResult {
+  return {
+    ok: false,
+    code,
+    outcome: 'blocked',
+    manifest,
+    artifact_path: null,
+    changed_fields: [],
+    remediation,
+    pr: null,
+  };
+}
+
+function repairPreflightToken(
+  manifest: LaneManifest,
+  repoRoot: string,
+): { changed: boolean; reason: string } {
+  try {
+    validatePreflightTokenPathValue(manifest.preflight_token, {
+      requireExistingFile: true,
+    });
+    return { changed: false, reason: 'existing preflight token is present' };
+  } catch (error) {
+    manifest.preflight_token = REPAIR_PREFLIGHT_TOKEN;
+    return {
+      changed: true,
+      reason: `preflight token repaired with ${REPAIR_PREFLIGHT_TOKEN}: ${
+        error instanceof Error ? error.message : String(error)
+      }; repo=${repoRoot}`,
+    };
+  }
+}
+
+function writeRepairArtifact(input: {
+  issueId: string;
+  artifactRoot: string;
+  payload: unknown;
+}): string {
+  fs.mkdirSync(input.artifactRoot, { recursive: true });
+  const artifactPath = path.join(input.artifactRoot, `${input.issueId}.json`);
+  fs.writeFileSync(artifactPath, `${JSON.stringify(input.payload, null, 2)}\n`);
+  return artifactPath;
+}
+
+function fetchMergedPrInfo(prUrl: string): RepairMergedPrInfo {
+  const selector = normalizePrSelector(prUrl);
+  const stdout = execFileSync('gh', ['pr', 'view', selector, '--json', 'url,state,mergedAt,mergeCommit'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const parsed = JSON.parse(stdout) as {
+    url?: string;
+    state?: string | null;
+    mergedAt?: string | null;
+    mergeCommit?: { oid?: string | null } | null;
+  };
+  const state = parsed.state?.toLowerCase() ?? null;
+  return {
+    url: parsed.url ?? prUrl,
+    state,
+    merged: state === 'merged' || Boolean(parsed.mergedAt),
+    mergeSha: parsed.mergeCommit?.oid ?? null,
+  };
+}
+
+function normalizePrSelector(prUrl: string): string {
+  const match = prUrl.match(/\/pull\/(\d+)(?:\b|$)/u);
+  return match?.[1] ?? prUrl;
+}
+
+function recordChanged(changedFields: string[], previous: unknown, next: unknown, field: string): void {
+  if (previous !== next) {
+    changedFields.push(field);
   }
 }
 
