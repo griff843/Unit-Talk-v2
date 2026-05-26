@@ -10,7 +10,7 @@
  * Callers (apps, workers) are responsible for persisting the output.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type {
   CertificationDomain,
   CertificationStatus,
@@ -92,10 +92,11 @@ function assertTransitionAllowed(
   to: CertificationStatus,
 ): void {
   if (from === null) {
-    // Initial insert — only 'pending' is allowed as the first status
-    if (to !== 'pending') {
+    // Initial insert is normally pending. Revoked is also allowed so a trigger
+    // against unknown state can still leave append-only invalidation evidence.
+    if (to !== 'pending' && to !== 'revoked') {
       throw new CertificationTransitionError(
-        `Domain "${domain}": initial status must be "pending", got "${to}"`,
+        `Domain "${domain}": initial status must be "pending" or fail-closed "revoked", got "${to}"`,
         domain, from, to,
       );
     }
@@ -136,8 +137,25 @@ function buildRecord(
   input: CertificationRecordInput,
   now: string,
 ): CertificationRecord {
+  const predecessorId = input.predecessorId ?? null;
+  const expiresAt = input.expiresAt ?? null;
+  const revocationTrigger = input.revocationTrigger ?? null;
+  const id = deterministicUuid('certification-record', [
+    input.programId,
+    input.domain,
+    input.status,
+    input.evidenceSha,
+    input.mergeSha,
+    input.transitionedBy,
+    input.transitionReason,
+    expiresAt ?? '',
+    revocationTrigger ?? '',
+    predecessorId ?? '',
+    now,
+  ]);
+
   return {
-    id:                 randomUUID(),
+    id,
     programId:          input.programId,
     domain:             input.domain,
     status:             input.status,
@@ -146,9 +164,9 @@ function buildRecord(
     transitionedAt:     now,
     transitionedBy:     input.transitionedBy,
     transitionReason:   input.transitionReason,
-    expiresAt:          input.expiresAt ?? null,
-    revocationTrigger:  input.revocationTrigger ?? null,
-    predecessorId:      input.predecessorId ?? null,
+    expiresAt,
+    revocationTrigger,
+    predecessorId,
     createdAt:          now,
   };
 }
@@ -158,7 +176,12 @@ function buildTransitionEvent(
   fromStatus: CertificationStatus | null,
 ): CertificationTransitionEvent {
   return {
-    id:            randomUUID(),
+    id:            deterministicUuid('certification-transition-event', [
+      record.id,
+      fromStatus ?? '',
+      record.status,
+      record.transitionedAt,
+    ]),
     certRecordId:  record.id,
     programId:     record.programId,
     domain:        record.domain,
@@ -170,6 +193,21 @@ function buildTransitionEvent(
     occurredAt:    record.transitionedAt,
     replaySafe:    true,
   };
+}
+
+function deterministicUuid(scope: string, parts: readonly string[]): string {
+  const hash = createHash('sha256')
+    .update(scope)
+    .update('\0')
+    .update(parts.join('\0'))
+    .digest('hex');
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    `4${hash.slice(13, 16)}`,
+    `${((parseInt(hash.slice(16, 18), 16) & 0x3f) | 0x80).toString(16)}${hash.slice(18, 20)}`,
+    hash.slice(20, 32),
+  ].join('-');
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +222,15 @@ export interface TransitionResult {
 export interface PropagationResult {
   /** Propagated revocations for all dependents, in dependency order. */
   readonly revocations: TransitionResult[];
+}
+
+export interface ReconstructedCertificationEventState {
+  readonly certRecordId: string;
+  readonly programId: ProgramId;
+  readonly domain: CertificationDomain;
+  readonly status: CertificationStatus;
+  readonly evidenceSha: string | null;
+  readonly occurredAt: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -251,11 +298,11 @@ export class CertificationStateMachine {
    *
    * Returns TransitionResults for each affected dependent domain, in
    * topological order (upstream before downstream). The caller provides
-   * current records for all domains; missing domains are treated as
-   * already non-active (no propagation needed for them).
+   * current records for all domains; missing dependent domains are revoked
+   * into explicit fail-closed evidence.
    *
-   * Fail-closed: if any domain in the dependency graph was active or
-   * suspended, it MUST be revoked.
+   * Fail-closed: if any domain in the dependency graph was active, suspended,
+   * pending, or missing, it MUST receive a revoked transition.
    */
   computePropagation(
     propagationInput: PropagationInput,
@@ -268,10 +315,9 @@ export class CertificationStateMachine {
 
     for (const dep of dependents) {
       const current = currentRecords[dep] ?? null;
-      // Only propagate if the dependent is in a state that can be revoked
-      if (current === null) continue;
-      if (current.status === 'revoked') continue;  // already revoked
-      if (!['active', 'suspended', 'pending'].includes(current.status)) continue;
+      // Missing dependents are fail-closed into explicit revoked evidence.
+      if (current?.status === 'revoked') continue;  // already revoked
+      if (current !== null && !['active', 'suspended', 'pending'].includes(current.status)) continue;
 
       const result = this.transition(
         current,
@@ -312,6 +358,32 @@ export class CertificationStateMachine {
     }
 
     return { revocations: deduped };
+  }
+
+  /**
+   * Reconstruct current certification status from append-only transition events.
+   * This intentionally uses only event fields so replay/audit consumers can
+   * verify lifecycle transitions without reading mutable current-state views.
+   */
+  reconstructCurrentStateFromEvents(
+    events: readonly CertificationTransitionEvent[],
+  ): Partial<Record<CertificationDomain, ReconstructedCertificationEventState>> {
+    const ordered = [...events].sort((a, b) => {
+      const byTime = a.occurredAt.localeCompare(b.occurredAt);
+      return byTime === 0 ? a.id.localeCompare(b.id) : byTime;
+    });
+    const state: Partial<Record<CertificationDomain, ReconstructedCertificationEventState>> = {};
+    for (const event of ordered) {
+      state[event.domain] = {
+        certRecordId: event.certRecordId,
+        programId: event.programId,
+        domain: event.domain,
+        status: event.toStatus,
+        evidenceSha: event.evidenceSha,
+        occurredAt: event.occurredAt,
+      };
+    }
+    return state;
   }
 
   /**

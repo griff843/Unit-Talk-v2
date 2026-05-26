@@ -23,10 +23,16 @@ import type {
   CertificationTransitionEvent,
   ProgramId,
   RevocationTrigger,
+  RevocationTriggerSignal,
   ProgramCertificationState,
   DomainCertificationState,
 } from './types.js';
-import { CERTIFICATION_DOMAINS, DOMAIN_DEPENDENCIES } from './types.js';
+import {
+  CERTIFICATION_DOMAINS,
+  DOMAIN_DEPENDENCIES,
+  REVOCATION_TRIGGER_EXECUTION_MATRIX,
+  getRevocationTriggerMatrixEntry,
+} from './types.js';
 
 // ---------------------------------------------------------------------------
 // Repository interface — injected by callers
@@ -90,6 +96,11 @@ export interface RevokeResult {
   readonly propagated: TransitionResult[];
 }
 
+export interface RevocationTriggerExecutionResult extends RevokeResult {
+  readonly signal: RevocationTriggerSignal;
+  readonly matrixEntry: typeof REVOCATION_TRIGGER_EXECUTION_MATRIX[number];
+}
+
 export interface GateCheckResult {
   readonly programId: ProgramId;
   readonly allCertified: boolean;
@@ -109,10 +120,21 @@ export interface TransitionInput {
   readonly transitionedBy: string;
   readonly transitionReason: string;
   readonly expiresAt?: string | null;
+  readonly occurredAt?: string;
 }
 
 export interface RevokeInput extends TransitionInput {
   readonly revocationTrigger: RevocationTrigger;
+}
+
+export interface RevocationSignalInput {
+  readonly programId: ProgramId;
+  readonly signal: RevocationTriggerSignal;
+  readonly evidenceSha: string;
+  readonly mergeSha: string;
+  readonly detail: string;
+  readonly domain?: CertificationDomain;
+  readonly occurredAt?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,10 +170,24 @@ export class CertificationLifecycleManager {
       return { domain, record: current, event: fakeEvent };
     }
 
-    const result = certificationStateMachine.initiate(
-      programId, domain, evidenceSha, mergeSha,
-      transitionedBy, transitionReason,
-    );
+    const result = current === null
+      ? certificationStateMachine.initiate(
+          programId, domain, evidenceSha, mergeSha,
+          transitionedBy, transitionReason, input.occurredAt,
+        )
+      : certificationStateMachine.transition(
+          current,
+          {
+            programId, domain,
+            status: 'pending',
+            evidenceSha, mergeSha,
+            transitionedBy, transitionReason,
+            expiresAt: input.expiresAt ?? null,
+            revocationTrigger: null,
+            predecessorId: current.id,
+          },
+          input.occurredAt,
+        );
     await this.repo.insertTransition(result.record, result.event);
     return { domain, record: result.record, event: result.event };
   }
@@ -175,6 +211,7 @@ export class CertificationLifecycleManager {
         revocationTrigger: null,
         predecessorId: current?.id ?? null,
       },
+      input.occurredAt,
     );
     await this.repo.insertTransition(result.record, result.event);
     return { domain, record: result.record, event: result.event };
@@ -198,6 +235,7 @@ export class CertificationLifecycleManager {
         revocationTrigger: null,
         predecessorId: current?.id ?? null,
       },
+      input.occurredAt,
     );
     await this.repo.insertTransition(result.record, result.event);
     return { domain, record: result.record, event: result.event };
@@ -211,7 +249,7 @@ export class CertificationLifecycleManager {
   async revoke(input: RevokeInput): Promise<RevokeResult> {
     const {
       programId, domain, evidenceSha, mergeSha,
-      transitionedBy, transitionReason, revocationTrigger,
+      transitionedBy, transitionReason, revocationTrigger, occurredAt,
     } = input;
 
     const [current, allRecords] = await Promise.all([
@@ -230,12 +268,14 @@ export class CertificationLifecycleManager {
         revocationTrigger,
         predecessorId: current?.id ?? null,
       },
+      occurredAt,
     );
 
     // Compute cascade revocations
     const propagation: PropagationResult = certificationStateMachine.computePropagation(
       { programId, revokedDomain: domain, revocationTrigger, evidenceSha, mergeSha, transitionedBy },
       { ...allRecords, [domain]: primaryResult.record },
+      occurredAt,
     );
 
     // Persist: primary + all propagated in one atomic batch
@@ -252,6 +292,27 @@ export class CertificationLifecycleManager {
       event: primaryResult.event,
       propagated: propagation.revocations,
     };
+  }
+
+  /**
+   * Execute one canonical revocation trigger signal through the deterministic
+   * matrix. This is the single wiring point for runtime trigger producers.
+   */
+  async executeRevocationTrigger(
+    input: RevocationSignalInput,
+  ): Promise<RevocationTriggerExecutionResult> {
+    const matrixEntry = getRevocationTriggerMatrixEntry(input.signal);
+    const result = await this.revoke({
+      programId: input.programId,
+      domain: input.domain ?? matrixEntry.defaultDomain,
+      evidenceSha: input.evidenceSha,
+      mergeSha: input.mergeSha,
+      transitionedBy: matrixEntry.triggeredBy,
+      transitionReason: `${matrixEntry.reasonPrefix}: ${input.detail}`,
+      revocationTrigger: matrixEntry.revocationTrigger,
+      ...(input.occurredAt ? { occurredAt: input.occurredAt } : {}),
+    });
+    return { ...result, signal: input.signal, matrixEntry };
   }
 
   /**
@@ -303,11 +364,13 @@ export class CertificationLifecycleManager {
     mergeSha: string,
     violationDetail: string,
   ): Promise<RevokeResult> {
-    return this.revoke({
-      programId, domain, evidenceSha, mergeSha,
-      transitionedBy: 'invariant-engine',
-      transitionReason: `Invariant violation escalated: ${violationDetail}`,
-      revocationTrigger: 'invariant_gap',
+    return this.executeRevocationTrigger({
+      programId,
+      domain,
+      signal: 'invariant_violation',
+      evidenceSha,
+      mergeSha,
+      detail: violationDetail,
     });
   }
 
@@ -322,11 +385,13 @@ export class CertificationLifecycleManager {
     mergeSha: string,
     detail: string,
   ): Promise<RevokeResult> {
-    return this.revoke({
-      programId, domain, evidenceSha, mergeSha,
-      transitionedBy: 'replay-harness',
-      transitionReason: `Replay nondeterminism detected: ${detail}`,
-      revocationTrigger: 'replay_nondeterminism',
+    return this.executeRevocationTrigger({
+      programId,
+      domain,
+      signal: 'replay_nondeterminism',
+      evidenceSha,
+      mergeSha,
+      detail,
     });
   }
 
@@ -340,13 +405,57 @@ export class CertificationLifecycleManager {
     mergeSha: string,
     detail: string,
   ): Promise<RevokeResult> {
-    return this.revoke({
+    return this.executeRevocationTrigger({
       programId,
-      domain: 'quarantine',
-      evidenceSha, mergeSha,
-      transitionedBy: 'quarantine-enforcement',
-      transitionReason: `Quarantine bypass detected: ${detail}`,
-      revocationTrigger: 'quarantine_bypass',
+      signal: 'quarantine_escalation',
+      evidenceSha,
+      mergeSha,
+      detail,
+    });
+  }
+
+  async onStaleProofLineage(
+    programId: ProgramId,
+    evidenceSha: string,
+    mergeSha: string,
+    detail: string,
+  ): Promise<RevokeResult> {
+    return this.executeRevocationTrigger({
+      programId,
+      signal: 'stale_proof_lineage',
+      evidenceSha,
+      mergeSha,
+      detail,
+    });
+  }
+
+  async onFreshnessEnforcementFailure(
+    programId: ProgramId,
+    evidenceSha: string,
+    mergeSha: string,
+    detail: string,
+  ): Promise<RevokeResult> {
+    return this.executeRevocationTrigger({
+      programId,
+      signal: 'freshness_enforcement_failure',
+      evidenceSha,
+      mergeSha,
+      detail,
+    });
+  }
+
+  async onDivergenceThresholdBreach(
+    programId: ProgramId,
+    evidenceSha: string,
+    mergeSha: string,
+    detail: string,
+  ): Promise<RevokeResult> {
+    return this.executeRevocationTrigger({
+      programId,
+      signal: 'divergence_threshold_breach',
+      evidenceSha,
+      mergeSha,
+      detail,
     });
   }
 }

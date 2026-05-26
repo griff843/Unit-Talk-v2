@@ -89,6 +89,8 @@ export type {
   CertificationDomain,
   CertificationStatus,
   RevocationTrigger,
+  RevocationTriggerSignal,
+  RevocationTriggerMatrixEntry,
   ProgramId,
   CertificationRecord,
   CertificationTransitionEvent,
@@ -102,12 +104,24 @@ export {
   CERTIFICATION_DOMAINS,
   CERTIFICATION_STATUSES,
   REVOCATION_TRIGGERS,
+  REVOCATION_TRIGGER_SIGNALS,
+  REVOCATION_TRIGGER_EXECUTION_MATRIX,
   PROGRAM_IDS,
   DOMAIN_DEPENDENCIES,
   getDependents,
+  getRevocationTriggerMatrixEntry,
   CertificationStateMachine,
   CertificationTransitionError,
   certificationStateMachine,
+  RevocationTriggerWiring,
 } from './certification/index.js';
 
-export type { TransitionResult, PropagationResult } from './certification/index.js';
+export type {
+  TransitionResult,
+  PropagationResult,
+  ReconstructedCertificationEventState,
+  RevocationSignalInput,
+  RevocationTriggerExecutionResult,
+  WireEngineOptions,
+  WireQuarantineOptions,
+} from './certification/index.js';

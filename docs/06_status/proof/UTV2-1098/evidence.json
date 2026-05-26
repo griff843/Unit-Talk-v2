@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1098",
+  "tier": "T1",
+  "executor": "claude",
+  "merge_sha": "pending-post-merge",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/883",
+  "verifier": {
+    "identity": "claude/utv2-1098-revocation-trigger-wiring"
+  },
+  "static_proof": {
+    "pnpm_verify": "EXIT 0",
+    "test_count": 612,
+    "test_pass": 612,
+    "test_fail": 0,
+    "branch_sha": "1a69f138ef13ad390f3e9001e55a4134877bd21f",
+    "merge_sha": "pending-post-merge"
+  },
+  "runtime_proof": {
+    "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",
+    "queries": [
+      "UTV2-920: delivery confirmation rollback — confirms pick_lifecycle and outbox atomicity",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: correction chain is additive — original settlement row is not mutated",
+      "certification_records: SELECT count(*) WHERE program_id = 'program-001'",
+      "certification_transition_events: SELECT count(*) WHERE program_id = 'program-001'"
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 5283 },
+      { "table": "certification_records", "count": 0 },
+      { "table": "certification_transition_events", "count": 0 },
+      { "table": "pick_lifecycle", "count": 13622 },
+      { "table": "distribution_outbox", "count": 439 },
+      { "table": "settlement_records", "count": 398 }
+    ],
+    "command": "pnpm test:db"
+  }
+}

@@ -7,20 +7,38 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1098-revocation-trigger-wiring",
   "branch": "codex/utv2-1098-revocation-trigger-wiring",
   "base_branch": "main",
-  "commit_sha": "c3231bbd",
+  "commit_sha": "1a69f138ef13ad390f3e9001e55a4134877bd21f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/883",
   "files_changed": [
+    "packages/invariants/src/certification/revocation-trigger-wiring.ts",
+    "packages/invariants/src/certification/revocation-trigger-wiring.test.ts",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
     "packages/invariants/src/certification/state-machine.ts",
+    "packages/invariants/src/certification/types.ts",
+    "packages/invariants/src/index.ts",
     ".ops/sync/UTV2-1098.yml",
     "docs/06_status/proof/UTV2-1098/evidence.json",
-    "docs/06_status/proof/UTV2-1098/verification.md"
+    "docs/06_status/proof/UTV2-1098/verification.md",
+    "docs/06_status/proof/UTV2-1098/runtime-verification.md"
   ],
   "file_scope_lock": [
+    "packages/invariants/src/certification/revocation-trigger-wiring.ts",
+    "packages/invariants/src/certification/revocation-trigger-wiring.test.ts",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    "packages/invariants/src/certification/types.ts",
+    "packages/invariants/src/index.ts",
     "docs/06_status/proof/UTV2-1098/evidence.json",
-    "docs/06_status/proof/UTV2-1098/verification.md"
+    "docs/06_status/proof/UTV2-1098/verification.md",
+    "docs/06_status/proof/UTV2-1098/runtime-verification.md",
+    "docs/06_status/lanes/UTV2-1098.json"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1098/evidence.json"
+    "docs/06_status/proof/UTV2-1098/evidence.json",
+    "docs/06_status/proof/UTV2-1098/verification.md",
+    "docs/06_status/proof/UTV2-1098/runtime-verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-05-26T17:06:50.884Z",
