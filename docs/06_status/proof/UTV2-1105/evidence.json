@@ -5,7 +5,7 @@
   "lane_type": "governance",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/882",
   "sha_binding": {
-    "verified_source_sha": "6c06c8f948f37ad47b5c6b95d405d22e10574dd6",
+    "verified_source_sha": "6959feee86b1321e8199d03b3d5909ddf8283b1d",
     "ci_sentinels": [
       "pnpm verify: EXIT 0",
       "pnpm test:db: 7/7 PASS"
