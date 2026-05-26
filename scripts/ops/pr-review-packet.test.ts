@@ -280,6 +280,31 @@ test('generatePRReviewPacket passes PR 866 style same-issue metadata scope chang
   assert.equal(packet.risk_packet.signals.scope_bleed_count, 0);
 });
 
+test('generatePRReviewPacket allows expected proof artifacts outside explicit scope lock', async () => {
+  const packet = await generatePRReviewPacket(
+    createInput({
+      pull_request: {
+        number: 1057,
+        url: 'https://github.com/unit-talk/unit-talk-v2/pull/1057',
+        title: 'feat(ops): UTV2-1057 automated return review packet',
+        headRefName: 'codex/utv2-1057-automated-return-review-packet-for-t1t2-prs',
+        headRefOid: 'abc123def456',
+        labels: [{ name: 'tier:T2' }],
+        files: [
+          { path: 'scripts/ops/pr-review-packet.ts' },
+          { path: 'docs/06_status/proof/UTV2-1057/diff-summary.md' },
+          { path: 'docs/06_status/proof/UTV2-1057/verification.log' },
+        ],
+        statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }],
+      },
+    }),
+  );
+
+  assert.strictEqual(packet.verdict, 'PASS');
+  assert.deepStrictEqual(packet.out_of_scope_files, []);
+  assert.equal(packet.checks.find((check) => check.id === 'scope')?.status, 'PASS');
+});
+
 test('generatePRReviewPacket detects dropped tests versus base package scripts', async () => {
   const packet = await generatePRReviewPacket(
     createInput({
@@ -384,6 +409,8 @@ test('generatePRReviewPacket preserves packet shape for prompt consumers', async
     '.github/workflows/return-review-packet.yml',
     '.ops/sync/UTV2-1057.yml',
     'docs/06_status/lanes/UTV2-1057.json',
+    'docs/06_status/proof/UTV2-1057/diff-summary.md',
+    'docs/06_status/proof/UTV2-1057/verification.log',
     'package.json',
     'scripts/ops/pr-review-packet.test.ts',
     'scripts/ops/pr-review-packet.ts',

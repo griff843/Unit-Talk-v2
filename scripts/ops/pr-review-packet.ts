@@ -243,7 +243,12 @@ export async function generatePRReviewPacket(input: PacketInput): Promise<PRRevi
   );
   const rLevelCompliance = input.prebuilt?.r_level_compliance ?? readRLevelCompliance(baseRef, headRef);
   const syncMetadata = input.prebuilt?.sync_metadata ?? readSyncMetadata(manifest.issue_id);
-  const scopeDiff = buildScopeDiff(changedFiles, manifest.file_scope_lock, manifest.issue_id);
+  const scopeDiff = buildScopeDiff(
+    changedFiles,
+    manifest.file_scope_lock,
+    manifest.issue_id,
+    manifest.expected_proof_paths,
+  );
   const packageTestDrift = buildPackageTestDrift({
     diffEntries,
     basePackageJson: input.prebuilt?.base_package_json ?? readPackageJsonAtRef(baseRef),
@@ -473,10 +478,16 @@ function buildChecks(input: {
   return checks;
 }
 
-function buildScopeDiff(changedFiles: string[], scopeLock: string[], issueId: string): ScopeDiffResult {
+function buildScopeDiff(
+  changedFiles: string[],
+  scopeLock: string[],
+  issueId: string,
+  expectedProofPaths: string[],
+): ScopeDiffResult {
   const allowedFileScope = normalizePaths([
     ...scopeLock,
     ...sameIssueLaneMetadataPaths(issueId),
+    ...expectedProofPaths,
   ]);
   return {
     allowed_file_scope: allowedFileScope,
