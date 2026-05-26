@@ -17,6 +17,7 @@
     "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1174.yml",
     ".claude/agents/ci-triage.md",
     ".claude/agents/codex-return-reviewer.md",
     ".claude/agents/lane-governor.md",
@@ -41,12 +42,22 @@
   ],
   "status": "merged",
   "started_at": "2026-05-26T03:13:01.653Z",
-  "heartbeat_at": "2026-05-26T12:38:10Z",
+  "heartbeat_at": "2026-05-26T13:22:57.709Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1174-map-prompt-agents-authority.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T13:22:57.709Z",
+      "verdict": "fail",
+      "merge_sha": "cc909e8f0742d64898eb3cf31bab6fe61efcdbe2",
+      "failures": [
+        "S1"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
