@@ -5,11 +5,11 @@
   "tier": "T1",
   "lane_type": "governance",
   "sha_binding": {
-    "verified_source_sha": "set-by-ci",
+    "verified_source_sha": "7f9d9cfe6548e42c08590af2e5df5872d59833a9",
     "merge_sha": "set-by-ci",
-    "verified_source_note": "Pending — will be updated to merge SHA after PR merge",
+    "verified_source_note": "Branch HEAD before merge — merge SHA will be bound post-squash",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "c8e9d0ff"
+    "current_pr_head_sha": "7f9d9cfe6548e42c08590af2e5df5872d59833a9"
   },
   "static_proof": {
     "type_check": "PASS",
