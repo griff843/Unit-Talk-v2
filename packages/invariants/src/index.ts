@@ -70,3 +70,17 @@ export type {
   ShaBindingResult,
   ShaBindingBlock,
 } from './merge-sha-binding.js';
+
+export {
+  FRESHNESS_WINDOWS_MS,
+  checkProofFreshness,
+  checkBundleFreshness,
+  requireFreshProof,
+  ProofFreshnessGateError,
+} from './proof-freshness.js';
+export type {
+  FreshnessClass,
+  FreshnessFailureKind,
+  FreshnessFailure,
+  FreshnessResult,
+} from './proof-freshness.js';
