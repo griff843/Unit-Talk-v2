@@ -57,3 +57,16 @@ export type {
   ProofValidationResult,
   ProofValidatorOptions,
 } from './proof-validator.js';
+
+export {
+  assertMergeShaBinding,
+  assertShaBindingBlock,
+  requireMergeShaBinding,
+  ShaBindingGateError,
+} from './merge-sha-binding.js';
+export type {
+  ShaBindingFailureKind,
+  ShaBindingFailure,
+  ShaBindingResult,
+  ShaBindingBlock,
+} from './merge-sha-binding.js';

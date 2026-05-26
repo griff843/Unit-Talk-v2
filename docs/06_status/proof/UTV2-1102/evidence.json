@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-1102",
+  "title": "INIT-2.2.3 — Merge-SHA Binding",
+  "tier": "T1",
+  "lane_type": "governance",
+  "sha_binding": {
+    "verified_source_sha": "set-by-ci",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": {
+      "verdict": "PASS",
+      "tests": 18,
+      "fail": 0,
+      "file": "packages/invariants/src/merge-sha-binding.test.ts"
+    },
+    "r_level_check": {
+      "verdict": "PASS",
+      "rules_matched": "none",
+      "note": "No R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "test_db": {
+      "verdict": "PASS",
+      "tests": 7,
+      "fail": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "duration_ms": 117796,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    }
+  },
+  "file_scope": [
+    "packages/invariants/src/merge-sha-binding.ts",
+    "packages/invariants/src/merge-sha-binding.test.ts",
+    "packages/invariants/src/index.ts",
+    "packages/invariants/package.json",
+    "docs/06_status/proof/UTV2-1102/evidence.json",
+    "docs/06_status/proof/UTV2-1102/verification.md"
+  ],
+  "invariants_asserted": [
+    "Branch-HEAD-bound bundles rejected — short SHAs (1-39 chars) → short-sha failure",
+    "Sentinel strings rejected (set-by-ci, pending, tbd, etc.) → sentinel-sha failure",
+    "Null/undefined mergeSha rejected → missing-sha failure",
+    "Non-hex 40-char strings rejected → invalid-format failure",
+    "ShaBindingGateError thrown on any rejection — certification halted",
+    "AuditEvent emitted for every check (pass or fail)",
+    "SHA binding verifiable on replay via assertShaBindingBlock",
+    "No I/O, Supabase, or HTTP — pure binding logic"
+  ]
+}
