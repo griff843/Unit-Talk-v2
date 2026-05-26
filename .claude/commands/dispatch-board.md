@@ -37,15 +37,41 @@ T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT.
 
 ---
 
-## Phase 1: Read the board
+## Phase 0: Live safety gates
 
-> **Preflight required first.** Before reading the board, run `/dispatch` Phase 0 (lane-governor concurrency preflight). If lane-governor returns BLOCKED, report the block and do not proceed.
+Before reading the board, run the same live governor and reconciliation sequence as `/dispatch` and `/loop-dispatch`. Abort on any hard fail or block.
+
+```bash
+pnpm ops:merge-risk
+pnpm ops:execution-state
+pnpm ops:lane-maximizer
+pnpm ops:orchestration-reconcile --current --json
+```
+
+Use `ops:execution-state` as the concurrency authority for active lanes by executor, available slots, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions.
+
+Use `ops:lane-maximizer` as the dispatch recommendation authority. Executor limits, singleton classes, and forbidden combinations come from `docs/governance/CONCURRENCY_CONFIG.json`; policy rationale lives in `docs/governance/LANE_CONCURRENCY_POLICY.md`. Do not copy numeric executor caps into this command.
+
+If `ops:merge-risk`, `ops:execution-state`, or `ops:lane-maximizer` reports a hard fail, block, no safe slot for the candidate executor, or an unsafe forbidden combination:
+
+```
+[dispatch-board] HALTED — live governor blocked: {top condition}. Resolve the block before reading the board.
+```
+
+If reconciliation does not pass, surface exactly one repair command from the first repair-plan action and stop before dispatching:
+
+```
+[dispatch-board] HALTED — reconciliation drift detected.
+Repair command: {first repair_plan action command | none available}
+```
+
+## Phase 1: Read the board
 
 1. `pnpm ops:brief` — current context
 2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
    - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
    - **Exclude:** In Claude, In Codex (already active), Done, Cancelled, Blocked, untiered
-3. Read `docs/06_status/lanes/*.json` — enumerate active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`), note `file_scope_lock[]` and executor counts. Slot limits (per `docs/governance/CONCURRENCY_CONFIG.json`): max 2 Claude, max 4 Codex for safe work classes; total cap 6. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
+3. Read `docs/06_status/lanes/*.json` — enumerate active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`), note `file_scope_lock[]`, executor counts, and worktree paths. Slot limits come from `docs/governance/CONCURRENCY_CONFIG.json` through the live gate outputs; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
 4. Build candidate list — exclude:
    - File-scope overlap with any active lane
    - Missing tier label
@@ -77,7 +103,7 @@ Excluded:
   UTV2-801  file scope overlap with active lane UTV2-871
   UTV2-802  blocked by UTV2-799 (not Done)
 
-Codex health: OK  |  Claude slots: 2  |  Codex slots: 3
+Codex health: OK  |  Claude slots: {available}/{configured}  |  Codex slots: {available}/{configured}
 ```
 
 ---
@@ -102,8 +128,8 @@ For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, 
 
 Dispatch order:
 1. Approved T1 Claude lanes first
-2. Non-T1 Claude lanes — sequentially (default: max 2 active for safe work classes; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
-3. Codex lanes — up to 4 in parallel (default per `docs/governance/CONCURRENCY_CONFIG.json`)
+2. Non-T1 Claude lanes — within the Claude slots reported by `ops:execution-state`
+3. Codex lanes — within the Codex slots reported by `ops:execution-state`
 
 Parallel dispatch guard:
 - Every active implementation lane must have a distinct worktree path.
@@ -178,7 +204,7 @@ Awaiting PM action:
 
 Blocked this cycle:
   ✗ UTV2-874 [T2/Codex]  → scope bleed into packages/domain — PR left open
-  ✗ UTV2-875 [T3/Claude] → ops:truth-check FAIL: pnpm test count decreased
+  ✗ UTV2-875 [T3/Claude] → `pnpm ops:truth-check` FAIL: pnpm test count decreased
 
 Deferred (external gate):
   — UTV2-878 [needs:live-data] — SGO unavailable
@@ -202,7 +228,8 @@ pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
 - **T2 clear-scope: Claude diff-review is the sole gate.** No PM_VERDICT.
 - **P0 lanes never auto-merge.** Before any merge attempt, run `pnpm ops:p0-detect <UTV2-###>`. If `is_p0: true`, the merge protocol (UTV2-948) overrides tier policy: the orchestrator surfaces the merge gate to PM and waits. PM merges manually. Required artifacts: `docs/06_status/proof/<UTV2-###>/claude-critique.md` and `runtime-verification.md`, both checked by the `P0 Protocol` workflow before merge is allowed.
 - **Auto-skip external-gate labels.** No user qualifier needed.
-- **Default: max 2 Claude lanes, max 4 Codex lanes for safe work classes** (Governance, Hygiene, Verification, Delivery/UI). Total hard cap 6. Runtime, migration, modeling, and data/canonical lanes are singleton per type regardless of executor count. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`. Queue — never stack.
+- **Executor limits are config-backed.** Use `docs/governance/CONCURRENCY_CONFIG.json` through `ops:execution-state` and `ops:lane-maximizer`; do not self-authorize lane expansion or duplicate numeric caps in prose.
+- **Singleton and forbidden-combination rules are config-backed.** Runtime, migration, modeling, and data/canonical lanes remain singleton per the live governor model. Queue — never stack.
 - **No scope overlap.** Check `file_scope_lock` before every dispatch.
 - **Codex lanes are async.** Dispatch and continue. Review on `--check-codex` re-entry.
-- **Board truth over Linear truth.** If `docs/06_status/lanes/*.json` manifests say active but Linear says Done, reconcile before dispatching (`pnpm ops:reconcile`).
+- **Board truth over Linear truth.** If `docs/06_status/lanes/*.json` manifests say active but Linear says Done, reconcile before dispatching (`pnpm ops:orchestration-reconcile --current --json`).

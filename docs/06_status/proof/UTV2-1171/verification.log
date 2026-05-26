@@ -1,0 +1,28 @@
+# UTV2-1171 Verification Log
+
+Generated at: 2026-05-26T12:05:00Z
+Issue: UTV2-1171
+Tier: T2
+Lane type: governance
+Branch: codex/utv2-1171-align-dispatch-board-governor
+Head SHA: pending
+Merge SHA: N/A
+
+## Commands
+
+- `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: PASS
+
+## Focused Test Tail
+
+```text
+# Subtest: dispatch surfaces share live governor and reconciliation gates
+ok 24 - dispatch surfaces share live governor and reconciliation gates
+# Subtest: dispatch surfaces delegate lane counts and forbidden combinations to config
+ok 25 - dispatch surfaces delegate lane counts and forbidden combinations to config
+# Subtest: active dispatch docs do not reference stale lane files or reconcile commands
+ok 26 - active dispatch docs do not reference stale lane files or reconcile commands
+1..26
+# tests 26
+# pass 26
+# fail 0
+```

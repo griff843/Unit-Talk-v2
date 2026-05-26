@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1171",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1171-align-dispatch-board-governor",
+  "branch": "codex/utv2-1171-align-dispatch-board-governor",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch-board.md",
+    ".claude/commands/dispatch.md",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1171/diff-summary.md",
+    "docs/06_status/proof/UTV2-1171/verification.log"
+  ],
+  "status": "started",
+  "started_at": "2026-05-26T11:57:09.259Z",
+  "heartbeat_at": "2026-05-26T11:57:09.259Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1171-align-dispatch-board-governor.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1171-align-dispatch-board-governor",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
