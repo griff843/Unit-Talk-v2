@@ -14,7 +14,6 @@ import { randomUUID } from 'node:crypto';
 import type {
   CertificationDomain,
   CertificationStatus,
-  RevocationTrigger,
   ProgramId,
   CertificationRecord,
   CertificationTransitionEvent,
