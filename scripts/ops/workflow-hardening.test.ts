@@ -24,6 +24,10 @@ function readWorkflowYaml(name: string): WorkflowDocument {
   return parsed as WorkflowDocument;
 }
 
+function readClaudeCommand(name: string): string {
+  return fs.readFileSync(path.join(ROOT, '.claude', 'commands', name), 'utf8');
+}
+
 function objectField(input: WorkflowDocument, key: string): WorkflowDocument {
   const value = input[key];
   assert.ok(value && typeof value === 'object' && !Array.isArray(value), `${key} must be an object`);
@@ -325,4 +329,55 @@ test('CI avoids duplicate verify jobs for codex PR branches', () => {
   assert.ok(on.pull_request !== undefined, 'CI must still run for pull requests');
   assert.match(stringField(concurrency, 'group'), /pull_request\.number/);
   assert.strictEqual(concurrency['cancel-in-progress'], true);
+});
+
+test('loop-dispatch requires live governor commands before every cycle', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+
+  const phase0 = command.slice(command.indexOf('## Phase 0:'), command.indexOf('## Phase 1:'));
+  const cycleStart = command.slice(command.indexOf('### Cycle start'), command.indexOf('### After each cycle'));
+
+  for (const required of [
+    'pnpm ops:merge-risk',
+    'pnpm ops:execution-state',
+    'pnpm ops:lane-maximizer',
+    'pnpm ops:orchestration-reconcile --current --json',
+  ]) {
+    assert.match(phase0, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(cycleStart, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+
+  assert.match(command, /hard fail or block/i);
+  assert.doesNotMatch(command, /codex-health-check\.ts/);
+  assert.doesNotMatch(command, /Run `pnpm ops:reconcile`/);
+});
+
+test('loop-dispatch bookends cycles with reconciliation and repair command reporting', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+  const cycleEnd = command.slice(command.indexOf('### Cycle-end reconciliation'), command.indexOf('### Cycle limit'));
+
+  assert.match(cycleEnd, /pnpm ops:orchestration-reconcile --current --json/);
+  assert.match(cycleEnd, /Repair command: \{first repair_plan action command \| none available\}/);
+  assert.match(command, /Start and end every cycle with `ops:orchestration-reconcile --current --json`/);
+});
+
+test('loop-dispatch summary exposes live executor state and recommendations', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+  const summary = command.slice(command.indexOf('LOOP-DISPATCH — SESSION COMPLETE'), command.indexOf('## --dry-run behavior'));
+
+  assert.match(summary, /Active lanes:\s+Claude \{N\}, Codex \{N\}, Unknown \{N\}/);
+  assert.match(summary, /Available slots:\s+Claude \{N\}, Codex \{N\}/);
+  assert.match(summary, /Blocked lanes:\s+\{issue IDs or none\}/);
+  assert.match(summary, /CI\/PM waiting:\s+\{PR numbers and reason or none\}/);
+  assert.match(summary, /Recommendations:\s+\{execution-state and lane-maximizer next recommendations\}/);
+});
+
+test('loop-dispatch delegates executor limits to concurrency config', () => {
+  const command = readClaudeCommand('loop-dispatch.md');
+
+  assert.match(command, /docs\/governance\/CONCURRENCY_CONFIG\.json/);
+  assert.match(command, /CONCURRENCY_CONFIG\.json owns lane limits/);
+  assert.doesNotMatch(command, /Claude slots at cap \(2\/2\)/);
+  assert.doesNotMatch(command, /max 2 Claude/);
+  assert.doesNotMatch(command, /max 4 Codex/);
 });

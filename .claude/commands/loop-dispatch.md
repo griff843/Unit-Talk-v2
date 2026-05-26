@@ -19,13 +19,62 @@ Continuous dispatch loop. Invokes `/dispatch-board` repeatedly until the board i
 
 ---
 
-## Phase 0: Safety gates (all must pass before first cycle)
+## Phase 0: Live safety gates (all must pass before first cycle)
 
-Run all four checks before dispatching any issue. Abort on any failure — do not proceed to Phase 1.
+Run the live governor and reconciliation checks before dispatching any issue. Abort on any hard fail or block — do not proceed to Phase 1.
 
-### Gate 1 — Lane-governor concurrency preflight
+### Gate 1 — Merge risk
 
-Run the same preflight as `/dispatch` Phase 0:
+```bash
+pnpm ops:merge-risk
+```
+
+If the report includes any `hard_fail` or `block` condition:
+
+```
+[loop-dispatch] HALTED — merge-risk blocked: {top condition}. Resolve the block before running /loop-dispatch.
+```
+
+### Gate 2 — Execution state
+
+```bash
+pnpm ops:execution-state
+```
+
+Use this report as the concurrency authority for active lanes by executor, available slots, blocked lanes, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions. If it reports a hard fail, block, unavailable merge mutex for a required merge action, or no available slot for the candidate executor:
+
+```
+[loop-dispatch] HALTED — execution-state blocked: {reason}. Resolve the block before running /loop-dispatch.
+```
+
+### Gate 3 — Lane maximizer
+
+```bash
+pnpm ops:lane-maximizer
+```
+
+Use this report as the dispatch recommendation authority. If it reports no safe dispatchable candidates, a hard fail, or a blocked wave plan:
+
+```
+[loop-dispatch] HALTED — lane-maximizer found no safe dispatch wave: {reason}.
+```
+
+### Gate 4 — Current-state reconciliation
+
+```bash
+pnpm ops:orchestration-reconcile --current --json
+```
+
+If the verdict is not pass, surface exactly one repair command from the first repair-plan action and stop before dispatching:
+
+```
+[loop-dispatch] HALTED — reconciliation drift detected.
+Repair command: {first repair_plan action command | none available}
+```
+
+### Optional operator readout — Lane-governor summary
+
+After the executable gates pass, the operator may ask the lane-governor agent for a concise summary. This is advisory only; the scripts above are the authority.
 
 ```typescript
 Agent({
@@ -35,63 +84,7 @@ Agent({
 })
 ```
 
-If lane-governor returns BLOCKED or any forbidden combination is active:
-
-```
-[loop-dispatch] HALTED — lane-governor blocked: {reason}. Resolve the block before running /loop-dispatch.
-```
-
-### Gate 2 — Ghost lane count
-
-Read `docs/06_status/lanes/` and count manifests where `status ∈ {started, in_progress, in_review, blocked, reopened}` and `heartbeat_at` is older than 48 hours.
-
-```bash
-node -e "
-const fs = require('fs'), path = require('path');
-const dir = 'docs/06_status/lanes';
-const cutoff = Date.now() - 48 * 60 * 60 * 1000;
-const ACTIVE = new Set(['started','in_progress','in_review','blocked','reopened']);
-const ghosts = fs.readdirSync(dir)
-  .filter(f => f.endsWith('.json'))
-  .map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')); } catch(e) { return null; } })
-  .filter(m => m && ACTIVE.has(m.status) && m.heartbeat_at && new Date(m.heartbeat_at).getTime() < cutoff);
-console.log(JSON.stringify({ count: ghosts.length, ids: ghosts.map(m => m.issue_id) }));
-"
-```
-
-If ghost count ≥ 2:
-
-```
-[loop-dispatch] HALTED — {N} ghost lane(s) detected. Run `pnpm ops:reconcile` first.
-Ghost lanes: {IDs}
-```
-
-A single ghost lane is a warning only — log it and continue.
-
-### Gate 3 — Codex health check
-
-```bash
-npx tsx scripts/ops/codex-health-check.ts --json
-```
-
-If `healthy: false`: log a warning and continue in Claude-only mode. Do not abort.
-
-```
-[loop-dispatch] WARNING — Codex unavailable ({error}). Continuing Claude-only. Codex candidates will be routed to Claude or deferred.
-```
-
-### Gate 4 — Activation gate (Phase 1 + Phase 2 completeness)
-
-Read `docs/06_status/SYSTEM_HARDENING_CHECKLIST.md`. Verify that every item in Phase 1 and Phase 2 shows `✅ merged`.
-
-If any Phase 1 or Phase 2 item is not `✅ merged`:
-
-```
-[loop-dispatch] HALTED — system hardening Phase 1/2 incomplete. Finish hardening before enabling continuous dispatch.
-Incomplete items: {list}
-```
-
-This gate is the deliberate activation lock for continuous dispatch. It exists because autonomous amplification of drift is worse than manual execution. The gate is satisfied when all Phase 1 and Phase 2 rows in the checklist show `✅ merged`. Phase 3 items do not affect this gate.
+Concurrency limits, singleton classes, and forbidden combinations come from `docs/governance/CONCURRENCY_CONFIG.json`; policy rationale lives in `docs/governance/LANE_CONCURRENCY_POLICY.md`. Do not copy numeric lane limits into this command.
 
 ---
 
@@ -109,13 +102,21 @@ max_cycles       = 5   (or --cycles N, clamped to 10)
 ### Cycle start
 
 1. Increment `cycle_count`.
-2. Log cycle header:
+2. Re-run the live safety gates:
+   ```bash
+   pnpm ops:merge-risk
+   pnpm ops:execution-state
+   pnpm ops:lane-maximizer
+   pnpm ops:orchestration-reconcile --current --json
+   ```
+   Stop before new dispatch on any hard fail/block. If reconciliation does not pass, surface exactly one repair command from the first repair-plan action.
+3. Log cycle header:
    ```
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    [loop-dispatch] Cycle {cycle_count}/{max_cycles} — {timestamp}
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    ```
-3. Invoke `/dispatch-board` for one full cycle. Capture the cycle report (merges this cycle, awaiting PM, blocked, deferred).
+4. Invoke `/dispatch-board` for one full cycle. Capture the cycle report (merges this cycle, awaiting PM, blocked, deferred).
 
 ### After each cycle
 
@@ -128,14 +129,14 @@ Parse the cycle report for merge count:
 If `consecutive_zero ≥ 2`:
 ```
 [loop-dispatch] STALLED — two cycles with no merges. Check blocked lanes.
-Run `pnpm ops:reconcile` to inspect and repair stale state, then re-invoke /loop-dispatch.
+Run `pnpm ops:orchestration-reconcile --current --json` to inspect and repair stale state, then re-invoke /loop-dispatch.
 ```
 Exit the loop.
 
-**Circuit breaker — Claude slot cap:**
-After each cycle, re-read `docs/06_status/lanes/` slot counts. If Claude is at cap (2/2) and no active Claude lane has a PR open for merge, pause: do not start the next cycle until a lane closes. Log:
+**Circuit breaker — executor slot cap:**
+After each cycle, re-run `pnpm ops:execution-state`. If the next recommended executor has no available slot and no active lane is ready to merge, pause: do not start the next cycle until a lane closes. Log:
 ```
-[loop-dispatch] PAUSED — Claude slots at cap (2/2). Waiting for a lane to close before next cycle.
+[loop-dispatch] PAUSED — {executor} slots unavailable per CONCURRENCY_CONFIG.json. Waiting for a lane to close before next cycle.
 ```
 Wait and re-check. Once a slot opens, resume.
 
@@ -157,6 +158,21 @@ Parse `dispatch_candidates`. If empty (all remaining issues are external-gated, 
 ```
 
 Exit the loop and proceed to Phase 2.
+
+### Cycle-end reconciliation
+
+Before deciding whether to run another cycle, run:
+
+```bash
+pnpm ops:orchestration-reconcile --current --json
+```
+
+If the verdict is not pass, stop the loop and surface exactly one repair command:
+
+```
+[loop-dispatch] HALTED — post-cycle reconciliation drift detected.
+Repair command: {first repair_plan action command | none available}
+```
 
 ### Cycle limit
 
@@ -189,6 +205,11 @@ Total merged:     {N} (across all cycles)
 Awaiting PM:      {N} T1 PR(s) open
 Still blocked:    {N} issue(s)
 External-gated:   {N} issue(s) deferred
+Active lanes:     Claude {N}, Codex {N}, Unknown {N}
+Available slots:  Claude {N}, Codex {N}
+Blocked lanes:    {issue IDs or none}
+CI/PM waiting:    {PR numbers and reason or none}
+Recommendations:  {execution-state and lane-maximizer next recommendations}
 
 Cycle breakdown:
   Cycle 1: {N} merged, {N} blocked, {N} deferred
@@ -197,7 +218,7 @@ Cycle breakdown:
 Next action:
   Board clear   → nothing; run /loop-dispatch again when new issues are Ready
   Cycle limit   → run /loop-dispatch to continue
-  Stalled       → run `pnpm ops:reconcile`, then /loop-dispatch
+  Stalled       → run `pnpm ops:orchestration-reconcile --current --json`, then /loop-dispatch
   T1 gate       → review T1 PR(s) and post PM_VERDICT; then /loop-dispatch
   Halted        → resolve the reported gate failure, then /loop-dispatch
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -209,7 +230,7 @@ Next action:
 
 When invoked as `/loop-dispatch --dry-run`:
 
-1. Run all four safety gates (abort on failure as normal).
+1. Run all live safety gates (abort on failure as normal).
 2. Invoke `/dispatch-board --dry-run` once (shows routing table, no state change).
 3. Print:
    ```
@@ -223,10 +244,10 @@ When invoked as `/loop-dispatch --dry-run`:
 
 - **Never bypass a T1 gate.** The loop pauses; PM must respond. This applies inside a continuous loop exactly as it does in a manual `/dispatch-board` run.
 - **Hard limit: 5 cycles per invocation (default).** `--cycles N` overrides up to 10. This is a hard cap — no exceptions. Autonomous amplification of drift is worse than manual execution.
-- **Phase 1+2 activation gate is non-negotiable.** If the checklist shows any Phase 1 or Phase 2 item not `✅ merged`, continuous dispatch does not run.
-- **Ghost lane threshold: ≥ 2 aborts.** One ghost is a warning; two or more indicate systemic state drift.
-- **Codex unavailability is a warning, not an abort.** Claude-only mode continues; do not prevent dispatch because Codex is down.
-- **Claude slot cap pauses, does not abort.** The loop waits for a lane to close; it does not exit.
+- **Live ops scripts are authoritative.** `ops:merge-risk`, `ops:execution-state`, `ops:lane-maximizer`, and `ops:orchestration-reconcile --current --json` must pass before each cycle starts.
+- **Reconciliation gates bookend each cycle.** Start and end every cycle with `ops:orchestration-reconcile --current --json`; surface one repair command on drift.
+- **CONCURRENCY_CONFIG.json owns lane limits.** Do not duplicate numeric executor caps in this command prose.
+- **Executor slot caps pause, they do not abort.** The loop waits for a lane to close; it does not exit.
 - **Two consecutive zero-merge cycles abort.** This prevents infinite loops against a permanently blocked board.
 - **270-second inter-cycle pause is fixed.** Do not reduce it to speed up throughput — it exists to stay within the cache window and to allow manual intervention between cycles.
 - **This skill owns the loop control plane only.** All board reads, routing, lane lifecycle, and merge operations are delegated to `/dispatch-board`, `/dispatch`, and `/three-brain`. Never re-implement them here.
