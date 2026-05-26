@@ -1,0 +1,26 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1097",
+  "tier": "T1",
+  "lane_type": "governance",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/881",
+  "sha_binding": {
+    "verified_source_sha": "4cbd08369478aee90b3909b459555e6bc1d28aae",
+    "ci_sentinels": [
+      "pnpm verify: EXIT 0",
+      "pnpm test:db: 7/7 PASS"
+    ]
+  },
+  "verification": {
+    "pnpm_verify": "PASS",
+    "pnpm_test_db": {
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "duration_ms": 25121
+    },
+    "r_level_check": "PASS — no rules matched"
+  },
+  "generated_at": "2026-05-26T17:45:00.000Z",
+  "generated_by": "claude-sonnet-4-6"
+}
