@@ -12,6 +12,7 @@
   "files_changed": [
     ".ops/sync/UTV2-1175.yml",
     "docs/06_status/lanes/UTV2-1175.json",
+    ".lane/lanes/governance.yml",
     ".agents/skills/betting-domain/SKILL.md",
     ".agents/skills/branch-hygiene/SKILL.md",
     ".agents/skills/db-verify/SKILL.md",
@@ -36,6 +37,7 @@
   "file_scope_lock": [
     ".ops/sync/UTV2-1175.yml",
     "docs/06_status/lanes/UTV2-1175.json",
+    ".lane/lanes/governance.yml",
     ".agents/skills/betting-domain/SKILL.md",
     ".agents/skills/branch-hygiene/SKILL.md",
     ".agents/skills/db-verify/SKILL.md",
