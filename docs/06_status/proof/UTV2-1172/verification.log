@@ -1,9 +1,14 @@
 UTV2-1172 verification
+Merge SHA: ba9111ce595703610c7314c02e730be6df0c3cbc
 
 Focused test:
 Command: tsx --test scripts/ops/workflow-hardening.test.ts
 Result: PASS
 Summary: 19 tests passed, 0 failed.
+
+Repo test command:
+Command: pnpm test
+Result: PASS via pnpm verify
 
 Type check:
 Command: pnpm type-check
