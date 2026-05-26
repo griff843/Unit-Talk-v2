@@ -3,7 +3,8 @@
 ## Runtime Verification
 
 Branch: claude/utv2-1106-bypass-reclassification
-Commit SHA: 07bedb48c3ddce09dd6abef7c5fba04160d10a43
+Commit SHA (branch HEAD): 07bedb48c3ddce09dd6abef7c5fba04160d10a43
+Merge SHA (main): e6b0e27da65a99589a8a3338b45c04071366964f
 
 Scope: Audit/discovery lane — bypass-audit.md + lint fix only.
 No runtime behavior changed; no DB interactions introduced or modified.
