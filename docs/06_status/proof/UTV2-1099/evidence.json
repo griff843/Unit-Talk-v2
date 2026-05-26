@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1099",
   "tier": "T1",
   "executor": "claude",
-  "merge_sha": "TBD — to be updated post-merge",
+  "merge_sha": "5494e009c1542f5f0e893e8233b1eb801a3f2aa1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/884",
   "verified_at": "2026-05-26T20:36:00Z",
   "verifier": {
@@ -17,7 +17,8 @@
     "type_check": "PASS",
     "lint": "PASS",
     "build": "PASS",
-    "branch_sha": "18518b2d"
+    "branch_sha": "18518b2d6a84ebae4f2eb2d03ee51c55e7bc9f32",
+    "merge_sha": "5494e009c1542f5f0e893e8233b1eb801a3f2aa1"
   },
   "runtime_proof": {
     "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",

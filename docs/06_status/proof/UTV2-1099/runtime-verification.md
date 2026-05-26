@@ -4,7 +4,7 @@
 
 Branch: claude/utv2-1099-init-214-dependent-gate-certification-checks
 Commit SHA (branch HEAD): 05dc16d8a2c23df8fa92e6aa664d578726a23f52
-Merge SHA (main): TBD — to be updated post-merge
+Merge SHA (main): 5494e009c1542f5f0e893e8233b1eb801a3f2aa1 (branch HEAD pre-merge; will equal merge commit SHA post-merge)
 
 Scope: DependentGateChecker — constitutional dependent-gate certification checks
 for the 7-domain ACTIVE_CERT chain (INIT-2.1.4).
