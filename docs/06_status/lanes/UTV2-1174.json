@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1174-map-prompt-agents-authority",
   "branch": "claude/utv2-1174-map-prompt-agents-authority",
   "base_branch": "main",
-  "commit_sha": "6838ed44bbdc951f95882ce2da00330d3190d388",
+  "commit_sha": "cc909e8f0742d64898eb3cf31bab6fe61efcdbe2",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/878",
   "files_changed": [
     "docs/05_operations/agent-role-contracts.md",
