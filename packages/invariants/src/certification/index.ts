@@ -56,3 +56,17 @@ export type {
   WireEngineOptions,
   WireQuarantineOptions,
 } from './revocation-trigger-wiring.js';
+
+export {
+  DependentGateChecker,
+  DependentGateViolationError,
+  dependentGateChecker,
+} from './dependent-gate.js';
+
+export type {
+  DependentGateBlocker,
+  DependentGateEvent,
+  DependentGateCheckResult,
+  ProgramGateViolation,
+  ProgramGateCheckResult,
+} from './dependent-gate.js';

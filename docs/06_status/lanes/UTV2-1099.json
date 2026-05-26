@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1099",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1099-init-214-dependent-gate-certification-checks",
+  "branch": "claude/utv2-1099-init-214-dependent-gate-certification-checks",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1099/evidence.json",
+    "docs/06_status/proof/UTV2-1099/runtime-verification.md",
+    "package.json",
+    "packages/invariants/src/certification/dependent-gate.test.ts",
+    "packages/invariants/src/certification/dependent-gate.ts",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/types.ts",
+    "scripts/ops/cert-check.ts"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1099/evidence.json",
+    "docs/06_status/proof/UTV2-1099/runtime-verification.md",
+    "package.json",
+    "packages/invariants/src/certification/dependent-gate.test.ts",
+    "packages/invariants/src/certification/dependent-gate.ts",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/types.ts",
+    "scripts/ops/cert-check.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1099/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-26T19:38:10.650Z",
+  "heartbeat_at": "2026-05-26T19:38:10.650Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1099-init-214-dependent-gate-certification-checks.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1099-init-214-dependent-gate-certification-checks",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
