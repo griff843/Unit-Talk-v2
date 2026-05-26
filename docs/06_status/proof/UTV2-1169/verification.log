@@ -1,4 +1,5 @@
 UTV2-1169 verification log
+Merge: 4f02d5d0ce714e0f3ab6149e5bae2cac9cde49c5
 
 Commands run from /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1169-repair-merged-lane-closeout
 
@@ -8,6 +9,10 @@ Summary: lane-close regression suite passed 55 tests, including repair mode cove
 
 pnpm type-check
 Result: PASS
+
+pnpm test
+Result: PASS
+Summary: Covered by the full pnpm verify gate, which runs the repository test suite after lint, type-check, and build.
 
 tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Result: PASS

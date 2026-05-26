@@ -3,6 +3,7 @@
 Issue: UTV2-1169 - Add repair mode for already-merged lane closeout
 Branch: codex/utv2-1169-repair-merged-lane-closeout
 Head: ba53475ea4fae51385c0e42446de01021dd5bb04
+Merge: 4f02d5d0ce714e0f3ab6149e5bae2cac9cde49c5
 
 ## Summary
 
@@ -25,3 +26,5 @@ The lane closeout command now has a repair path for already-merged PR lanes. Rep
 ## Verification
 
 No Tier C runtime, domain, database, worker, migration, or contract paths were changed. The implementation is limited to governance closeout tooling and focused regression tests.
+
+Post-merge closeout proof is bound to merge SHA `4f02d5d0ce714e0f3ab6149e5bae2cac9cde49c5`.

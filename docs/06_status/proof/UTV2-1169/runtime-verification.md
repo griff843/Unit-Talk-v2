@@ -3,6 +3,7 @@
 Issue: UTV2-1169 - Add repair mode for already-merged lane closeout
 Branch: codex/utv2-1169-repair-merged-lane-closeout
 Head: ba53475ea4fae51385c0e42446de01021dd5bb04
+Merge: 4f02d5d0ce714e0f3ab6149e5bae2cac9cde49c5
 
 ## Verification
 
@@ -12,3 +13,5 @@ Head: ba53475ea4fae51385c0e42446de01021dd5bb04
 - `pnpm verify`
 
 The lane changes only operator governance tooling for lane closeout repair. It does not change production API runtime, persistence schema, delivery behavior, or migration state.
+
+Post-merge closeout proof is bound to merge SHA `4f02d5d0ce714e0f3ab6149e5bae2cac9cde49c5`.
