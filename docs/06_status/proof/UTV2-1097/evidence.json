@@ -35,9 +35,14 @@
       "UTV2-996: correction chain additive — original settlement row not mutated"
     ],
     "row_counts": {
-      "db_tests": 7,
-      "db_pass": 7,
-      "db_fail": 0
+      "picks": 5283,
+      "certification_records": 0,
+      "certification_transition_events": 0,
+      "pick_lifecycle": 13622,
+      "distribution_outbox": 439,
+      "settlement_records": 398,
+      "sampled_at": "2026-05-26T18:35:00Z",
+      "project_ref": "zfzdnfwdarxucxtaojxm"
     },
     "command": "pnpm test:db"
   }
