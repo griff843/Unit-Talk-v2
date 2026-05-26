@@ -3,7 +3,9 @@
 ## Verification
 
 Branch: codex/utv2-1105-mechanical-expiration-enforcement
-Commit: 6959feee86b1321e8199d03b3d5909ddf8283b1d
+Commit (branch HEAD): 6959feee86b1321e8199d03b3d5909ddf8283b1d
+Merge SHA (main): c40678e3585cc4d256d870070711922333a78857
+PR: https://github.com/griff843/Unit-Talk-v2/pull/882
 
 pnpm verify — EXIT 0
 
