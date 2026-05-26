@@ -2,6 +2,7 @@ schema_version: 1
 lane_id: governance
 lane_type: governance
 allowed_path_globs:
+  - .agents/skills/**
   - .claude/agents/**
   - .claude/commands/**
   - .claude/hooks/**

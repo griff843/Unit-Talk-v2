@@ -1,6 +1,9 @@
 ---
 name: pick-lifecycle
 description: Guard Unit Talk lifecycle transitions. Use before changing picks.status, pick_lifecycle, settlement records, distribution enqueue paths, or any code that transitions a pick across lifecycle states.
+category: implementation
+owner: codex
+trigger: Before changing pick lifecycle state, settlement records, distribution enqueue paths, or lifecycle transition code.
 ---
 
 # Pick Lifecycle

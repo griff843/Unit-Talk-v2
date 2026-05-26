@@ -1,6 +1,9 @@
 ---
 name: merge-conflict-resolution
 description: Resolve Unit Talk merge conflicts safely. Use when merging feature branches into main or another integration branch, especially across shared tests, promotion logic, routing, or runtime code.
+category: governance
+owner: codex
+trigger: Resolving merge conflicts or merging feature branches into main or another integration branch.
 ---
 
 # Merge Conflict Resolution

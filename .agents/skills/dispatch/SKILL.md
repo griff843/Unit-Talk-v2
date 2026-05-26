@@ -1,6 +1,9 @@
 ---
 name: dispatch
 description: Run Unit Talk's Codex-native dispatch workflow. Use when the user asks for /dispatch, queue dispatch, Codex lane dispatch, or one-command issue execution from Linear into a lane.
+category: governance
+owner: codex
+trigger: User asks for /dispatch, queue dispatch, Codex lane dispatch, or one-command Linear issue execution.
 ---
 
 # Dispatch

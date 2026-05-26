@@ -322,7 +322,7 @@ for (const agent of EXISTING_AGENTS) {
   });
 }
 
-// ── Integration: all existing skills are valid (migration notes OK, no failures) ─
+// ── Integration: all existing skills are routeable ────────────────────────────
 
 const EXISTING_SKILLS = [
   'betting-domain',
@@ -347,7 +347,7 @@ const EXISTING_SKILLS = [
 ];
 
 for (const skill of EXISTING_SKILLS) {
-  test(`integration: existing skill "${skill}" has no hard failures`, () => {
+  test(`integration: existing skill "${skill}" has routing metadata`, () => {
     const filePath = `.agents/skills/${skill}/SKILL.md`;
     const content = readFileSync(filePath, 'utf8');
     const result = validateSkill(filePath, content);
@@ -356,5 +356,9 @@ for (const skill of EXISTING_SKILLS) {
       true,
       `Expected ${skill} to be valid but got failures: ${JSON.stringify(result.failures)}`,
     );
+    assert.deepStrictEqual(result.migrationNotes, [], `Expected ${skill} to have no migration notes`);
+    assert.ok(result.contract?.category, `Expected ${skill} category metadata`);
+    assert.ok(result.contract?.owner, `Expected ${skill} owner metadata`);
+    assert.ok(result.contract?.trigger, `Expected ${skill} trigger metadata`);
   });
 }

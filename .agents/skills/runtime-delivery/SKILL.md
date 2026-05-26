@@ -1,6 +1,9 @@
 ---
 name: runtime-delivery
 description: Guard Unit Talk runtime delivery behavior across API enqueue, worker processing, delivery adapters, and runtime health semantics. Use when changing delivery flow or runtime observability.
+category: implementation
+owner: codex
+trigger: Changing API enqueue, worker processing, delivery adapters, runtime health, or delivery observability.
 ---
 
 # Runtime Delivery

@@ -1,6 +1,9 @@
 ---
 name: db-verify
 description: Verify live Unit Talk DB truth after implementation. Use after DB-writing changes, during proof capture, or when runtime, operator, and persistence state may disagree.
+category: verification
+owner: codex
+trigger: After DB-writing changes, during proof capture, or when runtime, operator, and persistence state may disagree.
 ---
 
 # DB Verify

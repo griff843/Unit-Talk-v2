@@ -1,6 +1,9 @@
 ---
 name: proof-closeout
 description: Run Unit Talk proof and closeout workflows efficiently. Use when verifying implementation, preparing closeout evidence, checking runtime health, or building a compact proof bundle for a task.
+category: verification
+owner: codex
+trigger: Verifying implementation, preparing closeout evidence, checking runtime health, or building proof bundles.
 ---
 
 # Proof Closeout

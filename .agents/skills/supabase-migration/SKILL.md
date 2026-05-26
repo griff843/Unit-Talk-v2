@@ -1,6 +1,9 @@
 ---
 name: supabase-migration
 description: Handle Unit Talk database migrations safely. Use when adding or changing Supabase schema, regenerating database types, or validating DB-layer changes after a migration.
+category: implementation
+owner: codex
+trigger: Adding or changing Supabase schema, regenerating database types, or validating DB-layer migration changes.
 ---
 
 # Supabase Migration

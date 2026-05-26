@@ -1,6 +1,9 @@
 ---
 name: system-state-loader
 description: Load current Unit Talk repo state at session start or after context loss. Use when beginning work, after a reset, or whenever repo, queue, and runtime truth may have drifted from memory.
+category: governance
+owner: codex
+trigger: Beginning work, after reset/context loss, or whenever repo, queue, and runtime truth may have drifted.
 ---
 
 # System State Loader
