@@ -594,6 +594,8 @@ test('post-merge lane close workflow delegates to repair-merged lane closeout', 
   );
 
   assert.match(workflow, /pnpm ops:lane-close "\$ISSUE_ID" --repair-merged --explain/);
+  assert.match(workflow, /Bind proof artifacts to merge SHA/);
+  assert.match(workflow, /git add docs\/06_status\/proof\/"\$ISSUE_ID"\//);
   assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID"/);
   assert.doesNotMatch(workflow, /manifest\.status = 'done'/);
   assert.match(workflow, /git add "\$MANIFEST_PATH"/);

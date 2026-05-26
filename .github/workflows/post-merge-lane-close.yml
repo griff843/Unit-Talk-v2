@@ -172,6 +172,25 @@ jobs:
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Bind proof artifacts to merge SHA
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        env:
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, 'utf8'));
+            const proofPaths = Array.isArray(manifest.expected_proof_paths) ? manifest.expected_proof_paths : [];
+            for (const proofPath of proofPaths) {
+              if (!fs.existsSync(proofPath)) continue;
+              const text = fs.readFileSync(proofPath, 'utf8');
+              if (text.includes(process.env.MERGE_SHA)) continue;
+              fs.writeFileSync(proofPath, text.replace(/\s*$/, '') + '\n\nMerge SHA: ' + process.env.MERGE_SHA + '\n');
+              console.log('Bound proof artifact to merge SHA: ' + proofPath);
+            }
+          "
+
       - name: Run lane closeout (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         id: lane_close
@@ -250,6 +269,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$MANIFEST_PATH"
+          git add docs/06_status/proof/"$ISSUE_ID"/ 2>/dev/null || true
 
           # Remove per-issue sync file now that the lane is closed.
           per_issue_sync=".ops/sync/${ISSUE_ID}.yml"
