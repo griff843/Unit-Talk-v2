@@ -22,7 +22,7 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 **Usage:**
 - `/dispatch` — auto-pick the top dispatch candidate and execute
 - `/dispatch UTV2-###` — execute a specific issue
-- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel (up to 2 Claude + up to 4 Codex for safe classes)
+- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel within `docs/governance/CONCURRENCY_CONFIG.json` executor limits and singleton/forbidden-combination rules
 - `/dispatch --dry-run` — show what would be dispatched without executing
 
 **Arguments:** `$ARGUMENTS`
@@ -31,11 +31,36 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 
 ## Execution flow
 
-### Phase 0: Concurrency preflight
+### Phase 0: Live safety gates
 
-Before resolving targets or routing any issue, confirm the board is safe to accept new lanes.
+Before resolving targets or routing any issue, run the live governor and reconciliation checks. Abort on any hard fail or block; do not proceed to Phase 1.
 
-Invoke the lane-governor subagent:
+```bash
+pnpm ops:merge-risk
+pnpm ops:execution-state
+pnpm ops:lane-maximizer
+pnpm ops:orchestration-reconcile --current --json
+```
+
+Use `ops:execution-state` as the concurrency authority for active lanes by executor, available slots, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions.
+
+Use `ops:lane-maximizer` as the dispatch recommendation authority. Executor limits, singleton classes, and forbidden combinations come from `docs/governance/CONCURRENCY_CONFIG.json`; policy rationale lives in `docs/governance/LANE_CONCURRENCY_POLICY.md`. Do not copy numeric executor caps into this command.
+
+If `ops:merge-risk`, `ops:execution-state`, or `ops:lane-maximizer` reports a hard fail, block, no safe slot for the candidate executor, or an unsafe forbidden combination:
+
+```
+[dispatch] HALTED — live governor blocked: {top condition}. Resolve the block before dispatching.
+```
+
+If reconciliation does not pass, surface exactly one repair command from the first repair-plan action and stop before dispatching:
+
+```
+[dispatch] HALTED — reconciliation drift detected.
+Repair command: {first repair_plan action command | none available}
+```
+
+After the executable gates pass, the operator may ask the lane-governor agent for a concise summary. This is advisory only; the scripts above are the authority.
+
 ```typescript
 Agent({
   subagent_type: "lane-governor",
@@ -44,17 +69,13 @@ Agent({
 })
 ```
 
-If lane-governor returns BLOCKED or any forbidden combination is active: stop, report the specific block, do not proceed to Phase 1.
-
-If lane-governor returns headroom available: proceed to Phase 1 with the slot counts confirmed.
-
 ### Phase 1: Resolve targets
 
 If no issue IDs provided:
 1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
 2. Parse `dispatch_candidates` from the JSON output
 3. If empty: report "No dispatchable issues. Add tier labels to Ready issues in Linear." and stop.
-4. Pick candidates up to capacity: up to 2 Claude lanes + up to 4 Codex lanes for safe work classes (Governance, Hygiene, Verification, Delivery/UI); dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per type — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
+4. Pick candidates from `ops:lane-maximizer` recommendations up to the available executor slots reported by `ops:execution-state`; dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per config and policy.
 
 If issue IDs provided:
 1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
@@ -241,8 +262,8 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 ## Rules
 
 - **Never dispatch T1 without PM confirmation.** T1 changes require plan approval before execution.
-- **Default: max 2 Claude lanes (safe work classes).** Dangerous classes (Runtime, Migration, Modeling, Data/Canonical) are singleton per type regardless. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
-- **Default: max 4 Codex lanes (safe work classes).** Same dangerous-class restrictions apply. Total hard cap is 6 active lanes across all executors.
+- **Executor limits are config-backed.** Use `docs/governance/CONCURRENCY_CONFIG.json` through `ops:execution-state` and `ops:lane-maximizer`; do not self-authorize lane expansion or duplicate numeric caps in prose.
+- **Singleton and forbidden-combination rules are config-backed.** Runtime, migration, modeling, and data/canonical lanes remain singleton per the live governor model.
 - **Never start a lane if file scope overlaps with an active lane.** Check manifests first.
 - **Fail closed.** If any prerequisite is unclear, skip the issue and report why.
 - **Commit message must include issue ID.** Format: `feat|fix|chore(scope): UTV2-### description`

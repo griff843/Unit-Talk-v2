@@ -381,3 +381,43 @@ test('loop-dispatch delegates executor limits to concurrency config', () => {
   assert.doesNotMatch(command, /max 2 Claude/);
   assert.doesNotMatch(command, /max 4 Codex/);
 });
+
+test('dispatch surfaces share live governor and reconciliation gates', () => {
+  for (const name of ['dispatch.md', 'dispatch-board.md', 'loop-dispatch.md']) {
+    const command = readClaudeCommand(name);
+
+    for (const required of [
+      'pnpm ops:merge-risk',
+      'pnpm ops:execution-state',
+      'pnpm ops:lane-maximizer',
+      'pnpm ops:orchestration-reconcile --current --json',
+    ]) {
+      assert.match(command, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${name} missing ${required}`);
+    }
+
+    assert.match(command, /Repair command: \{first repair_plan action command \| none available\}/, `${name} must surface one repair command`);
+  }
+});
+
+test('dispatch surfaces delegate lane counts and forbidden combinations to config', () => {
+  for (const name of ['dispatch.md', 'dispatch-board.md']) {
+    const command = readClaudeCommand(name);
+
+    assert.match(command, /docs\/governance\/CONCURRENCY_CONFIG\.json/, `${name} must cite concurrency config`);
+    assert.match(command, /forbidden-combination|forbidden combination/i, `${name} must preserve forbidden-combination handling`);
+    assert.doesNotMatch(command, /max 2 Claude/i);
+    assert.doesNotMatch(command, /max 4 Codex/i);
+    assert.doesNotMatch(command, /up to 2 Claude/i);
+    assert.doesNotMatch(command, /up to 4 Codex/i);
+  }
+});
+
+test('active dispatch docs do not reference stale lane files or reconcile commands', () => {
+  for (const name of ['dispatch.md', 'dispatch-board.md', 'loop-dispatch.md']) {
+    const command = readClaudeCommand(name);
+
+    assert.doesNotMatch(command, /\.claude\/lanes\.json/);
+    assert.doesNotMatch(command, /pnpm ops:reconcile\b/);
+    assert.doesNotMatch(command, /codex-health-check\.ts/);
+  }
+});
