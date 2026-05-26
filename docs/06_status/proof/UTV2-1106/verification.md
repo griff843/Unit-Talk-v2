@@ -12,12 +12,21 @@ env:check     PASS
 lint          PASS
 type-check    PASS
 build         PASS
-test          PASS
+test          PASS (612/612)
 ```
 
-All 612 tests pass. No new test file added (audit deliverable is a .md document, not
-executable code). The only code change is removal of an unused `RevocationTrigger` import
-in state-machine.ts — no logic changed, no test wiring required.
+## pnpm test:db
+
+```
+1..7
+# tests 7
+# pass 7
+# fail 0
+# duration_ms 28991
+```
+
+7/7 live Supabase tests pass. No DB code introduced in this lane — test:db confirms
+no regressions from the unused import removal in state-machine.ts.
 
 ## R-Level Compliance
 
@@ -27,4 +36,4 @@ audit/documentation lane)
 ## Notes
 
 UTV2-1106 scope: audit/discovery only. bypass-audit.md catalogs 15 bypass paths.
-No behavioral changes introduced. Final enforcement semantics depend on UTV2-1105.
+No behavioral changes introduced. UTV2-1105 expiration semantics are now merged on main.
