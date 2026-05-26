@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1173-pr-review-packet-lane-metadata",
   "branch": "codex/utv2-1173-pr-review-packet-lane-metadata",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/873",
   "files_changed": [],
   "file_scope_lock": [
@@ -16,16 +16,38 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1173/diff-summary.md",
+    "docs/06_status/proof/UTV2-1173/runtime-verification.md",
     "docs/06_status/proof/UTV2-1173/verification.log"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-26T03:10:03.148Z",
-  "heartbeat_at": "2026-05-26T03:31:45.347Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T07:51:20.617Z",
+  "closed_at": "2026-05-26T07:51:20.617Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1173-pr-review-packet-lane-metadata.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T07:21:40.130Z",
+      "verdict": "pass",
+      "merge_sha": "96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/873"
+    },
+    {
+      "checked_at": "2026-05-26T07:50:39.140Z",
+      "verdict": "fail",
+      "merge_sha": "96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
