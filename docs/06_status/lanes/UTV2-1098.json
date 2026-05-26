@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1098",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1098-revocation-trigger-wiring",
+  "branch": "codex/utv2-1098-revocation-trigger-wiring",
+  "base_branch": "main",
+  "commit_sha": "c3231bbd",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/883",
+  "files_changed": [
+    "packages/invariants/src/certification/state-machine.ts",
+    ".ops/sync/UTV2-1098.yml",
+    "docs/06_status/proof/UTV2-1098/evidence.json",
+    "docs/06_status/proof/UTV2-1098/verification.md"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1098/evidence.json",
+    "docs/06_status/proof/UTV2-1098/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1098/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-26T17:06:50.884Z",
+  "heartbeat_at": "2026-05-26T17:06:50.884Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1098-revocation-trigger-wiring.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1098-revocation-trigger-wiring",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
