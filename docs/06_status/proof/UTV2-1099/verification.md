@@ -3,8 +3,8 @@
 ## Verification
 
 Branch: claude/utv2-1099-init-214-dependent-gate-certification-checks
-Commit (branch HEAD): 05dc16d8a2c23df8fa92e6aa664d578726a23f52
-Merge SHA (main): 5494e009c1542f5f0e893e8233b1eb801a3f2aa1 (branch HEAD pre-merge; will equal merge commit SHA post-merge)
+Commit (branch HEAD): 4a82a60ea38ac6f8faad39e8e510c7aae83a79c9
+Merge SHA (main): e3a247e13c2f65c90676c816dc1e231d9d1ea475
 PR: https://github.com/griff843/Unit-Talk-v2/pull/884
 
 pnpm verify — EXIT 0

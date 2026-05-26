@@ -3,9 +3,9 @@
   "issue_id": "UTV2-1099",
   "tier": "T1",
   "executor": "claude",
-  "merge_sha": "5494e009c1542f5f0e893e8233b1eb801a3f2aa1",
+  "merge_sha": "e3a247e13c2f65c90676c816dc1e231d9d1ea475",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/884",
-  "verified_at": "2026-05-26T20:36:00Z",
+  "verified_at": "2026-05-26T20:51:21Z",
   "verifier": {
     "identity": "claude/utv2-1099-init-214-dependent-gate-certification-checks"
   },
@@ -18,7 +18,7 @@
     "lint": "PASS",
     "build": "PASS",
     "branch_sha": "18518b2d6a84ebae4f2eb2d03ee51c55e7bc9f32",
-    "merge_sha": "5494e009c1542f5f0e893e8233b1eb801a3f2aa1"
+    "merge_sha": "e3a247e13c2f65c90676c816dc1e231d9d1ea475"
   },
   "runtime_proof": {
     "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",
