@@ -6,7 +6,7 @@ Tier: T2
 Lane type: governance
 Branch: codex/utv2-1170-wire-loop-dispatch-governor-gates
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/876
-Head SHA: 49fc67cc4dd659aefcf2d71271e8be35f57e22bd
+Head SHA: 652b3848ccb3d98754c9eb5cc2f4895c518e1742
 Merge SHA: N/A
 result: PASS
 
@@ -25,5 +25,5 @@ result: PASS
 
 ## SHA Binding
 
-Head SHA: 49fc67cc4dd659aefcf2d71271e8be35f57e22bd
+Head SHA: 652b3848ccb3d98754c9eb5cc2f4895c518e1742
 Merge SHA: N/A
