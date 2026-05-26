@@ -25,3 +25,5 @@ Final output:
 [command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json
 [check-migration-versions] 110 migration file(s) verified — no duplicate versions.
 [lint-migrations] 110 migration file(s) checked — no findings.
+
+Merge SHA: 91c88e79835e03aeb455c18e32419042becf1208

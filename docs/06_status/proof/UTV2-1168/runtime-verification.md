@@ -13,3 +13,5 @@ Head: c65d13ed33a9124483bde560bc6f9153ea62585d
 - `pnpm verify`
 
 The lane changes GitHub post-merge closeout orchestration and regression coverage. It does not change production API runtime, persistence schema, delivery behavior, or migration state.
+
+Merge SHA: 91c88e79835e03aeb455c18e32419042becf1208

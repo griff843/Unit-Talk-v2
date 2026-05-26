@@ -25,3 +25,5 @@ UTV2-1168 routes post-merge lane closeout through the same authoritative closeou
 - `pnpm type-check`
 - `pnpm test` (covered by `pnpm verify`)
 - `pnpm verify`
+
+Merge SHA: 91c88e79835e03aeb455c18e32419042becf1208
