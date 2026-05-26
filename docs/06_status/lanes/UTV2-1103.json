@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1103",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1103-proof-freshness-enforcement",
+  "branch": "claude/utv2-1103-proof-freshness-enforcement",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1103.yml",
+    "docs/06_status/lanes/UTV2-1103.json",
+    "docs/06_status/proof/UTV2-1103/evidence.json",
+    "docs/06_status/proof/UTV2-1103/verification.md",
+    "packages/invariants/package.json",
+    "packages/invariants/src/index.ts",
+    "packages/invariants/src/proof-freshness.test.ts",
+    "packages/invariants/src/proof-freshness.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1103/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-26T02:07:42.959Z",
+  "heartbeat_at": "2026-05-26T02:07:42.959Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1103-proof-freshness-enforcement.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1103-proof-freshness-enforcement",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
