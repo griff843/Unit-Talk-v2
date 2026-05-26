@@ -30,14 +30,36 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1103/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-26T02:07:42.959Z",
-  "heartbeat_at": "2026-05-26T02:07:42.959Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T02:55:03.488Z",
+  "closed_at": "2026-05-26T02:55:03.488Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1103-proof-freshness-enforcement.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T02:53:54.304Z",
+      "verdict": "fail",
+      "merge_sha": "46ded96ff700f6056728b511f4051872fc223558",
+      "failures": [
+        "C6",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T02:54:51.719Z",
+      "verdict": "pass",
+      "merge_sha": "46ded96ff700f6056728b511f4051872fc223558",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
