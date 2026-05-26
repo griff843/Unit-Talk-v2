@@ -1,0 +1,40 @@
+UTV2-1173 verification evidence
+Generated: 2026-05-26
+Branch: codex/utv2-1173-pr-review-packet-lane-metadata
+
+Command: tsx --test scripts/ops/pr-review-packet.test.ts
+Result: PASS
+Summary:
+1..13
+# tests 13
+# suites 0
+# pass 13
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+
+Command: pnpm type-check
+Result: PASS
+Summary:
+> @unit-talk/v2@0.1.0 type-check
+> pnpm exec tsc -b tsconfig.json
+
+Command: tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Result: PASS
+Summary:
+Verdict: PASS
+Changed files: 2
+Rules matched: (none) - no R-level artifacts required for this diff
+
+Command: pnpm verify
+Result: PASS
+Summary:
+[sync-check] OK (per-issue): branch "codex/utv2-1173-pr-review-packet-lane-metadata" <-> .ops/sync/UTV2-1173.yml
+[system-alignment] verdict=PASS fail=0 warn=0
+[automation-coverage] verdict=PASS fail=0 warn=0 classified=15
+Environment files passed validation.
+[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json
+[check-migration-versions] 110 migration file(s) verified - no duplicate versions.
+[lint-migrations] 110 migration file(s) checked - no findings.
+
