@@ -1,0 +1,27 @@
+UTV2-1169 verification log
+
+Commands run from /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1169-repair-merged-lane-closeout
+
+pnpm exec tsx --test scripts/ops/lane-close.test.ts
+Result: PASS
+Summary: lane-close regression suite passed 55 tests, including repair mode coverage for stale SHA, missing preflight token, already-done idempotency, and unmerged PR refusal.
+
+pnpm type-check
+Result: PASS
+
+tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Result: PASS
+Summary: changed files 2; no R-level rules triggered.
+
+pnpm verify
+Result: PASS
+Final output:
+> @unit-talk/v2@0.1.0 verify:commands /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1169-repair-merged-lane-closeout
+> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
+
+> @unit-talk/discord-bot@0.1.0 command-manifest:check /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1169-repair-merged-lane-closeout/apps/discord-bot
+> tsx scripts/sync-command-manifest.ts --check
+
+[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1169-repair-merged-lane-closeout/apps/discord-bot/command-manifest.json
+[check-migration-versions] 110 migration file(s) verified - no duplicate versions.
+[lint-migrations] 110 migration file(s) checked - no findings.
