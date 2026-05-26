@@ -17,10 +17,13 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1105/evidence.json",
     "docs/06_status/proof/UTV2-1105/verification.md",
-    "packages/invariants/src/governance-exception.ts"
+    "packages/invariants/src/governance-exception.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    ".ops/sync/UTV2-1105.yml"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1105/evidence.json"
+    "docs/06_status/proof/UTV2-1105/evidence.json",
+    "docs/06_status/proof/UTV2-1105/verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-05-26T17:06:39.328Z",
