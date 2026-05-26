@@ -3,7 +3,9 @@
 ## Verification
 
 Branch: claude/utv2-1106-bypass-reclassification
-Commit: 07bedb48c3ddce09dd6abef7c5fba04160d10a43
+Commit (branch HEAD): 07bedb48c3ddce09dd6abef7c5fba04160d10a43
+Merge SHA (main): e6b0e27da65a99589a8a3338b45c04071366964f
+PR: https://github.com/griff843/Unit-Talk-v2/pull/880
 
 pnpm verify — EXIT 0
 

@@ -16,7 +16,8 @@
     "type_check": "PASS",
     "lint": "PASS",
     "build": "PASS",
-    "branch_sha": "07bedb48c3ddce09dd6abef7c5fba04160d10a43"
+    "branch_sha": "07bedb48c3ddce09dd6abef7c5fba04160d10a43",
+    "merge_sha": "e6b0e27da65a99589a8a3338b45c04071366964f"
   },
   "runtime_proof": {
     "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",
