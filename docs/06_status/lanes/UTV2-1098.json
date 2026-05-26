@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1098-revocation-trigger-wiring",
   "branch": "codex/utv2-1098-revocation-trigger-wiring",
   "base_branch": "main",
-  "commit_sha": "1a69f138ef13ad390f3e9001e55a4134877bd21f",
+  "commit_sha": "41ee170d32aa496b0958c99fc5676192987d9cf1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/883",
   "files_changed": [
     "packages/invariants/src/certification/revocation-trigger-wiring.ts",
@@ -40,7 +40,7 @@
     "docs/06_status/proof/UTV2-1098/verification.md",
     "docs/06_status/proof/UTV2-1098/runtime-verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-26T17:06:50.884Z",
   "heartbeat_at": "2026-05-26T17:06:50.884Z",
   "closed_at": null,

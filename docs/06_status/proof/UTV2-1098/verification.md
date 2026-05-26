@@ -4,7 +4,7 @@
 
 Branch: codex/utv2-1098-revocation-trigger-wiring
 Commit (branch HEAD): 1a69f138ef13ad390f3e9001e55a4134877bd21f
-Merge SHA (main): pending-post-merge
+Merge SHA (main): 41ee170d32aa496b0958c99fc5676192987d9cf1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/883
 
 pnpm verify — EXIT 0

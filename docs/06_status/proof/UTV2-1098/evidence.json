@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1098",
   "tier": "T1",
   "executor": "claude",
-  "merge_sha": "pending-post-merge",
+  "merge_sha": "41ee170d32aa496b0958c99fc5676192987d9cf1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/883",
   "verifier": {
     "identity": "claude/utv2-1098-revocation-trigger-wiring"
@@ -14,7 +14,7 @@
     "test_pass": 612,
     "test_fail": 0,
     "branch_sha": "1a69f138ef13ad390f3e9001e55a4134877bd21f",
-    "merge_sha": "pending-post-merge"
+    "merge_sha": "41ee170d32aa496b0958c99fc5676192987d9cf1"
   },
   "runtime_proof": {
     "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",
