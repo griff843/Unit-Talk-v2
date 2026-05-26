@@ -2,7 +2,7 @@
 
 Issue: UTV2-1169 - Add repair mode for already-merged lane closeout
 Branch: codex/utv2-1169-repair-merged-lane-closeout
-Head: 7ff856daa60ed91d8d92d82ce1d496c11555c102
+Head: ba53475ea4fae51385c0e42446de01021dd5bb04
 
 ## Verification
 
