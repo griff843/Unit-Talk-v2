@@ -14,10 +14,7 @@
     "packages/domain/src/models/index.ts",
     "packages/domain/src/models/shadow-inference.test.ts",
     "packages/domain/src/models/shadow-inference.ts",
-    ".ops/sync/UTV2-1118.yml",
-    "docs/06_status/proof/UTV2-1118/evidence.json",
-    "docs/06_status/proof/UTV2-1118/verification.md",
-    "docs/06_status/lanes/UTV2-1118.json"
+    ".ops/sync/UTV2-1118.yml"
   ],
   "file_scope_lock": [
     "package.json",
@@ -34,13 +31,48 @@
   ],
   "status": "merged",
   "started_at": "2026-05-27T18:25:54.122Z",
-  "heartbeat_at": "2026-05-27T18:25:54.122Z",
+  "heartbeat_at": "2026-05-27T18:46:55.879Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1118-real-shadow-inference.json",
   "created_by": "claude",
-  "truth_check_history": [],
-  "reopen_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T18:40:05.475Z",
+      "verdict": "fail",
+      "merge_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
+      "failures": [
+        "G4",
+        "L5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T18:46:41.134Z",
+      "verdict": "pass",
+      "merge_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T18:46:55.879Z",
+      "verdict": "reopen",
+      "merge_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
+      "failures": [
+        "G5"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-27T18:46:55.879Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: e56d92d124662e8f3104c154358555a77af4ea6e"
+      ],
+      "detected_by": "ops:lane-close"
+    }
+  ],
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1118-real-shadow-inference",
