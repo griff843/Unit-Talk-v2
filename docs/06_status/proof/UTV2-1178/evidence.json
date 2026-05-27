@@ -1,0 +1,75 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1178",
+  "title": "INIT-2.3.X — Bypass Enforcement Runtime (E-2 + G-6 closure)",
+  "tier": "T1",
+  "executor": "claude",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/888",
+  "sha_binding": {
+    "branch_head_sha": "0fc0966ad8ae6534b2ff44cd19d05ec15fa40cf4",
+    "verified_source_sha": "PENDING_MERGE_SHA",
+    "ci_green_on_branch": true,
+    "ci_green_on_merge": "PENDING",
+    "note": "verified_source_sha and ci_green_on_merge must be updated to merge SHA after PR merges"
+  },
+
+  "## Verification": "---",
+
+  "verify_result": {
+    "command": "pnpm verify",
+    "exit_code": 0,
+    "steps_passed": [
+      "ops:sync-check",
+      "ops:system-alignment-check",
+      "ops:automation-coverage-check",
+      "env:check",
+      "lint",
+      "type-check",
+      "build",
+      "test",
+      "smart-form verify",
+      "verify:commands"
+    ]
+  },
+
+  "r_level_result": {
+    "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "verdict": "PASS",
+    "changed_files": 5,
+    "rules_matched": "none"
+  },
+
+  "test_db_result": {
+    "command": "pnpm test:db",
+    "exit_code": 0,
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 25229
+  },
+
+  "deliverables": [
+    {
+      "file": "packages/invariants/src/engine.ts",
+      "description": "E-2 closure: emit unknown-evaluator-skipped diagnostic event. G-6 closure: validateGovernanceException() method with use-time expiration enforcement. Injectable constructor for test isolation.",
+      "closes": ["CERT-BLK-002", "CERT-BLK-003", "CERT-BLK-005"]
+    },
+    {
+      "file": "packages/invariants/src/engine.test.ts",
+      "description": "Adversarial tests: 4 E-2 tests (unknown evaluator diagnostic event + no false violations + per-invariant count + known evaluator negative), 6 G-6 tests (active/expired/rolled-back/explicit-expired/no-expired-event/deterministic-now)."
+    },
+    {
+      "file": "packages/invariants/src/certification/bypass-audit.md",
+      "description": "E-2 and G-6 reclassified Enforced. Section 3.1 updated. Section 5 deferred list trimmed."
+    }
+  ],
+
+  "cert_blocker_closure": {
+    "CERT-BLK-002": "CLOSED — G-6: engine.validateGovernanceException() enforces expiration at use time",
+    "CERT-BLK-003": "CLOSED — G-6: same method; expired/rolled-back exceptions throw GovernanceExceptionValidationError",
+    "CERT-BLK-005": "CLOSED — E-2: unknown evaluator emits UnknownEvaluatorDiagnostic (replaySafe: true)"
+  },
+
+  "generated_at": "2026-05-27T00:00:00.000Z",
+  "generated_by": "claude-sonnet-4-6"
+}

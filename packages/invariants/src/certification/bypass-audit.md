@@ -1,8 +1,9 @@
 # Bypass Audit — UTV2-1106 (INIT-2.3.3)
 
-**Audit date:** 2026-05-26
+**Audit date:** 2026-05-26  
+**Last updated:** 2026-05-27 (UTV2-1178 — E-2 and G-6 enforcement closed)  
 **Scope:** `packages/invariants/src/` — all bypass/exception/forceBypass/override paths
-**Status:** Inventory + classification prep only. Final enforcement semantics deferred pending UTV2-1105.
+**Status:** E-2 and G-6 enforcement closed by UTV2-1178. Remaining items deferred per Section 5.
 
 ---
 
@@ -57,7 +58,7 @@
 | ID | File | Pattern | Classification | Replay-Visible |
 |----|------|---------|----------------|----------------|
 | E-1 | `engine.ts:57–254` | Advisory evaluators — all 11 advisory invariants only fire if caller explicitly sets a context flag | **Silent-fail-open** — caller omission ≡ no violation; not a forced bypass but a structural gap | No — advisory violations suppressed by omission do not produce replay records |
-| E-2 | `engine.ts:287–290` | `continue` on unknown evaluator | **Silent-fail-open** — unregistered INV-XXXX is silently dropped | No — no event emitted |
+| E-2 | `engine.ts` | `evaluate()` — unknown evaluator | **Enforced (UTV2-1178)** — emits `'unknown-evaluator-skipped'` diagnostic event with `replaySafe: true`; no longer silent | Yes — `UnknownEvaluatorDiagnostic` event emitted |
 | E-3 | `engine.ts:313–319` | Post-construction mutation of violation objects for replay stamping | **Implicit** (not a bypass, but a mutability concern for replay determinism) | Yes — `replay_run_id` is present in replay-stamped violations |
 | Q-1 | `quarantine.ts:62–65` | Non-`fail-closed`/non-`quarantine` behaviors produce only an audit event | **Explicit** — documented allow-list; `warn` and `advisory` behaviors intentionally pass through | Yes — audit event is emitted for all violations regardless of quarantine outcome |
 | Q-2 | `quarantine.ts:153–161` | Fallback escalation target `'GovernanceReviewer'` | **Explicit fallback** — but silent in that no signal distinguishes known vs unknown invariant IDs | Yes — escalation notice contains target; detectable by target = `'GovernanceReviewer'` with unrecognized `invariant_id` |
@@ -66,7 +67,7 @@
 | G-3 | `governance-exception.ts:27` | `'emergency-exception'` type | **Explicit** — same gates as G-1 | Yes — audit event emitted at creation |
 | G-4 | `governance-exception.ts:28` | `'scheduled-maintenance'` type | **Explicit** — same gates as G-1 | Yes — audit event emitted at creation |
 | G-5 | `governance-exception.ts:173–192` | Audit event `event_type: 'invariant_violation'` for exception creation | **Semantic mislabeling** — not a bypass itself, but creates ambiguity for replay consumers | Partially — replay consumers must inspect `payload.entity_type` to distinguish |
-| G-6 | `governance-exception.ts:136–143` | Expiration validated only at creation; no runtime gate | **Silent-fail-open post-creation** — expired exception records are not actively invalidated | No — no engine path re-validates expiration after creation |
+| G-6 | `engine.ts` → `governance-exception.ts` | `validateGovernanceException()` — use-time expiration enforcement | **Enforced (UTV2-1178)** — `InvariantEngine.validateGovernanceException()` calls `enforceGovernanceExceptionExpiration()` at use time; expired/rolled-back exceptions throw `GovernanceExceptionValidationError` and emit `'governance-exception-expired'` event | Yes — `GovernanceExceptionUseDiagnostic` event emitted with `replaySafe: true` |
 | C-1 | `certification/state-machine.ts:33–39` | Terminal revoked state | **Explicit, fail-closed** | Yes — `replaySafe: true` on all transition events |
 | C-2 | `certification/state-machine.ts:95–112` | Initial-insert gate | **Explicit, fail-closed** | Yes |
 | C-3 | `certification/state-machine.ts:271–275` | `null` domain record → skip propagation | **Silent-fail-open** — missing domain = not propagated | No — no event for skipped propagation |
@@ -77,14 +78,19 @@
 
 ## 3. Summary by Category
 
-### 3.1 Silent-fail-open (highest risk — deferred enforcement pending UTV2-1105)
+### 3.1 Silent-fail-open (remaining — deferred)
 
 | ID | Location | Mechanism |
 |----|----------|-----------|
 | E-1 | `engine.ts` | Advisory invariants fire only on explicit context flags; caller omission = no violation |
-| E-2 | `engine.ts:287–290` | Unknown evaluator ID silently skipped |
-| G-6 | `governance-exception.ts:136–143` | Exception expiration not re-checked at use time |
 | C-3 | `certification/state-machine.ts:271–275` | `null` domain record skips propagation silently |
+
+### 3.1.1 Closed by UTV2-1178
+
+| ID | Location | Closure |
+|----|----------|---------|
+| E-2 | `engine.ts` | Emits `'unknown-evaluator-skipped'` `UnknownEvaluatorDiagnostic` event — no longer silent |
+| G-6 | `engine.ts` | `validateGovernanceException()` enforces expiration/rollback status at use time — throws `GovernanceExceptionValidationError` and emits `'governance-exception-expired'` event |
 
 ### 3.2 Explicit / sanctioned bypasses (structurally sound, verify expiration semantics pending UTV2-1105)
 
@@ -110,23 +116,23 @@
 
 ## 4. Replay Visibility Summary
 
-**Replay-visible (event emitted):** G-1, G-2, G-3, G-4, Q-1, C-1, C-2, E-3 (partially), Q-2 (detectable post-hoc)
+**Replay-visible (event emitted):** G-1, G-2, G-3, G-4, Q-1, C-1, C-2, E-2 (UTV2-1178), E-3 (partially), G-6 (UTV2-1178), Q-2 (detectable post-hoc)
 
-**Not replay-visible (silent — no event):** E-1 (when context flags absent), E-2 (unknown evaluator skipped), C-3 (null domain propagation skip)
+**Not replay-visible (silent — no event):** E-1 (when context flags absent), C-3 (null domain propagation skip)
 
 **Partial visibility (requires payload inspection):** G-5 (`entity_type` field distinguishes violation vs exception creation)
 
 ---
 
-## 5. Deferred Work (blocked on UTV2-1105 expiration semantics)
+## 5. Deferred Work
 
-The following enforcement actions are NOT implemented in this lane:
+The following enforcement actions are NOT implemented in UTV2-1178:
 
 1. Converting `GovernanceExceptionType = 'temporary-bypass'` to require an `ExceptionRecord` enforced by the engine
-2. Runtime expiration re-validation when a `GovernanceException` is referenced (G-6)
-3. Making advisory evaluators (E-1) emit a "context-insufficient" advisory event instead of silent pass
-4. Emitting a diagnostic event when an unknown evaluator is skipped (E-2)
-5. Emitting an audit event when `null` domain record skips propagation (C-3)
-6. Correcting the `event_type` for governance exception creation (G-5) from `'invariant_violation'` to a dedicated type
+2. Making advisory evaluators (E-1) emit a "context-insufficient" advisory event instead of silent pass
+3. Emitting an audit event when `null` domain record skips propagation (C-3)
+4. Correcting the `event_type` for governance exception creation (G-5) from `'invariant_violation'` to a dedicated type
 
-These require the expiration semantic contract from UTV2-1105 before they can be finalized.
+Closed by UTV2-1178 (no longer deferred):
+- G-6: Runtime expiration re-validation when a `GovernanceException` is referenced — CLOSED
+- E-2: Emitting a diagnostic event when an unknown evaluator is skipped — CLOSED

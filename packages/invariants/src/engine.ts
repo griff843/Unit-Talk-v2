@@ -12,6 +12,11 @@
 import { EventEmitter } from 'node:events';
 import type { InvariantRegistryEntry, InvariantSeverity, InvariantQuarantineBehavior } from './types.js';
 import { getActiveInvariants } from './registry/loader.js';
+import {
+  enforceGovernanceExceptionExpiration,
+  GovernanceExceptionValidationError,
+  type GovernanceException,
+} from './governance-exception.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -32,6 +37,32 @@ export interface RuntimeContext {
   replay_run_id?: string;
   // extensible — implementors add domain-specific fields
   [key: string]: unknown;
+}
+
+/**
+ * Emitted via the 'unknown-evaluator-skipped' event when an invariant in the
+ * registry has no corresponding evaluator function. This replaces the prior
+ * silent continue (E-2 bypass closure — UTV2-1178).
+ */
+export interface UnknownEvaluatorDiagnostic {
+  readonly invariant_id: string;
+  readonly detected_at: string;
+  readonly replaySafe: true;
+  readonly event_type: 'unknown-evaluator-skipped';
+}
+
+/**
+ * Emitted via 'governance-exception-applied' or 'governance-exception-expired'
+ * when validateGovernanceException() is called. Provides replay-visible audit
+ * evidence of every governance exception use-time check (G-6 closure — UTV2-1178).
+ */
+export interface GovernanceExceptionUseDiagnostic {
+  readonly exception_id: string;
+  readonly scope: string;
+  readonly exception_status: GovernanceException['status'];
+  readonly checked_at: string;
+  readonly replaySafe: true;
+  readonly event_type: 'governance-exception-applied' | 'governance-exception-expired';
 }
 
 // ---------------------------------------------------------------------------
@@ -261,21 +292,34 @@ const RUNTIME_EVALUABLE_IDS = new Set(['INV-0009', 'INV-0010', 'INV-0014', 'INV-
 // InvariantEngine
 // ---------------------------------------------------------------------------
 
+export interface InvariantEngineOptions {
+  /**
+   * Override the active invariant list. Used in tests to inject invariants
+   * with unknown evaluator IDs to exercise the E-2 diagnostic path.
+   * Production callers omit this — getActiveInvariants() is used.
+   */
+  invariants?: InvariantRegistryEntry[];
+}
+
 export class InvariantEngine extends EventEmitter {
   private readonly invariants: InvariantRegistryEntry[];
 
   /** IDs of invariants that are fully evaluable from runtime context alone. */
   static readonly RUNTIME_EVALUABLE_IDS: ReadonlySet<string> = RUNTIME_EVALUABLE_IDS;
 
-  constructor() {
+  constructor(options?: InvariantEngineOptions) {
     super();
-    this.invariants = getActiveInvariants();
+    this.invariants = options?.invariants ?? getActiveInvariants();
   }
 
   /**
    * Evaluate all active invariants against the given runtime context.
    * Returns violations detected; does NOT throw on violation.
    * Also emits each violation via the 'violation' event.
+   *
+   * When an invariant ID in the registry has no evaluator, emits an
+   * 'unknown-evaluator-skipped' diagnostic event instead of silently
+   * continuing (E-2 enforcement — UTV2-1178).
    *
    * Synchronous — no I/O in the hot path.
    */
@@ -285,7 +329,13 @@ export class InvariantEngine extends EventEmitter {
     for (const inv of this.invariants) {
       const evaluator = EVALUATORS[inv.id];
       if (!evaluator) {
-        // Unknown invariant — skip (defensive; registry may have entries not yet implemented)
+        const diagnostic: UnknownEvaluatorDiagnostic = {
+          invariant_id: inv.id,
+          detected_at: new Date().toISOString(),
+          replaySafe: true,
+          event_type: 'unknown-evaluator-skipped',
+        };
+        this.emit('unknown-evaluator-skipped', diagnostic);
         continue;
       }
 
@@ -316,5 +366,57 @@ export class InvariantEngine extends EventEmitter {
       v.replay_run_id = replayRunId;
     }
     return violations;
+  }
+
+  /**
+   * Validate a GovernanceException at the point of use (G-6 enforcement — UTV2-1178).
+   *
+   * Callers must invoke this before using a GovernanceException to bypass or
+   * modify invariant evaluation. The check is enforced at use time, not just
+   * at creation time.
+   *
+   * - If the exception is active: emits 'governance-exception-applied' and
+   *   returns the diagnostic. The caller may proceed.
+   * - If the exception is expired or rolled-back: emits
+   *   'governance-exception-expired' and throws GovernanceExceptionValidationError.
+   *   The caller must not honor the exception (fail-closed).
+   *
+   * The returned GovernanceExceptionUseDiagnostic is replay-visible (replaySafe: true)
+   * and must be persisted by callers that maintain append-only audit trails.
+   */
+  validateGovernanceException(
+    exception: GovernanceException,
+    now?: Date,
+  ): GovernanceExceptionUseDiagnostic {
+    const checkedAt = (now ?? new Date()).toISOString();
+    const result = enforceGovernanceExceptionExpiration(exception, now);
+
+    if (result.expired) {
+      const diagnostic: GovernanceExceptionUseDiagnostic = {
+        exception_id: exception.id,
+        scope: exception.scope,
+        exception_status: result.exception.status,
+        checked_at: checkedAt,
+        replaySafe: true,
+        event_type: 'governance-exception-expired',
+      };
+      this.emit('governance-exception-expired', diagnostic);
+      throw new GovernanceExceptionValidationError(
+        'status',
+        `governance exception "${exception.id}" (scope: ${exception.scope}) is expired and cannot be used; ` +
+        `expiration was ${exception.expiration}`,
+      );
+    }
+
+    const diagnostic: GovernanceExceptionUseDiagnostic = {
+      exception_id: exception.id,
+      scope: exception.scope,
+      exception_status: result.exception.status,
+      checked_at: checkedAt,
+      replaySafe: true,
+      event_type: 'governance-exception-applied',
+    };
+    this.emit('governance-exception-applied', diagnostic);
+    return diagnostic;
   }
 }

@@ -13,7 +13,8 @@
 
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { InvariantEngine, type RuntimeContext } from './engine.js';
+import { InvariantEngine, type RuntimeContext, type UnknownEvaluatorDiagnostic, type GovernanceExceptionUseDiagnostic } from './engine.js';
+import { GovernanceExceptionValidationError, type GovernanceException } from './governance-exception.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -540,5 +541,207 @@ describe('InvariantEngine — mechanics', () => {
     assert.ok(ids.includes('INV-0010'));
     assert.ok(ids.includes('INV-0014'));
     assert.ok(ids.includes('INV-0015'));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E-2 enforcement (UTV2-1178): unknown evaluator emits diagnostic instead of
+// silently skipping (CERT-BLK-005 closure)
+// ---------------------------------------------------------------------------
+
+describe('E-2 enforcement — unknown-evaluator-skipped diagnostic', () => {
+  function makeUnknownInvariant(id: string) {
+    return {
+      id,
+      title: `Test invariant ${id}`,
+      description: 'Injected for adversarial E-2 test — no evaluator function exists for this ID',
+      severity: 'governance-critical' as const,
+      enforcing_layer: ['application' as const],
+      quarantine_behavior: 'fail-closed' as const,
+      escalation_target: 'GovernanceReviewer',
+      status: 'active' as const,
+      source_ref: 'UTV2-1178-test',
+      ratified_at: '2026-05-27T00:00:00.000Z',
+      ratified_by: 'test',
+    };
+  }
+
+  test('emits unknown-evaluator-skipped event for invariant with no evaluator', () => {
+    const engine = new InvariantEngine({
+      invariants: [makeUnknownInvariant('INV-UNKNOWN-TEST')],
+    });
+    const diagnostics: UnknownEvaluatorDiagnostic[] = [];
+    engine.on('unknown-evaluator-skipped', (d) => diagnostics.push(d));
+
+    engine.evaluate(cleanContext());
+
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0]!.invariant_id, 'INV-UNKNOWN-TEST');
+    assert.equal(diagnostics[0]!.event_type, 'unknown-evaluator-skipped');
+    assert.equal(diagnostics[0]!.replaySafe, true);
+    assert.equal(typeof diagnostics[0]!.detected_at, 'string');
+  });
+
+  test('unknown evaluator does not produce a violation entry', () => {
+    const engine = new InvariantEngine({
+      invariants: [makeUnknownInvariant('INV-UNKNOWN-TEST-2')],
+    });
+
+    const violations = engine.evaluate(cleanContext());
+    assert.equal(violations.length, 0);
+  });
+
+  test('emits one diagnostic per unknown-evaluator invariant', () => {
+    const engine = new InvariantEngine({
+      invariants: [
+        makeUnknownInvariant('INV-GHOST-A'),
+        makeUnknownInvariant('INV-GHOST-B'),
+      ],
+    });
+    const diagnostics: UnknownEvaluatorDiagnostic[] = [];
+    engine.on('unknown-evaluator-skipped', (d) => diagnostics.push(d));
+
+    engine.evaluate(cleanContext());
+
+    assert.equal(diagnostics.length, 2);
+    const ids = diagnostics.map((d) => d.invariant_id);
+    assert.ok(ids.includes('INV-GHOST-A'));
+    assert.ok(ids.includes('INV-GHOST-B'));
+  });
+
+  test('known evaluator does not emit unknown-evaluator-skipped', () => {
+    const engine = new InvariantEngine();
+    const diagnostics: UnknownEvaluatorDiagnostic[] = [];
+    engine.on('unknown-evaluator-skipped', (d) => diagnostics.push(d));
+
+    engine.evaluate(cleanContext({ delivery_bypassed_outbox: true }));
+
+    assert.equal(diagnostics.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// G-6 enforcement (UTV2-1178): validateGovernanceException() enforces expiration
+// at use time, not just at creation time (CERT-BLK-002/003 closure)
+// ---------------------------------------------------------------------------
+
+describe('G-6 enforcement — validateGovernanceException use-time check', () => {
+  function makeActiveException(overrides: Partial<GovernanceException> = {}): GovernanceException {
+    const futureExpiration = new Date(Date.now() + 86_400_000).toISOString(); // +24h
+    return {
+      id: 'exc-test-001',
+      scope: 'INV-0010',
+      type: 'temporary-bypass',
+      authorization: {
+        approver: 'approver-a',
+        secondaryApprover: 'approver-b',
+        authorizedAt: new Date().toISOString(),
+      },
+      justification: 'Test justification for adversarial tests',
+      expiration: futureExpiration,
+      rollbackCondition: 'On any invariant violation',
+      auditRef: 'AUDIT-TEST-001',
+      createdAt: new Date().toISOString(),
+      status: 'active',
+      ...overrides,
+    };
+  }
+
+  test('active exception: emits governance-exception-applied and returns diagnostic', () => {
+    const engine = new InvariantEngine();
+    const applied: GovernanceExceptionUseDiagnostic[] = [];
+    engine.on('governance-exception-applied', (d) => applied.push(d));
+
+    const exc = makeActiveException();
+    const result = engine.validateGovernanceException(exc);
+
+    assert.equal(applied.length, 1);
+    assert.equal(result.event_type, 'governance-exception-applied');
+    assert.equal(result.exception_id, exc.id);
+    assert.equal(result.scope, exc.scope);
+    assert.equal(result.exception_status, 'active');
+    assert.equal(result.replaySafe, true);
+    assert.equal(typeof result.checked_at, 'string');
+  });
+
+  test('expired exception (clock-based): emits governance-exception-expired and throws', () => {
+    const engine = new InvariantEngine();
+    const expired: GovernanceExceptionUseDiagnostic[] = [];
+    engine.on('governance-exception-expired', (d) => expired.push(d));
+
+    const pastExpiration = new Date(Date.now() - 3_600_000).toISOString(); // -1h
+    const exc = makeActiveException({ expiration: pastExpiration });
+
+    assert.throws(
+      () => engine.validateGovernanceException(exc, new Date()),
+      (err) => err instanceof GovernanceExceptionValidationError && err.field === 'status',
+    );
+
+    assert.equal(expired.length, 1);
+    assert.equal(expired[0]!.event_type, 'governance-exception-expired');
+    assert.equal(expired[0]!.exception_id, exc.id);
+    assert.equal(expired[0]!.replaySafe, true);
+  });
+
+  test('rolled-back exception: throws and emits governance-exception-expired', () => {
+    const engine = new InvariantEngine();
+    const expired: GovernanceExceptionUseDiagnostic[] = [];
+    engine.on('governance-exception-expired', (d) => expired.push(d));
+
+    const exc = makeActiveException({ status: 'rolled-back' });
+
+    assert.throws(
+      () => engine.validateGovernanceException(exc, new Date()),
+      (err) => err instanceof GovernanceExceptionValidationError && err.field === 'status',
+    );
+
+    assert.equal(expired.length, 1);
+  });
+
+  test('explicitly expired status exception: throws and emits governance-exception-expired', () => {
+    const engine = new InvariantEngine();
+    const expired: GovernanceExceptionUseDiagnostic[] = [];
+    engine.on('governance-exception-expired', (d) => expired.push(d));
+
+    const pastExpiration = new Date(Date.now() - 3_600_000).toISOString();
+    const exc = makeActiveException({ status: 'expired', expiration: pastExpiration });
+
+    assert.throws(
+      () => engine.validateGovernanceException(exc, new Date()),
+      (err) => err instanceof GovernanceExceptionValidationError,
+    );
+
+    assert.equal(expired.length, 1);
+  });
+
+  test('active exception: does not emit governance-exception-expired', () => {
+    const engine = new InvariantEngine();
+    const expiredEvents: GovernanceExceptionUseDiagnostic[] = [];
+    engine.on('governance-exception-expired', (d) => expiredEvents.push(d));
+
+    const exc = makeActiveException();
+    engine.validateGovernanceException(exc);
+
+    assert.equal(expiredEvents.length, 0);
+  });
+
+  test('validateGovernanceException accepts optional now parameter for deterministic testing', () => {
+    const engine = new InvariantEngine();
+    const exc = makeActiveException({
+      expiration: '2030-01-01T00:00:00.000Z',
+    });
+
+    // Check before expiration
+    const before = new Date('2029-12-31T00:00:00.000Z');
+    const result = engine.validateGovernanceException(exc, before);
+    assert.equal(result.event_type, 'governance-exception-applied');
+
+    // Check after expiration — new engine instance to reset listeners
+    const engine2 = new InvariantEngine();
+    const after = new Date('2030-01-02T00:00:00.000Z');
+    assert.throws(
+      () => engine2.validateGovernanceException(exc, after),
+      (err) => err instanceof GovernanceExceptionValidationError,
+    );
   });
 });
