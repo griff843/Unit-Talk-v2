@@ -7,19 +7,32 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1117-sha-verification-at-inference",
   "branch": "claude/utv2-1117-sha-verification-at-inference",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "90865372f3ac149f3f008ac66bdb9eba9966e035",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/892",
+  "files_changed": [
+    "package.json",
+    "packages/domain/src/models/index.ts",
+    "packages/domain/src/models/sha-verification.test.ts",
+    "packages/domain/src/models/sha-verification.ts",
+    ".ops/sync/UTV2-1117.yml",
+    "docs/06_status/proof/UTV2-1117/evidence.json",
+    "docs/06_status/proof/UTV2-1117/verification.md",
+    "docs/06_status/lanes/UTV2-1117.json"
+  ],
   "file_scope_lock": [
     "package.json",
     "packages/domain/src/models/index.ts",
     "packages/domain/src/models/sha-verification.test.ts",
-    "packages/domain/src/models/sha-verification.ts"
+    "packages/domain/src/models/sha-verification.ts",
+    ".ops/sync/UTV2-1117.yml",
+    "docs/06_status/proof/UTV2-1117/evidence.json",
+    "docs/06_status/proof/UTV2-1117/verification.md",
+    "docs/06_status/lanes/UTV2-1117.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1117/evidence.json"
   ],
-  "status": "started",
+  "status": "pr_opened",
   "started_at": "2026-05-27T18:08:11.008Z",
   "heartbeat_at": "2026-05-27T18:08:11.008Z",
   "closed_at": null,
