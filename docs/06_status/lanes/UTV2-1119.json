@@ -28,14 +28,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1119/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T19:00:11.380Z",
-  "heartbeat_at": "2026-05-27T19:10:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T20:10:20.644Z",
+  "closed_at": "2026-05-27T20:10:20.644Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1119-rollback-runtime.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T20:10:10.487Z",
+      "verdict": "pass",
+      "merge_sha": "d912209a5a65cf46e666d921180da851ff11fbff",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
