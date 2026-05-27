@@ -554,11 +554,15 @@ describe('E-2 enforcement — unknown-evaluator-skipped diagnostic', () => {
     return {
       id,
       title: `Test invariant ${id}`,
-      severity: 'critical' as const,
+      description: 'Injected for adversarial E-2 test — no evaluator function exists for this ID',
+      severity: 'governance-critical' as const,
+      enforcing_layer: ['application' as const],
       quarantine_behavior: 'fail-closed' as const,
+      escalation_target: 'GovernanceReviewer',
       status: 'active' as const,
-      description: 'injected for test',
-      enforcement_layer: 'application' as const,
+      source_ref: 'UTV2-1178-test',
+      ratified_at: '2026-05-27T00:00:00.000Z',
+      ratified_by: 'test',
     };
   }
 
