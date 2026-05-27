@@ -7,4 +7,6 @@ entities:
     - UTV2-1117
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-1117/evidence.json
+    - docs/06_status/proof/UTV2-1117/verification.md
