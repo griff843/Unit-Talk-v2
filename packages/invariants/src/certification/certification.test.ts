@@ -229,6 +229,12 @@ describe('CertificationStateMachine — revocation propagation', () => {
     );
 
     const revokedDomains = revocations.map(r => r.record.domain);
+    assert.deepEqual(revokedDomains, ['divergence', 'quarantine', 'proof_lineage', 'freshness', 'cert_evidence']);
+    assert.ok(
+      revokedDomains.indexOf('cert_evidence') > revokedDomains.indexOf('proof_lineage') &&
+      revokedDomains.indexOf('cert_evidence') > revokedDomains.indexOf('freshness'),
+      'cert_evidence must revoke after proof_lineage and freshness',
+    );
 
     // replay dependents
     assert.ok(revokedDomains.includes('divergence'),   'divergence must be revoked');
@@ -301,6 +307,36 @@ describe('CertificationStateMachine — revocation propagation', () => {
       'cert_evidence already revoked — should not be re-revoked');
     assert.equal(revokedDomains.filter(d => d === 'cert_evidence').length, 0,
       'cert_evidence count must be 0 — already revoked domains are skipped');
+  });
+
+  it('emits propagation audit event when an expired downstream domain is encountered', () => {
+    const allActive: Partial<Record<string, CertificationRecord>> = {};
+    for (const d of CERTIFICATION_DOMAINS) {
+      allActive[d] = makeActive(d);
+    }
+    allActive['proof_lineage'] = {
+      ...makeActive('proof_lineage'),
+      status: 'expired',
+    };
+
+    const { auditEvents, revocations } = sm.computePropagation(
+      {
+        programId: 'P1',
+        revokedDomain: 'replay',
+        revocationTrigger: 'replay_nondeterminism',
+        evidenceSha: EVIDENCE_SHA,
+        mergeSha: MERGE_SHA,
+        transitionedBy: 'replay-harness',
+      },
+      allActive as Record<string, CertificationRecord>,
+      NOW,
+    );
+
+    assert.ok(!revocations.map(r => r.record.domain).includes('proof_lineage'));
+    assert.equal(auditEvents.length, 1);
+    assert.equal(auditEvents[0]?.domain, 'proof_lineage');
+    assert.equal(auditEvents[0]?.action, 'certification.propagation.expired-domain');
+    assert.equal(auditEvents[0]?.replaySafe, true);
   });
 });
 

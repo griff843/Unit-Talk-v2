@@ -22,6 +22,7 @@ export {
   PROGRAM_IDS,
   DOMAIN_DEPENDENCIES,
   getDependents,
+  computeCanonicalDownstreamRevocations,
   getRevocationTriggerMatrixEntry,
 } from './types.js';
 
@@ -31,7 +32,7 @@ export {
   certificationStateMachine,
 } from './state-machine.js';
 
-export type { TransitionResult, PropagationResult } from './state-machine.js';
+export type { TransitionResult, PropagationResult, PropagationAuditEvent } from './state-machine.js';
 export type { ReconstructedCertificationEventState } from './state-machine.js';
 
 export {

@@ -11,7 +11,8 @@ import type {
   ProgramId,
   RevocationTrigger,
 } from './types.js';
-import type { TransitionResult } from './state-machine.js';
+import type { PropagationAuditEvent, TransitionResult } from './state-machine.js';
+import type { DependentGateEvent } from './dependent-gate.js';
 
 // ---------------------------------------------------------------------------
 // In-memory repository for tests
@@ -20,6 +21,8 @@ import type { TransitionResult } from './state-machine.js';
 class InMemoryRepo implements CertificationRepository {
   private records = new Map<string, CertificationRecord>();   // key: `${programId}:${domain}`
   private events: CertificationTransitionEvent[] = [];
+  private gateEvents: DependentGateEvent[] = [];
+  private propagationAuditEvents: PropagationAuditEvent[] = [];
   insertedBatches: TransitionResult[][] = [];
 
   async getCurrentRecord(
@@ -59,6 +62,16 @@ class InMemoryRepo implements CertificationRepository {
   }
 
   getEvents() { return [...this.events]; }
+  getGateEvents() { return [...this.gateEvents]; }
+  getPropagationAuditEvents() { return [...this.propagationAuditEvents]; }
+
+  async insertGateEvent(event: DependentGateEvent): Promise<void> {
+    this.gateEvents.push(event);
+  }
+
+  async insertPropagationAuditEvent(event: PropagationAuditEvent): Promise<void> {
+    this.propagationAuditEvents.push(event);
+  }
 }
 
 const EVIDENCE = 'a'.repeat(64);
@@ -106,6 +119,21 @@ describe('CertificationLifecycleManager', () => {
       assert.equal(result.record.status, 'active');
       assert.equal(result.event.fromStatus, 'pending');
       assert.equal(result.event.toStatus, 'active');
+      assert.equal(repo.getGateEvents().at(-1)?.verdict, 'allowed');
+    });
+
+    it('persists denied dependent-gate evidence before failing closed', async () => {
+      await mgr.initiate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
+
+      await assert.rejects(
+        () => mgr.activate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' }),
+        /Dependent-gate denied/,
+      );
+
+      const [gateEvent] = repo.getGateEvents();
+      assert.equal(gateEvent?.verdict, 'denied');
+      assert.equal(gateEvent.domain, 'divergence');
+      assert.ok(gateEvent.blockers.some(blocker => blocker.reason === 'missing'));
     });
 
     it('rejects active → pending (invalid transition)', async () => {
@@ -120,17 +148,17 @@ describe('CertificationLifecycleManager', () => {
 
   describe('suspend', () => {
     it('active → suspended', async () => {
-      await mgr.initiate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
-      await mgr.activate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
-      const result = await mgr.suspend({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'suspend' });
+      await mgr.initiate({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
+      await mgr.activate({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
+      const result = await mgr.suspend({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'suspend' });
       assert.equal(result.record.status, 'suspended');
     });
 
     it('suspended → active (re-activation)', async () => {
-      await mgr.initiate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
-      await mgr.activate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
-      await mgr.suspend({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'suspend' });
-      const result = await mgr.activate({ programId: PROGRAM, domain: 'divergence', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 're-activate' });
+      await mgr.initiate({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
+      await mgr.activate({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
+      await mgr.suspend({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'suspend' });
+      const result = await mgr.activate({ programId: PROGRAM, domain: 'invariant', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 're-activate' });
       assert.equal(result.record.status, 'active');
     });
   });
@@ -231,8 +259,10 @@ describe('CertificationLifecycleManager', () => {
     });
 
     it('onQuarantineBypass revokes quarantine domain', async () => {
-      await mgr.initiate({ programId: PROGRAM, domain: 'quarantine', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
-      await mgr.activate({ programId: PROGRAM, domain: 'quarantine', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
+      for (const domain of ['replay', 'invariant', 'divergence', 'quarantine'] as CertificationDomain[]) {
+        await mgr.initiate({ programId: PROGRAM, domain, evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
+        await mgr.activate({ programId: PROGRAM, domain, evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
+      }
 
       const result = await mgr.onQuarantineBypass(PROGRAM, EVIDENCE, MERGE, 'unauthorized bypass');
       assert.equal(result.record.revocationTrigger, 'quarantine_bypass');
@@ -242,9 +272,9 @@ describe('CertificationLifecycleManager', () => {
 
   describe('audit trail', () => {
     it('every transition emits a replaySafe event', async () => {
-      await mgr.initiate({ programId: PROGRAM, domain: 'freshness', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
-      await mgr.activate({ programId: PROGRAM, domain: 'freshness', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
-      await mgr.suspend({ programId: PROGRAM, domain: 'freshness', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'suspend' });
+      await mgr.initiate({ programId: PROGRAM, domain: 'replay', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'init' });
+      await mgr.activate({ programId: PROGRAM, domain: 'replay', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'activate' });
+      await mgr.suspend({ programId: PROGRAM, domain: 'replay', evidenceSha: EVIDENCE, mergeSha: MERGE, transitionedBy: 'test', transitionReason: 'suspend' });
 
       const events = repo.getEvents();
       assert.equal(events.length, 3);

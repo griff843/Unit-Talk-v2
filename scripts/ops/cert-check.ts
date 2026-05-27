@@ -10,8 +10,9 @@
  *   pnpm ops:cert-check --json             # emit structured JSON
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { pathToFileURL } from 'node:url';
 import {
+  certificationStateMachine,
   dependentGateChecker,
   CERTIFICATION_DOMAINS,
   type ProgramId,
@@ -24,21 +25,59 @@ import {
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
-const jsonMode = args.includes('--json');
-const programArg = args[args.indexOf('--program') + 1] as ProgramId | undefined;
-const programId: ProgramId = programArg ?? 'P1';
+
+export interface CertCheckArgs {
+  jsonMode: boolean;
+  programId: ProgramId;
+}
+
+export function parseCertCheckArgs(argv: readonly string[]): CertCheckArgs {
+  const jsonMode = argv.includes('--json');
+  const programIndex = argv.indexOf('--program');
+  const programArg = programIndex >= 0 ? argv[programIndex + 1] as ProgramId | undefined : undefined;
+  return {
+    jsonMode,
+    programId: programArg ?? 'P1',
+  };
+}
+
+export function evaluateCertificationReadiness(
+  programId: ProgramId,
+  allCurrentRecords: Partial<Record<CertificationDomain, CertificationRecord>>,
+  now: string,
+) {
+  const result = dependentGateChecker.checkProgramGates(programId, allCurrentRecords, now);
+  const blockers = certificationStateMachine.getProgramBlockers(allCurrentRecords, now);
+  const allCertified = blockers.length === 0 && result.allSatisfied;
+  return { result, blockers, allCertified };
+}
+
+const { jsonMode, programId } = parseCertCheckArgs(args);
 
 // ---------------------------------------------------------------------------
 // Supabase connection
 // ---------------------------------------------------------------------------
 
-function createDb() {
+interface CertCheckQuery {
+  select(columns: string): CertCheckQuery;
+  eq(column: string, value: string): CertCheckQuery;
+  order(column: string, options: { ascending: boolean }): CertCheckQuery;
+  limit(count: number): CertCheckQuery;
+  maybeSingle(): Promise<{ data: unknown; error: { message: string } | null }>;
+}
+
+interface CertCheckDb {
+  from(table: string): CertCheckQuery;
+}
+
+async function createDb(): Promise<CertCheckDb> {
   const url = process.env['SUPABASE_URL'];
   const key = process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!url || !key) {
     console.error('[cert-check] FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
     process.exit(2);
   }
+  const { createClient } = await import('@supabase/supabase-js');
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -81,7 +120,7 @@ function toRecord(row: DbCertRecord): CertificationRecord {
 }
 
 async function fetchCurrentRecords(
-  db: ReturnType<typeof createClient>,
+  db: CertCheckDb,
   program: ProgramId,
 ): Promise<Partial<Record<CertificationDomain, CertificationRecord>>> {
   const records: Partial<Record<CertificationDomain, CertificationRecord>> = {};
@@ -120,7 +159,7 @@ async function fetchCurrentRecords(
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const db = createDb();
+  const db = await createDb();
   const now = new Date().toISOString();
 
   let allCurrentRecords: Partial<Record<CertificationDomain, CertificationRecord>>;
@@ -132,14 +171,19 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const result = dependentGateChecker.checkProgramGates(programId, allCurrentRecords, now);
+  const { result, blockers, allCertified } = evaluateCertificationReadiness(
+    programId,
+    allCurrentRecords,
+    now,
+  );
 
   if (jsonMode) {
     console.log(JSON.stringify({
       schema_version: 1,
       generated_at: now,
       program_id: programId,
-      all_satisfied: result.allSatisfied,
+      all_satisfied: allCertified,
+      blockers,
       violations: result.violations,
       active_domains: CERTIFICATION_DOMAINS.filter(d => allCurrentRecords[d]?.status === 'active'),
       pending_domains: CERTIFICATION_DOMAINS.filter(d => allCurrentRecords[d]?.status === 'pending'),
@@ -154,9 +198,13 @@ async function main(): Promise<void> {
       console.log(`  ${domain.padEnd(16)} ${status}`);
     }
 
-    if (result.violations.length === 0) {
-      console.log('\n✅ All active domain dependency gates satisfied.');
+    if (allCertified) {
+      console.log('\n✅ All Program certification domains are active and dependency gates are satisfied.');
     } else {
+      console.log(`\n❌ CERTIFICATION BLOCKERS (${blockers.length})`);
+      for (const blocker of blockers) {
+        console.log(`  ${blocker}`);
+      }
       console.log(`\n❌ GATE VIOLATIONS (${result.violations.length}):`);
       for (const v of result.violations) {
         console.log(`\n  Domain: ${v.domain}`);
@@ -164,15 +212,17 @@ async function main(): Promise<void> {
           console.log(`    dep "${b.dependency}" → ${b.reason} (${b.status})`);
         }
       }
-      console.log('\n[cert-check] FAIL — dependent-gate violations detected. Certification denied.');
+      console.log('\n[cert-check] FAIL — certification incomplete or dependent-gate violations detected. Certification denied.');
     }
   }
 
   // Exit nonzero if gates are unsatisfied — this is the CI gate behavior
-  process.exit(result.allSatisfied ? 0 : 1);
+  process.exit(allCertified ? 0 : 1);
 }
 
-main().catch((err) => {
-  console.error('[cert-check] Unexpected error:', err);
-  process.exit(2);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error('[cert-check] Unexpected error:', err);
+    process.exit(2);
+  });
+}

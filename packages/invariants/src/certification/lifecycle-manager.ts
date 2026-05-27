@@ -16,6 +16,7 @@ import {
   certificationStateMachine,
   type TransitionResult,
   type PropagationResult,
+  type PropagationAuditEvent,
 } from './state-machine.js';
 import {
   dependentGateChecker,
@@ -75,6 +76,15 @@ export interface CertificationRepository {
    * Must be a single DB transaction; partial insert is not acceptable.
    */
   insertPropagationBatch(results: TransitionResult[]): Promise<void>;
+
+  /**
+   * Append replay-visible dependent-gate evidence. Implementations may store
+   * this in an audit ledger; failure must fail closed for denied gates.
+   */
+  insertGateEvent(event: DependentGateEvent): Promise<void>;
+
+  /** Append propagation audit evidence that is not itself a state transition. */
+  insertPropagationAuditEvent(event: PropagationAuditEvent): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,6 +238,7 @@ export class CertificationLifecycleManager {
     // DependentGateViolationError is thrown and propagates to the caller.
     const gateResult = dependentGateChecker.checkDomainGates(programId, domain, allRecords, now);
     if (!gateResult.allowed) {
+      await this.repo.insertGateEvent(gateResult.event);
       throw new DependentGateViolationError(gateResult.event);
     }
 
@@ -245,6 +256,7 @@ export class CertificationLifecycleManager {
       now,
     );
     await this.repo.insertTransition(result.record, result.event);
+    await this.repo.insertGateEvent(gateResult.event);
     return { domain, record: result.record, event: result.event, gateEvent: gateResult.event };
   }
 
@@ -315,6 +327,9 @@ export class CertificationLifecycleManager {
       await this.repo.insertTransition(primaryResult.record, primaryResult.event);
     } else {
       await this.repo.insertPropagationBatch(allResults);
+    }
+    for (const auditEvent of propagation.auditEvents) {
+      await this.repo.insertPropagationAuditEvent(auditEvent);
     }
 
     return {

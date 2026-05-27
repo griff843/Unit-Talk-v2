@@ -188,6 +188,26 @@ export function getDependents(domain: CertificationDomain): CertificationDomain[
   return CERTIFICATION_DOMAINS.filter(d => DOMAIN_DEPENDENCIES[d].includes(domain));
 }
 
+/** Canonical downstream propagation order shared by gates and lifecycle revocation. */
+export function computeCanonicalDownstreamRevocations(
+  revokedDomain: CertificationDomain,
+): CertificationDomain[] {
+  const affected = new Set<CertificationDomain>();
+  const queue: CertificationDomain[] = [revokedDomain];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    for (const domain of CERTIFICATION_DOMAINS) {
+      if (DOMAIN_DEPENDENCIES[domain].includes(current) && !affected.has(domain)) {
+        affected.add(domain);
+        queue.push(domain);
+      }
+    }
+  }
+
+  return CERTIFICATION_DOMAINS.filter(domain => affected.has(domain));
+}
+
 // ---------------------------------------------------------------------------
 // Entity types
 // ---------------------------------------------------------------------------
