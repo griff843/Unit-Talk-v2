@@ -7,19 +7,30 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1119-rollback-runtime",
   "branch": "claude/utv2-1119-rollback-runtime",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "d3f9db936f77329d35c7adf2f694c85fb6686ca9",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/894",
+  "files_changed": [
+    "packages/domain/src/models/rollback-runtime.ts",
+    "packages/domain/src/models/rollback-runtime.test.ts",
+    "packages/domain/src/models/index.ts",
+    ".ops/sync/UTV2-1119.yml"
+  ],
   "file_scope_lock": [
     "package.json",
-    "packages/domain/src/models/index.ts"
+    "packages/domain/src/models/index.ts",
+    "packages/domain/src/models/rollback-runtime.ts",
+    "packages/domain/src/models/rollback-runtime.test.ts",
+    ".ops/sync/UTV2-1119.yml",
+    "docs/06_status/proof/UTV2-1119/evidence.json",
+    "docs/06_status/proof/UTV2-1119/verification.md",
+    "docs/06_status/lanes/UTV2-1119.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1119/evidence.json"
   ],
-  "status": "started",
+  "status": "pr_opened",
   "started_at": "2026-05-27T19:00:11.380Z",
-  "heartbeat_at": "2026-05-27T19:00:11.380Z",
+  "heartbeat_at": "2026-05-27T19:10:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1119-rollback-runtime.json",
