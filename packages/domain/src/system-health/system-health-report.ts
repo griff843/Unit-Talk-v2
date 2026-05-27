@@ -601,8 +601,11 @@ export function generateModelReviewPacket(
 ): ModelReviewPacket {
   const cal = report.calibrationMetrics;
 
-  // Derive alert level from report calibration metrics (uses CALIBRATION_THRESHOLDS)
-  let calibration_alert_level: string = 'green';
+  // Derive alert level from report calibration metrics (uses CALIBRATION_THRESHOLDS).
+  // 'insufficient_data' replaces the old 'green' default for small samples —
+  // unknown calibration state must never be reported as passing.
+  let calibration_alert_level: string =
+    cal.sample_size < CALIBRATION_THRESHOLDS.minSampleForAlert ? 'insufficient_data' : 'green';
   if (
     cal.sample_size >= CALIBRATION_THRESHOLDS.minSampleForAlert &&
     (cal.ece >= CALIBRATION_THRESHOLDS.ece.critical ||

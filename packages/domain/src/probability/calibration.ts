@@ -187,6 +187,12 @@ export interface SliceCalibrationMetrics extends CalibrationMetrics {
   sliceKey: string;
   sport: string | null;
   marketFamily: string | null;
+  /**
+   * False when the group had fewer than MIN_SLICE_SAMPLES predictions.
+   * When false, all metric fields (brierScore, ece, mce, logLoss) are
+   * placeholder zeros and MUST NOT be treated as passing calibration.
+   */
+  has_sufficient_data: boolean;
 }
 
 const MIN_SLICE_SAMPLES = 10;
@@ -224,11 +230,13 @@ export function computeSliceCalibrationMetrics(
     const sliceKey = `${sport ?? 'global'}:${marketFamily ?? 'all'}`;
 
     if (group.length < MIN_SLICE_SAMPLES) {
-      // Not enough data — return minimal entry with null-like metrics
+      // Insufficient data — metric fields are placeholder zeros; has_sufficient_data
+      // is false so callers never treat these zeros as passing calibration.
       results.push({
         sliceKey,
         sport,
         marketFamily,
+        has_sufficient_data: false,
         sampleSize: group.length,
         winCount: group.filter(p => p.outcome === 1).length,
         lossCount: group.filter(p => p.outcome === 0).length,
@@ -247,6 +255,7 @@ export function computeSliceCalibrationMetrics(
 
     results.push({
       ...base,
+      has_sufficient_data: true,
       sliceKey,
       sport,
       marketFamily,
@@ -265,18 +274,24 @@ export const CALIBRATION_THRESHOLDS = {
   minSampleForAlert: 30,                         // Don't alert on tiny samples
 } as const;
 
-export type CalibrationAlertLevel = 'green' | 'warning' | 'critical';
+/**
+ * 'green'            — sufficient data, all thresholds satisfied
+ * 'warning'          — sufficient data, at least one warning threshold crossed
+ * 'critical'         — sufficient data, at least one critical threshold crossed
+ * 'insufficient_data' — fewer than minSampleForAlert samples; calibration state unknown
+ */
+export type CalibrationAlertLevel = 'green' | 'warning' | 'critical' | 'insufficient_data';
 
 /**
  * Derive an alert level for a set of CalibrationMetrics.
  *
- * Returns 'green' when sample size is below the minimum threshold so we
- * never fire on statistically insignificant slices.
+ * Returns 'insufficient_data' when sample size is below the minimum threshold.
+ * Callers must not treat 'insufficient_data' as passing calibration.
  */
 export function computeCalibrationAlertLevel(
   metrics: CalibrationMetrics,
 ): CalibrationAlertLevel {
-  if (metrics.sampleSize < CALIBRATION_THRESHOLDS.minSampleForAlert) return 'green';
+  if (metrics.sampleSize < CALIBRATION_THRESHOLDS.minSampleForAlert) return 'insufficient_data';
 
   if (
     metrics.brierScore >= CALIBRATION_THRESHOLDS.brier.critical ||
