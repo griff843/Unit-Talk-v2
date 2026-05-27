@@ -11,3 +11,4 @@ export * from './shadow-inference.js';
 export * from './rollback-runtime.js';
 export * from './deployment-hold.js';
 export * from './calibration-gate.js';
+export * from './cohort-hold.js';
