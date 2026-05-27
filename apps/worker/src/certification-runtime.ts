@@ -144,8 +144,20 @@ export class DatabaseCertificationRepository implements CertificationRepository 
   }
 
   async insertPropagationBatch(results: TransitionResult[]): Promise<void> {
-    for (const result of results) {
-      await this.insertTransition(result.record, result.event);
+    if (results.length === 0) {
+      return;
+    }
+
+    const { error } = await this.client.rpc(
+      'insert_certification_propagation_batch',
+      {
+        p_records: results.map(result => toRow(result.record)),
+        p_events: results.map(result => toEventRow(result.event)),
+      },
+    );
+
+    if (error) {
+      throw new Error(`certification propagation batch insert failed: ${error.message}`);
     }
   }
 
