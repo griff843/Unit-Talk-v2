@@ -4,9 +4,9 @@
   "sha_binding": {
     "verified_source_sha": "044bab2539fb567bc076f2fc89ae0defc22c4303",
     "verified_source_note": "Implementation commit: rollback-runtime.ts, rollback-runtime.test.ts, index.ts, .ops/sync/UTV2-1119.yml",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "d912209a5a65cf46e666d921180da851ff11fbff",
+    "evidence_commit_sha": "d912209a5a65cf46e666d921180da851ff11fbff",
+    "current_pr_head_sha": "d912209a5a65cf46e666d921180da851ff11fbff"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
