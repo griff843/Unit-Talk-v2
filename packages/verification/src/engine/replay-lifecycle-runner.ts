@@ -160,13 +160,16 @@ export class ReplayLifecycleRunner {
     options?: {
       invariantEngine?: InvariantEvaluator;
       quarantineProcessor?: QuarantineProcessor;
-      replayRunId?: string;
+      replayRunId: string;
     }
   ) {
     this.store = store;
     this.invariantEngine = options?.invariantEngine ?? null;
     this.quarantineProcessor = options?.quarantineProcessor ?? null;
-    this.replayRunId = options?.replayRunId ?? `replay-${Date.now()}`;
+    if (!options?.replayRunId || options.replayRunId.trim() === '') {
+      throw new Error('ReplayLifecycleRunner requires deterministic replayRunId');
+    }
+    this.replayRunId = options.replayRunId;
   }
 
   // ─────────────────────────────────────────────────────────────

@@ -101,7 +101,7 @@ export class FaultOrchestrator {
 
     // Build isolated storage and lifecycle runner
     this.pickStore = new IsolatedPickStore();
-    this.lifecycleRunner = new ReplayLifecycleRunner(this.pickStore);
+    this.lifecycleRunner = new ReplayLifecycleRunner(this.pickStore, { replayRunId: runId });
 
     // Build fault adapters
     this.publishAdapter = new FaultPublishAdapter('fault', this.injector);

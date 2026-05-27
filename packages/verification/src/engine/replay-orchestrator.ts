@@ -98,7 +98,7 @@ export class ReplayOrchestrator {
 
     this.feedAdapter = new ReplayFeedAdapter('replay', config.eventStore);
     this.pickStore = new IsolatedPickStore();
-    this.lifecycleRunner = new ReplayLifecycleRunner(this.pickStore);
+    this.lifecycleRunner = new ReplayLifecycleRunner(this.pickStore, { replayRunId: config.runId });
   }
 
   // ─────────────────────────────────────────────────────────────

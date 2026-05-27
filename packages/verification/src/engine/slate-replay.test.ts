@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { expandEventsForVolume, runSlateReplayHarness } from './slate-replay.js';
 import type { ReplayEvent } from './event-store.js';
 import { ReplayProofWriter } from './replay-proof-writer.js';
 
-const REPO_ROOT = process.cwd();
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const FIXTURE_PATH = join(
   REPO_ROOT,
   'packages',
