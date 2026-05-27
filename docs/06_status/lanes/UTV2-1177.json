@@ -42,6 +42,8 @@
     "packages/invariants/src/governance-exception.test.ts",
     "packages/invariants/src/index.ts",
     "pnpm-lock.yaml",
+    "scripts/ops/orchestration-reconciler.test.ts",
+    "scripts/ops/orchestration-reconciler.ts",
     "scripts/ops/cert-check.test.ts",
     "scripts/ops/cert-check.ts",
     "supabase/migrations/20260527001_utv2_1177_atomic_certification_propagation_batch.sql"
@@ -72,6 +74,8 @@
     "packages/invariants/src/governance-exception.test.ts",
     "packages/invariants/src/index.ts",
     "pnpm-lock.yaml",
+    "scripts/ops/orchestration-reconciler.test.ts",
+    "scripts/ops/orchestration-reconciler.ts",
     "scripts/ops/cert-check.test.ts",
     "scripts/ops/cert-check.ts",
     "supabase/migrations/20260527001_utv2_1177_atomic_certification_propagation_batch.sql"
@@ -83,7 +87,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-05-27T02:42:18.000Z",
-  "heartbeat_at": "2026-05-27T03:05:00.000Z",
+  "heartbeat_at": "2026-05-27T03:18:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1177-cert-worker-wiring.json",
