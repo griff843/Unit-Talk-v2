@@ -1,5 +1,7 @@
 # Diff Summary — UTV2-1178 (INIT-2.3.X)
 
+Merge SHA: 61c88fd68aee4a7ce19f039d5c37a8a15b139600
+
 ## Summary
 
 Governance lane closing CERT-BLK-002, CERT-BLK-003, and CERT-BLK-005 by implementing

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1178-bypass-enforcement-runtime",
   "branch": "claude/utv2-1178-bypass-enforcement-runtime",
   "base_branch": "main",
-  "commit_sha": "cb5e1283",
+  "commit_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/888",
   "files_changed": [
     "packages/invariants/src/engine.ts",
@@ -28,14 +28,42 @@
     "docs/06_status/proof/UTV2-1178/verification.md",
     "docs/06_status/proof/UTV2-1178/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-27T11:44:14.161Z",
-  "heartbeat_at": "2026-05-27T11:44:14.161Z",
+  "heartbeat_at": "2026-05-27T13:23:17.993Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1178-bypass-enforcement-runtime.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T13:22:57.673Z",
+      "verdict": "pass",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/888"
+    },
+    {
+      "checked_at": "2026-05-27T13:23:17.993Z",
+      "verdict": "fail",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

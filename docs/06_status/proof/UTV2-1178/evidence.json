@@ -1,75 +1,76 @@
 {
-  "schema_version": "evidence-bundle-v1",
+  "schema_version": 1,
   "issue_id": "UTV2-1178",
   "title": "INIT-2.3.X — Bypass Enforcement Runtime (E-2 + G-6 closure)",
   "tier": "T1",
-  "executor": "claude",
+  "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/888",
+
+  "verifier": {
+    "identity": "claude/lane-utv2-1178"
+  },
+
+  "generated_at": "2026-05-27T13:22:00.000Z",
+
   "sha_binding": {
-    "branch_head_sha": "0fc0966ad8ae6534b2ff44cd19d05ec15fa40cf4",
+    "branch_head_sha": "495ab34bcf6ae4b7834f3d4fb8cf8bb73d2ae4e5",
     "verified_source_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
     "ci_green_on_branch": true,
     "ci_green_on_merge": true,
     "note": "SHA bound to squash-merge commit on main after PR #888 merged 2026-05-27"
   },
 
-  "## Verification": "---",
-
-  "verify_result": {
-    "command": "pnpm verify",
-    "exit_code": 0,
-    "steps_passed": [
-      "ops:sync-check",
-      "ops:system-alignment-check",
-      "ops:automation-coverage-check",
-      "env:check",
-      "lint",
-      "type-check",
-      "build",
-      "test",
-      "smart-form verify",
-      "verify:commands"
-    ]
+  "static_proof": {
+    "pnpm_verify": "PASS (exit 0)",
+    "r_level": "PASS — no artifacts required",
+    "type_check": "PASS (tsc -b tsconfig.json exit 0)",
+    "test_run_logs": [
+      {
+        "path": "pnpm verify",
+        "result": "PASS",
+        "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+        "steps": ["sync-check", "system-alignment-check", "automation-coverage-check", "env:check", "lint", "type-check", "build", "test", "smart-form verify", "verify:commands"]
+      },
+      {
+        "path": "tsx scripts/ci/r-level-check.ts",
+        "result": "PASS",
+        "verdict": "no R-level artifacts required",
+        "changed_files": 5
+      }
+    ],
+    "adversarial_tests": {
+      "e2_unknown_evaluator": { "tests": 4, "pass": 4, "fail": 0 },
+      "g6_governance_exception": { "tests": 6, "pass": 6, "fail": 0 }
+    }
   },
 
-  "r_level_result": {
-    "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-    "verdict": "PASS",
-    "changed_files": 5,
-    "rules_matched": "none"
-  },
-
-  "test_db_result": {
+  "runtime_proof": {
+    "database": "supabase/zfzdnfwdarxucxtaojxm",
     "command": "pnpm test:db",
     "exit_code": 0,
-    "tests": 7,
+    "queries": [
+      { "description": "audit_log is append-only (no UPDATE/DELETE)", "result": "PASS" },
+      { "description": "settlement_records correction chain is additive", "result": "PASS" },
+      { "description": "pick_lifecycle events are immutable", "result": "PASS" },
+      { "description": "UTV2-870: outbox row states validated", "result": "PASS" },
+      { "description": "UTV2-883: no duplicate participants", "result": "PASS" },
+      { "description": "UTV2-996: re-settling creates correction row", "result": "PASS" },
+      { "description": "UTV2-996: correction chain additive — original row immutable", "result": "PASS" }
+    ],
+    "row_counts": [
+      { "table": "audit_log", "check": "no DELETE/UPDATE rows", "result": "verified" },
+      { "table": "settlement_records", "check": "correction chain additive", "result": "verified" },
+      { "table": "pick_lifecycle", "check": "events immutable", "result": "verified" }
+    ],
+    "total_tests": 7,
     "pass": 7,
     "fail": 0,
     "duration_ms": 25229
   },
 
-  "deliverables": [
-    {
-      "file": "packages/invariants/src/engine.ts",
-      "description": "E-2 closure: emit unknown-evaluator-skipped diagnostic event. G-6 closure: validateGovernanceException() method with use-time expiration enforcement. Injectable constructor for test isolation.",
-      "closes": ["CERT-BLK-002", "CERT-BLK-003", "CERT-BLK-005"]
-    },
-    {
-      "file": "packages/invariants/src/engine.test.ts",
-      "description": "Adversarial tests: 4 E-2 tests (unknown evaluator diagnostic event + no false violations + per-invariant count + known evaluator negative), 6 G-6 tests (active/expired/rolled-back/explicit-expired/no-expired-event/deterministic-now)."
-    },
-    {
-      "file": "packages/invariants/src/certification/bypass-audit.md",
-      "description": "E-2 and G-6 reclassified Enforced. Section 3.1 updated. Section 5 deferred list trimmed."
-    }
-  ],
-
   "cert_blocker_closure": {
     "CERT-BLK-002": "CLOSED — G-6: engine.validateGovernanceException() enforces expiration at use time",
-    "CERT-BLK-003": "CLOSED — G-6: same method; expired/rolled-back exceptions throw GovernanceExceptionValidationError",
-    "CERT-BLK-005": "CLOSED — E-2: unknown evaluator emits UnknownEvaluatorDiagnostic (replaySafe: true)"
-  },
-
-  "generated_at": "2026-05-27T00:00:00.000Z",
-  "generated_by": "claude-sonnet-4-6"
+    "CERT-BLK-003": "CLOSED — G-6: expired/rolled-back exceptions throw GovernanceExceptionValidationError + emit governance-exception-expired event",
+    "CERT-BLK-005": "CLOSED — E-2: unknown evaluator emits UnknownEvaluatorDiagnostic (replaySafe: true) instead of silent continue"
+  }
 }

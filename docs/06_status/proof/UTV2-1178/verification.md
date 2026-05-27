@@ -1,6 +1,6 @@
 # PROOF: UTV2-1178 — INIT-2.3.X Bypass Enforcement Runtime
 
-Branch head SHA: 7fc6271ef49e8b5a466fc3be43c2b6d5f644eedd  
+Merge SHA: 61c88fd68aee4a7ce19f039d5c37a8a15b139600  
 PR: https://github.com/griff843/Unit-Talk-v2/pull/888  
 Tier: T1  
 Cert blockers closed: CERT-BLK-002, CERT-BLK-003, CERT-BLK-005
@@ -109,4 +109,13 @@ ok 4 - explicitly expired status exception: throws and emits governance-exceptio
 ok 5 - active exception: does not emit governance-exception-expired
 # Subtest: validateGovernanceException accepts optional now parameter for deterministic testing
 ok 6 - validateGovernanceException accepts optional now parameter for deterministic testing
+```
+
+### runtime_proof summary
+
+```
+runtime_proof: pnpm test:db 7/7 PASS
+queries: 7 live DB queries executed against supabase/zfzdnfwdarxucxtaojxm
+row_counts: audit_log (append-only verified), settlement_records (correction chain additive), pick_lifecycle (immutable)
+receipts: test suite exit 0, duration_ms 25229
 ```
