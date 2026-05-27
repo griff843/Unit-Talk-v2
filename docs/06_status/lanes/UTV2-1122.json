@@ -29,14 +29,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1122/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T22:02:44.067Z",
-  "heartbeat_at": "2026-05-27T22:02:44.067Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T23:50:25.023Z",
+  "closed_at": "2026-05-27T23:50:25.023Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1122-cohort-level-holds.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T23:50:15.043Z",
+      "verdict": "pass",
+      "merge_sha": "c117eb28d84b32289700f0ba4b3ff9507e11d6ff",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
