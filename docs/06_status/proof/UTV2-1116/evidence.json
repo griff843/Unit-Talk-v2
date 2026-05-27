@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1116",
   "title": "INIT-2.2.1 — Immutable ModelVersion with Artifact SHA",
   "generated_at": "2026-05-27T17:10:00.000Z",
@@ -9,6 +9,10 @@
     "merge_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
     "evidence_commit_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
     "current_pr_head_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
   },
   "tier": "T1",
   "lane_type": "migration",
