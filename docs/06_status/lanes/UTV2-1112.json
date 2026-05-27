@@ -21,7 +21,8 @@
     "packages/domain/src/models/index.ts",
     "docs/06_status/proof/UTV2-1112/evidence.json",
     "docs/06_status/proof/UTV2-1112/verification.md",
-    "docs/06_status/lanes/UTV2-1112.json"
+    "docs/06_status/lanes/UTV2-1112.json",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1112/evidence.json"
