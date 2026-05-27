@@ -1,0 +1,75 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1116",
+  "title": "INIT-2.2.1 — Immutable ModelVersion with Artifact SHA",
+  "generated_at": "2026-05-27T17:10:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "bc22dcc7cec87ac62a50bf9981a077c3932d6381",
+    "verified_source_note": "Substantive implementation commit: migration, DB trigger, TypeScript types, repository wiring, model-registry tests, down-script, T1 proof test, lane contract update.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "tier": "T1",
+  "lane_type": "migration",
+  "executor": "codex-cli",
+  "pull_requests": [
+    "https://github.com/griff843/Unit-Talk-v2/pull/890"
+  ],
+  "verification": {
+    "pnpm_verify": "PASS",
+    "pnpm_test_db": "PASS",
+    "r_level_check": "PASS",
+    "migration_reversibility": "PASS — down-script present and validated"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests": 113,
+      "failures": 0
+    },
+    "model_registry_tests": {
+      "status": "PASS",
+      "note": "packages/db/src/model-registry.test.ts — included in pnpm verify suite"
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "label": "pnpm test:db smoke suite",
+        "description": "Live Supabase DB smoke tests — 7 queries executed against project zfzdnfwdarxucxtaojxm",
+        "result": "PASS"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "operation": "smoke_read",
+        "result": "reachable",
+        "source": "pnpm test:db"
+      }
+    ],
+    "receipts": [
+      {
+        "run": "pnpm test:db",
+        "tests": 7,
+        "failures": 0,
+        "duration_ms": 26269,
+        "supabase_project": "zfzdnfwdarxucxtaojxm"
+      }
+    ]
+  },
+  "assertions": [
+    "artifact_sha column added to model_registry via migration",
+    "DB-level immutability trigger trg_model_registry_artifact_sha_immutable prevents updates",
+    "TypeScript DatabaseModelVersion type includes artifact_sha field",
+    "repositories.ts ModelRegistryRepository exposes artifact_sha on create and read",
+    "runtime-repositories.ts maps artifact_sha through updateStatus return value",
+    "Down-script provided for schema round-trip drill CI check",
+    "T1 live-DB proof test covers create/null-default/updateStatus-preservation"
+  ],
+  "verdict": "PASS"
+}
