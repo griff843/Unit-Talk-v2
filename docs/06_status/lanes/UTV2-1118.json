@@ -7,19 +7,32 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1118-real-shadow-inference",
   "branch": "claude/utv2-1118-real-shadow-inference",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "dcb1de705172f9259a779b472660441385fe1b12",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/893",
+  "files_changed": [
+    "package.json",
+    "packages/domain/src/models/index.ts",
+    "packages/domain/src/models/shadow-inference.test.ts",
+    "packages/domain/src/models/shadow-inference.ts",
+    ".ops/sync/UTV2-1118.yml",
+    "docs/06_status/proof/UTV2-1118/evidence.json",
+    "docs/06_status/proof/UTV2-1118/verification.md",
+    "docs/06_status/lanes/UTV2-1118.json"
+  ],
   "file_scope_lock": [
     "package.json",
     "packages/domain/src/models/index.ts",
     "packages/domain/src/models/shadow-inference.test.ts",
-    "packages/domain/src/models/shadow-inference.ts"
+    "packages/domain/src/models/shadow-inference.ts",
+    ".ops/sync/UTV2-1118.yml",
+    "docs/06_status/proof/UTV2-1118/evidence.json",
+    "docs/06_status/proof/UTV2-1118/verification.md",
+    "docs/06_status/lanes/UTV2-1118.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1118/evidence.json"
   ],
-  "status": "started",
+  "status": "pr_opened",
   "started_at": "2026-05-27T18:25:54.122Z",
   "heartbeat_at": "2026-05-27T18:25:54.122Z",
   "closed_at": null,
