@@ -29,14 +29,40 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1120/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T20:11:32.459Z",
-  "heartbeat_at": "2026-05-27T20:25:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T21:28:30.430Z",
+  "closed_at": "2026-05-27T21:28:30.430Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1120-breach-to-deployment-state-wiring.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T21:26:14.293Z",
+      "verdict": "fail",
+      "merge_sha": "719cacce98db77737265544d92287083fa064966",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T21:26:20.812Z",
+      "verdict": "fail",
+      "merge_sha": "719cacce98db77737265544d92287083fa064966",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T21:28:20.698Z",
+      "verdict": "pass",
+      "merge_sha": "719cacce98db77737265544d92287083fa064966",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
