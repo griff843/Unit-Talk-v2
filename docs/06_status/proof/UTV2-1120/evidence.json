@@ -4,9 +4,9 @@
   "sha_binding": {
     "verified_source_sha": "8779d7b7af7847575615c653f6dc4ee6161af300",
     "verified_source_note": "Implementation commit: deployment-hold.ts, deployment-hold.test.ts, index.ts, package.json, .ops/sync/UTV2-1120.yml",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "719cacce98db77737265544d92287083fa064966",
+    "evidence_commit_sha": "719cacce98db77737265544d92287083fa064966",
+    "current_pr_head_sha": "719cacce98db77737265544d92287083fa064966"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",

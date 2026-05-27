@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1120-breach-to-deployment-state-wiring",
   "branch": "claude/utv2-1120-breach-to-deployment-state-wiring",
   "base_branch": "main",
-  "commit_sha": "e7664c95d836e3d6bbf30e571fc81e86529625a7",
+  "commit_sha": "719cacce98db77737265544d92287083fa064966",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/895",
   "files_changed": [
     "packages/domain/src/models/deployment-hold.ts",
@@ -29,7 +29,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1120/evidence.json"
   ],
-  "status": "pr_opened",
+  "status": "merged",
   "started_at": "2026-05-27T20:11:32.459Z",
   "heartbeat_at": "2026-05-27T20:25:00.000Z",
   "closed_at": null,
