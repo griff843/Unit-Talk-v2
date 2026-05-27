@@ -4,9 +4,9 @@
   "sha_binding": {
     "verified_source_sha": "54cf85c9995f928f7e3eaf849261ee632bc3f5f8",
     "verified_source_note": "Implementation commit: calibration-gate.ts, calibration-gate.test.ts, index.ts, package.json, .ops/sync/UTV2-1121.yml",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "8e21739ca33160455f6b0ab4858a0e8561473e62",
+    "evidence_commit_sha": "8e21739ca33160455f6b0ab4858a0e8561473e62",
+    "current_pr_head_sha": "8e21739ca33160455f6b0ab4858a0e8561473e62"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",

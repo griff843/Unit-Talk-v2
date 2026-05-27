@@ -29,7 +29,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1121/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-27T21:31:56.284Z",
   "heartbeat_at": "2026-05-27T21:31:56.284Z",
   "closed_at": null,
