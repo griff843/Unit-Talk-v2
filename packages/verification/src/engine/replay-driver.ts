@@ -8,12 +8,10 @@
  * Design laws:
  *   - Zero production writes: productionWritesAttempted MUST be 0 — throws if violated
  *   - Divergence is never suppressed: any divergence halts the run and populates the proof bundle
- *   - Window is computed from `new Date()` minus `windowDays * 24 * 60 * 60 * 1000`
+ *   - Window is computed from an injected deterministic clock.
  *   - dryRun defaults to true; setting it to false is only for test scaffolding
  *   - The ReplayProofBundle is the authoritative output for T1 evidence purposes
  */
-
-import { randomUUID } from 'node:crypto';
 
 import { FullPipelineReplayHarness } from './full-pipeline-replay.js';
 import { ReplayDivergenceEngine } from './replay-divergence.js';
@@ -28,10 +26,16 @@ import type { ReplaySnapshot } from './replay-types.js';
 export interface ReplayDriverOptions {
   /** How many days back from now to replay. Default: 30. */
   windowDays?: number;
-  /** Unique ID for this replay run — auto-generated if omitted. */
-  replayRunId?: string;
+  /** Unique deterministic ID for this replay run. Required. */
+  replayRunId: string;
+  /** Deterministic clock for all replay proof timestamps. Required. */
+  clock: ReplayClock;
   /** Always treat as read-only. Default: true. Set to false only in test scaffolding. */
   dryRun?: boolean;
+}
+
+export interface ReplayClock {
+  now(): Date;
 }
 
 export interface ReplayProofBundle {
@@ -91,11 +95,19 @@ export interface ReplayPickRecord {
 export class ReplayDriver {
   private readonly windowDays: number;
   private readonly replayRunId: string;
+  private readonly clock: ReplayClock;
   private readonly dryRun: boolean;
 
   constructor(options?: ReplayDriverOptions) {
     this.windowDays = options?.windowDays ?? 30;
-    this.replayRunId = options?.replayRunId ?? randomUUID();
+    if (!options?.replayRunId || options.replayRunId.trim() === '') {
+      throw new Error('ReplayDriver requires deterministic replayRunId');
+    }
+    if (!options.clock) {
+      throw new Error('ReplayDriver requires an injected deterministic clock');
+    }
+    this.replayRunId = options.replayRunId;
+    this.clock = options.clock;
     this.dryRun = options?.dryRun ?? true;
   }
 
@@ -114,7 +126,7 @@ export class ReplayDriver {
    * @param picks - Read-only array of pick records to replay
    */
   async run(picks: readonly ReplayPickRecord[]): Promise<ReplayProofBundle> {
-    const windowEnd = new Date();
+    const windowEnd = this.clock.now();
     const windowStart = new Date(windowEnd.getTime() - this.windowDays * 24 * 60 * 60 * 1000);
 
     // Build snapshots from picks — each pick becomes an ingestion-stage snapshot
@@ -195,7 +207,7 @@ export class ReplayDriver {
       productionWritesAttempted,
       halted,
       haltReason,
-      completedAt: new Date().toISOString(),
+      completedAt: this.clock.now().toISOString(),
     };
 
     return proof;

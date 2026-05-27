@@ -62,13 +62,21 @@ function capturingEngine(): { engine: InvariantEvaluator; calls: Array<Record<st
 
 test('runner without engine: insert and update succeed', () => {
   const store = makeStore();
-  const runner = new ReplayLifecycleRunner(store);
+  const runner = new ReplayLifecycleRunner(store, { replayRunId: 'run-no-engine-001' });
 
   const ins = runner.insert(minimalPick('pick-1'), { writerRole: 'submitter' });
   assert.ok(ins.success, `insert failed: ${ins.error}`);
 
   const upd = runner.update('pick-1', { status: 'validated' }, { writerRole: 'submitter' });
   assert.ok(upd.success, `update failed: ${upd.error}`);
+});
+
+test('runner requires deterministic replayRunId', () => {
+  const store = makeStore();
+  assert.throws(
+    () => new ReplayLifecycleRunner(store, { replayRunId: '' }),
+    /deterministic replayRunId/,
+  );
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -123,10 +131,10 @@ test('ADVERSARIAL: violated pick is NOT written to store when invariant fires', 
   runner.insert(minimalPick('pick-no-write'), { writerRole: 'submitter' });
   runner.update('pick-no-write', { status: 'validated' }, { writerRole: 'submitter' });
 
-  // The pick status should remain 'pending' — the invariant check fires before the store write
+  // The pick status should remain at the inserted value — the invariant check fires before the update write
   const pick = store.getAsPick('pick-no-write');
   assert.ok(pick !== null, 'pick should still exist in store');
-  assert.equal(pick?.status, 'pending', `pick status should be unchanged 'pending', got: ${pick?.status}`);
+  assert.equal(pick?.status, 'draft', `pick status should be unchanged 'draft', got: ${pick?.status}`);
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -135,7 +143,7 @@ test('ADVERSARIAL: violated pick is NOT written to store when invariant fires', 
 
 test('empty writer role throws', () => {
   const store = makeStore();
-  const runner = new ReplayLifecycleRunner(store);
+  const runner = new ReplayLifecycleRunner(store, { replayRunId: 'run-writer-role-001' });
 
   const result = runner.insert({ id: 'pick-auth-test', status: 'draft' as const }, { writerRole: '' as never });
   assert.ok(!result.success, 'empty writer role should fail');
@@ -148,7 +156,7 @@ test('empty writer role throws', () => {
 
 test('empty field list throws', () => {
   const store = makeStore();
-  const runner = new ReplayLifecycleRunner(store);
+  const runner = new ReplayLifecycleRunner(store, { replayRunId: 'run-fields-001' });
 
   runner.insert(minimalPick('pick-fields-test'), { writerRole: 'submitter' });
   const result = runner.update('pick-fields-test', {}, { writerRole: 'submitter' });

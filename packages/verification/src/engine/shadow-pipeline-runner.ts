@@ -65,10 +65,10 @@ export class ShadowPipelineRunner {
   private readonly lifecycleRunner: ReplayLifecycleRunner;
   private readonly errors: ShadowError[] = [];
 
-  constructor(adapters: AdapterManifest) {
+  constructor(adapters: AdapterManifest, runId = 'shadow-pipeline') {
     this.adapters = adapters;
     this.pickStore = new IsolatedPickStore();
-    this.lifecycleRunner = new ReplayLifecycleRunner(this.pickStore);
+    this.lifecycleRunner = new ReplayLifecycleRunner(this.pickStore, { replayRunId: runId });
   }
 
   /**

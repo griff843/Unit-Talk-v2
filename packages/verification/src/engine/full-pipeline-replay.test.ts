@@ -215,6 +215,13 @@ test('run with no snapshots completes with 0 writes and all 4 stages', async () 
   assert.equal(result.mode, 'isolated');
 });
 
+test('harness requires deterministic replayRunId', () => {
+  assert.throws(
+    () => new FullPipelineReplayHarness(makeMinimalSnapshots(), ''),
+    /deterministic replayRunId/,
+  );
+});
+
 // ─────────────────────────────────────────────────────────────
 // BONUS: IsolatedReplayStore write rejects unknown stage
 // ─────────────────────────────────────────────────────────────

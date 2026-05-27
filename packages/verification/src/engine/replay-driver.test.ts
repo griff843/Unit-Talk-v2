@@ -9,7 +9,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { ReplayDriver } from './replay-driver.js';
-import type { ReplayPickRecord } from './replay-driver.js';
+import type { ReplayClock, ReplayDriverOptions, ReplayPickRecord } from './replay-driver.js';
 
 // ─────────────────────────────────────────────────────────────
 // FIXTURES
@@ -28,6 +28,19 @@ function makePick(id: string, overrides?: Partial<ReplayPickRecord>): ReplayPick
   };
 }
 
+const CLOCK_NOW = '2026-05-26T12:00:00.000Z';
+const clock: ReplayClock = {
+  now: () => new Date(CLOCK_NOW),
+};
+
+function driverOptions(overrides: Partial<ReplayDriverOptions> = {}): ReplayDriverOptions {
+  return {
+    replayRunId: 'replay-run-fixed',
+    clock,
+    ...overrides,
+  };
+}
+
 // ─────────────────────────────────────────────────────────────
 // TESTS
 // ─────────────────────────────────────────────────────────────
@@ -35,14 +48,14 @@ function makePick(id: string, overrides?: Partial<ReplayPickRecord>): ReplayPick
 describe('ReplayDriver', () => {
   // ── 1. Default window is 30 days ────────────────────────────
   test('default window is 30 days', async () => {
-    const driver = new ReplayDriver();
+    const driver = new ReplayDriver(driverOptions());
     const proof = await driver.run([]);
     assert.equal(proof.windowDays, 30);
   });
 
   // ── 2. Zero picks → clean proof bundle ──────────────────────
   test('zero picks yields clean proof bundle', async () => {
-    const driver = new ReplayDriver({ windowDays: 30 });
+    const driver = new ReplayDriver(driverOptions({ windowDays: 30 }));
     const proof = await driver.run([]);
     assert.equal(proof.picksReplayed, 0);
     assert.equal(proof.divergencesFound, 0);
@@ -53,7 +66,7 @@ describe('ReplayDriver', () => {
 
   // ── 3. One clean pick → replayed, 0 divergences ─────────────
   test('one clean pick is replayed with zero divergences', async () => {
-    const driver = new ReplayDriver({ windowDays: 7 });
+    const driver = new ReplayDriver(driverOptions({ windowDays: 7 }));
     const picks: ReplayPickRecord[] = [makePick('pick-001')];
     const proof = await driver.run(picks);
     assert.equal(proof.picksReplayed, 1);
@@ -80,7 +93,7 @@ describe('ReplayDriver', () => {
         const injectedDivergence = {
           report_id: 'test-div-001',
           run_id: proof.replayRunId,
-          detected_at: new Date().toISOString(),
+          detected_at: clock.now().toISOString(),
           stage: 'ingestion' as const,
           item_id: 'pick-injected',
           expected: { field: 'expected_value' },
@@ -105,7 +118,7 @@ describe('ReplayDriver', () => {
       }
     }
 
-    const driver = new DivergentDriver({ windowDays: 30 });
+    const driver = new DivergentDriver(driverOptions({ windowDays: 30 }));
     const proof = await driver.run([makePick('pick-002')]);
 
     assert.equal(proof.halted, true);
@@ -117,7 +130,7 @@ describe('ReplayDriver', () => {
 
   // ── 5. productionWritesAttempted is always 0 ────────────────
   test('productionWritesAttempted is always 0 even with picks', async () => {
-    const driver = new ReplayDriver({ windowDays: 14 });
+    const driver = new ReplayDriver(driverOptions({ windowDays: 14 }));
     const picks: ReplayPickRecord[] = [makePick('pick-003'), makePick('pick-004')];
     const proof = await driver.run(picks);
     assert.equal(proof.productionWritesAttempted, 0);
@@ -125,7 +138,7 @@ describe('ReplayDriver', () => {
 
   // ── 6. Custom windowDays respected ──────────────────────────
   test('custom windowDays is reflected in proof bundle', async () => {
-    const driver = new ReplayDriver({ windowDays: 7 });
+    const driver = new ReplayDriver(driverOptions({ windowDays: 7 }));
     const proof = await driver.run([]);
     assert.equal(proof.windowDays, 7);
 
@@ -138,41 +151,33 @@ describe('ReplayDriver', () => {
     assert.ok(Math.abs(diffDays - 7) < 0.001, `expected 7-day window, got ${diffDays}`);
   });
 
-  // ── 7. replayRunId auto-generated when not provided ─────────
-  test('replayRunId is auto-generated when not provided', async () => {
-    const driver1 = new ReplayDriver();
-    const driver2 = new ReplayDriver();
-    const proof1 = await driver1.run([]);
-    const proof2 = await driver2.run([]);
-
-    // Both IDs exist and are non-empty
-    assert.ok(typeof proof1.replayRunId === 'string' && proof1.replayRunId.length > 0);
-    assert.ok(typeof proof2.replayRunId === 'string' && proof2.replayRunId.length > 0);
-
-    // Auto-generated IDs must be unique
-    assert.notEqual(proof1.replayRunId, proof2.replayRunId);
+  // ── 7. replayRunId required ─────────────────────────────────
+  test('replayRunId is required for deterministic replay', () => {
+    assert.throws(
+      () => new ReplayDriver({ clock, replayRunId: '' }),
+      /deterministic replayRunId/,
+    );
   });
 
   // ── 8. replayRunId is used when provided ────────────────────
   test('replayRunId is used when explicitly provided', async () => {
     const customId = 'my-replay-run-abc123';
-    const driver = new ReplayDriver({ replayRunId: customId });
+    const driver = new ReplayDriver(driverOptions({ replayRunId: customId }));
     const proof = await driver.run([]);
     assert.equal(proof.replayRunId, customId);
   });
 
-  // ── 9. completedAt is set ───────────────────────────────────
-  test('completedAt is set to a valid ISO-8601 string', async () => {
-    const driver = new ReplayDriver();
+  // ── 9. completedAt is deterministic ─────────────────────────
+  test('completedAt comes from the injected clock', async () => {
+    const driver = new ReplayDriver(driverOptions());
     const proof = await driver.run([]);
-    assert.ok(typeof proof.completedAt === 'string' && proof.completedAt.length > 0);
-    const parsed = new Date(proof.completedAt);
-    assert.ok(!isNaN(parsed.getTime()), 'completedAt must be a valid date');
+    assert.equal(proof.completedAt, CLOCK_NOW);
+    assert.equal(proof.windowEnd, CLOCK_NOW);
   });
 
   // ── 10. Multiple picks all replayed ─────────────────────────
   test('multiple picks are all counted in picksReplayed', async () => {
-    const driver = new ReplayDriver({ windowDays: 30 });
+    const driver = new ReplayDriver(driverOptions({ windowDays: 30 }));
     const picks = [makePick('p1'), makePick('p2'), makePick('p3')];
     const proof = await driver.run(picks);
     assert.equal(proof.picksReplayed, 3);

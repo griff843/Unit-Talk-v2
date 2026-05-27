@@ -201,11 +201,14 @@ export class FullPipelineReplayHarness {
   private readonly store: IsolatedReplayStore;
   readonly runId: string;
 
-  constructor(snapshots: ReplaySnapshot[], replayRunId?: string) {
+  constructor(snapshots: ReplaySnapshot[], replayRunId: string) {
+    if (!replayRunId || replayRunId.trim() === '') {
+      throw new Error('FullPipelineReplayHarness requires deterministic replayRunId');
+    }
     // Freeze all snapshot data on construction — immutability is structural
     this.snapshots = snapshots.map(s => Object.freeze({ ...s, data: Object.freeze({ ...s.data }) }));
     this.store = new IsolatedReplayStore('isolated');
-    this.runId = replayRunId ?? `full-pipeline-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.runId = replayRunId;
   }
 
   // ─────────────────────────────────────────────────────────────
