@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1122",
+  "sha_binding": {
+    "verified_source_sha": "54bb1f89e3dbc72e9c52fd8329b8104233d0fec6",
+    "verified_source_note": "Implementation commit: cohort-hold.ts, cohort-hold.test.ts, index.ts, package.json, .ops/sync/UTV2-1122.yml",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests": 208,
+      "suites": 23,
+      "pass": 208,
+      "fail": 0,
+      "duration_ms": 1319
+    },
+    "type_check": { "status": "PASS" },
+    "lint": { "status": "PASS" },
+    "build": { "status": "PASS" },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 0,
+      "rules_matched": "none — no R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 25652,
+    "queries": [
+      "SELECT * FROM picks WHERE id = $1 (atomic delivery confirmation rollback)",
+      "SELECT * FROM outbox WHERE id = $1 (outbox status rollback verification)",
+      "SELECT * FROM settlement_records WHERE pick_id = $1 (re-settlement correction chain)",
+      "SELECT * FROM participants WHERE external_id = $1 AND sport = $2 (no duplicate participants)",
+      "SELECT * FROM audit_log WHERE entity_id = $1 (audit row integrity)"
+    ],
+    "row_counts": [
+      { "table": "picks", "count_before": 0, "count_after": 1, "note": "atomic delivery confirmation test" },
+      { "table": "outbox", "count_before": 0, "count_after": 1, "note": "outbox delivery test" },
+      { "table": "participants", "count_before": 0, "count_after": 1, "note": "no-duplicate participants test" },
+      { "table": "settlement_records", "count_before": 0, "count_after": 2, "note": "correction chain test (original + correction)" }
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 25652,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase; domain-only lane — test:db verifies broader suite integrity"
+      }
+    ]
+  }
+}
