@@ -13,6 +13,10 @@ import {
   type RepositoryBundle,
 } from '@unit-talk/db';
 import {
+  createProductionCertificationRuntime,
+  type ProductionCertificationRuntime,
+} from './certification-runtime.js';
+import {
   buildRuntimeTruthReport,
   type RuntimeTruthReport,
 } from '@unit-talk/observability';
@@ -42,6 +46,7 @@ export interface WorkerRuntimeDependencies {
   simulationMode: boolean;
   targetCoverage: WorkerTargetCoverageReport;
   runtimeTruth: RuntimeTruthReport;
+  certificationRuntime: ProductionCertificationRuntime | null;
 }
 
 export function createWorkerRuntimeDependencies(
@@ -145,10 +150,12 @@ export function createWorkerRuntimeDependencies(
       autorun,
       simulationMode: readSimulationMode(environment),
       targetCoverage,
+      certificationRuntime: null,
     });
   }
 
   const connection = createServiceRoleDatabaseConnectionConfig(environment);
+  const certificationRuntime = createProductionCertificationRuntime(connection);
 
   return withWorkerRuntimeTruth({
     repositories: createDatabaseRepositoryBundle(connection),
@@ -168,6 +175,7 @@ export function createWorkerRuntimeDependencies(
     autorun,
     simulationMode: readSimulationMode(environment),
     targetCoverage,
+    certificationRuntime,
   });
 }
 

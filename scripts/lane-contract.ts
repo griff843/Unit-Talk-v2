@@ -69,6 +69,10 @@ export function isLaneType(input: string): input is LaneType {
   return (LANE_TYPES as readonly string[]).includes(input);
 }
 
+export function isLaneExecutorType(input: string): input is LaneExecutor {
+  return (LANE_EXECUTOR_TYPES as readonly string[]).includes(input);
+}
+
 export function loadLaneManifest(lane: string, repoRoot = process.cwd()): LaneManifestContract {
   if (!isLaneType(lane)) {
     throw new Error(`Invalid lane type: ${lane}. Expected one of: ${LANE_TYPES.join(', ')}`);
@@ -209,4 +213,3 @@ export function validateLaneAuthority(input: {
 export function matchesAny(file: string, patterns: string[]): boolean {
   return micromatch.isMatch(file, patterns, { dot: true });
 }
-

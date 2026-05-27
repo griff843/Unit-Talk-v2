@@ -308,6 +308,21 @@ test('required pull-request gates are wired to executable blocking jobs', () => 
   }
 });
 
+test('codex return review extracts issue IDs without sed delimiter traps', () => {
+  const workflow = readWorkflow('codex-return-review.yml');
+
+  assert.match(
+    workflow,
+    /grep -oiE 'utv2-\[0-9\]\+'/,
+    'codex-return-review.yml must extract issue IDs with grep instead of a sed expression that conflicts with pipe delimiters',
+  );
+  assert.doesNotMatch(
+    workflow,
+    /sed -nE 's\|codex\/\(utv2\|UTV2\)-/,
+    'codex-return-review.yml must not use the broken pipe-delimited sed alternation',
+  );
+});
+
 test('proof and runtime gates watch proof, lane, and ops control-plane paths', () => {
   const proofPaths = stringArrayField(workflowEvent('proof-auditor-gate.yml', 'pull_request'), 'paths');
   const runtimePaths = stringArrayField(workflowEvent('runtime-verifier-gate.yml', 'pull_request'), 'paths');

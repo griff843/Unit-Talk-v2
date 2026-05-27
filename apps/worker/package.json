@@ -10,7 +10,7 @@
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
     "dev": "tsx src/index.ts",
     "proof:outbox-drain": "tsx src/outbox-drain-proof.ts",
-    "test": "tsx --test src/worker-runtime.test.ts",
+    "test": "tsx --test src/worker-runtime.test.ts src/certification-runtime.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -18,6 +18,7 @@
     "@unit-talk/contracts": "workspace:*",
     "@unit-talk/db": "workspace:*",
     "@unit-talk/domain": "workspace:*",
+    "@unit-talk/invariants": "workspace:*",
     "@unit-talk/observability": "workspace:*"
   }
 }

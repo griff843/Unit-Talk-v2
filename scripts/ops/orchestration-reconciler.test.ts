@@ -205,6 +205,36 @@ test('fails when an open PR is not recorded in the manifest PR URL', () => {
   assert.equal(entry.pr_url, 'https://github.com/unit-talk/v2/pull/1059');
 });
 
+test('accepts open PRs recorded in related_prs for multi-PR lane manifests', () => {
+  const manifest = lane({
+    pr_url: 'https://github.com/unit-talk/v2/pull/887',
+  }) as LaneManifest & { related_prs: Array<{ number: number; url: string }> };
+  manifest.related_prs = [
+    { number: 885, url: 'https://github.com/unit-talk/v2/pull/885' },
+    { number: 886, url: 'https://github.com/unit-talk/v2/pull/886' },
+    { number: 887, url: 'https://github.com/unit-talk/v2/pull/887' },
+  ];
+
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [],
+    manifests: [manifest],
+    branches: [branch('codex/utv2-1059-secondary-pr')],
+    pullRequests: [
+      pr({
+        number: 886,
+        branch: 'codex/utv2-1059-secondary-pr',
+        url: 'https://github.com/unit-talk/v2/pull/886',
+      }),
+    ],
+    now: NOW,
+  });
+
+  const entry = check(report.checks, 'ORCH-OPEN-PR-MANIFEST-URL');
+  assert.equal(entry.verdict, 'pass');
+  assert.equal(entry.pr_url, 'https://github.com/unit-talk/v2/pull/886');
+});
+
 test('warns inside transition window and fails after it when merged PR is not Linear Done', () => {
   const fresh = buildOrchestrationReconcilerReport({
     linearIssues: [linear({ state_name: 'In Codex' })],
