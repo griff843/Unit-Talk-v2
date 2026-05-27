@@ -8,6 +8,7 @@ import {
 import { createWorkerRuntimeDependencies } from './runtime.js';
 import { createDeliveryAdapter, createSimulationDeliveryAdapter } from './delivery-adapters.js';
 import { runWorkerCycles } from './runner.js';
+import { invalidateExpiredCertificationProofs } from './certification-runtime.js';
 
 const lokiUrl = process.env.LOKI_URL?.trim();
 const workerWriter = lokiUrl
@@ -40,6 +41,7 @@ export function createWorkerRuntimeSummary() {
     watchdogMs: runtime.watchdogMs,
     autorun: runtime.autorun,
     simulationMode: runtime.simulationMode,
+    certificationRuntime: runtime.certificationRuntime === null ? 'disabled' : 'enabled',
     autoRecoveryEnabled: process.env['AUTOMATED_RECOVERY_ENABLED'] === 'true',
     nextStep: runtime.autorun
       ? 'worker cycles will execute with the configured delivery adapter'
@@ -67,7 +69,22 @@ if (runtime.autorun) {
         dryRun: runtime.dryRun,
       });
 
-  runWorkerCycles({
+  const certificationStartup = runtime.certificationRuntime === null
+    ? Promise.resolve([] as string[])
+    : invalidateExpiredCertificationProofs(runtime.certificationRuntime);
+
+  certificationStartup
+    .then((invalidatedCertificationDomains) => {
+      if (invalidatedCertificationDomains.length > 0) {
+        console.log(
+          JSON.stringify({
+            event: 'worker.certification-stale-proof-invalidated',
+            workerId: runtime.workerId,
+            domains: invalidatedCertificationDomains,
+          }),
+        );
+      }
+      return runWorkerCycles({
     repositories: runtime.repositories,
     workerId: runtime.workerId,
     targets: runtime.distributionTargets,
@@ -79,7 +96,8 @@ if (runtime.autorun) {
     watchdogMs: runtime.watchdogMs,
     workerHeartbeatIntervalMs: runtime.workerHeartbeatIntervalMs,
     persistenceMode: runtime.persistenceMode,
-  })
+      });
+    })
     .then((cycles) => {
       console.log(
         JSON.stringify(
