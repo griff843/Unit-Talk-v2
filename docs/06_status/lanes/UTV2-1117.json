@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1117-sha-verification-at-inference",
   "branch": "claude/utv2-1117-sha-verification-at-inference",
   "base_branch": "main",
-  "commit_sha": "90865372f3ac149f3f008ac66bdb9eba9966e035",
+  "commit_sha": "ad2a701efc56d972c4f09bc41b5957484b113755",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/892",
   "files_changed": [
     "package.json",
@@ -32,7 +32,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1117/evidence.json"
   ],
-  "status": "pr_opened",
+  "status": "merged",
   "started_at": "2026-05-27T18:08:11.008Z",
   "heartbeat_at": "2026-05-27T18:08:11.008Z",
   "closed_at": null,

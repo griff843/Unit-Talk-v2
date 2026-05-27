@@ -1,11 +1,12 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1117",
   "sha_binding": {
     "verified_source_sha": "90865372f3ac149f3f008ac66bdb9eba9966e035",
     "verified_source_note": "Implementation commit: sha-verification.ts, sha-verification.test.ts, index.ts, package.json, .ops/sync/UTV2-1117.yml",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "ad2a701efc56d972c4f09bc41b5957484b113755",
+    "evidence_commit_sha": "ad2a701efc56d972c4f09bc41b5957484b113755",
+    "current_pr_head_sha": "ad2a701efc56d972c4f09bc41b5957484b113755"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
