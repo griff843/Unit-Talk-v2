@@ -872,6 +872,8 @@ export interface ModelRegistryCreateInput {
   promotionApprovedBy?: string;
   promotionApprovedAt?: string;
   activeState?: string;
+  /** SHA-256 of the model artifact file. Immutable once set — pass only on initial registration. */
+  artifactSha?: string | null;
 }
 
 export interface ModelRegistryRepository {

@@ -1185,6 +1185,7 @@ export type Database = {
       model_registry: {
         Row: {
           active_state: string | null
+          artifact_sha: string | null
           calibration_metadata: Json | null
           champion_since: string | null
           created_at: string
@@ -1207,6 +1208,7 @@ export type Database = {
         }
         Insert: {
           active_state?: string | null
+          artifact_sha?: string | null
           calibration_metadata?: Json | null
           champion_since?: string | null
           created_at?: string
@@ -1229,6 +1231,7 @@ export type Database = {
         }
         Update: {
           active_state?: string | null
+          artifact_sha?: string | null
           calibration_metadata?: Json | null
           champion_since?: string | null
           created_at?: string

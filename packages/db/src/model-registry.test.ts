@@ -230,3 +230,51 @@ test('createModelRegistryRepositories() returns in-memory repositories when no c
   assert.equal(model.status, 'staged');
   assert.equal(experiment.status, 'running');
 });
+
+// -----------------------------------------------------------------------
+// artifact_sha immutability tests (UTV2-1116)
+// -----------------------------------------------------------------------
+
+test('model registry create() stores artifact_sha when provided', async () => {
+  const repository = new InMemoryModelRegistryRepository();
+
+  const record = await repository.create({
+    modelName: 'nba-spread',
+    version: 'v1',
+    sport: 'NBA',
+    marketFamily: 'spread',
+    artifactSha: 'abc123def456',
+  });
+
+  assert.equal(record.artifact_sha, 'abc123def456');
+});
+
+test('model registry create() stores null artifact_sha when not provided', async () => {
+  const repository = new InMemoryModelRegistryRepository();
+
+  const record = await repository.create({
+    modelName: 'nba-spread',
+    version: 'v1',
+    sport: 'NBA',
+    marketFamily: 'spread',
+  });
+
+  assert.equal(record.artifact_sha, null);
+});
+
+test('model registry updateStatus() preserves artifact_sha (immutability)', async () => {
+  const repository = new InMemoryModelRegistryRepository();
+  const sha = 'deadbeefcafe0123456789abcdef';
+
+  const record = await repository.create({
+    modelName: 'nfl-spread',
+    version: 'v3',
+    sport: 'NFL',
+    marketFamily: 'spread',
+    artifactSha: sha,
+  });
+
+  const updated = await repository.updateStatus(record.id, 'champion');
+
+  assert.equal(updated.artifact_sha, sha, 'artifact_sha must be preserved through status update');
+});

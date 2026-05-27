@@ -2344,6 +2344,7 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
       promotion_approved_by: input.promotionApprovedBy ?? null,
       promotion_approved_at: input.promotionApprovedAt ?? null,
       active_state: input.activeState ?? (input.status === 'champion' ? 'champion' : null),
+      artifact_sha: input.artifactSha ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -2413,10 +2414,14 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
       );
     }
 
+    // artifact_sha is immutable: updateStatus never touches it, but guard
+    // against future callers accidentally spreading a different sha in.
     const updated: ModelRegistryRecord = {
       ...existing,
       status,
       champion_since: nextChampionSince,
+      // Preserve artifact_sha — do not allow mutation via status update
+      artifact_sha: existing.artifact_sha,
       updated_at: now,
     };
 
@@ -6961,6 +6966,7 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
         promotion_approved_by: input.promotionApprovedBy ?? null,
         promotion_approved_at: input.promotionApprovedAt ?? null,
         active_state: input.activeState ?? (status === 'champion' ? 'champion' : null),
+        artifact_sha: input.artifactSha ?? null,
         updated_at: now,
       })
       .select('*')
