@@ -7,3 +7,4 @@ export * from './segment-readiness.js';
 export * from './contrarian.js';
 export * from './feature-vector.js';
 export * from './sha-verification.js';
+export * from './shadow-inference.js';
