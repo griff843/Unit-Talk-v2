@@ -17,7 +17,11 @@
   "file_scope_lock": [
     "packages/domain/src/index.ts",
     "packages/domain/src/models/feature-vector.test.ts",
-    "packages/domain/src/models/feature-vector.ts"
+    "packages/domain/src/models/feature-vector.ts",
+    "packages/domain/src/models/index.ts",
+    "docs/06_status/proof/UTV2-1112/evidence.json",
+    "docs/06_status/proof/UTV2-1112/verification.md",
+    "docs/06_status/lanes/UTV2-1112.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1112/evidence.json"
