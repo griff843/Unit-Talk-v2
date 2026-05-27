@@ -14,7 +14,7 @@
   },
   "branch": "codex/utv2-1177-cert-worker-wiring",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/887",
   "files_changed": [
     ".github/workflows/codex-return-review.yml",
@@ -95,14 +95,42 @@
     "docs/06_status/proof/UTV2-1177/verification.md",
     "docs/06_status/proof/UTV2-1177/atomic-propagation-rpc.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-27T02:42:18.000Z",
-  "heartbeat_at": "2026-05-27T06:52:00.000Z",
+  "heartbeat_at": "2026-05-27T08:02:42.137Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1177-cert-worker-wiring.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T08:02:42.137Z",
+      "verdict": "pass",
+      "merge_sha": "40af275d168cbf8fd9ab83d4fdb0c2e96c567434",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/885"
+    },
+    {
+      "checked_at": "2026-05-27T08:02:42.137Z",
+      "verdict": "pass",
+      "merge_sha": "f0e04ec2bea857f621262c4771dd36953de81d2d",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/886"
+    },
+    {
+      "checked_at": "2026-05-27T08:02:42.137Z",
+      "verdict": "pass",
+      "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/887"
+    }
+  ],
   "reopen_history": [],
   "related_prs": [
     {
