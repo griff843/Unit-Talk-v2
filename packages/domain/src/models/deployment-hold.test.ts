@@ -89,13 +89,15 @@ describe('buildDeploymentHold', () => {
     }
   });
 
-  it('coerces undefined artifact_sha to null', () => {
-    const hold = buildDeploymentHold({ ...BASE_INPUT, artifact_sha: undefined });
+  it('coerces absent artifact_sha to null', () => {
+    const { artifact_sha: _, ...rest } = BASE_INPUT;
+    const hold = buildDeploymentHold(rest);
     assert.equal(hold.artifact_sha, null);
   });
 
-  it('coerces undefined breach to null', () => {
-    const hold = buildDeploymentHold({ ...BASE_INPUT, breach: undefined });
+  it('coerces absent breach to null', () => {
+    const { breach: _, ...rest } = BASE_INPUT;
+    const hold = buildDeploymentHold(rest);
     assert.equal(hold.breach, null);
   });
 
