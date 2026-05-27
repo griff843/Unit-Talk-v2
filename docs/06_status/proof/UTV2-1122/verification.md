@@ -5,7 +5,7 @@
 - **Tier:** T1
 - **Verifier:** claude-sonnet-4-6 (orchestrator)
 - **Implementation SHA:** 54bb1f89e3dbc72e9c52fd8329b8104233d0fec6
-- **Merge SHA:** set-by-ci
+- **Merge SHA:** c117eb28d84b32289700f0ba4b3ff9507e11d6ff
 
 ## Static proof
 

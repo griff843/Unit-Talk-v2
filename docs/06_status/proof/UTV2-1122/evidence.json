@@ -4,9 +4,9 @@
   "sha_binding": {
     "verified_source_sha": "54bb1f89e3dbc72e9c52fd8329b8104233d0fec6",
     "verified_source_note": "Implementation commit: cohort-hold.ts, cohort-hold.test.ts, index.ts, package.json, .ops/sync/UTV2-1122.yml",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "c117eb28d84b32289700f0ba4b3ff9507e11d6ff",
+    "evidence_commit_sha": "c117eb28d84b32289700f0ba4b3ff9507e11d6ff",
+    "current_pr_head_sha": "c117eb28d84b32289700f0ba4b3ff9507e11d6ff"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
