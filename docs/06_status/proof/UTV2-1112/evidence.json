@@ -4,9 +4,9 @@
   "title": "INIT-3.1.1 — FeatureVector Entity and Schema Registry",
   "generated_at": "2026-05-27T16:30:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "9c4f2e6ef98efc4f8f580fc4afac2b0aeeb9f621",
-    "sha_type": "branch_head",
-    "note": "Merge SHA will be recorded by ops:truth-check post-merge per TRUTH_CHECK_SPEC"
+    "verified_source_sha": "e49750257313353bd953a30d5701ec33954f4343",
+    "sha_type": "merge_commit",
+    "note": "Squash merge SHA of PR #889 into main"
   },
   "tier": "T1",
   "lane_type": "modeling",
@@ -16,17 +16,12 @@
     "identity": "claude-sonnet-4-6",
     "role": "orchestrator"
   },
-  "verification_results": {
+  "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
       "tests": 113,
-      "failures": 0
-    },
-    "pnpm_test_db": {
-      "status": "PASS",
-      "tests": 7,
       "failures": 0,
-      "duration_ms": 32490
+      "merge_sha": "e49750257313353bd953a30d5701ec33954f4343"
     },
     "feature_vector_tests": {
       "status": "PASS",
@@ -37,6 +32,33 @@
       "status": "PASS",
       "verdict": "PASS — no R-level artifacts required for this diff"
     }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "label": "pnpm test:db smoke suite",
+        "description": "Live Supabase DB smoke tests — 7 queries executed against project zfzdnfwdarxucxtaojxm",
+        "result": "PASS",
+        "merge_sha": "e49750257313353bd953a30d5701ec33954f4343"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "operation": "smoke_read",
+        "result": "reachable",
+        "source": "pnpm test:db"
+      }
+    ],
+    "receipts": [
+      {
+        "run": "pnpm test:db",
+        "tests": 7,
+        "failures": 0,
+        "duration_ms": 32490,
+        "supabase_project": "zfzdnfwdarxucxtaojxm"
+      }
+    ]
   },
   "assertions": [
     "FeatureVectorSchema is immutable after registration (duplicate key throws)",
