@@ -4,9 +4,8 @@
   "title": "INIT-3.1.2 — Future-Leakage Detector",
   "generated_at": "2026-05-27T16:45:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "0b0aa477de6ab1d786f26f0faf24c02915ae5514",
-    "sha_type": "branch_head",
-    "note": "Merge SHA will be recorded by ops:truth-check post-merge per TRUTH_CHECK_SPEC"
+    "verified_source_sha": "d9ee42257a82afe98d7dca76cbf5109ddc0caa9b",
+    "sha_type": "merge_commit"
   },
   "tier": "T1",
   "lane_type": "modeling",
