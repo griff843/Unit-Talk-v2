@@ -2,10 +2,10 @@
   "schema_version": 2,
   "issue_id": "UTV2-1177",
   "title": "UTV2-1177 atomic certification propagation batch RPC proof",
-  "generated_at": "2026-05-27T03:18:00.000Z",
+  "generated_at": "2026-05-27T06:53:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "a806cbfbc830a459ce605d51b0ad48db7ee8a0cb",
-    "verified_source_note": "Proof source commit containing the non-runtime proof script and multi-PR lane reconciler support. The atomic RPC blocker fix is commit 9096be7188e014f7cdec7baf12436a25494d9fd8.",
+    "verified_source_sha": "01bdde58ff81eb094e7062a1a1f9b84425a42194",
+    "verified_source_note": "Proof source commit containing the non-runtime proof script, multi-PR lane reconciler support, and governance gate compatibility fixes. The atomic RPC blocker fix is commit 9096be7188e014f7cdec7baf12436a25494d9fd8.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
