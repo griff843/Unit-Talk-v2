@@ -7,10 +7,10 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/888",
   "sha_binding": {
     "branch_head_sha": "0fc0966ad8ae6534b2ff44cd19d05ec15fa40cf4",
-    "verified_source_sha": "PENDING_MERGE_SHA",
+    "verified_source_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
     "ci_green_on_branch": true,
-    "ci_green_on_merge": "PENDING",
-    "note": "verified_source_sha and ci_green_on_merge must be updated to merge SHA after PR merges"
+    "ci_green_on_merge": true,
+    "note": "SHA bound to squash-merge commit on main after PR #888 merged 2026-05-27"
   },
 
   "## Verification": "---",
