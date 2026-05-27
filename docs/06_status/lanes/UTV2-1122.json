@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1122-cohort-level-holds",
   "branch": "claude/utv2-1122-cohort-level-holds",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "54bb1f89e3dbc72e9c52fd8329b8104233d0fec6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/897",
+  "files_changed": [
+    "packages/domain/src/models/cohort-hold.ts",
+    "packages/domain/src/models/cohort-hold.test.ts",
+    "packages/domain/src/models/index.ts",
+    "package.json",
+    ".ops/sync/UTV2-1122.yml"
+  ],
   "file_scope_lock": [
     "package.json",
     "packages/domain/src/models/index.ts",
