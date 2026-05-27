@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1178",
-  "lane_type": "verification",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1178-bypass-enforcement-runtime",
@@ -18,10 +18,15 @@
   "file_scope_lock": [
     "packages/invariants/src/certification/bypass-audit.md",
     "packages/invariants/src/engine.test.ts",
-    "packages/invariants/src/engine.ts"
+    "packages/invariants/src/engine.ts",
+    "docs/06_status/proof/UTV2-1178/evidence.json",
+    "docs/06_status/proof/UTV2-1178/verification.md",
+    "docs/06_status/proof/UTV2-1178/diff-summary.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1178/evidence.json"
+    "docs/06_status/proof/UTV2-1178/evidence.json",
+    "docs/06_status/proof/UTV2-1178/verification.md",
+    "docs/06_status/proof/UTV2-1178/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-05-27T11:44:14.161Z",
