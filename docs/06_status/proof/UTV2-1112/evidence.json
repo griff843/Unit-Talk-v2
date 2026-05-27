@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1112",
+  "title": "INIT-3.1.1 — FeatureVector Entity and Schema Registry",
+  "generated_at": "2026-05-27T16:30:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "9c4f2e6ef98efc4f8f580fc4afac2b0aeeb9f621",
+    "sha_type": "branch_head",
+    "note": "Merge SHA will be recorded by ops:truth-check post-merge per TRUTH_CHECK_SPEC"
+  },
+  "tier": "T1",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/889",
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "verification_results": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests": 113,
+      "failures": 0
+    },
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests": 7,
+      "failures": 0,
+      "duration_ms": 32490
+    },
+    "feature_vector_tests": {
+      "status": "PASS",
+      "tests": 11,
+      "failures": 0
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required for this diff"
+    }
+  },
+  "assertions": [
+    "FeatureVectorSchema is immutable after registration (duplicate key throws)",
+    "createFeatureVector fails closed on unknown schema",
+    "createFeatureVector fails closed on missing required fields",
+    "Hash is deterministic: same schema + fields → identical SHA-256",
+    "Hash differs for different field values or schema versions",
+    "Extra undeclared input fields are dropped (no data leakage)",
+    "Domain package remains pure: no I/O, no DB, no env reads"
+  ],
+  "files_changed": [
+    "packages/domain/src/models/feature-vector.ts",
+    "packages/domain/src/models/feature-vector.test.ts",
+    "packages/domain/src/models/index.ts"
+  ]
+}

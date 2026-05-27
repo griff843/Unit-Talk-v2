@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1112",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1112-feature-vector-entity",
+  "branch": "claude/utv2-1112-feature-vector-entity",
+  "base_branch": "main",
+  "commit_sha": "e2af2d2749a4195af984858490b7c17f92636460",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/889",
+  "files_changed": [
+    "packages/domain/src/models/feature-vector.ts",
+    "packages/domain/src/models/feature-vector.test.ts",
+    "packages/domain/src/models/index.ts"
+  ],
+  "file_scope_lock": [
+    "packages/domain/src/index.ts",
+    "packages/domain/src/models/feature-vector.test.ts",
+    "packages/domain/src/models/feature-vector.ts",
+    "packages/domain/src/models/index.ts",
+    "docs/06_status/proof/UTV2-1112/evidence.json",
+    "docs/06_status/proof/UTV2-1112/verification.md",
+    "docs/06_status/lanes/UTV2-1112.json",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1112/evidence.json"
+  ],
+  "status": "pr_opened",
+  "started_at": "2026-05-27T16:06:32.598Z",
+  "heartbeat_at": "2026-05-27T16:06:32.598Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1112-feature-vector-entity.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1112-feature-vector-entity",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
