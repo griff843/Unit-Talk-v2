@@ -29,10 +29,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1121/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T21:31:56.284Z",
-  "heartbeat_at": "2026-05-27T22:01:21.431Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T22:02:01.075Z",
+  "closed_at": "2026-05-27T22:02:01.075Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1121-shadow-to-active-calibration-gate.json",
   "created_by": "claude",
@@ -46,6 +46,13 @@
         "G3",
         "C3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T22:01:46.850Z",
+      "verdict": "pass",
+      "merge_sha": "8e21739ca33160455f6b0ab4858a0e8561473e62",
+      "failures": [],
       "runner": "manual"
     }
   ],
