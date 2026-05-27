@@ -7,9 +7,12 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1113-future-leakage-detector",
   "branch": "claude/utv2-1113-future-leakage-detector",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "a9447b8b31ccbbd0bbbf10e617d1f5aaeffe75f7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/891",
+  "files_changed": [
+    "packages/domain/src/scoring/future-leakage-detector.ts",
+    "packages/domain/src/scoring/future-leakage-detector.test.ts"
+  ],
   "file_scope_lock": [
     "packages/domain/src/scoring/future-leakage-detector.test.ts",
     "packages/domain/src/scoring/future-leakage-detector.ts",
@@ -21,7 +24,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1113/evidence.json"
   ],
-  "status": "started",
+  "status": "pr_opened",
   "started_at": "2026-05-27T16:40:34.455Z",
   "heartbeat_at": "2026-05-27T16:40:34.455Z",
   "closed_at": null,

@@ -11,7 +11,7 @@
   "tier": "T1",
   "lane_type": "modeling",
   "executor": "claude",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/891",
   "verifier": {
     "identity": "claude-sonnet-4-6",
     "role": "orchestrator"
