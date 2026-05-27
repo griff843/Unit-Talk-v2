@@ -1,11 +1,12 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1118",
   "sha_binding": {
     "verified_source_sha": "dcb1de705172f9259a779b472660441385fe1b12",
     "verified_source_note": "Implementation commit: shadow-inference.ts, shadow-inference.test.ts, index.ts, package.json, .ops/sync/UTV2-1118.yml",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
+    "evidence_commit_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
+    "current_pr_head_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",

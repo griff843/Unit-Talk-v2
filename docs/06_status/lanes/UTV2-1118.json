@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1118-real-shadow-inference",
   "branch": "claude/utv2-1118-real-shadow-inference",
   "base_branch": "main",
-  "commit_sha": "dcb1de705172f9259a779b472660441385fe1b12",
+  "commit_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/893",
   "files_changed": [
     "package.json",
@@ -32,7 +32,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1118/evidence.json"
   ],
-  "status": "pr_opened",
+  "status": "merged",
   "started_at": "2026-05-27T18:25:54.122Z",
   "heartbeat_at": "2026-05-27T18:25:54.122Z",
   "closed_at": null,
