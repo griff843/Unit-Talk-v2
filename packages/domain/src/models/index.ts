@@ -5,3 +5,4 @@ export * from './stat-market-blend.js';
 export * from './sharp-consensus.js';
 export * from './segment-readiness.js';
 export * from './contrarian.js';
+export * from './feature-vector.js';
