@@ -3,7 +3,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { validateLaneAuthority, type LaneManifestContract } from './lane-contract.js';
+import {
+  isLaneExecutorType,
+  isLaneType,
+  validateLaneAuthority,
+  type LaneManifestContract,
+} from './lane-contract.js';
 
 const baseManifest: LaneManifestContract = {
   schema_version: 1,
@@ -16,6 +21,13 @@ const baseManifest: LaneManifestContract = {
   merge_policy: 'green verify',
   concurrency_notes: 'no overlap',
 };
+
+test('lane taxonomy separates domain lane types from executor lane types', () => {
+  assert.equal(isLaneType('runtime'), true);
+  assert.equal(isLaneExecutorType('runtime'), false);
+  assert.equal(isLaneType('codex-cli'), false);
+  assert.equal(isLaneExecutorType('codex-cli'), true);
+});
 
 test('lane authority fails on files outside allowed paths', () => {
   const result = validateLaneAuthority({

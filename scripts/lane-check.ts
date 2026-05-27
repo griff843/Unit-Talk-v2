@@ -1,4 +1,10 @@
-import { getChangedFiles, isLaneType, loadLaneManifest, validateLaneAuthority } from './lane-contract.js';
+import {
+  getChangedFiles,
+  isLaneExecutorType,
+  isLaneType,
+  loadLaneManifest,
+  validateLaneAuthority,
+} from './lane-contract.js';
 import { emitJson, getFlag, getFlags, parseArgs } from './ops/shared.js';
 
 function main(): void {
@@ -8,6 +14,21 @@ function main(): void {
 
   try {
     if (!isLaneType(lane)) {
+      if (isLaneExecutorType(lane)) {
+        if (json) {
+          emitJson({
+            ok: true,
+            code: 'lane_authority_skipped_executor_lane',
+            lane,
+            changed_files: [],
+            violations: [],
+          });
+        } else {
+          console.log(`lane:check SKIP lane=${lane} reason=executor-lane`);
+        }
+        process.exit(0);
+      }
+
       throw new Error('Missing or invalid lane. Pass --lane <type> or set LANE_TYPE.');
     }
 

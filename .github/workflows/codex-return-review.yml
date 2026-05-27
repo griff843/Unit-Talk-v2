@@ -108,7 +108,7 @@ jobs:
           BRANCH="${{ github.head_ref }}"
 
           # Extract issue ID from branch name (e.g. codex/utv2-1234-fix-foo → UTV2-1234)
-          ISSUE_ID=$(echo "$BRANCH" | sed -nE 's|codex/(utv2|UTV2)-([0-9]+).*|UTV2-\2|Ip')
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
 
           if [ -z "$ISSUE_ID" ]; then
             echo "issue_id=unknown" >> "$GITHUB_OUTPUT"
