@@ -14,6 +14,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/engine.test.ts src/quarantine.test.ts src/governance-exception.test.ts src/proof-bundle.test.ts src/proof-validator.test.ts src/merge-sha-binding.test.ts src/proof-freshness.test.ts src/certification/certification.test.ts src/certification/lifecycle-manager.test.ts"
+    "test": "tsx --test src/engine.test.ts src/quarantine.test.ts src/governance-exception.test.ts src/proof-bundle.test.ts src/proof-validator.test.ts src/merge-sha-binding.test.ts src/proof-freshness.test.ts src/certification/certification.test.ts src/certification/dependent-gate.test.ts src/certification/lifecycle-manager.test.ts src/certification/revocation-trigger-wiring.test.ts"
   }
 }

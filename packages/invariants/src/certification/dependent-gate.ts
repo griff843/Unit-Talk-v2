@@ -18,6 +18,7 @@
 import {
   CERTIFICATION_DOMAINS,
   DOMAIN_DEPENDENCIES,
+  computeCanonicalDownstreamRevocations,
   type CertificationDomain,
   type CertificationRecord,
   type ProgramId,
@@ -192,20 +193,7 @@ export class DependentGateChecker {
   computeDownstreamRevocations(
     revokedDomain: CertificationDomain,
   ): readonly CertificationDomain[] {
-    const affected = new Set<CertificationDomain>();
-    const queue: CertificationDomain[] = [revokedDomain];
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      for (const domain of CERTIFICATION_DOMAINS) {
-        if (DOMAIN_DEPENDENCIES[domain].includes(current) && !affected.has(domain)) {
-          affected.add(domain);
-          queue.push(domain);
-        }
-      }
-    }
-
-    return CERTIFICATION_DOMAINS.filter(d => affected.has(d));
+    return computeCanonicalDownstreamRevocations(revokedDomain);
   }
 
   /**

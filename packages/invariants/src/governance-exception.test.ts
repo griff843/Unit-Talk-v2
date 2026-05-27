@@ -8,8 +8,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  assertGovernanceExceptionActive,
   createGovernanceException,
+  enforceGovernanceExceptionExpiration,
   GovernanceExceptionValidationError,
+  isGovernanceExceptionExpired,
 } from './governance-exception.js';
 import type { GovernanceExceptionInput } from './governance-exception.js';
 
@@ -304,4 +307,43 @@ test('exception is replayable via JSON round-trip without loss', () => {
   });
   assert.equal(replayed.status, 'active');
   assert.equal(replayed.scope, exception.scope);
+});
+
+test('isGovernanceExceptionExpired returns true at or after expiration', () => {
+  const now = new Date('2026-05-26T12:00:00.000Z');
+  const { exception } = createGovernanceException(
+    validInput({ expiration: '2099-01-01T00:00:00.000Z' }),
+  );
+  const expired = { ...exception, expiration: '2026-05-26T12:00:00.000Z' };
+
+  assert.equal(isGovernanceExceptionExpired(exception, now), false);
+  assert.equal(isGovernanceExceptionExpired(expired, now), true);
+});
+
+test('enforceGovernanceExceptionExpiration marks active exception expired and emits audit event', () => {
+  const now = new Date('2026-05-26T12:00:00.000Z');
+  const { exception } = createGovernanceException(
+    validInput({ expiration: '2099-01-01T00:00:00.000Z' }),
+  );
+  const result = enforceGovernanceExceptionExpiration(
+    { ...exception, expiration: '2026-05-26T11:59:59.000Z' },
+    now,
+  );
+
+  assert.equal(result.expired, true);
+  assert.equal(result.exception.status, 'expired');
+  assert.equal(result.auditEvent?.payload['action'], 'expired');
+  assert.equal(result.auditEvent?.payload['exception_id'], exception.id);
+});
+
+test('assertGovernanceExceptionActive throws for expired exception', () => {
+  const now = new Date('2026-05-26T12:00:00.000Z');
+  const { exception } = createGovernanceException(
+    validInput({ expiration: '2099-01-01T00:00:00.000Z' }),
+  );
+
+  assert.throws(
+    () => assertGovernanceExceptionActive({ ...exception, expiration: '2026-05-26T11:00:00.000Z' }, now),
+    GovernanceExceptionValidationError,
+  );
 });

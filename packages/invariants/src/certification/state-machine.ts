@@ -20,7 +20,7 @@ import type {
   CertificationRecordInput,
   PropagationInput,
 } from './types.js';
-import { getDependents } from './types.js';
+import { computeCanonicalDownstreamRevocations } from './types.js';
 
 // ---------------------------------------------------------------------------
 // Transition table
@@ -222,6 +222,17 @@ export interface TransitionResult {
 export interface PropagationResult {
   /** Propagated revocations for all dependents, in dependency order. */
   readonly revocations: TransitionResult[];
+  readonly auditEvents: PropagationAuditEvent[];
+}
+
+export interface PropagationAuditEvent {
+  readonly programId: ProgramId;
+  readonly domain: CertificationDomain;
+  readonly action: 'certification.propagation.expired-domain';
+  readonly reason: string;
+  readonly status: CertificationStatus;
+  readonly encounteredAt: string;
+  readonly replaySafe: true;
 }
 
 export interface ReconstructedCertificationEventState {
@@ -310,13 +321,26 @@ export class CertificationStateMachine {
     now: string = new Date().toISOString(),
   ): PropagationResult {
     const { programId, revokedDomain, evidenceSha, mergeSha, transitionedBy } = propagationInput;
-    const dependents = getDependents(revokedDomain);
+    const downstream = computeCanonicalDownstreamRevocations(revokedDomain);
     const revocations: TransitionResult[] = [];
+    const auditEvents: PropagationAuditEvent[] = [];
 
-    for (const dep of dependents) {
+    for (const dep of downstream) {
       const current = currentRecords[dep] ?? null;
       // Missing dependents are fail-closed into explicit revoked evidence.
       if (current?.status === 'revoked') continue;  // already revoked
+      if (current?.status === 'expired') {
+        auditEvents.push({
+          programId,
+          domain: dep,
+          action: 'certification.propagation.expired-domain',
+          reason: `Expired domain "${dep}" encountered while propagating revocation from "${revokedDomain}"`,
+          status: current.status,
+          encounteredAt: now,
+          replaySafe: true,
+        });
+        continue;
+      }
       if (current !== null && !['active', 'suspended', 'pending'].includes(current.status)) continue;
 
       const result = this.transition(
@@ -334,30 +358,9 @@ export class CertificationStateMachine {
         now,
       );
       revocations.push(result);
-
-      // Recursively propagate — dependents of this dependent
-      const subResult = this.computePropagation(
-        { ...propagationInput, revokedDomain: dep },
-        {
-          ...currentRecords,
-          [dep]: result.record,  // treat as now revoked for sub-propagation
-        },
-        now,
-      );
-      revocations.push(...subResult.revocations);
     }
 
-    // Deduplicate by domain (first occurrence wins — topological order)
-    const seen = new Set<CertificationDomain>();
-    const deduped: TransitionResult[] = [];
-    for (const r of revocations) {
-      if (!seen.has(r.record.domain)) {
-        seen.add(r.record.domain);
-        deduped.push(r);
-      }
-    }
-
-    return { revocations: deduped };
+    return { revocations, auditEvents };
   }
 
   /**

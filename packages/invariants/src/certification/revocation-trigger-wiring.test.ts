@@ -5,11 +5,14 @@ import {
   CertificationLifecycleManager,
   CertificationStateMachine,
   CERTIFICATION_DOMAINS,
+  DOMAIN_DEPENDENCIES,
   REVOCATION_TRIGGER_EXECUTION_MATRIX,
   type CertificationDomain,
   type CertificationRecord,
   type CertificationRepository,
   type CertificationTransitionEvent,
+  type DependentGateEvent,
+  type PropagationAuditEvent,
   type ProgramId,
   type TransitionResult,
 } from './index.js';
@@ -54,6 +57,10 @@ class InMemoryCertificationRepository implements CertificationRepository {
       await this.insertTransition(result.record, result.event);
     }
   }
+
+  async insertGateEvent(_event: DependentGateEvent): Promise<void> {}
+
+  async insertPropagationAuditEvent(_event: PropagationAuditEvent): Promise<void> {}
 }
 
 const PROGRAM: ProgramId = 'P1';
@@ -64,7 +71,12 @@ const NOW = '2026-05-26T18:00:00.000Z';
 async function activateDomain(
   manager: CertificationLifecycleManager,
   domain: CertificationDomain,
+  activated = new Set<CertificationDomain>(),
 ): Promise<void> {
+  if (activated.has(domain)) return;
+  for (const dependency of DOMAIN_DEPENDENCIES[domain]) {
+    await activateDomain(manager, dependency, activated);
+  }
   await manager.initiate({
     programId: PROGRAM,
     domain,
@@ -83,6 +95,7 @@ async function activateDomain(
     transitionReason: `activate ${domain}`,
     occurredAt: NOW,
   });
+  activated.add(domain);
 }
 
 test('revocation trigger execution matrix covers every required ACTIVE_CERT signal', () => {
@@ -258,7 +271,7 @@ test('dependency invalidation propagation revokes downstream missing state fail-
   const revokedDomains = propagation.revocations.map(result => result.record.domain);
   assert.deepStrictEqual(
     revokedDomains,
-    ['divergence', 'quarantine', 'cert_evidence', 'proof_lineage', 'freshness'],
+    ['divergence', 'quarantine', 'proof_lineage', 'freshness', 'cert_evidence'],
   );
   assert.ok(propagation.revocations.every(result => result.record.revocationTrigger === 'dependency_revoked'));
   assert.ok(propagation.revocations.every(result => result.record.predecessorId === null));
@@ -318,8 +331,9 @@ test('deterministic replay produces identical revocation records and events', ()
 test('trigger propagation keeps constitutional activation order stable', async () => {
   const repo = new InMemoryCertificationRepository();
   const manager = new CertificationLifecycleManager(repo);
+  const activated = new Set<CertificationDomain>();
   for (const domain of CERTIFICATION_DOMAINS) {
-    await activateDomain(manager, domain);
+    await activateDomain(manager, domain, activated);
   }
 
   const result = await manager.executeRevocationTrigger({
@@ -333,7 +347,7 @@ test('trigger propagation keeps constitutional activation order stable', async (
 
   assert.deepStrictEqual(
     result.propagated.map(item => item.record.domain),
-    ['divergence', 'quarantine', 'cert_evidence', 'proof_lineage', 'freshness'],
+    ['divergence', 'quarantine', 'proof_lineage', 'freshness', 'cert_evidence'],
   );
 });
 

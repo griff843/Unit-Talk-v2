@@ -29,12 +29,20 @@ export type {
   EscalationNotice,
 } from './quarantine.js';
 
-export { createGovernanceException, GovernanceExceptionValidationError } from './governance-exception.js';
+export {
+  createGovernanceException,
+  getGovernanceExceptionStatus,
+  isGovernanceExceptionExpired,
+  enforceGovernanceExceptionExpiration,
+  assertGovernanceExceptionActive,
+  GovernanceExceptionValidationError,
+} from './governance-exception.js';
 export type {
   ExceptionAuthorization,
   GovernanceExceptionType,
   GovernanceExceptionInput,
   GovernanceException,
+  GovernanceExceptionExpirationResult,
 } from './governance-exception.js';
 
 export { createProofBundle, validateProofBundle, ProofBundleValidationError } from './proof-bundle.js';
@@ -109,19 +117,35 @@ export {
   PROGRAM_IDS,
   DOMAIN_DEPENDENCIES,
   getDependents,
+  computeCanonicalDownstreamRevocations,
   getRevocationTriggerMatrixEntry,
   CertificationStateMachine,
   CertificationTransitionError,
   certificationStateMachine,
+  CertificationLifecycleManager,
+  DependentGateChecker,
+  DependentGateViolationError,
+  dependentGateChecker,
   RevocationTriggerWiring,
 } from './certification/index.js';
 
 export type {
+  CertificationRepository,
+  ActivateResult,
+  SuspendResult,
+  RevokeResult,
+  GateCheckResult,
   TransitionResult,
   PropagationResult,
+  PropagationAuditEvent,
   ReconstructedCertificationEventState,
   RevocationSignalInput,
   RevocationTriggerExecutionResult,
   WireEngineOptions,
   WireQuarantineOptions,
+  DependentGateBlocker,
+  DependentGateEvent,
+  DependentGateCheckResult,
+  ProgramGateViolation,
+  ProgramGateCheckResult,
 } from './certification/index.js';
