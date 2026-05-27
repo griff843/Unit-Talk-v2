@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1113",
+  "title": "INIT-3.1.2 — Future-Leakage Detector",
+  "generated_at": "2026-05-27T16:45:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "0b0aa477de6ab1d786f26f0faf24c02915ae5514",
+    "sha_type": "branch_head",
+    "note": "Merge SHA will be recorded by ops:truth-check post-merge per TRUTH_CHECK_SPEC"
+  },
+  "tier": "T1",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/891",
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests": 113,
+      "failures": 0
+    },
+    "future_leakage_detector_tests": {
+      "status": "PASS",
+      "tests": 12,
+      "failures": 0
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "label": "pnpm test:db smoke suite",
+        "description": "Live Supabase DB smoke tests — 7 queries executed against project zfzdnfwdarxucxtaojxm",
+        "result": "PASS"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "operation": "smoke_read",
+        "result": "reachable",
+        "source": "pnpm test:db"
+      }
+    ],
+    "receipts": [
+      {
+        "run": "pnpm test:db",
+        "tests": 7,
+        "failures": 0,
+        "duration_ms": 25914,
+        "supabase_project": "zfzdnfwdarxucxtaojxm"
+      }
+    ]
+  },
+  "assertions": [
+    "Clean when all field evidence predates cutoff",
+    "Leaked when one field evidence postdates cutoff",
+    "All post-cutoff fields reported in leaked result",
+    "Clean with empty field_evidence list",
+    "Exactly at cutoff is not leaked (boundary: same millisecond)",
+    "1ms after cutoff is leaked",
+    "Indeterminate (fail-open) on invalid cutoff timestamp",
+    "Indeterminate (fail-open) on invalid field evidence_at timestamp",
+    "Deterministic: same input always returns same result",
+    "Only leaked fields appear in result — clean fields excluded",
+    "Far-future leakage detected (days after cutoff)",
+    "Far-past evidence is clean (days before cutoff)",
+    "Domain package remains pure: no I/O, no DB, no env reads"
+  ],
+  "files_changed": [
+    "packages/domain/src/scoring/future-leakage-detector.ts",
+    "packages/domain/src/scoring/future-leakage-detector.test.ts"
+  ]
+}
