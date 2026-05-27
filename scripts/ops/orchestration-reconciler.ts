@@ -196,6 +196,10 @@ export interface OrchestrationReconcilerInput {
   historicalDecayErrors?: string[];
 }
 
+type ManifestWithRelatedPrs = LaneManifest & {
+  related_prs?: Array<{ url?: unknown }>;
+};
+
 const DEFAULT_TRANSITION_WINDOW_MINUTES = 60;
 const ACTIVE_LINEAR_STATE_NAMES = new Set(['in codex', 'in claude']);
 const DONE_LINEAR_STATE_NAMES = new Set(['done']);
@@ -1045,19 +1049,24 @@ export function buildOrchestrationReconcilerReport(
       });
       continue;
     }
+    const prUrlRecorded = manifestHasPrUrl(manifest, pr.url);
     addCheck(checks, {
       id: 'ORCH-OPEN-PR-MANIFEST-URL',
       requirement: 'required',
-      verdict: manifest.pr_url === pr.url ? 'pass' : 'fail',
+      verdict: prUrlRecorded ? 'pass' : 'fail',
       issue_id: issueId,
       branch: pr.branch,
       pr_url: pr.url,
-      detail: manifest.pr_url === pr.url
+      detail: prUrlRecorded
         ? 'Open PR URL is recorded in lane manifest'
         : 'Open PR exists but lane manifest is missing the matching PR URL',
       evidence: [
         evidence('github_pr', pr.url, `state=open; branch=${pr.branch}`),
-        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, `pr_url=${manifest.pr_url ?? 'null'}`),
+        evidence(
+          'lane_manifest',
+          `docs/06_status/lanes/${issueId}.json`,
+          `pr_url=${manifest.pr_url ?? 'null'}; related_prs=${relatedPrUrls(manifest).join(',') || 'none'}`,
+        ),
       ],
     });
   }
@@ -1210,6 +1219,17 @@ export function buildOrchestrationReconcilerReport(
       detail: 'Safe wiring: run pnpm ops:orchestration-reconcile --current --cleanup-plan --json from a scheduled CI job after Linear/GitHub credentials are present.',
     },
   };
+}
+
+function relatedPrUrls(manifest: LaneManifest): string[] {
+  const withRelated = manifest as ManifestWithRelatedPrs;
+  return (withRelated.related_prs ?? [])
+    .map((entry) => entry.url)
+    .filter((url): url is string => typeof url === 'string' && url.length > 0);
+}
+
+function manifestHasPrUrl(manifest: LaneManifest, prUrl: string): boolean {
+  return manifest.pr_url === prUrl || relatedPrUrls(manifest).includes(prUrl);
 }
 
 function runCommand(command: string, args: string[]): string {
