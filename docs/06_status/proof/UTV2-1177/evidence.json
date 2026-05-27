@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1177",
+  "title": "UTV2-1177 atomic certification propagation batch RPC proof",
+  "generated_at": "2026-05-27T03:05:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "f03f749029b0f4b6d399fa03c4ec4da7eb46bb60",
+    "verified_source_note": "Proof source commit containing the non-runtime proof script. The atomic RPC blocker fix is commit 9096be7188e014f7cdec7baf12436a25494d9fd8.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "pull_requests": [
+    "https://github.com/griff843/Unit-Talk-v2/pull/885",
+    "https://github.com/griff843/Unit-Talk-v2/pull/886",
+    "https://github.com/griff843/Unit-Talk-v2/pull/887"
+  ],
+  "atomic_propagation_rpc": {
+    "rpc_name": "insert_certification_propagation_batch",
+    "atomic_fix_commit": "9096be7188e014f7cdec7baf12436a25494d9fd8",
+    "migration": "supabase/migrations/20260527001_utv2_1177_atomic_certification_propagation_batch.sql",
+    "rollback": "db/migrations-rollback/20260527001_utv2_1177_atomic_certification_propagation_batch.down.sql",
+    "proof_script": "apps/worker/src/scripts/utv2-1177-atomic-certification-propagation-proof.ts",
+    "append_only_behavior": "PASS - the RPC performs INSERTs into certification_records and certification_transition_events only; no UPDATE or DELETE statements are present.",
+    "transactional_rollback_guarantee": "PASS - PostgreSQL executes the PL/pgSQL RPC in one server-side transaction, so any insert failure aborts the entire propagation batch.",
+    "failure_path_test": "PASS - apps/worker/src/certification-runtime.test.ts simulates an event insert failure and asserts no partial records or events are committed."
+  },
+  "verification": {
+    "pnpm_verify": "PASS",
+    "pnpm_test_db": "PASS",
+    "r_level_check": "PASS",
+    "migration_reversibility": "PASS",
+    "schema_round_trip_drill": "PASS"
+  },
+  "verdict": "PASS"
+}
