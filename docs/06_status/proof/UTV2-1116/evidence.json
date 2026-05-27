@@ -6,8 +6,9 @@
   "sha_binding": {
     "verified_source_sha": "bc22dcc7cec87ac62a50bf9981a077c3932d6381",
     "verified_source_note": "Substantive implementation commit: migration, DB trigger, TypeScript types, repository wiring, model-registry tests, down-script, T1 proof test, lane contract update.",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
+    "evidence_commit_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
+    "current_pr_head_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62"
   },
   "tier": "T1",
   "lane_type": "migration",

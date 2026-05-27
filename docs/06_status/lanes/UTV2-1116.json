@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1116-immutable-model-version",
   "branch": "codex/utv2-1116-immutable-model-version",
   "base_branch": "main",
-  "commit_sha": "bc22dcc7cec87ac62a50bf9981a077c3932d6381",
+  "commit_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/890",
   "files_changed": [
     "packages/db/src/database.types.ts",
@@ -40,7 +40,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1116/evidence.json"
   ],
-  "status": "pr_opened",
+  "status": "merged",
   "started_at": "2026-05-27T16:08:25.468Z",
   "heartbeat_at": "2026-05-27T16:08:25.468Z",
   "closed_at": null,
