@@ -29,10 +29,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1118/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T18:25:54.122Z",
-  "heartbeat_at": "2026-05-27T18:46:55.879Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T18:58:33.055Z",
+  "closed_at": "2026-05-27T18:58:33.055Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1118-real-shadow-inference.json",
   "created_by": "claude",
@@ -62,6 +62,13 @@
         "G5"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-05-27T18:58:15.596Z",
+      "verdict": "pass",
+      "merge_sha": "7a60db5985d21699bef86de87ff2aea3c8982a45",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [
