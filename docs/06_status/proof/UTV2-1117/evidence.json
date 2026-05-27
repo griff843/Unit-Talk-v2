@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1117",
+  "sha_binding": {
+    "verified_source_sha": "90865372f3ac149f3f008ac66bdb9eba9966e035",
+    "verified_source_note": "Implementation commit: sha-verification.ts, sha-verification.test.ts, index.ts, package.json, .ops/sync/UTV2-1117.yml",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests": 113,
+      "suites": 13,
+      "pass": 113,
+      "fail": 0,
+      "duration_ms": 546
+    },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "build": {
+      "status": "PASS"
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 2,
+      "rules_matched": "none — no R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 35338,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 35338,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase; domain-only lane — test:db confirms broader suite integrity"
+      }
+    ]
+  }
+}
