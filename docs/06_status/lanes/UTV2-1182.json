@@ -17,6 +17,7 @@
     "docs/06_status/proof/UTV2-1182/verification.md",
     "docs/governance/approval-expiration-policy.json",
     "docs/governance/dual-auth-matrix.json",
+    "package.json",
     "packages/contracts/src/approval-expiration.ts",
     "packages/contracts/src/dual-auth.ts"
   ],
