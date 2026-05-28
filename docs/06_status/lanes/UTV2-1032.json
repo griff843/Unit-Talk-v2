@@ -19,9 +19,9 @@
     "docs/06_status/proof/UTV2-1032/diff-summary.md",
     "docs/06_status/proof/UTV2-1032/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-28T00:40:06.388Z",
-  "heartbeat_at": "2026-05-28T00:40:06.388Z",
+  "heartbeat_at": "2026-05-28T01:15:04.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed.json",
