@@ -3,8 +3,8 @@
   "issue_id": "UTV2-1110",
   "sha_binding": {
     "verified_source_sha": "9e421db31ddf50e5038251490dbf7c9e247195b1",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
+    "merge_sha": "a98992dcdc128373f513c3625a4fe52bcf74ceef",
+    "evidence_commit_sha": "a98992dcdc128373f513c3625a4fe52bcf74ceef",
     "current_pr_head_sha": "9e421db31ddf50e5038251490dbf7c9e247195b1"
   },
   "verifier": {

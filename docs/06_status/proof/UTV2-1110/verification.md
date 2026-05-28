@@ -4,7 +4,7 @@
 **Executor:** claude
 **Branch:** claude/utv2-1110-init-243-approval-expiration
 **Branch HEAD SHA:** 9e421db31ddf50e5038251490dbf7c9e247195b1
-**Merge SHA:** _to be updated post-merge_
+**Merge SHA:** a98992dcdc128373f513c3625a4fe52bcf74ceef
 **Date:** 2026-05-28
 
 ## Summary

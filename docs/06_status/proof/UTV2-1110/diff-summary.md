@@ -4,8 +4,8 @@ UTV2-1110 implements INIT-2.4.3 — Approval Expiration, extending expiration se
 TTL introduced in UTV2-1109 to cover all governance approval windows.
 
 **Branch HEAD SHA:** 9e421db31ddf50e5038251490dbf7c9e247195b1
-**Merge SHA:** _to be updated post-merge_
-**PR:** _to be updated post-merge_
+**Merge SHA:** a98992dcdc128373f513c3625a4fe52bcf74ceef
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/904
 
 ## Files Changed
 
