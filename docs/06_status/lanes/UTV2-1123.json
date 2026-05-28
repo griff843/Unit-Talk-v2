@@ -7,9 +7,18 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1123-advisory-path-removal",
   "branch": "claude/utv2-1123-advisory-path-removal",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "d45c5562b79a5585dd4ec388ebf377d02e227699",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/898",
+  "files_changed": [
+    "packages/domain/src/probability/calibration.ts",
+    "packages/domain/src/probability/calibration.test.ts",
+    "packages/domain/src/system-health/system-health-report.ts",
+    "packages/domain/src/models/calibration-proof.ts",
+    "packages/domain/src/models/calibration-proof.test.ts",
+    "packages/domain/src/models/index.ts",
+    "package.json",
+    ".ops/sync/UTV2-1123.yml"
+  ],
   "file_scope_lock": [
     "package.json",
     "packages/domain/src/models/index.ts",
