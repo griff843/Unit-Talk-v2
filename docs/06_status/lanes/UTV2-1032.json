@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1032",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed",
+  "branch": "codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md",
+    "docs/06_status/proof/UTV2-1032/evidence.json",
+    "scripts/roi-by-sport.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1032/diff-summary.md",
+    "docs/06_status/proof/UTV2-1032/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-28T00:40:06.388Z",
+  "heartbeat_at": "2026-05-28T00:40:06.388Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -33,7 +33,7 @@ Assigned when **any** of the following is true:
 Minimum requirements (all must be met):
 | Dimension | Minimum |
 |---|---|
-| In-sample bets | ≥ 50 settled bets in the cohort |
+| In-sample bets | ≥ 50 real-edge-backed settled bets in the cohort |
 | Out-of-sample bets | ≥ 20 bets held out from training |
 | Win rate CI | 90% confidence interval must not include 0.500 for a spread market |
 | CLV coverage | ≥ 60% of settlements have CLV payload |
@@ -42,6 +42,11 @@ Minimum requirements (all must be met):
 | Data freshness | Most recent evidence within 30 days |
 
 **Interpretation:** Sufficient for internal monitoring. Insufficient for syndicate-readiness claims.
+
+Confidence-proxy rows do not count toward the DEVELOPING sample minimum. The
+milestone proof must use market-backed edge sources such as Pinnacle, consensus,
+SGO, or single-book devigged edge, and must exclude confidence-delta or explicit
+operator component rows.
 
 ---
 

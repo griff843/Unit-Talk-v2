@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1032",
+  "generated_at": "2026-05-28T00:45:42.815Z",
+  "verdict": "DATA_GATED",
+  "label_asserted": "UNPROVEN",
+  "developing_label_eligible": false,
+  "acceptance_criteria": {
+    "real_edge_backed_settled_minimum": {
+      "threshold": 50,
+      "post_fix_value": 0,
+      "all_time_value": 5,
+      "passed": false
+    },
+    "roi_point_estimate_positive": {
+      "post_fix_value": null,
+      "all_time_value": null,
+      "passed": false
+    },
+    "clv_coverage_minimum_percent": {
+      "threshold": 60,
+      "post_fix_value": null,
+      "all_time_value": 0,
+      "passed": false
+    }
+  },
+  "commands": [
+    {
+      "command": "pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=2026-05-10 --monitor-json",
+      "exit_code": 0,
+      "summary": {
+        "tier": "UNPROVEN",
+        "settledRows": 0,
+        "roiPercent": null,
+        "clvCoveragePercent": null
+      }
+    },
+    {
+      "command": "pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=1970-01-01 --monitor-json",
+      "exit_code": 0,
+      "summary": {
+        "tier": "UNPROVEN",
+        "settledRows": 5,
+        "roiPercent": null,
+        "clvCoveragePercent": 0
+      }
+    }
+  ],
+  "notes": [
+    "Post-fix UTV2-1032 window has 0 real-edge-backed settled picks.",
+    "All-time query has 5 real-edge-backed settled picks, matching the prior UTV2-1000 data-gated state and remaining below the 50-pick DEVELOPING threshold.",
+    "MODEL_EDGE_ACCEPTANCE_STANDARD.md was clarified so DEVELOPING requires 50 real-edge-backed settled bets and excludes confidence-proxy rows.",
+    "The DEVELOPING tier label was not asserted because the live proof does not satisfy the issue acceptance criteria."
+  ]
+}
