@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "policy_id": "INIT-2.4.3",
+  "title": "Approval Expiration Policy",
+  "description": "Expiration semantics for all governance approval windows. Expired approvals fail closed. Expiration state is deterministic from (issuedAt, kind) alone, ensuring replay reconstruction reproduces the same expiration decisions.",
+  "approval_windows": {
+    "dual-auth": {
+      "seconds": 3600,
+      "description": "Dual-authorization window — two distinct operators must approve within 1 hour",
+      "governed_by": "INIT-2.4.2"
+    },
+    "operator-action": {
+      "seconds": 1800,
+      "description": "Single operator action authorization window — 30 minutes",
+      "governed_by": "INIT-2.4.1"
+    },
+    "member-promotion": {
+      "seconds": 86400,
+      "description": "Member promotion authorization window — 24 hours",
+      "governed_by": "INIT-2.4.1"
+    }
+  },
+  "invariants": [
+    "Expired approvals MUST throw ApprovalExpiredError (fail closed — no silent degradation)",
+    "Expiration is deterministic: given same issuedAt and kind, expiresAt is always equal",
+    "ExpirationRecord is immutable after creation (Object.freeze)",
+    "replayExpirationChain produces equal records from equal inputs",
+    "Boundary: an approval evaluated at exactly expiresAt is considered expired",
+    "Expiration evidence is append-only — expiredAt field is set once and never mutated"
+  ],
+  "enforcement_reference": "packages/contracts/src/approval-expiration.ts",
+  "closed_gap": "INIT-2.4.3: Approval expiration was implicit in dual-auth TTL only. Now all governance approval windows have explicit, deterministic expiration semantics with fail-closed enforcement."
+}
