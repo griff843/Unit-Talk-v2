@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1107",
+  "generated_at": "2026-05-28T02:35:00.000Z",
+  "merge_sha": "_to_be_updated_post_merge_",
+  "sha_binding": {
+    "verified_source_sha": "_to_be_updated_post_merge_",
+    "ci_sentinels": ["pnpm verify: PASS", "pnpm test:db: PASS (7/7)"]
+  },
+  "verdict": "PASS",
+  "tier": "T1",
+  "acceptance_criteria": {
+    "db_fsm_trigger_created": {
+      "trigger_name": "picks_fsm_guard",
+      "function_name": "picks_fsm_transition_guard",
+      "table": "public.picks",
+      "timing": "BEFORE UPDATE",
+      "when_clause": "OLD.status IS DISTINCT FROM NEW.status",
+      "passed": true
+    },
+    "invalid_transitions_rejected": {
+      "sqlstate": "P0001",
+      "exception_tag": "FSM_PICK_TRANSITION_REJECTED",
+      "passed": true
+    },
+    "terminal_states_enforced": {
+      "settled_allowed_next": [],
+      "voided_allowed_next": [],
+      "passed": true
+    },
+    "security_definer": {
+      "scope": "all roles including service_role",
+      "passed": true
+    },
+    "idempotent_migration": {
+      "drop_trigger_if_exists": true,
+      "passed": true
+    },
+    "pnpm_verify": {
+      "exit_code": 0,
+      "tests_pass": 113,
+      "tests_fail": 0,
+      "passed": true
+    },
+    "pnpm_test_db": {
+      "exit_code": 0,
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "passed": true
+    }
+  },
+  "fsm_transition_graph": {
+    "draft": ["validated", "voided"],
+    "validated": ["queued", "awaiting_approval", "voided"],
+    "awaiting_approval": ["queued", "voided"],
+    "queued": ["posted", "voided"],
+    "posted": ["settled", "voided"],
+    "settled": [],
+    "voided": []
+  },
+  "gap_closed": "Gap #9 (INIT-2.3.4): service-role direct UPDATE picks SET status bypassed TypeScript lifecycle guards. Trigger enforces FSM at Postgres storage layer for all roles."
+}
