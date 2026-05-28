@@ -22,8 +22,8 @@ settled bets, explicitly excluding confidence-proxy rows.
 
 ```
 pnpm verify — PASS
-  tests: 619 pass, 0 fail
-  type-check: PASS
+  pnpm type-check: PASS
+  pnpm test: 619 pass, 0 fail
   lint: PASS
   build: PASS
 ```

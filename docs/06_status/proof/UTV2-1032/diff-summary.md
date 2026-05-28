@@ -2,6 +2,9 @@
 
 UTV2-1032 added the `--real-edge-only` proof mode to `scripts/roi-by-sport.ts` and clarified the DEVELOPING sample requirement in `MODEL_EDGE_ACCEPTANCE_STANDARD.md`.
 
+**Merge SHA:** db497b886e1772259555d755ca2018708647ce1b
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/900
+
 ## Files Changed
 
 - `scripts/roi-by-sport.ts`: fetches latest promotion-history payloads, classifies settlement rows as `real-edge-backed`, `confidence-proxy`, or `unknown`, and filters ROI/monitor output when `--real-edge-only` is passed.
