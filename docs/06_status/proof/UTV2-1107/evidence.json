@@ -2,9 +2,10 @@
   "schema_version": 1,
   "issue_id": "UTV2-1107",
   "generated_at": "2026-05-28T02:35:00.000Z",
+  "branch_head_sha": "7356d0acb11d2875bd5b8f08e0b138fe4fd4669a",
   "merge_sha": "_to_be_updated_post_merge_",
   "sha_binding": {
-    "verified_source_sha": "_to_be_updated_post_merge_",
+    "verified_source_sha": "7356d0acb11d2875bd5b8f08e0b138fe4fd4669a",
     "ci_sentinels": ["pnpm verify: PASS", "pnpm test:db: PASS (7/7)"]
   },
   "verdict": "PASS",

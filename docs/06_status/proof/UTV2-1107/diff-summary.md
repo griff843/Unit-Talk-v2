@@ -2,6 +2,7 @@
 
 UTV2-1107 adds a Postgres `BEFORE UPDATE` trigger on `public.picks` that enforces the canonical pick lifecycle FSM graph for **all** DB roles, closing the gap where service-role direct `UPDATE picks SET status = ...` bypassed the TypeScript lifecycle guards in `packages/db/src/lifecycle.ts`.
 
+**Branch HEAD SHA:** 7356d0acb11d2875bd5b8f08e0b138fe4fd4669a
 **Merge SHA:** _to be updated post-merge_
 **PR:** _to be updated post-merge_
 

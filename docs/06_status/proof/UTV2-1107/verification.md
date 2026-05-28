@@ -3,6 +3,7 @@
 **Tier:** T1
 **Executor:** claude
 **Branch:** claude/utv2-1107-db-fsm-enforcement
+**Branch HEAD SHA:** 7356d0acb11d2875bd5b8f08e0b138fe4fd4669a
 **Merge SHA:** _to be updated post-merge_
 **Date:** 2026-05-28
 
