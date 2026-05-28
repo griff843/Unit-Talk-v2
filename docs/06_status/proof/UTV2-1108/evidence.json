@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1108",
+  "sha_binding": {
+    "verified_source_sha": "741d6afd3a43ab54d1ff98c4da4444cedf976104",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "741d6afd3a43ab54d1ff98c4da4444cedf976104"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "tests": 113,
+      "pass": 113,
+      "fail": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "t1_proof_test": {
+      "command": "tsx --test apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts",
+      "status": "PASS",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure TypeScript enforcement — AUTHORITY_MATRIX is a static constant. No live DB required. Authority decisions are deterministic and replay-safe.",
+    "command": "tsx --test apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts",
+    "status": "PASS",
+    "tests": 20,
+    "pass": 20,
+    "fail": 0,
+    "queries": [
+      "AUTHORITY_MATRIX.schema_version === 1",
+      "AUTHORITY_MATRIX.roles.map(r => r.id) includes all 6 required roles",
+      "every role has non-empty domains array",
+      "every declared domain is in AUTHORITY_DOMAINS registry",
+      "assertAuthority('submitter', 'picks:submit') — no throw",
+      "assertAuthority('settler', 'settlement:record') — no throw",
+      "assertAuthority('poster', 'outbox:enqueue') — no throw",
+      "assertAuthority('worker', 'outbox:deliver') — no throw",
+      "assertAuthority('operator', 'picks:override') — no throw",
+      "assertAuthority('settler', 'picks:post') — throws AuthorityViolationError (ADVERSARIAL)",
+      "assertAuthority('submitter', 'settlement:record') — throws AuthorityViolationError (ADVERSARIAL)",
+      "assertAuthority('worker', 'picks:settle') — throws AuthorityViolationError (ADVERSARIAL)",
+      "assertAuthority('poster', 'settlement:correct') — throws AuthorityViolationError (ADVERSARIAL)",
+      "assertAuthority('capper', 'operator:admin') — throws AuthorityViolationError (ADVERSARIAL)",
+      "assertAuthority('service_role', 'picks:settle') — throws AuthorityViolationError (unknown role)",
+      "hasAuthority('submitter', 'picks:settle') === false",
+      "hasAuthority('submitter', 'picks:submit') === true",
+      "getRole('settler').id === 'settler' && .can_delegate === false",
+      "getRole('service_role') === undefined",
+      "all roles structural check — revocable flag consistent"
+    ],
+    "row_counts": [],
+    "receipts": [
+      {
+        "note": "Pure TypeScript enforcement — AUTHORITY_MATRIX is a static constant with no DB dependency",
+        "supabase_project": "N/A",
+        "tests_run": 20,
+        "tests_pass": 20,
+        "tests_fail": 0,
+        "gap_closed": "Gap #22 — service_role previously unrestricted; separation of duties now mechanically enforced"
+      }
+    ]
+  },
+  "verdict": "PASS"
+}
