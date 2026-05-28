@@ -1,0 +1,79 @@
+{
+  "issue": "UTV2-1180",
+  "tier": "T1",
+  "branch": "codex/utv2-1180-cr-1-t1-proof-tests-must-execute-inside-verify-gate",
+  "baseHead": "729ca419448b2a89d75834bdd93ff8d9dc520fe1",
+  "generatedAt": "2026-05-28",
+  "summary": "Wired UTV2-1109, UTV2-1110, and UTV2-1111 T1 proof tests into the API package test command and normalized them to node:test test() cases.",
+  "changedFiles": [
+    "apps/api/package.json",
+    "apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts",
+    "apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts",
+    "apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+    "docs/06_status/proof/UTV2-1180/diff-summary.md",
+    "docs/06_status/proof/UTV2-1180/evidence.json",
+    "docs/06_status/proof/UTV2-1180/verification.md"
+  ],
+  "verification": [
+    {
+      "command": "npx tsx --test apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+      "status": "pass",
+      "details": "49 tests passed, 0 failed"
+    },
+    {
+      "command": "rg \"\\\\b(describe|it)\\\\s*\\\\(\" apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+      "status": "pass",
+      "details": "No describe()/it() matches"
+    },
+    {
+      "command": "pnpm type-check",
+      "status": "pass"
+    },
+    {
+      "command": "pnpm test",
+      "status": "pass",
+      "details": "Root aggregate test suite passed"
+    },
+    {
+      "command": "pnpm test:db",
+      "status": "pass",
+      "details": "7 tests passed, 0 failed"
+    },
+    {
+      "command": "pnpm verify",
+      "status": "pass",
+      "details": "env:check, lint, type-check, build, test, and verify:commands completed"
+    },
+    {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "pass",
+      "details": "Verdict: PASS; Changed files: 2; Rules matched: none"
+    }
+  ],
+  "runtimeProof": {
+    "command": "pnpm ops:runtime-health -- --json",
+    "status": "recorded_failed",
+    "overall": "FAILED",
+    "reason": "Shared runtime health reported stale worker, provider, scheduler, and delivery timestamps.",
+    "pipelineHealth": {
+      "state": "HEALTHY",
+      "outboxDeadLetterCount": 0,
+      "outboxFailedCount": 0,
+      "outboxPendingByTarget": {},
+      "queueHealthStatus": "healthy",
+      "silentStrandingRisk": false,
+      "workerVerdict": "HEALTHY - idle, no eligible rows in queue"
+    }
+  },
+  "knownCaveats": [
+    "Raw pnpm --filter @unit-talk/api test reproduces the packet-documented filtered API env failure class.",
+    "UNIT_TALK_APP_ENV=local pnpm --filter @unit-talk/api test hit a local tsx IPC EPERM before tests in this sandbox.",
+    "The worktree env-link helper refused because this checkout is treated as the main worktree; no env files were copied or modified."
+  ],
+  "rLevelCompliance": {
+    "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "verdict": "PASS",
+    "changedFiles": 2,
+    "rulesMatched": []
+  }
+}

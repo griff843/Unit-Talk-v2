@@ -39,13 +39,15 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeApproval(overrides: Partial<{
-  id: string;
-  firstApproverId: string;
-  secondApproverId: string;
-  requestedAt: string;
-  approvedAt: string;
-}> = {}) {
+function makeApproval(
+  overrides: Partial<{
+    id: string;
+    firstApproverId: string;
+    secondApproverId: string;
+    requestedAt: string;
+    approvedAt: string;
+  }> = {},
+) {
   const requestedAt = overrides.requestedAt ?? '2026-01-01T00:00:00.000Z';
   const approvedAt = overrides.approvedAt ?? '2026-01-01T00:01:00.000Z';
   const pending = createPendingApproval({
@@ -164,18 +166,26 @@ test('computeRollbackExpiresAt is deterministic', () => {
   assert.equal(result1, result2);
   assert.equal(
     result1,
-    new Date(new Date(base).getTime() + ROLLBACK_AUTHORIZATION_WINDOW_SECONDS * 1000).toISOString(),
+    new Date(
+      new Date(base).getTime() + ROLLBACK_AUTHORIZATION_WINDOW_SECONDS * 1000,
+    ).toISOString(),
   );
 });
 
 test('isRollbackExpired: exactly at expiry boundary = expired (fail-closed)', () => {
-  const approval = makeApproval({ requestedAt: '2026-01-01T00:00:00.000Z', approvedAt: '2026-01-01T00:00:00.000Z' });
+  const approval = makeApproval({
+    requestedAt: '2026-01-01T00:00:00.000Z',
+    approvedAt: '2026-01-01T00:00:00.000Z',
+  });
   const atExpiry = approval.expiresAt;
   assert.equal(isRollbackExpired(approval, atExpiry), true);
 });
 
 test('assertRollbackNotExpired throws RollbackExpiredError when expired', () => {
-  const approval = makeApproval({ requestedAt: '2026-01-01T00:00:00.000Z', approvedAt: '2026-01-01T00:00:00.000Z' });
+  const approval = makeApproval({
+    requestedAt: '2026-01-01T00:00:00.000Z',
+    approvedAt: '2026-01-01T00:00:00.000Z',
+  });
   assert.throws(
     () => assertRollbackNotExpired(approval, '2030-01-01T00:00:00.000Z'),
     (err: unknown) => {
@@ -241,9 +251,28 @@ test('ERB-4: replayRollbackChain produces deterministic final status for applied
   const base = '2026-01-01T00:01:00.000Z';
 
   const events: RollbackEvent[] = [
-    createRollbackEvent({ id: 'e1', kind: 'rollback_initiated', target: VALID_TARGET, approval, occurredAt: base }),
-    createRollbackEvent({ id: 'e2', kind: 'rollback_authorized', target: VALID_TARGET, approval, occurredAt: '2026-01-01T00:02:00.000Z' }),
-    createRollbackEvent({ id: 'e3', kind: 'rollback_applied', target: VALID_TARGET, approval, occurredAt: '2026-01-01T00:03:00.000Z', appliedAt: '2026-01-01T00:03:00.000Z' }),
+    createRollbackEvent({
+      id: 'e1',
+      kind: 'rollback_initiated',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: base,
+    }),
+    createRollbackEvent({
+      id: 'e2',
+      kind: 'rollback_authorized',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: '2026-01-01T00:02:00.000Z',
+    }),
+    createRollbackEvent({
+      id: 'e3',
+      kind: 'rollback_applied',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: '2026-01-01T00:03:00.000Z',
+      appliedAt: '2026-01-01T00:03:00.000Z',
+    }),
   ];
 
   const chain1 = replayRollbackChain(events);
@@ -257,8 +286,22 @@ test('ERB-4: replayRollbackChain produces deterministic final status for applied
 test('ERB-4: replayRollbackChain produces deterministic final status for rejected', () => {
   const approval = makeApproval();
   const events: RollbackEvent[] = [
-    createRollbackEvent({ id: 'e1', kind: 'rollback_initiated', target: VALID_TARGET, approval, occurredAt: '2026-01-01T00:01:00.000Z' }),
-    createRollbackEvent({ id: 'e2', kind: 'rollback_rejected', target: VALID_TARGET, approval, occurredAt: '2026-01-01T00:02:00.000Z', rejectedAt: '2026-01-01T00:02:00.000Z', rejectionReason: 'veto' }),
+    createRollbackEvent({
+      id: 'e1',
+      kind: 'rollback_initiated',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: '2026-01-01T00:01:00.000Z',
+    }),
+    createRollbackEvent({
+      id: 'e2',
+      kind: 'rollback_rejected',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: '2026-01-01T00:02:00.000Z',
+      rejectedAt: '2026-01-01T00:02:00.000Z',
+      rejectionReason: 'veto',
+    }),
   ];
 
   const chain = replayRollbackChain(events);
@@ -268,8 +311,21 @@ test('ERB-4: replayRollbackChain produces deterministic final status for rejecte
 test('ERB-2 + ERB-4: reconstructRollbackChain is idempotent and replay-visible', () => {
   const approval = makeApproval();
   const events: RollbackEvent[] = [
-    createRollbackEvent({ id: 'e1', kind: 'rollback_initiated', target: VALID_TARGET, approval, occurredAt: '2026-01-01T00:01:00.000Z' }),
-    createRollbackEvent({ id: 'e2', kind: 'rollback_applied', target: VALID_TARGET, approval, occurredAt: '2026-01-01T00:02:00.000Z', appliedAt: '2026-01-01T00:02:00.000Z' }),
+    createRollbackEvent({
+      id: 'e1',
+      kind: 'rollback_initiated',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: '2026-01-01T00:01:00.000Z',
+    }),
+    createRollbackEvent({
+      id: 'e2',
+      kind: 'rollback_applied',
+      target: VALID_TARGET,
+      approval,
+      occurredAt: '2026-01-01T00:02:00.000Z',
+      appliedAt: '2026-01-01T00:02:00.000Z',
+    }),
   ];
 
   const chain1 = reconstructRollbackChain(events);
