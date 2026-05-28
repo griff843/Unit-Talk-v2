@@ -37,7 +37,8 @@
       "A single approval never progresses a dual-auth action.",
       "No operator is both first and second approver for the same action.",
       "PendingApproval expires after TTL — no late completion allowed.",
-      "ApprovalRecord is frozen (Object.freeze) — immutable after creation."
+      "ApprovalRecord is frozen (Object.freeze) — immutable after creation.",
+      "Boundary: an approval evaluated at exactly expiresAt is considered expired (>= semantics, fail-closed)."
     ]
   },
   "enforcement": {

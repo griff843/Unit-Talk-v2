@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "apps/api/src/t1-proof-utv2-1182-dual-auth-expiry-boundary.test.ts",
     "docs/06_status/proof/UTV2-1182/diff-summary.md",
     "docs/06_status/proof/UTV2-1182/evidence.json",
     "docs/06_status/proof/UTV2-1182/verification.md",
