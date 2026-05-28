@@ -34,8 +34,8 @@
   ],
   "status": "done",
   "started_at": "2026-05-28T09:18:07.845Z",
-  "heartbeat_at": "2026-05-28T12:01:30.478Z",
-  "closed_at": "2026-05-28T12:01:30.478Z",
+  "heartbeat_at": "2026-05-28T14:19:55.717Z",
+  "closed_at": "2026-05-28T14:19:55.717Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1110-init-243-approval-expiration.json",
   "created_by": "claude",
@@ -48,9 +48,41 @@
         "L5"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T14:10:10.106Z",
+      "verdict": "reopen",
+      "merge_sha": "a98992dcdc128373f513c3625a4fe52bcf74ceef",
+      "failures": [
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T14:19:07.857Z",
+      "verdict": "pass",
+      "merge_sha": "a98992dcdc128373f513c3625a4fe52bcf74ceef",
+      "failures": [],
+      "runner": "manual"
     }
   ],
-  "reopen_history": [],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-28T14:10:10.106Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: 968fa01c3cc507ab2edaecb1287e4186cc93f8e7"
+      ],
+      "detected_by": "manual"
+    }
+  ],
+  "post_merge_repair_notes": [
+    {
+      "commit_sha": "968fa01c3cc507ab2edaecb1287e4186cc93f8e7",
+      "classification": "legitimate_binding_repair",
+      "reason": "Post-merge proof binding populated merge SHA and PR URL placeholders and updated manifest commit_sha to the squash merge. No runtime files changed.",
+      "recorded_at": "2026-05-28T14:20:00.000Z"
+    }
+  ],
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1110-init-243-approval-expiration",

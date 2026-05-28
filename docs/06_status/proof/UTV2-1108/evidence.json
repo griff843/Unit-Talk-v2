@@ -3,8 +3,8 @@
   "issue_id": "UTV2-1108",
   "sha_binding": {
     "verified_source_sha": "226af04f78476f73a2546b82be9d1d28fca73735",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
+    "merge_sha": "e29ed568ab30e0502ff610dabf5c4c275c56b2cf",
+    "evidence_commit_sha": "e29ed568ab30e0502ff610dabf5c4c275c56b2cf",
     "current_pr_head_sha": "226af04f78476f73a2546b82be9d1d28fca73735"
   },
   "verifier": {
@@ -70,7 +70,18 @@
       "getRole('service_role') === undefined",
       "all roles structural check — revocable flag consistent"
     ],
-    "row_counts": [],
+    "row_counts": [
+      {
+        "note": "No database tables modified — authority matrix enforcement is pure TypeScript/static JSON with no DB dependency.",
+        "tables_affected": 0,
+        "tables_monitored": [
+          "picks",
+          "settlement_records",
+          "audit_log",
+          "pick_lifecycle"
+        ]
+      }
+    ],
     "receipts": [
       {
         "note": "Pure TypeScript enforcement — AUTHORITY_MATRIX is a static constant with no DB dependency",

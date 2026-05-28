@@ -36,8 +36,8 @@
   ],
   "status": "done",
   "started_at": "2026-05-28T12:05:51.964Z",
-  "heartbeat_at": "2026-05-28T12:20:34.380Z",
-  "closed_at": "2026-05-28T12:20:34.380Z",
+  "heartbeat_at": "2026-05-28T14:20:00.209Z",
+  "closed_at": "2026-05-28T14:20:00.209Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1111-init-244-emergency-governance-rollback.json",
   "created_by": "claude",
@@ -58,9 +58,53 @@
       "merge_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T14:10:14.760Z",
+      "verdict": "reopen",
+      "merge_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
+      "failures": [
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T14:19:12.921Z",
+      "verdict": "pass",
+      "merge_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
+      "failures": [],
+      "runner": "manual"
     }
   ],
-  "reopen_history": [],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-28T14:10:14.760Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: 7a6b7c7fafb12f40312b38884045ee6e2d7a59ed, c269b54e9a68d823fc54b0948d8cba54710e120c, 1506f04b9c805ac9adfe266001531c2972026802"
+      ],
+      "detected_by": "manual"
+    }
+  ],
+  "post_merge_repair_notes": [
+    {
+      "commit_sha": "1506f04b9c805ac9adfe266001531c2972026802",
+      "classification": "legitimate_binding_repair",
+      "reason": "Post-merge proof binding populated merge SHA, PR URL, and manifest merge metadata. No runtime files changed.",
+      "recorded_at": "2026-05-28T14:20:00.000Z"
+    },
+    {
+      "commit_sha": "c269b54e9a68d823fc54b0948d8cba54710e120c",
+      "classification": "legitimate_binding_repair",
+      "reason": "Post-merge evidence metadata corrected evidence_commit_sha to the binding commit. No runtime files changed.",
+      "recorded_at": "2026-05-28T14:20:00.000Z"
+    },
+    {
+      "commit_sha": "7a6b7c7fafb12f40312b38884045ee6e2d7a59ed",
+      "classification": "legitimate_binding_repair",
+      "reason": "Post-merge proof metadata repaired row_counts shape and file_scope_lock for truth-check requirements. No runtime files changed.",
+      "recorded_at": "2026-05-28T14:20:00.000Z"
+    }
+  ],
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1111-init-244-emergency-governance-rollback",

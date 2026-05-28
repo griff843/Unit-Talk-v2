@@ -37,12 +37,31 @@
   ],
   "status": "done",
   "started_at": "2026-05-28T03:56:28.922Z",
-  "heartbeat_at": "2026-05-28T08:42:24.786Z",
+  "heartbeat_at": "2026-05-28T14:18:58.111Z",
   "closed_at": "2026-05-28T08:42:24.786Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1108-init-241-scoped-roles-and-authority-matrices.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T14:10:01.223Z",
+      "verdict": "fail",
+      "merge_sha": "e29ed568ab30e0502ff610dabf5c4c275c56b2cf",
+      "failures": [
+        "P3",
+        "C4",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T14:18:58.111Z",
+      "verdict": "pass",
+      "merge_sha": "e29ed568ab30e0502ff610dabf5c4c275c56b2cf",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
