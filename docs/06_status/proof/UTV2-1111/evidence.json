@@ -7,7 +7,7 @@
   "sha_binding": {
     "verified_source_sha": "84d0d855298e33c15c83ae01d7714e56c5ada3c0",
     "merge_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
-    "evidence_commit_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
+    "evidence_commit_sha": "1506f04b9c805ac9adfe266001531c2972026802",
     "note": "squash merge SHA from PR #905"
   },
   "verifier": {
