@@ -130,6 +130,34 @@ export function getRole(roleId: string): OperatorRole | undefined {
 }
 
 /**
+ * Assert that `roleId` is permitted to perform a multi-domain operation.
+ * Single-domain calls always pass. Two or more domains require `cross_domain_allowed: true`.
+ * Throws `AuthorityViolationError` fail-closed if the role lacks cross-domain permission.
+ */
+export function assertCrossDomainAllowed(
+  roleId: string,
+  domains: readonly AuthorityDomain[],
+): void {
+  if (domains.length <= 1) return;
+  const firstDomain = domains[0] as AuthorityDomain;
+  const role = getRole(roleId);
+  if (!role) {
+    throw new AuthorityViolationError(
+      `AUTHORITY_VIOLATION: unknown role '${roleId}' — cannot authorize cross-domain operation [domains=${domains.join(',')}] ERRCODE=AUTHORITY_VIOLATION`,
+      roleId,
+      firstDomain,
+    );
+  }
+  if (!role.cross_domain_allowed) {
+    throw new AuthorityViolationError(
+      `AUTHORITY_VIOLATION: role '${roleId}' has cross_domain_allowed=false — multi-domain operation rejected [domains=${domains.join(',')}] ERRCODE=AUTHORITY_VIOLATION`,
+      roleId,
+      firstDomain,
+    );
+  }
+}
+
+/**
  * Assert that `roleId` has authority over `domain`.
  * Throws `AuthorityViolationError` if the assertion fails — this is the
  * separation-of-duties enforcement gate.
