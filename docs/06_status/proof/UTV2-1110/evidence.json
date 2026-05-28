@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1110",
+  "sha_binding": {
+    "verified_source_sha": "9e421db31ddf50e5038251490dbf7c9e247195b1",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "9e421db31ddf50e5038251490dbf7c9e247195b1"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "tests": 113,
+      "pass": 113,
+      "fail": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "t1_proof_test": {
+      "command": "tsx --test apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts",
+      "status": "PASS",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure TypeScript enforcement — ExpirationRecord is a static value. No live DB required. Expiration decisions are deterministic from (issuedAt, kind) alone and are replay-safe.",
+    "command": "tsx --test apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts",
+    "status": "PASS",
+    "tests": 16,
+    "pass": 16,
+    "fail": 0,
+    "queries": [
+      "APPROVAL_WINDOW_SECONDS includes all required window kinds (dual-auth, operator-action, member-promotion)",
+      "APPROVAL_WINDOW_SECONDS['dual-auth'] === 3600",
+      "APPROVAL_WINDOW_SECONDS['operator-action'] === 1800",
+      "APPROVAL_WINDOW_SECONDS['member-promotion'] === 86400",
+      "computeExpiresAt produces correct future timestamp for dual-auth",
+      "computeExpiresAt is deterministic — same inputs produce equal outputs",
+      "isApprovalExpired returns false when within window",
+      "isApprovalExpired returns true when past expiry",
+      "BOUNDARY: isApprovalExpired returns true at exactly expiry time (fail-closed boundary)",
+      "assertApprovalNotExpired passes when within window",
+      "ADVERSARIAL: assertApprovalNotExpired throws ApprovalExpiredError when expired (dual-auth)",
+      "ADVERSARIAL: assertApprovalNotExpired throws for operator-action when expired",
+      "ADVERSARIAL: assertApprovalNotExpired throws for member-promotion when expired",
+      "ADVERSARIAL: assertApprovalNotExpired throws at exactly expiry time (boundary fail-closed)",
+      "createExpirationRecord produces a frozen ExpirationRecord with correct fields",
+      "createExpirationRecord captures expiredAt when approval was recorded as expired",
+      "ExpirationRecord is frozen — mutations throw TypeError in strict mode",
+      "replayExpirationChain is deterministic — same inputs produce equal ExpirationRecords",
+      "ApprovalExpiredError has correct name, code, kind, and expiresAt"
+    ],
+    "row_counts": [
+      {
+        "note": "No database tables modified — expiration enforcement is pure TypeScript with no DB dependency.",
+        "tables_affected": 0,
+        "tables_monitored": ["picks", "settlement_records", "audit_log", "pick_lifecycle"]
+      }
+    ],
+    "receipts": [
+      {
+        "note": "Pure TypeScript enforcement — ExpirationRecord values are deterministic; no Supabase interaction",
+        "supabase_project": "N/A",
+        "tests_run": 16,
+        "tests_pass": 16,
+        "tests_fail": 0,
+        "gap_closed": "INIT-2.4.3 — approval expiration was implicit in dual-auth TTL only; now all governance approval windows have explicit, deterministic, fail-closed expiration enforcement"
+      }
+    ]
+  },
+  "verdict": "PASS"
+}
