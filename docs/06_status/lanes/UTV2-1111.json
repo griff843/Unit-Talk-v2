@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1111",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1111-init-244-emergency-governance-rollback",
+  "branch": "claude/utv2-1111-init-244-emergency-governance-rollback",
+  "base_branch": "main",
+  "commit_sha": "fa751a62c3129a7b621eb883782e5a4bf15c38cb",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/905",
+  "files_changed": [
+    "packages/contracts/src/governance-rollback.ts",
+    "packages/contracts/src/index.ts",
+    "docs/governance/emergency-rollback-policy.json",
+    "apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+    "package.json",
+    ".ops/sync/UTV2-1111.yml",
+    "docs/06_status/proof/UTV2-1111/evidence.json",
+    "docs/06_status/proof/UTV2-1111/verification.md",
+    "docs/06_status/proof/UTV2-1111/diff-summary.md"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+    "docs/06_status/proof/UTV2-1111/diff-summary.md",
+    "docs/06_status/proof/UTV2-1111/evidence.json",
+    "docs/06_status/proof/UTV2-1111/verification.md",
+    "docs/governance/emergency-rollback-policy.json",
+    "package.json",
+    "packages/contracts/src/governance-rollback.ts",
+    "packages/contracts/src/index.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1111/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-28T12:05:51.964Z",
+  "heartbeat_at": "2026-05-28T12:35:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1111-init-244-emergency-governance-rollback.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1111-init-244-emergency-governance-rollback",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
