@@ -7,9 +7,13 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1179-treasury-frozen-domain-enforcement",
   "branch": "claude/utv2-1179-treasury-frozen-domain-enforcement",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "844e8989",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/910",
+  "files_changed": [
+    "packages/contracts/src/governance-rollback.ts",
+    "packages/contracts/src/governance-rollback.test.ts",
+    "docs/governance/emergency-rollback-policy.json"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1179/diff-summary.md",
     "docs/06_status/proof/UTV2-1179/evidence.json",
@@ -21,7 +25,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1179/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-28T20:49:38.354Z",
   "heartbeat_at": "2026-05-28T20:49:38.354Z",
   "closed_at": null,
