@@ -3,8 +3,8 @@
 UTV2-1108 implements INIT-2.4.1 — Scoped Roles and Authority Matrices, closing Gap #22 where the service_role was unrestricted and separation of duties was convention only.
 
 **Branch HEAD SHA:** 226af04f78476f73a2546b82be9d1d28fca73735
-**Merge SHA:** _to be updated post-merge_
-**PR:** _to be updated post-merge_
+**Merge SHA:** e29ed568ab30e0502ff610dabf5c4c275c56b2cf
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/902
 
 ## Files Changed
 

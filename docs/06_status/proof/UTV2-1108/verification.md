@@ -4,7 +4,7 @@
 **Executor:** claude
 **Branch:** claude/utv2-1108-init-241-scoped-roles-and-authority-matrices
 **Branch HEAD SHA:** 226af04f78476f73a2546b82be9d1d28fca73735
-**Merge SHA:** _to be updated post-merge_
+**Merge SHA:** e29ed568ab30e0502ff610dabf5c4c275c56b2cf
 **Date:** 2026-05-28
 
 ## Summary
