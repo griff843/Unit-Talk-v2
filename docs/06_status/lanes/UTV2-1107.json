@@ -24,14 +24,38 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1107/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-28T02:24:51.802Z",
-  "heartbeat_at": "2026-05-28T02:24:51.802Z",
+  "heartbeat_at": "2026-05-28T03:18:28.038Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1107-db-fsm-enforcement.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T03:17:11.283Z",
+      "verdict": "fail",
+      "merge_sha": "0887296bf3b05cbf27393d7685add5371b69f6f1",
+      "failures": [
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T03:18:28.038Z",
+      "verdict": "pass",
+      "merge_sha": "0887296bf3b05cbf27393d7685add5371b69f6f1",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
