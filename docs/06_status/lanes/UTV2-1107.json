@@ -24,10 +24,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1107/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-28T02:24:51.802Z",
-  "heartbeat_at": "2026-05-28T03:18:28.038Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T03:18:42.341Z",
+  "closed_at": "2026-05-28T03:18:42.341Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1107-db-fsm-enforcement.json",
   "created_by": "claude",

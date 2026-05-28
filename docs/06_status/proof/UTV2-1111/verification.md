@@ -13,7 +13,7 @@
 
 ## Merge SHA
 
-Merge SHA: _to be populated post-merge_
+Merge SHA: `7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d` (PR #905)
 
 ## pnpm test:db
 

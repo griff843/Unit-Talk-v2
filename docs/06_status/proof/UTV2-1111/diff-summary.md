@@ -1,7 +1,7 @@
 # Diff Summary — UTV2-1111 INIT-2.4.4 Emergency Governance Rollback
 
-PR URL: _to be populated post-merge_
-Merge SHA: _to be populated post-merge_
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/905
+Merge SHA: `7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d`
 
 ## Files changed
 
