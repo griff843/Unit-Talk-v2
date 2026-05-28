@@ -7,9 +7,19 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1108-init-241-scoped-roles-and-authority-matrices",
   "branch": "claude/utv2-1108-init-241-scoped-roles-and-authority-matrices",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "741d6afd3a43ab54d1ff98c4da4444cedf976104",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/902",
+  "files_changed": [
+    "packages/contracts/src/operator-role.ts",
+    "packages/contracts/src/index.ts",
+    "docs/governance/authority-matrix.json",
+    "apps/api/src/authority-enforcement.ts",
+    "apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1108/diff-summary.md",
+    "docs/06_status/proof/UTV2-1108/evidence.json",
+    "docs/06_status/proof/UTV2-1108/verification.md"
+  ],
   "file_scope_lock": [
     "apps/api/src/authority-enforcement.ts",
     "apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts",
@@ -23,7 +33,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1108/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-28T03:56:28.922Z",
   "heartbeat_at": "2026-05-28T03:56:28.922Z",
   "closed_at": null,
