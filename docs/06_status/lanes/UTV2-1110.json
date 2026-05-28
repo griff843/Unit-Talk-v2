@@ -7,9 +7,18 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1110-init-243-approval-expiration",
   "branch": "claude/utv2-1110-init-243-approval-expiration",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "c2602280b4c6dca9cabe8c24607a4e18aae2f94c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/904",
+  "files_changed": [
+    "packages/contracts/src/approval-expiration.ts",
+    "packages/contracts/src/index.ts",
+    "docs/governance/approval-expiration-policy.json",
+    "apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1110/evidence.json",
+    "docs/06_status/proof/UTV2-1110/verification.md",
+    "docs/06_status/proof/UTV2-1110/diff-summary.md"
+  ],
   "file_scope_lock": [
     "apps/api/src/t1-proof-utv2-1110-approval-expiration.test.ts",
     "docs/06_status/proof/UTV2-1110/diff-summary.md",
@@ -23,7 +32,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1110/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-28T09:18:07.845Z",
   "heartbeat_at": "2026-05-28T09:18:07.845Z",
   "closed_at": null,
