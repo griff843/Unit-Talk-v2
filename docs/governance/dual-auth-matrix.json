@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "title": "Unit Talk V2 — Dual-Authorization Runtime Matrix",
+  "issue": "UTV2-1109",
+  "gap_closed": "Gap #16 — dual authorization was convention only; now mechanically enforced at the runtime layer",
+  "effective_date": "2026-05-28",
+  "dual_auth_actions": [
+    {
+      "action": "picks:void",
+      "rationale": "Voiding a pick is irreversible — requires two independent operator approvals."
+    },
+    {
+      "action": "picks:override",
+      "rationale": "Overriding a pick outcome affects settlement; requires dual oversight."
+    },
+    {
+      "action": "member:write",
+      "rationale": "Mutating member records (tier, trust) requires dual authorization to prevent unilateral privilege grants."
+    },
+    {
+      "action": "operator:admin",
+      "rationale": "Administrative operator actions require separation — no single operator may self-authorize."
+    },
+    {
+      "action": "settlement:correct",
+      "rationale": "Settlement corrections affect payouts and audit integrity; dual-auth is mandatory."
+    },
+    {
+      "action": "promotion:override",
+      "rationale": "Promotion overrides bypass the automated evaluation pipeline; dual-auth prevents abuse."
+    }
+  ],
+  "lifecycle": {
+    "step_1": "First operator calls createPendingApproval() — produces PendingApproval record with TTL=3600s.",
+    "step_2": "Second, independently authenticated, different operator calls completeApproval() — produces immutable ApprovalRecord.",
+    "invariants": [
+      "A single approval never progresses a dual-auth action.",
+      "No operator is both first and second approver for the same action.",
+      "PendingApproval expires after TTL — no late completion allowed.",
+      "ApprovalRecord is frozen (Object.freeze) — immutable after creation."
+    ]
+  },
+  "enforcement": {
+    "function": "completeApproval() in packages/contracts/src/dual-auth.ts",
+    "error": "DualAuthViolationError with ERRCODE=DUAL_AUTH_VIOLATION",
+    "replay": "replayApprovalChain() reconstructs the record deterministically from PendingApproval + secondApproverId + approvedAt."
+  },
+  "adversarial_validation": {
+    "test": "apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts",
+    "scenario": "Operator 'alice' creates PendingApproval; 'alice' attempts second approval — rejected with DUAL_AUTH_VIOLATION.",
+    "result": "PASS"
+  }
+}

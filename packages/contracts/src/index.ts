@@ -31,3 +31,4 @@ export * from './provider-offers.js';
 export * from './shadow-mode.js';
 export * from './invariant-registry.js';
 export * from './operator-role.js';
+export * from './dual-auth.js';
