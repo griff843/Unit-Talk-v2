@@ -2,10 +2,10 @@
   "schema_version": 1,
   "issue_id": "UTV2-1108",
   "sha_binding": {
-    "verified_source_sha": "741d6afd3a43ab54d1ff98c4da4444cedf976104",
+    "verified_source_sha": "226af04f78476f73a2546b82be9d1d28fca73735",
     "merge_sha": "set-by-ci",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "741d6afd3a43ab54d1ff98c4da4444cedf976104"
+    "current_pr_head_sha": "226af04f78476f73a2546b82be9d1d28fca73735"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
