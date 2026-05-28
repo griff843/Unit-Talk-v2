@@ -32,10 +32,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1109/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-28T08:48:23.118Z",
-  "heartbeat_at": "2026-05-28T09:12:06.466Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T09:15:02.730Z",
+  "closed_at": "2026-05-28T09:15:02.730Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1109-init-242-dual-authorization-runtime.json",
   "created_by": "claude",
@@ -48,6 +48,13 @@
         "L5",
         "G5"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T09:14:50.934Z",
+      "verdict": "pass",
+      "merge_sha": "ed80f8039cab16198792580bf9489552493ac60b",
+      "failures": [],
       "runner": "manual"
     }
   ],
