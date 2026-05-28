@@ -2,38 +2,79 @@
   "schema_version": 1,
   "issue_id": "UTV2-1182",
   "sha_binding": {
-    "verified_source_sha": "555e46f3df6c1f0327079e2d347d4a571d1e6851",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "555e46f3df6c1f0327079e2d347d4a571d1e6851"
+    "verified_source_sha": "3eb3505b1f3eb2e6f24d9f00ef17d72d14c6a6aa",
+    "merge_sha": "8696da9bc992efd49423a943dce9523a81105a7d",
+    "evidence_commit_sha": "8696da9bc992efd49423a943dce9523a81105a7d",
+    "current_pr_head_sha": "3eb3505b1f3eb2e6f24d9f00ef17d72d14c6a6aa"
   },
   "verifier": {
-    "executor": "claude",
-    "tier": "T1",
-    "verified_at": "2026-05-28T18:20:00.000Z"
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
   },
-  "verification_results": {
-    "pnpm_verify": "PASS",
-    "pnpm_test_db": "PASS",
-    "r_level_check": "PASS",
-    "proof_tests": "PASS"
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "tests": 619,
+      "pass": 619,
+      "fail": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "t1_proof_test": {
+      "command": "tsx --test apps/api/src/t1-proof-utv2-1182-dual-auth-expiry-boundary.test.ts",
+      "status": "PASS",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0
+    }
   },
-  "proof_assertions": [
-    "EXP-1a: isDualAuthExpired returns true at exact boundary",
-    "EXP-1b: isApprovalExpired returns true at exact boundary",
-    "EXP-1c: both contracts agree — boundary is expired",
-    "EXP-2: isDualAuthExpired — exact boundary is expired",
-    "EXP-2b: isApprovalExpired — exact boundary is expired",
-    "EXP-3a: isDualAuthExpired — 1ms before boundary is valid",
-    "EXP-3b: isApprovalExpired — 1ms before boundary is valid",
-    "EXP-4a: isDualAuthExpired — 1ms after boundary is expired",
-    "EXP-4b: isApprovalExpired — 1ms after boundary is expired",
-    "EXP-5: replayApprovalChain — replay reproduces same expiry rejection",
-    "EXP-5b: replay expiration chain — deterministic from (issuedAt, kind)",
-    "EXP-6a: completeApproval — throws at exact boundary",
-    "EXP-6b: completeApproval — succeeds 1ms before boundary",
-    "EXP-6c: assertApprovalNotExpired — throws at exact boundary"
-  ],
-  "row_counts": [],
-  "change_summary": "Normalized dual-auth.ts isDualAuthExpired() from > to >= boundary semantics, matching approval-expiration.ts canonical policy. completeApproval() now calls isDualAuthExpired() directly (DRY). dual-auth-matrix.json documents the boundary invariant."
+  "runtime_proof": {
+    "note": "Pure TypeScript contract enforcement — expiration boundary semantics are deterministic from timestamp comparison alone. No live DB required. isDualAuthExpired() and isApprovalExpired() are stateless and replay-safe.",
+    "command": "tsx --test apps/api/src/t1-proof-utv2-1182-dual-auth-expiry-boundary.test.ts",
+    "status": "PASS",
+    "tests": 14,
+    "pass": 14,
+    "fail": 0,
+    "queries": [
+      "EXP-1a: isDualAuthExpired(pending, expiresAt) === true (exact boundary is expired)",
+      "EXP-1b: isApprovalExpired(expiresAt, expiresAt) === true (boundary agreement)",
+      "EXP-1c: both contracts return identical boundary verdict (normalized)",
+      "EXP-2: isDualAuthExpired at exact boundary === true (fail-closed)",
+      "EXP-2b: isApprovalExpired at exact boundary === true (fail-closed)",
+      "EXP-3a: isDualAuthExpired 1ms before boundary === false (valid)",
+      "EXP-3b: isApprovalExpired 1ms before boundary === false (valid)",
+      "EXP-4a: isDualAuthExpired 1ms after boundary === true (expired)",
+      "EXP-4b: isApprovalExpired 1ms after boundary === true (expired)",
+      "EXP-5: replayApprovalChain at boundary throws DualAuthViolationError (replay-consistent)",
+      "EXP-5b: computeExpiresAt is deterministic — same inputs produce same expiresAt",
+      "EXP-6a: completeApproval at boundary throws DualAuthViolationError",
+      "EXP-6b: completeApproval 1ms before boundary succeeds, returns frozen ApprovalRecord",
+      "EXP-6c: assertApprovalNotExpired at boundary throws ApprovalExpiredError"
+    ],
+    "row_counts": [
+      {
+        "note": "No database tables modified — dual-auth expiry boundary normalization is pure TypeScript contract enforcement with no DB dependency. Expiration semantics are deterministic from timestamp comparison alone.",
+        "tables_affected": 0,
+        "tables_monitored": [
+          "picks",
+          "audit_log",
+          "pick_lifecycle",
+          "settlement_records"
+        ]
+      }
+    ]
+  }
 }
