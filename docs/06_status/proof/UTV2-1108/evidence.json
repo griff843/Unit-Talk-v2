@@ -70,7 +70,13 @@
       "getRole('service_role') === undefined",
       "all roles structural check — revocable flag consistent"
     ],
-    "row_counts": [],
+    "row_counts": [
+      {
+        "note": "No database tables modified — AUTHORITY_MATRIX is a pure static TypeScript constant. No row-level changes occur at runtime.",
+        "tables_affected": 0,
+        "tables_monitored": ["picks", "settlement_records", "audit_log", "pick_lifecycle"]
+      }
+    ],
     "receipts": [
       {
         "note": "Pure TypeScript enforcement — AUTHORITY_MATRIX is a static constant with no DB dependency",
