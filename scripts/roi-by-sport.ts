@@ -4,7 +4,7 @@
  *
  * Historical rows with missing stake_units are labeled and excluded from ROI.
  *
- * Usage: tsx scripts/roi-by-sport.ts [--after=YYYY-MM-DD] [--monitor-json] [--state-file=path]
+ * Usage: tsx scripts/roi-by-sport.ts [--after=YYYY-MM-DD] [--real-edge-only] [--monitor-json] [--state-file=path]
  */
 import { loadEnvironment } from '@unit-talk/config';
 import {
@@ -22,6 +22,7 @@ export interface RoiBySportRow {
   odds: number | null;
   stakeUnits: number | null;
   clvStatus: string | null;
+  edgeSourceSplit?: EdgeSourceSplit;
   settledAt: string;
 }
 
@@ -45,6 +46,10 @@ interface SportSummary {
 }
 
 export type ModelEdgeTier = 'UNPROVEN' | 'DEVELOPING' | 'STRONG' | 'ELITE';
+export type EdgeSourceSplit =
+  | 'real-edge-backed'
+  | 'confidence-proxy'
+  | 'unknown';
 export type MonitoringAlertReason =
   | 'tier_changed'
   | 'roi_threshold_crossed'
@@ -201,8 +206,11 @@ export function buildModelPerformanceSnapshot(
   const stakeIntegrity = summarizeStakeIntegrity(rows);
   const notes: string[] = [];
 
-  if (total < 50)
-    notes.push('Sample below DEVELOPING minimum of 50 settled bets');
+  if (total < 50) {
+    notes.push(
+      'Sample below DEVELOPING minimum of 50 real-edge-backed settled bets',
+    );
+  }
   if (clvCoveragePercent === null || clvCoveragePercent < 60) {
     notes.push('CLV coverage below 60% minimum for positive edge labels');
   }
@@ -349,9 +357,10 @@ async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
     .select(
       `
       result,
+      pick_id,
       payload,
       settled_at,
-      picks!inner(stake_units, odds, metadata)
+      picks!inner(id, stake_units, odds, metadata)
     `,
     )
     .gte('settled_at', afterDate)
@@ -361,10 +370,21 @@ async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
     throw new Error(`Failed to fetch settled ROI rows: ${error.message}`);
   }
 
+  const promotionPayloadByPickId = await fetchLatestPromotionPayloads(
+    client,
+    (data ?? [])
+      .map((row) => readString(row.pick_id))
+      .filter((pickId): pickId is string => pickId !== null),
+  );
+
   return (data ?? []).map((row) => {
     const pick = Array.isArray(row.picks) ? row.picks[0] : row.picks;
     const metadata = asRecord(pick?.metadata);
     const payload = asRecord(row.payload);
+    const pickId = readString(row.pick_id) ?? readString(pick?.id);
+    const promotionPayload = pickId
+      ? (promotionPayloadByPickId.get(pickId) ?? null)
+      : null;
     return {
       result: typeof row.result === 'string' ? row.result : null,
       sport: typeof metadata?.['sport'] === 'string' ? metadata['sport'] : null,
@@ -380,15 +400,61 @@ async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
         typeof payload?.['clvStatus'] === 'string'
           ? payload['clvStatus']
           : null,
+      edgeSourceSplit: resolveEdgeSourceSplit(metadata, promotionPayload),
       settledAt: row.settled_at,
     };
   });
+}
+
+async function fetchLatestPromotionPayloads(
+  client: ReturnType<typeof createDatabaseClientFromConnection>,
+  pickIds: string[],
+): Promise<Map<string, Record<string, unknown>>> {
+  const uniquePickIds = [...new Set(pickIds)];
+  if (uniquePickIds.length === 0) return new Map();
+
+  const payloads = new Map<string, Record<string, unknown>>();
+  for (const chunk of chunks(uniquePickIds, 200)) {
+    const { data, error } = await client
+      .from('pick_promotion_history')
+      .select('pick_id, payload, decided_at, created_at')
+      .in('pick_id', chunk)
+      .order('decided_at', { ascending: false });
+
+    if (error) {
+      throw new Error(
+        `Failed to fetch promotion history rows: ${error.message}`,
+      );
+    }
+
+    for (const row of data ?? []) {
+      const pickId = readString(row.pick_id);
+      if (!pickId || payloads.has(pickId)) continue;
+      payloads.set(pickId, asRecord(row.payload) ?? {});
+    }
+  }
+  return payloads;
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
+}
+
+export function filterRealEdgeBackedRows(
+  rows: RoiBySportRow[],
+): RoiBySportRow[] {
+  return rows.filter((row) => row.edgeSourceSplit === 'real-edge-backed');
 }
 
 export function printReport(
   rows: RoiBySportRow[],
   afterDate: string,
   generatedAt = new Date().toISOString(),
+  options: { realEdgeOnly?: boolean } = {},
 ): string {
   const lines: string[] = [];
   const total = rows.length;
@@ -409,12 +475,18 @@ export function printReport(
 
   lines.push('=== ROI / Win-Rate by Sport ===');
   lines.push(`Query window: settled_at >= ${afterDate}`);
+  lines.push(
+    `Edge filter: ${options.realEdgeOnly ? 'real-edge-backed only' : 'all settled picks'}`,
+  );
   lines.push(`Generated: ${generatedAt}`);
   lines.push('');
   lines.push('## Overall (all sports)');
   lines.push('| Metric | Value |');
   lines.push('|--------|-------|');
   lines.push(`| Total settled | ${total} |`);
+  lines.push(
+    `| Real-edge-backed rows | ${rows.filter((row) => row.edgeSourceSplit === 'real-edge-backed').length} |`,
+  );
   lines.push(`| Wins | ${wins} (${pct(wins, total)}) |`);
   lines.push(`| Losses | ${losses} (${pct(losses, total)}) |`);
   lines.push(`| Pushes | ${pushes} |`);
@@ -482,7 +554,7 @@ export function printReport(
     '- ROI uses persisted picks.stake_units and persisted pick odds; no flat -110 fallback is used',
   );
   lines.push(
-    '- Observable model edge tier applies only measurable N, ROI, and CLV coverage gates from MODEL_EDGE_ACCEPTANCE_STANDARD.md; statistical proof gates must be reviewed separately',
+    '- Observable model edge tier applies only measurable real-edge-backed N, ROI, and CLV coverage gates from MODEL_EDGE_ACCEPTANCE_STANDARD.md when --real-edge-only is used; statistical proof gates must be reviewed separately',
   );
   lines.push(
     '- Run with --after=2026-05-17 on that date for 7-day post-fix window',
@@ -540,6 +612,68 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function readNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function readNestedString(
+  record: Record<string, unknown> | null,
+  path: string[],
+): string | null {
+  let current: unknown = record;
+  for (const key of path) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) {
+      return null;
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return readString(current);
+}
+
+export function resolveEdgeSourceSplit(
+  metadata: Record<string, unknown> | null,
+  promotionPayload: Record<string, unknown> | null,
+): EdgeSourceSplit {
+  const scoreInputs = asRecord(promotionPayload?.['scoreInputs']);
+  const edgeSource =
+    readNestedString(scoreInputs, ['edgeSource']) ??
+    readNestedString(metadata, ['edgeSource']) ??
+    readNestedString(metadata, ['domainAnalysis', 'realEdgeSource']);
+  const edgeMethod =
+    readNestedString(scoreInputs, ['edgeMethod']) ??
+    readNestedString(metadata, ['edgeProvenance', 'method']);
+  const providerCoverageState =
+    readNestedString(scoreInputs, ['providerCoverageState']) ??
+    readNestedString(metadata, ['edgeProvenance', 'providerCoverageState']);
+  const edgeSourceQuality = readNestedString(scoreInputs, [
+    'edgeSourceQuality',
+  ]);
+
+  if (
+    edgeMethod === 'market-devigged' ||
+    edgeSourceQuality === 'market-backed' ||
+    ['real-edge', 'consensus-edge', 'sgo-edge', 'single-book-edge'].includes(
+      edgeSource ?? '',
+    ) ||
+    ['pinnacle', 'consensus', 'sgo', 'single-book'].includes(
+      providerCoverageState ?? '',
+    )
+  ) {
+    return 'real-edge-backed';
+  }
+
+  if (
+    edgeMethod === 'confidence-delta' ||
+    edgeSourceQuality === 'confidence-fallback' ||
+    ['confidence-delta', 'explicit'].includes(edgeSource ?? '') ||
+    providerCoverageState === 'none'
+  ) {
+    return 'confidence-proxy';
+  }
+
+  return 'unknown';
 }
 
 function readStringFlag(name: string): string | null {
@@ -625,9 +759,11 @@ async function main() {
   const stateFile = readStringFlag('state-file');
   const monitorJson = hasFlag('monitor-json');
   const monitor = hasFlag('monitor') || monitorJson || stateFile !== null;
-  const rows = await fetchRows(afterDate);
+  const realEdgeOnly = hasFlag('real-edge-only');
+  const fetchedRows = await fetchRows(afterDate);
+  const rows = realEdgeOnly ? filterRealEdgeBackedRows(fetchedRows) : fetchedRows;
   if (!monitor) {
-    console.log(printReport(rows, afterDate));
+    console.log(printReport(rows, afterDate, new Date().toISOString(), { realEdgeOnly }));
     return;
   }
 
