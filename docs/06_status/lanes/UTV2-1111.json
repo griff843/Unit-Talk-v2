@@ -34,10 +34,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1111/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-28T12:05:51.964Z",
-  "heartbeat_at": "2026-05-28T12:19:32.074Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T12:20:34.380Z",
+  "closed_at": "2026-05-28T12:20:34.380Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1111-init-244-emergency-governance-rollback.json",
   "created_by": "claude",
@@ -50,6 +50,13 @@
         "R2",
         "S1"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T12:20:18.052Z",
+      "verdict": "pass",
+      "merge_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
+      "failures": [],
       "runner": "manual"
     }
   ],
