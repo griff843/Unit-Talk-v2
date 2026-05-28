@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1109",
+  "sha_binding": {
+    "verified_source_sha": "98e096390959cfe8e34b0d0147170b2b46d765f9",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "98e096390959cfe8e34b0d0147170b2b46d765f9"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "tests": 113,
+      "pass": 113,
+      "fail": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "t1_proof_test": {
+      "command": "tsx --test apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts",
+      "status": "PASS",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure TypeScript enforcement — PendingApproval and ApprovalRecord are static values. No live DB required. Approval decisions are deterministic and replay-safe.",
+    "command": "tsx --test apps/api/src/t1-proof-utv2-1109-dual-auth.test.ts",
+    "status": "PASS",
+    "tests": 16,
+    "pass": 16,
+    "fail": 0,
+    "queries": [
+      "DUAL_AUTH_ACTIONS includes all 6 required governed actions",
+      "DUAL_AUTH_TTL_SECONDS === 3600",
+      "requiresDualAuth('picks:void') === true",
+      "requiresDualAuth('operator:admin') === true",
+      "requiresDualAuth('picks:submit') === false",
+      "createPendingApproval produces frozen record with correct TTL",
+      "createPendingApproval respects custom ttlSeconds",
+      "completeApproval succeeds with different operator (alice + bob)",
+      "completeApproval('alice', 'alice') throws DualAuthViolationError (ADVERSARIAL)",
+      "completeApproval('carol', 'carol') on operator:admin throws DualAuthViolationError (ADVERSARIAL)",
+      "completeApproval('dave', 'dave') on member:write throws DualAuthViolationError (ADVERSARIAL)",
+      "completeApproval after TTL expiry throws DualAuthViolationError (ADVERSARIAL)",
+      "completeApproval after expiry on promotion:override throws DualAuthViolationError (ADVERSARIAL)",
+      "isDualAuthExpired returns true past TTL, false within TTL",
+      "replayApprovalChain is deterministic — same inputs produce equal ApprovalRecord",
+      "ApprovalRecord is frozen — mutations throw TypeError in strict mode"
+    ],
+    "row_counts": [
+      {
+        "note": "No database tables modified — dual-auth enforcement is pure TypeScript with no DB dependency.",
+        "tables_affected": 0,
+        "tables_monitored": ["picks", "settlement_records", "audit_log", "pick_lifecycle"]
+      }
+    ],
+    "receipts": [
+      {
+        "note": "Pure TypeScript enforcement — PendingApproval and ApprovalRecord are values; no Supabase interaction",
+        "supabase_project": "N/A",
+        "tests_run": 16,
+        "tests_pass": 16,
+        "tests_fail": 0,
+        "gap_closed": "Gap #16 — dual authorization was convention only; now mechanically enforced"
+      }
+    ]
+  },
+  "verdict": "PASS"
+}
