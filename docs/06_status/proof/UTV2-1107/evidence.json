@@ -4,8 +4,8 @@
   "title": "UTV2-1107 DB-layer picks FSM enforcement trigger proof",
   "generated_at": "2026-05-28T02:35:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "07a6a84e8e1a5b2db9144318e6720f5535352ee3",
-    "verified_source_note": "Final substantive commit: wires T1 proof test into test:t1-proof, expands file_scope_lock. All non-proof code changes are at or before this SHA.",
+    "verified_source_sha": "2c05ac9091a8203cd0c4218a1928ddd0bdff2584",
+    "verified_source_note": "Final substantive commit: fix smoke test for picks_fsm_guard trigger compatibility (remove queued→validated drift, use lifecycleFromState rejection instead). All non-proof code changes are at or before this SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
