@@ -151,10 +151,18 @@
         "result": "PASS"
       }
     ],
-    "row_counts": {
-      "tables_affected": 0,
-      "note": "Pure TypeScript governance contract — no DB mutations"
-    }
+    "row_counts": [
+      {
+        "note": "No database tables modified — emergency rollback is pure TypeScript governance contract with no DB dependency.",
+        "tables_affected": 0,
+        "tables_monitored": [
+          "picks",
+          "settlement_records",
+          "audit_log",
+          "pick_lifecycle"
+        ]
+      }
+    ]
   },
   "manifest": {
     "commit_sha": "7622c7dcf3ff68cf5b46b833fdd07e8a69e0754d",
