@@ -88,7 +88,7 @@ export function completeApproval(params: {
     );
   }
 
-  if (new Date(approvedAt) > new Date(pending.expiresAt)) {
+  if (isDualAuthExpired(pending, approvedAt)) {
     throw new DualAuthViolationError(
       `Pending approval expired at ${pending.expiresAt} — dual-auth window closed`,
       pending.action,
@@ -106,7 +106,8 @@ export function completeApproval(params: {
 }
 
 export function isDualAuthExpired(pending: PendingApproval, asOf: string): boolean {
-  return new Date(asOf) > new Date(pending.expiresAt);
+  // Canonical boundary: asOf >= expiresAt is expired (fail-closed, matches approval-expiration.ts)
+  return new Date(asOf).getTime() >= new Date(pending.expiresAt).getTime();
 }
 
 export function replayApprovalChain(
