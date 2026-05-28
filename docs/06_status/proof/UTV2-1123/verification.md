@@ -7,8 +7,8 @@
 
 ## pnpm verify
 
-PASS — 218/218 tests, 25 suites, 0 failures
-type-check: PASS
+`pnpm type-check`: PASS
+`pnpm test`: PASS — 218/218 tests, 25 suites, 0 failures
 lint: PASS
 build: PASS
 

@@ -1,6 +1,7 @@
 # Diff Summary: UTV2-1123 — Advisory-Path Removal (INIT-3.3.4)
 
 ## Implementation SHA: d45c5562b79a5585dd4ec388ebf377d02e227699
+## Merge SHA: 849df170930915b2381615e49432c4c840d070ac
 ## Tier: T2
 
 ## Files Changed
