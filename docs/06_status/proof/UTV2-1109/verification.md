@@ -4,7 +4,7 @@
 **Executor:** claude
 **Branch:** claude/utv2-1109-init-242-dual-authorization-runtime
 **Branch HEAD SHA:** 98e096390959cfe8e34b0d0147170b2b46d765f9
-**Merge SHA:** _to be updated post-merge_
+**Merge SHA:** ed80f8039cab16198792580bf9489552493ac60b
 **Date:** 2026-05-28
 
 ## Summary

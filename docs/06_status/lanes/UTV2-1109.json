@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1109-init-242-dual-authorization-runtime",
   "branch": "claude/utv2-1109-init-242-dual-authorization-runtime",
   "base_branch": "main",
-  "commit_sha": "d214e0fc86f2f2fa92859df2f85ace40cc5bb7fc",
+  "commit_sha": "ed80f8039cab16198792580bf9489552493ac60b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/903",
   "files_changed": [
     "packages/contracts/src/dual-auth.ts",

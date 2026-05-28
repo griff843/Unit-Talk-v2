@@ -3,8 +3,8 @@
 UTV2-1109 implements INIT-2.4.2 — Dual-Authorization Runtime, closing Gap #16 where dual authorization existed only as convention (a single approval could progress any governed action without enforcement).
 
 **Branch HEAD SHA:** 98e096390959cfe8e34b0d0147170b2b46d765f9
-**Merge SHA:** _to be updated post-merge_
-**PR:** _to be updated post-merge_
+**Merge SHA:** ed80f8039cab16198792580bf9489552493ac60b
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/903
 
 ## Files Changed
 
