@@ -2,6 +2,7 @@
   "schema_version": 1,
   "issue_id": "UTV2-1032",
   "generated_at": "2026-05-28T00:45:42.815Z",
+  "merge_sha": "db497b886e1772259555d755ca2018708647ce1b",
   "verdict": "DATA_GATED",
   "label_asserted": "UNPROVEN",
   "developing_label_eligible": false,

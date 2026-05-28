@@ -3,6 +3,7 @@
 **Tier:** T2
 **Executor:** codex-cli
 **Branch:** codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed
+**Merge SHA:** db497b886e1772259555d755ca2018708647ce1b
 **Date:** 2026-05-28
 
 ## Summary

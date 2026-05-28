@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed",
   "branch": "codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "db497b886e1772259555d755ca2018708647ce1b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/900",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md",
