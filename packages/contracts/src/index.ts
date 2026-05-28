@@ -33,3 +33,4 @@ export * from './invariant-registry.js';
 export * from './operator-role.js';
 export * from './dual-auth.js';
 export * from './approval-expiration.js';
+export * from './governance-rollback.js';
