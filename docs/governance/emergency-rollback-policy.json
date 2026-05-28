@@ -11,7 +11,8 @@
   "frozen_domains": [
     "capital",
     "scaling",
-    "ws-3.5"
+    "ws-3.5",
+    "treasury"
   ],
   "invariants": [
     {
@@ -40,6 +41,6 @@
       "enforcement": "assertDomainNotFrozen throws RollbackDomainFrozenError before any authorization is checked."
     }
   ],
-  "frozen_domain_rationale": "Domains capital, scaling, and ws-3.5 are constitutionally frozen pending formal activation standards. Rollback of these domains is prohibited to prevent unintended state reconstruction.",
+  "frozen_domain_rationale": "Domains capital, scaling, ws-3.5, and treasury are constitutionally frozen pending formal activation standards. Rollback of these domains is prohibited to prevent unintended state reconstruction. Treasury was added in UTV2-1179 per PM ruling 2026-05-28.",
   "enforcement_reference": "packages/contracts/src/governance-rollback.ts"
 }

@@ -15,7 +15,8 @@
     "docs/06_status/proof/UTV2-1179/evidence.json",
     "docs/06_status/proof/UTV2-1179/verification.md",
     "docs/governance/emergency-rollback-policy.json",
-    "packages/contracts/src/governance-rollback.ts"
+    "packages/contracts/src/governance-rollback.ts",
+    "packages/contracts/src/governance-rollback.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1179/evidence.json"
