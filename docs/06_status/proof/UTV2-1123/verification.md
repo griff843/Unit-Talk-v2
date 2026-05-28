@@ -3,7 +3,7 @@
 **Tier:** T2
 **Verifier:** claude-sonnet-4-6 (orchestrator)
 **Implementation SHA:** d45c5562b79a5585dd4ec388ebf377d02e227699
-**Merge SHA:** set-by-ci
+**Merge SHA:** 849df170f6d8aee4e5f9ce547a2d04e2cadf2a47
 
 ## pnpm verify
 
