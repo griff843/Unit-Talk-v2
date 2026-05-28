@@ -3,8 +3,8 @@
   "issue_id": "UTV2-1183",
   "sha_binding": {
     "verified_source_sha": "bf0279e5c81eebce7bebc27cccdcf34d68178697",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
+    "merge_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
+    "evidence_commit_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
     "current_pr_head_sha": "bf0279e5c81eebce7bebc27cccdcf34d68178697"
   },
   "verifier": {
@@ -42,7 +42,7 @@
     }
   },
   "runtime_proof": {
-    "note": "Pure TypeScript contract enforcement — terminal state immutability is deterministic from event kind ordering alone. No live DB required. replayRollbackChain() is stateless and replay-safe.",
+    "note": "Pure TypeScript contract enforcement \u2014 terminal state immutability is deterministic from event kind ordering alone. No live DB required. replayRollbackChain() is stateless and replay-safe.",
     "command": "tsx --test apps/api/src/t1-proof-utv2-1183-terminal-rollback-states.test.ts",
     "status": "PASS",
     "tests": 19,
@@ -71,7 +71,7 @@
     ],
     "row_counts": [
       {
-        "note": "No database tables modified — terminal rollback state enforcement is pure TypeScript contract check with no DB dependency.",
+        "note": "No database tables modified \u2014 terminal rollback state enforcement is pure TypeScript contract check with no DB dependency.",
         "tables_affected": 0,
         "tables_monitored": [
           "picks",

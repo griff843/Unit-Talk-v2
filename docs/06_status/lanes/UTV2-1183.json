@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1183-cr-4-enforce-terminal-rollback-replay-states",
   "branch": "claude/utv2-1183-cr-4-enforce-terminal-rollback-replay-states",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/909",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/t1-proof-utv2-1183-terminal-rollback-states.test.ts",
@@ -21,14 +21,49 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1183/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-28T19:07:25.995Z",
-  "heartbeat_at": "2026-05-28T19:07:25.995Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T20:26:56.285Z",
+  "closed_at": "2026-05-28T20:26:56.285Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1183-cr-4-enforce-terminal-rollback-replay-states.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T20:25:38.605Z",
+      "verdict": "fail",
+      "merge_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
+      "failures": [
+        "G3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T20:25:53.794Z",
+      "verdict": "fail",
+      "merge_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
+      "failures": [
+        "G3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T20:26:01.047Z",
+      "verdict": "fail",
+      "merge_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
+      "failures": [
+        "G3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T20:26:45.733Z",
+      "verdict": "pass",
+      "merge_sha": "e0825c379d8ce882570850d5e879f8811fe4e5bf",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
