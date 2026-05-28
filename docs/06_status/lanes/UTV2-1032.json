@@ -19,14 +19,33 @@
     "docs/06_status/proof/UTV2-1032/diff-summary.md",
     "docs/06_status/proof/UTV2-1032/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-28T00:40:06.388Z",
-  "heartbeat_at": "2026-05-28T01:15:04.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T01:16:48.239Z",
+  "closed_at": "2026-05-28T01:16:48.239Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T01:16:13.355Z",
+      "verdict": "fail",
+      "merge_sha": "db497b886e1772259555d755ca2018708647ce1b",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T01:16:37.170Z",
+      "verdict": "pass",
+      "merge_sha": "db497b886e1772259555d755ca2018708647ce1b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
