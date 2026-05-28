@@ -4,8 +4,8 @@
   "title": "UTV2-1107 DB-layer picks FSM enforcement trigger proof",
   "generated_at": "2026-05-28T02:35:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "f34ce5b0c430a054ea3acecabcb565c37bc0d375",
-    "verified_source_note": "Final substantive commit containing migration, down script, lane manifest, T1 proof test, and lint fix. All non-proof changes are at or before this SHA.",
+    "verified_source_sha": "07a6a84e8e1a5b2db9144318e6720f5535352ee3",
+    "verified_source_note": "Final substantive commit: wires T1 proof test into test:t1-proof, expands file_scope_lock. All non-proof code changes are at or before this SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
