@@ -3,7 +3,7 @@
 **Tier:** T1
 **Executor:** claude
 **Branch:** claude/utv2-1107-db-fsm-enforcement
-**Branch HEAD SHA:** 7356d0acb11d2875bd5b8f08e0b138fe4fd4669a
+**Branch HEAD SHA:** 2c1e28e2e792f54358ea98dc04b31e547d455056
 **Merge SHA:** _to be updated post-merge_
 **Date:** 2026-05-28
 
@@ -65,6 +65,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 - Terminal states (`settled`, `voided`) reject all further status changes: **PASS** — `allowed := ARRAY[]::TEXT[]`
 - Idempotent migration (DROP TRIGGER IF EXISTS before CREATE): **PASS**
 - SECURITY DEFINER to enforce across all roles including service_role: **PASS**
+- T1 live-DB FSM proof test (`t1-proof-utv2-1107-picks-fsm-trigger.test.ts`): **PASS** (13/13)
 - `pnpm verify` green: **PASS**
 - `pnpm test:db` green: **PASS** (7/7)
 
