@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1181-cr-2-enforce-cross-domain-allowed",
   "branch": "claude/utv2-1181-cr-2-enforce-cross-domain-allowed",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "00dbe252d64de4cf0a0cb2580967343bf1700ef6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/908",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/authority-enforcement.ts",
@@ -22,14 +22,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1181/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-28T18:38:13.032Z",
-  "heartbeat_at": "2026-05-28T18:38:13.032Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T19:04:22.407Z",
+  "closed_at": "2026-05-28T19:04:22.407Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1181-cr-2-enforce-cross-domain-allowed.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T19:04:11.835Z",
+      "verdict": "pass",
+      "merge_sha": "00dbe252d64de4cf0a0cb2580967343bf1700ef6",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -3,8 +3,8 @@
   "issue_id": "UTV2-1181",
   "sha_binding": {
     "verified_source_sha": "4daba080926c154bfa1c777f992a674ce12006c0",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
+    "merge_sha": "00dbe252d64de4cf0a0cb2580967343bf1700ef6",
+    "evidence_commit_sha": "00dbe252d64de4cf0a0cb2580967343bf1700ef6",
     "current_pr_head_sha": "4daba080926c154bfa1c777f992a674ce12006c0"
   },
   "verifier": {
@@ -42,7 +42,7 @@
     }
   },
   "runtime_proof": {
-    "note": "Pure TypeScript contract enforcement — cross_domain_allowed check is deterministic from role lookup alone. No live DB required. assertCrossDomainAllowed() is stateless and replay-safe.",
+    "note": "Pure TypeScript contract enforcement \u2014 cross_domain_allowed check is deterministic from role lookup alone. No live DB required. assertCrossDomainAllowed() is stateless and replay-safe.",
     "command": "tsx --test apps/api/src/t1-proof-utv2-1181-cross-domain-enforcement.test.ts",
     "status": "PASS",
     "tests": 17,
@@ -63,13 +63,13 @@
       "XD-5c: enforceAllAuthorities rejects unauthorized domain even for operator",
       "XD-5d: enforceAllAuthorities rejects settler for cross-domain outbox op",
       "XD-5e: enforceAllAuthorities single-domain works for restricted roles",
-      "XD-6a: assertCrossDomainAllowed is deterministic — same inputs same result",
+      "XD-6a: assertCrossDomainAllowed is deterministic \u2014 same inputs same result",
       "XD-6b: AUTHORITY_MATRIX cross_domain_allowed values are stable",
       "XD-6c: enforceAllAuthorities rejects unknown role fail-closed for multi-domain"
     ],
     "row_counts": [
       {
-        "note": "No database tables modified — cross_domain_allowed enforcement is pure TypeScript contract check with no DB dependency.",
+        "note": "No database tables modified \u2014 cross_domain_allowed enforcement is pure TypeScript contract check with no DB dependency.",
         "tables_affected": 0,
         "tables_monitored": [
           "picks",
