@@ -48,6 +48,39 @@ export type RollbackEventKind =
   | 'rollback_expired';
 
 // ---------------------------------------------------------------------------
+// Terminal rollback states — immutable once reached
+// ---------------------------------------------------------------------------
+
+/** Canonical terminal rollback status values. Once reached, replay must not overwrite. */
+export const TERMINAL_ROLLBACK_STATUSES = ['applied', 'rejected', 'expired'] as const;
+
+export type TerminalRollbackStatus = (typeof TERMINAL_ROLLBACK_STATUSES)[number];
+
+/** Returns true if the status is terminal — no further state transitions are valid. */
+export function isTerminalRollbackStatus(
+  status: RollbackChain['finalStatus'],
+): status is TerminalRollbackStatus {
+  return (TERMINAL_ROLLBACK_STATUSES as readonly string[]).includes(status);
+}
+
+/** Throws if `status` is already terminal — prevents replay from overwriting finalized outcomes. */
+export function assertRollbackStateNotTerminal(status: RollbackChain['finalStatus']): void {
+  if (isTerminalRollbackStatus(status)) {
+    throw new RollbackTerminalStateError(status);
+  }
+}
+
+export class RollbackTerminalStateError extends Error {
+  readonly code = 'ROLLBACK_TERMINAL_STATE' as const;
+  constructor(public readonly status: TerminalRollbackStatus) {
+    super(
+      `ROLLBACK_TERMINAL_STATE: rollback is already in terminal state '${status}' — replay reconstruction must not overwrite finalized outcomes ERRCODE=ROLLBACK_TERMINAL_STATE`,
+    );
+    this.name = 'RollbackTerminalStateError';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Core types
 // ---------------------------------------------------------------------------
 
@@ -213,6 +246,8 @@ export function replayRollbackChain(events: readonly RollbackEvent[]): RollbackC
   let finalStatus: RollbackChain['finalStatus'] = 'pending';
 
   for (const event of sorted) {
+    // Terminal states are immutable — stop processing once reached (CR-4)
+    if (isTerminalRollbackStatus(finalStatus)) break;
     switch (event.kind) {
       case 'rollback_applied':
         finalStatus = 'applied';
