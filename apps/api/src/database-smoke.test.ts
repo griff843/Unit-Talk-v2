@@ -205,12 +205,8 @@ test(
       assert.equal(claimed.id, enqueueResult.outbox.id);
       assert.equal(claimed.status, 'processing');
 
-      const { error: driftError } = await client
-        .from('picks')
-        .update({ status: 'validated' })
-        .eq('id', result.pick.id);
-      assert.ifError(driftError);
-
+      // UTV2-1107: direct status drift (queued→validated) is now blocked by the picks_fsm_guard
+      // BEFORE UPDATE trigger. Test the RPC rejection by passing wrong lifecycleFromState instead.
       await assert.rejects(
         () =>
           repositories.outbox.confirmDeliveryAtomic({
@@ -223,7 +219,7 @@ test(
             receiptExternalId: `utv2-920:${result.pick.id}:message`,
             receiptIdempotencyKey: `utv2-920-receipt:${result.pick.id}`,
             receiptPayload: { pickId: result.pick.id, proofIssue: 'UTV2-920' },
-            lifecycleFromState: 'queued',
+            lifecycleFromState: 'draft',
             lifecycleToState: 'posted',
             lifecycleWriterRole: 'poster',
             lifecycleReason: 'UTV2-920 delivery transition',

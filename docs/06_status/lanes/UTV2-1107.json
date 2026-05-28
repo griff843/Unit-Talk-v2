@@ -17,6 +17,7 @@
     "supabase/migrations/20260528001_utv2_1107_picks_fsm_trigger.sql",
     "db/migrations-rollback/20260528001_utv2_1107_picks_fsm_trigger.down.sql",
     "apps/api/src/t1-proof-utv2-1107-picks-fsm-trigger.test.ts",
+    "apps/api/src/database-smoke.test.ts",
     "package.json"
   ],
   "expected_proof_paths": [
