@@ -2,10 +2,10 @@
   "schema_version": 1,
   "issue_id": "UTV2-1182",
   "sha_binding": {
-    "verified_source_sha": "a2761798",
+    "verified_source_sha": "555e46f3df6c1f0327079e2d347d4a571d1e6851",
     "merge_sha": "set-by-ci",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "a2761798"
+    "current_pr_head_sha": "555e46f3df6c1f0327079e2d347d4a571d1e6851"
   },
   "verifier": {
     "executor": "claude",
