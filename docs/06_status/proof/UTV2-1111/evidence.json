@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1111",
+  "init_ref": "INIT-2.4.4",
+  "title": "Emergency Governance Rollback",
+  "verdict": "PASS",
+  "sha_binding": {
+    "verified_source_sha": "84d0d855298e33c15c83ae01d7714e56c5ada3c0",
+    "merge_sha": null,
+    "evidence_commit_sha": null,
+    "note": "merge_sha will be populated post-merge"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "timestamp": "2026-05-28T12:30:00.000Z"
+  },
+  "static_proof": {
+    "files_changed": [
+      "packages/contracts/src/governance-rollback.ts",
+      "packages/contracts/src/index.ts",
+      "docs/governance/emergency-rollback-policy.json",
+      "apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+      "package.json",
+      ".ops/sync/UTV2-1111.yml"
+    ],
+    "invariants_verified": [
+      {
+        "id": "ERB-1",
+        "description": "Rollback authority remains dual-authorized",
+        "test": "authorizeRollback rejects same-operator dual-auth; succeeds with two distinct operators",
+        "verdict": "PASS"
+      },
+      {
+        "id": "ERB-2",
+        "description": "Rollback events are replay-visible",
+        "test": "reconstructRollbackChain is idempotent and replay-visible",
+        "verdict": "PASS"
+      },
+      {
+        "id": "ERB-3",
+        "description": "Rollback is append-only",
+        "test": "createRollbackEvent returns frozen object with frozen nested fields",
+        "verdict": "PASS"
+      },
+      {
+        "id": "ERB-4",
+        "description": "Rollback reconstruction is deterministic",
+        "test": "replayRollbackChain produces same result regardless of input order",
+        "verdict": "PASS"
+      },
+      {
+        "id": "ERB-5",
+        "description": "Emergency override remains fail-closed",
+        "test": "assertDomainNotFrozen throws for capital/scaling/ws-3.5; authorizeRollback rejects frozen domain before dual-auth check",
+        "verdict": "PASS"
+      }
+    ],
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS"
+  },
+  "runtime_proof": {
+    "test_command": "tsx --test apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+    "test_count": 17,
+    "pass_count": 17,
+    "fail_count": 0,
+    "queries": [
+      {
+        "id": "q1",
+        "description": "ERB-5 frozen domain detection — isFrozenDomain returns true for all three frozen domains",
+        "result": "PASS"
+      },
+      {
+        "id": "q2",
+        "description": "ERB-5 frozen domain detection — isFrozenDomain returns false for non-frozen domains",
+        "result": "PASS"
+      },
+      {
+        "id": "q3",
+        "description": "ERB-5 assertDomainNotFrozen throws RollbackDomainFrozenError with correct code and ERRCODE",
+        "result": "PASS"
+      },
+      {
+        "id": "q4",
+        "description": "ERB-5 assertDomainNotFrozen does not throw for valid domains",
+        "result": "PASS"
+      },
+      {
+        "id": "q5",
+        "description": "ERB-1 authorizeRollback rejects same-operator dual-auth via DualAuthViolationError",
+        "result": "PASS"
+      },
+      {
+        "id": "q6",
+        "description": "ERB-1 authorizeRollback succeeds with two distinct operators",
+        "result": "PASS"
+      },
+      {
+        "id": "q7",
+        "description": "ERB-1 authorizeRollback rejects frozen domain before dual-auth check",
+        "result": "PASS"
+      },
+      {
+        "id": "q8",
+        "description": "computeRollbackExpiresAt is deterministic — same input yields same output",
+        "result": "PASS"
+      },
+      {
+        "id": "q9",
+        "description": "isRollbackExpired exactly at expiry boundary returns true (fail-closed)",
+        "result": "PASS"
+      },
+      {
+        "id": "q10",
+        "description": "assertRollbackNotExpired throws RollbackExpiredError with correct code and ERRCODE",
+        "result": "PASS"
+      },
+      {
+        "id": "q11",
+        "description": "assertRollbackAuthorized throws RollbackDomainFrozenError for frozen domain regardless of valid dual-auth",
+        "result": "PASS"
+      },
+      {
+        "id": "q12",
+        "description": "ERB-3 createRollbackEvent returns Object.freeze'd record with frozen target and approval",
+        "result": "PASS"
+      },
+      {
+        "id": "q13",
+        "description": "ERB-3 createRollbackEvent nulls optional fields by default",
+        "result": "PASS"
+      },
+      {
+        "id": "q14",
+        "description": "ERB-4 replayRollbackChain deterministic final status for applied — order-independent",
+        "result": "PASS"
+      },
+      {
+        "id": "q15",
+        "description": "ERB-4 replayRollbackChain deterministic final status for rejected",
+        "result": "PASS"
+      },
+      {
+        "id": "q16",
+        "description": "ERB-2+ERB-4 reconstructRollbackChain is idempotent and replay-visible",
+        "result": "PASS"
+      },
+      {
+        "id": "q17",
+        "description": "ERB-4 empty event chain yields pending status",
+        "result": "PASS"
+      }
+    ],
+    "row_counts": {
+      "tables_affected": 0,
+      "note": "Pure TypeScript governance contract — no DB mutations"
+    }
+  },
+  "manifest": {
+    "commit_sha": "84d0d855298e33c15c83ae01d7714e56c5ada3c0",
+    "pr_url": null,
+    "issue_id": "UTV2-1111",
+    "tier": "T1",
+    "lane_type": "governance"
+  }
+}

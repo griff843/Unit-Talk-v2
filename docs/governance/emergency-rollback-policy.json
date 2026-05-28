@@ -1,0 +1,45 @@
+{
+  "$schema": "https://unit-talk.internal/schemas/governance-policy/v1",
+  "policy_id": "emergency-rollback-policy",
+  "version": "1.0.0",
+  "issued_at": "2026-05-28T00:00:00.000Z",
+  "init_ref": "INIT-2.4.4",
+  "issue_ref": "UTV2-1111",
+  "title": "Emergency Governance Rollback Policy",
+  "summary": "Defines the dual-authorized, append-only, deterministically replayable semantics for emergency governance rollback. Emergency override remains fail-closed.",
+  "authorization_window_seconds": 3600,
+  "frozen_domains": [
+    "capital",
+    "scaling",
+    "ws-3.5"
+  ],
+  "invariants": [
+    {
+      "id": "ERB-1",
+      "description": "Rollback authority remains dual-authorized. A single operator cannot authorize a rollback unilaterally.",
+      "enforcement": "assertRollbackAuthorized throws RollbackAuthorizationError if dual-auth is invalid."
+    },
+    {
+      "id": "ERB-2",
+      "description": "Rollback events are replay-visible. The full event chain is retained and replayable.",
+      "enforcement": "replayRollbackChain reconstructs final status from the ordered event sequence."
+    },
+    {
+      "id": "ERB-3",
+      "description": "Rollback is append-only. Events are immutable once created; no mutation or deletion.",
+      "enforcement": "createRollbackEvent returns Object.freeze() records. No update path exists."
+    },
+    {
+      "id": "ERB-4",
+      "description": "Rollback reconstruction is deterministic. Same inputs always produce same final chain state.",
+      "enforcement": "replayRollbackChain sorts by occurredAt and applies a deterministic state machine."
+    },
+    {
+      "id": "ERB-5",
+      "description": "Emergency override remains fail-closed. Frozen domains cannot be rolled back regardless of authorization.",
+      "enforcement": "assertDomainNotFrozen throws RollbackDomainFrozenError before any authorization is checked."
+    }
+  ],
+  "frozen_domain_rationale": "Domains capital, scaling, and ws-3.5 are constitutionally frozen pending formal activation standards. Rollback of these domains is prohibited to prevent unintended state reconstruction.",
+  "enforcement_reference": "packages/contracts/src/governance-rollback.ts"
+}
