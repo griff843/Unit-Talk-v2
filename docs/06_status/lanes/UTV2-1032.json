@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1032",
-  "lane_type": "verification",
+  "lane_type": "governance",
   "executor": "codex-cli",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed",
@@ -17,7 +17,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1032/diff-summary.md",
-    "docs/06_status/proof/UTV2-1032/verification.log"
+    "docs/06_status/proof/UTV2-1032/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-28T00:40:06.388Z",

@@ -1,26 +1,71 @@
-# Verification Log - UTV2-1032
+# Verification: UTV2-1032 — DEVELOPING label proof run
 
-Generated: 2026-05-28T00:45:42.815Z
-Branch: codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed
+**Tier:** T2
+**Executor:** codex-cli
+**Branch:** codex/utv2-1032-developing-label-proof-run-trigger-after-50-real-edge-backed
+**Date:** 2026-05-28
 
-## Focused Checks
+## Summary
 
-- `pnpm exec tsx --test scripts/roi-by-sport.test.ts` - PASS
-- `pnpm type-check` - PASS
-- `pnpm test` - PASS, 619 tests passed
-- `pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=2026-05-10 --monitor-json` - PASS, result DATA_GATED with 0 real-edge-backed settled rows
-- `pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=1970-01-01 --monitor-json` - PASS, result DATA_GATED with 5 real-edge-backed settled rows
-- `pnpm verify` - PASS
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` - PASS, no R-level artifacts required
+Adds `--real-edge-only` flag to `scripts/roi-by-sport.ts` to filter ROI metrics to
+market-backed edge picks only. Implements `resolveEdgeSourceSplit()` to classify each
+settled pick as `real-edge-backed`, `confidence-proxy`, or `unknown` using promotion
+history payloads from `pick_promotion_history` table.
 
-## Acceptance Criteria Status
+Clarifies `MODEL_EDGE_ACCEPTANCE_STANDARD.md`: DEVELOPING requires ≥50 real-edge-backed
+settled bets, explicitly excluding confidence-proxy rows.
 
-- `roi-by-sport.ts --real-edge-only` reports >=50 settled picks: FAIL, current post-fix value is 0 and all-time value is 5.
-- ROI point estimate positive: FAIL, no measurable stake-backed real-edge sample is available.
-- CLV coverage >=60%: FAIL, post-fix value is n/a and all-time value is 0%.
-- Evidence bundle generated: PASS, see `docs/06_status/proof/UTV2-1032/evidence.json`.
-- `MODEL_EDGE_ACCEPTANCE_STANDARD.md` tier label updated to DEVELOPING: NOT DONE because live proof does not satisfy the threshold.
+## Verification
+
+### Static Verification (pnpm verify)
+
+```
+pnpm verify — PASS
+  tests: 619 pass, 0 fail
+  type-check: PASS
+  lint: PASS
+  build: PASS
+```
+
+### Issue-Specific: roi-by-sport.ts --real-edge-only
+
+```
+pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=2026-05-10 --monitor-json
+  tier: UNPROVEN
+  settledRows: 0
+  roiPercent: null
+  clvCoveragePercent: null
+  → DATA_GATED: 0 real-edge-backed settled picks post-fix
+
+pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=1970-01-01 --monitor-json
+  tier: UNPROVEN
+  settledRows: 5
+  roiPercent: null
+  clvCoveragePercent: 0
+  → DATA_GATED: 5 real-edge-backed settled picks all-time (50 required for DEVELOPING)
+```
+
+### R-Level Compliance
+
+```
+Verdict: PASS
+Changed files: 13
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+### Acceptance Criteria Status
+
+- `roi-by-sport.ts --real-edge-only` reports ≥50 settled picks: **FAIL** — 0 post-fix, 5 all-time
+- ROI point estimate positive: **FAIL** — no measurable stake-backed real-edge sample
+- CLV coverage ≥60%: **FAIL** — 0% all-time, N/A post-fix
+- Evidence bundle generated: **PASS** — `docs/06_status/proof/UTV2-1032/evidence.json`
+- `MODEL_EDGE_ACCEPTANCE_STANDARD.md` tier label updated: **NOT DONE** — data gate not met
 
 ## Closeout Decision
 
-Do not assert DEVELOPING from this proof run. The implementation can now isolate real-edge-backed rows, but current production evidence remains below the acceptance threshold.
+Proof result: **DATA_GATED**. The `--real-edge-only` implementation is complete and correct.
+Only 5 real-edge-backed settled picks exist (50 required). DEVELOPING label not asserted.
+This lane delivers the tooling and clarifies the standard; the milestone trigger fires when
+the pick count crosses 50.
+
+Evidence: `docs/06_status/proof/UTV2-1032/evidence.json` (verdict: DATA_GATED)
