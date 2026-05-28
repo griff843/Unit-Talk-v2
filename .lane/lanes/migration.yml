@@ -15,6 +15,7 @@ allowed_path_globs:
   - db/migrations-rollback/**
   - apps/ingestor/**
   - apps/api/src/t1-proof-*.test.ts
+  - apps/api/src/database-smoke.test.ts
   - package.json
   - .github/workflows/migration-reversibility-gate.yml
 forbidden_path_globs:
