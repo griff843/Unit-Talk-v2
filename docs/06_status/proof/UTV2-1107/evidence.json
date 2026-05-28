@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1107",
+  "title": "UTV2-1107 DB-layer picks FSM enforcement trigger proof",
+  "generated_at": "2026-05-28T02:35:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "676f96eb85e586b91e282271dddd23b802fb7c63",
+    "verified_source_note": "Final substantive commit: add database-smoke.test.ts to migration lane allowed paths. All non-proof code changes are at or before this SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "pull_requests": [
+    "https://github.com/griff843/Unit-Talk-v2/pull/901"
+  ],
+  "fsm_trigger": {
+    "trigger_name": "picks_fsm_guard",
+    "function_name": "picks_fsm_transition_guard",
+    "table": "public.picks",
+    "timing": "BEFORE UPDATE",
+    "when_clause": "OLD.status IS DISTINCT FROM NEW.status",
+    "security_definer": true,
+    "idempotent": true,
+    "migration_file": "supabase/migrations/20260528001_utv2_1107_picks_fsm_trigger.sql",
+    "rollback_file": "db/migrations-rollback/20260528001_utv2_1107_picks_fsm_trigger.down.sql",
+    "proof_test": "apps/api/src/t1-proof-utv2-1107-picks-fsm-trigger.test.ts",
+    "live_db_applied": true,
+    "gap_closed": "Gap #9 (INIT-2.3.4): service-role direct UPDATE picks SET status bypassed TypeScript lifecycle guards. Trigger enforces FSM at Postgres storage layer for all roles."
+  },
+  "fsm_transition_graph": {
+    "draft": ["validated", "voided"],
+    "validated": ["queued", "awaiting_approval", "voided"],
+    "awaiting_approval": ["queued", "voided"],
+    "queued": ["posted", "voided"],
+    "posted": ["settled", "voided"],
+    "settled": [],
+    "voided": []
+  },
+  "verification": {
+    "pnpm_verify": "PASS",
+    "pnpm_test_db": "PASS",
+    "t1_proof_test": "PASS (13/13 live-DB assertions)",
+    "r_level_check": "PASS",
+    "migration_reversibility": "PASS",
+    "schema_round_trip_drill": "PASS"
+  },
+  "verdict": "PASS"
+}
