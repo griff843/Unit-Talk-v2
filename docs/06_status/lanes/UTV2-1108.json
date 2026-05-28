@@ -28,7 +28,9 @@
     "docs/06_status/proof/UTV2-1108/verification.md",
     "docs/governance/authority-matrix.json",
     "packages/contracts/src/index.ts",
-    "packages/contracts/src/operator-role.ts"
+    "packages/contracts/src/operator-role.ts",
+    "package.json",
+    ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1108/evidence.json"

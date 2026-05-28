@@ -40,6 +40,7 @@ allowed_path_globs:
   - packages/invariants/**
   - db/migrations-rollback/**
   - apps/api/src/t1-proof-*.test.ts
+  - apps/api/src/authority-enforcement.ts
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**

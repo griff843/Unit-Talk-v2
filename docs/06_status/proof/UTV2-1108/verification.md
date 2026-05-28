@@ -76,6 +76,10 @@ Rules matched: (none) — no R-level artifacts required for this diff
 - T1 proof test: **PASS** (20/20)
 - pnpm verify green: **PASS**
 
+### pnpm test:db
+
+Not applicable for this lane. `AUTHORITY_MATRIX` is a pure static TypeScript constant with no database dependency. Authority decisions are deterministic and require no DB round-trip. The T1 proof test (`tsx --test apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts`) covers all 20 adversarial assertions without a live DB. No `pnpm test:db` run is required; this is documented per the authority enforcement design for INIT-2.4.1.
+
 ## Gap Closed
 
 Gap #22 (INIT-2.4.1): Previously, RBAC roles existed but separation of duties was enforced only by code review convention. `assertAuthority()` now mechanically rejects any role attempting to act outside its declared domain set. Unknown roles (including `service_role`) are also rejected, preventing undeclared privilege escalation.
