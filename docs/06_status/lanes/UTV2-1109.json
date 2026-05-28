@@ -32,15 +32,34 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1109/evidence.json"
   ],
-  "status": "done",
+  "status": "merged",
   "started_at": "2026-05-28T08:48:23.118Z",
-  "heartbeat_at": "2026-05-28T08:48:23.118Z",
-  "closed_at": "2026-05-28T09:10:39Z",
+  "heartbeat_at": "2026-05-28T09:12:06.466Z",
+  "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1109-init-242-dual-authorization-runtime.json",
   "created_by": "claude",
-  "truth_check_history": [],
-  "reopen_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T09:12:06.466Z",
+      "verdict": "reopen",
+      "merge_sha": "ed80f8039cab16198792580bf9489552493ac60b",
+      "failures": [
+        "L5",
+        "G5"
+      ],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-28T09:12:06.466Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: b9d9e9dbcc9a37c6307b47fb654289ebd295d92a"
+      ],
+      "detected_by": "manual"
+    }
+  ],
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1109-init-242-dual-authorization-runtime",
