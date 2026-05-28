@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "title": "Unit Talk V2 — Operator Authority Matrix",
+  "issue": "UTV2-1108",
+  "gap_closed": "Gap #22 — service_role unrestricted; separation of duties was convention only",
+  "effective_date": "2026-05-28",
+  "roles": [
+    {
+      "id": "submitter",
+      "name": "Pick Submitter",
+      "domains": ["picks:submit", "picks:read"],
+      "can_delegate": false,
+      "cross_domain_allowed": false,
+      "revocable": true,
+      "notes": "Submits picks via API or smart-form. Cannot settle, post, or grade."
+    },
+    {
+      "id": "settler",
+      "name": "Pick Settler",
+      "domains": ["picks:settle", "picks:grade", "picks:read", "settlement:record", "settlement:correct"],
+      "can_delegate": false,
+      "cross_domain_allowed": false,
+      "revocable": true,
+      "notes": "Records settlement outcomes and corrections. Cannot submit new picks or post to delivery targets."
+    },
+    {
+      "id": "poster",
+      "name": "Pick Poster",
+      "domains": ["picks:post", "picks:read", "outbox:enqueue"],
+      "can_delegate": false,
+      "cross_domain_allowed": false,
+      "revocable": true,
+      "notes": "Enqueues picks to outbox for delivery. Cannot settle or override decisions."
+    },
+    {
+      "id": "worker",
+      "name": "Outbox Worker",
+      "domains": ["outbox:deliver", "outbox:retry", "picks:read"],
+      "can_delegate": false,
+      "cross_domain_allowed": false,
+      "revocable": true,
+      "notes": "Processes outbox delivery. Cannot modify pick lifecycle or settlement state."
+    },
+    {
+      "id": "operator",
+      "name": "Operator",
+      "domains": [
+        "picks:read",
+        "picks:override",
+        "picks:void",
+        "promotion:evaluate",
+        "promotion:override",
+        "recap:generate",
+        "recap:post",
+        "audit:read",
+        "member:read",
+        "member:write",
+        "operator:admin",
+        "outbox:retry"
+      ],
+      "can_delegate": true,
+      "cross_domain_allowed": true,
+      "revocable": true,
+      "notes": "Administrative operator. Can override decisions and manage members. Cannot submit picks directly."
+    },
+    {
+      "id": "capper",
+      "name": "Capper",
+      "domains": ["picks:submit", "picks:read"],
+      "can_delegate": false,
+      "cross_domain_allowed": false,
+      "revocable": true,
+      "notes": "Authenticated via JWT. Same submission authority as submitter but identity-bound via capperId claim."
+    }
+  ],
+  "separation_of_duties": {
+    "principle": "No role may act outside its declared domain set. Cross-domain actions require cross_domain_allowed=true.",
+    "enforcement": "assertAuthority() in packages/contracts/src/operator-role.ts throws AuthorityViolationError on violation.",
+    "audit": "All authority violations are logged with roleId and domain for replay-safe audit trail."
+  },
+  "adversarial_validation": {
+    "test": "apps/api/src/t1-proof-utv2-1108-authority-matrix.test.ts",
+    "scenario": "A 'settler' role attempts a 'picks:post' domain action — rejected with AUTHORITY_VIOLATION.",
+    "result": "PASS"
+  }
+}

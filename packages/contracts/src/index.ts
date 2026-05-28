@@ -30,3 +30,4 @@ export * from './reference-data.js';
 export * from './provider-offers.js';
 export * from './shadow-mode.js';
 export * from './invariant-registry.js';
+export * from './operator-role.js';
