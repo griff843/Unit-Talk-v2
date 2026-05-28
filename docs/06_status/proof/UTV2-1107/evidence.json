@@ -6,6 +6,7 @@
   "sha_binding": {
     "verified_source_sha": "676f96eb85e586b91e282271dddd23b802fb7c63",
     "verified_source_note": "Final substantive commit: add database-smoke.test.ts to migration lane allowed paths. All non-proof code changes are at or before this SHA.",
+    "merge_sha": "0887296bf3b05cbf27393d7685add5371b69f6f1",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },

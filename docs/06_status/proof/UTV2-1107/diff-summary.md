@@ -3,8 +3,8 @@
 UTV2-1107 adds a Postgres `BEFORE UPDATE` trigger on `public.picks` that enforces the canonical pick lifecycle FSM graph for **all** DB roles, closing the gap where service-role direct `UPDATE picks SET status = ...` bypassed the TypeScript lifecycle guards in `packages/db/src/lifecycle.ts`.
 
 **Branch HEAD SHA:** 676f96eb85e586b91e282271dddd23b802fb7c63
-**Merge SHA:** _to be updated post-merge_
-**PR:** _to be updated post-merge_
+**Merge SHA:** 0887296bf3b05cbf27393d7685add5371b69f6f1
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/901
 
 ## Files Changed
 
@@ -18,4 +18,4 @@ Gap #9 (INIT-2.3.4): `transition_pick_lifecycle` RPC only guards the `from_state
 
 ## Proof Result
 
-_to be updated after pnpm test:db run_
+pnpm test:db — PASS (7/7): database-smoke + T1 FSM assertions all green on live Supabase.
