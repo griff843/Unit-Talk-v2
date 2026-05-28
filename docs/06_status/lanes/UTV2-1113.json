@@ -24,14 +24,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1113/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T16:40:34.455Z",
-  "heartbeat_at": "2026-05-27T16:40:34.455Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T18:04:58.917Z",
+  "closed_at": "2026-05-27T18:04:58.917Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1113-future-leakage-detector.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T18:04:48.001Z",
+      "verdict": "pass",
+      "merge_sha": "d9ee42257a82afe98d7dca76cbf5109ddc0caa9b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -40,14 +40,33 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1116/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T16:08:25.468Z",
-  "heartbeat_at": "2026-05-27T16:08:25.468Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T18:03:37.575Z",
+  "closed_at": "2026-05-27T18:03:37.575Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1116-immutable-model-version.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T18:01:12.323Z",
+      "verdict": "fail",
+      "merge_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
+      "failures": [
+        "P6",
+        "P10",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T18:03:22.153Z",
+      "verdict": "pass",
+      "merge_sha": "42888cc3e98068ad1629900f9b6047a1ed8abe62",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

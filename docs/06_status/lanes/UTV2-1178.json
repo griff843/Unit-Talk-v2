@@ -28,10 +28,10 @@
     "docs/06_status/proof/UTV2-1178/verification.md",
     "docs/06_status/proof/UTV2-1178/diff-summary.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T11:44:14.161Z",
-  "heartbeat_at": "2026-05-27T13:23:17.993Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T13:25:20.247Z",
+  "closed_at": "2026-05-27T13:25:20.247Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1178-bypass-enforcement-runtime.json",
   "created_by": "claude",
@@ -61,6 +61,13 @@
         "R2",
         "R3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T13:25:09.312Z",
+      "verdict": "pass",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [],
       "runner": "manual"
     }
   ],

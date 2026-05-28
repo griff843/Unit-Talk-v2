@@ -38,24 +38,29 @@
   ],
   "status": "done",
   "started_at": "2026-05-27T23:53:34.052Z",
-  "heartbeat_at": "2026-05-28T00:13:42.618Z",
-  "closed_at": "2026-05-28T00:13:42.618Z",
+  "heartbeat_at": "2026-05-28T00:13:30.158Z",
+  "closed_at": "2026-05-28T00:13:30.158Z",
   "blocked_by": [],
-  "preflight_token": "dispatch-auto",
+  "preflight_token": ".out/ops/preflight/claude/utv2-1123-advisory-path-removal.json",
   "created_by": "claude",
   "truth_check_history": [
     {
-      "checked_at": "2026-05-28T00:13:39.868Z",
+      "checked_at": "2026-05-28T00:12:45.215Z",
+      "verdict": "fail",
+      "merge_sha": "849df170930915b2381615e49432c4c840d070ac",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-28T00:13:12.122Z",
       "verdict": "pass",
       "merge_sha": "849df170930915b2381615e49432c4c840d070ac",
       "failures": [],
-      "runner": "ops:lane-close --repair-merged",
-      "source": "github_pr_merge_commit_repair",
-      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/898",
-      "repaired_fields": [
-        "preflight_token",
-        "truth_check_history"
-      ]
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

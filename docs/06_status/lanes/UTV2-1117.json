@@ -32,14 +32,33 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1117/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T18:08:11.008Z",
-  "heartbeat_at": "2026-05-27T18:08:11.008Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-27T18:24:00.458Z",
+  "closed_at": "2026-05-27T18:24:00.458Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1117-sha-verification-at-inference.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-27T18:21:28.793Z",
+      "verdict": "fail",
+      "merge_sha": "ad2a701efc56d972c4f09bc41b5957484b113755",
+      "failures": [
+        "G4",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-27T18:23:46.849Z",
+      "verdict": "pass",
+      "merge_sha": "ad2a701efc56d972c4f09bc41b5957484b113755",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
