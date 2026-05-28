@@ -51,3 +51,5 @@
 | Calibration is fail-closed | PASS — missing data fails-closed in all paths |
 | Calibration enforcement re-runs on replay | PASS — buildCalibrationProof() is pure + deterministic |
 | Removed advisory paths recorded | PASS — this diff summary |
+
+Merge SHA: 4d2a54219c5fba9f625ff32675ad6400b7a5f405

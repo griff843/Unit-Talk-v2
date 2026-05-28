@@ -36,14 +36,28 @@
     "docs/06_status/proof/UTV2-1123/diff-summary.md",
     "docs/06_status/proof/UTV2-1123/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T23:53:34.052Z",
-  "heartbeat_at": "2026-05-28T00:11:30.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-28T00:13:42.618Z",
+  "closed_at": "2026-05-28T00:13:42.618Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1123-advisory-path-removal.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-28T00:13:39.868Z",
+      "verdict": "pass",
+      "merge_sha": "849df170930915b2381615e49432c4c840d070ac",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/898",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
