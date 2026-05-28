@@ -20,7 +20,7 @@ import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { loadEnvironment } from '@unit-talk/config';
-import type { CanonicalPick } from '@unit-talk/contracts';
+import type { CanonicalPick, SubmissionPayload } from '@unit-talk/contracts';
 import {
   createDatabaseRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
@@ -57,9 +57,19 @@ before(() => {
 async function createDraftPick(label: string): Promise<string> {
   const submissionId = randomUUID();
   const now = new Date().toISOString();
+  const submissionPayload: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'nba-spread',
+    selection: `UTV2-1107 FSM TRIGGER ${label}`,
+    line: -3.5,
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 60,
+    metadata: { testRun: RUN_ID, label },
+  };
   await repositories.submissions.saveSubmission({
     id: submissionId,
-    payload: { source: 'test', submittedBy: `utv2-1107-${RUN_ID}` } as any,
+    payload: submissionPayload,
     receivedAt: now,
   });
 
