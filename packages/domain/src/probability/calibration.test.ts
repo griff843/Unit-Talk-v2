@@ -151,14 +151,14 @@ test('computeSliceCalibrationMetrics returns empty array for empty input', () =>
 
 // ── computeCalibrationAlertLevel ─────────────────────────────────────────────
 
-test('computeCalibrationAlertLevel returns green for sample below minSampleForAlert', () => {
+test('computeCalibrationAlertLevel returns insufficient_data for sample below minSampleForAlert', () => {
   const metrics = computeCalibrationMetrics(
     [{ pFinal: 0.9, outcome: 0 }, { pFinal: 0.9, outcome: 0 }],
     'v1',
     'pv1'
   );
   // Only 2 samples, well below the 30-sample threshold — even with bad scores
-  assert.equal(computeCalibrationAlertLevel(metrics), 'green');
+  assert.equal(computeCalibrationAlertLevel(metrics), 'insufficient_data');
 });
 
 test('computeCalibrationAlertLevel returns warning at warning threshold boundary', () => {

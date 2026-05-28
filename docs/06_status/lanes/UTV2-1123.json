@@ -29,12 +29,12 @@
     "packages/domain/src/models/calibration-proof.test.ts",
     ".ops/sync/UTV2-1123.yml",
     "docs/06_status/proof/UTV2-1123/diff-summary.md",
-    "docs/06_status/proof/UTV2-1123/verification.log",
+    "docs/06_status/proof/UTV2-1123/verification.md",
     "docs/06_status/lanes/UTV2-1123.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1123/diff-summary.md",
-    "docs/06_status/proof/UTV2-1123/verification.log"
+    "docs/06_status/proof/UTV2-1123/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-27T23:53:34.052Z",
