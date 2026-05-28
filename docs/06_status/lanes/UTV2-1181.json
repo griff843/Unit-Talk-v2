@@ -12,9 +12,11 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/authority-enforcement.ts",
+    "apps/api/src/t1-proof-utv2-1181-cross-domain-enforcement.test.ts",
     "docs/06_status/proof/UTV2-1181/diff-summary.md",
     "docs/06_status/proof/UTV2-1181/evidence.json",
     "docs/06_status/proof/UTV2-1181/verification.md",
+    "package.json",
     "packages/contracts/src/operator-role.ts"
   ],
   "expected_proof_paths": [

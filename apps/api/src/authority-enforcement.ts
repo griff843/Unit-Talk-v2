@@ -10,6 +10,7 @@ import {
   type AuthorityDomain,
   type AuthorityViolationError,
   assertAuthority,
+  assertCrossDomainAllowed,
   hasAuthority,
 } from '@unit-talk/contracts';
 
@@ -38,9 +39,10 @@ export function canActIn(context: AuthContext, domain: AuthorityDomain): boolean
 
 /**
  * Assert multiple domain authorities at once. All must pass.
- * Use when a single operation spans two domains to enforce cross-domain restrictions.
+ * Enforces cross_domain_allowed: roles without it are rejected for multi-domain calls.
  */
 export function enforceAllAuthorities(context: AuthContext, domains: AuthorityDomain[]): void {
+  assertCrossDomainAllowed(context.role, domains);
   for (const domain of domains) {
     assertAuthority(context.role, domain);
   }
