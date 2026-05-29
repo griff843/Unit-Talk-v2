@@ -35,6 +35,8 @@ const baseOpportunity: OpportunityFeatures = {
   role_change_detected: false,
   opportunity_projection: 7.75,
   games_sampled: 10,
+  usage_rate_source: 'direct',
+  usage_rates_sampled: 10,
 };
 
 const baseEfficiency: EfficiencyFeatures = {
