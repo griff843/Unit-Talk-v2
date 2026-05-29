@@ -14,7 +14,7 @@
     "docs/06_status/lanes/UTV2-1163.json",
     "docs/06_status/proof/UTV2-1163/diff-summary.md",
     "docs/06_status/proof/UTV2-1163/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1163/verification.log",
+    "docs/06_status/proof/UTV2-1163/verification.md",
     "scripts/ops/lane-finalize.test.ts",
     "scripts/ops/lane-finalize.ts"
   ],
@@ -23,14 +23,14 @@
     "docs/06_status/lanes/UTV2-1163.json",
     "docs/06_status/proof/UTV2-1163/diff-summary.md",
     "docs/06_status/proof/UTV2-1163/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1163/verification.log",
+    "docs/06_status/proof/UTV2-1163/verification.md",
     "scripts/ops/lane-finalize.test.ts",
     "scripts/ops/lane-finalize.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1163/diff-summary.md",
     "docs/06_status/proof/UTV2-1163/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1163/verification.log"
+    "docs/06_status/proof/UTV2-1163/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-25T18:48:29.377Z",

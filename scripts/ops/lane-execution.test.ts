@@ -43,7 +43,7 @@ function manifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
       ],
       expected_proof_paths: [
         'docs/06_status/proof/UTV2-1188/diff-summary.md',
-        'docs/06_status/proof/UTV2-1188/verification.log',
+        'docs/06_status/proof/UTV2-1188/verification.md',
       ],
       preflight_token: '.out/ops/preflight/codex/utv2-1188-block-resume.json',
       status: 'in_progress',

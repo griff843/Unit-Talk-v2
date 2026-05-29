@@ -23,7 +23,7 @@ forbidden_path_globs:
   - apps/worker/**
 required_proof_artifacts:
   - diff-summary.md
-  - verification.log
+  - verification.md
   - model-evaluation.json
 ci_requirements:
   - pnpm verify

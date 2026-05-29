@@ -12,7 +12,7 @@
   "files_changed": [
     "apps/api/src/t1-proof-lifecycle-invariants.test.ts",
     "docs/06_status/proof/UTV2-938/evidence-bundle.md",
-    "docs/06_status/proof/UTV2-938/verification.log",
+    "docs/06_status/proof/UTV2-938/verification.md",
     "packages/db/src/lifecycle-exhaustive.test.ts",
     "packages/db/src/settlement-invariants.test.ts",
     "package.json"
@@ -24,7 +24,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-938/evidence-bundle.md",
-    "docs/06_status/proof/UTV2-938/verification.log"
+    "docs/06_status/proof/UTV2-938/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-17T07:00:00.000Z",

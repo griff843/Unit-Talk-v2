@@ -16,7 +16,7 @@ const baseManifest: LaneManifestContract = {
   lane_type: 'hygiene',
   allowed_path_globs: ['.lane/**', 'scripts/**', 'package.json'],
   forbidden_path_globs: ['supabase/migrations/**', 'packages/**/database.types.ts'],
-  required_proof_artifacts: ['diff-summary.md', 'verification.log'],
+  required_proof_artifacts: ['diff-summary.md', 'verification.md'],
   ci_requirements: ['pnpm verify'],
   merge_policy: 'green verify',
   concurrency_notes: 'no overlap',
@@ -61,7 +61,7 @@ test('migration lane requires active migration lock for schema changes', () => {
     lane_type: 'migration',
     allowed_path_globs: ['supabase/migrations/**', 'packages/**/database.types.ts'],
     forbidden_path_globs: [],
-    required_proof_artifacts: ['diff-summary.md', 'verification.log', 'db-smoke.log'],
+    required_proof_artifacts: ['diff-summary.md', 'verification.md', 'db-smoke.log'],
     requires_migration_lock: true,
   };
 
@@ -89,7 +89,7 @@ test('migration lane passes when active lock exists', () => {
     lane_type: 'migration',
     allowed_path_globs: ['supabase/migrations/**', 'packages/**/database.types.ts'],
     forbidden_path_globs: [],
-    required_proof_artifacts: ['diff-summary.md', 'verification.log', 'db-smoke.log'],
+    required_proof_artifacts: ['diff-summary.md', 'verification.md', 'db-smoke.log'],
     requires_migration_lock: true,
   };
 

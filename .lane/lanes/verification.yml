@@ -19,7 +19,7 @@ forbidden_path_globs:
   - packages/**/database.types.ts
 required_proof_artifacts:
   - diff-summary.md
-  - verification.log
+  - verification.md
   - validation-report.md
 ci_requirements:
   - pnpm verify

@@ -17,7 +17,7 @@
     "packages/db/src/lifecycle-matrix.test.ts",
     "packages/domain/src/lifecycle-validator.ts",
     "docs/06_status/proof/UTV2-930/evidence-bundle.md",
-    "docs/06_status/proof/UTV2-930/verification.log"
+    "docs/06_status/proof/UTV2-930/verification.md"
   ],
   "file_scope_lock": [
     "packages/contracts/src/**",
@@ -27,7 +27,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-930/evidence-bundle.md",
-    "docs/06_status/proof/UTV2-930/verification.log"
+    "docs/06_status/proof/UTV2-930/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-17T03:20:00.000Z",

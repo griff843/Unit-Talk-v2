@@ -16,11 +16,11 @@
     "docs/06_status/lanes/UTV2-1047.json",
     "docs/06_status/proof/UTV2-1047/diff-summary.md",
     "docs/06_status/proof/UTV2-1047/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1047/verification.log"
+    "docs/06_status/proof/UTV2-1047/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1047/diff-summary.md",
-    "docs/06_status/proof/UTV2-1047/verification.log"
+    "docs/06_status/proof/UTV2-1047/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-19T20:22:26.277Z",

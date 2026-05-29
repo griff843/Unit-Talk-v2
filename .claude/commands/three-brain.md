@@ -2,7 +2,7 @@
 name: three-brain
 description: |
   Executor-selection layer for Unit Talk V2. Returns which executor
-  handles a given task: Claude, Codex, Explore, QA Agent, or Griff.
+  handles a given task: Claude, Codex CLI, Codex Cloud, or Griff.
   Called by /dispatch during Phase 1. QA Agent invokes it to request
   Codex review or Explore scans. Claude invokes it directly for failure
   rescue and codebase scans.
@@ -18,9 +18,10 @@ description: |
 | Executor | Role |
 |---|---|
 | **Claude** | Orchestrator and driver. T1, T3, Tier C paths, fallback when Codex unavailable |
-| **Codex** | T2 clear-scope implementation lanes, failure rescue |
-| **Explore** | Large-context codebase scans, cross-package architecture analysis (native Claude Code subagent) |
-| **QA Agent** | Playwright surface verification and regression (`pnpm qa:experience`) |
+| **Codex CLI** | T2 clear-scope implementation lanes, failure rescue |
+| **Codex Cloud** | Reserved autonomous Codex executor when explicitly selected by the orchestrator |
+| **Explore** | Claude action for large-context scans; not a lane-start executor |
+| **QA Agent** | Claude action for Playwright surface verification; not a lane-start executor |
 | **Griff** | Scope authority, source-of-truth conflicts, product decisions, merge gates |
 
 ---
@@ -193,22 +194,30 @@ Never route Griff escalations to Codex or the Explore subagent. Never continue i
 
 ## Output Format (when called by /dispatch Phase 1)
 
-Return a one-line routing decision:
+Return a one-line routing decision. For dispatchable implementation lanes, `executor`
+must be one of the lane-start executor values:
 
 ```
-executor: claude | codex | explore | qa-agent
+executor: claude | codex-cli | codex-cloud
 announce: true | false
 escalate_to_griff: true | false
 reason: <one line>
 ```
 
+Explore and QA Agent are not lane-start executors. If a candidate needs Explore
+or QA Agent work, return `executor: claude` and include `action: explore-scan`
+or `action: qa-agent` in the reason so `/dispatch` runs that branch without
+creating a malformed lane manifest.
+
 Examples:
 
 ```
-executor: codex    announce: false  escalate: false  reason: T2 clear-scope, health OK
+executor: codex-cli announce: false  escalate: false  reason: T2 clear-scope, health OK
 executor: claude   announce: false  escalate: true   reason: T1 — Tier C, PM plan required
 executor: claude   announce: false  escalate: false  reason: Codex unavailable, fallback
-executor: codex    announce: true   escalate: false  reason: failure rescue — 2× same test
+executor: codex-cli announce: true   escalate: false  reason: failure rescue — 2× same test
+executor: claude   announce: false  escalate: false  reason: action: explore-scan — broad codebase scan before routing
+executor: claude   announce: true   escalate: false  reason: action: qa-agent — surface regression verification required
 ```
 
 ---

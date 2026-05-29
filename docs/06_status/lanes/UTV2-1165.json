@@ -13,7 +13,7 @@
     ".ops/sync/UTV2-1165.yml",
     "docs/06_status/proof/UTV2-1165/diff-summary.md",
     "docs/06_status/proof/UTV2-1165/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1165/verification.log",
+    "docs/06_status/proof/UTV2-1165/verification.md",
     "docs/governance/CONCURRENCY_CONFIG.json",
     "docs/governance/LANE_CONCURRENCY_POLICY.md",
     "scripts/ops/concurrency-config.ts",
@@ -28,7 +28,7 @@
     "docs/06_status/lanes/UTV2-1165.json",
     "docs/06_status/proof/UTV2-1165/diff-summary.md",
     "docs/06_status/proof/UTV2-1165/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1165/verification.log",
+    "docs/06_status/proof/UTV2-1165/verification.md",
     "docs/governance/CONCURRENCY_CONFIG.json",
     "docs/governance/LANE_CONCURRENCY_POLICY.md",
     "scripts/ops/concurrency-config.ts",
@@ -41,7 +41,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1165/diff-summary.md",
     "docs/06_status/proof/UTV2-1165/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1165/verification.log"
+    "docs/06_status/proof/UTV2-1165/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-25T18:49:03.578Z",

@@ -53,7 +53,7 @@ test('defaultProofPaths are tier-aware', () => {
   assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T1'), ['docs/06_status/proof/UTV2-539/evidence.json']);
   assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T2'), [
     'docs/06_status/proof/UTV2-539/diff-summary.md',
-    'docs/06_status/proof/UTV2-539/verification.log',
+    'docs/06_status/proof/UTV2-539/verification.md',
   ]);
   assert.deepStrictEqual(defaultProofPaths('UTV2-539', 'T3'), []);
 });

@@ -22,7 +22,7 @@ forbidden_path_globs:
   - packages/domain/src/**
 required_proof_artifacts:
   - diff-summary.md
-  - verification.log
+  - verification.md
 ci_requirements:
   - pnpm verify
 merge_policy: Merge after confirming no runtime or schema ownership drift.

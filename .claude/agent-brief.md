@@ -218,9 +218,9 @@ A bounded stop with precise evidence is strictly better than a wider blast radiu
 
 ## 18. Proof files must be `.md`; `lane_type: verification` does not cover `apps/api/src/**`
 
-**The trap:** Codex defaults to `lane_type: verification` for test-correction work and writes proof as `verification.log`. Both break CI in ways that aren't obvious from the error.
+**The trap:** Codex defaults to `lane_type: verification` for test-correction work and writes proof as `verification.md`. Both break CI in ways that aren't obvious from the error.
 
-**`verification.log` is invisible to `runtime-verifier-gate`.** The gate only reads `.md` files. The failure message says "No runtime-verification file found" even if `verification.log` exists with perfect content. Rename to `verification.md`.
+**`verification.md` must contain a `## Verification` header.** The gate scans for that exact header. The failure message says "No runtime-verification file found" even if `verification.md` exists with perfect content. Add `## Verification` as a section heading.
 
 **`lane_type: verification` blocks `apps/api/src/**`.** Only `apps/api/src/database-smoke.test.ts` is allowed. Every other `apps/api/src/` file fails lane-authority with `outside_allowed_paths`. Use `lane_type: runtime` for any test file in `apps/api/`.
 

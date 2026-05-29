@@ -14,12 +14,12 @@
     ".ops/sync/UTV2-1071.yml",
     "docs/06_status/lanes/UTV2-1071.json",
     "docs/06_status/proof/UTV2-1071/diff-summary.md",
-    "docs/06_status/proof/UTV2-1071/verification.log",
+    "docs/06_status/proof/UTV2-1071/verification.md",
     "docs/06_status/proof/UTV2-1071/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1071/diff-summary.md",
-    "docs/06_status/proof/UTV2-1071/verification.log",
+    "docs/06_status/proof/UTV2-1071/verification.md",
     "docs/06_status/proof/UTV2-1071/verification.md"
   ],
   "status": "done",

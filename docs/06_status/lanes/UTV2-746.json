@@ -20,7 +20,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-746/diff-summary.md",
-    "docs/06_status/proof/UTV2-746/verification.log"
+    "docs/06_status/proof/UTV2-746/verification.md"
   ],
   "status": "closed",
   "started_at": "2026-04-24T06:44:26.116Z",

@@ -17,7 +17,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1169/diff-summary.md",
     "docs/06_status/proof/UTV2-1169/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1169/verification.log"
+    "docs/06_status/proof/UTV2-1169/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-26T03:01:55.192Z",

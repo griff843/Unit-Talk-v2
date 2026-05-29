@@ -557,7 +557,7 @@ export function defaultProofPaths(issueId: string, tier: LaneTier): string[] {
     return [`${proofRoot}/evidence.json`];
   }
   if (tier === 'T2') {
-    return [`${proofRoot}/diff-summary.md`, `${proofRoot}/verification.log`];
+    return [`${proofRoot}/diff-summary.md`, `${proofRoot}/verification.md`];
   }
 
   return [];

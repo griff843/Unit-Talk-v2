@@ -15,13 +15,13 @@
     ".ops/sync/UTV2-1034.yml",
     "docs/06_status/lanes/UTV2-1034.json",
     "docs/06_status/proof/UTV2-1034/diff-summary.md",
-    "docs/06_status/proof/UTV2-1034/verification.log",
+    "docs/06_status/proof/UTV2-1034/verification.md",
     "docs/06_status/proof/UTV2-1034/verification-report.md",
     "docs/06_status/proof/UTV2-1034/calibration-baseline-20260524.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1034/diff-summary.md",
-    "docs/06_status/proof/UTV2-1034/verification.log",
+    "docs/06_status/proof/UTV2-1034/verification.md",
     "docs/06_status/proof/UTV2-1034/verification-report.md",
     "docs/06_status/proof/UTV2-1034/calibration-baseline-20260524.md"
   ],

@@ -22,7 +22,7 @@ forbidden_path_globs:
   - apps/worker/**
 required_proof_artifacts:
   - diff-summary.md
-  - verification.log
+  - verification.md
   - sql-review.md
   - db-smoke.log
 ci_requirements:

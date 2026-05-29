@@ -16,12 +16,12 @@
   "file_scope_lock": [
     "apps/api/src/scripts/utv2-592-syndicate-proof-gate.ts",
     "docs/06_status/proof/UTV2-592/gate-results.md",
-    "docs/06_status/proof/UTV2-592/verification.log",
+    "docs/06_status/proof/UTV2-592/verification.md",
     "docs/06_status/lanes/UTV2-592.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-592/gate-results.md",
-    "docs/06_status/proof/UTV2-592/verification.log"
+    "docs/06_status/proof/UTV2-592/verification.md"
   ],
   "status": "done",
   "started_at": "2026-04-25T03:00:00.000Z",

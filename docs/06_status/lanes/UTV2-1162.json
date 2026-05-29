@@ -13,7 +13,7 @@
     ".ops/sync/UTV2-1162.yml",
     "docs/06_status/proof/UTV2-1162/diff-summary.md",
     "docs/06_status/proof/UTV2-1162/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1162/verification.log",
+    "docs/06_status/proof/UTV2-1162/verification.md",
     "scripts/ops/lane-maximizer.test.ts",
     "scripts/ops/lane-maximizer.ts"
   ],
@@ -22,14 +22,14 @@
     "docs/06_status/lanes/UTV2-1162.json",
     "docs/06_status/proof/UTV2-1162/diff-summary.md",
     "docs/06_status/proof/UTV2-1162/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1162/verification.log",
+    "docs/06_status/proof/UTV2-1162/verification.md",
     "scripts/ops/lane-maximizer.test.ts",
     "scripts/ops/lane-maximizer.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1162/diff-summary.md",
     "docs/06_status/proof/UTV2-1162/runtime-verification.md",
-    "docs/06_status/proof/UTV2-1162/verification.log"
+    "docs/06_status/proof/UTV2-1162/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-25T18:48:13.128Z",

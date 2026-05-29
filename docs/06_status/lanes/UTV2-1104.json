@@ -17,14 +17,14 @@
     "docs/06_status/proof/UTV2-1104/evidence.json",
     "docs/06_status/proof/UTV2-1104/verification.md",
     "docs/06_status/proof/UTV2-1104/diff-summary.md",
-    "docs/06_status/proof/UTV2-1104/verification.log"
+    "docs/06_status/proof/UTV2-1104/verification.md"
   ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1104.yml",
     "docs/06_status/lanes/UTV2-1104.json",
     "docs/06_status/proof/UTV2-1104/diff-summary.md",
     "docs/06_status/proof/UTV2-1104/evidence.json",
-    "docs/06_status/proof/UTV2-1104/verification.log",
+    "docs/06_status/proof/UTV2-1104/verification.md",
     "docs/06_status/proof/UTV2-1104/verification.md",
     "packages/invariants/package.json",
     "packages/invariants/src/governance-exception.test.ts",
@@ -33,7 +33,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1104/diff-summary.md",
-    "docs/06_status/proof/UTV2-1104/verification.log"
+    "docs/06_status/proof/UTV2-1104/verification.md"
   ],
   "status": "done",
   "started_at": "2026-05-25T21:38:34.208Z",

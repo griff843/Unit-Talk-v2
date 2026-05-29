@@ -20,7 +20,7 @@ forbidden_path_globs:
   - packages/domain/src/**
 required_proof_artifacts:
   - diff-summary.md
-  - verification.log
+  - verification.md
   - canonical-diff.json
 ci_requirements:
   - pnpm verify

@@ -288,7 +288,7 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "| Check | Description | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|-------------|--------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| C1 | pnpm verify proof (verification.log) | ${{ steps.c1.outcome == 'success' && '✓ PASS' || steps.c1.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C1 | pnpm verify proof (verification.md) | ${{ steps.c1.outcome == 'success' && '✓ PASS' || steps.c1.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| C2 | pnpm test:db proof present | ${{ steps.c2.outcome == 'success' && '✓ PASS' || steps.c2.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| C3 | R-level compliance (r-level-compliance-check.yml) | ℹ INFO |" >> "$GITHUB_STEP_SUMMARY"
           echo "| C4 | SHA-bound proof | ${{ steps.c4.outcome == 'success' && '✓ PASS' || steps.c4.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"

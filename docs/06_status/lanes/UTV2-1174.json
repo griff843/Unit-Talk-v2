@@ -13,7 +13,7 @@
     "docs/05_operations/agent-role-contracts.md",
     ".ops/sync/UTV2-1174.yml",
     "docs/06_status/proof/UTV2-1174/diff-summary.md",
-    "docs/06_status/proof/UTV2-1174/verification.log",
+    "docs/06_status/proof/UTV2-1174/verification.md",
     "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
   "file_scope_lock": [
@@ -37,7 +37,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1174/diff-summary.md",
-    "docs/06_status/proof/UTV2-1174/verification.log",
+    "docs/06_status/proof/UTV2-1174/verification.md",
     "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
   "status": "done",

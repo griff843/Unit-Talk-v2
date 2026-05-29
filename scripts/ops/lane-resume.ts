@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import {
   emitJson,
@@ -8,9 +9,7 @@ import {
   relativeToRoot,
   requireIssueId,
   issueToManifestPath,
-  writeManifest,
 } from './shared.js';
-import { resumeLaneManifest } from './lane-execution.js';
 
 export function main(argv = process.argv.slice(2)): number {
   const { positionals, flags, bools } = parseArgs(argv);
@@ -24,11 +23,42 @@ export function main(argv = process.argv.slice(2)): number {
       throw new Error(`Manifest not found for ${issueId}`);
     }
 
-    const result = resumeLaneManifest({
-      manifest: readManifest(issueId),
-      now: new Date().toISOString(),
-    });
-    writeManifest(result.manifest);
+    const current = readManifest(issueId);
+    if (current.status !== 'blocked') {
+      throw new Error(
+        `Only blocked lanes can be resumed (current status: ${current.status})`,
+      );
+    }
+
+    runChecked([
+      'ops:preflight',
+      issueId,
+      '--tier',
+      current.tier,
+      '--branch',
+      current.branch,
+      '--refresh',
+      ...current.file_scope_lock.flatMap((filePath) => ['--files', filePath]),
+    ]);
+    runChecked([
+      'ops:lane-start',
+      issueId,
+      '--tier',
+      current.tier,
+      '--branch',
+      current.branch,
+      '--lane-type',
+      current.lane_type,
+      '--executor',
+      current.executor,
+      ...current.file_scope_lock.flatMap((filePath) => ['--files', filePath]),
+    ]);
+
+    const resumedManifest = readManifest(issueId);
+    const result = {
+      manifest: resumedManifest,
+      changed: resumedManifest.status !== current.status,
+    };
 
     const payload = {
       ok: true,
@@ -61,6 +91,19 @@ export function main(argv = process.argv.slice(2)): number {
 
 function usage(): void {
   console.error('Usage: pnpm ops:lane:resume -- UTV2-123 [--json]');
+}
+
+function runChecked(args: string[]): void {
+  const result = spawnSync('pnpm', args, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      `pnpm ${args.join(' ')} failed: ${result.stderr || result.stdout || 'unknown error'}`,
+    );
+  }
 }
 
 if (

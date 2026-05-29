@@ -393,6 +393,10 @@ function main(): void {
         throw new Error(`Lane lease check failed: ${lease.code} ${lease.message}`);
       }
       manifest.heartbeat_at = new Date().toISOString();
+      if (manifest.status === 'blocked') {
+        manifest.status = 'in_progress';
+        manifest.blocked_by = [];
+      }
       manifest.execution_location = setup.execution_location;
       writeManifest(manifest);
       emitJson({

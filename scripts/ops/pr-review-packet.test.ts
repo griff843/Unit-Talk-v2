@@ -28,7 +28,7 @@ function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
     ],
     expected_proof_paths: [
       'docs/06_status/proof/UTV2-1057/diff-summary.md',
-      'docs/06_status/proof/UTV2-1057/verification.log',
+      'docs/06_status/proof/UTV2-1057/verification.md',
     ],
     status: 'in_review',
     started_at: '2026-05-18T00:00:00.000Z',
@@ -68,7 +68,7 @@ function createInput(overrides: Partial<PacketInput['prebuilt']> = {}): PacketIn
       },
       present_proof_paths: [
         'docs/06_status/proof/UTV2-1057/diff-summary.md',
-        'docs/06_status/proof/UTV2-1057/verification.log',
+        'docs/06_status/proof/UTV2-1057/verification.md',
       ],
       r_level_compliance: {
         status: 'PASS',
@@ -293,7 +293,7 @@ test('generatePRReviewPacket allows expected proof artifacts outside explicit sc
         files: [
           { path: 'scripts/ops/pr-review-packet.ts' },
           { path: 'docs/06_status/proof/UTV2-1057/diff-summary.md' },
-          { path: 'docs/06_status/proof/UTV2-1057/verification.log' },
+          { path: 'docs/06_status/proof/UTV2-1057/verification.md' },
         ],
         statusCheckRollup: [{ name: 'lint', conclusion: 'SUCCESS' }],
       },
@@ -367,7 +367,7 @@ test('generatePRReviewPacket detects missing proof artifacts', async () => {
   assert.strictEqual(packet.verdict, 'FAIL');
   assert.strictEqual(packet.missing_proof, true);
   assert.deepStrictEqual(packet.proof_requirement.missing, [
-    'docs/06_status/proof/UTV2-1057/verification.log',
+    'docs/06_status/proof/UTV2-1057/verification.md',
   ]);
 });
 
@@ -410,7 +410,7 @@ test('generatePRReviewPacket preserves packet shape for prompt consumers', async
     '.ops/sync/UTV2-1057.yml',
     'docs/06_status/lanes/UTV2-1057.json',
     'docs/06_status/proof/UTV2-1057/diff-summary.md',
-    'docs/06_status/proof/UTV2-1057/verification.log',
+    'docs/06_status/proof/UTV2-1057/verification.md',
     'package.json',
     'scripts/ops/pr-review-packet.test.ts',
     'scripts/ops/pr-review-packet.ts',

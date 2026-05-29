@@ -505,7 +505,7 @@ function closeoutInput(
       commit_sha: mergeSha,
       pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1058',
       files_changed: ['scripts/ops/truth-check-lib.ts'],
-      expected_proof_paths: ['docs/06_status/proof/UTV2-1058/verification.log'],
+      expected_proof_paths: ['docs/06_status/proof/UTV2-1058/verification.md'],
       created_by: 'codex-cli',
     },
     linear_state: 'Done',
@@ -514,7 +514,7 @@ function closeoutInput(
     pr_head_sha: 'head456',
     proof_artifacts: [
       {
-        path: 'docs/06_status/proof/UTV2-1058/verification.log',
+        path: 'docs/06_status/proof/UTV2-1058/verification.md',
         content: `MERGE_SHA: ${mergeSha}\npnpm verify pass`,
         mtime_ms: 2000,
       },
@@ -548,7 +548,7 @@ test('closeout truth gate fails completed work without manifest merge SHA', () =
   input.manifest = { ...input.manifest, commit_sha: null };
   input.proof_artifacts = [
     {
-      path: 'docs/06_status/proof/UTV2-1058/verification.log',
+      path: 'docs/06_status/proof/UTV2-1058/verification.md',
       content: 'MERGE_SHA: abc123merge\npnpm verify pass',
       mtime_ms: 2000,
     },
@@ -563,7 +563,7 @@ test('closeout truth gate fails proof without merge or head SHA binding', () => 
       closeoutInput({
         proof_artifacts: [
           {
-            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            path: 'docs/06_status/proof/UTV2-1058/verification.md',
             content: 'pnpm verify pass without sha',
             mtime_ms: 2000,
           },
@@ -580,7 +580,7 @@ test('closeout truth gate requires merge SHA binding when merge SHA is available
       closeoutInput({
         proof_artifacts: [
           {
-            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            path: 'docs/06_status/proof/UTV2-1058/verification.md',
             content: 'HEAD_SHA: head456\npnpm verify pass',
             mtime_ms: 2000,
           },
@@ -606,7 +606,7 @@ test('closeout truth gate can use head SHA only when no merge SHA is available',
   };
   input.proof_artifacts = [
     {
-      path: 'docs/06_status/proof/UTV2-1058/verification.log',
+      path: 'docs/06_status/proof/UTV2-1058/verification.md',
       content: 'HEAD_SHA: head456\npnpm verify pass',
       mtime_ms: 2000,
     },
@@ -640,7 +640,7 @@ test('closeout truth gate rejects narrative text that only names live proof', ()
         runtime_proof_required: true,
         proof_artifacts: [
           {
-            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            path: 'docs/06_status/proof/UTV2-1058/verification.md',
             content: 'MERGE_SHA: abc123merge\nLive DB was checked by the implementer.',
             mtime_ms: 2000,
           },
@@ -658,7 +658,7 @@ test('closeout truth gate accepts text runtime proof with concrete row counts', 
         runtime_proof_required: true,
         proof_artifacts: [
           {
-            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            path: 'docs/06_status/proof/UTV2-1058/verification.md',
             content: 'MERGE_SHA: abc123merge\nruntime_proof.row_counts picks=12',
             mtime_ms: 2000,
           },
