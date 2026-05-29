@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1194",
-  "title": "Lane G \u2014 /loop-dispatch soak proof run (Wave 3)",
+  "title": "Lane G — /loop-dispatch soak proof run (Wave 3)",
   "lane_type": "verification",
   "executor": "claude",
   "tier": "T3",
@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1194/diff-summary.md",
     "docs/06_status/proof/UTV2-1194/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T19:14:00.000Z",
-  "heartbeat_at": "2026-05-29T19:20:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T19:12:27.743Z",
+  "closed_at": "2026-05-29T19:12:27.743Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1194-lane-g-loop-dispatch-soak-proof-run-wave-3.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T19:12:21.672Z",
+      "verdict": "pass",
+      "merge_sha": "c75dfc513f32aa0d2e94c41c4e7eec22c0f32030",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

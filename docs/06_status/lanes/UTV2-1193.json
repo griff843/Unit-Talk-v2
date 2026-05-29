@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1193",
-  "title": "Lane F \u2014 /dispatch-board real proof run (Wave 3)",
+  "title": "Lane F — /dispatch-board real proof run (Wave 3)",
   "lane_type": "verification",
   "executor": "claude",
   "tier": "T3",
@@ -20,14 +20,31 @@
     "docs/06_status/proof/UTV2-1193/diff-summary.md",
     "docs/06_status/proof/UTV2-1193/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T18:56:47.000Z",
-  "heartbeat_at": "2026-05-29T19:10:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T19:04:19.609Z",
+  "closed_at": "2026-05-29T19:04:19.609Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1193-lane-f-dispatch-board-real-proof-run-wave-3.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T19:00:50.618Z",
+      "verdict": "fail",
+      "merge_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T19:04:13.191Z",
+      "verdict": "pass",
+      "merge_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
