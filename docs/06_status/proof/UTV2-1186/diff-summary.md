@@ -11,3 +11,8 @@
 ## Notes
 - The direct issue-specific command exercises this proof file: `npx tsx --test apps/api/src/t1-proof-runtime-truth-spine.test.ts`.
 - Root `pnpm test` and `pnpm verify` pass, but the existing root `test:t1-proof` script does not currently include this file.
+
+## SHA Binding
+
+Merge SHA: 6fb2f3c94a4f93e770098b2f9ea1850c91588152
+PR: https://github.com/griff843/Unit-Talk-v2/pull/913

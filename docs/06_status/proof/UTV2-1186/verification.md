@@ -30,3 +30,8 @@ PASS — Verdict: PASS. Changed files: 5. Rules matched: none (no R-level artifa
 ## Notes
 
 The root `test:t1-proof` script does not currently include `t1-proof-runtime-truth-spine.test.ts`; the issue-specific direct test above covers this file.
+
+## SHA Binding
+
+Merge SHA: 6fb2f3c94a4f93e770098b2f9ea1850c91588152
+PR: https://github.com/griff843/Unit-Talk-v2/pull/913

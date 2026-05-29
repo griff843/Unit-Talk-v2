@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1187-cr-9-fix-or-recategorize-t1-proof-scoring-integrity-data",
   "branch": "codex/utv2-1187-cr-9-fix-or-recategorize-t1-proof-scoring-integrity-data",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "bc7843f90ab3bcf840acfafb9abc40534f783b64",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/914",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/t1-proof-scoring-integrity.test.ts"
@@ -17,14 +17,22 @@
     "docs/06_status/proof/UTV2-1187/diff-summary.md",
     "docs/06_status/proof/UTV2-1187/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-29T05:14:46.478Z",
-  "heartbeat_at": "2026-05-29T06:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T12:44:32.657Z",
+  "closed_at": "2026-05-29T12:44:32.657Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1187-cr-9-fix-or-recategorize-t1-proof-scoring-integrity-data.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T12:44:21.282Z",
+      "verdict": "pass",
+      "merge_sha": "bc7843f90ab3bcf840acfafb9abc40534f783b64",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

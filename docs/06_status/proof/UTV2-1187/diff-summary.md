@@ -21,3 +21,8 @@ Focused verification on 2026-05-29 reported:
 
 - No runtime, domain, contract, repository, migration, or generated DB type files changed.
 - The threshold misses reflect current live data and are outside this lane's allowed file scope.
+
+## SHA Binding
+
+Merge SHA: bc7843f90ab3bcf840acfafb9abc40534f783b64
+PR: https://github.com/griff843/Unit-Talk-v2/pull/914

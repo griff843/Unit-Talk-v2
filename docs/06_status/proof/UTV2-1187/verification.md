@@ -37,3 +37,8 @@ PASS — Verdict: PASS. No R-level artifacts required.
 ## Notes
 
 Test recategorized from T1 acceptance gate to T2 audit. Threshold misses reflect live data quality issues outside this lane's file scope.
+
+## SHA Binding
+
+Merge SHA: bc7843f90ab3bcf840acfafb9abc40534f783b64
+PR: https://github.com/griff843/Unit-Talk-v2/pull/914
