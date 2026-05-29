@@ -97,7 +97,7 @@
   ],
   "status": "merged",
   "started_at": "2026-05-27T02:42:18.000Z",
-  "heartbeat_at": "2026-05-27T08:02:42.137Z",
+  "heartbeat_at": "2026-05-28T20:36:25.962Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1177-cert-worker-wiring.json",
@@ -129,6 +129,25 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/887"
+    },
+    {
+      "checked_at": "2026-05-28T20:36:25.962Z",
+      "verdict": "fail",
+      "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+      "failures": [
+        "L5",
+        "P3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
