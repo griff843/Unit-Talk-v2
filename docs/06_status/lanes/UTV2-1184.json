@@ -26,10 +26,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1184/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T03:38:28.877Z",
-  "heartbeat_at": "2026-05-29T04:39:57.803Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T04:41:14.994Z",
+  "closed_at": "2026-05-29T04:41:14.994Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1184-cr-5-wire-t1-proof-into-verify.json",
   "created_by": "claude",
@@ -44,6 +44,13 @@
         "R1",
         "S1"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T04:40:50.253Z",
+      "verdict": "pass",
+      "merge_sha": "2c3fcc485b19bb344b7816c0e25303d7df3f66a2",
+      "failures": [],
       "runner": "manual"
     }
   ],
