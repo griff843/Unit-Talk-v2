@@ -6,9 +6,9 @@
   "sha_binding": {
     "verified_source_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5",
     "verified_source_note": "Last substantive code change commit. Subsequent commits are proof artifacts only.",
-    "merge_sha": "set-after-merge",
-    "evidence_commit_sha": "set-after-merge",
-    "current_pr_head_sha": "ff270d85"
+    "merge_sha": "2c3fcc485b19bb344b7816c0e25303d7df3f66a2",
+    "evidence_commit_sha": "2c3fcc485b19bb344b7816c0e25303d7df3f66a2",
+    "current_pr_head_sha": "58430f0d"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
