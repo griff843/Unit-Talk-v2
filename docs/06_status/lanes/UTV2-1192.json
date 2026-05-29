@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1192",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1192-historical-sha-proof-repair-utv2-1020-evidencejson-null",
+  "branch": "griffadavi/utv2-1192-historical-sha-proof-repair-utv2-1020-evidencejson-null",
+  "base_branch": "main",
+  "commit_sha": "6248a6845c1fd283d1677e5471554399cceea163",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/919",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1020/evidence.json",
+    "scripts/ops/proof-check.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1192/diff-summary.md",
+    "docs/06_status/proof/UTV2-1192/verification.md"
+  ],
+  "status": "merged",
+  "started_at": "2026-05-29T17:22:31.890Z",
+  "heartbeat_at": "2026-05-29T17:38:12.345Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1192-historical-sha-proof-repair-utv2-1020-evidencejson-null.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T17:38:12.345Z",
+      "verdict": "pass",
+      "merge_sha": "6248a6845c1fd283d1677e5471554399cceea163",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/919"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1192-historical-sha-proof-repair-utv2-1020-evidencejson-null",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

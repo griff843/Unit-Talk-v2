@@ -18,3 +18,12 @@ Date: 2026-05-29
 ## Notes
 
 The root test and verify runs emitted known stranded-pick warnings from live DB proof tests. The commands exited 0 and no stranded rows were modified by this lane.
+
+## SHA Binding
+merge_sha: 6248a6845c1fd283d1677e5471554399cceea163
+
+## Verification Commands
+- pnpm type-check: PASS
+- pnpm test: PASS
+- pnpm verify: PASS
+- scripts/ci/r-level-check.ts: PASS

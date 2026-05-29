@@ -14,3 +14,6 @@
 ## Issue-Specific Check
 
 `pnpm ops:proof-check UTV2-1020 --post-merge` now resolves `docs/06_status/proof/UTV2-1020/evidence.json`, validates the historical merge SHA, and returns PASS.
+
+## SHA Binding
+merge_sha: 6248a6845c1fd283d1677e5471554399cceea163
