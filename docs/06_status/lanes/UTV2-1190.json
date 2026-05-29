@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1190/diff-summary.md",
     "docs/06_status/proof/UTV2-1190/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T14:08:55.651Z",
-  "heartbeat_at": "2026-05-29T17:09:31.766Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T17:09:55.015Z",
+  "closed_at": "2026-05-29T17:09:55.015Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1190-mechanical-closeout-gates-pnpm-verify-r-level-check-wired.json",
   "created_by": "codex-cli",
@@ -36,6 +36,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/917"
+    },
+    {
+      "checked_at": "2026-05-29T17:09:48.567Z",
+      "verdict": "pass",
+      "merge_sha": "730e8b5fdd3556a6fbb0ad84586c95ac1241707a",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

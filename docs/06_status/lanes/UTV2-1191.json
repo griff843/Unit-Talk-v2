@@ -53,10 +53,10 @@
     "docs/06_status/proof/UTV2-1191/diff-summary.md",
     "docs/06_status/proof/UTV2-1191/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T14:09:14.717Z",
-  "heartbeat_at": "2026-05-29T17:10:20.650Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T17:10:44.328Z",
+  "closed_at": "2026-05-29T17:10:44.328Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1191-proof-artifact-format-gate-block-verificationlog-enforce.json",
   "created_by": "codex-cli",
@@ -69,6 +69,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/918"
+    },
+    {
+      "checked_at": "2026-05-29T17:10:38.143Z",
+      "verdict": "pass",
+      "merge_sha": "2d98d60f4d77a37c1294ab17c8050c91abba0e4e",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
