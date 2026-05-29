@@ -9,4 +9,4 @@ entities:
   controls: []
   proofs:
     - docs/06_status/proof/UTV2-1187/diff-summary.md
-    - docs/06_status/proof/UTV2-1187/verification.log
+    - docs/06_status/proof/UTV2-1187/verification.md
