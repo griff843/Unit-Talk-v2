@@ -1,5 +1,7 @@
 # UTV2-1185 Diff Summary
 
+Merge SHA: `0b848ddaa425f5825347cc256f5cad3df495dc5f`
+
 ## Branch
 
 `claude/utv2-1185-cr-67-rollback-contract-hardening`

@@ -18,7 +18,8 @@
   "file_scope_lock": [
     "packages/contracts/src/dual-auth.ts",
     "packages/contracts/src/governance-rollback.ts",
-    "apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts"
+    "apps/api/src/t1-proof-utv2-1111-governance-rollback.test.ts",
+    ".ops/sync/UTV2-1185.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1185/diff-summary.md",
@@ -26,12 +27,25 @@
   ],
   "status": "merged",
   "started_at": "2026-05-29T04:15:46.249Z",
-  "heartbeat_at": "2026-05-29T04:41:00.000Z",
+  "heartbeat_at": "2026-05-29T04:45:24.218Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1185-cr-67-rollback-contract-hardening.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T04:45:24.218Z",
+      "verdict": "fail",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [
+        "G4",
+        "P3",
+        "C4",
+        "S1"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
