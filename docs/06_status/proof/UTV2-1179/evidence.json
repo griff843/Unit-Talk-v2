@@ -4,8 +4,8 @@
   "sha_binding": {
     "verified_source_sha": "e5e98022e63987313d47444f183ad4f004b651f0",
     "current_pr_head_sha": "e5e98022e63987313d47444f183ad4f004b651f0",
-    "merge_sha": null,
-    "evidence_commit_sha": "e5e98022e63987313d47444f183ad4f004b651f0"
+    "merge_sha": "c4e2d04f61315790364b7b99e8864799abb41672",
+    "evidence_commit_sha": "c4e2d04f61315790364b7b99e8864799abb41672"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
@@ -56,6 +56,17 @@
     "tests": 9,
     "pass": 9,
     "fail": 0,
+    "queries": [
+      "FD-1: assertDomainNotFrozen('capital') throws RollbackDomainFrozenError",
+      "FD-2: assertDomainNotFrozen('scaling') throws RollbackDomainFrozenError",
+      "FD-3: assertDomainNotFrozen('ws-3.5') throws RollbackDomainFrozenError",
+      "FD-4: assertDomainNotFrozen('treasury') throws RollbackDomainFrozenError",
+      "FD-5: isFrozenDomain returns true for capital, scaling, ws-3.5, treasury",
+      "FD-6: assertDomainNotFrozen does not throw for unfrozen domains",
+      "FD-7: isFrozenDomain returns false for non-frozen domains",
+      "FD-8: adversarial near-miss strings are not frozen",
+      "FD-9: RollbackDomainFrozenError.code === 'ROLLBACK_DOMAIN_FROZEN', .name === 'RollbackDomainFrozenError', .domain === 'treasury'"
+    ],
     "row_counts": [
       {
         "note": "No database tables modified — treasury frozen-domain enforcement is a pure TypeScript contract check with no DB dependency.",
