@@ -1,0 +1,68 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1124",
+  "tier": "T1",
+  "title": "INIT-3.4.1 — Immutable DecisionRecord",
+  "verifier": "claude/utv2-1124-init-341-immutable-decisionrecord",
+  "date": "2026-05-29",
+  "sha_binding": {
+    "verified_source_sha": "c8e33cafade599c306d0dbe094ca43920bfeecce",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "verify": "PASS",
+      "t1_proof_gate": "pending",
+      "merge_gate": "PASS"
+    }
+  },
+  "constitutional_guarantees": [
+    {
+      "guarantee": "append-only / immutable records",
+      "evidence": "Object.freeze applied to all DecisionRecord and DecisionChain instances",
+      "test_coverage": "adversarial immutability tests in decision-record.test.ts:27-41",
+      "status": "PASS"
+    },
+    {
+      "guarantee": "decision provenance replay-visible",
+      "evidence": "inputs_hash + DecisionProvenance stored on every record; reconstructDecisionChain verified",
+      "test_coverage": "decision-record.test.ts:86-110 (replay reconstruction)",
+      "status": "PASS"
+    },
+    {
+      "guarantee": "decision reconstruction deterministic",
+      "evidence": "reconstructDecisionChain produces identical output from any record ordering",
+      "test_coverage": "decision-record.test.ts:106-110 (determinism test)",
+      "status": "PASS"
+    },
+    {
+      "guarantee": "force/override paths traceable",
+      "evidence": "is_force, is_override fields + getTracedDecisions() + authority constraint enforced",
+      "test_coverage": "decision-record.test.ts:130-163 (tracing tests)",
+      "status": "PASS"
+    },
+    {
+      "guarantee": "no mutable decision authority",
+      "evidence": "Pure functions only; no setters, no mutation functions exported",
+      "test_coverage": "decision-record.test.ts:27-41 (frozen record mutation attempt throws)",
+      "status": "PASS"
+    },
+    {
+      "guarantee": "Program 1 certification topology untouched",
+      "evidence": "Only new file (decision-record.ts) and barrel export (models/index.ts) modified",
+      "test_coverage": "Scope: packages/domain/src/models only; no existing certified files touched",
+      "status": "PASS"
+    }
+  ],
+  "verification_commands": {
+    "pnpm_verify": "PASS",
+    "pnpm_test_db": "NOT_REQUIRED — pure domain package, no DB access",
+    "r_level_check": "PASS — no R-level artifacts required",
+    "test_count": "26/26 in decision-record.test.ts"
+  },
+  "files_changed": [
+    "packages/domain/src/models/decision-record.ts",
+    "packages/domain/src/models/decision-record.test.ts",
+    "packages/domain/src/models/index.ts",
+    "package.json",
+    ".ops/sync/UTV2-1124.yml"
+  ]
+}

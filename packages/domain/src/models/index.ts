@@ -13,3 +13,4 @@ export * from './deployment-hold.js';
 export * from './calibration-gate.js';
 export * from './cohort-hold.js';
 export * from './calibration-proof.js';
+export * from './decision-record.js';
