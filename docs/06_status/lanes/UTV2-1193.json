@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1193",
+  "title": "Lane F — /dispatch-board real proof run (Wave 3)",
+  "tier": "T3",
+  "executor": "claude",
+  "lane_type": "verification",
+  "branch": "griffadavi/utv2-1193-lane-f-dispatch-board-real-proof-run-wave-3",
+  "status": "in_progress",
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1193/diff-summary.md",
+    "docs/06_status/proof/UTV2-1193/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1193/diff-summary.md",
+    "docs/06_status/proof/UTV2-1193/verification.md"
+  ],
+  "created_at": "2026-05-29T18:56:47.000Z",
+  "commit_sha": null,
+  "merge_sha": null,
+  "pr_url": null,
+  "worktree_path": null
+}
