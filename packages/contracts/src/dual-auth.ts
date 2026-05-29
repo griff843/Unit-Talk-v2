@@ -54,6 +54,14 @@ export function requiresDualAuth(action: string): action is DualAuthAction {
   return (DUAL_AUTH_ACTIONS as readonly string[]).includes(action);
 }
 
+/**
+ * Creates a pending dual-auth approval window.
+ *
+ * Design boundary: actor IDs are opaque strings — this contract enforces identity
+ * distinctness and timing, NOT actor authority. Authority validation (whether the
+ * actor is permitted to perform the action) is the caller's responsibility, enforced
+ * at the route/enforcement layer via assertAuthority() before calling createPendingApproval.
+ */
 export function createPendingApproval(params: {
   id: string;
   action: DualAuthAction;
@@ -74,6 +82,17 @@ export function createPendingApproval(params: {
   });
 }
 
+/**
+ * Completes a dual-auth approval by providing a second, distinct actor.
+ * Throws DualAuthViolationError if the same actor provides both approvals or
+ * the approval window has expired.
+ *
+ * Design boundary: actor IDs are opaque strings — this contract enforces identity
+ * distinctness and timing, NOT actor authority. Authority validation is the caller's
+ * responsibility (enforceAuthority / assertAuthority at the route layer). This
+ * deliberate decoupling allows the dual-auth contract to remain pure and replayable
+ * independent of the authority matrix.
+ */
 export function completeApproval(params: {
   pending: PendingApproval;
   secondApproverId: string;
