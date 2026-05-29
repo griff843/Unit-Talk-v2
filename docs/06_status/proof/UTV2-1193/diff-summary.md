@@ -23,3 +23,6 @@ The /dispatch-board run executed against the live Linear board:
 
 The dispatch system correctly enforces the T1 plan gate invariant:
 no implementation began without PM plan approval.
+
+## SHA Binding
+merge_sha: 144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4

@@ -135,3 +135,6 @@ Board: 0 merged, 1 awaiting T1 plan gate
 - pnpm test: PASS
 - pnpm verify: PASS
 - scripts/ci/r-level-check.ts: PASS
+
+## SHA Binding
+merge_sha: 144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4

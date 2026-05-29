@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1193",
-  "title": "Lane F — /dispatch-board real proof run (Wave 3)",
+  "title": "Lane F \u2014 /dispatch-board real proof run (Wave 3)",
   "tier": "T3",
   "executor": "claude",
   "lane_type": "verification",
   "branch": "griffadavi/utv2-1193-lane-f-dispatch-board-real-proof-run-wave-3",
-  "status": "in_progress",
+  "status": "merged",
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1193/diff-summary.md",
     "docs/06_status/proof/UTV2-1193/verification.md"
@@ -16,8 +16,8 @@
     "docs/06_status/proof/UTV2-1193/verification.md"
   ],
   "created_at": "2026-05-29T18:56:47.000Z",
-  "commit_sha": null,
-  "merge_sha": null,
-  "pr_url": null,
+  "commit_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
+  "merge_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/920",
   "worktree_path": null
 }
