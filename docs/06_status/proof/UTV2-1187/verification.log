@@ -1,0 +1,85 @@
+# UTV2-1187 Verification Log
+
+Timestamp: 2026-05-29
+Branch: codex/utv2-1187-cr-9-fix-or-recategorize-t1-proof-scoring-integrity-data
+
+## Commands
+
+### pnpm ops:brief
+
+Result: PASS
+
+- Confirmed lane branch and worktree.
+- Reported no PR open at session start.
+- Reported proof inputs incomplete before this lane wrote the UTV2-1187 proof artifacts.
+
+### npx tsx --test apps/api/src/t1-proof-scoring-integrity.test.ts
+
+Result: PASS
+
+Key output:
+
+```text
+UTV2-1187 C1: confidence-proxy rate = 82.25% (820/997); threshold <= 10%
+UTV2-1187 C1 verdict: AUDIT_ONLY_THRESHOLD_MISS
+UTV2-1187 C3: uniqueness - 7 distinct values; fallback(50)=0.3%
+UTV2-1187 C3 verdict: PASS
+UTV2-1187 C4: band missing = 0/26 promoted rows
+UTV2-1187 C4 verdict: PASS
+UTV2-1187 C5: qualified with null target = PPH:0/26 + picks:20/55
+UTV2-1187 C5 verdict: AUDIT_ONLY_THRESHOLD_MISS
+UTV2-1187: scoring integrity audit complete
+UTV2-1187 determinism: both queries returned 500 rows - OK
+# tests 2
+# pass 2
+# fail 0
+```
+
+### pnpm type-check
+
+Result: PASS
+
+### pnpm test
+
+Result: PASS after transient live-DB retry evidence
+
+- Initial root aggregate run hit a transient `fetch failed` failure in `apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts`.
+- Focused retry of that file passed 4/4 immediately.
+- Full `pnpm verify` reran the aggregate test path and passed.
+
+### npx tsx --test apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts
+
+Result: PASS
+
+Key output:
+
+```text
+# tests 4
+# pass 4
+# fail 0
+```
+
+### rg "@unit-talk/db|@unit-talk/config|apps/" packages/domain/src
+
+Result: PASS
+
+- Only comment references were found.
+- No runtime imports from DB, config, or apps exist in `packages/domain/src`.
+
+### pnpm verify
+
+Result: PASS
+
+Final output:
+
+```text
+> @unit-talk/v2@0.1.0 verify:commands
+> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
+
+> @unit-talk/discord-bot@0.1.0 command-manifest:check
+> tsx scripts/sync-command-manifest.ts --check
+
+[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json
+[check-migration-versions] 114 migration file(s) verified - no duplicate versions.
+[lint-migrations] 114 migration file(s) checked - no findings.
+```
