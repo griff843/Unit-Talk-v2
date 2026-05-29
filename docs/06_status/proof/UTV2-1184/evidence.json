@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1184",
+  "title": "CR-5 — Wire test:t1-proof into pnpm verify",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5",
+    "merge_sha": "set-after-merge",
+    "evidence_commit_sha": "set-after-merge",
+    "current_pr_head_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "test_t1_proof": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "t1_proof_tests": {
+      "status": "PASS",
+      "files": [
+        "t1-proof-utv2-1107-picks-fsm-trigger",
+        "t1-proof-utv2-1108-authority-matrix",
+        "t1-proof-utv2-1109-dual-auth",
+        "t1-proof-utv2-1110-approval-expiration",
+        "t1-proof-utv2-1111-governance-rollback",
+        "t1-proof-utv2-1181-cross-domain-enforcement",
+        "t1-proof-utv2-1182-dual-auth-expiry-boundary",
+        "t1-proof-utv2-1183-terminal-rollback-states"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "note": "Tooling change — wires existing proof tests into pnpm verify. No runtime logic modified. pnpm test:db confirms no regression in live DB smoke tests.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      "test:t1-proof now executes inside pnpm verify gate",
+      "governance proof tests (1107/1108/1109/1110/1111/1181/1182/1183) all pass",
+      "pre-existing fixture bugs fixed: idempotency key uniqueness, stake_units constraint, event-gate bypass",
+      "pnpm type-check PASS",
+      "R-level PASS — no R-level artifacts required for this diff"
+    ],
+    "row_counts": [
+      { "table": "t1_proof_tests_executed", "count": 113, "note": "governance + atomicity + brake path + FSM live-DB suite" }
+    ]
+  },
+  "pm_verdict": {
+    "status": "APPROVED",
+    "schema": "pm-verdict/v1",
+    "issue": "UTV2-1184",
+    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/911"
+  }
+}
