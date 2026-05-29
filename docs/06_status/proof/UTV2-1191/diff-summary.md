@@ -17,3 +17,6 @@
 
 - The execution packet asked for `docs/06_status/proof/UTV2-1191/verification.log`, but this lane's implementation intentionally blocks that filename. The proof artifact for this lane is therefore `verification.md`.
 - This worktree branch already contained unrelated UTV2-1186, UTV2-1187, and UTV2-1188 commits relative to `origin/main` before this lane's edits. Git ref writes were denied by the sandbox, so branch cleanup and PR creation were not completed from this session.
+
+## SHA Binding
+merge_sha: 2d98d60f4d77a37c1294ab17c8050c91abba0e4e

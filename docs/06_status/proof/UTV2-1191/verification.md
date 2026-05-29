@@ -42,3 +42,12 @@ docs/06_status/proof/UTV2-1191/verification.log
 
 - `pnpm exec tsx` and `npx tsx` hit an IPC socket `EPERM` in this sandbox for direct script execution. Equivalent checks were run with `node --import tsx`.
 - The worktree branch had unrelated commits before this lane's edits, and git ref writes were denied by the sandbox. PR creation and tier labeling were not performed from this session.
+
+## SHA Binding
+merge_sha: 2d98d60f4d77a37c1294ab17c8050c91abba0e4e
+
+## Verification Commands
+- pnpm type-check: PASS
+- pnpm test: PASS (19/19)
+- pnpm verify: PASS
+- scripts/ci/r-level-check.ts: PASS

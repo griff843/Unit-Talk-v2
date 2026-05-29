@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1191-proof-artifact-format-gate-block-verificationlog-enforce",
   "branch": "griffadavi/utv2-1191-proof-artifact-format-gate-block-verificationlog-enforce",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "2d98d60f4d77a37c1294ab17c8050c91abba0e4e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/918",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/proof-auditor-gate.yml",
@@ -51,16 +51,26 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1191/diff-summary.md",
-    "docs/06_status/proof/UTV2-1191/verification.log"
+    "docs/06_status/proof/UTV2-1191/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-29T14:09:14.717Z",
-  "heartbeat_at": "2026-05-29T14:09:14.717Z",
+  "heartbeat_at": "2026-05-29T17:10:20.650Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1191-proof-artifact-format-gate-block-verificationlog-enforce.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T17:10:20.650Z",
+      "verdict": "pass",
+      "merge_sha": "2d98d60f4d77a37c1294ab17c8050c91abba0e4e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/918"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
