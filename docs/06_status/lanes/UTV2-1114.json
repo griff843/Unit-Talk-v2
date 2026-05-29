@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1114-init-313-imputation-removal",
   "branch": "claude/utv2-1114-init-313-imputation-removal",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "beb54dd0d6b20d49fe151e7d10362863c0db644b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/923",
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/features/availability.ts",
@@ -24,14 +24,24 @@
     "docs/06_status/proof/UTV2-1114/diff-summary.md",
     "docs/06_status/proof/UTV2-1114/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-29T20:45:32.561Z",
-  "heartbeat_at": "2026-05-29T20:45:32.561Z",
+  "heartbeat_at": "2026-05-29T22:20:33.261Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1114-init-313-imputation-removal.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T22:20:33.261Z",
+      "verdict": "pass",
+      "merge_sha": "beb54dd0d6b20d49fe151e7d10362863c0db644b",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/923"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
@@ -39,5 +49,6 @@
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
-  }
+  },
+  "merge_sha": "beb54dd0d6b20d49fe151e7d10362863c0db644b"
 }
