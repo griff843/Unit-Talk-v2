@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1184-cr-5-wire-t1-proof-into-verify",
   "branch": "claude/utv2-1184-cr-5-wire-t1-proof-into-verify",
   "base_branch": "main",
-  "commit_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5",
+  "commit_sha": "2c3fcc485b19bb344b7816c0e25303d7df3f66a2",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/911",
   "files_changed": [
     "package.json",
@@ -20,19 +20,33 @@
     "package.json",
     "apps/api/src/t1-proof-awaiting-approval.test.ts",
     "apps/api/src/t1-proof-atomicity.test.ts",
-    "apps/api/src/t1-proof-runtime-truth-spine.test.ts"
+    "apps/api/src/t1-proof-runtime-truth-spine.test.ts",
+    ".ops/sync/UTV2-1184.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1184/evidence.json"
   ],
   "status": "merged",
   "started_at": "2026-05-29T03:38:28.877Z",
-  "heartbeat_at": "2026-05-29T03:38:28.877Z",
+  "heartbeat_at": "2026-05-29T04:39:57.803Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1184-cr-5-wire-t1-proof-into-verify.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T04:39:57.803Z",
+      "verdict": "fail",
+      "merge_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5",
+      "failures": [
+        "G2",
+        "C3",
+        "R1",
+        "S1"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
