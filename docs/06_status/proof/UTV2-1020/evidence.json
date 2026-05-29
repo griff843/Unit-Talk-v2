@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1020",
   "title": "UTV2-1020 — Fix R1-R3 always-skip bypass in truth-check",
   "generated_at": "2026-05-19T04:00:00.000Z",
-  "merge_sha": null,
+  "merge_sha": "e7d3216f3e093cc4a9e4b16cae89182f0afc05af",
   "verifier": {
     "identity": "claude-sonnet-4.6/utv2-1020",
     "role": "orchestrator"
