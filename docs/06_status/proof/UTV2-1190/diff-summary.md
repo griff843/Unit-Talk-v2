@@ -42,3 +42,6 @@ Verdict: PASS
 Changed files: 8
 Rules matched: (none) - no R-level artifacts required for this diff
 ```
+
+## SHA Binding
+merge_sha: 730e8b5fdd3556a6fbb0ad84586c95ac1241707a
