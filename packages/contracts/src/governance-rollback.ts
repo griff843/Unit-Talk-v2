@@ -24,6 +24,7 @@ const FROZEN_DOMAINS = new Set<string>([
   'capital',
   'scaling',
   'ws-3.5',
+  'treasury',
 ]);
 
 export function assertDomainNotFrozen(domain: string): void {

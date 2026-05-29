@@ -69,7 +69,20 @@ Agent({
 })
 ```
 
+### Phase 0.5: Live Linear context pull
+
+Before resolving targets, pull fresh Linear state for each candidate issue. Do not route from memory or stale manifests.
+
+For each candidate issue ID:
+```
+mcp__claude_ai_Linear__get_issue({"id": "<issue_id>"})
+```
+
+From the response, extract and record: current state, tier label, priority, blocking issue IDs, and assignee. Exclude any issue whose current state is Done, Cancelled, or Blocked — do not process further. This ensures routing decisions reflect Linear truth, not cache.
+
 ### Phase 1: Resolve targets
+
+**Mandatory three-brain routing:** Call `/three-brain` for every candidate before assigning an executor. Do not assign from memory or prior session routing. Three-brain owns the routing decision; this skill owns the lane lifecycle. If `/three-brain` is not called for a candidate, do not dispatch that candidate.
 
 If no issue IDs provided:
 1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
@@ -80,7 +93,7 @@ If no issue IDs provided:
 If issue IDs provided:
 1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
 2. Determine tier from labels (tier:T1, tier:T2, tier:T3)
-3. Apply routing defaults: T1→Claude, T2 clear-scope→Codex, T2 with migration/contract→Claude, T3→Claude
+3. Call `/three-brain` for each candidate — the routing decision returned by `/three-brain` is authoritative. Apply routing defaults only if `/three-brain` is unavailable: T1→Claude, T2 clear-scope→Codex, T2 with migration/contract→Claude, T3→Claude
 
 ### Phase 2: Validate prerequisites (for each target)
 

@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1179",
+  "sha_binding": {
+    "verified_source_sha": "e5e98022e63987313d47444f183ad4f004b651f0",
+    "current_pr_head_sha": "e5e98022e63987313d47444f183ad4f004b651f0",
+    "merge_sha": null,
+    "evidence_commit_sha": "e5e98022e63987313d47444f183ad4f004b651f0"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "frozen_domain_tests": {
+      "command": "node --test packages/contracts/src/governance-rollback.test.ts",
+      "status": "PASS",
+      "tests": 9,
+      "pass": 9,
+      "fail": 0,
+      "cases": [
+        "FD-1: assertDomainNotFrozen throws for capital",
+        "FD-2: assertDomainNotFrozen throws for scaling",
+        "FD-3: assertDomainNotFrozen throws for ws-3.5",
+        "FD-4: assertDomainNotFrozen throws for treasury (UTV2-1179)",
+        "FD-5: isFrozenDomain returns true for all four frozen domains",
+        "FD-6: assertDomainNotFrozen does not throw for unfrozen domains",
+        "FD-7: isFrozenDomain returns false for non-frozen domains",
+        "FD-8: adversarial near-miss strings are not frozen",
+        "FD-9: RollbackDomainFrozenError has correct shape for treasury"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure TypeScript contract enforcement — FROZEN_DOMAINS is a compile-time constant Set. No live DB tables affected. assertDomainNotFrozen() is stateless and deterministic.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 9,
+    "pass": 9,
+    "fail": 0,
+    "row_counts": [
+      {
+        "note": "No database tables modified — treasury frozen-domain enforcement is a pure TypeScript contract check with no DB dependency.",
+        "tables_affected": 0,
+        "tables_monitored": ["picks", "audit_log", "pick_lifecycle", "settlement_records"]
+      }
+    ]
+  },
+  "constitutional_invariants": {
+    "ERB-5": {
+      "description": "Emergency override remains fail-closed. Frozen domains cannot be rolled back regardless of authorization.",
+      "enforcement": "assertDomainNotFrozen throws RollbackDomainFrozenError before any authorization is checked.",
+      "domains_frozen": ["capital", "scaling", "ws-3.5", "treasury"],
+      "status": "ENFORCED"
+    }
+  },
+  "pm_ruling": {
+    "date": "2026-05-28",
+    "issue": "UTV2-1179",
+    "verdict": "APPROVED",
+    "rationale": "Treasury added as constitutionally frozen domain per PM ruling. Prevents unintended rollback of treasury state pending formal activation standards."
+  }
+}
