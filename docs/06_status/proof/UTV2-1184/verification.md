@@ -17,21 +17,10 @@ Branch SHA (last code change): `1dd15c84cd71234523196094d1f4a8b3a4ff57d5`
 | `pnpm test:db` | PASS | 7 live DB smoke tests, 0 failures |
 | R-level check | PASS | No R-level artifacts required |
 
-## Governance proof tests now enforced
-
-- t1-proof-utv2-1107 (FSM trigger): PASS
-- t1-proof-utv2-1108 (authority matrix): PASS
-- t1-proof-utv2-1109 (dual-auth): PASS
-- t1-proof-utv2-1110 (approval expiration): PASS
-- t1-proof-utv2-1111 (governance rollback): PASS
-- t1-proof-utv2-1181 (cross-domain enforcement): PASS
-- t1-proof-utv2-1182 (expiry boundary): PASS
-- t1-proof-utv2-1183 (terminal rollback states): PASS
-
 ## pnpm verify tail
 
 ```text
-> pnpm test:t1-proof (final segment)
+> pnpm test:t1-proof
 # pass 20
 # fail 0
 
