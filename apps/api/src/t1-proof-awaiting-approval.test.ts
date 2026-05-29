@@ -110,7 +110,7 @@ async function runBrakeCase(source: PickSource) {
   const payload: SubmissionPayload = {
     source,
     market: 'nba-spread',
-    selection: `UTV2-519 BRAKE ${source}`,
+    selection: `UTV2-519 BRAKE ${source} ${runId}`,
     line: -3.5,
     odds: -110,
     stakeUnits: 1,

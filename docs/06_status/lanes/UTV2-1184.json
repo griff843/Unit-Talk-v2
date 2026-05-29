@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1184",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1184-cr-5-wire-t1-proof-into-verify",
+  "branch": "claude/utv2-1184-cr-5-wire-t1-proof-into-verify",
+  "base_branch": "main",
+  "commit_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/911",
+  "files_changed": [
+    "package.json",
+    "apps/api/src/t1-proof-awaiting-approval.test.ts",
+    "apps/api/src/t1-proof-atomicity.test.ts",
+    "apps/api/src/t1-proof-runtime-truth-spine.test.ts",
+    ".ops/sync/UTV2-1184.yml"
+  ],
+  "file_scope_lock": [
+    "package.json",
+    "apps/api/src/t1-proof-awaiting-approval.test.ts",
+    "apps/api/src/t1-proof-atomicity.test.ts",
+    "apps/api/src/t1-proof-runtime-truth-spine.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1184/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-29T03:38:28.877Z",
+  "heartbeat_at": "2026-05-29T03:38:28.877Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1184-cr-5-wire-t1-proof-into-verify.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1184-cr-5-wire-t1-proof-into-verify",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

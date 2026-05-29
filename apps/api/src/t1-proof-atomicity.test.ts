@@ -155,7 +155,7 @@ describe('STEP 2 — Submission atomicity (UTV2-218)', () => {
       p_pick: {
         id: pickId, submission_id: submissionId, market: 'nba-spread',
         selection: 'LAL -3.5', source: 't1-proof', approval_status: 'approved',
-        promotion_status: 'not_eligible', status: 'validated',
+        promotion_status: 'not_eligible', status: 'validated', stake_units: 1,
         metadata: { proof: true }, created_at: now, updated_at: now,
       },
       p_idempotency_key: idempotencyKey,
@@ -189,7 +189,7 @@ describe('STEP 2 — Submission atomicity (UTV2-218)', () => {
       p_pick: {
         id: randomUUID(), submission_id: submissionId, market: 'nba-spread',
         selection: 'LAL -3.5', source: 't1-proof', approval_status: 'approved',
-        promotion_status: 'not_eligible', status: 'validated',
+        promotion_status: 'not_eligible', status: 'validated', stake_units: 1,
         metadata: {}, created_at: now, updated_at: now,
       },
       p_idempotency_key: idempotencyKey, // SAME KEY
@@ -225,7 +225,7 @@ describe('STEP 3 — Enqueue atomicity (UTV2-219)', () => {
       id: enqueuePickId, submission_id: subId, market: 'nba-total',
       selection: 'Over 220.5', source: 't1-proof', status: 'validated',
       approval_status: 'approved', promotion_status: 'qualified',
-      promotion_target: 'best-bets', metadata: {},
+      promotion_target: 'best-bets', stake_units: 1, metadata: {},
       created_at: now, updated_at: now,
     });
   });
@@ -288,7 +288,7 @@ describe('STEP 4 — Delivery idempotency (UTV2-220)', () => {
     await insert('picks', {
       id: dlvPickId, submission_id: subId, market: 'nba-ml', selection: 'LAL',
       source: 't1-proof', status: 'queued', approval_status: 'approved',
-      promotion_status: 'qualified', metadata: {},
+      promotion_status: 'qualified', stake_units: 1, metadata: {},
       created_at: now, updated_at: now,
     });
     await insert('distribution_outbox', {
@@ -368,7 +368,7 @@ describe('STEP 5 — Settlement atomicity (UTV2-221)', () => {
       id: settlePickId, submission_id: subId, market: 'nba-spread',
       selection: 'BOS -5', source: 't1-proof', status: 'posted',
       posted_at: now, approval_status: 'approved', promotion_status: 'qualified',
-      metadata: {}, created_at: now, updated_at: now,
+      stake_units: 1, metadata: {}, created_at: now, updated_at: now,
     });
   });
 

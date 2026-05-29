@@ -55,7 +55,6 @@ test('UTV2 runtime truth proof: smart-form playerId persists canonical participa
       selection: `${participant.display_name} Over 27.5`,
       line: 27.5,
       odds: -110,
-      eventName: `UTV2 Proof Event ${fixtureSuffix}`,
       metadata: {
         playerId: participant.id,
         proofFixtureId: fixtureId,
@@ -101,7 +100,6 @@ test('UTV2 runtime truth proof: settlement persists explicit CLV diagnostics in 
       selection: `${participant.display_name} Over 24.5`,
       line: 24.5,
       odds: -110,
-      eventName: `UTV2 Proof Event ${fixtureSuffix}`,
       metadata: {
         playerId: participant.id,
         proofFixtureId: fixtureId,

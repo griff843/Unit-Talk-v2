@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1184",
+  "title": "CR-5 — Wire test:t1-proof into pnpm verify",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "1dd15c84cd71234523196094d1f4a8b3a4ff57d5",
+    "verified_source_note": "Last substantive code change commit. Subsequent commits are proof artifacts only.",
+    "merge_sha": "set-after-merge",
+    "evidence_commit_sha": "set-after-merge",
+    "current_pr_head_sha": "ff270d85"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "test_t1_proof": "PASS",
+        "check_migration_versions": "PASS",
+        "lint_migrations": "PASS"
+      }
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "t1_proof_tests": {
+      "status": "PASS",
+      "note": "All governance proof tests executed inside pnpm verify gate"
+    }
+  },
+  "runtime_proof": {
+    "note": "Tooling change only — wires existing proof tests into pnpm verify. No runtime logic modified.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "row_counts": [
+      { "table": "t1_proof_tests_executed", "count": 113 }
+    ]
+  },
+  "pm_verdict": {
+    "status": "APPROVED",
+    "schema": "pm-verdict/v1",
+    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/911"
+  }
+}
