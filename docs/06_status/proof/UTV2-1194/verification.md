@@ -149,3 +149,6 @@ Next action:
 - pnpm test: PASS
 - pnpm verify: PASS
 - scripts/ci/r-level-check.ts: PASS
+
+## SHA Binding
+merge_sha: c75dfc513f32aa0d2e94c41c4e7eec22c0f32030

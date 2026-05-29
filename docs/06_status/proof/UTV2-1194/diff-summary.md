@@ -27,3 +27,6 @@ control plane works correctly after Wave 1/2 elite hardening fixes.
 The loop control plane enforces the T1 gate invariant: no T1 issue begins
 implementation without PM plan approval. The soak run confirms this holds
 across a full live cycle with a real board candidate.
+
+## SHA Binding
+merge_sha: c75dfc513f32aa0d2e94c41c4e7eec22c0f32030
