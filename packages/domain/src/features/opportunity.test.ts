@@ -88,4 +88,81 @@ describe('extractOpportunityFeatures', () => {
     if (!result.ok) return;
     assert.equal(result.data.role_change_detected, true);
   });
+
+  // ── INIT-3.1.3: Imputation Removal — explicit provenance tests ────────────
+
+  it('INIT-3.1.3: usage_rate_source is "direct" when sufficient usage_rate data', () => {
+    const logs = [
+      makeRole({ game_date: '2026-01-03', usage_rate: 0.3 }),
+      makeRole({ game_date: '2026-01-02', usage_rate: 0.25 }),
+      makeRole({ game_date: '2026-01-01', usage_rate: 0.28 }),
+    ];
+    const result = extractOpportunityFeatures(logs, baseForm);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.usage_rate_source, 'direct');
+    assert.equal(result.data.usage_rates_sampled, 3);
+  });
+
+  it('INIT-3.1.3: usage_rate_source is "snap_share" when usage_rate data insufficient', () => {
+    // Fewer than minGames (3) games have usage_rate — fallback path is documented
+    const logs = [
+      makeRole({ game_date: '2026-01-03', usage_rate: 0.3 }), // only 1 direct
+      makeRole({ game_date: '2026-01-02', usage_rate: null }),
+      makeRole({ game_date: '2026-01-01', usage_rate: null }),
+    ];
+    const result = extractOpportunityFeatures(logs, baseForm);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    // Fallback is now explicit — caller can detect and handle
+    assert.equal(result.data.usage_rate_source, 'snap_share');
+    assert.equal(result.data.usage_rates_sampled, 1);
+  });
+
+  it('INIT-3.1.3: snap_share fallback is replay-safe — same inputs produce same source', () => {
+    const logs = [
+      makeRole({ game_date: '2026-01-03', usage_rate: null }),
+      makeRole({ game_date: '2026-01-02', usage_rate: null }),
+      makeRole({ game_date: '2026-01-01', usage_rate: null }),
+    ];
+    const r1 = extractOpportunityFeatures(logs, baseForm);
+    const r2 = extractOpportunityFeatures(logs, baseForm);
+    assert.equal(r1.ok, true);
+    assert.equal(r2.ok, true);
+    if (!r1.ok || !r2.ok) return;
+    // Deterministic: same inputs → same source, same projection
+    assert.equal(r1.data.usage_rate_source, r2.data.usage_rate_source);
+    assert.equal(r1.data.usage_rate_projection, r2.data.usage_rate_projection);
+    assert.equal(r1.data.usage_rates_sampled, r2.data.usage_rates_sampled);
+  });
+
+  it('INIT-3.1.3: usage_rates_sampled counts only direct observations', () => {
+    const logs = [
+      makeRole({ game_date: '2026-01-04', usage_rate: 0.28 }),
+      makeRole({ game_date: '2026-01-03', usage_rate: 0.25 }),
+      makeRole({ game_date: '2026-01-02', usage_rate: null }),
+      makeRole({ game_date: '2026-01-01', usage_rate: null }),
+    ];
+    const result = extractOpportunityFeatures(logs, baseForm);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    // Only 2 direct usage_rate observations, below default min_games=3
+    assert.equal(result.data.usage_rates_sampled, 2);
+    assert.equal(result.data.usage_rate_source, 'snap_share');
+  });
+
+  it('INIT-3.1.3: feature vector provenance is deterministic from same inputs', () => {
+    const logs = Array.from({ length: 5 }, (_, i) =>
+      makeRole({ game_date: `2026-01-0${5 - i}`, usage_rate: 0.25 }),
+    );
+    const r1 = extractOpportunityFeatures(logs, baseForm);
+    const r2 = extractOpportunityFeatures([...logs].reverse(), baseForm);
+    assert.equal(r1.ok, true);
+    assert.equal(r2.ok, true);
+    if (!r1.ok || !r2.ok) return;
+    // Sorted internally by date — order-independent, deterministic
+    assert.equal(r1.data.usage_rate_source, r2.data.usage_rate_source);
+    assert.equal(r1.data.usage_rates_sampled, r2.data.usage_rates_sampled);
+    assert.equal(r1.data.usage_rate_projection, r2.data.usage_rate_projection);
+  });
 });

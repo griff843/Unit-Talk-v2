@@ -42,6 +42,16 @@ export interface OpportunityFeatures {
 
   // Metadata
   games_sampled: number;
+  /**
+   * How usage_rate_projection was derived. INIT-3.1.3 — explicit provenance,
+   * no silent imputation.
+   *
+   * 'direct'     — computed from observed usage_rate data (≥ min_games samples)
+   * 'snap_share' — fallback: minutes ÷ team_minutes when usage_rate unavailable
+   */
+  usage_rate_source: 'direct' | 'snap_share';
+  /** Number of games with direct usage_rate observations (vs snap_share proxy). */
+  usage_rates_sampled: number;
 }
 
 export type OpportunityResult =
@@ -100,15 +110,22 @@ export function extractOpportunityFeatures(
     .map((g) => g.usage_rate)
     .filter((u): u is number => u != null);
 
+  // INIT-3.1.3: explicit provenance — no silent imputation.
+  // 'direct' when we have enough usage_rate observations; 'snap_share' (fallback)
+  // when we do not, using minutes ÷ team_minutes as a documented proxy.
   let usageRateProjection: number;
+  let usageRateSource: 'direct' | 'snap_share';
   if (usageRates.length >= minGames) {
     usageRateProjection = mean(usageRates);
+    usageRateSource = 'direct';
   } else {
-    // Fall back to snap share (minutes / team_minutes)
+    // Documented fallback: snap share = minutes / team_minutes.
+    // Caller can inspect usage_rate_source === 'snap_share' to detect this path.
     const snapShares = sorted.map(
       (g) => g.minutes / (g.team_minutes ?? teamMinutes),
     );
     usageRateProjection = mean(snapShares);
+    usageRateSource = 'snap_share';
   }
 
   // ── Role Stability ─────────────────────────────────────────────────────
@@ -146,6 +163,8 @@ export function extractOpportunityFeatures(
       role_change_detected: roleChangeDetected,
       opportunity_projection: opportunityProjection,
       games_sampled: n,
+      usage_rate_source: usageRateSource,
+      usage_rates_sampled: usageRates.length,
     },
   };
 }
