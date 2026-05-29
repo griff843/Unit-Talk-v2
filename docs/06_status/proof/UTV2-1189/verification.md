@@ -45,3 +45,6 @@ Branch-scope caveat:
 - The original lane worktree's `git diff --name-only origin/main...HEAD` includes pre-existing local commits for UTV2-1186, UTV2-1187, and UTV2-1188 before this lane's working-tree edits.
 - UTV2-1189 implementation changes are limited to `.claude/commands/dispatch.md`, `.claude/commands/three-brain.md`, and `scripts/ops/lane-start.ts`.
 - The PR branch was prepared from `origin/main` with only the UTV2-1189 implementation files and proof bundle.
+
+## SHA Binding
+merge_sha: 5426e1c3cf222e54c7eded4a2f32e5e5f65788f8

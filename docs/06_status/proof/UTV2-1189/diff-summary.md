@@ -14,3 +14,6 @@
 ## Scope Note
 
 Closeout inspection found the original lane worktree already contained local-only commits ahead of `origin/main` for UTV2-1186, UTV2-1187, and UTV2-1188. Those files were pre-existing lane history, not part of this implementation. To keep the PR scoped, the PR branch was prepared from `origin/main` with only the files listed above plus this proof bundle.
+
+## SHA Binding
+merge_sha: 5426e1c3cf222e54c7eded4a2f32e5e5f65788f8
