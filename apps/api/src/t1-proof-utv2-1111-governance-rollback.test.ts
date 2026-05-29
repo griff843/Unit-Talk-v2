@@ -13,12 +13,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  ROLLBACK_AUTHORIZATION_WINDOW_SECONDS,
   assertDomainNotFrozen,
   assertRollbackAuthorized,
   assertRollbackNotExpired,
   authorizeRollback,
-  computeRollbackExpiresAt,
   createRollbackEvent,
   isFrozenDomain,
   isRollbackExpired,
@@ -158,19 +156,6 @@ test('ERB-1: authorizeRollback rejects frozen domain before dual-auth', () => {
 // ---------------------------------------------------------------------------
 // Expiry semantics
 // ---------------------------------------------------------------------------
-
-test('computeRollbackExpiresAt is deterministic', () => {
-  const base = '2026-01-01T00:00:00.000Z';
-  const result1 = computeRollbackExpiresAt(base);
-  const result2 = computeRollbackExpiresAt(base);
-  assert.equal(result1, result2);
-  assert.equal(
-    result1,
-    new Date(
-      new Date(base).getTime() + ROLLBACK_AUTHORIZATION_WINDOW_SECONDS * 1000,
-    ).toISOString(),
-  );
-});
 
 test('isRollbackExpired: exactly at expiry boundary = expired (fail-closed)', () => {
   const approval = makeApproval({

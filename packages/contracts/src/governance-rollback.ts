@@ -139,12 +139,6 @@ export class RollbackDomainFrozenError extends Error {
 // Authorization expiry helpers
 // ---------------------------------------------------------------------------
 
-export function computeRollbackExpiresAt(approvedAt: string): string {
-  return new Date(
-    new Date(approvedAt).getTime() + ROLLBACK_AUTHORIZATION_WINDOW_SECONDS * 1000,
-  ).toISOString();
-}
-
 export function isRollbackExpired(approval: ApprovalRecord, asOf: string): boolean {
   return new Date(asOf).getTime() >= new Date(approval.expiresAt).getTime();
 }
@@ -265,7 +259,7 @@ export function replayRollbackChain(events: readonly RollbackEvent[]): RollbackC
   }
 
   return Object.freeze({
-    events: sorted,
+    events: Object.freeze(sorted),
     finalStatus,
   });
 }
