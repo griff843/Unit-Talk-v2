@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1194",
+  "title": "Lane G \u2014 /loop-dispatch soak proof run (Wave 3)",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "griffadavi/utv2-1194-lane-g-loop-dispatch-soak-proof-run-wave-3",
+  "base_branch": "main",
+  "commit_sha": null,
+  "merge_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1194/diff-summary.md",
+    "docs/06_status/proof/UTV2-1194/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1194/diff-summary.md",
+    "docs/06_status/proof/UTV2-1194/verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-29T19:14:00.000Z",
+  "heartbeat_at": "2026-05-29T19:20:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1194-lane-g-loop-dispatch-soak-proof-run-wave-3.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
