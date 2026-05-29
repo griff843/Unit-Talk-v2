@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1186",
-  "lane_type": "verification",
+  "lane_type": "runtime",
   "executor": "codex-cli",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1186-cr-8-fix-t1-proof-runtime-truth-spine",
