@@ -51,8 +51,17 @@ interface ProofCheckResult {
 }
 
 const PROOF_DIR = path.join(ROOT, 'docs', '06_status', 'proof');
+const SHA_RE = /^[0-9a-f]{40}$/i;
+
+interface LegacyEvidenceBundle {
+  schema_version: number;
+  merge_sha?: string | null;
+}
 
 function resolveProofPath(issueId: string): string | null {
+  const nestedEvidencePath = path.join(PROOF_DIR, issueId, 'evidence.json');
+  if (fs.existsSync(nestedEvidencePath)) return nestedEvidencePath;
+
   const jsonPath = path.join(PROOF_DIR, `${issueId}.json`);
   if (fs.existsSync(jsonPath)) return jsonPath;
 
@@ -65,6 +74,24 @@ function resolveProofPath(issueId: string): string | null {
   return null;
 }
 
+function checkedProofLocations(issueId: string): string[] {
+  return [
+    path.join(PROOF_DIR, issueId, 'evidence.json'),
+    path.join(PROOF_DIR, `${issueId}.json`),
+    path.join(ROOT, 'docs', '06_status', `${issueId}-EVIDENCE-BUNDLE.md`),
+    path.join(PROOF_DIR, `${issueId}.md`),
+  ];
+}
+
+function readManifestOrWarn(issueId: string, warnings: string[]): ReturnType<typeof readManifest> | null {
+  try {
+    return readManifest(issueId);
+  } catch {
+    warnings.push(`Lane manifest not found for ${issueId} — cannot determine branch for staleness check`);
+    return null;
+  }
+}
+
 function getCurrentHeadSha(branch: string | undefined): string | null {
   if (!branch) return null;
   const result = git(['rev-parse', `refs/heads/${branch}`]);
@@ -74,6 +101,18 @@ function getCurrentHeadSha(branch: string | undefined): string | null {
   if (result2.ok) return result2.stdout.trim();
 
   return null;
+}
+
+function isLegacyEvidenceBundle(candidate: unknown): candidate is LegacyEvidenceBundle {
+  if (candidate === null || typeof candidate !== 'object') return false;
+  const bundle = candidate as Record<string, unknown>;
+  return (
+    typeof bundle['schema_version'] === 'number' &&
+    bundle['schema_version'] !== 2 &&
+    (bundle['merge_sha'] === null ||
+      bundle['merge_sha'] === undefined ||
+      typeof bundle['merge_sha'] === 'string')
+  );
 }
 
 function getPrHeadSha(prNumber: number): string | null {
@@ -99,14 +138,16 @@ function run(options: CliOptions): ProofCheckResult {
   const { issueId, prNumber, postMerge } = options;
   const failures: string[] = [];
   const warnings: string[] = [];
+  const manifest = readManifestOrWarn(issueId, warnings);
 
   const proofPath = resolveProofPath(issueId);
   let proofSourceSha: string | null = null;
+  let legacyProof: LegacyEvidenceBundle | null = null;
   let stale = false;
 
   // --- Locate proof file ---
   if (!proofPath) {
-    failures.push(`No proof file found for ${issueId} (checked ${PROOF_DIR}/${issueId}.json, ${issueId}-EVIDENCE-BUNDLE.md, ${PROOF_DIR}/${issueId}.md)`);
+    failures.push(`No proof file found for ${issueId} (checked ${checkedProofLocations(issueId).join(', ')})`);
   }
 
   // --- Load and validate proof schema (JSON proofs only) ---
@@ -122,8 +163,13 @@ function run(options: CliOptions): ProofCheckResult {
     if (rawProof !== undefined) {
       const validation = validateProofSchema(rawProof);
       if (!validation.valid) {
-        for (const f of validation.failures) {
-          failures.push(`Proof schema invalid — ${f.field}: ${f.message}`);
+        if (isLegacyEvidenceBundle(rawProof)) {
+          legacyProof = rawProof;
+          proofSourceSha = legacyProof.merge_sha ?? null;
+        } else {
+          for (const f of validation.failures) {
+            failures.push(`Proof schema invalid — ${f.field}: ${f.message}`);
+          }
         }
       } else {
         proof = rawProof as ProofSchemaV2;
@@ -150,11 +196,10 @@ function run(options: CliOptions): ProofCheckResult {
 
   // Fallback to lane manifest branch
   if (!currentHeadSha) {
-    try {
-      const manifest = readManifest(issueId);
-      currentHeadSha = getCurrentHeadSha(manifest.branch) ?? null;
-    } catch {
-      warnings.push(`Lane manifest not found for ${issueId} — cannot determine branch for staleness check`);
+    if (manifest?.status === 'done' && manifest.commit_sha) {
+      currentHeadSha = manifest.commit_sha;
+    } else if (manifest) {
+      currentHeadSha = getCurrentHeadSha(manifest.branch) ?? manifest.commit_sha ?? null;
     }
   }
 
@@ -185,9 +230,16 @@ function run(options: CliOptions): ProofCheckResult {
     if (proof && proof.merge_sha === null) {
       failures.push('merge_sha is null but --post-merge was specified — bind proof to merge SHA');
     }
+    if (legacyProof && !SHA_RE.test(legacyProof.merge_sha ?? '')) {
+      failures.push('merge_sha is null or invalid but --post-merge was specified — bind proof to merge SHA');
+    }
     if (!proof && proofPath) {
-      // Markdown proof — warn but don't fail on merge SHA absence
-      warnings.push('Cannot verify merge_sha in markdown proof — use JSON proof for post-merge validation');
+      if (legacyProof) {
+        warnings.push('Legacy schema v1 proof detected — merge_sha was checked, v2 staleness validation skipped');
+      } else {
+        // Markdown proof — warn but don't fail on merge SHA absence
+        warnings.push('Cannot verify merge_sha in markdown proof — use JSON proof for post-merge validation');
+      }
     }
   }
 
