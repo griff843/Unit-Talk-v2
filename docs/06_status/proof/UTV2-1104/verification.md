@@ -4,7 +4,7 @@
 
 Implemented `GovernanceException` as a pure runtime entity in `packages/invariants/src/governance-exception.ts`. All required fields are validated on creation. The factory function `createGovernanceException` emits an `AuditEvent` using the existing type from `quarantine.ts`. No I/O, no Supabase, no HTTP — pure validation and construction.
 
-## Verification Steps
+## Verification
 
 ### 1. pnpm verify — PASS
 
