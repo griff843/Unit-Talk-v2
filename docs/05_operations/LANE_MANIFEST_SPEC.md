@@ -256,6 +256,27 @@ The manifest points to these sources; it does not replace them.
 
 ---
 
+## 14. Lane type selection for test-correction work (ops finding 2026-05-29)
+
+**Finding:** Codex defaults to `lane_type: verification` for any test-correction work and names proof files `verification.log`. Both break CI.
+
+**`lane_type: verification` does not permit `apps/api/src/**`** (except `database-smoke.test.ts`). The lane-authority check rejects all other `apps/api/src/` files with `outside_allowed_paths`. Correct type for `apps/api/src/**` changes is `lane_type: runtime`.
+
+**`verification.log` is invisible to the runtime-verifier-gate.** The gate (`scripts/ops/runtime-verifier-gate.ts`) only scans files ending in `.md`. A `verification.log` file is silently skipped — the gate fails with "No runtime-verification file found." even though the file exists. Proof files must be `.md`.
+
+**Required proof file shape for `runtime` lanes:**
+- Filename: must contain `verification` or `runtime` (e.g. `verification.md`)
+- Extension: `.md` — not `.log`, not `.txt`
+- Content: must include a `## Verification` section header (not `## Commands`)
+- Content: must mention `pnpm type-check` and `pnpm test` explicitly (checked by P12)
+- Content: must include the merge SHA after merge (P3/C4 checks)
+
+**Checklist when a Codex lane touches `apps/api/src/**`:**
+1. Confirm `lane_type: runtime` in the manifest (not `verification`)
+2. Rename any `verification.log` → `verification.md`
+3. Ensure `## Verification` header in the proof file (not `## Commands`)
+4. Update `expected_proof_paths` and `.ops/sync/UTV2-###.yml` `proofs:` to reference `.md`
+
 ## 13. Manifest housekeeping CI policy
 
 Manifest commits (lane-open, PR-open, lane-close) must not use `[skip ci]` on PR branches. The `[skip ci]` tag suppresses all CI workflows, which prevents required branch-protection checks from running and deadlocks the merge without admin override.

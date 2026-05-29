@@ -216,6 +216,26 @@ A bounded stop with precise evidence is strictly better than a wider blast radiu
 
 ---
 
+## 18. Proof files must be `.md`; `lane_type: verification` does not cover `apps/api/src/**`
+
+**The trap:** Codex defaults to `lane_type: verification` for test-correction work and writes proof as `verification.log`. Both break CI in ways that aren't obvious from the error.
+
+**`verification.log` is invisible to `runtime-verifier-gate`.** The gate only reads `.md` files. The failure message says "No runtime-verification file found" even if `verification.log` exists with perfect content. Rename to `verification.md`.
+
+**`lane_type: verification` blocks `apps/api/src/**`.** Only `apps/api/src/database-smoke.test.ts` is allowed. Every other `apps/api/src/` file fails lane-authority with `outside_allowed_paths`. Use `lane_type: runtime` for any test file in `apps/api/`.
+
+**Proof file requirements for runtime lanes:**
+- Name: `verification.md` (contains "verification", ends in `.md`)
+- Header: `## Verification` (not `## Commands` — `hasRequiredSection` check)
+- Body: must mention `pnpm type-check` and `pnpm test` (P12 check)
+- After merge: append the merge SHA (`Merge SHA: <sha>`) to pass P3/C4
+
+**Also update:** `expected_proof_paths` in the lane manifest and `proofs:` in `.ops/sync/UTV2-###.yml` must reference `.md`, not `.log`.
+
+Canonical spec: `docs/05_operations/LANE_MANIFEST_SPEC.md §14`
+
+---
+
 ## 17. This brief is append-only
 
 When a new drift class is found, add a numbered section. Do not delete sections without PM approval — they exist because an incident happened. If a gotcha is fully remediated (e.g. the constraint is now enforced at CI time), mark it `[REMEDIATED: <date> via <issue>]` and keep the section as historical context.

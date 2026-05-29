@@ -34,3 +34,8 @@ ci_requirements:
   - pnpm verify
 merge_policy: Requires green verify and no active overlapping lane manifest.
 concurrency_notes: May run beside non-overlapping UI, verification, and hygiene lanes.
+codex_guidance: |
+  Use this lane type for any change to apps/api/src/** (including test files).
+  Proof files must be .md (not .log) — runtime-verifier-gate ignores non-.md files.
+  Proof file must contain a ## Verification section header (not ## Commands).
+  Proof file must explicitly mention "pnpm type-check" and "pnpm test".

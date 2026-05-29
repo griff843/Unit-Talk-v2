@@ -25,3 +25,8 @@ ci_requirements:
   - pnpm verify
 merge_policy: Verification tooling may merge independently when runtime behavior is untouched.
 concurrency_notes: Coordinate if changing shared CI or lane contract scripts.
+codex_guidance: |
+  DO NOT use this lane type for changes to apps/api/src/** (except database-smoke.test.ts).
+  This lane only permits packages/verification/**, scripts/**, and proof/docs paths.
+  For any apps/api/src/ test fix, use lane_type: runtime instead.
+  Proof files must be .md (not .log) — runtime-verifier-gate ignores non-.md files.
