@@ -258,6 +258,52 @@ test('G5 allows same-issue closeout repair commits before lane is done', () => {
   assert.deepStrictEqual(result, ['unlinked-sha']);
 });
 
+test('G5 ignores manifest and proof closeout paths when checking post-merge implementation touches', () => {
+  const filesChanged = [
+    'docs/06_status/lanes/UTV2-1178.json',
+    'docs/06_status/proof/UTV2-1178/evidence.json',
+    'packages/invariants/src/engine.ts',
+  ];
+  const finalizedFiles = filesChanged.filter(
+    (filePath) =>
+      filePath !== 'docs/06_status/lanes/UTV2-1178.json' &&
+      !filePath.startsWith('docs/06_status/proof/'),
+  );
+
+  const result = findPostMergeTouches({
+    mergeSha: 'merge-sha',
+    filesChanged: finalizedFiles,
+    issueId: 'UTV2-1178',
+    showCommit: () => ({
+      timestamp: '2026-05-27T12:00:00.000Z',
+      subject: 'feat(ops): UTV2-1178 primary merge',
+    }),
+    gitCommand: (args) => {
+      if (args[0] === 'log') {
+        return {
+          ok: true,
+          stdout: [
+            'proof-sha\tchore(proof): UTV2-1178 bind proof evidence\t2026-05-27T13:00:00.000Z',
+            'manifest-sha\tdocs(proof): UTV2-1178 record closeout\t2026-05-27T13:05:00.000Z',
+          ].join('\n'),
+          stderr: '',
+        };
+      }
+
+      const sha = args.at(-1);
+      return {
+        ok: true,
+        stdout: sha === 'proof-sha'
+          ? 'docs/06_status/proof/UTV2-1178/evidence.json\n'
+          : 'docs/06_status/lanes/UTV2-1178.json\n',
+        stderr: '',
+      };
+    },
+  });
+
+  assert.deepStrictEqual(result, []);
+});
+
 test('P8 skips absent test_run_logs and fails present logs without merge SHA', () => {
   assert.strictEqual(evaluateTestRunLogEvidence({}, 'merge-sha'), 'skip');
   assert.strictEqual(evaluateTestRunLogEvidence({ test_run_logs: [] }, 'merge-sha'), 'skip');

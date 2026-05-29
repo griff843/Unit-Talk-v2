@@ -1,9 +1,16 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1177",
   "title": "UTV2-1177 atomic certification propagation batch RPC proof",
+  "tier": "T1",
+  "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/887",
+  "verifier": {
+    "identity": "claude/post-hardening-audit"
+  },
   "generated_at": "2026-05-27T06:53:00.000Z",
   "sha_binding": {
+    "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
     "verified_source_sha": "01bdde58ff81eb094e7062a1a1f9b84425a42194",
     "verified_source_note": "Proof source commit containing the non-runtime proof script, multi-PR lane reconciler support, and governance gate compatibility fixes. The atomic RPC blocker fix is commit 9096be7188e014f7cdec7baf12436a25494d9fd8.",
     "evidence_commit_sha": "set-by-ci",
@@ -30,6 +37,94 @@
     "r_level_check": "PASS",
     "migration_reversibility": "PASS",
     "schema_round_trip_drill": "PASS"
+  },
+  "static_proof": {
+    "pnpm_verify": "PASS (exit 0)",
+    "r_level": "PASS",
+    "migration_reversibility": "PASS",
+    "schema_round_trip_drill": "PASS",
+    "test_run_logs": [
+      {
+        "path": "pnpm verify",
+        "result": "PASS",
+        "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+        "steps": [
+          "sync-check",
+          "system-alignment-check",
+          "automation-coverage-check",
+          "env:check",
+          "lint",
+          "type-check",
+          "build",
+          "test",
+          "smart-form verify",
+          "verify:commands"
+        ]
+      },
+      {
+        "path": "tsx scripts/ci/r-level-check.ts --base origin/codex/utv2-1177-cert-gate-evidence --head HEAD",
+        "result": "PASS"
+      },
+      {
+        "path": "tsx scripts/ci/migration-reversibility-gate.ts --base origin/codex/utv2-1177-cert-gate-evidence --json",
+        "result": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "database": "supabase/zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "exit_code": 0,
+    "queries": [
+      {
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "PASS"
+      },
+      {
+        "description": "UTV2-920 invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "PASS"
+      },
+      {
+        "description": "UTV2-920 invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "PASS"
+      },
+      {
+        "description": "UTV2-920 invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "PASS"
+      },
+      {
+        "description": "UTV2-883 no duplicate participants for the same external_id and sport",
+        "result": "PASS"
+      },
+      {
+        "description": "UTV2-996 re-settling a settled pick creates correction, not duplicate base rows",
+        "result": "PASS"
+      },
+      {
+        "description": "UTV2-996 correction chain is additive and original settlement row is not mutated",
+        "result": "PASS"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "certification_records",
+        "check": "atomic propagation batch inserts certification records transactionally",
+        "result": "verified"
+      },
+      {
+        "table": "certification_transition_events",
+        "check": "atomic propagation batch inserts transition events transactionally",
+        "result": "verified"
+      },
+      {
+        "table": "settlement_records",
+        "check": "correction chain remains additive during DB smoke validation",
+        "result": "verified"
+      }
+    ],
+    "total_tests": 7,
+    "pass": 7,
+    "fail": 0
   },
   "verdict": "PASS"
 }

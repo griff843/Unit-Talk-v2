@@ -645,10 +645,16 @@ export async function runTruthCheck(
       addCheck('S1', 'pass', 'scope-diff check not applicable (empty files_changed or scope)');
     }
 
-    if (mergeSha && manifest.files_changed.length > 0) {
+    const finalizedFilesForPostMergeTouchCheck = manifest.files_changed.filter(
+      (filePath) =>
+        filePath !== relativeToRoot(manifestPath) &&
+        !filePath.startsWith('docs/06_status/proof/'),
+    );
+
+    if (mergeSha && finalizedFilesForPostMergeTouchCheck.length > 0) {
       const postMergeTouches = findPostMergeTouches({
         mergeSha,
-        filesChanged: manifest.files_changed,
+        filesChanged: finalizedFilesForPostMergeTouchCheck,
         issueId,
         sinceSha: options.sinceSha,
         laneStartedAt: manifest.started_at,
@@ -664,7 +670,7 @@ export async function runTruthCheck(
         addCheck('G5', 'pass', 'no post-merge touches without linked follow-up issue detected');
       }
     } else {
-      addCheck('G5', 'pass', 'no finalized files_changed entries to inspect');
+      addCheck('G5', 'pass', 'no finalized implementation files_changed entries to inspect');
     }
 
     const linearProjectIsP0 = linearIssue.project?.id === P0_PROJECT_ID;

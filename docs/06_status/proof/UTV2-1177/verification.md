@@ -3,6 +3,7 @@
 ## Verification
 
 Commit under proof: `9096be7188e014f7cdec7baf12436a25494d9fd8`
+Merge SHA: `59910df1d87b04a125c160b3244cc417b66ab69e`
 
 Commands run on PR #887 head:
 

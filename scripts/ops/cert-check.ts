@@ -77,7 +77,7 @@ async function createDb(): Promise<CertCheckDb> {
     console.error('[cert-check] FATAL: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
     process.exit(2);
   }
-  const { createClient } = await import('@supabase/supabase-js');
+  const { createClient } = await import('../../packages/db/node_modules/@supabase/supabase-js/dist/index.mjs');
   return createClient(url, key, { auth: { persistSession: false } });
 }
 

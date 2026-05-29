@@ -30,8 +30,8 @@
   ],
   "status": "done",
   "started_at": "2026-05-27T11:44:14.161Z",
-  "heartbeat_at": "2026-05-28T20:40:00.000Z",
-  "closed_at": "2026-05-28T20:40:00.000Z",
+  "heartbeat_at": "2026-05-29T03:12:49.390Z",
+  "closed_at": "2026-05-29T03:09:28.825Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1178-bypass-enforcement-runtime.json",
   "created_by": "claude",
@@ -86,11 +86,64 @@
       "failures": [],
       "runner": "manual",
       "note": "Force-close: G5 reopen was false positive. Flagged commits 9600938a and 6962a69b are UTV2-1178 own post-merge proof patch commits (bind SHA + schema fix), not external scope bleed. PR #888 merged, truth-check passed at 2026-05-27T13:25:09."
+    },
+    {
+      "checked_at": "2026-05-29T02:55:28.636Z",
+      "verdict": "reopen",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T02:56:41.826Z",
+      "verdict": "pass",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T03:06:26.340Z",
+      "verdict": "reopen",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T03:09:14.577Z",
+      "verdict": "pass",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T03:12:49.390Z",
+      "verdict": "pass",
+      "merge_sha": "61c88fd68aee4a7ce19f039d5c37a8a15b139600",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [
     {
       "timestamp": "2026-05-28T20:36:48.123Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: 9600938a557297b839dad4dca850ed89096f595e, 6962a69bee65b306d34dcd946f3500e67c1496c6"
+      ],
+      "detected_by": "manual"
+    },
+    {
+      "timestamp": "2026-05-29T02:55:28.636Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: 9600938a557297b839dad4dca850ed89096f595e, 6962a69bee65b306d34dcd946f3500e67c1496c6"
+      ],
+      "detected_by": "manual"
+    },
+    {
+      "timestamp": "2026-05-29T03:06:26.340Z",
       "reasons": [
         "commits touched locked files after merge without linked follow-up issue: 9600938a557297b839dad4dca850ed89096f595e, 6962a69bee65b306d34dcd946f3500e67c1496c6"
       ],

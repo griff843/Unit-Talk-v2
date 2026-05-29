@@ -11,6 +11,7 @@ PRs linked to this lane:
 RPC: `insert_certification_propagation_batch`
 
 Commit: `9096be7188e014f7cdec7baf12436a25494d9fd8`
+Merge SHA: `59910df1d87b04a125c160b3244cc417b66ab69e`
 
 The RPC persists certification propagation batches by inserting rows into `certification_records` and `certification_transition_events` in a single PL/pgSQL function call.
 

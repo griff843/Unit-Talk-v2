@@ -95,10 +95,10 @@
     "docs/06_status/proof/UTV2-1177/verification.md",
     "docs/06_status/proof/UTV2-1177/atomic-propagation-rpc.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-27T02:42:18.000Z",
-  "heartbeat_at": "2026-05-28T20:36:25.962Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T03:12:49.159Z",
+  "closed_at": "2026-05-29T02:58:51.436Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1177-cert-worker-wiring.json",
   "created_by": "codex-cli",
@@ -147,6 +147,27 @@
         "R2",
         "R3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T02:55:28.616Z",
+      "verdict": "pass",
+      "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T03:08:31.942Z",
+      "verdict": "pass",
+      "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T03:12:49.159Z",
+      "verdict": "pass",
+      "merge_sha": "59910df1d87b04a125c160b3244cc417b66ab69e",
+      "failures": [],
       "runner": "manual"
     }
   ],
