@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1186",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1186-cr-8-fix-t1-proof-runtime-truth-spine",
+  "branch": "codex/utv2-1186-cr-8-fix-t1-proof-runtime-truth-spine",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/t1-proof-runtime-truth-spine.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1186/diff-summary.md",
+    "docs/06_status/proof/UTV2-1186/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-29T05:13:10.023Z",
+  "heartbeat_at": "2026-05-29T06:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1186-cr-8-fix-t1-proof-runtime-truth-spine.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1186-cr-8-fix-t1-proof-runtime-truth-spine",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
