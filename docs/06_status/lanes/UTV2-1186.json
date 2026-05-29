@@ -17,9 +17,9 @@
     "docs/06_status/proof/UTV2-1186/diff-summary.md",
     "docs/06_status/proof/UTV2-1186/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-29T05:13:10.023Z",
-  "heartbeat_at": "2026-05-29T05:13:10.023Z",
+  "heartbeat_at": "2026-05-29T06:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1186-cr-8-fix-t1-proof-runtime-truth-spine.json",
