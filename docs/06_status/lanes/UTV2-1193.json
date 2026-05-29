@@ -2,11 +2,16 @@
   "schema_version": 1,
   "issue_id": "UTV2-1193",
   "title": "Lane F \u2014 /dispatch-board real proof run (Wave 3)",
-  "tier": "T3",
-  "executor": "claude",
   "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1193-lane-f-dispatch-board-real-proof-run-wave-3",
-  "status": "merged",
+  "base_branch": "main",
+  "commit_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
+  "merge_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/920",
+  "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1193/diff-summary.md",
     "docs/06_status/proof/UTV2-1193/verification.md"
@@ -15,9 +20,20 @@
     "docs/06_status/proof/UTV2-1193/diff-summary.md",
     "docs/06_status/proof/UTV2-1193/verification.md"
   ],
-  "created_at": "2026-05-29T18:56:47.000Z",
-  "commit_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
-  "merge_sha": "144ab9d81f85e40a0ba0d1243ce1941bb0ba48d4",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/920",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2"
+  "status": "merged",
+  "started_at": "2026-05-29T18:56:47.000Z",
+  "heartbeat_at": "2026-05-29T19:10:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1193-lane-f-dispatch-board-real-proof-run-wave-3.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
 }
