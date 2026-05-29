@@ -1,0 +1,36 @@
+UTV2-1172 verification
+
+## Verification
+
+This markdown file preserves the lane verification evidence in a gate-visible proof artifact.
+
+Merge SHA: ba9111ce595703610c7314c02e730be6df0c3cbc
+
+Focused test:
+Command: tsx --test scripts/ops/workflow-hardening.test.ts
+Result: PASS
+Summary: 19 tests passed, 0 failed.
+
+Repo test command:
+Command: pnpm test
+Result: PASS via pnpm verify
+
+Type check:
+Command: pnpm type-check
+Result: PASS
+
+R-level:
+Command: tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Result: PASS
+Output:
+Verdict: PASS
+Changed files: 2
+Rules matched: (none) — no R-level artifacts required for this diff
+
+Gate:
+Command: pnpm verify
+Result: PASS
+Final output:
+[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json
+[check-migration-versions] 110 migration file(s) verified — no duplicate versions.
+[lint-migrations] 110 migration file(s) checked — no findings.

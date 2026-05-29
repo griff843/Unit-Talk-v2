@@ -84,6 +84,24 @@ jobs:
             echo "has_proof=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Reject verification.log proof artifacts
+        run: |
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+
+          changed_log_files=$(git diff --diff-filter=ACM --name-only "$base_sha" "$head_sha" \
+            | grep '^docs/06_status/proof/.*/verification\.log$' || true)
+
+          if [ -n "$changed_log_files" ]; then
+            echo "::error title=Proof Artifact Format::Proof verification artifacts must be markdown files named verification.md."
+            echo ""
+            echo "Blocked verification.log files:"
+            echo "$changed_log_files" | sed 's/^/  - /'
+            echo ""
+            echo "Rename each changed verification.log file to verification.md so proof gates can read it."
+            exit 1
+          fi
+
       - name: Run proof auditor gate per proof directory
         id: gate
         if: steps.detect.outputs.has_proof == 'true'
@@ -183,6 +201,7 @@ jobs:
           echo "  - SHA not bound in proof files"
           echo "  - Invalid or stale SHA"
           echo "  - No markdown files in proof directory"
+          echo "  - verification.log used instead of verification.md"
           echo "  - Missing R-level artifact keywords (e.g. 'determinism' for r2)"
           echo ""
           echo "Fix the proof files and push again."

@@ -1,0 +1,21 @@
+UTV2-598 Verification Log
+
+## Verification
+
+This markdown file preserves the lane verification evidence in a gate-visible proof artifact.
+
+Date: 2026-04-15
+
+pnpm type-check — PASS
+pnpm test — PASS (32/32)
+
+Issue-specific verification:
+- pnpm stranded:cleanup (dry-run): correctly shows 35 awaiting_approval rows, no mutation
+- pnpm stranded:cleanup --confirm: executed live
+  - Voided: 35 (22 system-pick-scanner, 5 alert-agent, 8 model-driven)
+  - Failed: 0
+  - Remaining awaiting_approval: 0
+
+Post-cleanup DB query confirmation:
+- SELECT count(*) FROM picks WHERE status = 'awaiting_approval' → 0 rows
+- Backlog fully resolved

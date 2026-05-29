@@ -1,0 +1,43 @@
+# UTV2-1034 Verification Log
+
+## Verification
+
+This markdown file preserves the lane verification evidence in a gate-visible proof artifact.
+
+
+Date: 2026-05-24
+Branch: claude/utv2-1034-model-calibration-baseline
+Merge SHA: 3081cca59fd201f6df57cf57f2e1f90a046203af
+PR: https://github.com/griff843/Unit-Talk-v2/pull/838
+Executor: claude
+
+## pnpm type-check
+PASS — TypeScript project-references build clean
+
+## pnpm test
+All 113 tests pass
+
+## pnpm verify
+All 113 tests pass. Type-check, lint, build all clean.
+
+## R-level check
+Verdict: PASS
+Changed files: 2
+Rules matched: (none)
+
+## Live Script Run
+tsx scripts/calibration-report.ts --after=2026-05-11
+- DB connected: ✅ (Supabase project zfzdnfwdarxucxtaojxm)
+- Total rows queried: 2
+- Usable rows: 0 (null confidence)
+- Output written: docs/06_status/proof/UTV2-1034/calibration-baseline-20260524.md
+- Follow-on required: No (insufficient data gate)
+
+## Acceptance Criteria
+
+- [x] Script queries picks + settlement_records for picks settled after 2026-05-11
+- [x] Computes Brier score, ECE (10-bucket), and log-loss
+- [x] Segments by confidence band, sport, and model version
+- [x] Publishes results to docs/06_status/proof/calibration-baseline-20260524.md
+- [x] ECE > 0.10 → follow-on issue trigger (not triggered — insufficient data)
+- [~] Baseline metrics: n/a — only 2 rows with null confidence in live DB; script is ready-to-run instrument once picks accumulate
