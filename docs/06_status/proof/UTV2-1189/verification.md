@@ -48,3 +48,9 @@ Branch-scope caveat:
 
 ## SHA Binding
 merge_sha: 5426e1c3cf222e54c7eded4a2f32e5e5f65788f8
+
+## Verification Commands
+- pnpm type-check: PASS
+- pnpm test: PASS (19/19)
+- pnpm verify: PASS
+- scripts/ci/r-level-check.ts: PASS (no R-level artifacts required for T2/governance lane)

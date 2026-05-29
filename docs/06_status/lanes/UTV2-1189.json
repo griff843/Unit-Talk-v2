@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1189-executor-routing-contract-codex-normalization-exploreqa",
   "branch": "griffadavi/utv2-1189-executor-routing-contract-codex-normalization-exploreqa",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "5426e1c3cf222e54c7eded4a2f32e5e5f65788f8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/915",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/commands/dispatch.md",
@@ -18,16 +18,65 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1189/diff-summary.md",
-    "docs/06_status/proof/UTV2-1189/verification.log"
+    "docs/06_status/proof/UTV2-1189/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-29T14:08:37.205Z",
-  "heartbeat_at": "2026-05-29T14:08:39.429Z",
+  "heartbeat_at": "2026-05-29T17:08:18.794Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1189-executor-routing-contract-codex-normalization-exploreqa.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T17:07:51.049Z",
+      "verdict": "pass",
+      "merge_sha": "5426e1c3cf222e54c7eded4a2f32e5e5f65788f8",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/915"
+    },
+    {
+      "checked_at": "2026-05-29T17:08:04.948Z",
+      "verdict": "fail",
+      "merge_sha": "5426e1c3cf222e54c7eded4a2f32e5e5f65788f8",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T17:08:09.141Z",
+      "verdict": "fail",
+      "merge_sha": "5426e1c3cf222e54c7eded4a2f32e5e5f65788f8",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-05-29T17:08:18.794Z",
+      "verdict": "fail",
+      "merge_sha": "5426e1c3cf222e54c7eded4a2f32e5e5f65788f8",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
