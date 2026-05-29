@@ -4,8 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
+  createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
   transitionPickLifecycle,
+  type UnitTalkSupabaseClient,
   type RepositoryBundle,
 } from '@unit-talk/db';
 import { processSubmission } from './submission-service.js';
@@ -25,12 +27,36 @@ const skipReason = hasSupabaseSmokeEnvironment()
   : 'SUPABASE_SERVICE_ROLE_KEY not configured - skipping live DB proof';
 
 let repositories: RepositoryBundle;
+let dbClient: UnitTalkSupabaseClient;
 
 before(() => {
   if (skipReason) return;
   const env = loadEnvironment();
-  repositories = createDatabaseRepositoryBundle(createServiceRoleDatabaseConnectionConfig(env));
+  const connection = createServiceRoleDatabaseConnectionConfig(env);
+  repositories = createDatabaseRepositoryBundle(connection);
+  dbClient = createDatabaseClientFromConnection(connection);
 });
+
+async function upsertLegacyPlayerFixture(input: {
+  id: string;
+  displayName: string;
+  fixtureId: string;
+  proofIssue: string;
+}) {
+  const { error } = await dbClient.from('players').upsert(
+    {
+      id: input.id,
+      display_name: input.displayName,
+      metadata: {
+        proofFixtureId: input.fixtureId,
+        proofIssue: input.proofIssue,
+      },
+    },
+    { onConflict: 'id' },
+  );
+
+  assert.ifError(error);
+}
 
 test('UTV2 runtime truth proof: smart-form playerId persists canonical participant linkage in live DB', { skip: skipReason }, async () => {
   const fixtureId = `utv2-303-player-link-${randomUUID()}`;
@@ -45,6 +71,12 @@ test('UTV2 runtime truth proof: smart-form playerId persists canonical participa
       proofFixtureId: fixtureId,
       proofIssue: 'UTV2-614',
     },
+  });
+  await upsertLegacyPlayerFixture({
+    id: participant.id,
+    displayName: participant.display_name,
+    fixtureId,
+    proofIssue: 'UTV2-614',
   });
 
   const created = await processSubmission(
@@ -90,6 +122,12 @@ test('UTV2 runtime truth proof: settlement persists explicit CLV diagnostics in 
       proofFixtureId: fixtureId,
       proofIssue: 'UTV2-618',
     },
+  });
+  await upsertLegacyPlayerFixture({
+    id: participant.id,
+    displayName: participant.display_name,
+    fixtureId,
+    proofIssue: 'UTV2-618',
   });
 
   const created = await processSubmission(
