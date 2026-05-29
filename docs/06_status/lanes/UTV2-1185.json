@@ -25,10 +25,10 @@
     "docs/06_status/proof/UTV2-1185/diff-summary.md",
     "docs/06_status/proof/UTV2-1185/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T04:15:46.249Z",
-  "heartbeat_at": "2026-05-29T04:45:24.218Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T04:47:59.084Z",
+  "closed_at": "2026-05-29T04:47:59.084Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1185-cr-67-rollback-contract-hardening.json",
   "created_by": "claude",
@@ -43,6 +43,58 @@
         "C4",
         "S1"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T04:45:59.256Z",
+      "verdict": "fail",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [
+        "G4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-05-29T04:46:08.026Z",
+      "verdict": "fail",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T04:46:14.664Z",
+      "verdict": "fail",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T04:47:12.712Z",
+      "verdict": "fail",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T04:47:19.877Z",
+      "verdict": "fail",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-29T04:47:45.582Z",
+      "verdict": "pass",
+      "merge_sha": "0b848ddaa425f5825347cc256f5cad3df495dc5f",
+      "failures": [],
       "runner": "manual"
     }
   ],
