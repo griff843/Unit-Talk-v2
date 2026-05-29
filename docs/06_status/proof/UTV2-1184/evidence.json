@@ -4,10 +4,10 @@
   "title": "CR-5 — Wire test:t1-proof into pnpm verify",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "6bffe5c00ae5fd0b9655d117eafa8e0d5e38f7c9",
+    "verified_source_sha": "75baaf742225efb12ee74b28ff2900fae79d30e4",
     "merge_sha": "set-after-merge",
     "evidence_commit_sha": "set-after-merge",
-    "current_pr_head_sha": "6bffe5c00ae5fd0b9655d117eafa8e0d5e38f7c9"
+    "current_pr_head_sha": "75baaf742225efb12ee74b28ff2900fae79d30e4"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
