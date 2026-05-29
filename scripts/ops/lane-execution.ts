@@ -1,7 +1,12 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, relativeToRoot } from './shared.js';
+import {
+  type LaneManifest,
+  assertStatusTransition,
+  ROOT,
+  relativeToRoot,
+} from './shared.js';
 
 export type LaneInstallState = 'not_required' | 'required' | 'verified';
 export type LaneExecutionMode = 'worktree' | 'main-control';
@@ -17,6 +22,11 @@ export interface LaneExecutionLocation {
 export interface LaneSetupResult {
   execution_location: LaneExecutionLocation;
   ran_install: boolean;
+}
+
+export interface LaneBlockResumeResult {
+  manifest: LaneManifest;
+  changed: boolean;
 }
 
 const PACKAGE_TOUCHING_PREFIXES = [
@@ -68,6 +78,66 @@ export function packageTouchingLaneRequiresSingleton(
   return laneRequiresIsolatedInstall(fileScope) && !installVerified;
 }
 
+export function blockLaneManifest(input: {
+  manifest: LaneManifest;
+  blockedBy: string[];
+  now: string;
+}): LaneBlockResumeResult {
+  if (input.blockedBy.length === 0) {
+    throw new Error('At least one blocker is required');
+  }
+  assertStatusTransition(input.manifest.status, 'blocked');
+  const blockedBy = [
+    ...new Set(input.blockedBy.map((entry) => entry.trim()).filter(Boolean)),
+  ];
+  if (blockedBy.length === 0) {
+    throw new Error('At least one non-empty blocker is required');
+  }
+
+  const next: LaneManifest = {
+    ...input.manifest,
+    status: 'blocked',
+    blocked_by: blockedBy,
+    heartbeat_at: input.now,
+  };
+
+  return {
+    manifest: next,
+    changed:
+      input.manifest.status !== next.status ||
+      input.manifest.heartbeat_at !== next.heartbeat_at ||
+      JSON.stringify(input.manifest.blocked_by) !==
+        JSON.stringify(next.blocked_by),
+  };
+}
+
+export function resumeLaneManifest(input: {
+  manifest: LaneManifest;
+  now: string;
+}): LaneBlockResumeResult {
+  if (input.manifest.status !== 'blocked') {
+    throw new Error(
+      `Only blocked lanes can be resumed (current status: ${input.manifest.status})`,
+    );
+  }
+  assertStatusTransition(input.manifest.status, 'in_progress');
+
+  const next: LaneManifest = {
+    ...input.manifest,
+    status: 'in_progress',
+    blocked_by: [],
+    heartbeat_at: input.now,
+  };
+
+  return {
+    manifest: next,
+    changed:
+      input.manifest.status !== next.status ||
+      input.manifest.heartbeat_at !== next.heartbeat_at ||
+      input.manifest.blocked_by.length > 0,
+  };
+}
+
 export function validateExecutionCwd(
   expectedCwd: string,
   actualCwd = process.cwd(),
@@ -86,7 +156,10 @@ export function validateLeaseCwdCoherence(input: {
 }): string[] {
   const errors: string[] = [];
   const leaseCwd = normalizeExecutionCwd(input.lease_cwd);
-  if (input.worktree_path && normalizeExecutionCwd(input.worktree_path) !== leaseCwd) {
+  if (
+    input.worktree_path &&
+    normalizeExecutionCwd(input.worktree_path) !== leaseCwd
+  ) {
     errors.push('worktree_path must match lease cwd');
   }
   if (
@@ -118,13 +191,17 @@ export function validateLaneCwd(input: {
 
   const nodeModulesPath = path.join(cwd, 'node_modules');
   if (!fs.existsSync(nodeModulesPath)) {
-    errors.push(`isolated install missing: ${relativeOrAbsolute(nodeModulesPath)}`);
+    errors.push(
+      `isolated install missing: ${relativeOrAbsolute(nodeModulesPath)}`,
+    );
     return errors;
   }
 
   const nodeModulesStat = fs.lstatSync(nodeModulesPath);
   if (nodeModulesStat.isSymbolicLink()) {
-    errors.push(`node_modules must not be a symlink or junction: ${relativeOrAbsolute(nodeModulesPath)}`);
+    errors.push(
+      `node_modules must not be a symlink or junction: ${relativeOrAbsolute(nodeModulesPath)}`,
+    );
   }
 
   const laneNodeModulesRealPath = fs.realpathSync(nodeModulesPath);
@@ -134,13 +211,17 @@ export function validateLaneCwd(input: {
     fs.realpathSync(mainNodeModulesPath) === laneNodeModulesRealPath &&
     normalizeExecutionCwd(cwd) !== normalizeExecutionCwd(ROOT)
   ) {
-    errors.push('node_modules must not resolve to the main checkout node_modules');
+    errors.push(
+      'node_modules must not resolve to the main checkout node_modules',
+    );
   }
 
   if (input.requireInstallVerified && errors.length === 0) {
     const pnpmDir = path.join(nodeModulesPath, '.pnpm');
     if (!fs.existsSync(pnpmDir)) {
-      errors.push(`isolated pnpm install is not verified: ${relativeOrAbsolute(pnpmDir)} missing`);
+      errors.push(
+        `isolated pnpm install is not verified: ${relativeOrAbsolute(pnpmDir)} missing`,
+      );
     }
   }
 
@@ -153,7 +234,10 @@ export function prepareLaneExecutionDirectory(input: {
   runner?: typeof spawnSync;
 }): LaneSetupResult {
   const runner = input.runner ?? spawnSync;
-  const executionLocation = buildLaneExecutionLocation(input.cwd, input.fileScope);
+  const executionLocation = buildLaneExecutionLocation(
+    input.cwd,
+    input.fileScope,
+  );
   const initialErrors = validateLaneCwd({
     cwd: executionLocation.cwd,
     fileScope: input.fileScope,
@@ -167,12 +251,16 @@ export function prepareLaneExecutionDirectory(input: {
   // junction fallback. Run install for any detached worktree (cwd != ROOT) that lacks node_modules,
   // even for non-package-touching scopes.
   const isDetachedWorktree =
-    normalizeExecutionCwd(executionLocation.cwd) !== normalizeExecutionCwd(ROOT);
+    normalizeExecutionCwd(executionLocation.cwd) !==
+    normalizeExecutionCwd(ROOT);
   const worktreeNeedsInstall =
     isDetachedWorktree &&
     !fs.existsSync(path.join(executionLocation.cwd, 'node_modules'));
 
-  if (!worktreeNeedsInstall && executionLocation.package_install !== 'required') {
+  if (
+    !worktreeNeedsInstall &&
+    executionLocation.package_install !== 'required'
+  ) {
     return {
       execution_location: executionLocation,
       ran_install: false,
