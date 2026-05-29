@@ -188,12 +188,79 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   return checks;
 }
 
+export function evaluateT2ProofEvidence(input: {
+  proofPaths: string[];
+  proofContents: string;
+}): CheckResult[] {
+  const checks: CheckResult[] = [];
+  const add = (id: string, status: 'pass' | 'fail', detail: string): void => {
+    checks.push({ id, status, detail });
+  };
+
+  if (
+    /diff summary/i.test(input.proofContents) ||
+    input.proofPaths.some((proofPath) => /diff-summary/i.test(path.basename(proofPath)))
+  ) {
+    add('P11', 'pass', 'proof includes a diff summary file');
+  } else {
+    add('P11', 'fail', 'proof must include a diff summary file');
+  }
+
+  if (hasCommandMention(input.proofContents, 'pnpm type-check') && hasCommandMention(input.proofContents, 'pnpm test')) {
+    add('P12', 'pass', 'verification log references pnpm type-check and pnpm test');
+  } else {
+    add('P12', 'fail', 'verification log must reference pnpm type-check and pnpm test');
+  }
+
+  if (hasCommandMention(input.proofContents, 'pnpm verify')) {
+    add('P13', 'pass', 'verification log references pnpm verify');
+  } else {
+    add('P13', 'fail', 'verification log must reference pnpm verify');
+  }
+
+  if (hasRLevelCheckMention(input.proofContents)) {
+    add('P14', 'pass', 'verification log references r-level-check');
+  } else {
+    add('P14', 'fail', 'verification log must reference scripts/ci/r-level-check.ts');
+  }
+
+  return checks;
+}
+
 function hasRuntimeProofTextEvidence(content: string): boolean {
   return content
     .split(/\r?\n/)
     .some((line) =>
       /runtime_proof|row_counts|receipts|queries/i.test(line) &&
       /[\d{[]/.test(line),
+    );
+}
+
+function hasCommandMention(content: string, command: string): boolean {
+  const escaped = command
+    .split(/\s+/)
+    .map(escapeRegExp)
+    .join('\\s+');
+  const commandPattern = new RegExp(`\\b${escaped}\\b`, 'i');
+
+  return content
+    .split(/\r?\n/)
+    .some((line) =>
+      commandPattern.test(line) &&
+      !/\bpnpm\s+verify:commands\b/i.test(line),
+    );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasRLevelCheckMention(content: string): boolean {
+  return content
+    .split(/\r?\n/)
+    .some((line) =>
+      /\bscripts\/ci\/r-level-check\.ts\b/i.test(line) ||
+      /\br-level-check(?:\.ts)?\b/i.test(line),
     );
 }
 
@@ -612,16 +679,11 @@ export async function runTruthCheck(
       addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence);
     } else if (tier === 'T2') {
       const proofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
-      if (/diff summary/i.test(proofContents) || proofFiles.some((proofPath) => /diff-summary/i.test(path.basename(proofPath)))) {
-        addCheck('P11', 'pass', 'proof includes a diff summary file');
-      } else {
-        addCheck('P11', 'fail', 'proof must include a diff summary file');
-      }
-
-      if (/pnpm type-check/i.test(proofContents) && /pnpm test/i.test(proofContents)) {
-        addCheck('P12', 'pass', 'verification log references pnpm type-check and pnpm test');
-      } else {
-        addCheck('P12', 'fail', 'verification log must reference pnpm type-check and pnpm test');
+      for (const check of evaluateT2ProofEvidence({
+        proofPaths: proofFiles.map(relativeToRoot),
+        proofContents,
+      })) {
+        addCheck(check.id, check.status === 'fail' ? 'fail' : 'pass', check.detail);
       }
     }
 

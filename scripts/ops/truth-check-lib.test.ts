@@ -5,6 +5,7 @@ import {
   checkCommitReachableFromMain,
   evaluateCloseoutTruthGate,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
   findPostMergeTouches,
   formatP0Failures,
@@ -718,6 +719,71 @@ test('closeout truth gate fails Done manifest with unmerged PR', () => {
       }),
     ),
     ['C7'],
+  );
+});
+
+function t2ProofFailureIds(input: {
+  proofPaths?: string[];
+  proofContents?: string;
+} = {}): string[] {
+  return evaluateT2ProofEvidence({
+    proofPaths: input.proofPaths ?? ['docs/06_status/proof/UTV2-1190/diff-summary.md'],
+    proofContents: input.proofContents ?? [
+      '## Diff Summary',
+      'pnpm type-check: PASS',
+      'pnpm test: PASS',
+      'pnpm verify: PASS',
+      'npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: PASS',
+    ].join('\n'),
+  })
+    .filter((check) => check.status === 'fail')
+    .map((check) => check.id);
+}
+
+test('T2 proof evidence requires diff summary, focused checks, pnpm verify, and r-level check', () => {
+  assert.deepStrictEqual(t2ProofFailureIds(), []);
+});
+
+test('T2 proof evidence fails closed when pnpm verify is absent', () => {
+  assert.deepStrictEqual(
+    t2ProofFailureIds({
+      proofContents: [
+        '## Diff Summary',
+        'pnpm type-check: PASS',
+        'pnpm test: PASS',
+        'npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: PASS',
+      ].join('\n'),
+    }),
+    ['P13'],
+  );
+});
+
+test('T2 proof evidence fails closed when r-level-check is absent', () => {
+  assert.deepStrictEqual(
+    t2ProofFailureIds({
+      proofContents: [
+        '## Diff Summary',
+        'pnpm type-check: PASS',
+        'pnpm test: PASS',
+        'pnpm verify: PASS',
+      ].join('\n'),
+    }),
+    ['P14'],
+  );
+});
+
+test('T2 proof evidence does not treat verify:commands as pnpm verify', () => {
+  assert.deepStrictEqual(
+    t2ProofFailureIds({
+      proofContents: [
+        '## Diff Summary',
+        'pnpm type-check: PASS',
+        'pnpm test: PASS',
+        'pnpm verify:commands: PASS',
+        'npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: PASS',
+      ].join('\n'),
+    }),
+    ['P13'],
   );
 });
 
