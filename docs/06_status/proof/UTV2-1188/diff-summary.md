@@ -18,3 +18,6 @@
 ## R-Level Scope
 
 `docs/05_operations/r1-r5-rules.json` was checked. The changed files do not match any R-level rule paths, so no R-level artifacts are required.
+
+## SHA Binding
+merge_sha: b0ac540cf0963a1dc11fd16dd81331a48c7d0816
