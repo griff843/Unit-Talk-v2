@@ -17,9 +17,9 @@
     "docs/06_status/proof/UTV2-1187/diff-summary.md",
     "docs/06_status/proof/UTV2-1187/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-29T05:14:46.478Z",
-  "heartbeat_at": "2026-05-29T05:14:46.478Z",
+  "heartbeat_at": "2026-05-29T06:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1187-cr-9-fix-or-recategorize-t1-proof-scoring-integrity-data.json",
