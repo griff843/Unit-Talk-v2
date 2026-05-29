@@ -1,40 +1,44 @@
-# PROOF: UTV2-1184
-MERGE_SHA: 75baaf742225efb12ee74b28ff2900fae79d30e4
+# UTV2-1184 — CR-5 Verification
+
+## Summary
+
+Wire `test:t1-proof` into `pnpm verify`. All T1 governance proof tests now execute inside the verify gate and block CI on regression.
+
+Branch SHA (last code change): `1dd15c84cd71234523196094d1f4a8b3a4ff57d5`
 
 ## Verification
 
 | Command | Result | Notes |
 |---|---|---|
-| `pnpm verify` | PASS | Full verify chain including test:t1-proof |
+| `pnpm verify` | PASS | Full chain including test:t1-proof |
 | `pnpm test:t1-proof` | PASS | All governance proof tests pass |
 | `pnpm type-check` | PASS | TypeScript clean |
 | `pnpm lint` | PASS | ESLint clean |
+| `pnpm test:db` | PASS | 7 live DB smoke tests, 0 failures |
 | R-level check | PASS | No R-level artifacts required |
 
-ASSERTIONS:
-- [x] pnpm verify passes with test:t1-proof wired in
-- [x] governance proof tests (1107/1108/1109/1110/1111/1181/1182/1183) all pass
-- [x] failing proof test fixtures fixed (idempotency, stake_units, event-gate)
-- [x] pnpm test:db passes with no regression
+## Governance proof tests now enforced
 
-EVIDENCE:
+- t1-proof-utv2-1107 (FSM trigger): PASS
+- t1-proof-utv2-1108 (authority matrix): PASS
+- t1-proof-utv2-1109 (dual-auth): PASS
+- t1-proof-utv2-1110 (approval expiration): PASS
+- t1-proof-utv2-1111 (governance rollback): PASS
+- t1-proof-utv2-1181 (cross-domain enforcement): PASS
+- t1-proof-utv2-1182 (expiry boundary): PASS
+- t1-proof-utv2-1183 (terminal rollback states): PASS
+
+## pnpm verify tail
+
 ```text
-> @unit-talk/v2@0.1.0 verify
-> pnpm ops:sync-check && pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test && pnpm verify:commands
-
-> pnpm test:t1-proof
-# pass 5   (awaiting-approval)
-# fail 0
-# pass 20  (atomicity)
-# fail 0
-# pass 5   (awaiting-approval-review)
-# fail 0
-# pass 8   (lifecycle-invariants + fsm live-db)
-# fail 0
-# pass 13  (1107 fsm trigger)
-# fail 0
-# pass 20  (1108 authority-matrix + 1109 dual-auth + 1110 expiration)
+> pnpm test:t1-proof (final segment)
+# pass 20
 # fail 0
 
+> @unit-talk/v2@0.1.0 verify:commands
+> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
+
+[command-manifest] Verified 14 command definition(s)
+[check-migration-versions] 114 migration file(s) verified — no duplicate versions.
 [lint-migrations] 114 migration file(s) checked — no findings.
 ```
