@@ -15,7 +15,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1186/diff-summary.md",
-    "docs/06_status/proof/UTV2-1186/verification.log"
+    "docs/06_status/proof/UTV2-1186/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-29T05:13:10.023Z",
