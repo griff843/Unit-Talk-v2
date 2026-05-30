@@ -46,6 +46,15 @@ function makeClosingSourceVerification(
   return { sourceType, rank, isVerified, hierarchyVersion: CLOSING_SOURCE_HIERARCHY_VERSION, providerKey };
 }
 
+/**
+ * Returns true when the closing source is a fallback (rank >= 3).
+ * Rank 1–2 are primary preferred sources; rank 3–4 are secondary fallback sources.
+ * Per INIT-4.3.3, fallback source use must emit an AuditEvent at the call site.
+ */
+export function isCLVFallbackSource(v: ClosingSourceVerification): boolean {
+  return v.rank >= 3;
+}
+
 // ── Closing-line internal shape ────────────────────────────────────────────────
 
 /** Normalized closing-line shape accepted by CLV computation. */

@@ -33,6 +33,7 @@ import { ensurePickLifecycleState, transitionPickLifecycle } from './lifecycle-s
 import { ApiError } from './errors.js';
 import {
   computeCLVOutcome,
+  isCLVFallbackSource,
   type CLVComputationOutcome,
   type CLVPreResolvedContext,
 } from './clv-service.js';
@@ -153,6 +154,8 @@ export async function recordGradedSettlement(
   const clvOutcome = await computeCLVOutcome(pick, repositories, {
     ...(clvContext ? { preResolvedContext: clvContext } : {}),
   });
+  // Non-blocking: audit failure must never break settlement (observability-only path).
+  emitClvFallbackAuditIfNeeded(clvOutcome, pick, repositories.audit).catch(() => undefined);
   const clv = clvOutcome.result;
   const payload: Record<string, unknown> = {
     gradingContext,
@@ -915,3 +918,32 @@ function buildStakeIntegrityPayload(stakeUnits: number | null | undefined): Reco
   };
 }
 
+
+// INIT-4.3.3 — Fallback Audit Events
+// Emits a structured audit event when CLV resolves from a secondary fallback source (rank >= 3).
+// Fallback source use must be auditable as a first-class event per Blueprint Layer 3.12.
+export async function emitClvFallbackAuditIfNeeded(
+  outcome: CLVComputationOutcome,
+  pick: PickRecord,
+  audit: AuditLogRepository,
+): Promise<void> {
+  if (!outcome.closingSourceVerification) return;
+  if (!isCLVFallbackSource(outcome.closingSourceVerification)) return;
+
+  await audit.record({
+    entityType: 'clv_fallback_event',
+    entityId: pick.id,
+    entityRef: pick.id,
+    action: 'clv_fallback_source_used',
+    actor: 'clv-service',
+    payload: {
+      sourceType: outcome.closingSourceVerification.sourceType,
+      rank: outcome.closingSourceVerification.rank,
+      isVerified: outcome.closingSourceVerification.isVerified,
+      hierarchyVersion: outcome.closingSourceVerification.hierarchyVersion,
+      providerKey: outcome.closingSourceVerification.providerKey,
+      pickId: pick.id,
+      market: pick.market,
+    },
+  });
+}
