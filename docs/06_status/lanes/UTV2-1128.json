@@ -16,10 +16,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1128/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T04:23:05.139Z",
-  "heartbeat_at": "2026-05-30T04:23:05.139Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T04:43:24.601Z",
+  "closed_at": "2026-05-30T04:43:24.601Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1128-init-351-central-portfolioexposure-store.json",
   "created_by": "codex-cli",
