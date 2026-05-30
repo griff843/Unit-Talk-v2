@@ -22,12 +22,22 @@
   ],
   "status": "merged",
   "started_at": "2026-05-29T20:45:12.637Z",
-  "heartbeat_at": "2026-05-29T20:45:12.637Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-29T22:15:49.882Z",
+  "closed_at": "2026-05-29T22:15:31.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1124-init-341-immutable-decisionrecord.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-29T22:15:49.882Z",
+      "verdict": "pass",
+      "merge_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/922"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
