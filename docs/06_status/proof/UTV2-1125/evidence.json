@@ -4,8 +4,8 @@
   "sha_binding": {
     "verified_source_sha": "9d3f521ce08e8006bbd99267534c24f24cda8eeb",
     "verified_source_note": "Implementation commit: edge-price freshness enforcement in stale-data, edge-validator, decision-record evidence, and edge-validation tests",
-    "merge_sha": null,
-    "evidence_commit_sha": null,
+    "merge_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
+    "evidence_commit_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
     "current_pr_head_sha": "9d3f521ce08e8006bbd99267534c24f24cda8eeb"
   },
   "verifier": {

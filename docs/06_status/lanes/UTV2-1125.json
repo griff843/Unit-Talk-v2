@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1125-init-342-edge-price-freshness-enforcement",
   "branch": "codex/utv2-1125-init-342-edge-price-freshness-enforcement",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/925",
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/edge-validation/edge-validation.test.ts",
@@ -22,14 +22,27 @@
     "docs/06_status/proof/UTV2-1125/evidence.json",
     "docs/06_status/proof/UTV2-1125/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
+  "merge_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
   "started_at": "2026-05-30T02:58:48.707Z",
-  "heartbeat_at": "2026-05-30T02:58:48.707Z",
+  "heartbeat_at": "2026-05-30T03:32:28.327Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1125-init-342-edge-price-freshness-enforcement.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-30T03:32:28.327Z",
+      "verdict": "fail",
+      "merge_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
+      "failures": [
+        "L5",
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

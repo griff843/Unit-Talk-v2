@@ -6,7 +6,7 @@ Tier: T1
 Branch: codex/utv2-1125-init-342-edge-price-freshness-enforcement
 Head SHA at proof generation: 1603f796824a73bf944bf9a5d3fde947dd1be672
 Implementation SHA: 9d3f521ce08e8006bbd99267534c24f24cda8eeb
-Merge SHA: N/A pre-merge
+Merge SHA: 992a7c8ca1335029660b439872be1ef4dd65cc1f
 
 ## Summary
 
@@ -36,4 +36,4 @@ Runtime proof note: this is a domain-only enforcement lane with no schema or DB-
 
 Proof generation head SHA: 1603f796824a73bf944bf9a5d3fde947dd1be672
 Implementation SHA: 9d3f521ce08e8006bbd99267534c24f24cda8eeb
-Merge SHA: N/A pre-merge
+Merge SHA: 992a7c8ca1335029660b439872be1ef4dd65cc1f
