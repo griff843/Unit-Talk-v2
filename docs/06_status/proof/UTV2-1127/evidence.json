@@ -4,8 +4,8 @@
   "sha_binding": {
     "verified_source_sha": "d76ed93ebba5741cbaad4606b16a896351a7b2f5",
     "verified_source_note": "Pre-PR lane verification for forcePromote exception runtime. Final PR head SHA is established by the implementation commit containing this evidence bundle.",
-    "merge_sha": null,
-    "evidence_commit_sha": null,
+    "merge_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
+    "evidence_commit_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
     "current_pr_head_sha": null
   },
   "verifier": {

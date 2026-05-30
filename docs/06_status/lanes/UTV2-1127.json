@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1127-init-344-forcepromote-to-exception-runtime",
   "branch": "codex/utv2-1127-init-344-forcepromote-to-exception-runtime",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/927",
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/lifecycle-validator.ts",
@@ -19,7 +19,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1127/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-30T03:46:44.428Z",
   "heartbeat_at": "2026-05-30T03:46:44.428Z",
   "closed_at": null,
@@ -34,5 +34,6 @@
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
-  }
+  },
+  "merge_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4"
 }
