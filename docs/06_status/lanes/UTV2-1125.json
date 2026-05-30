@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1125",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1125-init-342-edge-price-freshness-enforcement",
+  "branch": "codex/utv2-1125-init-342-edge-price-freshness-enforcement",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "packages/domain/src/edge-validation/edge-validation.test.ts",
+    "packages/domain/src/edge-validation/edge-validator.ts",
+    "packages/domain/src/edge-validation/index.ts",
+    "packages/domain/src/models/decision-record.ts",
+    "packages/domain/src/models/index.ts",
+    "packages/domain/src/stale-data.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1125/evidence.json",
+    "docs/06_status/proof/UTV2-1125/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-30T02:58:48.707Z",
+  "heartbeat_at": "2026-05-30T02:58:48.707Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1125-init-342-edge-price-freshness-enforcement.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1125-init-342-edge-price-freshness-enforcement",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

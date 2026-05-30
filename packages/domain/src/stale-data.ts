@@ -1,5 +1,42 @@
 export type FreshnessProximityTier = 'pre' | 'standard' | 'game-day' | 'pre-start' | 'unknown-event';
 
+export type EdgePriceFreshnessFailReason =
+  | 'missing_price_snapshot_at'
+  | 'missing_price_provider_key'
+  | 'stale_price_snapshot';
+
+export interface EdgePriceFreshnessInput {
+  priceSnapshotAt: string | null | undefined;
+  priceProviderKey: string | null | undefined;
+  eventStartsAt?: string | null | undefined;
+  sportKey?: string | null | undefined;
+  marketKey?: string | null | undefined;
+  nowMs?: number | undefined;
+}
+
+export type EdgePriceFreshnessResult =
+  | {
+      ok: true;
+      priceSnapshotAt: string;
+      priceProviderKey: string;
+      snapshotAgeMs: number;
+      eventStartsAt: string | null;
+      minutesToEvent: number | null;
+      proximityTier: FreshnessProximityTier;
+      freshnessThresholdMs: number;
+    }
+  | {
+      ok: false;
+      reason: EdgePriceFreshnessFailReason;
+      priceSnapshotAt: string | null;
+      priceProviderKey: string | null;
+      snapshotAgeMs: number | null;
+      eventStartsAt: string | null;
+      minutesToEvent: number | null;
+      proximityTier: FreshnessProximityTier;
+      freshnessThresholdMs: number;
+    };
+
 export const STALE_DATA_FRESHNESS_CONTRACT = {
   proximityTiers: {
     pre: { thresholdMs: 6 * 60 * 60 * 1000 },
@@ -43,6 +80,49 @@ export function evaluateProviderDataFreshness(input: {
   };
 }
 
+export function evaluateEdgePriceFreshness(input: EdgePriceFreshnessInput): EdgePriceFreshnessResult {
+  const freshness = evaluateProviderDataFreshness({
+    snapshotAt: input.priceSnapshotAt,
+    eventStartsAt: input.eventStartsAt,
+    sportKey: input.sportKey,
+    marketKey: input.marketKey,
+    nowMs: input.nowMs,
+  });
+  const priceSnapshotAt = normalizeTime(input.priceSnapshotAt);
+  const priceProviderKey = normalizeProvider(input.priceProviderKey);
+
+  const base = {
+    priceSnapshotAt,
+    priceProviderKey,
+    snapshotAgeMs: freshness.snapshotAgeMs,
+    eventStartsAt: freshness.eventStartsAt,
+    minutesToEvent: freshness.minutesToEvent,
+    proximityTier: freshness.proximityTier,
+    freshnessThresholdMs: freshness.freshnessThresholdMs,
+  };
+
+  if (priceSnapshotAt === null) {
+    return { ok: false, reason: 'missing_price_snapshot_at', ...base };
+  }
+  if (priceProviderKey === null) {
+    return { ok: false, reason: 'missing_price_provider_key', ...base };
+  }
+  if (freshness.staleAtScanTime || freshness.snapshotAgeMs === null) {
+    return { ok: false, reason: 'stale_price_snapshot', ...base };
+  }
+
+  return {
+    ok: true,
+    priceSnapshotAt,
+    priceProviderKey,
+    snapshotAgeMs: freshness.snapshotAgeMs,
+    eventStartsAt: freshness.eventStartsAt,
+    minutesToEvent: freshness.minutesToEvent,
+    proximityTier: freshness.proximityTier,
+    freshnessThresholdMs: freshness.freshnessThresholdMs,
+  };
+}
+
 function resolveTier(minutesToEvent: number | null): FreshnessProximityTier {
   if (minutesToEvent === null) return 'unknown-event';
   if (minutesToEvent < 60) return 'pre-start';
@@ -80,4 +160,14 @@ function parseTime(value: string | null | undefined): number | null {
   if (!value) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeTime(value: string | null | undefined): string | null {
+  const parsed = parseTime(value);
+  return parsed === null ? null : new Date(parsed).toISOString();
+}
+
+function normalizeProvider(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
 }
