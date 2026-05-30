@@ -1,8 +1,10 @@
 ---
+merge_sha: 16d43a90303570177b298994e4d2b25d8a8c17ab
 issue: UTV2-1135
 title: INIT-4.2.1 — updatePayload Surface Removal
 tier: T2
 ---
+merge_sha: 16d43a90303570177b298994e4d2b25d8a8c17ab
 
 ## Verification
 
