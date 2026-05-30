@@ -1,8 +1,10 @@
 ---
+merge_sha: ff3608d1cd218d8f594a202a05800fb32d3eca8c
 issue: UTV2-1134
 title: INIT-4.1.3 — Exception-Gated Dead-Letter Recovery
 tier: T2
 ---
+merge_sha: ff3608d1cd218d8f594a202a05800fb32d3eca8c
 
 ## Verification
 
