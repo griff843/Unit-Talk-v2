@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/migration.yml",
+    "apps/api/package.json",
     "apps/api/src/t1-proof-execution-intent.test.ts",
     "db/migrations-rollback/20260530001_utv2_1132_execution_intents.down.sql",
     "docs/06_status/proof/UTV2-1132/db-smoke.log",
@@ -19,6 +20,7 @@
     "docs/06_status/proof/UTV2-1132/evidence.json",
     "docs/06_status/proof/UTV2-1132/sql-review.md",
     "docs/06_status/proof/UTV2-1132/verification.md",
+    "package.json",
     "packages/db/src/repositories.ts",
     "packages/db/src/runtime-repositories.ts",
     "packages/db/src/types.ts",
