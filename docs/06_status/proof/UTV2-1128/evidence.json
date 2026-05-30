@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1128",
+  "sha_binding": {
+    "verified_source_sha": "46e63f5f8f676facfbd03f37d18bce7ffb970b92",
+    "verified_source_note": "Implementation commit: PortfolioExposureStore append-only ledger with deterministic reconstruction and adversarial tests",
+    "merge_sha": "0d5335e78ec0d7c27dcde6b93246fae0b12ac339",
+    "evidence_commit_sha": "0d5335e78ec0d7c27dcde6b93246fae0b12ac339",
+    "current_pr_head_sha": "46e63f5f8f676facfbd03f37d18bce7ffb970b92"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "ops_sync_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "verify_commands": "PASS"
+      },
+      "tail": [
+        "[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json",
+        "[check-migration-versions] 114 migration file(s) verified — no duplicate versions.",
+        "[lint-migrations] 114 migration file(s) checked — no findings."
+      ]
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "exposure_store_tests": {
+      "command": "npx tsx --test packages/domain/src/portfolio/exposure-store.test.ts",
+      "status": "PASS",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "cases": [
+        "empty store reconstructs to valid zero-exposure snapshot",
+        "opened pick appears in snapshot",
+        "closed pick is removed from snapshot",
+        "voided pick is removed from snapshot",
+        "multiple open picks accumulate total stake weight",
+        "reconstruction is deterministic regardless of append order",
+        "open picks are sorted by pick_id for replay stability",
+        "closing a never-opened pick fails closed",
+        "re-opening a closed pick fails closed",
+        "voiding a never-opened pick fails closed",
+        "append rejects event with blank pick_id",
+        "append rejects event with stake_weight out of range",
+        "append rejects event with invalid recorded_at_ms",
+        "stale open pick (no close event) remains in exposure — no phantom removal",
+        "events array is immutable after append"
+      ]
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    }
+  },
+  "runtime_proof": {
+    "note": "Domain-only pure entity with no DB writes. Live Supabase smoke required for T1.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed. No schema or DB-write paths modified by this lane."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists submission/settlement",
+      "UTV2-920 invalid atomic enqueue rolls back status and lifecycle writes",
+      "invalid atomic delivery rolls back outbox, receipt, audit, and lifecycle writes",
+      "invalid atomic settlement rolls back settlement and lifecycle writes",
+      "UTV2-883 participant upsert does not create duplicate rows",
+      "UTV2-996 correction path avoids duplicate base settlement rows",
+      "settlement correction chain remains additive"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific DB rows created or mutated outside shared smoke fixtures.",
+        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "append_only_semantics": "PASS",
+    "replay_safe_reconstruction": "PASS",
+    "fail_closed_ambiguous_states": "PASS",
+    "stale_open_pick_retention": "PASS",
+    "immutable_event_log": "PASS",
+    "adversarial_rejection_tests": "PASS"
+  },
+  "verdict": "PASS"
+}
