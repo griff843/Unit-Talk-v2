@@ -17,10 +17,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1129/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T04:44:16.071Z",
-  "heartbeat_at": "2026-05-30T04:44:16.071Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T04:59:34.413Z",
+  "closed_at": "2026-05-30T04:59:34.413Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1129-init-352-serializable-exposure-consistency.json",
   "created_by": "claude",
