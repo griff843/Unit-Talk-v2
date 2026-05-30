@@ -20,12 +20,12 @@
     "docs/06_status/proof/UTV2-1138/diff-summary.md",
     "docs/06_status/proof/UTV2-1138/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T16:56:31.211Z",
-  "heartbeat_at": "2026-05-30T17:43:57.245Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T17:44:34.409Z",
+  "closed_at": "2026-05-30T17:44:34.409Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1138-init-431-verified-closing-source-hierarchy.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -36,6 +36,19 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/934"
+    },
+    {
+      "checked_at": "2026-05-30T17:44:30.313Z",
+      "verdict": "pass",
+      "merge_sha": "0f56d512d5cced372b4e4ef25b35922490e32364",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/934",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
