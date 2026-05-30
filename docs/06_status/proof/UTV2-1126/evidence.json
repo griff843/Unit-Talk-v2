@@ -11,7 +11,7 @@
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
-  "merge_sha": null,
+  "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
   "evidence": {
     "type_check": {
       "command": "pnpm type-check",
