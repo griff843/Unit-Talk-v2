@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1129",
+  "sha_binding": {
+    "verified_source_sha": "81982a75",
+    "verified_source_note": "Implementation commit: verifySnapshotConsistency and verifyEventLogConsistency with 16 adversarial tests",
+    "merge_sha": "2c8bfd09ff1816d611b166bcc70d3a3c5f97f00a",
+    "evidence_commit_sha": "2c8bfd09ff1816d611b166bcc70d3a3c5f97f00a",
+    "current_pr_head_sha": "81982a75"
+  },
+  "verifier": {"identity": "claude-sonnet-4-6", "role": "implementation-lane"},
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {"status": "PASS", "exit_code": 0},
+    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "consistency_tests": {
+      "command": "npx tsx --test packages/domain/src/portfolio/exposure-consistency.test.ts",
+      "status": "PASS", "tests": 16, "pass": 16, "fail": 0
+    },
+    "r_level": {"command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD", "status": "PASS", "rules_matched": "none"}
+  },
+  "runtime_proof": {
+    "note": "Pure domain entity. Live Supabase smoke required for T1.",
+    "command": "pnpm test:db", "status": "PASS", "tests": 7, "pass": 7, "fail": 0,
+    "receipts": [{"supabase_project": "zfzdnfwdarxucxtaojxm", "note": "Live Supabase smoke passed. No DB writes by this lane."}],
+    "queries": [
+      "database repository bundle persists submission/settlement",
+      "UTV2-920 invalid atomic enqueue rolls back status and lifecycle writes",
+      "invalid atomic delivery rolls back outbox, receipt, audit, and lifecycle writes",
+      "invalid atomic settlement rolls back settlement and lifecycle writes",
+      "UTV2-883 participant upsert does not create duplicate rows",
+      "UTV2-996 correction path avoids duplicate base settlement rows",
+      "settlement correction chain remains additive"
+    ],
+    "row_counts": [{"note": "No lane-specific DB rows mutated.", "tables_monitored": ["picks","pick_lifecycle","audit_log","settlement_records","participants"]}]
+  },
+  "acceptance_criteria": {
+    "snapshot_consistency_validation": "PASS",
+    "event_log_consistency_validation": "PASS",
+    "fail_closed_on_violations": "PASS",
+    "adversarial_rule_coverage": "PASS",
+    "deterministic_consistency_checks": "PASS"
+  },
+  "verdict": "PASS"
+}

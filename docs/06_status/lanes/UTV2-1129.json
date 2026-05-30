@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1129-init-352-serializable-exposure-consistency",
   "branch": "claude/utv2-1129-init-352-serializable-exposure-consistency",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "2c8bfd09ff1816d611b166bcc70d3a3c5f97f00a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/929",
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/portfolio/exposure-store.ts",
@@ -17,7 +17,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1129/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-30T04:44:16.071Z",
   "heartbeat_at": "2026-05-30T04:44:16.071Z",
   "closed_at": null,
@@ -32,5 +32,6 @@
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
-  }
+  },
+  "merge_sha": "2c8bfd09ff1816d611b166bcc70d3a3c5f97f00a"
 }
