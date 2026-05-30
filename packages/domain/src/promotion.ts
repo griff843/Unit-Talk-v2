@@ -10,8 +10,13 @@ import {
   type PromotionScoreInputs,
   type PromotionScoreWeights,
 } from '@unit-talk/contracts';
+import { createHash } from 'node:crypto';
 import { applyPromotionModifiers, type ScoreProvenance } from './scoring/promotion-weight-profiles.js';
 import { americanToDecimal } from './risk/kelly-sizer.js';
+import {
+  createForcePromotionExceptionDecisionRecord,
+  type DecisionRecord,
+} from './models/decision-record.js';
 
 export { bestBetsPromotionPolicy, exclusiveInsightsPromotionPolicy, traderInsightsPromotionPolicy } from '@unit-talk/contracts';
 export type { ScoreProvenance, MarketFamily, PromotionWeightModifiers } from './scoring/promotion-weight-profiles.js';
@@ -280,6 +285,7 @@ function computeDispersionScore(metadata: Record<string, unknown>): number {
  */
 export interface BoardPromotionDecisionWithProvenance extends BoardPromotionDecision {
   scoreProvenance: ScoreProvenance;
+  exceptionRecord?: DecisionRecord;
 }
 
 export function evaluatePromotionEligibility(
@@ -365,7 +371,12 @@ export function evaluatePromotionEligibility(
     );
   }
 
-  if (suppressionReasons.length > 0 && !input.override?.forcePromote) {
+  const forcePromotionError = validateForcePromotionOverride(input);
+  if (forcePromotionError) {
+    suppressionReasons.push(forcePromotionError);
+  }
+
+  if (suppressionReasons.length > 0 && (!input.override?.forcePromote || forcePromotionError)) {
     return buildDecision({
       input,
       decidedAt,
@@ -384,6 +395,22 @@ export function evaluatePromotionEligibility(
 
   if (input.override?.forcePromote) {
     reasons.push(input.override.reason ?? `operator force-promoted to ${policy.target}`);
+    const exceptionRecord = createForcePromotionExceptionDecisionRecord({
+      record_id: buildForcePromotionExceptionRecordId(input, policy, decidedAt),
+      entity_id: resolveForcePromotionEntityId(input, policy),
+      decided_at_ms: Date.parse(decidedAt),
+      inputs_hash: hashForcePromotionExceptionInputs(input, policy, breakdown, suppressionReasons),
+      target: policy.target,
+      requested_by: decidedBy,
+      authority: resolveDecisionAuthority(decidedBy),
+      policy_version: version,
+      evaluator_version: 'promotion-exception-runtime-v1',
+      override_reason: input.override.reason?.trim() ?? `operator force-promoted to ${policy.target}`,
+      score: breakdown.total,
+      minimum_score: policy.minimumScore,
+      suppression_reasons: suppressionReasons,
+      gate_reasons: reasons,
+    });
     return buildDecision({
       input,
       decidedAt,
@@ -395,6 +422,7 @@ export function evaluatePromotionEligibility(
       policyWeights: policy.weights,
       status: 'qualified',
       qualified: true,
+      exceptionRecord,
     });
   }
 
@@ -539,6 +567,7 @@ function buildDecision(input: {
   policyWeights: PromotionScoreWeights;
   status: BoardPromotionDecision['status'];
   qualified: boolean;
+  exceptionRecord?: DecisionRecord;
 }): BoardPromotionDecisionWithProvenance {
   // Extract provenance from the extended breakdown but strip it from the
   // contracts-typed breakdown field to keep the breakdown shape conformant.
@@ -559,7 +588,107 @@ function buildDecision(input: {
     decidedAt: input.decidedAt,
     decidedBy: input.decidedBy,
     scoreProvenance: provenance,
+    ...(input.exceptionRecord ? { exceptionRecord: input.exceptionRecord } : {}),
   };
+}
+
+function validateForcePromotionOverride(input: BoardPromotionEvaluationInput): string | null {
+  if (!input.override?.forcePromote) {
+    return null;
+  }
+  if (input.override.suppress) {
+    return 'force promotion exception is invalid: forcePromote and suppress cannot both be true';
+  }
+  if (!input.override.reason?.trim()) {
+    return 'force promotion exception is invalid: override reason is required';
+  }
+  return null;
+}
+
+function resolveForcePromotionEntityId(
+  input: BoardPromotionEvaluationInput,
+  policy: PromotionPolicy,
+): string {
+  return input.pick.id?.trim() || `promotion:${policy.target}`;
+}
+
+function resolveDecisionAuthority(decidedBy: string): 'system' | 'pm' | 'operator' {
+  const normalized = decidedBy.trim().toLowerCase();
+  if (normalized.startsWith('pm') || normalized.includes('product-manager')) {
+    return 'pm';
+  }
+  if (normalized === 'system' || normalized === 'replay') {
+    return 'system';
+  }
+  return 'operator';
+}
+
+function buildForcePromotionExceptionRecordId(
+  input: BoardPromotionEvaluationInput,
+  policy: PromotionPolicy,
+  decidedAt: string,
+): string {
+  const digest = createHash('sha256')
+    .update(stableSerialize({
+      pickId: input.pick.id,
+      entityId: resolveForcePromotionEntityId(input, policy),
+      target: policy.target,
+      decidedAt,
+      reason: input.override?.reason ?? '',
+    }))
+    .digest('hex')
+    .slice(0, 16);
+  return `force-promotion:${policy.target}:${digest}`;
+}
+
+function hashForcePromotionExceptionInputs(
+  input: BoardPromotionEvaluationInput,
+  policy: PromotionPolicy,
+  breakdown: PromotionScoreBreakdown,
+  suppressionReasons: readonly string[],
+): string {
+  return createHash('sha256')
+    .update(stableSerialize({
+      target: policy.target,
+      policyVersion: policy.version,
+      entityId: resolveForcePromotionEntityId(input, policy),
+      scoreInputs: input.scoreInputs,
+      gateInputs: {
+        approvalStatus: input.approvalStatus,
+        hasRequiredFields: input.hasRequiredFields,
+        isStale: input.isStale,
+        withinPostingWindow: input.withinPostingWindow,
+        marketStillValid: input.marketStillValid,
+        riskBlocked: input.riskBlocked,
+        confidenceFloor: input.confidenceFloor ?? null,
+        pickConfidence: input.pick.confidence ?? null,
+      },
+      boardState: input.boardState,
+      boardCaps: input.boardCaps,
+      override: input.override,
+      score: breakdown.total,
+      minimumScore: policy.minimumScore,
+      suppressionReasons,
+    }))
+    .digest('hex');
+}
+
+function stableSerialize(value: unknown): string {
+  return JSON.stringify(sortForStableSerialization(value));
+}
+
+function sortForStableSerialization(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortForStableSerialization);
+  }
+  if (!isRecord(value)) {
+    return value;
+  }
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(value).sort()) {
+    sorted[key] = sortForStableSerialization(value[key]);
+  }
+  return sorted;
 }
 
 /**

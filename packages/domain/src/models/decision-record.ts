@@ -48,8 +48,21 @@ export interface EdgePriceFreshnessDecisionEvidence {
   readonly freshness_result: 'fresh' | 'stale' | 'missing';
 }
 
+export interface ForcePromotionExceptionDecisionEvidence {
+  readonly exception_runtime_version: string;
+  readonly force_promote: true;
+  readonly target: string;
+  readonly requested_by: string;
+  readonly override_reason: string;
+  readonly score: number;
+  readonly minimum_score: number;
+  readonly suppression_reasons: readonly string[];
+  readonly gate_reasons: readonly string[];
+}
+
 export interface DecisionEvidence {
   readonly edge_price_freshness?: EdgePriceFreshnessDecisionEvidence;
+  readonly force_promotion_exception?: ForcePromotionExceptionDecisionEvidence;
 }
 
 /**
@@ -102,6 +115,26 @@ export interface DecisionRecordInput {
   readonly is_override?: boolean;
 }
 
+export interface ForcePromotionExceptionDecisionRecordInput {
+  readonly record_id: string;
+  readonly entity_id: string;
+  readonly decided_at_ms: number;
+  readonly inputs_hash: string;
+  readonly preceding_record_id?: string | null;
+  readonly target: string;
+  readonly requested_by: string;
+  readonly authority: 'system' | 'pm' | 'operator';
+  readonly policy_version: string;
+  readonly evaluator_version: string;
+  readonly override_reason: string;
+  readonly score: number;
+  readonly minimum_score: number;
+  readonly suppression_reasons: readonly string[];
+  readonly gate_reasons: readonly string[];
+}
+
+export const FORCE_PROMOTION_EXCEPTION_RUNTIME_VERSION = 'force-promotion-exception-runtime-v1';
+
 // ── Construction ────────────────────────────────────────────────────────────────
 
 /**
@@ -142,6 +175,55 @@ export function createDecisionRecord(input: DecisionRecordInput): DecisionRecord
     return Object.freeze({ ...record, evidence });
   }
   return Object.freeze(record);
+}
+
+export function createForcePromotionExceptionDecisionRecord(
+  input: ForcePromotionExceptionDecisionRecordInput,
+): DecisionRecord {
+  if (!input.override_reason.trim()) {
+    throw new Error('DecisionRecord: force promotion exception requires override_reason');
+  }
+  if (!input.requested_by.trim()) {
+    throw new Error('DecisionRecord: force promotion exception requires requested_by');
+  }
+  if (!input.target.trim()) {
+    throw new Error('DecisionRecord: force promotion exception requires target');
+  }
+  if (!Number.isFinite(input.score) || !Number.isFinite(input.minimum_score)) {
+    throw new Error('DecisionRecord: force promotion exception score fields must be finite');
+  }
+
+  return createDecisionRecord({
+    record_id: input.record_id,
+    decision_type: 'force_promote',
+    entity_id: input.entity_id,
+    entity_type: 'promotion',
+    decided_at_ms: input.decided_at_ms,
+    outcome: 'approved',
+    reason: input.override_reason,
+    inputs_hash: input.inputs_hash,
+    provenance: {
+      authority: input.authority,
+      policy_version: input.policy_version,
+      evaluator_version: input.evaluator_version,
+    },
+    evidence: {
+      force_promotion_exception: {
+        exception_runtime_version: FORCE_PROMOTION_EXCEPTION_RUNTIME_VERSION,
+        force_promote: true,
+        target: input.target,
+        requested_by: input.requested_by,
+        override_reason: input.override_reason,
+        score: input.score,
+        minimum_score: input.minimum_score,
+        suppression_reasons: [...input.suppression_reasons],
+        gate_reasons: [...input.gate_reasons],
+      },
+    },
+    preceding_record_id: input.preceding_record_id ?? null,
+    is_force: true,
+    is_override: true,
+  });
 }
 
 // ── Chain Operations ────────────────────────────────────────────────────────────
@@ -284,10 +366,35 @@ export function verifyDecisionIntegrity(record: DecisionRecord): string[] {
     }
   }
   if (record.is_force && record.provenance.authority === 'system') {
-    v.push('force decision must have authority pm or operator, not system');
+    if (!record.evidence?.force_promotion_exception) {
+      v.push('force decision must have authority pm or operator, or exception runtime evidence');
+    }
   }
   if (record.is_override && record.provenance.authority === 'system') {
-    v.push('override decision must have authority pm or operator, not system');
+    if (!record.evidence?.force_promotion_exception) {
+      v.push('override decision must have authority pm or operator, or exception runtime evidence');
+    }
+  }
+  const forcePromotion = record.evidence?.force_promotion_exception;
+  if (forcePromotion && record.decision_type === 'force_promote') {
+    if (!record.is_force) v.push('force_promote decision_type requires is_force=true');
+    if (!record.is_override) v.push('force_promote decision_type requires is_override=true');
+    if (record.outcome !== 'approved') v.push('force_promote decision_type requires approved outcome');
+  }
+  if (forcePromotion) {
+    if (forcePromotion.exception_runtime_version !== FORCE_PROMOTION_EXCEPTION_RUNTIME_VERSION) {
+      v.push('force_promotion_exception.exception_runtime_version is unsupported');
+    }
+    if (forcePromotion.force_promote !== true) {
+      v.push('force_promotion_exception.force_promote must be true');
+    }
+    if (!forcePromotion.target) v.push('force_promotion_exception.target is empty');
+    if (!forcePromotion.requested_by) v.push('force_promotion_exception.requested_by is empty');
+    if (!forcePromotion.override_reason) v.push('force_promotion_exception.override_reason is empty');
+    if (!Number.isFinite(forcePromotion.score)) v.push('force_promotion_exception.score must be finite');
+    if (!Number.isFinite(forcePromotion.minimum_score)) {
+      v.push('force_promotion_exception.minimum_score must be finite');
+    }
   }
   return v;
 }
@@ -307,12 +414,24 @@ export function verifyDecisionChainIntegrity(chain: DecisionChain): string[] {
 function freezeDecisionEvidence(evidence: DecisionEvidence | undefined): DecisionEvidence | undefined {
   if (!evidence) return undefined;
   const freshness = evidence.edge_price_freshness;
-  if (freshness) {
-    return Object.freeze({
-      edge_price_freshness: Object.freeze({ ...freshness }),
-    });
-  }
-  return Object.freeze({});
+  const forcePromotion = evidence.force_promotion_exception;
+  const frozen: DecisionEvidence = Object.freeze({
+    ...(freshness
+      ? {
+          edge_price_freshness: Object.freeze({ ...freshness }),
+        }
+      : {}),
+    ...(forcePromotion
+      ? {
+          force_promotion_exception: Object.freeze({
+            ...forcePromotion,
+            suppression_reasons: Object.freeze([...forcePromotion.suppression_reasons]),
+            gate_reasons: Object.freeze([...forcePromotion.gate_reasons]),
+          }),
+        }
+      : {}),
+  });
+  return frozen;
 }
 
 // ── Query Helpers ───────────────────────────────────────────────────────────────
