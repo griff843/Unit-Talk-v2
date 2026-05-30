@@ -1326,20 +1326,6 @@ export class InMemorySettlementRepository implements SettlementRepository {
       .slice(0, limit);
   }
 
-  async updatePayload(
-    settlementId: string,
-    payload: Record<string, unknown>,
-  ): Promise<SettlementRecord> {
-    const existing = this.settlements.find(
-      (record) => record.id === settlementId,
-    );
-    if (!existing) {
-      throw new Error(`Settlement record not found: ${settlementId}`);
-    }
-
-    existing.payload = toJsonObject(payload);
-    return existing;
-  }
 }
 
 export class InMemoryProviderOfferRepository implements ProviderOfferRepository {
@@ -4367,27 +4353,6 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     return data ?? [];
   }
 
-  async updatePayload(
-    settlementId: string,
-    payload: Record<string, unknown>,
-  ): Promise<SettlementRecord> {
-    const { data, error } = await this.client
-      .from('settlement_records')
-      .update({
-        payload: toJsonObject(payload),
-      })
-      .eq('id', settlementId)
-      .select()
-      .single();
-
-    if (error || !data) {
-      throw new Error(
-        `Failed to update settlement payload: ${error?.message ?? 'unknown error'}`,
-      );
-    }
-
-    return data;
-  }
 }
 
 export class DatabaseGradeResultRepository implements GradeResultRepository {

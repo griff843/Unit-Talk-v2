@@ -509,10 +509,6 @@ export interface SettlePickAtomicResult {
 export interface SettlementRepository {
   record(input: SettlementCreateInput): Promise<SettlementRecord>;
   settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult>;
-  updatePayload(
-    settlementId: string,
-    payload: Record<string, unknown>,
-  ): Promise<SettlementRecord>;
   findLatestForPick(pickId: string): Promise<SettlementRecord | null>;
   listByPick(pickId: string): Promise<SettlementRecord[]>;
   listRecent(limit?: number | undefined): Promise<SettlementRecord[]>;
