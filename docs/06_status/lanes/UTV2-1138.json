@@ -11,8 +11,10 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "apps/api/src/clv-service.ts",
     "apps/api/src/clv-service.test.ts",
-    "apps/api/src/clv-service.ts"
+    "docs/06_status/proof/UTV2-1138/diff-summary.md",
+    "docs/06_status/proof/UTV2-1138/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1138/diff-summary.md",

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
-import { computeAndAttachCLV, computeCLVOutcome } from './clv-service.js';
+import {
+  computeAndAttachCLV,
+  computeCLVOutcome,
+  CLOSING_SOURCE_HIERARCHY_VERSION,
+} from './clv-service.js';
 
 test('ProviderOfferRepository.findClosingLine returns latest offer before cutoff for player props', async () => {
   const repositories = createInMemoryRepositoryBundle();
@@ -1775,4 +1779,268 @@ test('computeCLVOutcome returns null when marketUniverseId references unknown ro
   );
 
   assert.equal(outcome.result, null);
+});
+
+// ── INIT-4.3.1: Verified Closing-Source Hierarchy ────────────────────────────
+
+const BASE_PICK = {
+  id: 'pick-hierarchy-test',
+  submission_id: 'sub-hierarchy-test',
+  participant_id: null,
+  player_id: null,
+  capper_id: null,
+  market_type_id: null,
+  sport_id: 'NBA',
+  market: 'player_batting_hits_ou',
+  selection: 'Over 1.5',
+  line: 1.5,
+  odds: -120,
+  stake_units: 1,
+  confidence: 0.7,
+  source: 'board-construction',
+  approval_status: 'approved' as const,
+  promotion_status: 'qualified' as const,
+  promotion_target: 'best-bets',
+  promotion_score: 91,
+  promotion_reason: 'test',
+  promotion_version: 'v1',
+  promotion_decided_at: '2026-04-24T20:00:00.000Z',
+  promotion_decided_by: 'api',
+  status: 'posted' as const,
+  posted_at: '2026-04-24T20:05:00.000Z',
+  settled_at: null,
+  idempotency_key: null,
+  created_at: '2026-04-24T20:00:00.000Z',
+  updated_at: '2026-04-24T20:05:00.000Z',
+};
+
+test('INIT-4.3.1: market_universe_provenance resolves as rank 1, isVerified=true', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.marketUniverse.upsertMarketUniverse([
+    {
+      provider_key: 'sgo',
+      provider_event_id: 'hierarchy-evt-1',
+      provider_participant_id: 'PLAYER_H1',
+      provider_market_key: 'hits-all-game-ou',
+      sport_key: 'MLB',
+      league_key: 'MLB',
+      event_id: null,
+      participant_id: null,
+      market_type_id: 'player_batting_hits_ou',
+      canonical_market_key: 'player_batting_hits_ou',
+      current_line: 1.5,
+      current_over_odds: -110,
+      current_under_odds: -110,
+      opening_line: 1.5,
+      opening_over_odds: -110,
+      opening_under_odds: -110,
+      closing_line: 1.5,
+      closing_over_odds: -140,
+      closing_under_odds: 120,
+      fair_over_prob: null,
+      fair_under_prob: null,
+      is_stale: false,
+      last_offer_snapshot_at: '2026-04-24T22:00:00.000Z',
+    },
+  ]);
+  const [universe] = await repositories.marketUniverse.listForScan(1);
+  assert.ok(universe);
+
+  const outcome = await computeCLVOutcome(
+    { ...BASE_PICK, metadata: { marketUniverseId: universe.id } },
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.ok(outcome.closingSourceVerification, 'closingSourceVerification must be set');
+  assert.equal(outcome.closingSourceVerification!.sourceType, 'market_universe_provenance');
+  assert.equal(outcome.closingSourceVerification!.rank, 1);
+  assert.equal(outcome.closingSourceVerification!.isVerified, true);
+  assert.equal(outcome.closingSourceVerification!.hierarchyVersion, CLOSING_SOURCE_HIERARCHY_VERSION);
+  assert.ok(outcome.result?.closingSourceVerification, 'result.closingSourceVerification must be set');
+  assert.equal(outcome.result!.closingSourceVerification.sourceType, 'market_universe_provenance');
+});
+
+test('INIT-4.3.1: pinnacle_closing resolves as rank 2, isVerified=true', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'hierarchy-evt-2',
+      providerMarketKey: 'hits-all-game-ou',
+      providerParticipantId: 'PLAYER_H2',
+      sportKey: 'NBA',
+      line: 1.5,
+      overOdds: -145,
+      underOdds: 125,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: true,
+      snapshotAt: '2026-04-24T21:00:00.000Z',
+      idempotencyKey: 'pinnacle-offer-h2',
+      bookmakerKey: 'pinnacle',
+    },
+  ]);
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_H2',
+    displayName: 'Hierarchy Player Two',
+    participantType: 'player',
+    sport: 'NBA',
+    metadata: {},
+  });
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'hierarchy-evt-2',
+    eventName: 'Hierarchy Game 2',
+    eventDate: '2026-04-24',
+    sportId: 'NBA',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-24T23:00:00Z' },
+  });
+  await repositories.eventParticipants.upsert({ eventId: event.id, participantId: participant.id, role: 'home' });
+
+  const outcome = await computeCLVOutcome(
+    {
+      ...BASE_PICK,
+      id: 'pick-pinnacle-h2',
+      market: 'hits-all-game-ou',
+      market_type_id: null,
+      participant_id: participant.id,
+      metadata: {},
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.ok(outcome.closingSourceVerification);
+  assert.equal(outcome.closingSourceVerification!.sourceType, 'pinnacle_closing');
+  assert.equal(outcome.closingSourceVerification!.rank, 2);
+  assert.equal(outcome.closingSourceVerification!.isVerified, true);
+});
+
+test('INIT-4.3.1: opening_line_proxy resolves as rank 5, isVerified=false', async () => {
+  // Use mock overrides: findClosingLine always returns null, findOpeningLine returns a line.
+  // The InMemory implementation does not filter by isClosing, so we must mock to force the fallback path.
+  const repositories = createInMemoryRepositoryBundle();
+
+  const openingOffer = {
+    id: 'opening-offer-h3',
+    provider_key: 'sgo',
+    provider_event_id: 'hierarchy-evt-3',
+    provider_market_key: 'hits-all-game-ou',
+    provider_participant_id: 'PLAYER_H3',
+    sport_key: 'NBA',
+    line: 1.5,
+    over_odds: -110,
+    under_odds: -110,
+    is_opening: true,
+    is_closing: false,
+    snapshot_at: '2026-04-24T18:00:00.000Z',
+    idempotency_key: 'opening-offer-h3',
+    bookmaker_key: null,
+    devig_mode: 'PAIRED',
+    created_at: '2026-04-24T18:00:00.000Z',
+  };
+
+  const originalFindClosingLine = repositories.providerOffers.findClosingLine.bind(repositories.providerOffers);
+  repositories.providerOffers.findClosingLine = async (criteria) => {
+    // Return null to force opening-line fallback (no closing line available)
+    if (criteria.providerEventId === 'hierarchy-evt-3') return null;
+    return originalFindClosingLine(criteria);
+  };
+  repositories.providerOffers.findOpeningLine = async (criteria) => {
+    if (criteria.providerEventId === 'hierarchy-evt-3') {
+      return openingOffer as unknown as import('@unit-talk/db').ProviderOfferRecord;
+    }
+    return null;
+  };
+
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_H3',
+    displayName: 'Hierarchy Player Three',
+    participantType: 'player',
+    sport: 'NBA',
+    metadata: {},
+  });
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'hierarchy-evt-3',
+    eventName: 'Hierarchy Game 3',
+    eventDate: '2026-04-24',
+    sportId: 'NBA',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-24T23:00:00Z' },
+  });
+  await repositories.eventParticipants.upsert({ eventId: event.id, participantId: participant.id, role: 'home' });
+
+  const outcome = await computeCLVOutcome(
+    {
+      ...BASE_PICK,
+      id: 'pick-opening-h3',
+      market: 'hits-all-game-ou',
+      market_type_id: null,
+      participant_id: participant.id,
+      metadata: {},
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'opening_line_fallback');
+  assert.ok(outcome.closingSourceVerification);
+  assert.equal(outcome.closingSourceVerification!.sourceType, 'opening_line_proxy');
+  assert.equal(outcome.closingSourceVerification!.rank, 5);
+  assert.equal(outcome.closingSourceVerification!.isVerified, false);
+  assert.equal(outcome.result?.isOpeningLineFallback, true);
+  assert.equal(outcome.result?.closingSourceVerification.isVerified, false);
+});
+
+test('INIT-4.3.1: CLV result always carries closingSourceVerification when computed', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.marketUniverse.upsertMarketUniverse([
+    {
+      provider_key: 'sgo',
+      provider_event_id: 'hierarchy-evt-4',
+      provider_participant_id: null,
+      provider_market_key: 'total-game-ou',
+      sport_key: 'NBA',
+      league_key: 'NBA',
+      event_id: null,
+      participant_id: null,
+      market_type_id: 'game_total_ou',
+      canonical_market_key: 'game_total_ou',
+      current_line: 220.5,
+      current_over_odds: -110,
+      current_under_odds: -110,
+      opening_line: 220.5,
+      opening_over_odds: -110,
+      opening_under_odds: -110,
+      closing_line: 221.0,
+      closing_over_odds: -112,
+      closing_under_odds: -108,
+      fair_over_prob: null,
+      fair_under_prob: null,
+      is_stale: false,
+      last_offer_snapshot_at: '2026-04-24T22:30:00.000Z',
+    },
+  ]);
+  const [universe] = await repositories.marketUniverse.listForScan(1);
+  assert.ok(universe);
+
+  const outcome = await computeCLVOutcome(
+    {
+      ...BASE_PICK,
+      id: 'pick-always-csv',
+      market: 'game_total_ou',
+      selection: 'Over 220.5',
+      metadata: { marketUniverseId: universe.id },
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.ok(outcome.result);
+  assert.ok(outcome.result.closingSourceVerification, 'every computed CLVResult must have closingSourceVerification');
+  assert.equal(typeof outcome.result.closingSourceVerification.rank, 'number');
+  assert.equal(typeof outcome.result.closingSourceVerification.isVerified, 'boolean');
+  assert.equal(outcome.result.closingSourceVerification.hierarchyVersion, CLOSING_SOURCE_HIERARCHY_VERSION);
 });
