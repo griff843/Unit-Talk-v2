@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1139/diff-summary.md",
     "docs/06_status/proof/UTV2-1139/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T17:45:17.247Z",
-  "heartbeat_at": "2026-05-30T18:21:51.603Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T18:22:20.668Z",
+  "closed_at": "2026-05-30T18:22:20.668Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1139-init-432-opening-line-proxy-removal.json",
   "created_by": "claude",
@@ -36,6 +36,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/935"
+    },
+    {
+      "checked_at": "2026-05-30T18:22:07.359Z",
+      "verdict": "pass",
+      "merge_sha": "ca8d8ad8bc8c8ea9ccca6549d32fea535058d677",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
