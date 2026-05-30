@@ -19,7 +19,8 @@
     "packages/domain/src/stale-data.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1125/evidence.json"
+    "docs/06_status/proof/UTV2-1125/evidence.json",
+    "docs/06_status/proof/UTV2-1125/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-30T02:58:48.707Z",
