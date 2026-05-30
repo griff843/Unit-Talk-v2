@@ -4,6 +4,7 @@ import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
   computeAndAttachCLV,
   computeCLVOutcome,
+  isCLVFallbackSource,
   CLOSING_SOURCE_HIERARCHY_VERSION,
 } from './clv-service.js';
 
@@ -2027,4 +2028,28 @@ test('INIT-4.3.1: CLV result always carries closingSourceVerification when compu
   assert.equal(typeof outcome.result.closingSourceVerification.rank, 'number');
   assert.equal(typeof outcome.result.closingSourceVerification.isVerified, 'boolean');
   assert.equal(outcome.result.closingSourceVerification.hierarchyVersion, CLOSING_SOURCE_HIERARCHY_VERSION);
+});
+
+// ── INIT-4.3.3: Fallback Audit Events ────────────────────────────────────────
+
+test('INIT-4.3.3: isCLVFallbackSource returns false for rank 1 and 2 (primary sources)', () => {
+  const rank1: import('./clv-service.js').ClosingSourceVerification = {
+    sourceType: 'market_universe_provenance', rank: 1, isVerified: true, hierarchyVersion: '1', providerKey: 'sgo',
+  };
+  const rank2: import('./clv-service.js').ClosingSourceVerification = {
+    sourceType: 'pinnacle_closing', rank: 2, isVerified: true, hierarchyVersion: '1', providerKey: 'pinnacle',
+  };
+  assert.equal(isCLVFallbackSource(rank1), false, 'rank 1 is primary — not a fallback');
+  assert.equal(isCLVFallbackSource(rank2), false, 'rank 2 is primary — not a fallback');
+});
+
+test('INIT-4.3.3: isCLVFallbackSource returns true for rank 3 and 4 (secondary fallback sources)', () => {
+  const rank3: import('./clv-service.js').ClosingSourceVerification = {
+    sourceType: 'consensus_closing', rank: 3, isVerified: true, hierarchyVersion: '1', providerKey: 'sgo',
+  };
+  const rank4: import('./clv-service.js').ClosingSourceVerification = {
+    sourceType: 'market_universe_fallback', rank: 4, isVerified: true, hierarchyVersion: '1', providerKey: 'sgo',
+  };
+  assert.equal(isCLVFallbackSource(rank3), true, 'rank 3 is a fallback');
+  assert.equal(isCLVFallbackSource(rank4), true, 'rank 4 is a fallback');
 });
