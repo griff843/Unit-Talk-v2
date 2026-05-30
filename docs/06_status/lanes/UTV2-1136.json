@@ -7,9 +7,14 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1136-init-422-settlement-records-immutability-trigger",
   "branch": "claude/utv2-1136-init-422-settlement-records-immutability-trigger",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "b8a2a504719940eb4e8edfdcd954f27aba567030",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/939",
+  "files_changed": [
+    "supabase/migrations/20260530002_utv2_1136_settlement_records_immutability_trigger.sql",
+    "apps/api/src/t1-proof-utv2-1136-settlement-records-immutability.test.ts",
+    "package.json",
+    ".ops/sync/UTV2-1136.yml"
+  ],
   "file_scope_lock": [
     "packages/db/src/repositories.ts",
     "packages/db/src/settlement-invariants.test.ts"
@@ -17,7 +22,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1136/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-30T22:59:13.312Z",
   "heartbeat_at": "2026-05-30T22:59:13.312Z",
   "closed_at": null,
