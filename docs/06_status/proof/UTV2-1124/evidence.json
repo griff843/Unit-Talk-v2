@@ -1,68 +1,149 @@
 {
-  "schema_version": "evidence-bundle-v1",
+  "schema_version": 1,
   "issue_id": "UTV2-1124",
-  "tier": "T1",
-  "title": "INIT-3.4.1 — Immutable DecisionRecord",
-  "verifier": "claude/utv2-1124-init-341-immutable-decisionrecord",
-  "date": "2026-05-29",
   "sha_binding": {
     "verified_source_sha": "c8e33cafade599c306d0dbe094ca43920bfeecce",
-    "merge_sha": null,
-    "ci_sentinels": {
-      "verify": "PASS",
-      "t1_proof_gate": "pending",
-      "merge_gate": "PASS"
+    "verified_source_note": "Implementation commit for INIT-3.4.1 Immutable DecisionRecord before PR #922 merge",
+    "merge_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+    "evidence_commit_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+    "current_pr_head_sha": "c8e33cafade599c306d0dbe094ca43920bfeecce"
+  },
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "closure-verification-lane"
+  },
+  "tier": "T1",
+  "title": "INIT-3.4.1 — Immutable DecisionRecord",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "checked_at": "2026-05-30T05:47:00Z",
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS"
+      },
+      "tail": [
+        "[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json",
+        "[check-migration-versions] 114 migration file(s) verified -- no duplicate versions.",
+        "[lint-migrations] 114 migration file(s) checked -- no findings."
+      ]
+    },
+    "domain_decision_record_tests": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "tests": 26,
+      "pass": 26,
+      "fail": 0,
+      "cases": [
+        "DecisionRecord instances are frozen against mutation",
+        "Decision provenance includes replay-visible inputs_hash",
+        "DecisionChain reconstruction is deterministic",
+        "force and override paths are traceable with authority constraints"
+      ]
+    },
+    "r_level": {
+      "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    },
+    "scope": {
+      "status": "PASS",
+      "files_changed": [
+        "packages/domain/src/models/decision-record.ts",
+        "packages/domain/src/models/decision-record.test.ts",
+        "packages/domain/src/models/index.ts",
+        "package.json",
+        ".ops/sync/UTV2-1124.yml"
+      ],
+      "program_1_certification_topology": "UNCHANGED"
     }
+  },
+  "runtime_proof": {
+    "note": "Domain-only immutable DecisionRecord work with live DB smoke required for T1 closure verification. Live Supabase smoke passed during Program 3 closure verification; this lane did not add migrations or runtime repository writes.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "checked_at": "2026-05-30T05:45:00Z",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase database smoke passed after Program 3 closure verification rerun."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists submission/settlement",
+      "UTV2-920 invalid atomic enqueue rolls back status and lifecycle writes",
+      "invalid atomic delivery rolls back outbox, receipt, audit, and lifecycle writes",
+      "invalid atomic settlement rolls back settlement and lifecycle writes",
+      "UTV2-883 participant upsert does not create duplicate rows",
+      "UTV2-996 correction path avoids duplicate base settlement rows",
+      "settlement correction chain remains additive"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific database rows created or mutated outside the shared smoke/proof fixtures.",
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
+      }
+    ]
   },
   "constitutional_guarantees": [
     {
       "guarantee": "append-only / immutable records",
-      "evidence": "Object.freeze applied to all DecisionRecord and DecisionChain instances",
-      "test_coverage": "adversarial immutability tests in decision-record.test.ts:27-41",
+      "evidence": "Object.freeze applied to DecisionRecord and DecisionChain instances",
+      "test_coverage": "decision-record.test.ts adversarial immutability coverage",
       "status": "PASS"
     },
     {
       "guarantee": "decision provenance replay-visible",
-      "evidence": "inputs_hash + DecisionProvenance stored on every record; reconstructDecisionChain verified",
-      "test_coverage": "decision-record.test.ts:86-110 (replay reconstruction)",
+      "evidence": "inputs_hash and DecisionProvenance stored on every record",
+      "test_coverage": "decision-record.test.ts replay reconstruction coverage",
       "status": "PASS"
     },
     {
       "guarantee": "decision reconstruction deterministic",
-      "evidence": "reconstructDecisionChain produces identical output from any record ordering",
-      "test_coverage": "decision-record.test.ts:106-110 (determinism test)",
+      "evidence": "reconstructDecisionChain produces stable output independent of record ordering",
+      "test_coverage": "decision-record.test.ts determinism coverage",
       "status": "PASS"
     },
     {
       "guarantee": "force/override paths traceable",
-      "evidence": "is_force, is_override fields + getTracedDecisions() + authority constraint enforced",
-      "test_coverage": "decision-record.test.ts:130-163 (tracing tests)",
+      "evidence": "is_force, is_override, getTracedDecisions(), and authority constraint are covered",
+      "test_coverage": "decision-record.test.ts tracing coverage",
       "status": "PASS"
     },
     {
       "guarantee": "no mutable decision authority",
-      "evidence": "Pure functions only; no setters, no mutation functions exported",
-      "test_coverage": "decision-record.test.ts:27-41 (frozen record mutation attempt throws)",
-      "status": "PASS"
-    },
-    {
-      "guarantee": "Program 1 certification topology untouched",
-      "evidence": "Only new file (decision-record.ts) and barrel export (models/index.ts) modified",
-      "test_coverage": "Scope: packages/domain/src/models only; no existing certified files touched",
+      "evidence": "Pure functions only; no setters or mutation functions exported",
+      "test_coverage": "decision-record.test.ts frozen mutation attempts",
       "status": "PASS"
     }
   ],
-  "verification_commands": {
-    "pnpm_verify": "PASS",
-    "pnpm_test_db": "NOT_REQUIRED — pure domain package, no DB access",
-    "r_level_check": "PASS — no R-level artifacts required",
-    "test_count": "26/26 in decision-record.test.ts"
+  "acceptance_criteria": {
+    "immutable_decision_records": "PASS",
+    "append_only_decision_chain": "PASS",
+    "replay_visible_provenance": "PASS",
+    "deterministic_reconstruction": "PASS",
+    "force_override_traceability": "PASS",
+    "program_1_certification_topology_unchanged": "PASS"
   },
-  "files_changed": [
-    "packages/domain/src/models/decision-record.ts",
-    "packages/domain/src/models/decision-record.test.ts",
-    "packages/domain/src/models/index.ts",
-    "package.json",
-    ".ops/sync/UTV2-1124.yml"
-  ]
+  "verdict": "PASS"
 }

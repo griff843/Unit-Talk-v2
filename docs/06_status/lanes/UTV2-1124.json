@@ -20,10 +20,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1124/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T20:45:12.637Z",
-  "heartbeat_at": "2026-05-29T22:15:49.882Z",
-  "closed_at": "2026-05-29T22:15:31.000Z",
+  "heartbeat_at": "2026-05-30T06:16:39.707Z",
+  "closed_at": "2026-05-30T06:13:49.981Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1124-init-341-immutable-decisionrecord.json",
   "created_by": "claude",
@@ -36,6 +36,34 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/922"
+    },
+    {
+      "checked_at": "2026-05-30T05:55:45.088Z",
+      "verdict": "pass",
+      "merge_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-30T05:56:25.007Z",
+      "verdict": "pass",
+      "merge_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-30T06:13:36.166Z",
+      "verdict": "pass",
+      "merge_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-30T06:16:39.707Z",
+      "verdict": "pass",
+      "merge_sha": "73e9ffefb736164a55bba07e3639d280d7feecb8",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
