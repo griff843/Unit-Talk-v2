@@ -166,10 +166,12 @@ Do NOT increase concurrency. Do NOT activate UTV2-1176. The bottleneck is consti
 
 Program 1 certified when ALL of the following are mechanically verified:
 
-- [ ] Replay truth is reproducible (UTV2-1101 shipped; needs domain cert record)
-- [ ] Invariants are enforceable (UTV2-1102 shipped; needs domain cert record)
-- [ ] Divergence is bounded (UTV2-1103 shipped; needs domain cert record)
-- [ ] Quarantine is reliable (UTV2-1103 shipped; needs bypass reclassification UTV2-1106)
-- [ ] Proof lineage is traceable (UTV2-1100 shipped; needs lineage manager)
-- [ ] Freshness is enforceable (UTV2-1097 runtime needed)
-- [ ] Certification evidence is audit-valid (UTV2-1096–1099 full chain needed)
+- [x] Replay truth is reproducible (UTV2-1101 #869 merged 05b58ec4; UTV2-1097 CertificationLifecycleManager merged c6e03cc8)
+- [x] Invariants are enforceable (UTV2-1102 #870 merged bab99bf2)
+- [x] Divergence is bounded (UTV2-1103 #871 merged 46ded96f)
+- [x] Quarantine is reliable (UTV2-1103 #871 merged 46ded96f; UTV2-1106 #880 bypass reclassification merged e6b0e27d)
+- [x] Proof lineage is traceable (UTV2-1100 #868 merged 142c1f7c; UTV2-1097 lineage manager merged c6e03cc8)
+- [x] Freshness is enforceable (UTV2-1097 #881 CertificationLifecycleManager runtime merged c6e03cc8)
+- [x] Certification evidence is audit-valid (UTV2-1096–1099 full chain: efef79d5, c6e03cc8, 41ee170d, e3a247e1)
+
+**P1 CERTIFIED — 2026-05-30**
