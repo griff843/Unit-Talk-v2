@@ -39,6 +39,19 @@ export interface DecisionProvenance {
   readonly evaluator_version: string;
 }
 
+export interface EdgePriceFreshnessDecisionEvidence {
+  readonly price_snapshot_at: string | null;
+  readonly price_provider_key: string | null;
+  readonly event_starts_at: string | null;
+  readonly snapshot_age_ms: number | null;
+  readonly freshness_threshold_ms: number;
+  readonly freshness_result: 'fresh' | 'stale' | 'missing';
+}
+
+export interface DecisionEvidence {
+  readonly edge_price_freshness?: EdgePriceFreshnessDecisionEvidence;
+}
+
 /**
  * A single immutable decision event. Once created, no field may be mutated.
  * Records form an append-only chain via preceding_record_id.
@@ -54,6 +67,8 @@ export interface DecisionRecord {
   /** SHA-256 hex of the serialized inputs used to reach this decision. */
   readonly inputs_hash: string;
   readonly provenance: DecisionProvenance;
+  /** Immutable replay-visible evidence used by the evaluator. */
+  readonly evidence?: DecisionEvidence;
   /** ID of the immediately preceding record in this entity's chain. Null = root. */
   readonly preceding_record_id: string | null;
   /** True when a force-promote path was taken, bypassing gate checks. */
@@ -81,6 +96,7 @@ export interface DecisionRecordInput {
   readonly reason: string;
   readonly inputs_hash: string;
   readonly provenance: DecisionProvenance;
+  readonly evidence?: DecisionEvidence;
   readonly preceding_record_id: string | null;
   readonly is_force?: boolean;
   readonly is_override?: boolean;
@@ -106,7 +122,8 @@ export function createDecisionRecord(input: DecisionRecordInput): DecisionRecord
     throw new Error('DecisionRecord: provenance must include policy_version and evaluator_version');
   }
 
-  return Object.freeze({
+  const evidence = freezeDecisionEvidence(input.evidence);
+  const record = {
     record_id: input.record_id,
     decision_type: input.decision_type,
     entity_id: input.entity_id,
@@ -119,7 +136,12 @@ export function createDecisionRecord(input: DecisionRecordInput): DecisionRecord
     preceding_record_id: input.preceding_record_id,
     is_force: input.is_force ?? false,
     is_override: input.is_override ?? false,
-  });
+  };
+
+  if (evidence) {
+    return Object.freeze({ ...record, evidence });
+  }
+  return Object.freeze(record);
 }
 
 // ── Chain Operations ────────────────────────────────────────────────────────────
@@ -244,6 +266,23 @@ export function verifyDecisionIntegrity(record: DecisionRecord): string[] {
   if (!record.inputs_hash) v.push('inputs_hash is missing');
   if (!record.provenance.policy_version) v.push('provenance.policy_version is empty');
   if (!record.provenance.evaluator_version) v.push('provenance.evaluator_version is empty');
+  const freshness = record.evidence?.edge_price_freshness;
+  if (freshness) {
+    if (freshness.freshness_threshold_ms <= 0) {
+      v.push('edge_price_freshness.freshness_threshold_ms must be positive');
+    }
+    if (
+      freshness.snapshot_age_ms !== null &&
+      (freshness.snapshot_age_ms < 0 || !Number.isFinite(freshness.snapshot_age_ms))
+    ) {
+      v.push('edge_price_freshness.snapshot_age_ms must be null or a finite non-negative number');
+    }
+    if (freshness.freshness_result === 'fresh') {
+      if (!freshness.price_snapshot_at) v.push('fresh edge_price_freshness requires price_snapshot_at');
+      if (!freshness.price_provider_key) v.push('fresh edge_price_freshness requires price_provider_key');
+      if (freshness.snapshot_age_ms === null) v.push('fresh edge_price_freshness requires snapshot_age_ms');
+    }
+  }
   if (record.is_force && record.provenance.authority === 'system') {
     v.push('force decision must have authority pm or operator, not system');
   }
@@ -263,6 +302,17 @@ export function verifyDecisionChainIntegrity(chain: DecisionChain): string[] {
     }
   }
   return violations;
+}
+
+function freezeDecisionEvidence(evidence: DecisionEvidence | undefined): DecisionEvidence | undefined {
+  if (!evidence) return undefined;
+  const freshness = evidence.edge_price_freshness;
+  if (freshness) {
+    return Object.freeze({
+      edge_price_freshness: Object.freeze({ ...freshness }),
+    });
+  }
+  return Object.freeze({});
 }
 
 // ── Query Helpers ───────────────────────────────────────────────────────────────

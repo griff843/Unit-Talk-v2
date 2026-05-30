@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { computeConfidenceInterval } from './edge-calibrator.js';
@@ -7,8 +7,13 @@ import {
   validateEdge,
   MIN_EDGE_SAMPLE_SIZE,
   DEFAULT_ALPHA,
+  type EdgeValidationRecord,
 } from './edge-validator.js';
-import type { ScoredOutcome } from '../outcomes/types.js';
+import { createDecisionRecord, verifyDecisionIntegrity } from '../models/decision-record.js';
+import { evaluateEdgePriceFreshness } from '../stale-data.js';
+
+const NOW_MS = Date.parse('2026-05-01T12:00:00Z');
+const FRESH_EDGE_PRICE_SNAPSHOT_AT = '2026-05-01T11:50:00Z';
 
 // ── Edge Calibrator ─────────────────────────────────────────────────────────
 
@@ -71,7 +76,8 @@ function makeScoredOutcome(
   p_final: number,
   p_market_devig: number,
   mtid: number = 1,
-): ScoredOutcome {
+  overrides: Partial<EdgeValidationRecord> = {},
+): EdgeValidationRecord {
   return {
     market_key: `key_${mtid}`,
     event_id: 'evt-1',
@@ -86,6 +92,11 @@ function makeScoredOutcome(
     line: 22.5,
     actual_value: 25,
     outcome: 'WIN',
+    edgePriceSnapshotAt: FRESH_EDGE_PRICE_SNAPSHOT_AT,
+    edgePriceProviderKey: 'draftkings',
+    eventStartsAt: '2026-05-01T18:00:00Z',
+    sportKey: 'nba',
+    ...overrides,
   };
 }
 
@@ -136,7 +147,7 @@ describe('analyzeCLV', () => {
 describe('validateEdge', () => {
   it('returns INSUFFICIENT_SAMPLE for small input', () => {
     const records = [makeScoredOutcome(0.6, 0.55)];
-    const result = validateEdge(records);
+    const result = validateEdge(records, DEFAULT_ALPHA, { nowMs: NOW_MS });
     assert.equal(result.ok, false);
     if (!result.ok) {
       assert.equal(result.reason, 'INSUFFICIENT_SAMPLE');
@@ -148,7 +159,7 @@ describe('validateEdge', () => {
     const records = Array.from({ length: 40 }, (_, i) =>
       makeScoredOutcome(0.6 + (i % 5) * 0.01, 0.55),
     );
-    const result = validateEdge(records);
+    const result = validateEdge(records, DEFAULT_ALPHA, { nowMs: NOW_MS });
     assert.equal(result.ok, true);
     if (result.ok) {
       assert.ok(result.meanCLV > 0);
@@ -165,7 +176,7 @@ describe('validateEdge', () => {
         0.5,
       ),
     );
-    const result = validateEdge(records);
+    const result = validateEdge(records, DEFAULT_ALPHA, { nowMs: NOW_MS });
     assert.equal(result.ok, true);
     if (result.ok) {
       // Mean CLV ~ 0, should not be significant
@@ -176,6 +187,92 @@ describe('validateEdge', () => {
   it('exports MIN_EDGE_SAMPLE_SIZE', () => {
     assert.equal(MIN_EDGE_SAMPLE_SIZE, 30);
   });
+});
+
+// ── Edge-Price Freshness Enforcement ────────────────────────────────────────
+
+test('evaluateEdgePriceFreshness: accepts a fresh priced edge at the boundary', () => {
+  const result = evaluateEdgePriceFreshness({
+    priceSnapshotAt: '2026-05-01T11:00:00Z',
+    priceProviderKey: 'draftkings',
+    eventStartsAt: '2026-05-01T18:00:00Z',
+    sportKey: 'nba',
+    marketKey: 'game_total_ou',
+    nowMs: NOW_MS,
+  });
+
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.snapshotAgeMs, result.freshnessThresholdMs);
+    assert.equal(result.proximityTier, 'game-day');
+  }
+});
+
+test('validateEdge: fails closed when edge-price freshness evidence is missing', () => {
+  const records = Array.from({ length: 40 }, (_, i) =>
+    makeScoredOutcome(0.6 + (i % 5) * 0.01, 0.55, 1, { edgePriceSnapshotAt: null }),
+  );
+
+  const result = validateEdge(records, DEFAULT_ALPHA, { nowMs: NOW_MS });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.reason, 'MISSING_EDGE_PRICE_FRESHNESS');
+    assert.match(result.reasonDetail, /missing_price_snapshot_at/);
+  }
+});
+
+test('validateEdge: rejects stale edge-price snapshots before CLV significance', () => {
+  const records = Array.from({ length: 40 }, (_, i) =>
+    makeScoredOutcome(0.6 + (i % 5) * 0.01, 0.55, 1, {
+      edgePriceSnapshotAt: '2026-05-01T10:59:59Z',
+      eventStartsAt: '2026-05-01T18:00:00Z',
+      market_type_key: 'game_total_ou',
+    }),
+  );
+
+  const result = validateEdge(records, DEFAULT_ALPHA, { nowMs: NOW_MS });
+
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.reason, 'STALE_EDGE_PRICE');
+    assert.match(result.reasonDetail, /stale_price_snapshot/);
+  }
+});
+
+test('DecisionRecord: stores frozen replay-visible edge-price freshness evidence', () => {
+  const rec = createDecisionRecord({
+    record_id: 'freshness-decision-1',
+    decision_type: 'block',
+    entity_id: 'pick-1',
+    entity_type: 'pick',
+    decided_at_ms: NOW_MS,
+    outcome: 'blocked',
+    reason: 'STALE_EDGE_PRICE',
+    inputs_hash: 'abc123',
+    provenance: {
+      authority: 'system',
+      policy_version: 'edge-price-freshness:v1',
+      evaluator_version: 'edge-validator:v1',
+    },
+    evidence: {
+      edge_price_freshness: {
+        price_snapshot_at: '2026-05-01T10:59:59Z',
+        price_provider_key: 'draftkings',
+        event_starts_at: '2026-05-01T18:00:00Z',
+        snapshot_age_ms: 3_601_000,
+        freshness_threshold_ms: 3_600_000,
+        freshness_result: 'stale',
+      },
+    },
+    preceding_record_id: null,
+  });
+
+  assert.ok(Object.isFrozen(rec));
+  assert.ok(Object.isFrozen(rec.evidence));
+  assert.ok(Object.isFrozen(rec.evidence?.edge_price_freshness));
+  assert.deepEqual(verifyDecisionIntegrity(rec), []);
+  assert.equal(rec.evidence?.edge_price_freshness?.freshness_result, 'stale');
 });
 
 // ── assertClosingSourcePresent ───────────────────────────────────────────────

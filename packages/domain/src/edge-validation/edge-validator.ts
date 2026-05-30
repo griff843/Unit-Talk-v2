@@ -11,6 +11,7 @@
  */
 
 import { analyzeCLV } from './clv-analyzer.js';
+import { evaluateEdgePriceFreshness } from '../stale-data.js';
 
 import type { ScoredOutcome } from '../outcomes/types.js';
 
@@ -20,7 +21,23 @@ export type EdgeValidationFailReason =
   | 'INSUFFICIENT_SAMPLE'
   | 'INVALID_PROBABILITIES'
   | 'ZERO_VARIANCE'
-  | 'CLV_ANALYSIS_FAILED';
+  | 'CLV_ANALYSIS_FAILED'
+  | 'MISSING_EDGE_PRICE_FRESHNESS'
+  | 'STALE_EDGE_PRICE';
+
+export interface EdgePriceFreshnessEvidence {
+  readonly edgePriceSnapshotAt?: string | null;
+  readonly edgePriceProviderKey?: string | null;
+  readonly eventStartsAt?: string | null;
+  readonly sportKey?: string | null;
+}
+
+export type EdgeValidationRecord = ScoredOutcome & EdgePriceFreshnessEvidence;
+
+export interface EdgeValidationOptions {
+  readonly nowMs?: number;
+  readonly requireEdgePriceFreshness?: boolean;
+}
 
 export interface EdgeValidationOk {
   ok: true;
@@ -61,8 +78,9 @@ const Z_CRITICAL: Record<number, number> = {
  * is statistically distinguishable from zero.
  */
 export function validateEdge(
-  records: ScoredOutcome[],
+  records: EdgeValidationRecord[],
   alpha: number = DEFAULT_ALPHA,
+  options: EdgeValidationOptions = {},
 ): EdgeValidationResult {
   if (records.length < MIN_EDGE_SAMPLE_SIZE) {
     return {
@@ -71,6 +89,13 @@ export function validateEdge(
       reasonDetail: `Need >=${MIN_EDGE_SAMPLE_SIZE} records; got ${records.length}`,
       sampleSize: records.length,
     };
+  }
+
+  if (options.requireEdgePriceFreshness !== false) {
+    const freshnessFailure = firstEdgePriceFreshnessFailure(records, options.nowMs);
+    if (freshnessFailure !== null) {
+      return freshnessFailure;
+    }
   }
 
   const clvResult = analyzeCLV(records);
@@ -120,6 +145,36 @@ export function validateEdge(
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function firstEdgePriceFreshnessFailure(
+  records: EdgeValidationRecord[],
+  nowMs: number | undefined,
+): EdgeValidationFail | null {
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]!;
+    const result = evaluateEdgePriceFreshness({
+      priceSnapshotAt: record.edgePriceSnapshotAt,
+      priceProviderKey: record.edgePriceProviderKey,
+      eventStartsAt: record.eventStartsAt,
+      sportKey: record.sportKey,
+      marketKey: record.market_type_key ?? record.market_key,
+      nowMs,
+    });
+
+    if (!result.ok) {
+      const missing =
+        result.reason === 'missing_price_snapshot_at' || result.reason === 'missing_price_provider_key';
+      return {
+        ok: false,
+        reason: missing ? 'MISSING_EDGE_PRICE_FRESHNESS' : 'STALE_EDGE_PRICE',
+        reasonDetail: `Record ${i} ${result.reason}; snapshotAgeMs=${String(result.snapshotAgeMs)} thresholdMs=${result.freshnessThresholdMs}`,
+        sampleSize: records.length,
+      };
+    }
+  }
+
+  return null;
+}
 
 function approximatePValue(absTStat: number): number {
   const tailProb = normalTailProb(absTStat);
