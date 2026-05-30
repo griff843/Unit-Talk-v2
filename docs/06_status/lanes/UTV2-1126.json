@@ -22,15 +22,32 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1126/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
   "started_at": "2026-05-30T03:02:30.727Z",
-  "heartbeat_at": "2026-05-30T03:02:30.727Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T03:41:08.668Z",
+  "closed_at": "2026-05-30T03:41:08.668Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1126-init-343-negative-ev-rejection-routing.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-30T03:40:00.724Z",
+      "verdict": "fail",
+      "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
+      "failures": [
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
