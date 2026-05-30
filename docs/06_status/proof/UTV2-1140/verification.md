@@ -25,3 +25,6 @@ Verdict: PASS — no R-level artifacts required
 ## SHA Binding
 merge_sha: b77ccf91c865872789dcabc239143d7bae5afd23
 pr: https://github.com/griff843/Unit-Talk-v2/pull/936
+
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS — no R-level artifacts required
