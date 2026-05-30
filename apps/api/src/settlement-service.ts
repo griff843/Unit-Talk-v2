@@ -154,7 +154,8 @@ export async function recordGradedSettlement(
   const clvOutcome = await computeCLVOutcome(pick, repositories, {
     ...(clvContext ? { preResolvedContext: clvContext } : {}),
   });
-  await emitClvFallbackAuditIfNeeded(clvOutcome, pick, repositories.audit);
+  // Non-blocking: audit failure must never break settlement (observability-only path).
+  emitClvFallbackAuditIfNeeded(clvOutcome, pick, repositories.audit).catch(() => undefined);
   const clv = clvOutcome.result;
   const payload: Record<string, unknown> = {
     gradingContext,
