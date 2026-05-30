@@ -19,14 +19,35 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1127/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T03:46:44.428Z",
-  "heartbeat_at": "2026-05-30T03:46:44.428Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T04:17:03.509Z",
+  "closed_at": "2026-05-30T04:17:03.509Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1127-init-344-forcepromote-to-exception-runtime.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-30T04:16:22.019Z",
+      "verdict": "fail",
+      "merge_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
+      "failures": [
+        "R1",
+        "R2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-05-30T04:16:30.201Z",
+      "verdict": "fail",
+      "merge_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
+      "failures": [
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
