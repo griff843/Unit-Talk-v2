@@ -20,36 +20,30 @@ export type ClosingSourceType =
   | 'market_universe_provenance'  // rank 1: direct from pick's market universe record (ingestor-written)
   | 'pinnacle_closing'            // rank 2: Pinnacle closing line from provider_offers
   | 'consensus_closing'           // rank 3: any closing line from provider_offers (non-Pinnacle)
-  | 'market_universe_fallback'    // rank 4: market universe via provider key lookup (alias fallback)
-  | 'opening_line_proxy';         // rank 5: opening line used as CLV proxy — NOT a closing line
+  | 'market_universe_fallback';   // rank 4: market universe via provider key lookup (alias fallback)
+  // opening_line_proxy (rank 5, unverified) was removed by INIT-4.3.2 — CLV now quarantines without a verified close
 
 export interface ClosingSourceVerification {
   readonly sourceType: ClosingSourceType;
-  readonly rank: 1 | 2 | 3 | 4 | 5;
+  readonly rank: 1 | 2 | 3 | 4;
   readonly isVerified: boolean;
   readonly hierarchyVersion: typeof CLOSING_SOURCE_HIERARCHY_VERSION;
   readonly providerKey: string;
 }
 
-const CLOSING_SOURCE_RANKS: Record<ClosingSourceType, { rank: 1 | 2 | 3 | 4 | 5; isVerified: boolean }> = {
+const CLOSING_SOURCE_RANKS: Record<ClosingSourceType, { rank: 1 | 2 | 3 | 4; isVerified: boolean }> = {
   market_universe_provenance: { rank: 1, isVerified: true },
   pinnacle_closing:           { rank: 2, isVerified: true },
   consensus_closing:          { rank: 3, isVerified: true },
   market_universe_fallback:   { rank: 4, isVerified: true },
-  opening_line_proxy:         { rank: 5, isVerified: false },
 };
 
 function makeClosingSourceVerification(
   sourceType: ClosingSourceType,
   providerKey: string,
 ): ClosingSourceVerification {
-  return {
-    sourceType,
-    rank: CLOSING_SOURCE_RANKS[sourceType].rank,
-    isVerified: CLOSING_SOURCE_RANKS[sourceType].isVerified,
-    hierarchyVersion: CLOSING_SOURCE_HIERARCHY_VERSION,
-    providerKey,
-  };
+  const { rank, isVerified } = CLOSING_SOURCE_RANKS[sourceType];
+  return { sourceType, rank, isVerified, hierarchyVersion: CLOSING_SOURCE_HIERARCHY_VERSION, providerKey };
 }
 
 // ── Closing-line internal shape ────────────────────────────────────────────────
@@ -78,8 +72,6 @@ export interface CLVResult {
   clvPercent: number;
   beatsClosingLine: boolean;
   providerKey: string;
-  /** True when opening line was used as CLV proxy (no closing line available). */
-  isOpeningLineFallback?: boolean;
   /** True when only one side of the closing line was available — devig skipped, raw implied used. */
   isSingleSideDevig?: boolean;
   /** Verified closing-source provenance — always present on a computed result (INIT-4.3.1). */
@@ -88,13 +80,13 @@ export interface CLVResult {
 
 export type CLVComputationStatus =
   | 'computed'
-  | 'opening_line_fallback'
   | 'missing_pick_odds'
   | 'missing_selection_side'
   | 'missing_event_context'
   | 'missing_closing_line'
   | 'missing_priced_side'
   | 'devig_failed';
+  // 'opening_line_fallback' removed by INIT-4.3.2 — CLV quarantines on missing close
 
 export interface CLVComputationOutcome {
   result: CLVResult | null;
@@ -145,7 +137,7 @@ export async function computeAndAttachCLV(
   options: ComputeAndAttachClvOptions = {},
 ): Promise<CLVResult | null> {
   const outcome = await computeCLVOutcome(pick, repositories, options);
-  if (!outcome.result && outcome.status !== 'opening_line_fallback') {
+  if (!outcome.result) {
     const logger = options.logger ?? console;
     logger.warn(
       {
@@ -220,7 +212,6 @@ export async function computeCLVOutcome(
         pick,
         directUniverseLine.closingLine,
         selectionSide,
-        false,
         sourceVerification,
       );
       if (!result) {
@@ -297,19 +288,7 @@ export async function computeCLVOutcome(
     if (closingLine) resolvedSourceType = 'consensus_closing';
   }
 
-  // Fallback: use SGO opening line as CLV proxy when no closing line is available.
-  // This removes the hard dependency on Odds API Pinnacle data — picks still get a
-  // directionally-valid CLV even when the Odds API is down or hasn't ingested yet.
-  let isOpeningFallback = false;
-  if (!closingLine) {
-    closingLine = asClosingLineLike(
-      await repositories.providerOffers.findOpeningLine(baseLineCriteria),
-    );
-    if (closingLine) {
-      isOpeningFallback = true;
-      resolvedSourceType = 'opening_line_proxy';
-    }
-  }
+  // Opening-line proxy path removed by INIT-4.3.2. CLV quarantines when no verified close exists.
 
   // Fallback: read closing data from market_universe (materializer snapshot).
   // market_universe stores the closing line written by the ingestor even when
@@ -422,13 +401,12 @@ export async function computeCLVOutcome(
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
     closingSourceVerification: sourceVerification,
-    ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
     ...(isSingleSideDevig ? { isSingleSideDevig: true } : {}),
   };
 
   return {
     result,
-    status: isOpeningFallback ? 'opening_line_fallback' : 'computed',
+    status: 'computed',
     resolvedMarketKey,
     availableMarkets: [],
     closingSourceVerification: sourceVerification,
@@ -475,7 +453,6 @@ function computeClvFromClosingLine(
   pick: PickRecord,
   closingLine: ClosingLineLike,
   resolvedSide: 'over' | 'under',
-  isOpeningFallback: boolean,
   sourceVerification: ClosingSourceVerification,
 ): CLVResult | null {
   const pricedSide = readClosingSideOdds(closingLine, resolvedSide);
@@ -517,7 +494,6 @@ function computeClvFromClosingLine(
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
     closingSourceVerification: sourceVerification,
-    ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
     ...(isSingleSideDevig ? { isSingleSideDevig: true } : {}),
   };
 }

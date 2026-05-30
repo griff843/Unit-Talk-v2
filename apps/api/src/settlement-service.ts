@@ -661,7 +661,6 @@ const CLV_SKIP_REASON_MAP: Record<string, string> = {
   missing_closing_line: 'No closing line available for this market',
   missing_priced_side: 'Closing line missing price for selected side',
   devig_failed: 'Probability devigging calculation failed',
-  opening_line_fallback: 'Used opening line as closing line proxy',
 };
 
 function buildClvDiagnosticPayload(outcome: CLVComputationOutcome): Record<string, unknown> {
@@ -669,7 +668,7 @@ function buildClvDiagnosticPayload(outcome: CLVComputationOutcome): Record<strin
     clvStatus: outcome.status,
     clvUnavailableReason: outcome.result ? null : outcome.status,
     clvSkipReason: outcome.result ? null : (CLV_SKIP_REASON_MAP[outcome.status] ?? outcome.status),
-    ...(outcome.result?.isOpeningLineFallback ? { isOpeningLineFallback: true } : {}),
+    ...(outcome.closingSourceVerification ? { closingSourceType: outcome.closingSourceVerification.sourceType } : {}),
     ...(outcome.resolvedMarketKey ? { clvResolvedMarketKey: outcome.resolvedMarketKey } : {}),
     ...(outcome.availableMarkets.length > 0 ? { clvAvailableMarkets: outcome.availableMarkets } : {}),
   };
