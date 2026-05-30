@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1138/diff-summary.md",
     "docs/06_status/proof/UTV2-1138/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T16:56:31.211Z",
-  "heartbeat_at": "2026-05-30T17:43:57.245Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T17:44:28.218Z",
+  "closed_at": "2026-05-30T17:44:28.218Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1138-init-431-verified-closing-source-hierarchy.json",
   "created_by": "claude",
@@ -36,6 +36,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/934"
+    },
+    {
+      "checked_at": "2026-05-30T17:44:11.109Z",
+      "verdict": "pass",
+      "merge_sha": "0f56d512d5cced372b4e4ef25b35922490e32364",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
