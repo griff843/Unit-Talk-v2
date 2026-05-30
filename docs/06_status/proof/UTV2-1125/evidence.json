@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1125",
+  "sha_binding": {
+    "verified_source_sha": "9d3f521ce08e8006bbd99267534c24f24cda8eeb",
+    "verified_source_note": "Implementation commit: edge-price freshness enforcement in stale-data, edge-validator, decision-record evidence, and edge-validation tests",
+    "merge_sha": null,
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": "9d3f521ce08e8006bbd99267534c24f24cda8eeb"
+  },
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS"
+      },
+      "tail": [
+        "[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json",
+        "[check-migration-versions] 114 migration file(s) verified -- no duplicate versions.",
+        "[lint-migrations] 114 migration file(s) checked -- no findings."
+      ]
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "domain_freshness_tests": {
+      "command": "npx tsx --test packages/domain/src/edge-validation/edge-validation.test.ts",
+      "status": "PASS",
+      "tests": 22,
+      "pass": 22,
+      "fail": 0,
+      "cases": [
+        "evaluateEdgePriceFreshness accepts a fresh priced edge at the boundary",
+        "validateEdge fails closed when edge-price freshness evidence is missing",
+        "validateEdge rejects stale edge-price snapshots before CLV significance",
+        "DecisionRecord stores frozen replay-visible edge-price freshness evidence"
+      ]
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
+    }
+  },
+  "runtime_proof": {
+    "note": "Domain-only enforcement with live DB smoke required for T1. Live Supabase smoke passed; root verify also ran the T1 live proof suite. Existing stranded awaiting_approval rows were reported by known diagnostic tests and were not mutated by this lane.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase database smoke test passed after domain freshness changes; no schema or DB-write paths were modified by this lane."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists submission/settlement",
+      "UTV2-920 invalid atomic enqueue rolls back status and lifecycle writes",
+      "invalid atomic delivery rolls back outbox, receipt, audit, and lifecycle writes",
+      "invalid atomic settlement rolls back settlement and lifecycle writes",
+      "UTV2-883 participant upsert does not create duplicate rows",
+      "UTV2-996 correction path avoids duplicate base settlement rows",
+      "settlement correction chain remains additive"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific database rows created or mutated outside the shared smoke/proof fixtures.",
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "fail_closed_stale_or_missing_edge_price_freshness": "PASS",
+    "replay_safe_decision_provenance": "PASS",
+    "freshness_boundary_tests": "PASS",
+    "stale_price_rejection_tests": "PASS",
+    "replay_safe_evidence_tests": "PASS",
+    "deterministic_routing_decision_tests": "PASS"
+  },
+  "verdict": "PASS"
+}
