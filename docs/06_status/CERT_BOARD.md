@@ -166,12 +166,54 @@ Do NOT increase concurrency. Do NOT activate UTV2-1176. The bottleneck is consti
 
 Program 1 certified when ALL of the following are mechanically verified:
 
-- [x] Replay truth is reproducible (UTV2-1101 #869 merged 05b58ec4; UTV2-1097 CertificationLifecycleManager merged c6e03cc8)
-- [x] Invariants are enforceable (UTV2-1102 #870 merged bab99bf2)
-- [x] Divergence is bounded (UTV2-1103 #871 merged 46ded96f)
-- [x] Quarantine is reliable (UTV2-1103 #871 merged 46ded96f; UTV2-1106 #880 bypass reclassification merged e6b0e27d)
-- [x] Proof lineage is traceable (UTV2-1100 #868 merged 142c1f7c; UTV2-1097 lineage manager merged c6e03cc8)
-- [x] Freshness is enforceable (UTV2-1097 #881 CertificationLifecycleManager runtime merged c6e03cc8)
-- [x] Certification evidence is audit-valid (UTV2-1096–1099 full chain: efef79d5, c6e03cc8, 41ee170d, e3a247e1)
+- [x] Replay truth is reproducible — UTV2-1101 #869 (05b58ec4); CertificationLifecycleManager UTV2-1097 #881 (c6e03cc8)
+- [x] Invariants are enforceable — UTV2-1102 #870 (bab99bf2)
+- [x] Divergence is bounded — UTV2-1103 #871 (46ded96f)
+- [x] Quarantine is reliable — UTV2-1103 #871 (46ded96f); bypass reclassification UTV2-1106 #880 (e6b0e27d)
+- [x] Proof lineage is traceable — UTV2-1100 #868 (142c1f7c); lineage manager UTV2-1097 #881 (c6e03cc8)
+- [x] Freshness is enforceable — UTV2-1097 #881 (c6e03cc8)
+- [x] Certification evidence is audit-valid — INIT-2.1.x full chain: UTV2-1096 (efef79d5), UTV2-1097 (c6e03cc8), UTV2-1098 (41ee170d), UTV2-1099 #884 (e3a247e1)
 
-**P1 CERTIFIED — 2026-05-30**
+---
+
+## PM Certification Declaration
+
+**PROGRAM 1 CERTIFIED**
+Date: 2026-05-30
+Authority: PM (griffadavi)
+
+### Certification Basis
+
+**WS-2.2 Shipped Foundations (all done):**
+| Issue | Component | Merge SHA | PR |
+|---|---|---|---|
+| UTV2-1100 | ProofBundle Entity + Contract | 142c1f7c | #868 |
+| UTV2-1101 | Replay Harness + Driver | 05b58ec4 | #869 |
+| UTV2-1102 | Invariant Registry + Engine | bab99bf2 | #870 |
+| UTV2-1103 | Divergence Engine + Quarantine + Escalation | 46ded96f | #871 |
+
+**ACTIVE_CERT Chain (all done, sequential 1096→1097→1098→1099, parallel 1106):**
+| Issue | Component | Merge SHA | PR |
+|---|---|---|---|
+| UTV2-1096 | Certification Entity and Lifecycle States | efef79d5 | — |
+| UTV2-1097 | Certification Lifecycle Manager | c6e03cc8 | #881 |
+| UTV2-1098 | Revocation Trigger Wiring | 41ee170d | — |
+| UTV2-1099 | Dependent-Gate Certification Checks | e3a247e1 | #884 |
+| UTV2-1106 | Bypass Reclassification | e6b0e27d | #880 |
+
+**SUPPORT_CERT Chain (all done):**
+| Issue | Component | Merge SHA | PR |
+|---|---|---|---|
+| UTV2-1105 | Mechanical Expiration Enforcement | c40678e3 | #882 |
+| UTV2-1107 | Database-Layer FSM Enforcement | 0887296b | #901 |
+| UTV2-1108 | Scoped Roles and Authority Matrices | e29ed568 | #902 |
+| UTV2-1109 | Dual-Authorization Runtime | ed80f803 | #903 |
+| UTV2-1110 | Approval Expiration | a98992dc | #904 |
+| UTV2-1111 | Service-Role Constraint and RLS | 7622c7dc | #905 |
+
+### Effect
+
+- POST_CERT Stage 4 (INIT-3.x / Program 3): complete (UTV2-1112–1131, all merged and truth-checked)
+- POST_CERT Stage 5 (INIT-4.x / Program 4): **authorized to activate** as of this declaration
+- FROZEN (INIT-5.x / capital / treasury / scaling): remains frozen pending P1–P4 certified AND milestone decisions
+- Program 1 certification topology: untouched — no mutations to certified artifacts
