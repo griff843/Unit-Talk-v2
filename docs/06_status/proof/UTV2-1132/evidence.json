@@ -1,76 +1,72 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1132",
-  "title": "INIT-4.1.1 \u2014 ExecutionIntent Entity",
+  "sha_binding": {
+    "verified_source_sha": "253249a7",
+    "verified_source_note": "ExecutionIntent Entity — append-only domain type, DB migration, InMemory+Database repositories, 33 domain tests, 7 live-DB proof tests",
+    "merge_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
+    "evidence_commit_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
+    "current_pr_head_sha": "253249a7"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "implementation-lane"
+  },
   "tier": "T1",
   "lane_type": "migration",
-  "executor": "claude",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/932",
-  "sha_binding": {
-    "verified_source_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
-    "ci_sentinels": {
-      "pnpm_verify": "PASS",
-      "pnpm_test_db": "PASS",
-      "r_level_check": "PASS",
-      "tier_label": "tier:T1",
-      "live_db_proof": "PASS \u2014 7/7 vs zfzdnfwdarxucxtaojxm"
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "domain_tests": {
+      "command": "tsx --test packages/domain/src/models/execution-intent.test.ts",
+      "status": "PASS",
+      "tests": 33,
+      "pass": 33,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
     }
   },
-  "static_proof": {
-    "pnpm_verify": "PASS",
-    "lint": "PASS",
-    "type_check": "PASS",
-    "build": "PASS",
-    "test": "PASS",
-    "domain_test_count": 33,
-    "domain_test_failures": 0,
-    "r_level": "PASS",
-    "r_level_rules_matched": "none"
-  },
   "runtime_proof": {
-    "pnpm_test_db": "PASS",
-    "test_count": 7,
-    "failures": 0,
-    "duration_ms": 1944,
+    "note": "Live Supabase proof — apps/api/src/t1-proof-execution-intent.test.ts run against zfzdnfwdarxucxtaojxm",
+    "command": "tsx --test apps/api/src/t1-proof-execution-intent.test.ts",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "execution_intents table created by migration; all 7 live-DB assertions pass"
+      }
+    ],
+    "queries": [
+      "execution_intents table exists and INSERT works",
+      "immutability trigger rejects UPDATE",
+      "immutability trigger rejects DELETE",
+      "idempotency_key unique index prevents duplicate re-confirm",
+      "predecessor_id chain persists correctly",
+      "inputs_hash CHECK rejects non-hex hash",
+      "status CHECK rejects invalid status value"
+    ],
     "row_counts": [
       {
         "table": "execution_intents",
-        "note": "test rows inserted and verified via t1-proof-execution-intent.test.ts"
+        "rows_inserted": 7,
+        "rows_verified": 7,
+        "note": "test rows; table append-only, no deletes"
       }
     ],
-    "notes": "Live-DB proof confirms: INSERT, UPDATE trigger, DELETE trigger, idempotency UNIQUE index, predecessor chain, inputs_hash CHECK, status CHECK \u2014 all pass vs Supabase zfzdnfwdarxucxtaojxm."
-  },
-  "implementation_summary": {
-    "files_created": [
-      "supabase/migrations/20260530001_utv2_1132_execution_intents.sql",
-      "db/migrations-rollback/20260530001_utv2_1132_execution_intents.down.sql",
-      "packages/domain/src/models/execution-intent.ts",
-      "packages/domain/src/models/execution-intent.test.ts",
-      "apps/api/src/t1-proof-execution-intent.test.ts"
-    ],
-    "files_modified": [
-      "packages/domain/src/models/index.ts",
-      "packages/db/src/types.ts",
-      "packages/db/src/repositories.ts",
-      "packages/db/src/runtime-repositories.ts",
-      ".lane/lanes/migration.yml",
-      "package.json",
-      "apps/api/package.json"
-    ],
-    "schema_summary": {
-      "table": "execution_intents",
-      "immutability": "BEFORE UPDATE/DELETE triggers raise EXCEPTION",
-      "predecessor_chain": "predecessor_id UUID REFERENCES execution_intents(id) DEFERRABLE",
-      "idempotency": "UNIQUE partial index on idempotency_key WHERE NOT NULL",
-      "issued_at_ms": "BIGINT NOT NULL \u2014 deterministic epoch ms from caller"
-    },
-    "constitutional_constraints": {
-      "no_capital": true,
-      "no_treasury": true,
-      "no_scaling": true,
-      "no_frozen_domain": true,
-      "program1_topology_untouched": true,
-      "domain_package_pure": true
-    }
+    "duration_ms": 1944
   }
 }
