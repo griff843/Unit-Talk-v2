@@ -1067,6 +1067,7 @@ export interface RepositoryBundle {
   experimentLedger?: ExperimentLedgerRepository;
   modelHealthSnapshots?: ModelHealthSnapshotRepository;
   executionQuality?: ExecutionQualityRepository;
+  executionIntents?: ExecutionIntentRepository;
 }
 
 export type { IMarketUniverseRepository, MarketUniverseClosingLine, MarketUniverseUpsertInput };
@@ -1247,3 +1248,44 @@ export function mapValidatedSubmissionToSubmissionCreateInput(
     receivedAt: submission.receivedAt,
   };
 }
+
+// ---------------------------------------------------------------------------
+// ExecutionIntent Repository (UTV2-1132 — INIT-4.1.1)
+// ---------------------------------------------------------------------------
+
+import type {
+  ExecutionIntentRow,
+  ExecutionIntentType,
+  ExecutionIntentStatus,
+} from './types.js';
+
+export interface ExecutionIntentAppendInput {
+  /** Caller-supplied stable UUID. */
+  id: string;
+  predecessor_id: string | null;
+  pick_id: string;
+  decision_record_id: string;
+  intent_type: ExecutionIntentType;
+  status: ExecutionIntentStatus;
+  idempotency_key: string | null;
+  inputs_hash: string;
+  provenance: Record<string, unknown>;
+  payload: Record<string, unknown>;
+  issued_at_ms: number;
+}
+
+export interface ExecutionIntentRepository {
+  /** Append a new immutable ExecutionIntent record. */
+  append(input: ExecutionIntentAppendInput): Promise<ExecutionIntentRow>;
+  findById(id: string): Promise<ExecutionIntentRow | null>;
+  findByPickId(pickId: string): Promise<ExecutionIntentRow[]>;
+  /** Returns the record matching idempotency_key, or null if none. */
+  findByIdempotencyKey(key: string): Promise<ExecutionIntentRow | null>;
+  /**
+   * Reconstruct the ordered chain for a pick_id.
+   * Returns records in chronological order (root first, most recent last).
+   */
+  reconstructChain(pickId: string): Promise<ExecutionIntentRow[]>;
+}
+
+export type { ExecutionIntentRow, ExecutionIntentType, ExecutionIntentStatus };

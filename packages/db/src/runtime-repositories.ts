@@ -112,6 +112,8 @@ import type {
   OddsSnapshotInsert,
   OddsSnapshotRecord,
   OddsSnapshotRepository,
+  ExecutionIntentAppendInput,
+  ExecutionIntentRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -145,6 +147,7 @@ import type {
   SubmissionEventRecord,
   SubmissionRecord,
   PickReviewRecord,
+  ExecutionIntentRow,
 } from './types.js';
 import type { Json } from './database.types.js';
 import {
@@ -8155,6 +8158,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     marketFamilyTrust: new InMemoryMarketFamilyTrustRepository(),
     modelRegistry: new InMemoryModelRegistryRepository(),
     experimentLedger: new InMemoryExperimentLedgerRepository(),
+    executionIntents: new InMemoryExecutionIntentRepository(),
   };
 }
 
@@ -8189,6 +8193,7 @@ export function createDatabaseRepositoryBundle(
     experimentLedger: new DatabaseExperimentLedgerRepository(
       createDatabaseClientFromConnection(connection),
     ),
+    executionIntents: new DatabaseExecutionIntentRepository(connection),
   };
 }
 
@@ -9173,3 +9178,179 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// ExecutionIntentRepository — InMemory implementation (UTV2-1132)
+// ---------------------------------------------------------------------------
+
+export class InMemoryExecutionIntentRepository implements ExecutionIntentRepository {
+  private store = new Map<string, ExecutionIntentRow>();
+  private idempotencyIndex = new Map<string, string>();
+
+  async append(input: ExecutionIntentAppendInput): Promise<ExecutionIntentRow> {
+    if (input.idempotency_key !== null) {
+      const existing = this.idempotencyIndex.get(input.idempotency_key);
+      if (existing !== undefined) {
+        const row = this.store.get(existing);
+        if (row !== undefined) return row;
+      }
+    }
+    const row: ExecutionIntentRow = {
+      id: input.id,
+      predecessor_id: input.predecessor_id,
+      pick_id: input.pick_id,
+      decision_record_id: input.decision_record_id,
+      intent_type: input.intent_type,
+      status: input.status,
+      idempotency_key: input.idempotency_key,
+      inputs_hash: input.inputs_hash,
+      provenance: input.provenance,
+      payload: input.payload,
+      issued_at_ms: input.issued_at_ms,
+      created_at: new Date().toISOString(),
+    };
+    this.store.set(row.id, row);
+    if (row.idempotency_key !== null) {
+      this.idempotencyIndex.set(row.idempotency_key, row.id);
+    }
+    return row;
+  }
+
+  async findById(id: string): Promise<ExecutionIntentRow | null> {
+    return this.store.get(id) ?? null;
+  }
+
+  async findByPickId(pickId: string): Promise<ExecutionIntentRow[]> {
+    return [...this.store.values()]
+      .filter(r => r.pick_id === pickId)
+      .sort((a, b) => a.issued_at_ms - b.issued_at_ms);
+  }
+
+  async findByIdempotencyKey(key: string): Promise<ExecutionIntentRow | null> {
+    const id = this.idempotencyIndex.get(key);
+    return id !== undefined ? (this.store.get(id) ?? null) : null;
+  }
+
+  async reconstructChain(pickId: string): Promise<ExecutionIntentRow[]> {
+    const all = await this.findByPickId(pickId);
+    if (all.length === 0) return [];
+
+    const byId = new Map(all.map(r => [r.id, r]));
+    const roots = all.filter(r => r.predecessor_id === null || !byId.has(r.predecessor_id));
+    if (roots.length === 0) return all;
+
+    const childOf = new Map<string, ExecutionIntentRow>();
+    for (const r of all) {
+      if (r.predecessor_id !== null) childOf.set(r.predecessor_id, r);
+    }
+
+    const chain: ExecutionIntentRow[] = [];
+    let current: ExecutionIntentRow | undefined = roots[0];
+    const visited = new Set<string>();
+    while (current !== undefined) {
+      if (visited.has(current.id)) break;
+      visited.add(current.id);
+      chain.push(current);
+      current = childOf.get(current.id);
+    }
+    return chain;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ExecutionIntentRepository — Database implementation (UTV2-1132)
+// ---------------------------------------------------------------------------
+
+export class DatabaseExecutionIntentRepository implements ExecutionIntentRepository {
+  private client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async append(input: ExecutionIntentAppendInput): Promise<ExecutionIntentRow> {
+    if (input.idempotency_key !== null) {
+      const existing = await this.findByIdempotencyKey(input.idempotency_key);
+      if (existing !== null) return existing;
+    }
+
+    const { data, error } = await this.client
+      .from('execution_intents')
+      .insert({
+        id: input.id,
+        predecessor_id: input.predecessor_id,
+        pick_id: input.pick_id,
+        decision_record_id: input.decision_record_id,
+        intent_type: input.intent_type,
+        status: input.status,
+        idempotency_key: input.idempotency_key,
+        inputs_hash: input.inputs_hash,
+        provenance: input.provenance as Json,
+        payload: input.payload as Json,
+        issued_at_ms: input.issued_at_ms,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw new Error(`ExecutionIntentRepository.append failed: ${error.message}`);
+    return data as ExecutionIntentRow;
+  }
+
+  async findById(id: string): Promise<ExecutionIntentRow | null> {
+    const { data, error } = await this.client
+      .from('execution_intents')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw new Error(`ExecutionIntentRepository.findById failed: ${error.message}`);
+    return (data as ExecutionIntentRow | null) ?? null;
+  }
+
+  async findByPickId(pickId: string): Promise<ExecutionIntentRow[]> {
+    const { data, error } = await this.client
+      .from('execution_intents')
+      .select('*')
+      .eq('pick_id', pickId)
+      .order('issued_at_ms', { ascending: true });
+
+    if (error) throw new Error(`ExecutionIntentRepository.findByPickId failed: ${error.message}`);
+    return (data ?? []) as ExecutionIntentRow[];
+  }
+
+  async findByIdempotencyKey(key: string): Promise<ExecutionIntentRow | null> {
+    const { data, error } = await this.client
+      .from('execution_intents')
+      .select('*')
+      .eq('idempotency_key', key)
+      .maybeSingle();
+
+    if (error) throw new Error(`ExecutionIntentRepository.findByIdempotencyKey failed: ${error.message}`);
+    return (data as ExecutionIntentRow | null) ?? null;
+  }
+
+  async reconstructChain(pickId: string): Promise<ExecutionIntentRow[]> {
+    const all = await this.findByPickId(pickId);
+    if (all.length === 0) return [];
+
+    const byId = new Map(all.map(r => [r.id, r]));
+    const roots = all.filter(r => r.predecessor_id === null || !byId.has(r.predecessor_id));
+    if (roots.length === 0) return all;
+
+    const childOf = new Map<string, ExecutionIntentRow>();
+    for (const r of all) {
+      if (r.predecessor_id !== null) childOf.set(r.predecessor_id, r);
+    }
+
+    const chain: ExecutionIntentRow[] = [];
+    let current: ExecutionIntentRow | undefined = roots[0];
+    const visited = new Set<string>();
+    while (current !== undefined) {
+      if (visited.has(current.id)) break;
+      visited.add(current.id);
+      chain.push(current);
+      current = childOf.get(current.id);
+    }
+    return chain;
+  }
+}

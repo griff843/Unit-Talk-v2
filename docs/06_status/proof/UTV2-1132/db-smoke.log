@@ -1,0 +1,17 @@
+UTV2-1132 live-DB proof — 2026-05-30
+Supabase project: zfzdnfwdarxucxtaojxm
+Test file: apps/api/src/t1-proof-execution-intent.test.ts
+
+TAP version 13
+ok 1 - UTV2-1132: execution_intents table exists and INSERT works (407ms)
+ok 2 - UTV2-1132: immutability trigger rejects UPDATE (213ms)
+ok 3 - UTV2-1132: immutability trigger rejects DELETE (260ms)
+ok 4 - UTV2-1132: idempotency_key unique index prevents duplicate re-confirm (209ms)
+ok 5 - UTV2-1132: predecessor_id chain persists correctly (211ms)
+ok 6 - UTV2-1132: inputs_hash CHECK rejects non-hex hash (105ms)
+ok 7 - UTV2-1132: status CHECK rejects invalid status value (109ms)
+1..7
+# tests 7
+# pass 7
+# fail 0
+# duration_ms 1944

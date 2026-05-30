@@ -6,6 +6,8 @@ allowed_path_globs:
   - database/migrations/**
   - packages/**/database.types.ts
   - packages/db/**
+  - packages/domain/**
+  - docs/06_status/CERT_BOARD.md
   - scripts/**
   - .lane/migration-lock.yml
   - .lane/lanes/**
@@ -16,6 +18,7 @@ allowed_path_globs:
   - apps/ingestor/**
   - apps/api/src/t1-proof-*.test.ts
   - apps/api/src/database-smoke.test.ts
+  - apps/api/package.json
   - package.json
   - .github/workflows/migration-reversibility-gate.yml
 forbidden_path_globs:

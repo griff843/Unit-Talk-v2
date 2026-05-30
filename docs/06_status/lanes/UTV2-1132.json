@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1132",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1132-executionintent-entity",
+  "branch": "claude/utv2-1132-executionintent-entity",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/lanes/migration.yml",
+    "apps/api/package.json",
+    "apps/api/src/t1-proof-execution-intent.test.ts",
+    "db/migrations-rollback/20260530001_utv2_1132_execution_intents.down.sql",
+    "docs/06_status/proof/UTV2-1132/db-smoke.log",
+    "docs/06_status/proof/UTV2-1132/diff-summary.md",
+    "docs/06_status/proof/UTV2-1132/evidence.json",
+    "docs/06_status/proof/UTV2-1132/sql-review.md",
+    "docs/06_status/proof/UTV2-1132/verification.md",
+    "package.json",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "packages/db/src/types.ts",
+    "packages/domain/src/models/execution-intent.test.ts",
+    "packages/domain/src/models/execution-intent.ts",
+    "packages/domain/src/models/index.ts",
+    "supabase/migrations/20260530001_utv2_1132_execution_intents.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1132/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-30T06:49:56.810Z",
+  "heartbeat_at": "2026-05-30T06:49:56.810Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1132-executionintent-entity.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1132-executionintent-entity",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
