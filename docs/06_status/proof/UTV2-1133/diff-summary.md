@@ -17,3 +17,8 @@
 ## Scope
 
 All implementation and proof changes are within the UTV2-1133 allowed file scope.
+
+## SHA Binding
+
+merge_sha: 80f349ada9848ac42fce67ca39a67c205a23f13f
+pr: https://github.com/griff843/Unit-Talk-v2/pull/933
