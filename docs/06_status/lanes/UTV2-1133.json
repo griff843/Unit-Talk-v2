@@ -12,7 +12,11 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/distribution-receipt-service.ts",
-    "apps/api/src/persistence.ts"
+    "apps/api/src/persistence.ts",
+    "apps/api/src/execution-confirmation-service.ts",
+    "apps/api/src/execution-confirmation-service.test.ts",
+    "docs/06_status/proof/UTV2-1133/diff-summary.md",
+    "docs/06_status/proof/UTV2-1133/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1133/diff-summary.md",
