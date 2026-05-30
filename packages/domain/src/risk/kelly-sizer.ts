@@ -10,6 +10,13 @@
  * DETERMINISTIC: Same inputs always produce same output.
  */
 
+import { createHash } from 'node:crypto';
+
+import {
+  createDecisionRecord,
+  type DecisionRecord,
+} from '../models/decision-record.js';
+
 export interface BankrollConfig {
   /** Total bankroll in units (e.g., 1000 = $1000) */
   total_bankroll: number;
@@ -47,6 +54,44 @@ export interface KellySizingResult {
   /** Whether the edge is positive (kelly > 0). */
   has_edge: boolean;
 }
+
+export type NegativeEvRoute = 'eligible' | 'rejected';
+
+export type NegativeEvRejectionReason =
+  | 'invalid_inputs'
+  | 'invalid_bankroll'
+  | 'negative_expected_value'
+  | 'zero_expected_value'
+  | 'zero_fractional_kelly';
+
+export interface NegativeEvRoutingInput {
+  /** Pick or candidate id whose routing decision is being made. */
+  entity_id: string;
+  /** Caller-supplied append-only DecisionRecord id. */
+  record_id: string;
+  /** Caller-supplied epoch ms for deterministic replay. */
+  decided_at_ms: number;
+  /** Model win probability at the offered price. */
+  win_probability: number;
+  /** Offered decimal odds. */
+  decimal_odds: number;
+  /** Optional prior DecisionRecord id for replay-visible chaining. */
+  preceding_record_id?: string | null;
+  /** Defaults to DEFAULT_BANKROLL_CONFIG. Included in the replay hash. */
+  bankroll?: BankrollConfig;
+}
+
+export interface NegativeEvRoutingResult {
+  route: NegativeEvRoute;
+  rejection_reason: NegativeEvRejectionReason | null;
+  expected_value_per_unit: number;
+  break_even_probability: number;
+  kelly: KellySizingResult;
+  decision_record: DecisionRecord;
+}
+
+export const NEGATIVE_EV_ROUTING_POLICY_VERSION = 'negative-ev-routing-v1';
+export const NEGATIVE_EV_ROUTING_EVALUATOR_VERSION = 'kelly-sizer-v1';
 
 /**
  * Compute Kelly-optimal bet size given probability, odds, and bankroll context.
@@ -130,6 +175,60 @@ export function computeKellySize(
 }
 
 /**
+ * Route a pick/candidate through the negative-EV gate.
+ *
+ * The decision fails closed: invalid inputs, invalid bankroll config, EV <= 0,
+ * or zero fractional Kelly all produce a rejected route. Every route emits an
+ * immutable DecisionRecord so replay can bind the rejection/eligibility result
+ * to the exact economic inputs and policy versions used.
+ */
+export function routeNegativeEvDecision(
+  input: NegativeEvRoutingInput,
+): NegativeEvRoutingResult {
+  const bankroll = input.bankroll ?? DEFAULT_BANKROLL_CONFIG;
+  const kelly = computeKellySize(input.win_probability, input.decimal_odds, bankroll);
+  const breakEvenProbability = isValidOdds(input.decimal_odds) ? 1 / input.decimal_odds : 0;
+  const expectedValuePerUnit =
+    isValidProbability(input.win_probability) && isValidOdds(input.decimal_odds)
+      ? input.win_probability * (input.decimal_odds - 1) - (1 - input.win_probability)
+      : 0;
+
+  const rejectionReason = determineNegativeEvRejectionReason(
+    kelly,
+    expectedValuePerUnit,
+  );
+  const route: NegativeEvRoute = rejectionReason === null ? 'eligible' : 'rejected';
+  const reason = buildNegativeEvDecisionReason(route, rejectionReason, expectedValuePerUnit, kelly);
+  const inputsHash = hashNegativeEvRoutingInputs(input, bankroll);
+
+  const decisionRecord = createDecisionRecord({
+    record_id: input.record_id,
+    decision_type: route === 'rejected' ? 'block' : 'promotion',
+    entity_id: input.entity_id,
+    entity_type: 'pick',
+    decided_at_ms: input.decided_at_ms,
+    outcome: route === 'rejected' ? 'blocked' : 'approved',
+    reason,
+    inputs_hash: inputsHash,
+    provenance: {
+      authority: 'system',
+      policy_version: NEGATIVE_EV_ROUTING_POLICY_VERSION,
+      evaluator_version: NEGATIVE_EV_ROUTING_EVALUATOR_VERSION,
+    },
+    preceding_record_id: input.preceding_record_id ?? null,
+  });
+
+  return {
+    route,
+    rejection_reason: rejectionReason,
+    expected_value_per_unit: round(expectedValuePerUnit, 6),
+    break_even_probability: round(breakEvenProbability, 6),
+    kelly,
+    decision_record: decisionRecord,
+  };
+}
+
+/**
  * Compute raw Kelly fraction without bankroll context.
  *
  * Returns the fractional Kelly value (raw * multiplier), capped at max_fraction.
@@ -195,6 +294,55 @@ function isValidBankroll(config: BankrollConfig): boolean {
     config.max_bet_fraction > 0 &&
     config.max_bet_fraction <= 1
   );
+}
+
+function determineNegativeEvRejectionReason(
+  kelly: KellySizingResult,
+  expectedValuePerUnit: number,
+): NegativeEvRejectionReason | null {
+  if (kelly.cap_reason === 'invalid_inputs') return 'invalid_inputs';
+  if (kelly.cap_reason === 'invalid_bankroll') return 'invalid_bankroll';
+  if (expectedValuePerUnit < 0) return 'negative_expected_value';
+  if (expectedValuePerUnit === 0) return 'zero_expected_value';
+  if (kelly.fractional_kelly <= 0) return 'zero_fractional_kelly';
+  return null;
+}
+
+function buildNegativeEvDecisionReason(
+  route: NegativeEvRoute,
+  rejectionReason: NegativeEvRejectionReason | null,
+  expectedValuePerUnit: number,
+  kelly: KellySizingResult,
+): string {
+  const ev = round(expectedValuePerUnit, 6);
+  if (route === 'eligible') {
+    return `negative_ev_route:eligible ev_per_unit=${ev} raw_kelly=${kelly.raw_kelly}`;
+  }
+  return `negative_ev_route:rejected reason=${rejectionReason} ev_per_unit=${ev} raw_kelly=${kelly.raw_kelly}`;
+}
+
+function hashNegativeEvRoutingInputs(
+  input: NegativeEvRoutingInput,
+  bankroll: BankrollConfig,
+): string {
+  const canonical = JSON.stringify({
+    policy_version: NEGATIVE_EV_ROUTING_POLICY_VERSION,
+    evaluator_version: NEGATIVE_EV_ROUTING_EVALUATOR_VERSION,
+    win_probability: canonicalNumber(input.win_probability),
+    decimal_odds: canonicalNumber(input.decimal_odds),
+    bankroll: {
+      total_bankroll: canonicalNumber(bankroll.total_bankroll),
+      kelly_multiplier: canonicalNumber(bankroll.kelly_multiplier),
+      max_bet_fraction: canonicalNumber(bankroll.max_bet_fraction),
+      min_bet_units: canonicalNumber(bankroll.min_bet_units),
+      daily_loss_limit: canonicalNumber(bankroll.daily_loss_limit),
+    },
+  });
+  return createHash('sha256').update(canonical).digest('hex');
+}
+
+function canonicalNumber(value: number): number | string {
+  return Number.isFinite(value) ? value : String(value);
 }
 
 function zeroSizing(reason: string): KellySizingResult {
