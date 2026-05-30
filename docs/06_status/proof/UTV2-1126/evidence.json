@@ -1,0 +1,88 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1126",
+  "title": "INIT-3.4.3 - Negative-EV Rejection Routing",
+  "tier": "T1",
+  "executor": "codex",
+  "branch": "codex/utv2-1126-init-343-negative-ev-rejection-routing",
+  "sha_binding": {
+    "verified_source_sha": "3d918eb03ced596d0d0ffa9c6b0e9c19786c9ce5",
+    "verified_source_note": "Implementation commit containing the negative-EV routing gate and tests. Subsequent commits in this PR are proof-only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "merge_sha": null,
+  "evidence": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "note": "TypeScript project reference check completed successfully before full verify."
+    },
+    "focused_domain_tests": {
+      "command": "npx tsx --test packages/domain/src/risk/risk.test.ts",
+      "result": "PASS",
+      "tests": 35,
+      "passed": 35,
+      "failed": 0,
+      "coverage": [
+        "negative-EV adversarial rejection",
+        "invalid input fail-closed routing",
+        "zero-EV rejection",
+        "deterministic replay evidence via inputs_hash"
+      ]
+    },
+    "pnpm_test": {
+      "command": "pnpm test",
+      "result": "PASS",
+      "note": "Aggregate test suite completed successfully after a clean full rerun. An earlier live DB artifact-sha test hit a transient fetch failure and passed on targeted retry before the clean aggregate run."
+    },
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "result": "PASS",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "result": "PASS",
+      "note": "ops sync, system alignment, automation coverage, env check, lint, type-check, build, aggregate tests, smart-form verify, and command checks completed successfully."
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "result": "PASS",
+      "changed_files": 2,
+      "rules_matched": [],
+      "artifacts_required": [],
+      "output": "Verdict: PASS; Changed files: 2; Rules matched: (none) - no R-level artifacts required for this diff"
+    },
+    "runtime_proof": {
+      "result": "PASS",
+      "evidence_refs": [
+        "pnpm test:db live Supabase smoke suite",
+        "pnpm verify T1 live proof suites under test:t1-proof"
+      ],
+      "note": "No runtime code path changed. T1 runtime proof was still executed per packet."
+    },
+    "evidence_bundle": {
+      "result": "PASS",
+      "path": "docs/06_status/proof/UTV2-1126/evidence.json"
+    }
+  },
+  "invariants_asserted": [
+    "Negative expected value routes are rejected with DecisionRecord outcome=blocked.",
+    "Invalid replay/economic inputs fail closed instead of routing eligible.",
+    "Break-even EV is rejected as zero_expected_value.",
+    "Positive EV routes eligible and bind deterministic inputs_hash evidence.",
+    "DecisionRecord provenance records policy version, evaluator version, system authority, and optional preceding record id.",
+    "packages/domain remains pure: no DB, config, app, or runtime service imports were introduced."
+  ],
+  "files_changed": [
+    "packages/domain/src/risk/kelly-sizer.ts",
+    "packages/domain/src/risk/risk.test.ts",
+    "docs/06_status/proof/UTV2-1126/evidence.json"
+  ],
+  "generated_at": "2026-05-30T03:20:00Z",
+  "generated_by": "codex"
+}

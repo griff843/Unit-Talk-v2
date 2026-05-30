@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -6,6 +6,9 @@ import {
   computeKellyFraction,
   americanToDecimal,
   DEFAULT_BANKROLL_CONFIG,
+  NEGATIVE_EV_ROUTING_EVALUATOR_VERSION,
+  NEGATIVE_EV_ROUTING_POLICY_VERSION,
+  routeNegativeEvDecision,
 } from './kelly-sizer.js';
 
 import type { BankrollConfig } from './kelly-sizer.js';
@@ -255,4 +258,97 @@ describe('computeKellySize', () => {
     assert.equal(result.has_edge, true);
     assert.ok(result.recommended_units > 0);
   });
+});
+
+test('routeNegativeEvDecision rejects adversarial negative-EV inputs with immutable DecisionRecord provenance', () => {
+  const result = routeNegativeEvDecision({
+    entity_id: 'pick-negative-ev',
+    record_id: 'decision-negative-ev',
+    decided_at_ms: 1_800_000_000_000,
+    win_probability: 0.45,
+    decimal_odds: 2.0,
+  });
+
+  assert.equal(result.route, 'rejected');
+  assert.equal(result.rejection_reason, 'negative_expected_value');
+  assert.equal(result.expected_value_per_unit, -0.1);
+  assert.equal(result.kelly.has_edge, false);
+  assert.equal(result.decision_record.decision_type, 'block');
+  assert.equal(result.decision_record.outcome, 'blocked');
+  assert.equal(result.decision_record.entity_type, 'pick');
+  assert.equal(result.decision_record.provenance.authority, 'system');
+  assert.equal(
+    result.decision_record.provenance.policy_version,
+    NEGATIVE_EV_ROUTING_POLICY_VERSION,
+  );
+  assert.equal(
+    result.decision_record.provenance.evaluator_version,
+    NEGATIVE_EV_ROUTING_EVALUATOR_VERSION,
+  );
+  assert.match(result.decision_record.reason, /reason=negative_expected_value/);
+  assert.equal(Object.isFrozen(result.decision_record), true);
+  assert.equal(Object.isFrozen(result.decision_record.provenance), true);
+});
+
+test('routeNegativeEvDecision fails closed for invalid replay inputs', () => {
+  const result = routeNegativeEvDecision({
+    entity_id: 'pick-invalid',
+    record_id: 'decision-invalid',
+    decided_at_ms: 1_800_000_000_001,
+    win_probability: Number.NaN,
+    decimal_odds: 2.0,
+  });
+
+  assert.equal(result.route, 'rejected');
+  assert.equal(result.rejection_reason, 'invalid_inputs');
+  assert.equal(result.expected_value_per_unit, 0);
+  assert.equal(result.break_even_probability, 0.5);
+  assert.equal(result.decision_record.outcome, 'blocked');
+  assert.match(result.decision_record.reason, /reason=invalid_inputs/);
+  assert.match(result.decision_record.inputs_hash, /^[a-f0-9]{64}$/);
+});
+
+test('routeNegativeEvDecision rejects exact break-even as zero expected value', () => {
+  const result = routeNegativeEvDecision({
+    entity_id: 'pick-break-even',
+    record_id: 'decision-break-even',
+    decided_at_ms: 1_800_000_000_002,
+    win_probability: 0.5,
+    decimal_odds: 2.0,
+  });
+
+  assert.equal(result.route, 'rejected');
+  assert.equal(result.rejection_reason, 'zero_expected_value');
+  assert.equal(result.expected_value_per_unit, 0);
+  assert.equal(result.kelly.raw_kelly, 0);
+  assert.equal(result.decision_record.outcome, 'blocked');
+});
+
+test('routeNegativeEvDecision produces deterministic replay evidence for identical economic inputs', () => {
+  const first = routeNegativeEvDecision({
+    entity_id: 'pick-replay',
+    record_id: 'decision-replay-1',
+    decided_at_ms: 1_800_000_000_003,
+    win_probability: 0.55,
+    decimal_odds: 2.0,
+    preceding_record_id: 'previous-decision',
+  });
+  const second = routeNegativeEvDecision({
+    entity_id: 'pick-replay',
+    record_id: 'decision-replay-2',
+    decided_at_ms: 1_800_000_000_004,
+    win_probability: 0.55,
+    decimal_odds: 2.0,
+    preceding_record_id: 'previous-decision',
+  });
+
+  assert.equal(first.route, 'eligible');
+  assert.equal(first.rejection_reason, null);
+  assert.equal(first.expected_value_per_unit, 0.1);
+  assert.equal(first.decision_record.decision_type, 'promotion');
+  assert.equal(first.decision_record.outcome, 'approved');
+  assert.equal(first.decision_record.preceding_record_id, 'previous-decision');
+  assert.equal(first.decision_record.inputs_hash, second.decision_record.inputs_hash);
+  assert.equal(first.kelly.raw_kelly, second.kelly.raw_kelly);
+  assert.equal(first.kelly.fractional_kelly, second.kelly.fractional_kelly);
 });
