@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1127",
+  "sha_binding": {
+    "verified_source_sha": "d76ed93ebba5741cbaad4606b16a896351a7b2f5",
+    "verified_source_note": "Pre-PR lane verification for forcePromote exception runtime. Final PR head SHA is established by the implementation commit containing this evidence bundle.",
+    "merge_sha": null,
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS"
+      },
+      "tail": [
+        "[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json",
+        "[check-migration-versions] 114 migration file(s) verified - no duplicate versions.",
+        "[lint-migrations] 114 migration file(s) checked - no findings."
+      ]
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "domain_tests": {
+      "command": "npx tsx --test packages/domain/src/models/decision-record.test.ts packages/domain/src/promotion-conviction.test.ts",
+      "status": "PASS",
+      "tests": 31,
+      "pass": 31,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 2,
+      "rules_matched": "none",
+      "artifacts_required": "none",
+      "output": [
+        "Verdict: PASS",
+        "Changed files: 2",
+        "Rules matched: (none) - no R-level artifacts required for this diff"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "note": "Domain-only forcePromote exception runtime with live DB smoke required for T1. No schema, repository, API, or worker paths were modified by this lane.",
+    "inline_exception_runtime_proof": {
+      "command": "npx tsx -e <forcePromote exception runtime assertions>",
+      "status": "PASS",
+      "output": "UTV2-1127 inline proof PASS",
+      "assertions": [
+        "malformed forcePromote with blank reason fails closed and emits no exceptionRecord",
+        "valid forcePromote over a suppressed pick qualifies and emits immutable DecisionRecord provenance",
+        "exception DecisionRecord passes verifyDecisionIntegrity",
+        "suppression reasons bypassed by the exception are replay-visible in evidence",
+        "replayPromotion reconstructs stable exception inputs_hash for identical snapshots"
+      ]
+    },
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "supabase_project": "zfzdnfwdarxucxtaojxm",
+      "queries": [
+        "database repository bundle persists submission and settlement",
+        "invalid atomic enqueue writes no lifecycle event or outbox row",
+        "invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "participant upsert prevents duplicate rows",
+        "re-settling a settled pick creates correction without duplicate base rows",
+        "correction chain is additive and original settlement row is not mutated"
+      ]
+    },
+    "root_test": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "note": "Root aggregate test suite completed with exit code 0 before pnpm verify."
+    }
+  },
+  "acceptance_criteria": {
+    "exception_escalation_paths_explicit": "PASS",
+    "malformed_exception_escalation_fails_closed": "PASS",
+    "replay_visible_exception_provenance": "PASS",
+    "immutable_decision_record_bound_to_exception": "PASS",
+    "no_portfolio_exposure_runtime_activation": "PASS",
+    "no_program_4_activation": "PASS",
+    "no_frozen_domain_activation": "PASS",
+    "no_program_1_certification_topology_mutation": "PASS"
+  },
+  "verdict": "PASS"
+}
