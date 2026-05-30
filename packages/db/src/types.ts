@@ -505,6 +505,30 @@ export interface CapperRow {
   updated_at: string;
 }
 
+// ---------------------------------------------------------------------------
+// ExecutionIntent types (UTV2-1132 — INIT-4.1.1)
+// Hand-rolled: table is new, not yet in database.types.ts.
+// Regenerate with `pnpm supabase:types` after migration is applied.
+// ---------------------------------------------------------------------------
+
+export type ExecutionIntentType = 'initial' | 're_confirm' | 'recovery';
+export type ExecutionIntentStatus = 'pending' | 'confirmed' | 'dead_letter' | 'recovered';
+
+export interface ExecutionIntentRow {
+  id: string;                           // UUID PRIMARY KEY
+  predecessor_id: string | null;        // UUID NULL REFERENCES execution_intents(id)
+  pick_id: string;                      // UUID NOT NULL (logical ref — no FK)
+  decision_record_id: string;           // TEXT NOT NULL (domain-layer ref, no FK)
+  intent_type: ExecutionIntentType;     // TEXT NOT NULL
+  status: ExecutionIntentStatus;        // TEXT NOT NULL DEFAULT 'pending'
+  idempotency_key: string | null;       // TEXT NULL (unique partial index when set)
+  inputs_hash: string;                  // TEXT NOT NULL — SHA-256 hex of inputs
+  provenance: Record<string, unknown>;  // JSONB NOT NULL
+  payload: Record<string, unknown>;     // JSONB NOT NULL DEFAULT '{}'
+  issued_at_ms: number;                 // BIGINT NOT NULL — deterministic epoch ms from caller
+  created_at: string;                   // TIMESTAMPTZ NOT NULL
+}
+
 export interface EventRow {
   id: string;
   sport_id: string;

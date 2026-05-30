@@ -1,0 +1,74 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1132",
+  "title": "INIT-4.1.1 — ExecutionIntent Entity",
+  "tier": "T1",
+  "lane_type": "migration",
+  "executor": "claude",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/932",
+  "sha_binding": {
+    "verified_source_sha": "a2b33516a487417265cc0b732c1adf120ca24fb0",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS",
+      "pnpm_test_db": "PASS",
+      "r_level_check": "PASS",
+      "tier_label": "tier:T1",
+      "live_db_proof": "PASS — 7/7 vs zfzdnfwdarxucxtaojxm"
+    }
+  },
+  "static_proof": {
+    "pnpm_verify": "PASS",
+    "lint": "PASS",
+    "type_check": "PASS",
+    "build": "PASS",
+    "test": "PASS",
+    "test_count": 113,
+    "domain_test_count": 30,
+    "domain_test_failures": 0,
+    "r_level": "PASS",
+    "r_level_rules_matched": "none — no artifacts required for this diff"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "PASS",
+    "test_count": 7,
+    "failures": 0,
+    "duration_ms": 1944,
+    "row_counts": [
+      { "table": "execution_intents", "note": "test rows inserted and verified via t1-proof-execution-intent.test.ts" }
+    ],
+    "notes": "Live-DB proof (t1-proof-execution-intent.test.ts) confirms: INSERT, UPDATE trigger, DELETE trigger, idempotency UNIQUE index, predecessor chain, inputs_hash CHECK, status CHECK — all pass against Supabase zfzdnfwdarxucxtaojxm."
+  },
+  "implementation_summary": {
+    "files_created": [
+      "supabase/migrations/20260530001_utv2_1132_execution_intents.sql",
+      "db/migrations-rollback/20260530001_utv2_1132_execution_intents.down.sql",
+      "packages/domain/src/models/execution-intent.ts",
+      "packages/domain/src/models/execution-intent.test.ts",
+      "apps/api/src/t1-proof-execution-intent.test.ts"
+    ],
+    "files_modified": [
+      "packages/domain/src/models/index.ts",
+      "packages/db/src/types.ts",
+      "packages/db/src/repositories.ts",
+      "packages/db/src/runtime-repositories.ts",
+      ".lane/lanes/migration.yml",
+      "package.json",
+      "apps/api/package.json"
+    ],
+    "schema_summary": {
+      "table": "execution_intents",
+      "immutability": "BEFORE UPDATE/DELETE triggers raise EXCEPTION",
+      "predecessor_chain": "predecessor_id UUID REFERENCES execution_intents(id) DEFERRABLE",
+      "idempotency": "UNIQUE partial index on idempotency_key WHERE NOT NULL",
+      "issued_at_ms": "BIGINT NOT NULL — deterministic epoch ms from caller, no wall-clock"
+    },
+    "constitutional_constraints": {
+      "no_capital": true,
+      "no_treasury": true,
+      "no_scaling": true,
+      "no_frozen_domain": true,
+      "program1_topology_untouched": true,
+      "domain_package_pure": true
+    }
+  }
+}
