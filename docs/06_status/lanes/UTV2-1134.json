@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/automated-recovery.ts",
+    "apps/worker/src/worker-automated-recovery.test.ts",
     "packages/domain/src/models/execution-intent.ts"
   ],
   "expected_proof_paths": [
