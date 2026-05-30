@@ -84,7 +84,7 @@ test('UTV2-750 live MLB CLV aliases resolve and recompute missing CLV samples', 
   }
 
   const computedOutcomes = outcomes.filter(
-    (outcome) => outcome.status === 'computed' || outcome.status === 'opening_line_fallback',
+    (outcome) => outcome.status === 'computed',
   );
 
   assert.equal(computedOutcomes.length, samplePicks.length);

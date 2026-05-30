@@ -1205,7 +1205,7 @@ test('recordGradedSettlement omits top-level CLV keys when no closing line exist
   assert.equal(payload.clvUnavailableReason, 'missing_closing_line');
 });
 
-test('recordGradedSettlement persists opening-line fallback visibility when CLV uses opening line', async () => {
+test('INIT-4.3.2: recordGradedSettlement quarantines CLV (null) when only opening line available — proxy removed', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
@@ -1256,9 +1256,9 @@ test('recordGradedSettlement persists opening-line fallback visibility when CLV 
   );
 
   const payload = result.settlementRecord.payload as Record<string, unknown>;
-  assert.equal(payload.clvStatus, 'opening_line_fallback');
-  assert.equal(payload.clvUnavailableReason, null);
-  assert.equal(payload.isOpeningLineFallback, true);
+  assert.equal(payload.clvStatus, 'missing_closing_line', 'CLV quarantined when only opening line available');
+  assert.equal(payload.clvUnavailableReason, 'missing_closing_line');
+  assert.equal(payload.isOpeningLineFallback, undefined, 'isOpeningLineFallback removed by INIT-4.3.2');
 });
 
 test('recordGradedSettlement produces non-null CLV when a future sibling event is closer by date (UTV2-453 regression)', async () => {
