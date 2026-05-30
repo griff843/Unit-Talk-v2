@@ -19,3 +19,7 @@ No CLV record without a verified closing source. Quarantine is mandatory when no
 ## Scope
 
 All changes within `apps/api/src/`. No Tier C modifications. No DB schema changes. No domain mutations.
+
+## SHA Binding
+merge_sha: ca8d8ad8bc8c8ea9ccca6549d32fea535058d677
+pr: https://github.com/griff843/Unit-Talk-v2/pull/935

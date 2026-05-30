@@ -23,3 +23,7 @@ Test: "INIT-4.3.2: adversarial — inject missing close; quarantine is mandatory
 - findOpeningLine mocked to return an opening offer
 - Result: outcome.result === null, outcome.status === 'missing_closing_line' ✓
 - No CLV fabricated from opening line ✓
+
+## SHA Binding
+merge_sha: ca8d8ad8bc8c8ea9ccca6549d32fea535058d677
+pr: https://github.com/griff843/Unit-Talk-v2/pull/935
