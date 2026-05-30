@@ -5,3 +5,4 @@ export * from './sizing-signal.js';
 export * from './exposure-store.js';
 export * from './exposure-consistency.js';
 export * from './drawdown-monitor.js';
+export * from './concentration-hard-blocks.js';
