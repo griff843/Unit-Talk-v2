@@ -3,8 +3,24 @@ import type { OutboxRecord, RepositoryBundle } from '@unit-talk/db';
 export const MAX_AUTO_RECOVERY_ATTEMPTS = 3;
 const AUTO_RECOVERY_SCAN_LIMIT = 20;
 
+// Explicitly allowlisted exception classes for dead-letter recovery.
+// Recovery is deny-by-default: only these classes permit automatic recovery.
+export const RECOVERY_EXCEPTION_CLASSES = {
+  NETWORK_FETCH: 'network_fetch',
+  NETWORK_RESET: 'network_reset',
+  CONNECTION_REFUSED: 'connection_refused',
+  TIMEOUT: 'timeout',
+  DNS_FAILURE: 'dns_failure',
+  HTTP_RATE_LIMIT: 'http_rate_limit',
+  HTTP_GATEWAY: 'http_gateway',
+  HTML_RESPONSE: 'html_response',
+} as const;
+
+export type RecoveryExceptionClass =
+  (typeof RECOVERY_EXCEPTION_CLASSES)[keyof typeof RECOVERY_EXCEPTION_CLASSES];
+
 // These patterns BLOCK recovery regardless of other error content.
-// Checked first — any match refuses recovery.
+// Denylist is checked first — any match refuses recovery.
 const RECOVERY_DENYLIST_PATTERNS = [
   'schema drift',
   'foreign key',
@@ -21,25 +37,60 @@ const RECOVERY_DENYLIST_PATTERNS = [
   'violates',
 ] as const;
 
-// Only these transient infrastructure patterns are eligible for auto-recovery.
-// Unknown errors that match neither list are NOT recoverable (fail closed).
-const TRANSIENT_RECOVERY_PATTERNS = [
-  'fetch failed',
-  'TypeError: fetch',
-  'ECONNRESET',
-  'ECONNREFUSED',
-  'ETIMEDOUT',
-  'ENOTFOUND',
-  '502',
-  '503',
-  '504',
-  '521',
-  '429',
-  'Bad gateway',
-  'Service Unavailable',
-  'Web server is down',
-  '<!DOCTYPE',
-] as const;
+// Explicit mapping from exception class to matching error patterns.
+// Unknown errors matching no class are denied (fail closed).
+const EXCEPTION_CLASS_PATTERNS: Array<{
+  cls: RecoveryExceptionClass;
+  patterns: readonly string[];
+}> = [
+  {
+    cls: RECOVERY_EXCEPTION_CLASSES.NETWORK_FETCH,
+    patterns: ['fetch failed', 'TypeError: fetch'],
+  },
+  { cls: RECOVERY_EXCEPTION_CLASSES.NETWORK_RESET, patterns: ['ECONNRESET'] },
+  { cls: RECOVERY_EXCEPTION_CLASSES.CONNECTION_REFUSED, patterns: ['ECONNREFUSED'] },
+  { cls: RECOVERY_EXCEPTION_CLASSES.TIMEOUT, patterns: ['ETIMEDOUT'] },
+  { cls: RECOVERY_EXCEPTION_CLASSES.DNS_FAILURE, patterns: ['ENOTFOUND'] },
+  { cls: RECOVERY_EXCEPTION_CLASSES.HTTP_RATE_LIMIT, patterns: ['429'] },
+  {
+    cls: RECOVERY_EXCEPTION_CLASSES.HTTP_GATEWAY,
+    patterns: ['502', '503', '504', '521', 'Bad gateway', 'Service Unavailable', 'Web server is down'],
+  },
+  { cls: RECOVERY_EXCEPTION_CLASSES.HTML_RESPONSE, patterns: ['<!DOCTYPE'] },
+];
+
+export interface ExceptionClassification {
+  allowed: boolean;
+  exceptionClass: RecoveryExceptionClass | 'denylist' | 'unknown' | 'no_error';
+}
+
+/**
+ * Classifies an error string into a recovery exception class.
+ * Deny-by-default: null, unknown, and denylist-matched errors return allowed=false.
+ * Every classification result is replay-visible via the recovery_exception_gated audit event.
+ */
+export function classifyException(error: string | null): ExceptionClassification {
+  if (!error) {
+    return { allowed: false, exceptionClass: 'no_error' };
+  }
+
+  const lower = error.toLowerCase();
+
+  // Denylist wins — hard business/lifecycle errors must never auto-recover
+  if (RECOVERY_DENYLIST_PATTERNS.some((p) => lower.includes(p.toLowerCase()))) {
+    return { allowed: false, exceptionClass: 'denylist' };
+  }
+
+  // Match against explicitly allowlisted exception classes
+  for (const { cls, patterns } of EXCEPTION_CLASS_PATTERNS) {
+    if (patterns.some((p) => error.includes(p))) {
+      return { allowed: true, exceptionClass: cls };
+    }
+  }
+
+  // Unknown exception type — fail closed
+  return { allowed: false, exceptionClass: 'unknown' };
+}
 
 export function isRecoveryEnabled(): boolean {
   return process.env['AUTOMATED_RECOVERY_ENABLED'] === 'true';
@@ -48,16 +99,7 @@ export function isRecoveryEnabled(): boolean {
 export function isEligibleForAutoRecovery(row: OutboxRecord): boolean {
   if (row.status !== 'failed' && row.status !== 'dead_letter') return false;
   if (row.attempt_count >= MAX_AUTO_RECOVERY_ATTEMPTS) return false;
-  if (!row.last_error) return false;
-
-  const err = row.last_error;
-  const lower = err.toLowerCase();
-
-  // Denylist first — any match blocks recovery
-  if (RECOVERY_DENYLIST_PATTERNS.some((p) => lower.includes(p.toLowerCase()))) return false;
-
-  // Must match at least one allowlist pattern — unknown errors are not recoverable
-  return TRANSIENT_RECOVERY_PATTERNS.some((p) => err.includes(p));
+  return classifyException(row.last_error).allowed;
 }
 
 export interface AutoRecoveryResult {
@@ -92,13 +134,41 @@ export async function runAutoRecoverySweep(
       break;
     }
 
-    if (!isEligibleForAutoRecovery(row)) {
+    if (row.status !== 'failed' && row.status !== 'dead_letter') {
+      skipped++;
+      continue;
+    }
+
+    const classification = classifyException(row.last_error);
+
+    if (!classification.allowed) {
+      // Every denied recovery decision is recorded for replay visibility
+      try {
+        await repositories.audit.record({
+          entityType: 'distribution_outbox',
+          entityId: row.id,
+          entityRef: row.pick_id,
+          action: 'distribution.recovery_exception_gated',
+          actor: 'system.automated-recovery',
+          payload: {
+            correlationId,
+            decision: 'denied',
+            exceptionClass: classification.exceptionClass,
+            lastError: row.last_error,
+            attemptCount: row.attempt_count,
+            status: row.status,
+          },
+        });
+      } catch (auditErr) {
+        errors.push(
+          `Failed to record denial audit for outbox ${row.id}: ${auditErr instanceof Error ? auditErr.message : String(auditErr)}`,
+        );
+      }
       skipped++;
       continue;
     }
 
     try {
-      // Capture mutable fields before reset — InMemory repos mutate the same object
       const originalFailureReason = row.last_error;
       const previousStatus = row.status;
       const attemptCountBefore = row.attempt_count;
@@ -110,6 +180,24 @@ export async function runAutoRecoverySweep(
         continue;
       }
 
+      // Record approved gating decision (replay-visible before the reset is acted on)
+      await repositories.audit.record({
+        entityType: 'distribution_outbox',
+        entityId: row.id,
+        entityRef: row.pick_id,
+        action: 'distribution.recovery_exception_gated',
+        actor: 'system.automated-recovery',
+        payload: {
+          correlationId,
+          decision: 'approved',
+          exceptionClass: classification.exceptionClass,
+          lastError: originalFailureReason,
+          attemptCount: attemptCountBefore,
+          status: previousStatus,
+        },
+      });
+
+      // Record recovery outcome
       await repositories.audit.record({
         entityType: 'distribution_outbox',
         entityId: row.id,
@@ -125,6 +213,7 @@ export async function runAutoRecoverySweep(
           recoveryOutcome: 'reset_to_pending',
           attemptCountBefore,
           previousStatus,
+          exceptionClass: classification.exceptionClass,
         },
       });
 

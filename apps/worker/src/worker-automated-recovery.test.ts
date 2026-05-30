@@ -5,6 +5,8 @@ import {
   isEligibleForAutoRecovery,
   isRecoveryEnabled,
   runAutoRecoverySweep,
+  classifyException,
+  RECOVERY_EXCEPTION_CLASSES,
   MAX_AUTO_RECOVERY_ATTEMPTS,
 } from './automated-recovery.js';
 import {
@@ -201,4 +203,120 @@ test('kill-switch: mid-run disable leaves subsequent rows unprocessed', async ()
   const r2 = outbox['entries'].find((e) => e.id === row2.id);
   assert.equal(r2?.status, 'failed', 'row2 should remain failed after kill-switch');
   assert.ok(result.recovered <= 1);
+});
+
+// Exception classification tests
+test('classifyException: null error returns no_error denied', () => {
+  const r = classifyException(null);
+  assert.equal(r.allowed, false);
+  assert.equal(r.exceptionClass, 'no_error');
+});
+
+test('classifyException: unknown error returns unknown denied', () => {
+  const r = classifyException('some random internal error XYZ');
+  assert.equal(r.allowed, false);
+  assert.equal(r.exceptionClass, 'unknown');
+});
+
+test('classifyException: denylist match returns denylist denied', () => {
+  const r = classifyException('violates foreign key constraint');
+  assert.equal(r.allowed, false);
+  assert.equal(r.exceptionClass, 'denylist');
+});
+
+test('classifyException: denylist wins over allowlist', () => {
+  const r = classifyException('ECONNRESET while enforcing foreign key constraint');
+  assert.equal(r.allowed, false);
+  assert.equal(r.exceptionClass, 'denylist');
+});
+
+test('classifyException: fetch failed -> network_fetch allowed', () => {
+  const r = classifyException('fetch failed');
+  assert.equal(r.allowed, true);
+  assert.equal(r.exceptionClass, RECOVERY_EXCEPTION_CLASSES.NETWORK_FETCH);
+});
+
+test('classifyException: ECONNRESET -> network_reset allowed', () => {
+  const r = classifyException('ECONNRESET');
+  assert.equal(r.allowed, true);
+  assert.equal(r.exceptionClass, RECOVERY_EXCEPTION_CLASSES.NETWORK_RESET);
+});
+
+test('classifyException: ETIMEDOUT -> timeout allowed', () => {
+  const r = classifyException('ETIMEDOUT');
+  assert.equal(r.allowed, true);
+  assert.equal(r.exceptionClass, RECOVERY_EXCEPTION_CLASSES.TIMEOUT);
+});
+
+test('classifyException: 503 Service Unavailable -> http_gateway allowed', () => {
+  const r = classifyException('503 Service Unavailable');
+  assert.equal(r.allowed, true);
+  assert.equal(r.exceptionClass, RECOVERY_EXCEPTION_CLASSES.HTTP_GATEWAY);
+});
+
+test('classifyException: 429 -> http_rate_limit allowed', () => {
+  const r = classifyException('429');
+  assert.equal(r.allowed, true);
+  assert.equal(r.exceptionClass, RECOVERY_EXCEPTION_CLASSES.HTTP_RATE_LIMIT);
+});
+
+test('classifyException: <!DOCTYPE -> html_response allowed', () => {
+  const r = classifyException('<!DOCTYPE html>');
+  assert.equal(r.allowed, true);
+  assert.equal(r.exceptionClass, RECOVERY_EXCEPTION_CLASSES.HTML_RESPONSE);
+});
+
+// Gating audit event tests
+test('denied recovery emits recovery_exception_gated with decision=denied', async () => {
+  const repos = makeRepos();
+  const outbox = repos.outbox as InMemoryOutboxRepository;
+  const row = makeRow({ status: 'failed', last_error: 'some unknown internal error' });
+  outbox['entries'].push(row);
+  const correlationId = randomUUID();
+  const result = await runAutoRecoverySweep(repos, correlationId, () => true);
+  assert.equal(result.recovered, 0);
+  assert.equal(result.skipped, 1);
+  const audit = repos.audit as InMemoryAuditLogRepository;
+  const gated = await audit.listRecentByEntityType('distribution_outbox', new Date(0).toISOString(), 'distribution.recovery_exception_gated');
+  assert.equal(gated.length, 1);
+  const g = gated[0];
+  assert.ok(g, 'gating audit event must exist');
+  assert.equal(g.entity_id, row.id);
+  const p = g.payload as Record<string, unknown>;
+  assert.equal(p['decision'], 'denied');
+  assert.equal(p['exceptionClass'], 'unknown');
+  assert.equal(p['correlationId'], correlationId);
+});
+
+test('approved recovery emits recovery_exception_gated with decision=approved and exceptionClass', async () => {
+  const repos = makeRepos();
+  const outbox = repos.outbox as InMemoryOutboxRepository;
+  const row = makeRow({ status: 'failed', last_error: 'fetch failed', attempt_count: 0 });
+  outbox['entries'].push(row);
+  const correlationId = randomUUID();
+  const result = await runAutoRecoverySweep(repos, correlationId, () => true);
+  assert.equal(result.recovered, 1);
+  const audit = repos.audit as InMemoryAuditLogRepository;
+  const gated = await audit.listRecentByEntityType('distribution_outbox', new Date(0).toISOString(), 'distribution.recovery_exception_gated');
+  assert.equal(gated.length, 1);
+  const g = gated[0];
+  assert.ok(g, 'gating audit event must exist');
+  const p = g.payload as Record<string, unknown>;
+  assert.equal(p['decision'], 'approved');
+  assert.equal(p['exceptionClass'], RECOVERY_EXCEPTION_CLASSES.NETWORK_FETCH);
+  assert.equal(p['correlationId'], correlationId);
+});
+
+test('auto_recovered event includes exceptionClass for replay reconstruction', async () => {
+  const repos = makeRepos();
+  const outbox = repos.outbox as InMemoryOutboxRepository;
+  const row = makeRow({ status: 'failed', last_error: 'ECONNRESET', attempt_count: 0 });
+  outbox['entries'].push(row);
+  const result = await runAutoRecoverySweep(repos, randomUUID(), () => true);
+  assert.equal(result.recovered, 1);
+  const audit = repos.audit as InMemoryAuditLogRepository;
+  const recovered = await audit.listRecentByEntityType('distribution_outbox', new Date(0).toISOString(), 'distribution.auto_recovered');
+  assert.equal(recovered.length, 1);
+  const p = recovered[0]?.payload as Record<string, unknown>;
+  assert.equal(p['exceptionClass'], RECOVERY_EXCEPTION_CLASSES.NETWORK_RESET);
 });
