@@ -1,19 +1,19 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1132",
-  "title": "INIT-4.1.1 — ExecutionIntent Entity",
+  "title": "INIT-4.1.1 \u2014 ExecutionIntent Entity",
   "tier": "T1",
   "lane_type": "migration",
   "executor": "claude",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/932",
   "sha_binding": {
-    "verified_source_sha": "253249a7fc926e06e20ec7bef63981448099fa1e",
+    "verified_source_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
       "r_level_check": "PASS",
       "tier_label": "tier:T1",
-      "live_db_proof": "PASS — 7/7 vs zfzdnfwdarxucxtaojxm"
+      "live_db_proof": "PASS \u2014 7/7 vs zfzdnfwdarxucxtaojxm"
     }
   },
   "static_proof": {
@@ -33,9 +33,12 @@
     "failures": 0,
     "duration_ms": 1944,
     "row_counts": [
-      { "table": "execution_intents", "note": "test rows inserted and verified via t1-proof-execution-intent.test.ts" }
+      {
+        "table": "execution_intents",
+        "note": "test rows inserted and verified via t1-proof-execution-intent.test.ts"
+      }
     ],
-    "notes": "Live-DB proof confirms: INSERT, UPDATE trigger, DELETE trigger, idempotency UNIQUE index, predecessor chain, inputs_hash CHECK, status CHECK — all pass vs Supabase zfzdnfwdarxucxtaojxm."
+    "notes": "Live-DB proof confirms: INSERT, UPDATE trigger, DELETE trigger, idempotency UNIQUE index, predecessor chain, inputs_hash CHECK, status CHECK \u2014 all pass vs Supabase zfzdnfwdarxucxtaojxm."
   },
   "implementation_summary": {
     "files_created": [
@@ -59,7 +62,7 @@
       "immutability": "BEFORE UPDATE/DELETE triggers raise EXCEPTION",
       "predecessor_chain": "predecessor_id UUID REFERENCES execution_intents(id) DEFERRABLE",
       "idempotency": "UNIQUE partial index on idempotency_key WHERE NOT NULL",
-      "issued_at_ms": "BIGINT NOT NULL — deterministic epoch ms from caller"
+      "issued_at_ms": "BIGINT NOT NULL \u2014 deterministic epoch ms from caller"
     },
     "constitutional_constraints": {
       "no_capital": true,
