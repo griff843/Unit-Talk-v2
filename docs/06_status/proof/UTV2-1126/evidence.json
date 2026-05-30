@@ -1,88 +1,106 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1126",
-  "title": "INIT-3.4.3 - Negative-EV Rejection Routing",
-  "tier": "T1",
-  "executor": "codex",
-  "branch": "codex/utv2-1126-init-343-negative-ev-rejection-routing",
   "sha_binding": {
     "verified_source_sha": "3d918eb03ced596d0d0ffa9c6b0e9c19786c9ce5",
-    "verified_source_note": "Implementation commit containing the negative-EV routing gate and tests. Subsequent commits in this PR are proof-only.",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "verified_source_note": "Implementation commit: negative-EV rejection routing gate with DecisionRecord provenance, Kelly sizing, and adversarial tests",
+    "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
+    "evidence_commit_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
+    "current_pr_head_sha": "3d918eb03ced596d0d0ffa9c6b0e9c19786c9ce5"
   },
-  "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
-  "evidence": {
-    "type_check": {
-      "command": "pnpm type-check",
-      "result": "PASS",
-      "note": "TypeScript project reference check completed successfully before full verify."
-    },
-    "focused_domain_tests": {
-      "command": "npx tsx --test packages/domain/src/risk/risk.test.ts",
-      "result": "PASS",
-      "tests": 35,
-      "passed": 35,
-      "failed": 0,
-      "coverage": [
-        "negative-EV adversarial rejection",
-        "invalid input fail-closed routing",
-        "zero-EV rejection",
-        "deterministic replay evidence via inputs_hash"
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0,
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS"
+      },
+      "tail": [
+        "[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json",
+        "[check-migration-versions] 114 migration file(s) verified - no duplicate versions.",
+        "[lint-migrations] 114 migration file(s) checked - no findings."
       ]
     },
-    "pnpm_test": {
-      "command": "pnpm test",
-      "result": "PASS",
-      "note": "Aggregate test suite completed successfully after a clean full rerun. An earlier live DB artifact-sha test hit a transient fetch failure and passed on targeted retry before the clean aggregate run."
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
     },
-    "pnpm_test_db": {
-      "command": "pnpm test:db",
-      "result": "PASS",
-      "tests": 7,
-      "passed": 7,
-      "failed": 0,
-      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    "domain_rejection_tests": {
+      "command": "npx tsx --test packages/domain/src/risk/risk.test.ts",
+      "status": "PASS",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "cases": [
+        "routeNegativeEvDecision rejects a negative-EV pick (adversarial)",
+        "routeNegativeEvDecision rejects invalid replay inputs fail-closed",
+        "routeNegativeEvDecision rejects at exact break-even (zero EV)",
+        "routeNegativeEvDecision produces deterministic replay evidence for identical economic inputs"
+      ]
     },
-    "pnpm_verify": {
-      "command": "pnpm verify",
-      "result": "PASS",
-      "note": "ops sync, system alignment, automation coverage, env check, lint, type-check, build, aggregate tests, smart-form verify, and command checks completed successfully."
-    },
-    "r_level_check": {
+    "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "result": "PASS",
-      "changed_files": 2,
-      "rules_matched": [],
-      "artifacts_required": [],
-      "output": "Verdict: PASS; Changed files: 2; Rules matched: (none) - no R-level artifacts required for this diff"
-    },
-    "runtime_proof": {
-      "result": "PASS",
-      "evidence_refs": [
-        "pnpm test:db live Supabase smoke suite",
-        "pnpm verify T1 live proof suites under test:t1-proof"
-      ],
-      "note": "No runtime code path changed. T1 runtime proof was still executed per packet."
-    },
-    "evidence_bundle": {
-      "result": "PASS",
-      "path": "docs/06_status/proof/UTV2-1126/evidence.json"
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none"
     }
   },
-  "invariants_asserted": [
-    "Negative expected value routes are rejected with DecisionRecord outcome=blocked.",
-    "Invalid replay/economic inputs fail closed instead of routing eligible.",
-    "Break-even EV is rejected as zero_expected_value.",
-    "Positive EV routes eligible and bind deterministic inputs_hash evidence.",
-    "DecisionRecord provenance records policy version, evaluator version, system authority, and optional preceding record id.",
-    "packages/domain remains pure: no DB, config, app, or runtime service imports were introduced."
-  ],
-  "files_changed": [
-    "packages/domain/src/risk/kelly-sizer.ts",
-    "packages/domain/src/risk/risk.test.ts",
-    "docs/06_status/proof/UTV2-1126/evidence.json"
-  ],
-  "generated_at": "2026-05-30T03:20:00Z",
-  "generated_by": "codex"
+  "runtime_proof": {
+    "note": "Domain-only enforcement with live DB smoke required for T1. Live Supabase smoke passed 7/7; no schema or DB-write paths modified by this lane.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase database smoke test passed after domain negative-EV routing changes; no schema or DB-write paths were modified by this lane."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists submission/settlement",
+      "UTV2-920 invalid atomic enqueue rolls back status and lifecycle writes",
+      "invalid atomic delivery rolls back outbox, receipt, audit, and lifecycle writes",
+      "invalid atomic settlement rolls back settlement and lifecycle writes",
+      "UTV2-883 participant upsert does not create duplicate rows",
+      "UTV2-996 correction path avoids duplicate base settlement rows",
+      "settlement correction chain remains additive"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific database rows created or mutated outside the shared smoke/proof fixtures.",
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "fail_closed_negative_ev_decision_paths": "PASS",
+    "replay_safe_decision_provenance": "PASS",
+    "negative_ev_adversarial_rejection_tests": "PASS",
+    "replay_safe_evidence_tests": "PASS",
+    "deterministic_routing_tests": "PASS",
+    "invalid_input_fail_closed": "PASS"
+  },
+  "verdict": "PASS"
 }
