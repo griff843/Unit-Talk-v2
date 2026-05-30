@@ -4,7 +4,7 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-1138
+    - UTV2-1139
   findings: []
   controls: []
   proofs: []

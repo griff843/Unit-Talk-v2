@@ -613,7 +613,7 @@ test('computeCLVOutcome returns missing_closing_line diagnostics with available 
   assert.deepEqual(outcome.availableMarkets, ['rebounds-all-game-ou']);
 });
 
-test('computeCLVOutcome reports opening_line_fallback when opening line is used', async () => {
+test('INIT-4.3.2: CLV is quarantined (missing_closing_line) when only opening line available — proxy removed', async () => {
   const repositories = createInMemoryRepositoryBundle();
 
   const participant = await repositories.participants.upsertByExternalId({
@@ -692,8 +692,8 @@ test('computeCLVOutcome reports opening_line_fallback when opening line is used'
     repositories,
   );
 
-  assert.equal(outcome.status, 'opening_line_fallback');
-  assert.equal(outcome.result?.isOpeningLineFallback, true);
+  assert.equal(outcome.status, 'missing_closing_line');
+  assert.equal(outcome.result, null, 'CLV must be null (quarantined) when no verified closing source exists');
 });
 
 test('computeAndAttachCLV resolves participant from metadata.player when participant_id is null', async () => {
@@ -917,8 +917,9 @@ test('computeAndAttachCLV resolves canonical pick.market to provider market key 
   assert.equal(result.closingOdds, 100); // under side (pick is Under)
 });
 
-test('computeAndAttachCLV falls back to opening line when no closing line exists', async () => {
-  // Validates UTV2-449: opening line is used as CLV proxy when Odds API is unavailable
+test('INIT-4.3.2: computeAndAttachCLV returns null (quarantine) when only opening line exists — proxy removed', async () => {
+  // Previously (UTV2-449): opening line was used as CLV proxy when Odds API is unavailable.
+  // INIT-4.3.2 removes this path: CLV is null (quarantined) when no verified closing source exists.
   const repositories = createInMemoryRepositoryBundle();
 
   const participant = await repositories.participants.upsertByExternalId({
@@ -999,13 +1000,10 @@ test('computeAndAttachCLV falls back to opening line when no closing line exists
     repositories,
   );
 
-  assert.ok(result !== null, 'CLV should not be null when opening line is available as fallback');
-  assert.equal(result.isOpeningLineFallback, true, 'isOpeningLineFallback should be true');
-  assert.equal(result.providerKey, 'sgo');
-  assert.equal(result.closingOdds, -115); // over side
+  assert.equal(result, null, 'CLV must be null (quarantined) — opening-line proxy is removed');
 });
 
-test('computeAndAttachCLV does not set isOpeningLineFallback when closing line is found', async () => {
+test('computeAndAttachCLV returns non-null CLV when closing line is found (proxy removed, no regression)', async () => {
   const repositories = createInMemoryRepositoryBundle();
 
   const participant = await repositories.participants.upsertByExternalId({
@@ -1084,8 +1082,7 @@ test('computeAndAttachCLV does not set isOpeningLineFallback when closing line i
     repositories,
   );
 
-  assert.ok(result !== null, 'CLV should not be null when a snapshot is available');
-  assert.equal(result.isOpeningLineFallback, undefined, 'isOpeningLineFallback should not be set when closing line found');
+  assert.ok(result !== null, 'CLV should not be null when a closing line snapshot is available');
 });
 
 test('computeCLVOutcome computes CLV for smart-form abbreviated O/U selections', async () => {
@@ -1918,42 +1915,11 @@ test('INIT-4.3.1: pinnacle_closing resolves as rank 2, isVerified=true', async (
   assert.equal(outcome.closingSourceVerification!.isVerified, true);
 });
 
-test('INIT-4.3.1: opening_line_proxy resolves as rank 5, isVerified=false', async () => {
-  // Use mock overrides: findClosingLine always returns null, findOpeningLine returns a line.
-  // The InMemory implementation does not filter by isClosing, so we must mock to force the fallback path.
+test('INIT-4.3.2: adversarial — inject missing close; quarantine is mandatory (no proxy fallback)', async () => {
+  // Adversarial validation per INIT-4.3.2: inject a scenario with only opening-line data.
+  // CLV MUST be quarantined (result=null, status=missing_closing_line).
+  // The opening_line_proxy path has been removed — no proxy CLV may be produced.
   const repositories = createInMemoryRepositoryBundle();
-
-  const openingOffer = {
-    id: 'opening-offer-h3',
-    provider_key: 'sgo',
-    provider_event_id: 'hierarchy-evt-3',
-    provider_market_key: 'hits-all-game-ou',
-    provider_participant_id: 'PLAYER_H3',
-    sport_key: 'NBA',
-    line: 1.5,
-    over_odds: -110,
-    under_odds: -110,
-    is_opening: true,
-    is_closing: false,
-    snapshot_at: '2026-04-24T18:00:00.000Z',
-    idempotency_key: 'opening-offer-h3',
-    bookmaker_key: null,
-    devig_mode: 'PAIRED',
-    created_at: '2026-04-24T18:00:00.000Z',
-  };
-
-  const originalFindClosingLine = repositories.providerOffers.findClosingLine.bind(repositories.providerOffers);
-  repositories.providerOffers.findClosingLine = async (criteria) => {
-    // Return null to force opening-line fallback (no closing line available)
-    if (criteria.providerEventId === 'hierarchy-evt-3') return null;
-    return originalFindClosingLine(criteria);
-  };
-  repositories.providerOffers.findOpeningLine = async (criteria) => {
-    if (criteria.providerEventId === 'hierarchy-evt-3') {
-      return openingOffer as unknown as import('@unit-talk/db').ProviderOfferRecord;
-    }
-    return null;
-  };
 
   const participant = await repositories.participants.upsertByExternalId({
     externalId: 'PLAYER_H3',
@@ -1973,10 +1939,31 @@ test('INIT-4.3.1: opening_line_proxy resolves as rank 5, isVerified=false', asyn
   });
   await repositories.eventParticipants.upsert({ eventId: event.id, participantId: participant.id, role: 'home' });
 
+  // Mock: no closing line, opening line exists — quarantine must fire
+  repositories.providerOffers.findClosingLine = async () => null;
+  repositories.providerOffers.findOpeningLine = async () => ({
+    id: 'opening-offer-h3',
+    provider_key: 'sgo',
+    provider_event_id: 'hierarchy-evt-3',
+    provider_market_key: 'hits-all-game-ou',
+    provider_participant_id: 'PLAYER_H3',
+    sport_key: 'NBA',
+    line: 1.5,
+    over_odds: -110,
+    under_odds: -110,
+    is_opening: true,
+    is_closing: false,
+    snapshot_at: '2026-04-24T18:00:00.000Z',
+    idempotency_key: 'opening-offer-h3',
+    bookmaker_key: null,
+    devig_mode: 'PAIRED',
+    created_at: '2026-04-24T18:00:00.000Z',
+  } as unknown as import('@unit-talk/db').ProviderOfferRecord);
+
   const outcome = await computeCLVOutcome(
     {
       ...BASE_PICK,
-      id: 'pick-opening-h3',
+      id: 'pick-adversarial-h3',
       market: 'hits-all-game-ou',
       market_type_id: null,
       participant_id: participant.id,
@@ -1985,13 +1972,10 @@ test('INIT-4.3.1: opening_line_proxy resolves as rank 5, isVerified=false', asyn
     repositories,
   );
 
-  assert.equal(outcome.status, 'opening_line_fallback');
-  assert.ok(outcome.closingSourceVerification);
-  assert.equal(outcome.closingSourceVerification!.sourceType, 'opening_line_proxy');
-  assert.equal(outcome.closingSourceVerification!.rank, 5);
-  assert.equal(outcome.closingSourceVerification!.isVerified, false);
-  assert.equal(outcome.result?.isOpeningLineFallback, true);
-  assert.equal(outcome.result?.closingSourceVerification.isVerified, false);
+  // QUARANTINE INVARIANT: CLV must not be fabricated from an opening line
+  assert.equal(outcome.result, null, 'CLV must be null — no verified closing source exists');
+  assert.equal(outcome.status, 'missing_closing_line', 'status must be missing_closing_line (quarantine)');
+  assert.equal(outcome.closingSourceVerification, undefined, 'no source verification when quarantined');
 });
 
 test('INIT-4.3.1: CLV result always carries closingSourceVerification when computed', async () => {
