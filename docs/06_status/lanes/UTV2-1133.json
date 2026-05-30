@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1133-init-412-idempotent-re-confirm-receipt-fix",
   "branch": "codex/utv2-1133-init-412-idempotent-re-confirm-receipt-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "80f349ada9848ac42fce67ca39a67c205a23f13f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/933",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/distribution-receipt-service.ts",
@@ -22,14 +22,41 @@
     "docs/06_status/proof/UTV2-1133/diff-summary.md",
     "docs/06_status/proof/UTV2-1133/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-30T16:15:46.981Z",
-  "heartbeat_at": "2026-05-30T16:15:46.981Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T16:52:20.864Z",
+  "closed_at": "2026-05-30T16:52:20.864Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1133-init-412-idempotent-re-confirm-receipt-fix.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-30T16:51:31.924Z",
+      "verdict": "pass",
+      "merge_sha": "80f349ada9848ac42fce67ca39a67c205a23f13f",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/933"
+    },
+    {
+      "checked_at": "2026-05-30T16:51:42.842Z",
+      "verdict": "fail",
+      "merge_sha": "80f349ada9848ac42fce67ca39a67c205a23f13f",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-30T16:52:06.188Z",
+      "verdict": "pass",
+      "merge_sha": "80f349ada9848ac42fce67ca39a67c205a23f13f",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
