@@ -9,6 +9,51 @@ import type {
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
+// ── Closing-Source Hierarchy — INIT-4.3.1 ─────────────────────────────────────
+// Version-controlled ranking of closing-source types. Lower rank = higher quality.
+// isVerified=false means the source is a proxy, not an actual closing line.
+// Rank 5 (opening_line_proxy) satisfies the fallback path but is NOT a verified source.
+
+export const CLOSING_SOURCE_HIERARCHY_VERSION = '1' as const;
+
+export type ClosingSourceType =
+  | 'market_universe_provenance'  // rank 1: direct from pick's market universe record (ingestor-written)
+  | 'pinnacle_closing'            // rank 2: Pinnacle closing line from provider_offers
+  | 'consensus_closing'           // rank 3: any closing line from provider_offers (non-Pinnacle)
+  | 'market_universe_fallback'    // rank 4: market universe via provider key lookup (alias fallback)
+  | 'opening_line_proxy';         // rank 5: opening line used as CLV proxy — NOT a closing line
+
+export interface ClosingSourceVerification {
+  readonly sourceType: ClosingSourceType;
+  readonly rank: 1 | 2 | 3 | 4 | 5;
+  readonly isVerified: boolean;
+  readonly hierarchyVersion: typeof CLOSING_SOURCE_HIERARCHY_VERSION;
+  readonly providerKey: string;
+}
+
+const CLOSING_SOURCE_RANKS: Record<ClosingSourceType, { rank: 1 | 2 | 3 | 4 | 5; isVerified: boolean }> = {
+  market_universe_provenance: { rank: 1, isVerified: true },
+  pinnacle_closing:           { rank: 2, isVerified: true },
+  consensus_closing:          { rank: 3, isVerified: true },
+  market_universe_fallback:   { rank: 4, isVerified: true },
+  opening_line_proxy:         { rank: 5, isVerified: false },
+};
+
+function makeClosingSourceVerification(
+  sourceType: ClosingSourceType,
+  providerKey: string,
+): ClosingSourceVerification {
+  return {
+    sourceType,
+    rank: CLOSING_SOURCE_RANKS[sourceType].rank,
+    isVerified: CLOSING_SOURCE_RANKS[sourceType].isVerified,
+    hierarchyVersion: CLOSING_SOURCE_HIERARCHY_VERSION,
+    providerKey,
+  };
+}
+
+// ── Closing-line internal shape ────────────────────────────────────────────────
+
 /** Normalized closing-line shape accepted by CLV computation. */
 interface ClosingLineLike {
   line: number | null;
@@ -37,6 +82,8 @@ export interface CLVResult {
   isOpeningLineFallback?: boolean;
   /** True when only one side of the closing line was available — devig skipped, raw implied used. */
   isSingleSideDevig?: boolean;
+  /** Verified closing-source provenance — always present on a computed result (INIT-4.3.1). */
+  closingSourceVerification: ClosingSourceVerification;
 }
 
 export type CLVComputationStatus =
@@ -54,6 +101,8 @@ export interface CLVComputationOutcome {
   status: CLVComputationStatus;
   resolvedMarketKey: string | null;
   availableMarkets: string[];
+  /** Set whenever a closing source was resolved, even if CLV computation failed after (INIT-4.3.1). */
+  closingSourceVerification?: ClosingSourceVerification;
 }
 
 /**
@@ -163,11 +212,16 @@ export async function computeCLVOutcome(
       repositories.marketUniverse,
     );
     if (directUniverseLine) {
+      const sourceVerification = makeClosingSourceVerification(
+        directUniverseLine.sourceType,
+        directUniverseLine.closingLine.provider_key,
+      );
       const result = computeClvFromClosingLine(
         pick,
         directUniverseLine.closingLine,
         selectionSide,
         false,
+        sourceVerification,
       );
       if (!result) {
         return {
@@ -175,6 +229,7 @@ export async function computeCLVOutcome(
           status: 'missing_priced_side',
           resolvedMarketKey: directUniverseLine.resolvedMarketKey,
           availableMarkets: [],
+          closingSourceVerification: sourceVerification,
         };
       }
 
@@ -183,6 +238,7 @@ export async function computeCLVOutcome(
         status: 'computed',
         resolvedMarketKey: directUniverseLine.resolvedMarketKey,
         availableMarkets: [],
+        closingSourceVerification: sourceVerification,
       };
     }
   }
@@ -232,10 +288,13 @@ export async function computeCLVOutcome(
       bookmakerKey: 'pinnacle',
     }),
   );
+  let resolvedSourceType: ClosingSourceType | null = closingLine ? 'pinnacle_closing' : null;
+
   if (!closingLine) {
     closingLine = asClosingLineLike(
       await repositories.providerOffers.findClosingLine(baseLineCriteria),
     );
+    if (closingLine) resolvedSourceType = 'consensus_closing';
   }
 
   // Fallback: use SGO opening line as CLV proxy when no closing line is available.
@@ -248,6 +307,7 @@ export async function computeCLVOutcome(
     );
     if (closingLine) {
       isOpeningFallback = true;
+      resolvedSourceType = 'opening_line_proxy';
     }
   }
 
@@ -268,10 +328,11 @@ export async function computeCLVOutcome(
         snapshot_at: muRow.last_offer_snapshot_at,
         provider_key: muRow.provider_key,
       };
+      resolvedSourceType = 'market_universe_fallback';
     }
   }
 
-  if (!closingLine) {
+  if (!closingLine || !resolvedSourceType) {
     const availableMarkets = await logMarketMismatchIfNeeded(
       pick,
       eventContext,
@@ -286,6 +347,8 @@ export async function computeCLVOutcome(
     };
   }
 
+  const sourceVerification = makeClosingSourceVerification(resolvedSourceType, closingLine.provider_key);
+
   // Resolve final selection side for odds column mapping:
   // - O/U picks: 'over' or 'under' from selection string (already validated above)
   // - Moneyline: 'home' role → 'over' column, 'away' role → 'under' column
@@ -298,6 +361,7 @@ export async function computeCLVOutcome(
         status: 'missing_selection_side',
         resolvedMarketKey,
         availableMarkets: [],
+        closingSourceVerification: sourceVerification,
       };
     }
     resolvedSide = participantSide === 'home' ? 'over' : 'under';
@@ -312,6 +376,7 @@ export async function computeCLVOutcome(
       status: 'missing_priced_side',
       resolvedMarketKey,
       availableMarkets: [],
+      closingSourceVerification: sourceVerification,
     };
   }
 
@@ -338,6 +403,7 @@ export async function computeCLVOutcome(
         status: 'devig_failed',
         resolvedMarketKey,
         availableMarkets: [],
+        closingSourceVerification: sourceVerification,
       };
     }
     closingImpliedProb = rawImplied;
@@ -346,7 +412,7 @@ export async function computeCLVOutcome(
 
   const clvRaw = roundTo(pickImpliedProb - closingImpliedProb, 6);
 
-  const result = {
+  const result: CLVResult = {
     pickOdds: pick.odds as number,
     closingOdds: pricedSide,
     closingLine: closingLine.line,
@@ -355,6 +421,7 @@ export async function computeCLVOutcome(
     clvPercent: roundTo(clvRaw * 100, 4),
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
+    closingSourceVerification: sourceVerification,
     ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
     ...(isSingleSideDevig ? { isSingleSideDevig: true } : {}),
   };
@@ -364,13 +431,14 @@ export async function computeCLVOutcome(
     status: isOpeningFallback ? 'opening_line_fallback' : 'computed',
     resolvedMarketKey,
     availableMarkets: [],
+    closingSourceVerification: sourceVerification,
   };
 }
 
 async function resolveClosingLineFromPickProvenance(
   pick: PickRecord,
   marketUniverse: IMarketUniverseRepository | undefined,
-): Promise<{ closingLine: ClosingLineLike; resolvedMarketKey: string } | null> {
+): Promise<{ closingLine: ClosingLineLike; resolvedMarketKey: string; sourceType: 'market_universe_provenance' } | null> {
   if (!marketUniverse) {
     return null;
   }
@@ -399,6 +467,7 @@ async function resolveClosingLineFromPickProvenance(
       provider_key: row.provider_key,
     },
     resolvedMarketKey: row.provider_market_key,
+    sourceType: 'market_universe_provenance',
   };
 }
 
@@ -407,6 +476,7 @@ function computeClvFromClosingLine(
   closingLine: ClosingLineLike,
   resolvedSide: 'over' | 'under',
   isOpeningFallback: boolean,
+  sourceVerification: ClosingSourceVerification,
 ): CLVResult | null {
   const pricedSide = readClosingSideOdds(closingLine, resolvedSide);
   if (!pricedSide) {
@@ -446,6 +516,7 @@ function computeClvFromClosingLine(
     clvPercent: roundTo(clvRaw * 100, 4),
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
+    closingSourceVerification: sourceVerification,
     ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
     ...(isSingleSideDevig ? { isSingleSideDevig: true } : {}),
   };
