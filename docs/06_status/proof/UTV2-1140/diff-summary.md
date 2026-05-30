@@ -17,3 +17,7 @@ All changes within `apps/api/src/`. No Tier C modifications. No DB schema change
 ## Invariant enforced
 
 Fallback source use emits an AuditEvent. `emitClvFallbackAuditIfNeeded` is a no-op for rank 1–2 (primary sources) and fires for rank 3–4.
+
+## SHA Binding
+merge_sha: b77ccf91c865872789dcabc239143d7bae5afd23
+pr: https://github.com/griff843/Unit-Talk-v2/pull/936
