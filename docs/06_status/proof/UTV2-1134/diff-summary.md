@@ -1,45 +1,40 @@
----
-issue: UTV2-1134
-title: INIT-4.1.3 — Exception-Gated Dead-Letter Recovery
-tier: T2
-executor: claude
-branch: claude/utv2-1134-init-413-exception-gated-dead-letter-recovery
----
+# UTV2-1134 Diff Summary
 
-## Summary
+Generated at: 2026-05-30T22:38:04.597Z
+Issue: UTV2-1134
+Tier: T2
+Lane type: runtime
+Branch: claude/utv2-1134-init-413-exception-gated-dead-letter-recovery
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/938
+Head SHA: 3c26d7a9ab587670dfe4c1513455a657f01dacf4
+Merge SHA: ff3608d1cd218d8f594a202a05800fb32d3eca8c
+Diff base: ff3608d1cd218d8f594a202a05800fb32d3eca8c^1
+Diff target: ff3608d1cd218d8f594a202a05800fb32d3eca8c
 
-Refactors automated dead-letter recovery to use explicit exception class gating.
-Closes the gap between pattern-gated (heuristic) and exception-gated
-(explicitly classified, deny-by-default) recovery authority.
+## Git Diff Stat
+```
+.ops/sync/UTV2-1134.yml                           |  12 ++
+ apps/worker/src/automated-recovery.ts             | 153 +++++++++++++++++-----
+ apps/worker/src/worker-automated-recovery.test.ts | 118 +++++++++++++++++
+ docs/06_status/lanes/UTV2-1134.json               |  38 ++++++
+ docs/06_status/proof/UTV2-1134/diff-summary.md    |  45 +++++++
+ docs/06_status/proof/UTV2-1134/verification.md    |  51 ++++++++
+ 6 files changed, 385 insertions(+), 32 deletions(-)
+```
 
-## Files Changed
+## Git Name Status
+```
+A	.ops/sync/UTV2-1134.yml
+M	apps/worker/src/automated-recovery.ts
+M	apps/worker/src/worker-automated-recovery.test.ts
+A	docs/06_status/lanes/UTV2-1134.json
+A	docs/06_status/proof/UTV2-1134/diff-summary.md
+A	docs/06_status/proof/UTV2-1134/verification.md
+```
 
-| File | Change |
-|------|--------|
-| `apps/worker/src/automated-recovery.ts` | Added `RECOVERY_EXCEPTION_CLASSES`, `classifyException()`, updated `isEligibleForAutoRecovery()`, added `recovery_exception_gated` audit events |
-| `apps/worker/src/worker-automated-recovery.test.ts` | 13 new tests: classification coverage, gating audit emission, replay path |
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Design
-
-**Exception classes (8 explicitly allowlisted):**
-- `network_fetch`, `network_reset`, `connection_refused`, `timeout`, `dns_failure`
-- `http_rate_limit`, `http_gateway`, `html_response`
-
-**Deny-by-default classification:**
-- `no_error` (null last_error) → denied
-- `denylist` (business/lifecycle error patterns) → denied
-- `unknown` (no matching class) → denied
-- Named class (matches allowlist) → approved
-
-**Replay-visible audit evidence:**
-- `distribution.recovery_exception_gated` emitted for EVERY gating decision
-  (approved or denied), with `decision`, `exceptionClass`, `correlationId`
-- `distribution.auto_recovered` includes `exceptionClass` for reconstruction
-
-## Constraints Satisfied
-
-- Deny-by-default: unknown exception types fail closed
-- Exception classes explicitly allowlisted — not inferred from heuristics
-- Every recovery decision emits replay-visible audit evidence
-- No broad worker recovery expansion beyond approved gated path
-- No capital deployment, no treasury operations, no scaling runtime
+## SHA Binding
+Head SHA: 3c26d7a9ab587670dfe4c1513455a657f01dacf4
+Merge SHA: ff3608d1cd218d8f594a202a05800fb32d3eca8c

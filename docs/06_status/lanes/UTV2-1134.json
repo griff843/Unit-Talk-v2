@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1134-init-413-exception-gated-dead-letter-recovery",
   "branch": "claude/utv2-1134-init-413-exception-gated-dead-letter-recovery",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ff3608d1cd218d8f594a202a05800fb32d3eca8c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/938",
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/automated-recovery.ts",
@@ -19,14 +19,31 @@
     "docs/06_status/proof/UTV2-1134/diff-summary.md",
     "docs/06_status/proof/UTV2-1134/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-30T19:43:07.691Z",
-  "heartbeat_at": "2026-05-30T19:43:07.691Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T22:38:59.467Z",
+  "closed_at": "2026-05-30T22:38:59.467Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1134-init-413-exception-gated-dead-letter-recovery.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-30T22:38:03.347Z",
+      "verdict": "pass",
+      "merge_sha": "ff3608d1cd218d8f594a202a05800fb32d3eca8c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/938"
+    },
+    {
+      "checked_at": "2026-05-30T22:38:10.613Z",
+      "verdict": "pass",
+      "merge_sha": "ff3608d1cd218d8f594a202a05800fb32d3eca8c",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
