@@ -2,9 +2,12 @@
 issue: UTV2-1135
 title: INIT-4.2.1 — updatePayload Surface Removal
 tier: T2
+merge_sha: 16d43a90303570177b298994e4d2b25d8a8c17ab
 ---
 
 ## Verification
+
+merge_sha: 16d43a90303570177b298994e4d2b25d8a8c17ab
 
 ### pnpm verify
 
@@ -13,9 +16,9 @@ VERIFY_EXIT:0
 ```
 
 All stages passed: sync-check, system-alignment, automation-coverage, env:check,
-lint, type-check, build, test (113 pass / 0 fail), verify:commands.
+lint, pnpm type-check, pnpm build, pnpm test (113 pass / 0 fail), verify:commands.
 
-### R-level check
+### R-level check (scripts/ci/r-level-check.ts)
 
 ```
 Verdict: PASS

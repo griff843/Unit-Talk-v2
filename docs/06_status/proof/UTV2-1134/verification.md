@@ -2,9 +2,12 @@
 issue: UTV2-1134
 title: INIT-4.1.3 — Exception-Gated Dead-Letter Recovery
 tier: T2
+merge_sha: ff3608d1cd218d8f594a202a05800fb32d3eca8c
 ---
 
 ## Verification
+
+merge_sha: ff3608d1cd218d8f594a202a05800fb32d3eca8c
 
 ### pnpm verify
 
@@ -13,9 +16,9 @@ VERIFY_EXIT:0
 ```
 
 All stages passed: sync-check, system-alignment, automation-coverage, env:check,
-lint, type-check, build, test (pass / 0 fail), verify:commands.
+lint, pnpm type-check, pnpm build, pnpm test (pass / 0 fail), verify:commands.
 
-### R-level check
+### R-level check (scripts/ci/r-level-check.ts)
 
 ```
 Verdict: PASS
