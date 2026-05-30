@@ -31,3 +31,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 - market_universe_provenance has `rank=1, isVerified=true` — confirmed by test 25
 - Every computed CLVResult carries `closingSourceVerification` — confirmed by test 28
 - Hierarchy version `'1'` is a const — version-controlled per INIT-4.3.1 governance requirement
+
+## SHA Binding
+merge_sha: 0f56d512d5cced372b4e4ef25b35922490e32364
+pr: https://github.com/griff843/Unit-Talk-v2/pull/934

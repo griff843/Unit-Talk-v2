@@ -30,3 +30,7 @@ INIT-4.3.1 — Verified Closing-Source Hierarchy. Adds `ClosingSourceVerificatio
 
 All changes within `apps/api/src/clv-service.ts` and `apps/api/src/clv-service.test.ts`.
 No Tier C path modifications. No DB schema changes. No domain mutations.
+
+## SHA Binding
+merge_sha: 0f56d512d5cced372b4e4ef25b35922490e32364
+pr: https://github.com/griff843/Unit-Talk-v2/pull/934
