@@ -32,14 +32,34 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1132/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-30T06:49:56.810Z",
-  "heartbeat_at": "2026-05-30T06:49:56.810Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-30T15:43:58.771Z",
+  "closed_at": "2026-05-30T15:43:58.771Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1132-executionintent-entity.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-30T15:42:39.168Z",
+      "verdict": "fail",
+      "merge_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
+      "failures": [
+        "P6",
+        "P10",
+        "R1",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-30T15:43:33.241Z",
+      "verdict": "pass",
+      "merge_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
