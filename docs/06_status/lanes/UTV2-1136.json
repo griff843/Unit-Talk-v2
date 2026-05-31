@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1136-init-422-settlement-records-immutability-trigger",
   "branch": "claude/utv2-1136-init-422-settlement-records-immutability-trigger",
   "base_branch": "main",
-  "commit_sha": "b8a2a504719940eb4e8edfdcd954f27aba567030",
+  "commit_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/939",
   "files_changed": [
     "supabase/migrations/20260530002_utv2_1136_settlement_records_immutability_trigger.sql",
@@ -17,19 +17,51 @@
   ],
   "file_scope_lock": [
     "packages/db/src/repositories.ts",
-    "packages/db/src/settlement-invariants.test.ts"
+    "packages/db/src/settlement-invariants.test.ts",
+    "supabase/migrations/20260530002_utv2_1136_settlement_records_immutability_trigger.sql",
+    "apps/api/src/t1-proof-utv2-1136-settlement-records-immutability.test.ts",
+    "package.json",
+    ".ops/sync/UTV2-1136.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1136/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-30T22:59:13.312Z",
-  "heartbeat_at": "2026-05-30T22:59:13.312Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-31T08:19:29.093Z",
+  "closed_at": "2026-05-31T08:19:29.093Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1136-init-422-settlement-records-immutability-trigger.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-31T08:17:41.508Z",
+      "verdict": "fail",
+      "merge_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
+      "failures": [
+        "R1",
+        "R2",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-31T08:18:36.238Z",
+      "verdict": "fail",
+      "merge_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
+      "failures": [
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-31T08:19:13.222Z",
+      "verdict": "pass",
+      "merge_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

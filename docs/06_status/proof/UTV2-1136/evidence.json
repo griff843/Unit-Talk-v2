@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "merge_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
+  "generated_at": "2026-05-31T08:18:00.000Z",
+  "verifier": {
+    "identity": "claude/sonnet-4-6/session-utv2-1136",
+    "model": "claude-sonnet-4-6"
+  },
+  "sha_binding": {
+    "verified_source_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
+    "ci_sentinels": [
+      "pnpm verify: PASS (exit 0)",
+      "pnpm test:db: 7/7 PASS",
+      "T1 live-DB proof: 4/4 PASS",
+      "R-level: PASS"
+    ]
+  },
+  "static_proof": {
+    "verify_exit": 0,
+    "verify_summary": "113 tests pass / 0 fail. lint, type-check, build, test all green. migration lint: 116 files checked, no findings.",
+    "r_level": {
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": []
+    },
+    "migration_applied": {
+      "project_id": "zfzdnfwdarxucxtaojxm",
+      "migration_name": "20260530002_utv2_1136_settlement_records_immutability_trigger",
+      "result": "success"
+    },
+    "diff_files": [
+      "supabase/migrations/20260530002_utv2_1136_settlement_records_immutability_trigger.sql",
+      "apps/api/src/t1-proof-utv2-1136-settlement-records-immutability.test.ts",
+      "package.json",
+      ".ops/sync/UTV2-1136.yml"
+    ],
+    "t1_trigger": "supabase/migrations/ file created"
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "label": "trigger_exists",
+        "sql": "SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_name = 'trg_settlement_records_immutable'",
+        "result": "2",
+        "note": "Count=2 confirms trigger fires on both UPDATE and DELETE events"
+      },
+      {
+        "label": "settlement_record_counts",
+        "sql": "SELECT COUNT(*) total, SUM(CASE WHEN corrects_id IS NULL THEN 1 ELSE 0 END) originals, SUM(CASE WHEN corrects_id IS NOT NULL THEN 1 ELSE 0 END) corrections FROM public.settlement_records",
+        "result": "total=683, originals=662, corrections=21"
+      }
+    ],
+    "row_counts": [
+      { "table": "settlement_records", "count": 683, "note": "total rows" },
+      { "table": "settlement_records (originals)", "count": 662, "note": "corrects_id IS NULL" },
+      { "table": "settlement_records (corrections)", "count": 21, "note": "corrects_id IS NOT NULL" }
+    ],
+    "test_db_result": {
+      "tests": 7,
+      "pass": 7,
+      "fail": 0
+    },
+    "t1_live_db_proof": {
+      "test_file": "apps/api/src/t1-proof-utv2-1136-settlement-records-immutability.test.ts",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "assertions": [
+        "settlement INSERT succeeds (baseline)",
+        "UPDATE on settlement_records rejected by immutability trigger",
+        "DELETE on settlement_records rejected by immutability trigger",
+        "correction INSERT (corrects_id set) succeeds — append-only path intact"
+      ]
+    },
+    "trigger_name": "trg_settlement_records_immutable",
+    "trigger_timing": "BEFORE UPDATE OR DELETE",
+    "trigger_table": "public.settlement_records",
+    "error_code": "P0001",
+    "error_prefix": "SETTLEMENT_RECORD_IMMUTABLE"
+  }
+}
