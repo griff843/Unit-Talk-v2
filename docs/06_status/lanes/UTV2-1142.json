@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1142",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1142-init-442-reproducible-performance-cohorts",
+  "branch": "claude/utv2-1142-init-442-reproducible-performance-cohorts",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1142/diff-summary.md",
+    "docs/06_status/proof/UTV2-1142/evidence.json",
+    "docs/06_status/proof/UTV2-1142/verification.md",
+    "packages/domain/src/index.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1142/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-31T13:24:44.960Z",
+  "heartbeat_at": "2026-05-31T13:24:44.960Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1142-init-442-reproducible-performance-cohorts.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1142-init-442-reproducible-performance-cohorts",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
