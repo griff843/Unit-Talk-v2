@@ -13,8 +13,9 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1141/diff-summary.md",
     "docs/06_status/proof/UTV2-1141/verification.md",
-    "packages/domain/src/attribution/attribution-engine.ts",
+    "package.json",
     "packages/domain/src/attribution/attribution-engine.test.ts",
+    "packages/domain/src/attribution/attribution-engine.ts",
     "packages/domain/src/attribution/index.ts",
     "packages/domain/src/index.ts"
   ],
