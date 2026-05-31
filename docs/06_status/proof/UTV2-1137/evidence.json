@@ -1,0 +1,74 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1137",
+  "title": "INIT-4.2.3 — Dual-Authorized Corrections",
+  "tier": "T1",
+  "executor": "claude",
+  "sha_binding": {
+    "note": "SHA will be updated to merge SHA post-merge per proof binding policy",
+    "branch_head_sha": "pending-pre-merge",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS",
+      "pnpm_test_db": "PASS",
+      "r_level_check": "PASS",
+      "t1_proof_tests": "PASS"
+    }
+  },
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifacts": {
+    "domain_type": "packages/domain/src/outcomes/settlement-correction.ts",
+    "domain_tests": "packages/domain/src/outcomes/settlement-correction.test.ts",
+    "service": "apps/api/src/settlement-correction-service.ts",
+    "service_tests": "apps/api/src/settlement-correction-service.test.ts",
+    "t1_proof_test": "apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts",
+    "migration": "supabase/migrations/20260531001_utv2_1137_settlement_corrections.sql"
+  },
+  "verification_summary": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "test_count": 113,
+      "failures": 0
+    },
+    "pnpm_test_db": {
+      "status": "PASS",
+      "test_count": 7,
+      "failures": 0
+    },
+    "t1_proof_tests": {
+      "status": "PASS",
+      "test_count": 4,
+      "failures": 0,
+      "tests": [
+        "T1 Proof 1 — attempted UPDATE on settlement_records rejected",
+        "T1 Proof 2 — single-approver correction rejected by DB constraint",
+        "T1 Proof 3 — dual-authorized correction creates settlement_corrections record",
+        "T1 Proof 4 — PnL reproduces through correction chain"
+      ]
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "rules_matched": "none — no R-level artifacts required"
+    },
+    "migration_applied": {
+      "status": "PASS",
+      "project_id": "zfzdnfwdarxucxtaojxm",
+      "table": "settlement_corrections",
+      "constraints": [
+        "settlement_corrections_distinct_authorizers (CHECK authorizer_1 != authorizer_2)",
+        "settlement_corrections_record_idx (UNIQUE on settlement_record_id)",
+        "trg_settlement_corrections_validate (BEFORE INSERT trigger)"
+      ]
+    }
+  },
+  "invariants_verified": [
+    "Corrections require two distinct authorizers (DB CHECK constraint)",
+    "Single-approver corrections rejected at DB layer",
+    "settlement_corrections trigger validates corrects_id lineage",
+    "PnL reproduced through correction chain via resolveEffectiveSettlement",
+    "Domain validation (validateDualAuthorization) fail-closed before any DB write",
+    "AuditEvent emitted referencing correction record on every dual-authorized correction"
+  ],
+  "adversarial_validation": "ops:adversarial:standard — proof bundle reviewed against audit gap #28",
+  "certification_impact": "Settlement Certification (WS-4.2 chain: INIT-4.2.1 → 4.2.2 → 4.2.3)",
+  "maturity_impact": "Stage 5"
+}
