@@ -1,0 +1,44 @@
+UTV2-1137 DB Smoke Test Log
+Generated: 2026-05-31
+Supabase project: zfzdnfwdarxucxtaojxm
+
+pnpm test:db output:
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+  duration_ms: 10185.429112
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+  duration_ms: 9622.457839
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+  duration_ms: 10262.865437
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+  duration_ms: 10629.393108
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+  duration_ms: 566.323813
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  duration_ms: 12053.117495
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  duration_ms: 11004.892884
+1..7
+# tests 7
+# pass 7
+# fail 0
+VERDICT: PASS
+
+T1 proof tests (UTV2-1137):
+TAP version 13
+ok 1 - T1 Proof 1 — attempted UPDATE on settlement_records rejected
+ok 2 - T1 Proof 2 — single-approver correction rejected by DB constraint
+ok 3 - T1 Proof 3 — dual-authorized correction creates settlement_corrections record
+ok 4 - T1 Proof 4 — PnL reproduces through correction chain
+1..4
+# tests 4
+# pass 4
+# fail 0
+VERDICT: PASS
