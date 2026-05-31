@@ -13,8 +13,12 @@
   "file_scope_lock": [
     "apps/api/src/settlement-service.test.ts",
     "apps/api/src/settlement-service.ts",
+    "apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts",
+    "db/migrations-rollback/20260531001_utv2_1137_settlement_corrections.down.sql",
+    "docs/06_status/proof/UTV2-1137/db-smoke.log",
     "docs/06_status/proof/UTV2-1137/evidence.json",
-    "docs/06_status/proof/UTV2-1137/verification.md"
+    "docs/06_status/proof/UTV2-1137/verification.md",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1137/evidence.json"
