@@ -1,0 +1,82 @@
+{
+  "schema_version": 2,
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1142",
+  "title": "INIT-4.4.2 — Reproducible Performance Cohorts",
+  "tier": "T1",
+  "executor": "claude",
+  "sha_binding": {
+    "note": "Branch head SHA recorded pre-merge; will be rebound to merge SHA post-merge",
+    "branch_head_sha": "d368e8c0dc53796ce4b5dd115981b34bde07b358",
+    "verified_source_sha": "d368e8c0dc53796ce4b5dd115981b34bde07b358",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS",
+      "pnpm_test_db": "PASS",
+      "r_level_check": "PASS",
+      "cohort_tests": "PASS"
+    }
+  },
+  "generated_at": "2026-05-31T00:00:00Z",
+  "artifacts": {
+    "domain_type": "packages/domain/src/cohorts/performance-cohort.ts",
+    "domain_tests": "packages/domain/src/cohorts/performance-cohort.test.ts",
+    "domain_barrel": "packages/domain/src/cohorts/index.ts",
+    "domain_export": "packages/domain/src/index.ts"
+  },
+  "verification_summary": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "test_count": 628,
+      "failures": 0
+    },
+    "pnpm_test_db": {
+      "status": "PASS",
+      "test_count": 7,
+      "failures": 0
+    },
+    "cohort_tests": {
+      "status": "PASS",
+      "test_count": 22,
+      "failures": 0,
+      "tests": [
+        "validateCohortInput — passes with full valid input",
+        "validateCohortInput — rejects missing cohort_id",
+        "validateCohortInput — rejects missing window.from",
+        "validateCohortInput — rejects missing window.to",
+        "validateCohortInput — rejects window.from after window.to",
+        "validateCohortInput — rejects empty picks array",
+        "validateCohortInput — rejects duplicate pick_ids",
+        "buildPerformanceCohort — returns ok:true with valid input",
+        "buildPerformanceCohort — cohort_id matches input",
+        "buildPerformanceCohort — pick_count equals input length",
+        "buildPerformanceCohort — attribution_records length equals pick_count",
+        "buildPerformanceCohort — decomposition total_records equals pick_count",
+        "buildPerformanceCohort — win+loss+push: total_realized_pnl_bps = 0",
+        "buildPerformanceCohort — is_reproducible true when all picks have feature snapshots",
+        "buildPerformanceCohort — is_reproducible false when any pick lacks feature snapshot",
+        "buildPerformanceCohort — version is set",
+        "buildPerformanceCohort — rejects pick settled_at outside window",
+        "buildPerformanceCohort — fails closed on invalid cohort input",
+        "buildPerformanceCohort — deterministic: same inputs produce same cohort",
+        "reconstructCohort — matches original build exactly",
+        "reconstructCohort — deterministic replay: multiple reconstructions match",
+        "cohort decomposition is compatible with attribution engine"
+      ]
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "rules_matched": "none — no R-level artifacts required"
+    }
+  },
+  "invariants_verified": [
+    "buildPerformanceCohort is deterministic: same CohortInput always produces same PerformanceCohort",
+    "reconstructCohort is replay-safe: matches original build exactly from stored inputs",
+    "Cohort construction fail-closed on invalid id, window, empty picks, duplicate pick_ids",
+    "Window membership enforced: picks settled_at outside window rejected at construction time",
+    "Attribution compatibility: cohort decomposition matches manual attribution-engine output",
+    "is_reproducible propagated from constituent attribution records"
+  ],
+  "adversarial_validation": "ops:adversarial:standard — proof bundle reviewed against attribution invariants",
+  "certification_impact": "Capital Scaling Certification (cohort evidence required for edge-decay detection)",
+  "maturity_impact": "Stage 5 — enables UTV2-1143 Edge Decay Detector"
+}
