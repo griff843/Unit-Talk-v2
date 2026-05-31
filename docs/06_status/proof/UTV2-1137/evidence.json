@@ -6,9 +6,9 @@
   "tier": "T1",
   "executor": "claude",
   "sha_binding": {
-    "note": "Branch head SHA recorded pre-merge; will be rebound to merge SHA post-merge",
+    "merge_sha": "77a2dbeb52f7fc91bf69c94005355d3283000ba7",
+    "verified_source_sha": "77a2dbeb52f7fc91bf69c94005355d3283000ba7",
     "branch_head_sha": "94ee7b8ce73e53e0e919d47a3871e7a05fb34f25",
-    "verified_source_sha": "94ee7b8ce73e53e0e919d47a3871e7a05fb34f25",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
