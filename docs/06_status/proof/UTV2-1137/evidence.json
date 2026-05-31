@@ -2,13 +2,13 @@
   "schema_version": 2,
   "schema": "evidence-bundle/v1",
   "issue_id": "UTV2-1137",
-  "title": "INIT-4.2.3 — Dual-Authorized Corrections",
+  "title": "INIT-4.2.3 \u2014 Dual-Authorized Corrections",
   "tier": "T1",
   "executor": "claude",
   "sha_binding": {
     "note": "Branch head SHA recorded pre-merge; will be rebound to merge SHA post-merge",
-    "branch_head_sha": "8f0f56cf6846df0ca5c23eacb729b2604e0065bd",
-    "verified_source_sha": "8f0f56cf6846df0ca5c23eacb729b2604e0065bd",
+    "branch_head_sha": "8412c0be",
+    "verified_source_sha": "8412c0be",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
@@ -41,15 +41,15 @@
       "test_count": 4,
       "failures": 0,
       "tests": [
-        "T1 Proof 1 — attempted UPDATE on settlement_records rejected",
-        "T1 Proof 2 — single-approver correction rejected by DB constraint",
-        "T1 Proof 3 — dual-authorized correction creates settlement_corrections record",
-        "T1 Proof 4 — PnL reproduces through correction chain"
+        "T1 Proof 1 \u2014 attempted UPDATE on settlement_records rejected",
+        "T1 Proof 2 \u2014 single-approver correction rejected by DB constraint",
+        "T1 Proof 3 \u2014 dual-authorized correction creates settlement_corrections record",
+        "T1 Proof 4 \u2014 PnL reproduces through correction chain"
       ]
     },
     "r_level_check": {
       "status": "PASS",
-      "rules_matched": "none — no R-level artifacts required"
+      "rules_matched": "none \u2014 no R-level artifacts required"
     },
     "migration_applied": {
       "status": "PASS",
@@ -70,7 +70,7 @@
     "Domain validation (validateDualAuthorization) fail-closed before any DB write",
     "AuditEvent emitted referencing correction record on every dual-authorized correction"
   ],
-  "adversarial_validation": "ops:adversarial:standard — proof bundle reviewed against audit gap #28",
-  "certification_impact": "Settlement Certification (WS-4.2 chain: INIT-4.2.1 → 4.2.2 → 4.2.3)",
+  "adversarial_validation": "ops:adversarial:standard \u2014 proof bundle reviewed against audit gap #28",
+  "certification_impact": "Settlement Certification (WS-4.2 chain: INIT-4.2.1 \u2192 4.2.2 \u2192 4.2.3)",
   "maturity_impact": "Stage 5"
 }
