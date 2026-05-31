@@ -1,22 +1,46 @@
-# Diff Summary: UTV2-1141 — INIT-4.4.1 Attribution Engine
+# UTV2-1141 Diff Summary
 
-## Files Changed
+Generated at: 2026-05-31T10:44:57.514Z
+Issue: UTV2-1141
+Tier: T2
+Lane type: modeling
+Branch: claude/utv2-1141-init-441-attribution-engine
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/941
+Head SHA: b611eec1af6c5a21064879aebfdce2b3c5fb6eca
+Merge SHA: b611eec1af6c5a21064879aebfdce2b3c5fb6eca
+Diff base: b611eec1af6c5a21064879aebfdce2b3c5fb6eca^1
+Diff target: b611eec1af6c5a21064879aebfdce2b3c5fb6eca
 
-| File | Change |
-|---|---|
-| `packages/domain/src/attribution/attribution-engine.ts` | New — core Attribution Engine module |
-| `packages/domain/src/attribution/attribution-engine.test.ts` | New — 23 tests |
-| `packages/domain/src/attribution/index.ts` | New — re-exports |
-| `packages/domain/src/index.ts` | Modified — add attribution export |
+## Git Diff Stat
+```
+.ops/sync/UTV2-1141.yml                            |  12 +
+ docs/06_status/lanes/UTV2-1141.json                |  43 ++++
+ docs/06_status/proof/UTV2-1141/diff-summary.md     |  22 ++
+ docs/06_status/proof/UTV2-1141/verification.md     |  39 ++++
+ package.json                                       |   2 +-
+ .../src/attribution/attribution-engine.test.ts     | 203 +++++++++++++++++
+ .../domain/src/attribution/attribution-engine.ts   | 248 +++++++++++++++++++++
+ packages/domain/src/attribution/index.ts           |   1 +
+ packages/domain/src/index.ts                       |   1 +
+ 9 files changed, 570 insertions(+), 1 deletion(-)
+```
 
-## Summary
+## Git Name Status
+```
+A	.ops/sync/UTV2-1141.yml
+A	docs/06_status/lanes/UTV2-1141.json
+A	docs/06_status/proof/UTV2-1141/diff-summary.md
+A	docs/06_status/proof/UTV2-1141/verification.md
+M	package.json
+A	packages/domain/src/attribution/attribution-engine.test.ts
+A	packages/domain/src/attribution/attribution-engine.ts
+A	packages/domain/src/attribution/index.ts
+M	packages/domain/src/index.ts
+```
 
-Implements `AttributionEngine` that decomposes realized PnL into model, execution, and luck components. Pure domain computation — no DB, no I/O, deterministic replay-safe.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-**Decomposition model:** `realized_pnl = model_component + execution_component + luck_component`
-
-- `model_component_bps`: EV at bet time (model's predicted edge)
-- `execution_component_bps`: CLV captured after entry (clv_at_close - clv_at_bet)
-- `luck_component_bps`: residual variance
-
-Records without feature snapshots are tagged `insufficient_data` and excluded from aggregate decompositions. Fail-closed on missing/invalid inputs.
+## SHA Binding
+Head SHA: b611eec1af6c5a21064879aebfdce2b3c5fb6eca
+Merge SHA: b611eec1af6c5a21064879aebfdce2b3c5fb6eca
