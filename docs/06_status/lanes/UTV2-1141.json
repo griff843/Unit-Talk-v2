@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1141",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1141-init-441-attribution-engine",
+  "branch": "claude/utv2-1141-init-441-attribution-engine",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/941",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1141/diff-summary.md",
+    "docs/06_status/proof/UTV2-1141/verification.md",
+    "package.json",
+    "packages/domain/src/attribution/attribution-engine.test.ts",
+    "packages/domain/src/attribution/attribution-engine.ts",
+    "packages/domain/src/attribution/index.ts",
+    "packages/domain/src/index.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1141/diff-summary.md",
+    "docs/06_status/proof/UTV2-1141/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-31T09:49:00.982Z",
+  "heartbeat_at": "2026-05-31T09:49:00.982Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1141-init-441-attribution-engine.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1141-init-441-attribution-engine",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  },
+  "pr_number": 941
+}
