@@ -25,7 +25,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-05-31T08:47:41.334Z",
-  "heartbeat_at": "2026-05-31T08:47:41.334Z",
+  "heartbeat_at": "2026-05-31T11:01:33Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1137-init-423-dual-authorized-corrections.json",
