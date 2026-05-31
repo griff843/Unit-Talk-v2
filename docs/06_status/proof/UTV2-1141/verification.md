@@ -3,15 +3,18 @@
 ## Issue
 
 UTV2-1141 — INIT-4.4.1 — Attribution Engine  
-**Tier:** T2 | **Executor:** Claude | **Lane:** modeling
+**Tier:** T2 | **Executor:** Claude | **Lane:** modeling  
+**Merge SHA:** b611eec1af6c5a21064879aebfdce2b3c5fb6eca  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/941
 
 ## Verification
 
 | Check | Result |
 |---|---|
-| `pnpm verify` (lint + type-check + build + test) | PASS |
-| Attribution unit tests (23) | PASS — 23/23 |
-| R-level check | PASS — no artifacts required |
+| `pnpm type-check` | PASS |
+| `pnpm test` (incl. `test:domain-analytics`) | PASS — 23/23 attribution tests |
+| `scripts/ci/r-level-check.ts` | PASS — no artifacts required |
+| `pnpm verify` (full pipeline) | PASS |
 
 ## Test Results
 
