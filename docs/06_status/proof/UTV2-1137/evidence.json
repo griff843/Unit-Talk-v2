@@ -7,8 +7,8 @@
   "executor": "claude",
   "sha_binding": {
     "note": "Branch head SHA recorded pre-merge; will be rebound to merge SHA post-merge",
-    "branch_head_sha": "8412c0be",
-    "verified_source_sha": "8412c0be",
+    "branch_head_sha": "8412c0be56c4587787558b8e4a224a959414dacb",
+    "verified_source_sha": "8412c0be56c4587787558b8e4a224a959414dacb",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
