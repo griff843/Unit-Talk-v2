@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "schema": "evidence-bundle/v1",
   "issue_id": "UTV2-1137",
   "title": "INIT-4.2.3 — Dual-Authorized Corrections",
@@ -6,8 +7,8 @@
   "executor": "claude",
   "sha_binding": {
     "note": "Branch head SHA recorded pre-merge; will be rebound to merge SHA post-merge",
-    "branch_head_sha": "c0ab5f52daf60596cbfa1d09baae90db38e9ea17",
-    "verified_source_sha": "c0ab5f52daf60596cbfa1d09baae90db38e9ea17",
+    "branch_head_sha": "8f0f56cf6846df0ca5c23eacb729b2604e0065bd",
+    "verified_source_sha": "8f0f56cf6846df0ca5c23eacb729b2604e0065bd",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
