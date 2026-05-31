@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1137",
-  "lane_type": "governance",
+  "lane_type": "migration",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1137-init-423-dual-authorized-corrections",
