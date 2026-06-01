@@ -30,6 +30,7 @@ export * from './system-health/index.js';
 export * from './risk/index.js';
 export * from './attribution/index.js';
 export * from './cohorts/index.js';
+export * from './edge-decay/index.js';
 export * from './hedge-detection.js';
 export * from './recap-embed.js';
 export * from './multi-book-consensus.js';
