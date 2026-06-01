@@ -14,4 +14,12 @@ export interface ManipulationFinding extends ReplayableAdversarialFinding {
 export interface ManipulationDetectorInput {
   readonly record: IndependentAdversarialRecord;
   readonly detectedAt: string;
+  readonly thresholds?: Partial<ManipulationDetectorThresholds>;
+}
+
+export interface ManipulationDetectorThresholds {
+  readonly fabricatedLineDelta: number;
+  readonly volumeSpikeRatio: number;
+  readonly timestampFutureToleranceMs: number;
+  readonly timestampPastToleranceMs: number;
 }

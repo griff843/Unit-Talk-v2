@@ -15,4 +15,11 @@ export interface ProviderAnomalyReport extends ReplayableAdversarialFinding {
 export interface ProviderAnomalyDetectorInput {
   readonly records: readonly IndependentAdversarialRecord[];
   readonly detectedAt: string;
+  readonly thresholds?: Partial<ProviderAnomalyDetectorThresholds>;
+}
+
+export interface ProviderAnomalyDetectorThresholds {
+  readonly staleAfterMs: number;
+  readonly lineDivergence: number;
+  readonly oddsDivergence: number;
 }

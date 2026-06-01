@@ -1,0 +1,104 @@
+{
+  "$schema": "https://unit-talk.dev/schemas/evidence_bundle_v1.schema.json",
+  "schema_version": 1,
+  "issue_id": "UTV2-1148",
+  "tier": "T1",
+  "merge_sha": null,
+  "pr_url": null,
+  "generated_at": "2026-06-01T16:20:32.838Z",
+  "source_sha": "d4ea54dfe10e4772c0f949c08a1f37a4c0715194",
+  "verifier": {
+    "identity": "codex-verifier/utv2-1148"
+  },
+  "static_proof": {
+    "focused_test_command": "npx tsx --test packages/domain/src/adversarial/manipulation-detector.test.ts packages/domain/src/adversarial/provider-anomaly.test.ts",
+    "focused_test_result": "8/8 pass",
+    "type_check_command": "pnpm type-check",
+    "type_check_result": "pass",
+    "test_command": "pnpm test",
+    "test_result": "pass",
+    "verify_command": "pnpm verify",
+    "verify_result": "pass",
+    "import_audit_command": "rg \"@unit-talk/db|@unit-talk/config|apps/\" packages/domain/src",
+    "import_audit_result": "no runtime dependency violations; hits are historical comments in outcomes files",
+    "changed_files": [
+      "packages/domain/src/adversarial/manipulation-detector.test.ts",
+      "packages/domain/src/adversarial/manipulation-detector.ts",
+      "packages/domain/src/adversarial/manipulation-detector.types.ts",
+      "packages/domain/src/adversarial/provider-anomaly.test.ts",
+      "packages/domain/src/adversarial/provider-anomaly.ts",
+      "packages/domain/src/adversarial/provider-anomaly.types.ts",
+      "packages/domain/src/index.ts",
+      "docs/06_status/proof/UTV2-1148/evidence.json",
+      "docs/06_status/proof/UTV2-1148/verification.md"
+    ]
+  },
+  "runtime_proof": {
+    "test_db_command": "pnpm test:db",
+    "test_db_result": "7/7 pass",
+    "test_db_duration_ms": 114370,
+    "supabase_project_ref": "zfzdnfwdarxucxtaojxm",
+    "runtime_health_command": "pnpm ops:runtime-health -- --json",
+    "runtime_health_result": "failed due to pre-existing live runtime state outside this pure-domain lane",
+    "runtime_health_failed_sources": [
+      "runtime:health",
+      "pipeline:health"
+    ],
+    "runtime_health_failures": [
+      "Queue: 189 dead_letter rows",
+      "Provider: stale 16087m ago (>360m threshold)",
+      "189 dead-letter row(s) require operator review"
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_outbox",
+        "dead_letter": 189,
+        "pending": 0,
+        "stuck_processing": 0
+      },
+      {
+        "table": "provider_offers",
+        "latest_offer_age_hours": 268.1,
+        "latest_provider": "sgo",
+        "latest_sport": "NHL"
+      }
+    ],
+    "queries": [
+      {
+        "name": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "pass",
+        "duration_ms": 18548
+      },
+      {
+        "name": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "pass",
+        "duration_ms": 17730
+      },
+      {
+        "name": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "pass",
+        "duration_ms": 19124
+      },
+      {
+        "name": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "pass",
+        "duration_ms": 18924
+      },
+      {
+        "name": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "pass",
+        "duration_ms": 615
+      },
+      {
+        "name": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "pass",
+        "duration_ms": 19713
+      },
+      {
+        "name": "UTV2-996: correction chain is additive — original settlement row is not mutated",
+        "result": "pass",
+        "duration_ms": 18736
+      }
+    ]
+  }
+}
