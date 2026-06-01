@@ -2,6 +2,8 @@
 
 ## Verification
 
+Branch head verified: 21031626e6d8d280d4f526e30663b259bf57e242
+
 Implemented the adversarial burn-in harness in `packages/domain/src/adversarial/burn-in.ts` with typed scenario/run/result contracts, deterministic run IDs, replay stability checks, escalation/non-escalation count validation, clock reset fail-closed handling, and domain package exports.
 
 Commands run:

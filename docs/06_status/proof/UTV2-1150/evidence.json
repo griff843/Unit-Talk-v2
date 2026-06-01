@@ -2,7 +2,8 @@
   "issue": "UTV2-1150",
   "tier": "T1",
   "branch": "codex/utv2-1150-burn-in-harness",
-  "commit": "recorded in git history after proof generation",
+  "commit": "21031626e6d8d280d4f526e30663b259bf57e242"
+  "verified_source_sha": "21031626e6d8d280d4f526e30663b259bf57e242",
   "generatedAt": "2026-06-01T22:26:57Z",
   "summary": "Implemented a pure-domain adversarial burn-in harness that composes independent records, manipulation detection, provider anomaly detection, replay verification, and escalation outcomes.",
   "changedFiles": [
