@@ -31,12 +31,23 @@
   ],
   "status": "merged",
   "started_at": "2026-06-01T00:09:20.613Z",
-  "heartbeat_at": "2026-06-01T00:09:20.613Z",
+  "heartbeat_at": "2026-06-01T00:40:51.785Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1143-init-443-edge-decay-detector.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-01T00:40:51.785Z",
+      "verdict": "fail",
+      "merge_sha": "327c9a4cfd50eea592a72f332c83931c5bfec1ab",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

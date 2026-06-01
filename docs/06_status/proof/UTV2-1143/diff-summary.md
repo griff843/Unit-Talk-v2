@@ -5,9 +5,9 @@ Issue: UTV2-1143
 Tier: T2
 Lane type: modeling
 Branch: claude/utv2-1143-init-443-edge-decay-detector
-PR URL: 943
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/943
 Head SHA: 229ecbc70f49089df7108d6c93c9030fcf54aa91
-Merge SHA: N/A
+Merge SHA: 327c9a4cfd50eea592a72f332c83931c5bfec1ab
 Diff base: 60ce07f69c7ab7dd78ff7d0cb44f2ebfea049381
 Diff target: 229ecbc70f49089df7108d6c93c9030fcf54aa91
 
@@ -37,4 +37,4 @@ M	packages/domain/src/index.ts
 
 ## SHA Binding
 Head SHA: 229ecbc70f49089df7108d6c93c9030fcf54aa91
-Merge SHA: N/A
+Merge SHA: 327c9a4cfd50eea592a72f332c83931c5bfec1ab
