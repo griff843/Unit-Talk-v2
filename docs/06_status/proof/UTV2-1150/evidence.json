@@ -1,0 +1,73 @@
+{
+  "issue": "UTV2-1150",
+  "tier": "T1",
+  "branch": "codex/utv2-1150-burn-in-harness",
+  "commit": "recorded in git history after proof generation",
+  "generatedAt": "2026-06-01T22:26:57Z",
+  "summary": "Implemented a pure-domain adversarial burn-in harness that composes independent records, manipulation detection, provider anomaly detection, replay verification, and escalation outcomes.",
+  "changedFiles": [
+    "packages/domain/src/adversarial/burn-in.ts",
+    "packages/domain/src/adversarial/burn-in.types.ts",
+    "packages/domain/src/adversarial/burn-in.test.ts",
+    "packages/domain/src/index.ts",
+    "docs/06_status/proof/UTV2-1150/evidence.json",
+    "docs/06_status/proof/UTV2-1150/verification.md"
+  ],
+  "verification": [
+    {
+      "command": "npx tsx --test packages/domain/src/adversarial/burn-in.test.ts",
+      "status": "passed",
+      "evidence": "4 tests passed; burn-in pass, violation pause, clock reset fail-closed, and malformed input rejection covered."
+    },
+    {
+      "command": "pnpm type-check",
+      "status": "passed",
+      "evidence": "TypeScript project references check completed with exit code 0."
+    },
+    {
+      "command": "pnpm test",
+      "status": "passed",
+      "evidence": "Root aggregate completed with exit code 0, including test:t1-proof live proof suite."
+    },
+    {
+      "command": "pnpm test:db",
+      "status": "passed",
+      "evidence": "7 database smoke tests passed against Supabase-backed repositories."
+    },
+    {
+      "command": "pnpm ops:runtime-health -- --json",
+      "status": "failed_existing_runtime_state",
+      "evidence": "Command returned FAILED because runtime:health reported 192 dead_letter rows and stale provider freshness; pipeline:health also reported 192 dead_letter rows. These are outside the UTV2-1150 domain-only file scope."
+    },
+    {
+      "command": "pnpm verify",
+      "status": "passed",
+      "evidence": "Gate completed with exit code 0: sync/alignment/automation checks, env:check, lint, type-check, build, test, smart-form verify, and verify:commands all passed."
+    },
+    {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "passed",
+      "evidence": "Verdict: PASS; Rules matched: (none) — no R-level artifacts required for this diff."
+    }
+  ],
+  "rLevel": {
+    "rulesFile": "docs/05_operations/r1-r5-rules.json",
+    "matchedRules": [],
+    "artifactRequirements": [],
+    "note": "r-level-check returned PASS with no matched rules and no required R-level artifacts."
+  },
+  "runtimeProof": {
+    "command": "pnpm ops:runtime-health -- --json",
+    "overall": "FAILED",
+    "failedSources": [
+      "runtime:health",
+      "pipeline:health"
+    ],
+    "knownBlockingRuntimeState": [
+      "Queue Movement: 192 dead_letter rows",
+      "Provider Freshness: latest offer 274.2h ago",
+      "pipeline:health: 192 dead-letter rows require operator review"
+    ],
+    "laneImpact": "No runtime, DB writer, worker, provider, or outbox code was modified by this lane."
+  }
+}
