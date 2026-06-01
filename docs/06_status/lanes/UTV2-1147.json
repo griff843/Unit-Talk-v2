@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1147",
-  "lane_type": "runtime",
+  "lane_type": "modeling",
   "executor": "codex-cli",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1147-independent-data-path",

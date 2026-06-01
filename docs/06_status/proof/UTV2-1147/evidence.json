@@ -4,7 +4,7 @@
   "issue_id": "UTV2-1147",
   "title": "Independent adversarial data path",
   "tier": "T1",
-  "lane_type": "runtime",
+  "lane_type": "modeling",
   "status": "PASS",
   "sha_binding": {
     "branch_head_sha": "aa5401eaac8625d99dd27d71127d45974cbf480b",
