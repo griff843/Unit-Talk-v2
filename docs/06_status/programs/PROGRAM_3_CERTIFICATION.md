@@ -1,8 +1,10 @@
 # Program 3 Certification Audit
 
-**Status:** READY FOR PM CERTIFICATION — all mechanical blockers resolved; one PM decision required (UTV2-1115)  
+**Status:** CERTIFIED  
 **Produced:** 2026-06-01  
-**Recovery sprint:** 2026-06-01 — truth-checks for UTV2-1125–1131 all now PASS  
+**Certified:** 2026-06-01  
+**Recovery sprint:** 7cc4ffe4 — truth-checks for UTV2-1125–1131 all PASS; no waivers required  
+**UTV2-1115 disposition:** Canceled in Linear — retired/superseded/not-started (PM decision 2026-06-01)  
 **Authority:** PM (griffadavi)  
 **Governs:** INIT-3.x Decision Integrity (POST_CERT Stage 4)  
 **CERT_BOARD reference:** "POST_CERT Stage 4 (INIT-3.x / Program 3): complete (UTV2-1112–1131, all merged and truth-checked)"  
@@ -154,17 +156,16 @@ When P3 is formally certified, update CERT_BOARD.md §Effect to add a P3 certifi
 
 ---
 
-## 6. Draft PM Certification Declaration
-
-**STATUS: READY pending UTV2-1115 PM decision only.**
-
-All 19 tracked issues have mechanical PASS. One PM governance decision needed (UTV2-1115).
+## 6. PM Certification Declaration
 
 ---
 
-**PROGRAM 3 CERTIFIED** *(AWAITING PM SIGNATURE + UTV2-1115 DECISION)*  
-Date: [PM to fill]  
-Authority: PM (griffadavi)
+**PROGRAM 3 CERTIFIED**  
+Date: 2026-06-01  
+Authority: PM (griffadavi)  
+Recovery commit: 7cc4ffe4  
+No waivers required.  
+UTV2-1115: Canceled in Linear — retired/superseded/not-started (PM decision 2026-06-01, comment ID 4c19d4ec-715c-48b6-8a87-f778bfd25d8f). Not a certification waiver.
 
 ### Certification Basis
 
@@ -187,9 +188,9 @@ UTV2-1112, 1113, 1114, 1116, 1117, 1118, 1119, 1120, 1121, 1122, 1123 — all pa
 | UTV2-1130 | PASS ✅ | 499d1453 |
 | UTV2-1131 | PASS ✅ | 77b25d7e |
 
-**UTV2-1115 — INIT-3.1.4 — [PM decision required — see §7]**
+**UTV2-1115 — INIT-3.1.4 — Canceled (retired/superseded, PM decision 2026-06-01)**
 
-### Effect (when certified)
+### Effect
 - "P1–P4 certified" gate for INIT-5.x: P3 condition SATISFIED
 - Stage 4 formally closed
 

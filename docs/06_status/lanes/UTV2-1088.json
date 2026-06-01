@@ -43,7 +43,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-22T21:39:05.404Z",
-  "heartbeat_at": "2026-06-01T12:12:31.928Z",
+  "heartbeat_at": "2026-06-01T12:50:49.924Z",
   "closed_at": "2026-05-23T14:45:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1088-invariant-registry-substrate.json",
@@ -61,6 +61,13 @@
     },
     {
       "checked_at": "2026-06-01T12:12:31.928Z",
+      "verdict": "pass",
+      "merge_sha": "2194b018fab116ad803a8b967b4b3fc9173cf4b6",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:50:49.924Z",
       "verdict": "pass",
       "merge_sha": "2194b018fab116ad803a8b967b4b3fc9173cf4b6",
       "failures": [],

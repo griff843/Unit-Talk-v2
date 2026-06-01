@@ -1,17 +1,24 @@
 # Program 5 Activation Scope Declaration
 
-**Status:** DRAFT — DISPATCH HOLD  
+**Status:** P5-A ELIGIBLE FOR ACTIVATION REVIEW — all other sub-programs on HOLD  
 **Produced:** 2026-06-01  
+**Updated:** 2026-06-01 — P2 and P3 certified  
 **Authority:** PM (griffadavi)  
 **Governing issues:** UTV2-1144–1154  
 **Activation gates:**
   - P1 certified: YES (2026-05-30)
-  - P2 certified: BLOCKED — see PROGRAM_2_CERTIFICATION.md
-  - P3 certified: BLOCKED — see PROGRAM_3_CERTIFICATION.md
+  - P2 certified: YES (2026-06-01) — see PROGRAM_2_CERTIFICATION.md
+  - P3 certified: YES (2026-06-01) — see PROGRAM_3_CERTIFICATION.md
   - P4 certified: YES (2026-06-01, HEAD 55bd0bd7)
   - M10 Path A PM decision: BLOCKED — see decisions/M10_PATH_A_DECISION.md
 
-**Dispatch state:** HOLD — do not open any Program 5 lane until activation gates are satisfied.
+**P1–P4 certification gate: SATISFIED as of 2026-06-01.**
+
+**Dispatch state:**
+- P5-A (UTV2-1147 → 1148 → 1149): ELIGIBLE FOR ACTIVATION REVIEW — P1–P4 gate satisfied
+- P5-B (UTV2-1150 → 1151): ELIGIBLE FOR ACTIVATION REVIEW — P1+P2 gate satisfied
+- P5-C (UTV2-1144 → 1145 → 1146): HOLD — M10 Path A decision required
+- P5-D (UTV2-1152 → 1153 → 1154): HOLD — requires P5-B + P5-C complete
 
 ---
 
@@ -98,10 +105,10 @@ All of the following must be true before any Program 5 lane opens:
 |---|---|---|
 | Clean working tree | 0 uncommitted files | PASS |
 | P1 certified | PM cert declaration in CERT_BOARD | PASS (2026-05-30) |
-| P2 certified | PM cert declaration in PROGRAM_2_CERTIFICATION.md | **BLOCKED** |
-| P3 certified | PM cert declaration in PROGRAM_3_CERTIFICATION.md | **BLOCKED** |
+| P2 certified | PM cert declaration in PROGRAM_2_CERTIFICATION.md | PASS (2026-06-01) |
+| P3 certified | PM cert declaration in PROGRAM_3_CERTIFICATION.md | PASS (2026-06-01) |
 | P4 certified | 12/12 TC PASS, HEAD 55bd0bd7 | PASS (2026-06-01) |
-| M10 Path A decision | Decision doc in decisions/M10_PATH_A_DECISION.md | **BLOCKED** |
+| M10 Path A decision | Decision doc in decisions/M10_PATH_A_DECISION.md | **BLOCKED — P5-C only** |
 | No active lanes | `active_lanes: []` in execution-state | PASS |
 | Merge mutex released | `status: released` | PASS |
 | cert-check P1 PASS | `pnpm ops:cert-check` exit 0 | PASS (env-gated) |
@@ -136,8 +143,8 @@ Program 5 is certified when ALL of the following are mechanically verified:
 
 | Gate | Issues Unlocked | Unlock Condition |
 |---|---|---|
-| P1–P4 certified | UTV2-1147 (P5-A Wave 1) | P1, P3, P4 certs + current P4 done |
-| P2 certified | UTV2-1150 (P5-B Wave 1) | P2 cert declaration issued |
+| P1–P4 certified | UTV2-1147 (P5-A Wave 1) | **SATISFIED 2026-06-01** |
+| P2 certified | UTV2-1150 (P5-B Wave 1) | **SATISFIED 2026-06-01** |
 | M10 Path A decision | UTV2-1144 (P5-C Wave 1) | PM decision doc created |
 | UTV2-1147 certified | UTV2-1148 | Auto-unlock on TC pass |
 | UTV2-1148 certified | UTV2-1149 | Auto-unlock on TC pass |
@@ -218,19 +225,19 @@ All Program 5 lanes are T1. Proof requirements per lane:
 
 ## 8. Dispatch Plan (First Wave)
 
-**Wave 0 (pre-dispatch — required before any lane opens):**
-1. Resolve P2 certification (B2-1 through B2-5 in PROGRAM_2_CERTIFICATION.md)
-2. Resolve P3 certification (B3-1 through B3-8 in PROGRAM_3_CERTIFICATION.md)
-3. PM issues M10 Path A decision (or explicitly defers Treasury lanes)
-4. `pnpm ops:execution-state --json` confirms active_lanes:[], merge_mutex:released
+**Wave 0 status (2026-06-01):**
+1. ~~Resolve P2 certification~~ — DONE ✅ (certified 2026-06-01)
+2. ~~Resolve P3 certification~~ — DONE ✅ (certified 2026-06-01, UTV2-1115 canceled)
+3. M10 Path A decision — OUTSTANDING (Treasury P5-C only; P5-A and P5-B may proceed without it)
+4. `pnpm ops:execution-state --json` — active_lanes:[], merge_mutex:released ✅
 
-**Wave 1 (first dispatch after gates satisfied):**
+**Wave 1 (ELIGIBLE NOW — P1–P4 gate satisfied):**
 - Open UTV2-1147 (INIT-5.2.1 — Independent Data Path)
 - Executor: Codex
 - Tier: T1
-- Blocked by: Nothing (P1–P4 cert = activation gate)
+- Blocked by: Nothing — all gates satisfied
 - Singleton: No
-- Parallel with: UTV2-1150 (P5-B — if P2 cert is also resolved simultaneously)
+- Parallel with: UTV2-1150 (P5-B — P1+P2 gate also satisfied; both can open together)
 - Max lanes open simultaneously: 2 (Claude 2, Codex 4 — stay within cap)
 
 **Wave 2 (after 1147 certified):**

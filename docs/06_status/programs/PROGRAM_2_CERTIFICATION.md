@@ -1,8 +1,9 @@
 # Program 2 Certification Audit
 
-**Status:** READY FOR PM CERTIFICATION — all mechanical blockers resolved  
+**Status:** CERTIFIED  
 **Produced:** 2026-06-01  
-**Recovery sprint:** 2026-06-01 — all 13 issues now have truth-check PASS  
+**Certified:** 2026-06-01  
+**Recovery sprint:** 7cc4ffe4 — all 13 issues truth-check PASS; no waivers required  
 **Authority:** PM (griffadavi)  
 **Governs:** WS-1.x Constitutional Foundation Layer (INIT-1.x)  
 **Required by:** INIT-5.3.x Burn-In activation gate ("P1+P2 certified")
@@ -128,15 +129,15 @@ Remaining action: PM issues formal certification declaration (§6).
 
 ---
 
-## 6. Draft PM Certification Declaration
-
-**STATUS: READY — all mechanical blockers resolved. PM may issue certification declaration now.**
+## 6. PM Certification Declaration
 
 ---
 
-**PROGRAM 2 CERTIFIED** *(AWAITING PM SIGNATURE)*  
-Date: [PM to fill]  
-Authority: PM (griffadavi)
+**PROGRAM 2 CERTIFIED**  
+Date: 2026-06-01  
+Authority: PM (griffadavi)  
+Recovery commit: 7cc4ffe4  
+No waivers required.
 
 ### Certification Basis
 
@@ -165,7 +166,7 @@ Authority: PM (griffadavi)
 | UTV2-1090 | Automatic Quarantine and Escalation | G4 exception ✅ |
 | UTV2-1094 | Production/Replay Integration | G4 exception ✅ |
 
-### Effect (when PM certifies)
+### Effect
 - INIT-5.3.x (Burn-In, UTV2-1150–1151) "P1+P2" gate: SATISFIED
 - "P1–P4 certified" gate for INIT-5.2.x: P2 condition SATISFIED
 - Constitutional foundation topology: untouched — no mutations to certified artifacts

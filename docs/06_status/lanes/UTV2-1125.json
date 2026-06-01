@@ -25,7 +25,7 @@
   "status": "done",
   "merge_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
   "started_at": "2026-05-30T02:58:48.707Z",
-  "heartbeat_at": "2026-06-01T12:12:37.011Z",
+  "heartbeat_at": "2026-06-01T12:50:55.620Z",
   "closed_at": "2026-05-30T03:35:45.112Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1125-init-342-edge-price-freshness-enforcement.json",
@@ -51,6 +51,13 @@
     },
     {
       "checked_at": "2026-06-01T12:12:37.011Z",
+      "verdict": "pass",
+      "merge_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:50:55.620Z",
       "verdict": "pass",
       "merge_sha": "992a7c8ca1335029660b439872be1ef4dd65cc1f",
       "failures": [],

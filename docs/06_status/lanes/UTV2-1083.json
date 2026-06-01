@@ -39,7 +39,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-22T21:38:13.447Z",
-  "heartbeat_at": "2026-06-01T12:12:10.821Z",
+  "heartbeat_at": "2026-06-01T12:50:44.600Z",
   "closed_at": "2026-05-23T14:30:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1083-reversible-migration-capability.json",
@@ -80,6 +80,13 @@
     },
     {
       "checked_at": "2026-06-01T12:12:10.821Z",
+      "verdict": "pass",
+      "merge_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:50:44.600Z",
       "verdict": "pass",
       "merge_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d",
       "failures": [],

@@ -217,3 +217,42 @@ Authority: PM (griffadavi)
 - POST_CERT Stage 5 (INIT-4.x / Program 4): **authorized to activate** as of this declaration
 - FROZEN (INIT-5.x / capital / treasury / scaling): remains frozen pending P1–P4 certified AND milestone decisions
 - Program 1 certification topology: untouched — no mutations to certified artifacts
+
+---
+
+## Program 2 Certification Declaration
+
+**PROGRAM 2 CERTIFIED**
+Date: 2026-06-01
+Authority: PM (griffadavi)
+
+Program 2 = WS-1.x Constitutional Foundation Layer (INIT-1.x):
+WS-1.1 (UTV2-1083–1087), WS-1.2 (UTV2-1091–1095), WS-1.3 (UTV2-1088–1094)
+
+All 13 issues truth-check PASS. No waivers. Recovery commit: 7cc4ffe4.
+Full basis: docs/06_status/programs/PROGRAM_2_CERTIFICATION.md
+
+**Effect:**
+- INIT-5.3.x (Burn-In) P1+P2 gate: SATISFIED
+- P5-B (UTV2-1150–1151) eligible for activation review
+
+---
+
+## Program 3 Certification Declaration
+
+**PROGRAM 3 CERTIFIED**
+Date: 2026-06-01
+Authority: PM (griffadavi)
+
+Program 3 = INIT-3.x Decision Integrity (POST_CERT Stage 4):
+UTV2-1112–1131. UTV2-1115 formally canceled (retired/superseded, not a waiver).
+
+All 19 active issues truth-check PASS. No waivers. Recovery commit: 7cc4ffe4.
+Full basis: docs/06_status/programs/PROGRAM_3_CERTIFICATION.md
+
+**Effect:**
+- P1–P4 certified gate for INIT-5.x: P3 condition SATISFIED
+- Combined with P4 certified (2026-06-01): P1–P4 certification gate SATISFIED
+- P5-A (UTV2-1147–1149) eligible for activation review immediately
+- P5-C (UTV2-1144–1146) remains frozen pending M10 Path A decision
+- Program 3 certification topology: untouched — no mutations to certified artifacts
