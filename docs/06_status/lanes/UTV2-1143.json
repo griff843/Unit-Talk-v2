@@ -13,6 +13,7 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1143/diff-summary.md",
     "docs/06_status/proof/UTV2-1143/verification.md",
+    "package.json",
     "packages/domain/src/edge-decay/edge-decay-detector.test.ts",
     "packages/domain/src/edge-decay/edge-decay-detector.ts",
     "packages/domain/src/edge-decay/index.ts",
