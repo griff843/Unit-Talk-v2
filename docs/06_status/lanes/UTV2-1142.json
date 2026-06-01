@@ -22,7 +22,7 @@
   "status": "done",
   "pr_number": 942,
   "started_at": "2026-05-31T13:24:44.960Z",
-  "heartbeat_at": "2026-05-31T14:23:47.247Z",
+  "heartbeat_at": "2026-06-01T01:45:54.768Z",
   "closed_at": "2026-05-31T14:23:47.247Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1142-init-442-reproducible-performance-cohorts.json",
@@ -72,6 +72,13 @@
     },
     {
       "checked_at": "2026-05-31T14:23:21.993Z",
+      "verdict": "pass",
+      "merge_sha": "d6b081342ba0974ecbdce2cb6cf623905396c198",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:45:54.768Z",
       "verdict": "pass",
       "merge_sha": "d6b081342ba0974ecbdce2cb6cf623905396c198",
       "failures": [],

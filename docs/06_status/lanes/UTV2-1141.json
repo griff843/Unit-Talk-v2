@@ -25,7 +25,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-31T09:49:00.982Z",
-  "heartbeat_at": "2026-05-31T10:46:52.733Z",
+  "heartbeat_at": "2026-06-01T01:45:50.293Z",
   "closed_at": "2026-05-31T10:46:52.733Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1141-init-441-attribution-engine.json",
@@ -66,6 +66,13 @@
     },
     {
       "checked_at": "2026-05-31T10:46:24.175Z",
+      "verdict": "pass",
+      "merge_sha": "b611eec1af6c5a21064879aebfdce2b3c5fb6eca",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:45:50.293Z",
       "verdict": "pass",
       "merge_sha": "b611eec1af6c5a21064879aebfdce2b3c5fb6eca",
       "failures": [],

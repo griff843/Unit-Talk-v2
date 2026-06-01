@@ -23,7 +23,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T18:23:03.252Z",
-  "heartbeat_at": "2026-05-30T18:45:03.479Z",
+  "heartbeat_at": "2026-06-01T01:45:42.148Z",
   "closed_at": "2026-05-30T18:45:03.479Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1140-init-433-fallback-audit-events.json",
@@ -49,6 +49,13 @@
     },
     {
       "checked_at": "2026-05-30T18:44:48.735Z",
+      "verdict": "pass",
+      "merge_sha": "b77ccf91c865872789dcabc239143d7bae5afd23",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:45:42.148Z",
       "verdict": "pass",
       "merge_sha": "b77ccf91c865872789dcabc239143d7bae5afd23",
       "failures": [],
