@@ -31,7 +31,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-31T08:47:41.334Z",
-  "heartbeat_at": "2026-06-01T01:45:24.873Z",
+  "heartbeat_at": "2026-06-01T09:14:05.276Z",
   "closed_at": "2026-05-31T11:20:37Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1137-init-423-dual-authorized-corrections.json",
@@ -109,6 +109,13 @@
     },
     {
       "checked_at": "2026-06-01T01:45:24.873Z",
+      "verdict": "pass",
+      "merge_sha": "77a2dbeb52f7fc91bf69c94005355d3283000ba7",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T09:14:05.276Z",
       "verdict": "pass",
       "merge_sha": "77a2dbeb52f7fc91bf69c94005355d3283000ba7",
       "failures": [],

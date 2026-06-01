@@ -31,7 +31,7 @@
   ],
   "status": "done",
   "started_at": "2026-06-01T00:09:20.613Z",
-  "heartbeat_at": "2026-06-01T01:45:59.700Z",
+  "heartbeat_at": "2026-06-01T09:14:10.604Z",
   "closed_at": "2026-06-01T00:41:40.956Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1143-init-443-edge-decay-detector.json",
@@ -56,6 +56,13 @@
     },
     {
       "checked_at": "2026-06-01T01:45:59.700Z",
+      "verdict": "pass",
+      "merge_sha": "327c9a4cfd50eea592a72f332c83931c5bfec1ab",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T09:14:10.604Z",
       "verdict": "pass",
       "merge_sha": "327c9a4cfd50eea592a72f332c83931c5bfec1ab",
       "failures": [],
