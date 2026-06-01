@@ -1,5 +1,7 @@
 # UTV2-1148 Verification
 
+Branch head verified: 961b817552d9b6f491ad785b677d01874e3b2d26
+
 ## Verification
 
 - `npx tsx --test packages/domain/src/adversarial/manipulation-detector.test.ts packages/domain/src/adversarial/provider-anomaly.test.ts` — PASS, 8/8 tests.
