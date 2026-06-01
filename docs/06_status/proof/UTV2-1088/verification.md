@@ -1,5 +1,7 @@
 # Verification Log: UTV2-1088
 
+**Merge SHA:** 2194b018fab116ad803a8b967b4b3fc9173cf4b6 (PR #830)
+
 ## pnpm verify
 
 Run: 2026-05-23, worktree `claude__utv2-1088-invariant-registry-substrate`

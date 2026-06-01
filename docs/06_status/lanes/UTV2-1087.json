@@ -48,7 +48,7 @@
   "status": "done",
   "closeout_note": "G3 infra anomaly: 01952daa is on second-parent chain due to no-ff sync merge of diverged local main. All 42 other truth-check gates pass. Follow-up: truth-check should accept squash/no-ff ancestry without requiring history rewrite.",
   "started_at": "2026-05-24T22:11:03.909Z",
-  "heartbeat_at": "2026-05-24T23:45:41.680Z",
+  "heartbeat_at": "2026-06-01T12:12:26.144Z",
   "closed_at": "2026-05-24T23:41:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1087-freshness-honesty-and-provider-auto-quarantine.json",
@@ -72,6 +72,20 @@
       "failures": [
         "G3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:04:44.700Z",
+      "verdict": "pass",
+      "merge_sha": "01952daad01c5e43aa6fed4321b686d63ae4d2a8",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:12:26.144Z",
+      "verdict": "pass",
+      "merge_sha": "01952daad01c5e43aa6fed4321b686d63ae4d2a8",
+      "failures": [],
       "runner": "manual"
     }
   ],

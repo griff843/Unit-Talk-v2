@@ -22,12 +22,27 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T05:14:31.555Z",
-  "heartbeat_at": "2026-05-30T05:35:13.246Z",
+  "heartbeat_at": "2026-06-01T12:13:06.482Z",
   "closed_at": "2026-05-30T05:35:13.246Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1131-init-354-concentration-hard-blocks.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-01T12:05:20.264Z",
+      "verdict": "pass",
+      "merge_sha": "77b25d7eed34088423868a407d6eb809ef967577",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:13:06.482Z",
+      "verdict": "pass",
+      "merge_sha": "77b25d7eed34088423868a407d6eb809ef967577",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

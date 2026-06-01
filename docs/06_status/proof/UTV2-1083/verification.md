@@ -1,5 +1,7 @@
 # Verification Log: UTV2-1083
 
+**Merge SHA:** bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d (PR #829)
+
 ## pnpm verify
 
 Run: 2026-05-23, worktree `claude__utv2-1083-reversible-migration-capability`

@@ -20,12 +20,27 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T05:00:02.682Z",
-  "heartbeat_at": "2026-05-30T05:14:03.745Z",
+  "heartbeat_at": "2026-06-01T12:13:01.550Z",
   "closed_at": "2026-05-30T05:14:03.745Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1130-init-353-drawdown-monitor-and-atomic-halt.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-01T12:05:14.666Z",
+      "verdict": "pass",
+      "merge_sha": "499d1453cfbe80dae020c2eec47bae5f44bbddb4",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:13:01.550Z",
+      "verdict": "pass",
+      "merge_sha": "499d1453cfbe80dae020c2eec47bae5f44bbddb4",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

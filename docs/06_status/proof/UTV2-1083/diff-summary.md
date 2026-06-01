@@ -1,5 +1,7 @@
 # Diff Summary: UTV2-1083 — INIT-1.1.0 Reversible Migration Capability
 
+**Merge SHA:** bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d (PR #829)
+
 ## Scope
 
 Phase A additive scaffolding. No existing code modified; all changes are net-new files.

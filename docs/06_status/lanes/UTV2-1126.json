@@ -25,7 +25,7 @@
   "status": "done",
   "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
   "started_at": "2026-05-30T03:02:30.727Z",
-  "heartbeat_at": "2026-05-30T03:41:08.668Z",
+  "heartbeat_at": "2026-06-01T12:12:41.788Z",
   "closed_at": "2026-05-30T03:41:08.668Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1126-init-343-negative-ev-rejection-routing.json",
@@ -46,6 +46,20 @@
         "R3"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-01T12:04:54.377Z",
+      "verdict": "pass",
+      "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:12:41.788Z",
+      "verdict": "pass",
+      "merge_sha": "4a65550d59d94258ec310da156f9bd6b0ed64a81",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

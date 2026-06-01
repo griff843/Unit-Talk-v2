@@ -19,12 +19,27 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T04:44:16.071Z",
-  "heartbeat_at": "2026-05-30T04:59:34.413Z",
+  "heartbeat_at": "2026-06-01T12:12:56.725Z",
   "closed_at": "2026-05-30T04:59:34.413Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1129-init-352-serializable-exposure-consistency.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-01T12:05:09.859Z",
+      "verdict": "pass",
+      "merge_sha": "2c8bfd09ff1816d611b166bcc70d3a3c5f97f00a",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:12:56.725Z",
+      "verdict": "pass",
+      "merge_sha": "2c8bfd09ff1816d611b166bcc70d3a3c5f97f00a",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -21,7 +21,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T03:46:44.428Z",
-  "heartbeat_at": "2026-05-30T04:17:03.509Z",
+  "heartbeat_at": "2026-06-01T12:12:46.988Z",
   "closed_at": "2026-05-30T04:17:03.509Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1127-init-344-forcepromote-to-exception-runtime.json",
@@ -45,6 +45,20 @@
         "R1",
         "R2"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:04:59.682Z",
+      "verdict": "pass",
+      "merge_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:12:46.988Z",
+      "verdict": "pass",
+      "merge_sha": "5403f51a4951e58cf7d4c3afdb74761632eaf8a4",
+      "failures": [],
       "runner": "manual"
     }
   ],

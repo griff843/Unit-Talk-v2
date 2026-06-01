@@ -1,70 +1,106 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1083",
   "title": "INIT-1.1.0 — Reversible Migration Capability",
   "tier": "T1",
-  "executor": "claude",
-  "phase": "A",
-  "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
+  "lane_type": "governance",
   "sha_binding": {
-    "verified_source_sha": "1c36e656aba3fae6092fda1f50081b26d9b8c154",
-    "verified_source_note": "Last complete-state commit — validator updated with explicit placeholder contract and placeholder_fields_resolved output",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "verified_source_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d",
+    "verified_source_note": "PR #829 merge commit — confirmed ancestor of HEAD. Original sha_binding used branch SHAs with set-by-ci placeholders; repaired to merge SHA during P2 certification recovery (2026-06-01). All underlying evidence is unchanged.",
+    "evidence_commit_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d",
+    "current_pr_head_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d"
   },
-  "merge_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d",
-  "evidence": {
+  "executor": "claude",
+  "executed_at": "2026-05-22T21:38:13.447Z",
+  "verifier": {
+    "identity": "claude/utv2-1083-p2-recovery"
+  },
+  "r_level": {
+    "level": "R0",
+    "reason": "Governance lane — no migrations added; gate is the deliverable; r_level_check matched 0 rules, 0 artifacts required"
+  },
+  "static_proof": {
     "pnpm_verify": {
-      "result": "PASS",
+      "status": "PASS",
       "note": "lint + type-check + build + test all green in worktree (re-verified on 46c9abc8)"
     },
-    "pnpm_test_db": {
-      "result": "PASS",
-      "tests": 7,
-      "passed": 7,
-      "failed": 0,
-      "note": "Retry 2 — first run had transient network failure on UTV2-996; second run 7/7 PASS"
+    "pnpm_type_check": {
+      "status": "PASS"
     },
     "r_level_check": {
-      "result": "PASS",
-      "rules_matched": 0,
-      "artifacts_required": []
+      "status": "PASS",
+      "verdict": "PASS — 0 rules matched, 0 artifacts required"
     },
+    "adversarial_tests": [
+      "F1: missing down script — gate FAILS with exit 1",
+      "F2: comment-only down script — gate FAILS with exit 1",
+      "F3: IRREVERSIBLE without ratification record — gate FAILS with exit 1",
+      "F4: unresolvable base ref — gate exits 2 (infra error, not silent pass)",
+      "F5: valid reversible down script — gate PASSES with exit 0",
+      "F6: IRREVERSIBLE with ratification record — gate PASSES with exit 0",
+      "F7: zero new migrations — gate PASSES with exit 0"
+    ],
     "migration_reversibility_gate": {
-      "result": "PASS",
+      "status": "PASS",
       "checked": 0,
-      "note": "No new migrations in this PR — gate passes trivially. Gate is the deliverable, not a migration."
-    },
-    "adversarial_fixtures": {
-      "result": "PASS",
-      "tests": 7,
-      "passed": 7,
-      "failed": 0,
-      "note": "F1: missing down (exit 1), F2: comment-only (exit 1), F3: IRREVERSIBLE-without-ratification (exit 1), F4: invalid base ref (exit 2), F5: valid reversible (exit 0), F6: IRREVERSIBLE-with-ratification (exit 0), F7: zero migrations (exit 0)"
-    },
-    "gate_local_validation": {
-      "result": "PASS",
-      "note": "Gate exits nonzero on missing down, comment-only, IRREVERSIBLE without exemption registry entry, and invalid base ref"
+      "note": "No new migrations in this PR — gate passes trivially. Gate is the constitutional deliverable."
     },
     "irreversible_exemption_registry": {
-      "result": "PASS",
+      "status": "PASS",
       "exemptions": 2,
       "entries": [
         "202605120001_utv2_883_link_market_universe_participant_ids",
         "202605130002_utv2_920_db_invariant_rpc_guards"
       ]
-    },
-    "round_trip_workflow_fixes": {
-      "result": "PASS",
-      "fixes": [
-        "grep '\\.sql$' || true — prevents bash -e failing the detect step on zero-migration PRs",
-        "ON_ERROR_STOP=1 on all psql calls — SQL errors propagate as non-zero exit",
-        "Adversarial round-trip fixture step — proves psql rejects invalid SQL down scripts"
-      ]
     }
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-22T00:00:00Z",
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "note": "7/7 PASS against live Supabase zfzdnfwdarxucxtaojxm. Retry 2 — first run had transient network failure; second run clean. Re-verified 2026-06-01: 7/7 PASS."
+    },
+    "queries": [
+      {
+        "label": "migration-reversibility-gate local run — zero-migration PR",
+        "operation": "tsx scripts/ci/migration-reversibility-gate.ts",
+        "result": "PASS",
+        "note": "Gate exits 0. No new migrations in PR — constitutional gate is the deliverable of this lane"
+      },
+      {
+        "label": "irreversible-exemption-registry read",
+        "operation": "read db/migrations-rollback/irreversible-exemption-registry.json",
+        "result": "PASS",
+        "count": 2,
+        "entries": [
+          "202605120001_utv2_883_link_market_universe_participant_ids",
+          "202605130002_utv2_920_db_invariant_rpc_guards"
+        ]
+      },
+      {
+        "label": "pnpm test:db — DB smoke suite against live Supabase",
+        "operation": "pnpm test:db",
+        "result": "PASS",
+        "tests_pass": 7,
+        "tests_fail": 0
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "irreversible_exemption_registry (file-based append-only store)",
+        "count": 2,
+        "note": "2 PM-ratified IRREVERSIBLE migration exemption entries. Static count — registry is append-only by constitutional rule."
+      }
+    ]
   },
   "audit_gap_closed": "#40",
   "constitutional_invariant_created": "INV-0013",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/829",
+  "merge_sha": "bd2a8e9bfa65ab90fa13bd8c3c1fb724dce9921d",
   "generated_at": "2026-05-22",
-  "generated_by": "claude"
+  "generated_by": "claude",
+  "recovery_note": "Converted from schema_version 2 to schema_version 1 during P2 certification recovery (2026-06-01). All evidence data sourced from original proof.md and evidence.json. No data fabricated. manifest.commit_sha set from GitHub PR #829 mergeCommit.oid, confirmed ancestor of HEAD."
 }

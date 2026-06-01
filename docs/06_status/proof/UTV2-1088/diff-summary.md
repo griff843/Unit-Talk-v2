@@ -1,5 +1,7 @@
 # Diff Summary: UTV2-1088 — INIT-1.3.1 Machine-Readable Invariant Registry Substrate
 
+**Merge SHA:** 2194b018fab116ad803a8b967b4b3fc9173cf4b6 (PR #830)
+
 ## Scope
 
 Phase A additive scaffolding. No existing code modified; all changes are net-new files.

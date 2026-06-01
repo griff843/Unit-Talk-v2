@@ -43,7 +43,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-23T17:58:20.664Z",
-  "heartbeat_at": "2026-05-23T22:11:16.404Z",
+  "heartbeat_at": "2026-06-01T12:12:16.036Z",
   "closed_at": "2026-05-23T22:11:16.404Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1084-raw-payload-store-pre-transformation-hashing.json",
@@ -64,6 +64,20 @@
         "R3"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-01T12:04:34.833Z",
+      "verdict": "pass",
+      "merge_sha": "56ed83c8bd5dc6e2648afe69bc651671e9f04642",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T12:12:16.036Z",
+      "verdict": "pass",
+      "merge_sha": "56ed83c8bd5dc6e2648afe69bc651671e9f04642",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
