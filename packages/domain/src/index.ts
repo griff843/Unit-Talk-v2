@@ -53,3 +53,4 @@ export * from './adversarial/independent-data-path.js';
 export * from './adversarial/replay.js';
 export * from './adversarial/manipulation-detector.js';
 export * from './adversarial/provider-anomaly.js';
+export * from './adversarial/escalation.js';

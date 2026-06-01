@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1149",
+  "sha_binding": {
+    "verified_source_sha": "1ee75678bf482bd3262e3cf31930e1e0b14e373f",
+    "verified_source_note": "First-class adversarial escalation wiring in pure domain package",
+    "merge_sha": null,
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "focused_tests": {
+      "command": "npx tsx --test packages/domain/src/adversarial/escalation.test.ts",
+      "status": "PASS",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "test": {
+      "command": "pnpm test",
+      "status": "PASS"
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "domain_dependency_audit": {
+      "command": "rg \"@unit-talk/db|@unit-talk/config|apps/\" packages/domain/src",
+      "status": "PASS",
+      "finding": "No runtime dependency imports were introduced; matches were pre-existing source comments only."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure domain escalation builder. Live Supabase smoke required for T1 and completed without lane-specific DB mutations.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed. This lane did not write adversarial escalation rows to the database."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists submission and settlement",
+      "UTV2-920 invalid atomic enqueue writes no lifecycle/outbox",
+      "UTV2-920 invalid atomic delivery confirmation rolls back",
+      "UTV2-920 invalid atomic settlement writes no settlement/lifecycle/audit",
+      "UTV2-883 no duplicate participants same external_id+sport",
+      "UTV2-996 re-settling creates correction no duplicate base",
+      "UTV2-996 correction chain additive original not mutated"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific DB rows mutated.",
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "quarantine_signal_routes_to_escalation": "PASS",
+    "non_quarantine_signal_audited_without_escalation": "PASS",
+    "economic_impact_ignored_for_escalation": "PASS",
+    "provider_anomaly_and_manipulation_findings_share_contract": "PASS",
+    "deterministic_replay_key_and_audit_event": "PASS",
+    "malformed_timestamp_rejected": "PASS"
+  },
+  "verdict": "PASS"
+}
