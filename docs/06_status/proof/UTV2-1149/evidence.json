@@ -78,7 +78,22 @@
           "participants"
         ]
       }
-    ]
+    ],
+    "runtime_health": {
+      "command": "pnpm ops:runtime-health -- --json",
+      "status": "FAILED",
+      "exit_code": 1,
+      "failed_sources": [
+        "runtime:health",
+        "pipeline:health"
+      ],
+      "failures": [
+        "Queue: 194 dead_letter rows",
+        "Provider: stale 16197m ago (>360m threshold)",
+        "194 dead-letter row(s) require operator review"
+      ],
+      "lane_assessment": "Pre-existing live runtime state outside this pure-domain escalation lane; no API, worker, queue, provider, or database writer files were changed."
+    }
   },
   "acceptance_criteria": {
     "quarantine_signal_routes_to_escalation": "PASS",

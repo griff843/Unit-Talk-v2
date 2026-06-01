@@ -14,6 +14,7 @@ Date: 2026-06-01
 | `pnpm type-check` | PASS | TypeScript project references passed. |
 | `pnpm test` | PASS | Root aggregate test suite passed. |
 | `pnpm test:db` | PASS | Live Supabase smoke passed against project `zfzdnfwdarxucxtaojxm`; 7 tests passed, 0 failed. |
+| `pnpm ops:runtime-health -- --json` | FAIL | Pre-existing live runtime state: 194 dead-letter rows and stale provider data. No runtime writer paths changed in this pure-domain lane. |
 | `pnpm verify` | PASS | Full gate passed: env, lint, type-check, build, test, smart-form verify, command manifest, migration checks. |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Committed branch-head run passed: no R-level artifacts required for this diff. |
 
