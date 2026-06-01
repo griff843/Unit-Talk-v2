@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1147",
+  "title": "Independent adversarial data path",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "status": "PASS",
+  "sha_binding": {
+    "branch_head_sha": "aa5401eaac8625d99dd27d71127d45974cbf480b",
+    "verified_source_sha": "aa5401eaac8625d99dd27d71127d45974cbf480b",
+    "ci_sentinels": {
+      "focused_independent_data_path_tests": "PASS",
+      "focused_replay_tests": "PASS",
+      "pnpm_type_check": "PASS",
+      "pnpm_test": "PASS",
+      "pnpm_test_db": "PASS",
+      "pnpm_verify": "PASS",
+      "r_level_check": "PASS"
+    }
+  },
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "implementation-lane"
+  },
+  "generated_at": "2026-06-01T13:52:36Z",
+  "artifacts": {
+    "implementation": [
+      "packages/domain/src/adversarial/independent-data-path.ts",
+      "packages/domain/src/adversarial/independent-data-path.types.ts",
+      "packages/domain/src/adversarial/replay.ts",
+      "packages/domain/src/index.ts"
+    ],
+    "tests": [
+      "packages/domain/src/adversarial/independent-data-path.test.ts",
+      "packages/domain/src/adversarial/replay.test.ts"
+    ],
+    "proof": [
+      "docs/06_status/proof/UTV2-1147/verification.md",
+      "docs/06_status/proof/UTV2-1147/evidence.json"
+    ]
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "focused_independent_data_path_tests": {
+      "command": "npx tsx --test packages/domain/src/adversarial/independent-data-path.test.ts",
+      "status": "PASS",
+      "test_count": 5,
+      "pass_count": 5,
+      "fail_count": 0
+    },
+    "focused_replay_tests": {
+      "command": "npx tsx --test packages/domain/src/adversarial/replay.test.ts",
+      "status": "PASS",
+      "test_count": 3,
+      "pass_count": 3,
+      "fail_count": 0
+    },
+    "pnpm_test": {
+      "command": "pnpm test",
+      "status": "PASS"
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS"
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none - no R-level artifacts required"
+    }
+  },
+  "runtime_proof": {
+    "note": "Lane implementation is pure domain code with no DB writes. Live DB regression proof still ran for T1 gate coverage.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "test_count": 7,
+    "pass_count": 7,
+    "fail_count": 0,
+    "row_counts": [
+      "No UTV2-1147-specific database rows expected or written",
+      "Root live DB smoke suite passed 7/7"
+    ],
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920 invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920 invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920 invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883 no duplicate participants for same external_id and sport",
+      "UTV2-996 re-settling settled pick creates correction",
+      "UTV2-996 correction chain additive, original settlement row not mutated"
+    ]
+  },
+  "invariants_verified": [
+    "Raw provider payload is retained as immutable evidence",
+    "Payload hashes are deterministic across object key order",
+    "Non-JSON evidence fails closed before record creation",
+    "Adversarial findings bind to the independent record id, payload hash, and replay key",
+    "Replay verifies only against the unchanged independent raw snapshot",
+    "Transformed or changed payloads are rejected during replay"
+  ],
+  "acceptance_criteria": [
+    {
+      "criterion": "Independent raw provider snapshot path",
+      "status": "PASS"
+    },
+    {
+      "criterion": "Replayable adversarial findings bind to raw snapshot evidence",
+      "status": "PASS"
+    },
+    {
+      "criterion": "Deterministic hashing and replay keys",
+      "status": "PASS"
+    },
+    {
+      "criterion": "Fail-closed JSON validation",
+      "status": "PASS"
+    },
+    {
+      "criterion": "T1 verification bundle present",
+      "status": "PASS"
+    }
+  ]
+}
