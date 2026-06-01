@@ -2,10 +2,10 @@
   "schema_version": 1,
   "issue_id": "UTV2-1149",
   "sha_binding": {
-    "verified_source_sha": "1ee75678bf482bd3262e3cf31930e1e0b14e373f",
+    "verified_source_sha": "e7d3fc508f3d9543d1aa101d46c77b080530ee00",
     "verified_source_note": "First-class adversarial escalation wiring in pure domain package",
     "merge_sha": null,
-    "evidence_commit_sha": null,
+    "evidence_commit_sha": "e7d3fc508f3d9543d1aa101d46c77b080530ee00",
     "current_pr_head_sha": null
   },
   "verifier": {
