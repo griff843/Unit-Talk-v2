@@ -7,8 +7,8 @@
   "lane_type": "runtime",
   "status": "PASS",
   "sha_binding": {
-    "branch_head_sha": "aa5401ea",
-    "verified_source_sha": "aa5401ea",
+    "branch_head_sha": "aa5401eaac8625d99dd27d71127d45974cbf480b",
+    "verified_source_sha": "aa5401eaac8625d99dd27d71127d45974cbf480b",
     "ci_sentinels": {
       "focused_independent_data_path_tests": "PASS",
       "focused_replay_tests": "PASS",
