@@ -3,10 +3,10 @@
   "schema_version": 1,
   "issue_id": "UTV2-1148",
   "tier": "T1",
-  "merge_sha": null,
-  "pr_url": null,
+  "merge_sha": "914cc5bf46cf1684e16b2d2ac3fba544632e3bdc",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/945",
   "generated_at": "2026-06-01T16:20:32.838Z",
-  "source_sha": "961b817552d9b6f491ad785b677d01874e3b2d26",
+  "source_sha": "914cc5bf46cf1684e16b2d2ac3fba544632e3bdc",
   "verifier": {
     "identity": "codex-verifier/utv2-1148"
   },
