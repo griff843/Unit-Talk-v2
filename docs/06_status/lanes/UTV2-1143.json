@@ -29,10 +29,10 @@
     "docs/06_status/proof/UTV2-1143/diff-summary.md",
     "docs/06_status/proof/UTV2-1143/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-01T00:09:20.613Z",
-  "heartbeat_at": "2026-06-01T00:40:51.785Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-01T00:41:40.956Z",
+  "closed_at": "2026-06-01T00:41:40.956Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1143-init-443-edge-decay-detector.json",
   "created_by": "claude",
@@ -45,6 +45,13 @@
         "P3",
         "C4"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T00:41:19.961Z",
+      "verdict": "pass",
+      "merge_sha": "327c9a4cfd50eea592a72f332c83931c5bfec1ab",
+      "failures": [],
       "runner": "manual"
     }
   ],

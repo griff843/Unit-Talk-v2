@@ -21,7 +21,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T19:43:07.691Z",
-  "heartbeat_at": "2026-05-30T22:38:59.467Z",
+  "heartbeat_at": "2026-06-01T01:24:21.381Z",
   "closed_at": "2026-05-30T22:38:59.467Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1134-init-413-exception-gated-dead-letter-recovery.json",
@@ -38,6 +38,13 @@
     },
     {
       "checked_at": "2026-05-30T22:38:10.613Z",
+      "verdict": "pass",
+      "merge_sha": "ff3608d1cd218d8f594a202a05800fb32d3eca8c",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:24:21.381Z",
       "verdict": "pass",
       "merge_sha": "ff3608d1cd218d8f594a202a05800fb32d3eca8c",
       "failures": [],

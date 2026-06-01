@@ -28,7 +28,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T22:59:13.312Z",
-  "heartbeat_at": "2026-05-31T08:19:29.093Z",
+  "heartbeat_at": "2026-06-01T01:24:35.599Z",
   "closed_at": "2026-05-31T08:19:29.093Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1136-init-422-settlement-records-immutability-trigger.json",
@@ -56,6 +56,13 @@
     },
     {
       "checked_at": "2026-05-31T08:19:13.222Z",
+      "verdict": "pass",
+      "merge_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:24:35.599Z",
       "verdict": "pass",
       "merge_sha": "d95a7838a718b0f8efedead66f59480f079472ac",
       "failures": [],

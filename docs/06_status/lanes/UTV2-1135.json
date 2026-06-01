@@ -20,7 +20,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T19:43:26.634Z",
-  "heartbeat_at": "2026-05-30T22:38:49.272Z",
+  "heartbeat_at": "2026-06-01T01:24:30.797Z",
   "closed_at": "2026-05-30T22:38:49.272Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1135-init-421-updatepayload-surface-removal.json",
@@ -61,6 +61,13 @@
     },
     {
       "checked_at": "2026-05-30T22:37:48.932Z",
+      "verdict": "pass",
+      "merge_sha": "16d43a90303570177b298994e4d2b25d8a8c17ab",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:24:30.797Z",
       "verdict": "pass",
       "merge_sha": "16d43a90303570177b298994e4d2b25d8a8c17ab",
       "failures": [],

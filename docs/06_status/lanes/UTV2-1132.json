@@ -34,7 +34,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-30T06:49:56.810Z",
-  "heartbeat_at": "2026-05-30T15:43:58.771Z",
+  "heartbeat_at": "2026-06-01T01:33:48.455Z",
   "closed_at": "2026-05-30T15:43:58.771Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1132-executionintent-entity.json",
@@ -54,6 +54,20 @@
     },
     {
       "checked_at": "2026-05-30T15:43:33.241Z",
+      "verdict": "pass",
+      "merge_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:24:08.318Z",
+      "verdict": "pass",
+      "merge_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T01:33:48.455Z",
       "verdict": "pass",
       "merge_sha": "c000c0641eff8190e7dfacefc934e9f1b527e619",
       "failures": [],
