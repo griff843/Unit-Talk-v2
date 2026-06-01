@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1147-independent-data-path",
   "branch": "codex/utv2-1147-independent-data-path",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "bb7cd451b66f0890aa6702abb927f70d7cacc654",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/944",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1147/evidence.json",
@@ -23,14 +23,40 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1147/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-01T13:29:22.621Z",
-  "heartbeat_at": "2026-06-01T13:29:22.621Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-01T15:42:52.525Z",
+  "closed_at": "2026-06-01T15:42:52.525Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1147-independent-data-path.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-01T15:41:55.882Z",
+      "verdict": "pass",
+      "merge_sha": "bb7cd451b66f0890aa6702abb927f70d7cacc654",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-01T15:42:20.911Z",
+      "verdict": "fail",
+      "merge_sha": "bb7cd451b66f0890aa6702abb927f70d7cacc654",
+      "failures": [
+        "L3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-01T15:42:29.735Z",
+      "verdict": "fail",
+      "merge_sha": "bb7cd451b66f0890aa6702abb927f70d7cacc654",
+      "failures": [
+        "L3"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
