@@ -4,11 +4,11 @@
   "issue_id": "UTV2-1147",
   "title": "Independent adversarial data path",
   "tier": "T1",
-  "lane_type": "domain",
+  "lane_type": "runtime",
   "status": "PASS",
   "sha_binding": {
-    "branch_head_sha": "fa0c4415536aab628ab1efc982e7079f4fe19102",
-    "verified_source_sha": "fa0c4415536aab628ab1efc982e7079f4fe19102",
+    "branch_head_sha": "aa5401ea",
+    "verified_source_sha": "aa5401ea",
     "ci_sentinels": {
       "focused_independent_data_path_tests": "PASS",
       "focused_replay_tests": "PASS",
