@@ -30,6 +30,10 @@ const REQUIRED_FILES = [
   'docs/00_constitution/CONSTITUTIONAL_DRIFT_AUDIT.md',
   'docs/00_constitution/PROGRAM_ALIGNMENT_MATRIX.md',
   'docs/02_architecture/CONSTITUTIONAL_LINEAR_EXECUTION_STRUCTURE.md',
+  // Added by SPRINT-CONSTITUTIONAL-CONVERGENCE-002 — canonical program state + gap ledger + backlog plan.
+  'docs/00_constitution/CANONICAL_PROGRAM_STATE.md',
+  'docs/00_constitution/CERTIFICATION_GAP_REGISTER.md',
+  'docs/00_constitution/CONSTITUTIONAL_CONVERGENCE_BACKLOG_PLAN.md',
 ] as const;
 
 /** SHA-256 of the recovered constitutional source, for tamper-evidence (warn-only). */

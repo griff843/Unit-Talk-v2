@@ -2,6 +2,8 @@
 
 > 2026-06-02. Ordered by constitutional sequencing (§18.2: truth → governance → scale). Each: action, owner, gate. None of these were performed this sprint (out of scope: restore/preserve/map/audit only).
 
+> **UPDATE 2026-06-02 (SPRINT-CONSTITUTIONAL-CONVERGENCE-002):** PM-1 and PM-2 are now **`PM_RATIFIED`** — see `docs/00_constitution/CANONICAL_PROGRAM_STATE.md` and `CERTIFICATION_GAP_REGISTER.md`. D-CONST-1 (§18.3 numbering canonical) and D-CONST-2 (P1/P2 certified · P3 active · P4 conditional · P5 frozen) are resolved by PM ruling; no certification advanced. PM-3/PM-4 remain.
+
 ## PM decisions required (only PM can do these — §2.9)
 | # | Decision | Closes | Why it's PM-only |
 |---|---|---|---|

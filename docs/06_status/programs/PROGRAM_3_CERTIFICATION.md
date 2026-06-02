@@ -1,5 +1,9 @@
 # Program 3 Certification Audit
 
+> **CONSTITUTIONAL RECONCILIATION NOTICE**
+> As of SPRINT-CONSTITUTIONAL-CONVERGENCE-002, the canonical program numbering and activation state are defined by `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 and `docs/00_constitution/CANONICAL_PROGRAM_STATE.md`. This document is historical or partially drifted where it conflicts. Do not use this file as authority for Program numbering or activation status without checking the canonical program state.
+> **Specific drift (D-CONST-2, PM_RATIFIED):** this doc's header "Status: CERTIFIED" is **superseded**. Per PM ruling, **P3 Decision Integrity = ACTIVE_NOT_CERTIFIED**. P3 work is authorized, but P3 is **not** certified. Treat the "certified 2026-06-01" claim as historical; the canonical status is in `CANONICAL_PROGRAM_STATE.md`. This sprint advances no certification.
+
 **Status:** CERTIFIED  
 **Produced:** 2026-06-01  
 **Certified:** 2026-06-01  

@@ -38,6 +38,8 @@ Layers whose doctrine is written and partially scaffolded but not yet fulfilled:
 
 ## Which constitutional areas have DRIFTED (doctrine vs reality conflict)
 
+> **PM rulings (2026-06-02, SPRINT-CONSTITUTIONAL-CONVERGENCE-002):** **D-CONST-1 = `PM_RATIFIED`** (§18.3 numbering canonical) and **D-CONST-2 = `PM_RATIFIED`** (P1 ACTIVE_CERTIFIED · P2 ACTIVE_CERTIFIED · P3 ACTIVE_NOT_CERTIFIED · P4 CONDITIONAL_NOT_CERTIFIED · P5 FROZEN_NOT_CERTIFIED). D-CONST-3..8 remain **OPEN**. Canonical state: `CANONICAL_PROGRAM_STATE.md`; ledger: `CERTIFICATION_GAP_REGISTER.md`. No certification was advanced by these rulings.
+
 | Drift | Constitution says | Reality | Severity |
 |---|---|---|---|
 | **D-CONST-1 — Program numbering** | §18.3: **P2 = Governance, P3 = Decision Integrity, P4 = Execution & Economic, P5 = Institutional** | Repo `PROGRAM_2_CERTIFICATION.md` declares "Program 2 = WS-1.x" and back-derives the number (`:28`). | **HIGH** — repo cert docs are **constitutionally mislabeled.** The constitution is the tie-breaker; per §18.3 the doc the repo calls "P2 cert (WS-1.x)" is actually **Program 1** work. |

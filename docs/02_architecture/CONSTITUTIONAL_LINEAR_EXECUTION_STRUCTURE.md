@@ -93,8 +93,10 @@ A board generator MUST:
 - treat Linear as operational tracking only — the constitution + repo proof are authoritative.
 
 ## 8. Known structural drift to reconcile (see `CONSTITUTIONAL_DRIFT_AUDIT.md`)
-- D-CONST-1: repo cert docs use a non-constitutional program numbering — reconcile to §18.3.
-- D-CONST-2: Linear has not authorized P3+ activation; cert claims outrun recorded authority.
-- D-CONST-3: P1 cert (Linear-only) and P4 cert (manifest-only) lack canonical repo cert docs.
+- D-CONST-1 — **`PM_RATIFIED` 2026-06-02:** §18.3 numbering is canonical. Stale references annotated; full renaming in SPRINT-CERTIFICATION-STATE-RECONCILIATION-003.
+- D-CONST-2 — **`PM_RATIFIED` 2026-06-02:** activation is P1/P2 ACTIVE_CERTIFIED · P3 ACTIVE · P4 CONDITIONAL · P5 FROZEN (`../00_constitution/CANONICAL_PROGRAM_STATE.md`). No certification advanced.
+- D-CONST-3 — **OPEN:** P1 cert (Linear-only) and P4 cert (manifest-only) lack canonical repo cert docs → SPRINT-CERTIFICATION-STATE-RECONCILIATION-003.
+
+> Activation order is now PM-fixed: P1✅ → P2✅ → **P3 active** → **P4 conditional** → **P5 frozen**. No capital (P5-C/P5-D) generation while P5 is frozen.
 
 This document is the canonical board-generation reference. Update it only when the constitution itself changes (which requires re-ratification, not an edit here).

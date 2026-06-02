@@ -2,6 +2,8 @@
 
 > 2026-06-02 · HEAD `a0614837` · Executor: Claude (Opus 4.8). Scope: restore, preserve, map, and audit drift for the recovered Unit Talk Constitution. **No doctrine rewritten, no certification status changed, no runtime behavior modified.**
 
+> **UPDATE 2026-06-02 (SPRINT-CONSTITUTIONAL-CONVERGENCE-002):** the two PM decisions surfaced here are now **`PM_RATIFIED`** — D-CONST-1 (§18.3 numbering canonical) and D-CONST-2 (P1/P2 ACTIVE_CERTIFIED · P3 ACTIVE_NOT_CERTIFIED · P4 CONDITIONAL_NOT_CERTIFIED · P5 FROZEN_NOT_CERTIFIED). Canonical state: `docs/00_constitution/CANONICAL_PROGRAM_STATE.md`. No certification was advanced.
+
 ## What was done
 The recovered constitution (`UNIT_TALK_CONSTITUTION_V1.md`, 2483 lines, 19 capability layers) was restored into the repository **byte-for-byte verbatim**, preserved behind a fail-closed CI guard, mapped to implementation reality, and audited for drift. The constitution is now the canonical, SHA-pinned, tamper-evident source of truth at `docs/00_constitution/`.
 

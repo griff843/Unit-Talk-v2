@@ -34,11 +34,18 @@ The constitution file is intentionally kept **byte-for-byte verbatim** (not edit
 
 > Note: the constitution (§18.3) is the **tie-breaker for program numbering**. Programs are: P1 Truth · P2 Governance · P3 Decision Integrity · P4 Execution & Economic Truth · P5 Institutional Runtime. Any repo doc using a different numbering is drifted (see `CONSTITUTIONAL_DRIFT_AUDIT.md`).
 
+## PM rulings (ratified 2026-06-02 — SPRINT-CONSTITUTIONAL-CONVERGENCE-002)
+- **D-CONST-1 — `PM_RATIFIED`:** §18.3 program numbering is canonical. Conflicting definitions are drift to reconcile, not alternate authority.
+- **D-CONST-2 — `PM_RATIFIED`:** activation state is **P1 ACTIVE_CERTIFIED · P2 ACTIVE_CERTIFIED · P3 ACTIVE_NOT_CERTIFIED · P4 CONDITIONAL_NOT_CERTIFIED · P5 FROZEN_NOT_CERTIFIED.** This advances **no** certification. Canonical detail: [`CANONICAL_PROGRAM_STATE.md`](./CANONICAL_PROGRAM_STATE.md). Gap ledger: [`CERTIFICATION_GAP_REGISTER.md`](./CERTIFICATION_GAP_REGISTER.md). Next sprints: [`CONSTITUTIONAL_CONVERGENCE_BACKLOG_PLAN.md`](./CONSTITUTIONAL_CONVERGENCE_BACKLOG_PLAN.md).
+
 ## Constitutional artifacts (this directory)
 
 | File | Purpose |
 |---|---|
 | [`UNIT_TALK_CONSTITUTION_V1.md`](./UNIT_TALK_CONSTITUTION_V1.md) | The constitution itself — verbatim, supreme authority |
+| [`CANONICAL_PROGRAM_STATE.md`](./CANONICAL_PROGRAM_STATE.md) | **Authoritative current program status** (P1–P5, PM-ratified) |
+| [`CERTIFICATION_GAP_REGISTER.md`](./CERTIFICATION_GAP_REGISTER.md) | D-CONST-1..8 gap ledger (which are ratified vs open) |
+| [`CONSTITUTIONAL_CONVERGENCE_BACKLOG_PLAN.md`](./CONSTITUTIONAL_CONVERGENCE_BACKLOG_PLAN.md) | Next sprint sequence (pre-Linear-issue plan) |
 | [`CONSTITUTION_IMPLEMENTATION_MATRIX.md`](./CONSTITUTION_IMPLEMENTATION_MATRIX.md) | Section → repo implementation → enforcement → tests → CI gates → status |
 | [`CONSTITUTIONAL_DRIFT_AUDIT.md`](./CONSTITUTIONAL_DRIFT_AUDIT.md) | Per-layer: Implemented / Partial / Missing / Bypassed / Superseded |
 | [`PROGRAM_ALIGNMENT_MATRIX.md`](./PROGRAM_ALIGNMENT_MATRIX.md) | Programs 1–5 → layers, issues, workstreams, certifications, runtime |

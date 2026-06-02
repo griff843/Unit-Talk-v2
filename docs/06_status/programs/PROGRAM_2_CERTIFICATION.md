@@ -1,5 +1,9 @@
 # Program 2 Certification Audit
 
+> **CONSTITUTIONAL RECONCILIATION NOTICE**
+> As of SPRINT-CONSTITUTIONAL-CONVERGENCE-002, the canonical program numbering and activation state are defined by `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 and `docs/00_constitution/CANONICAL_PROGRAM_STATE.md`. This document is historical or partially drifted where it conflicts. Do not use this file as authority for Program numbering or activation status without checking the canonical program state.
+> **Specific drift (D-CONST-1, PM_RATIFIED):** this doc's "Program 2 = WS-1.x Constitutional Foundation Layer" is **non-canonical**. Per §18.3, **Program 2 = Governance Convergence**; WS-1.x foundation work belongs to Program 1 (Truth). Canonical P2 (Governance) status is ACTIVE_CERTIFIED. This sprint changes no certification status.
+
 **Status:** CERTIFIED  
 **Produced:** 2026-06-01  
 **Certified:** 2026-06-01  

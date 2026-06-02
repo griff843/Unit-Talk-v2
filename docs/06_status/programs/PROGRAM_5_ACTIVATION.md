@@ -1,5 +1,9 @@
 # Program 5 Activation Scope Declaration
 
+> **CONSTITUTIONAL RECONCILIATION NOTICE**
+> As of SPRINT-CONSTITUTIONAL-CONVERGENCE-002, the canonical program numbering and activation state are defined by `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 and `docs/00_constitution/CANONICAL_PROGRAM_STATE.md`. This document is historical or partially drifted where it conflicts. Do not use this file as authority for Program numbering or activation status without checking the canonical program state.
+> **Specific drift (D-CONST-2, PM_RATIFIED):** statements that "P1–P4 certified — SATISFIED" and "P3 certified / P4 certified" are **superseded**. Canonical state: P3 = ACTIVE_NOT_CERTIFIED, P4 = CONDITIONAL_NOT_CERTIFIED → the "P1–P4 certified" unlock string is **NOT satisfied**. **P5 (capital/treasury/scaling) remains FROZEN_NOT_CERTIFIED** until burn-in PASS + certification (§4.17, §20.6). Already-merged P5-A adversarial code (UTV2-1147–1149) is historical, not an unfreeze.
+
 **Status:** P5-A ELIGIBLE FOR ACTIVATION REVIEW — all other sub-programs on HOLD  
 **Produced:** 2026-06-01  
 **Updated:** 2026-06-01 — P2 and P3 certified  

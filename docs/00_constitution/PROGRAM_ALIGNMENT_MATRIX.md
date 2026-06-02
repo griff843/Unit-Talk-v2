@@ -3,6 +3,18 @@
 > SPRINT-CONSTITUTION-RESTORATION-AND-RATIFICATION-001 · 2026-06-02 · HEAD `a0614837`.
 > Maps Programs 1–5 (per **constitution §18.3 — the authoritative numbering**) to capability layers, issues, workstreams, certifications, and runtime components. Based on **repo evidence**, not Linear assumptions. Determines what each Program *actually means today.* Changes no certification status.
 
+## PM-ratified activation state (2026-06-02 — D-CONST-2 `PM_RATIFIED`)
+
+| Program | Activation status (canonical) |
+|---|---|
+| P1 Truth Convergence | **ACTIVE_CERTIFIED** |
+| P2 Governance Convergence | **ACTIVE_CERTIFIED** |
+| P3 Decision Integrity | **ACTIVE_NOT_CERTIFIED** |
+| P4 Execution & Economic Truth | **CONDITIONAL_NOT_CERTIFIED** |
+| P5 Institutional Runtime | **FROZEN_NOT_CERTIFIED** |
+
+> Authoritative detail in [`CANONICAL_PROGRAM_STATE.md`](./CANONICAL_PROGRAM_STATE.md). This matrix's per-program "certification" prose below is **historical analysis**; where it differs from the table above, the table (and CANONICAL_PROGRAM_STATE) governs. No certification was advanced.
+
 ## Authoritative program definitions (§18.3)
 
 | Program | Constitutional name | Maturity stage (§16) | Capability layers | Convergence target |
