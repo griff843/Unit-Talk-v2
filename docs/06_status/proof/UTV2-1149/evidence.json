@@ -2,11 +2,18 @@
   "schema_version": 1,
   "issue_id": "UTV2-1149",
   "sha_binding": {
-    "verified_source_sha": "e7d3fc508f3d9543d1aa101d46c77b080530ee00",
+    "verified_source_sha": "fb37f341b3744fd76b04acb671631cba8575382a",
     "verified_source_note": "First-class adversarial escalation wiring in pure domain package",
-    "merge_sha": null,
+    "merge_sha": "fb37f341b3744fd76b04acb671631cba8575382a",
     "evidence_commit_sha": "e7d3fc508f3d9543d1aa101d46c77b080530ee00",
-    "current_pr_head_sha": null
+    "current_pr_head_sha": null,
+    "ci_sentinels": {
+      "pnpm_verify": "PASS",
+      "pnpm_type_check": "PASS",
+      "pnpm_test": "PASS",
+      "pnpm_test_db": "PASS",
+      "r_level_check": "PASS"
+    }
   },
   "verifier": {
     "identity": "codex-gpt-5",
@@ -103,5 +110,6 @@
     "deterministic_replay_key_and_audit_event": "PASS",
     "malformed_timestamp_rejected": "PASS"
   },
-  "verdict": "PASS"
+  "verdict": "PASS",
+  "status": "PASS"
 }
