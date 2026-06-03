@@ -21,6 +21,10 @@ allowed_path_globs:
   - docs/06_status/SYSTEM_STATE.md
   - docs/06_status/qa-roadmap-expansion.md
   - docs/06_status/model-performance-log.md
+  # Certification authority documents — governance lanes author/reconcile these
+  # (P1–P5 certification records and the certification board). Added UTV2-1195.
+  - docs/06_status/programs/**
+  - docs/06_status/CERT_BOARD.md
   - .claude/.state-stamp
   - docs/archive/**
   - CLAUDE.md

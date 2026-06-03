@@ -37,17 +37,54 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       db-configured: ${{ steps.check.outputs.configured }}
+      required: ${{ steps.check.outputs.required }}
     steps:
       - id: check
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # Opt-in enforcement flag (mirrors CI_REQUIRE_DB_SMOKE / required-db-smoke).
+          CI_REQUIRE_SCHEMA_PARITY: ${{ vars.CI_REQUIRE_SCHEMA_PARITY }}
         run: |
+          # When is parity REQUIRED (fail-closed)? Mirrors scripts/ci/required-db-smoke.ts:
+          #   - explicit opt-in flag CI_REQUIRE_SCHEMA_PARITY truthy, OR
+          #   - the ref is protected, OR
+          #   - the ref is main.
+          # On feature-branch PRs (none of the above) a missing secret is a LOUD skip,
+          # not a failure. Once the flag is set (after provisioning the SUPABASE_DB_URL
+          # secret) a missing/unreachable DB is treated as a FAILURE, never a silent skip.
+          required=false
+          case "$CI_REQUIRE_SCHEMA_PARITY" in
+            1|true|TRUE|yes|YES) required=true ;;
+          esac
+          if [ "$GITHUB_REF_PROTECTED" = "true" ] || [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            required=true
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+
           if [ -n "$SUPABASE_DB_URL" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::SUPABASE_DB_URL not configured — live schema parity skipped."
+            if [ "$required" = "true" ]; then
+              echo "::error title=Live schema parity unverified::SUPABASE_DB_URL is not configured but parity is REQUIRED on this ref. A skip is treated as FAIL (D-CONST-4 / D-CONST-7, fail-closed). Provision the SUPABASE_DB_URL secret."
+            else
+              echo "::warning title=Live schema parity skipped::SUPABASE_DB_URL not configured — parity not verified on this feature ref. This is a LOUD skip, not a pass."
+            fi
           fi
+
+  # D-CONST-7 fail-closed gate: a skipped parity check must never read as a pass.
+  # When parity is required (main / protected / CI_REQUIRE_SCHEMA_PARITY) and the DB
+  # is not configured, this job FAILS instead of letting schema-parity be skipped.
+  enforce-parity-required:
+    name: Enforce parity (fail-closed)
+    needs: check-config
+    if: needs.check-config.outputs.db-configured != 'true' && needs.check-config.outputs.required == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail closed — parity required but DB unconfigured
+        run: |
+          echo "::error title=Live schema parity unverified::Parity is REQUIRED on this ref but SUPABASE_DB_URL is not configured. Per fail-closed doctrine (D-CONST-4/D-CONST-7) a silent skip is treated as FAILURE. Provision the SUPABASE_DB_URL secret to verify live schema parity."
+          exit 1
 
   schema-parity:
     name: Live Schema Parity

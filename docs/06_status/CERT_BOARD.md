@@ -182,6 +182,13 @@ Program 1 certified when ALL of the following are mechanically verified:
 
 ## PM Certification Declaration
 
+> **§18.3 CANONICAL MAPPING (D-CONST-1, `PM_RATIFIED`).** The "PROGRAM 1" basis below is the
+> **INIT-2.x certification-framework** chain (UTV2-1096–1111 + WS-2.2 foundations). Under §18.3
+> this certification-runtime work is canonically **Program 2 (Governance Convergence)** — *not*
+> P1. Canonical **P1 = Truth** is the WS-1.x substrate, recorded in
+> `docs/06_status/programs/PROGRAM_1_CERTIFICATION.md` (frozen surface SHA `9600938`). The
+> evidence below remains valid; the program *label* is the drift. No certification changes.
+
 **PROGRAM 1 CERTIFIED**
 Date: 2026-05-30
 Authority: PM (griffadavi)
@@ -226,6 +233,12 @@ Authority: PM (griffadavi)
 
 ## Program 2 Certification Declaration
 
+> **§18.3 CANONICAL MAPPING (D-CONST-1, `PM_RATIFIED`).** The "PROGRAM 2" basis below is the
+> **WS-1.x / INIT-1.x** foundation (UTV2-1083–1095). Under §18.3 this truth-substrate work is
+> canonically **Program 1 (Truth Convergence)** — its canonical record is
+> `docs/06_status/programs/PROGRAM_1_CERTIFICATION.md`. The evidence below remains valid; the
+> "Program 2" label is the pre-convergence drift. No certification changes.
+
 **PROGRAM 2 CERTIFIED**
 Date: 2026-06-01
 Authority: PM (griffadavi)
@@ -234,7 +247,7 @@ Program 2 = WS-1.x Constitutional Foundation Layer (INIT-1.x):
 WS-1.1 (UTV2-1083–1087), WS-1.2 (UTV2-1091–1095), WS-1.3 (UTV2-1088–1094)
 
 All 13 issues truth-check PASS. No waivers. Recovery commit: 7cc4ffe4.
-Full basis: docs/06_status/programs/PROGRAM_2_CERTIFICATION.md
+Full basis: docs/06_status/programs/PROGRAM_2_CERTIFICATION.md (canonically P1 Truth substrate)
 
 **Effect:**
 - INIT-5.3.x (Burn-In) P1+P2 gate: SATISFIED
@@ -255,8 +268,15 @@ All 19 active issues truth-check PASS. No waivers. Recovery commit: 7cc4ffe4.
 Full basis: docs/06_status/programs/PROGRAM_3_CERTIFICATION.md
 
 **Effect:**
-- P1–P4 certified gate for INIT-5.x: P3 condition SATISFIED
-- Combined with P4 certified (2026-06-01): P1–P4 certification gate SATISFIED
-- P5-A (UTV2-1147–1149) eligible for activation review immediately
 - P5-C (UTV2-1144–1146) remains frozen pending M10 Path A decision
 - Program 3 certification topology: untouched — no mutations to certified artifacts
+
+> **SUPERSEDED (D-CONST-2, `PM_RATIFIED` 2026-06-02).** The original effect lines below are
+> **superseded** by `docs/00_constitution/CANONICAL_PROGRAM_STATE.md`:
+> - ~~"P3 condition SATISFIED"~~ → **P3 = ACTIVE_NOT_CERTIFIED** (`PROGRAM_3_CERTIFICATION.md`
+>   header is historical; canonical state is NOT certified).
+> - ~~"Combined with P4 certified (2026-06-01): P1–P4 certification gate SATISFIED"~~ →
+>   **P4 = CONDITIONAL_NOT_CERTIFIED** (`PROGRAM_4_CERTIFICATION.md`). The **"P1–P4 certified"
+>   gate is NOT satisfied.**
+> - ~~"P5-A eligible for activation review immediately"~~ → **P5 remains FROZEN_NOT_CERTIFIED.**
+>   Already-merged P5-A code (UTV2-1147–1149) is historical, not an unfreeze.

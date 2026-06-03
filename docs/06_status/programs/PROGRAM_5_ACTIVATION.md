@@ -9,19 +9,25 @@
 **Updated:** 2026-06-01 — P2 and P3 certified  
 **Authority:** PM (griffadavi)  
 **Governing issues:** UTV2-1144–1154  
-**Activation gates:**
-  - P1 certified: YES (2026-05-30)
-  - P2 certified: YES (2026-06-01) — see PROGRAM_2_CERTIFICATION.md
-  - P3 certified: YES (2026-06-01) — see PROGRAM_3_CERTIFICATION.md
-  - P4 certified: YES (2026-06-01, HEAD 55bd0bd7)
+**Activation gates (CANONICAL — corrected per D-CONST-2 `PM_RATIFIED` 2026-06-02):**
+  - P1 (Truth) certified: **YES** — frozen surface SHA `9600938`, see `PROGRAM_1_CERTIFICATION.md` (re-cert due 2026-08-25)
+  - P2 (Governance) certified: **YES** — INIT-2.x certification runtime, 229 live tests (canonical mapping: `CERT_BOARD.md` "Program 1" section)
+  - P3 (Decision Integrity) certified: **NO — ACTIVE_NOT_CERTIFIED**, see `CANONICAL_PROGRAM_STATE.md` (the `PROGRAM_3_CERTIFICATION.md` "certified" header is historical/superseded)
+  - P4 (Execution & Economic Truth) certified: **NO — CONDITIONAL_NOT_CERTIFIED**, see `PROGRAM_4_CERTIFICATION.md` (execution real, economics unproven)
   - M10 Path A PM decision: BLOCKED — see decisions/M10_PATH_A_DECISION.md
 
-**P1–P4 certification gate: SATISFIED as of 2026-06-01.**
+> **SUPERSEDED — the original gate block below is historical drift (D-CONST-2):**
+> ~~P3 certified: YES (2026-06-01)~~ · ~~P4 certified: YES (2026-06-01, HEAD 55bd0bd7)~~ ·
+> ~~"P1–P4 certification gate: SATISFIED"~~. Per `CANONICAL_PROGRAM_STATE.md`, **P3 and P4 are
+> NOT certified**, so the **"P1–P4 certified" gate is NOT satisfied** and **P5 remains
+> FROZEN_NOT_CERTIFIED.** The already-merged P5-A code (UTV2-1147–1149) is historical, not an
+> unfreeze. P5 stays frozen until burn-in PASS + certification (§4.17, §20.6). This activation
+> packet does **not** authorize P5 sub-program dispatch on the strength of the stale gate.
 
-**Dispatch state:**
-- P5-A (UTV2-1147 → 1148 → 1149): ELIGIBLE FOR ACTIVATION REVIEW — P1–P4 gate satisfied
-- P5-B (UTV2-1150 → 1151): ELIGIBLE FOR ACTIVATION REVIEW — P1+P2 gate satisfied
-- P5-C (UTV2-1144 → 1145 → 1146): HOLD — M10 Path A decision required
+**Dispatch state (historical — gated by the corrected canonical state above):**
+- P5-A (UTV2-1147 → 1148 → 1149): code merged (historical); **NOT** an unfreeze — P1–P4 gate NOT satisfied
+- P5-B (UTV2-1150 → 1151): P1+P2 gate satisfied; burn-in execution (1151) is a separate time-gated operation
+- P5-C (UTV2-1144 → 1145 → 1146): HOLD — M10 Path A decision required + P1–P4 gate NOT satisfied
 - P5-D (UTV2-1152 → 1153 → 1154): HOLD — requires P5-B + P5-C complete
 
 ---
