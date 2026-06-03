@@ -1,5 +1,6 @@
 # UTV2-1195 — Diff Summary
 
+**Merge SHA:** `a123b160820740c8ef7f4219914782fd600126eb` (PR #950, squash-merged 2026-06-03). Proof bound to the merge SHA.
 **Lane:** SPRINT-CERTIFICATION-STATE-RECONCILIATION-003
 **Tier:** T2 · **Lane type:** governance · **Executor:** Claude (doc authoring) + PM (ratify) + Codex (canonical types regen)
 **Closes:** D-CONST-3 (missing canonical cert records); cleans up D-CONST-1 / D-CONST-2 stale references; D-CONST-7 **parity-gate half** (types-regen half deferred to a Codex Migration lane — see note below)

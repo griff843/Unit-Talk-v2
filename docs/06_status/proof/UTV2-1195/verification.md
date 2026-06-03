@@ -33,9 +33,16 @@
 2. **Parity gate is fail-closed *gated on a flag*.** Enforcement triggers on `main`/protected refs or when `CI_REQUIRE_SCHEMA_PARITY` is truthy. CI currently has **no** `SUPABASE_DB_URL` secret, so to activate full enforcement the PM must: (a) provision the `SUPABASE_DB_URL` GitHub secret, and (b) set repo variable `CI_REQUIRE_SCHEMA_PARITY=1`. Live Schema Parity is **not** a branch-protection-required check, so the gate going red does not hard-block merges — it is the honest "unverified" signal D-CONST-7 intends.
 3. **Cert docs require PM ratification.** Per the issue executor split ("Claude doc authoring + PM ratify"), these canonical records are authored here and await PM ratification. No certification status is self-issued.
 
+### Closeout commands (post-merge, bound to merge SHA `a123b160`)
+
+- `pnpm type-check` — **PASS** (exit 0; tsc -b project references).
+- `pnpm test` — **PASS** (all suites `# fail 0`, incl. `scripts/ci/live-schema-parity-workflow.test.ts`).
+- `pnpm verify` — **PASS** (env:check + lint + type-check + build + test + verify:commands).
+- R-level compliance: `scripts/ci/r-level-check.ts` — the **R-Level Compliance Check** CI gate passed on the merge SHA. This is a docs + CI-gate lane (no migration, no write-path, no runtime behavior change); no R1–R5 runtime artifacts are triggered.
+
 ### SHA binding
 
-Authored at branch HEAD (pre-merge). Per T2, the proof binds to the **merge SHA** post-merge — `merge_sha` to be set in the lane manifest and this bundle after merge (not the branch HEAD SHA).
+**Merge SHA: `a123b160820740c8ef7f4219914782fd600126eb`** (PR #950, squash-merged 2026-06-03). Proof bound to the merge SHA per T2. `pnpm verify` green on branch; CI green on the merge SHA.
 
 ### Linear state
 
