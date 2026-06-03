@@ -155,6 +155,54 @@ test('fails execution-bound proof when required command is only mentioned', () =
   assert.match(result.output.failures.join('\n'), /lacks node:test pass evidence/);
 });
 
+test('fails execution-bound proof when required command is not referenced', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    [
+      '## Summary',
+      'DB proof omitted.',
+      '## Evidence',
+      'The proof includes no DB smoke command reference.',
+      '## Verification',
+      'No DB smoke evidence captured.',
+    ].join('\n'),
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /not referenced/);
+});
+
+test('fails execution-bound proof when required command evidence has skipped node:test output', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    [
+      '## Summary',
+      'Skipped DB proof.',
+      '## Evidence',
+      'Command: pnpm test:db',
+      'TAP version 13',
+      '# tests 5',
+      '# pass 4',
+      '# fail 0',
+      '# cancelled 0',
+      '# skipped 1',
+      '## Verification',
+      'Live DB smoke included skipped tests.',
+    ].join('\n'),
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /lacks node:test pass evidence/);
+});
+
 test('passes execution-bound proof when required command has node:test pass output', () => {
   const proofDir = makeTempDir();
   writeFileSync(

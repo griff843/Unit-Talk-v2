@@ -1,6 +1,6 @@
 ## Summary
 
-UTV2-1196 closes the D-CONST-4 string-bound proof gap for T1 DB proof coverage by binding C2 to actual DB smoke execution and adding a self-test for string-only proof rejection.
+UTV2-1196 closes the D-CONST-4 string-bound proof gap for T1 DB proof coverage by binding C2 to actual DB smoke execution and requiring proof-auditor bundles to include captured `node:test` execution evidence for `pnpm test:db`.
 
 ## Evidence
 
@@ -8,14 +8,30 @@ Focused proof-auditor regression:
 
 ```text
 npx tsx --test scripts/ops/proof-auditor-gate.test.ts
-1..14
-# tests 14
+1..16
+# tests 16
 # suites 0
-# pass 14
+# pass 16
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
+```
+
+Live DB smoke execution evidence:
+
+```text
+pnpm test:db
+TAP version 13
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 135213.569857
 ```
 
 TypeScript project references:
@@ -47,18 +63,19 @@ R-level compliance:
 ```text
 npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 10
+Changed files: 16
 Rules matched: (none) - no R-level artifacts required for this diff
 ```
 
-Proof capture HEAD: `e71f66dd8d18547119444c7aa74b4aefa7da43ae`
+Proof capture HEAD: `1ad3ed6e8551ec05b635e26ff5bef4ca79a582ef`
 
 ## Verification
 
 Required packet commands:
 
 - `pnpm type-check`: PASS
-- `pnpm test`: PASS
 - Issue-specific verification, `npx tsx --test scripts/ops/proof-auditor-gate.test.ts`: PASS
+- `pnpm test:db`: PASS
+- `pnpm test`: PASS
 - `pnpm verify`: PASS
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS
