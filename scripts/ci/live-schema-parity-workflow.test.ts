@@ -32,3 +32,38 @@ test('live-schema-parity workflow wires compare output through the drift gate', 
   assert.match(String(artifactStep?.with ? (artifactStep.with as Record<string, unknown>).path : ''), /artifacts\/schema-parity\/?/);
   assert.match(text, /scripts\/ci\/schema-drift-gate\.ts/);
 });
+
+test('live-schema-parity is non-skippable when required (D-CONST-7 fail-closed gate)', () => {
+  const text = fs.readFileSync(workflowPath, 'utf8');
+  const workflow = YAML.parse(text) as {
+    jobs?: {
+      'check-config'?: { outputs?: Record<string, unknown> };
+      'enforce-parity-required'?: {
+        if?: string;
+        steps?: Array<Record<string, unknown>>;
+      };
+    };
+  };
+
+  // check-config must publish a `required` flag derived from the opt-in env var.
+  const checkConfig = workflow.jobs?.['check-config'];
+  assert.ok(checkConfig, 'check-config job must exist');
+  assert.ok(
+    String(checkConfig?.outputs?.required ?? '').includes('required'),
+    'check-config must output a `required` flag',
+  );
+  assert.match(text, /CI_REQUIRE_SCHEMA_PARITY/, 'enforcement is gated on CI_REQUIRE_SCHEMA_PARITY');
+
+  // A required parity run with no DB configured must FAIL closed, never silent-skip.
+  const enforce = workflow.jobs?.['enforce-parity-required'];
+  assert.ok(enforce, 'enforce-parity-required job must exist');
+  assert.match(
+    String(enforce?.if ?? ''),
+    /db-configured.*!=.*'true'.*required.*==.*'true'/s,
+    'enforcement runs only when parity is required AND the DB is unconfigured',
+  );
+  const failStep = (enforce?.steps ?? []).find((step) =>
+    /exit 1/.test(String((step as Record<string, unknown>).run ?? '')),
+  );
+  assert.ok(failStep, 'enforce-parity-required must contain an `exit 1` fail-closed step');
+});

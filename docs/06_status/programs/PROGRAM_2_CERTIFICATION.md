@@ -16,10 +16,18 @@
 
 ## 1. Program Identification
 
-**Program 2 = WS-1.x Constitutional Foundation Layer (INIT-1.x)**
+**This document certifies the WS-1.x Constitutional Foundation Layer (INIT-1.x).**
 
-This program encompasses the three Stage 1/2 workstreams that establish the constitutional substrate
-for all downstream programs:
+> **§18.3 CANONICAL MAPPING (D-CONST-1, `PM_RATIFIED`).** The "Program 2" label in this file's
+> title and history is **superseded pre-convergence numbering**. Under constitution §18.3 the
+> WS-1.x foundation work below is canonically **Program 1 (Truth Convergence)** substrate — its
+> canonical certification record is `docs/06_status/programs/PROGRAM_1_CERTIFICATION.md`.
+> Canonical **Program 2 = Governance Convergence** (INIT-2.x certification runtime, `229` live
+> tests; recorded in `CERT_BOARD.md` under the superseded "Program 1" heading). The certification
+> evidence below remains valid; only the program *label* is corrected. No certification status changes.
+
+This layer encompasses the three Stage 1/2 workstreams that establish the constitutional truth
+substrate for all downstream programs:
 
 | Workstream | Name | Stage |
 |---|---|---|
@@ -28,8 +36,8 @@ for all downstream programs:
 | WS-1.3 | Runtime Invariant Enforcement | Stage 2 |
 
 These were dispatched as Stage 2 work per `docs/06_status/STAGE2_ACTIVATION_CHECKLIST.md`.
-The CERT_BOARD references "P1+P2" as a gate for INIT-5.3.x (Burn-In), establishing Program 2
-as the WS-1.x layer.
+The CERT_BOARD's historical "P1+P2" gate for INIT-5.3.x (Burn-In) used the pre-convergence
+numbering; under §18.3 this WS-1.x layer is **P1 (Truth)** — see `PROGRAM_1_CERTIFICATION.md`.
 
 ---
 
