@@ -162,6 +162,8 @@ earlier `MERGED_PR_ACTIVE_LANE` board hard_fail. That was the operator's action,
 - `pnpm test` (via `pnpm verify`) — **PASS**: test 113/113, including `scripts/ops/substrate-guard.test.ts` 18/18. ✅
 - `pnpm lint` — **PASS** (exit 0). ✅
 - `pnpm verify` — **PASS (exit 0)**: env:check + lint + type-check + build + test + verify:commands (command-manifest check, 117 migrations version-checked + linted) all green. ✅
+- `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — **PASS**: no R-level artifacts triggered for this governance/tooling lane. ✅
+- Diff summary: see `diff-summary.md` in this proof directory for the full file-level diff summary (10 files, 996 insertions, 2 deletions).
 
 ---
 
