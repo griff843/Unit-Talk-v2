@@ -4,8 +4,9 @@
   "generated_at": "2026-06-03T16:35:00.000Z",
   "sha_binding": {
     "base_sha": "a9ae6d9fff32e333ef169fb4cd90f2d8a657b057",
-    "state": "working-tree change pending PM review; not yet committed/merged",
-    "merge_sha": null
+    "merge_sha": "cc903083174e0ec7340dd74aff373d1eea353b67",
+    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/952",
+    "state": "merged to main 2026-06-03"
   },
   "constraints_honored": {
     "codex_launched": false,

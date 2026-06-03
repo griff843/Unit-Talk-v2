@@ -5,7 +5,8 @@
 appeared to vanish mid-dispatch. Add a fail-closed dispatch preflight guard.
 
 **Executor:** Claude (no Codex launched). **Base SHA:** `a9ae6d9fff32e333ef169fb4cd90f2d8a657b057`
-**State:** working-tree change pending PM review (not yet committed/merged). **Date:** 2026-06-03
+**Merge SHA:** `cc903083174e0ec7340dd74aff373d1eea353b67` (PR #952, merged 2026-06-03)
+**State:** merged to main. **Date:** 2026-06-03
 
 > Constraints honored: Codex not launched · UTV2-1196 not started/dispatched · UTV2-1150 deploy WIP untouched.
 
@@ -157,8 +158,9 @@ earlier `MERGED_PR_ACTIVE_LANE` board hard_fail. That was the operator's action,
 - lane preflight command `pnpm ops:substrate-guard` — `ok: true`, 0 hard_fail (full + `--skip-merge-risk`). ✅
 - `pnpm ops:merge-risk` (folded into guard) — 0 hard_fail / 0 block / 0 warning. ✅
 - `npx tsx --test scripts/ops/substrate-guard.test.ts` — **18/18 pass**. ✅
-- `pnpm type-check` — pass (exit 0). ✅
-- `pnpm lint` — pass (exit 0). ✅
+- `pnpm type-check` — **PASS** (exit 0). ✅
+- `pnpm test` (via `pnpm verify`) — **PASS**: test 113/113, including `scripts/ops/substrate-guard.test.ts` 18/18. ✅
+- `pnpm lint` — **PASS** (exit 0). ✅
 - `pnpm verify` — **PASS (exit 0)**: env:check + lint + type-check + build + test + verify:commands (command-manifest check, 117 migrations version-checked + linted) all green. ✅
 
 ---
