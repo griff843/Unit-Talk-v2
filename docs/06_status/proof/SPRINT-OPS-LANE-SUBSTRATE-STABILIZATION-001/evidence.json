@@ -1,0 +1,95 @@
+{
+  "sprint": "SPRINT-OPS-LANE-SUBSTRATE-STABILIZATION-001",
+  "executor": "claude",
+  "generated_at": "2026-06-03T16:35:00.000Z",
+  "sha_binding": {
+    "base_sha": "a9ae6d9fff32e333ef169fb4cd90f2d8a657b057",
+    "state": "working-tree change pending PM review; not yet committed/merged",
+    "merge_sha": null
+  },
+  "constraints_honored": {
+    "codex_launched": false,
+    "utv2_1196_started": false,
+    "utv2_1150_wip_touched": false
+  },
+  "outcome_1_root_cause": {
+    "conclusion": "WSL2/filesystem transient ENOENT",
+    "ruled_out": ["known cleanup script", "git worktree prune", "claude/codex cleanup behavior"],
+    "supporting_evidence": [
+      "two code sweeps found no automatic/background deletion of leases, merge-lock, or worktrees (all deletion explicit, dry-run, fail-closed)",
+      "vanished files present with mtimes predating the 'missing' observation (never recreated => never deleted)",
+      "transience probe: 12/12 stat hits, 0 misses",
+      "ext4-on-WSL2 (/dev/sdd, discard) with 122 registered worktrees; no reaper/dispatch process running (ps clean)"
+    ]
+  },
+  "outcome_2_substrate_expectations": {
+    "lease_dir": "present; guard initializes idempotently if absent",
+    "merge_lock": "present, status=released (valid idle); only present-but-corrupt is unsafe",
+    "worktrees_dir": "present; 122 registered",
+    "worktree_registration": "UTV2-1196 registered @ 88737607, dir exists"
+  },
+  "outcome_3_guard": {
+    "script": "scripts/ops/substrate-guard.ts",
+    "test": "scripts/ops/substrate-guard.test.ts",
+    "command": "pnpm ops:substrate-guard",
+    "hard_fail_conditions": [
+      "lease_dir_uninitializable",
+      "merge_lock_invalid",
+      "active_lane_missing_worktree",
+      "linear_manifest_conflict",
+      "board_hard_fail:<code>"
+    ],
+    "warning_conditions": ["orphan_worktree_missing_dir", "merge_risk_unavailable", "linear_check_skipped"],
+    "wsl_robustness": "robustExists retry-probe distinguishes transient ENOENT from genuine absence; fail-closed only after retries exhausted",
+    "mechanical_enforcement": [
+      ".claude/commands/dispatch.md Phase 0 (first gate)",
+      "scripts/ops/lane-start.ts (local checks before lease/worktree creation; break-glass --force-unsafe-substrate)",
+      "codex-exec transitively gated via required manifest"
+    ],
+    "unit_tests": "18/18 pass"
+  },
+  "outcome_4_utv2_1196": {
+    "linear_state": "Ready for Codex",
+    "false_in_codex": false,
+    "branch": "codex/utv2-1196-sprint-proof-gate-execution-bound-004",
+    "commit": "88737607",
+    "worktree_present": true,
+    "manifest_main_checkout": "restored from 88737607",
+    "lease": "released (orphaned active lease, owner pid 29736 dead)",
+    "codex_launched": false,
+    "redispatchable": true
+  },
+  "outcome_5_utv2_1150_untouched": {
+    "my_changeset": [
+      "scripts/ops/substrate-guard.ts",
+      "scripts/ops/substrate-guard.test.ts",
+      "scripts/ops/lane-start.ts",
+      "package.json",
+      ".claude/commands/dispatch.md",
+      "docs/06_status/lanes/UTV2-1196.json",
+      "docs/06_status/proof/SPRINT-OPS-LANE-SUBSTRATE-STABILIZATION-001/"
+    ],
+    "overlap_with_1150_or_deploy_paths": "none",
+    "utv2_1150_blob_hashes": {
+      ".github/workflows/deploy.yml": "1187e21518224a8fbb7997adc509fa5f65089f19",
+      ".github/workflows/staging-deploy.yml": "7496729f5d8dc95371a827423f9f1cac6b197e4d",
+      "deploy/production/docker-compose.yml": "15d7446cc6019cd9d9d173f759e0fcbb1de565be",
+      "deploy/production/topology-spec.yml": "c3e8eac3b1f3923cdd10dd9b5a5bdb9eabc94d47",
+      "docs/06_status/lanes/UTV2-1150.json": "6788cbc733f6e3c5fdafbdbd6b7de304abcf3cbe",
+      "docs/06_status/proof/UTV2-1150/evidence.json": "fbe40a0d42fe4a564e7164dfb5150a6e4c1fc7fc",
+      "scripts/deploy-check.test.ts": "da6db1e78b4d74c3917efe983fa4c23e44450e7b",
+      "scripts/deploy-check.ts": "9877070270f70adf777fd9dbf8a2e99730bd459f"
+    }
+  },
+  "outcome_7_commands": {
+    "git_status_short": "captured (my files vs operator WIP cleanly separated)",
+    "git_worktree_list": "122 worktrees; UTV2-1196 @ 88737607",
+    "lane_preflight_substrate_guard": "ok=true, hard_fail=0 (full and --skip-merge-risk)",
+    "ops_merge_risk": "hard_fail=0 block=0 warning=0",
+    "substrate_guard_unit_test": "18/18 pass",
+    "type_check": "pass",
+    "lint": "pass",
+    "verify": "PASS (exit 0): env:check + lint + type-check + build + test + verify:commands all green"
+  },
+  "acceptance": "PASS — fails closed when unsafe; non-paralyzing when safe; UTV2-1196 redispatchable; pnpm verify green"
+}

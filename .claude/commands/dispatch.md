@@ -36,17 +36,20 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 Before resolving targets or routing any issue, run the live governor and reconciliation checks. Abort on any hard fail or block; do not proceed to Phase 1.
 
 ```bash
+pnpm ops:substrate-guard
 pnpm ops:merge-risk
 pnpm ops:execution-state
 pnpm ops:lane-maximizer
 pnpm ops:orchestration-reconcile --current --json
 ```
 
+`ops:substrate-guard` runs FIRST and is fail-closed: it refuses dispatch when the lane-execution substrate is unsafe — `.ops/leases/` missing and uninitializable, `.ops/merge-lock.json` present-but-invalid, an active lane whose worktree directory is missing, a board `hard_fail` lane (folds in `ops:merge-risk`), or (with `--check-linear`) a Linear/manifest conflict. It tolerates transient WSL ENOENT by retry-probing before declaring substrate genuinely absent. Exit code 1 ⇒ HALT. The same guard runs again mechanically inside `ops:lane-start` (local checks) so no lane can reserve a lease or create a worktree on unsafe substrate even if Phase 0 was skipped; break-glass is `--force-unsafe-substrate`.
+
 Use `ops:execution-state` as the concurrency authority for active lanes by executor, available slots, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions.
 
 Use `ops:lane-maximizer` as the dispatch recommendation authority. Executor limits, singleton classes, and forbidden combinations come from `docs/governance/CONCURRENCY_CONFIG.json`; policy rationale lives in `docs/governance/LANE_CONCURRENCY_POLICY.md`. Do not copy numeric executor caps into this command.
 
-If `ops:merge-risk`, `ops:execution-state`, or `ops:lane-maximizer` reports a hard fail, block, no safe slot for the candidate executor, or an unsafe forbidden combination:
+If `ops:substrate-guard`, `ops:merge-risk`, `ops:execution-state`, or `ops:lane-maximizer` reports a hard fail, block, no safe slot for the candidate executor, or an unsafe forbidden combination:
 
 ```
 [dispatch] HALTED — live governor blocked: {top condition}. Resolve the block before dispatching.

@@ -10,6 +10,7 @@ import {
   defaultLeaseOwner,
   reserveLease,
 } from './lease-registry.js';
+import { evaluateSubstrate, gatherSubstrateFacts } from './substrate-guard.js';
 import {
   ACTIVE_LOCK_STATUSES,
   activeManifestOverlap,
@@ -287,6 +288,25 @@ function main(): void {
     }
     if (fileArgs.length === 0) {
       throw new Error('Missing required --files (repeatable, at least one required)');
+    }
+
+    // Fail closed on an unsafe lane substrate before reserving a lease or
+    // creating a worktree (UTV2 SPRINT-OPS-LANE-SUBSTRATE-STABILIZATION-001).
+    // Local checks only here (lease dir, merge-lock validity, active-lane
+    // worktree integrity); board hard_fail + Linear drift are enforced by the
+    // standalone `pnpm ops:substrate-guard` run in dispatch Phase 0. Break-glass
+    // via --force-unsafe-substrate (logged in the failure payload).
+    const forceUnsafeSubstrate = bools.has('force-unsafe-substrate') || flags.has('force-unsafe-substrate');
+    const substrateReport = evaluateSubstrate(gatherSubstrateFacts({ includeMergeRisk: false }));
+    if (!substrateReport.ok && !forceUnsafeSubstrate) {
+      emitJson({
+        ok: false,
+        code: 'substrate_unsafe',
+        message:
+          'Lane substrate is unsafe; refusing to start lane. Run `pnpm ops:substrate-guard` for full detail, resolve the findings, or pass --force-unsafe-substrate to override.',
+        findings: substrateReport.findings.filter((f) => f.severity === 'hard_fail'),
+      });
+      process.exit(1);
     }
 
     const tier = validateTier(tierInput);
