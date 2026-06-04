@@ -19,12 +19,12 @@
     "docs/06_status/proof/UTV2-1198/diff-summary.md",
     "docs/06_status/proof/UTV2-1198/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-04T12:06:37.233Z",
-  "heartbeat_at": "2026-06-04T13:01:24.261Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-04T13:05:02.420Z",
+  "closed_at": "2026-06-04T13:05:02.420Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1198-database-types-regen.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
   "truth_check_history": [
     {
@@ -38,6 +38,19 @@
         "P13"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-04T13:04:59.667Z",
+      "verdict": "pass",
+      "merge_sha": "492f4ed9763246b9863c66e1ecf59319c510f3cf",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/957",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],

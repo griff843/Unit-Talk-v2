@@ -51,3 +51,5 @@ settlement_corrections: {
 ### No removals
 
 All existing types preserved. `artifact_sha` on `model_registry` remains present — the UTV2-1116 migration was applied to the live DB as part of this lane, bringing the remote schema into parity with the committed migration file.
+
+Merge SHA: 498567e355eaf36221998dad63c44a6f749c7e3f
