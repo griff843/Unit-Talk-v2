@@ -1,3 +1,5 @@
+**Merge SHA:** `b2aaa72ba1b1e66535806abf9646d32128ce9e69` (PR #954, merged 2026-06-04)
+
 ## Summary
 
 UTV2-1196 makes the T1 proof gates execution-bound for live DB smoke coverage. The previous C2 check accepted a proof file that only mentioned `pnpm test:db`; the workflow now runs the existing fail-closed DB smoke helper with `CI_REQUIRE_DB_SMOKE=true`, and the proof auditor requires captured `node:test` execution evidence for `pnpm test:db`.
