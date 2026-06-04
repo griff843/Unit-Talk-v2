@@ -1,7 +1,7 @@
 # Certification Gap Register
 
-> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION · 2026-06-04.
-> Canonical ledger of constitutional certification gaps. D-CONST-1 and D-CONST-2 are PM-ratified; D-CONST-8 resolved by doc reconciliation; D-CONST-3 through D-CONST-7 remain OPEN. This sprint **advances no certification.**
+> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated 2026-06-04 (D-CONST-4, D-CONST-7, D-CONST-8 resolved).
+> Canonical ledger of constitutional certification gaps. D-CONST-1 through D-CONST-4 resolved; D-CONST-7/D-CONST-8 resolved 2026-06-04; D-CONST-5 and D-CONST-6 remain OPEN.
 
 ## D-CONST-1 — Program numbering drift
 - **Status:** `PM_RATIFIED`
@@ -14,17 +14,14 @@
 - **Remaining work:** update / annotate stale references that claim "P3 certified" / "P4 certified" / "P1–P4 certified SATISFIED" (`PROGRAM_3_CERTIFICATION.md`, `PROGRAM_5_ACTIVATION.md`, `CERT_BOARD.md`) and reconcile Linear operational state. Banners applied this sprint.
 
 ## D-CONST-3 — Missing canonical certification records
-- **Status:** `OPEN`
-- **Details:**
-  - **P1** certification exists outside canonical repo docs (Linear `PROGRAM_1_FROZEN_SURFACE` + repo proof JSON) — asymmetrically represented; no `docs/06_status/programs/PROGRAM_1_CERTIFICATION.md`.
-  - **P4** has **no** canonical repo certification doc (only scattered `chore(program-4)` lane-manifest annotations).
-  - **P5** has no certification and remains frozen.
-- **Required next action:** `SPRINT-CERTIFICATION-STATE-RECONCILIATION-003`
+- **Status:** `RESOLVED`
+- **Resolved by:** UTV2-1195 (PR #950, 2026-06-02) — P1/P4 canonical cert records created, §18.3 numbering normalized, stale-claim reconciliation merged.
+- **Details:** P1 cert doc created, P4 cert doc created, stale P3/P4/P5 claim banners applied. P5 remains frozen/uncertified (correct).
+- **Remaining:** P5 certification deferred (frozen per D-CONST-2 PM ratification). No further D-CONST-3 action required.
 
 ## D-CONST-4 — Proof gate string-bound not execution-bound
-- **Status:** `OPEN`
-- **Detail:** `t1-proof-gate` greps the literal string `"test:db"`; DB-trigger proofs skip silently without `SUPABASE_SERVICE_ROLE_KEY`.
-- **Required next action:** `SPRINT-PROOF-GATE-EXECUTION-BOUND-004`
+- **Status:** `RESOLVED`
+- **Resolved by:** UTV2-1196 (PR #954, 2026-06-04) — proof gate made execution-bound; `t1-proof-gate` now requires TAP node:test output pattern, not string presence; DB-trigger proofs fail closed when service role key absent.
 
 ## D-CONST-5 — Edge as market echo
 - **Status:** `OPEN`
@@ -37,9 +34,8 @@
 - **Required next action:** runtime hardening + ingestion restoration **when SGO is intentionally reactivated or mocked for no-cost proof** (do not activate SGO in this sprint).
 
 ## D-CONST-7 — `database.types.ts` drift
-- **Status:** `OPEN`
-- **Detail:** `execution_intents` + `settlement_corrections` exist live but are absent from generated types; parity gate may skip when `SUPABASE_DB_URL` unset.
-- **Required next action:** regenerate types + make parity non-skippable (folds into SPRINT-CERTIFICATION-STATE-RECONCILIATION-003 or proof-gate sprint).
+- **Status:** `RESOLVED`
+- **Resolved by:** UTV2-1198 (PR #957, 2026-06-04) — `packages/db/src/database.types.ts` regenerated from live Supabase; `execution_intents` and `settlement_corrections` now present in generated types. Also reconciled missing `artifact_sha` migration in live DB history.
 
 ## D-CONST-8 — Docs say fail-open but code is fail-closed
 - **Status:** `RESOLVED`
@@ -55,9 +51,9 @@
 |---|---|
 | D-CONST-1 Program numbering | **PM_RATIFIED** |
 | D-CONST-2 Activation state | **PM_RATIFIED** |
-| D-CONST-3 Missing cert records | OPEN |
-| D-CONST-4 Proof gate string-bound | OPEN |
+| D-CONST-3 Missing cert records | **RESOLVED** (UTV2-1195, PR #950) |
+| D-CONST-4 Proof gate string-bound | **RESOLVED** (UTV2-1196, PR #954) |
 | D-CONST-5 Edge as echo | OPEN |
 | D-CONST-6 Ingestion stale | OPEN |
-| D-CONST-7 types drift | OPEN (UTV2-1198 in progress) |
-| D-CONST-8 doc fail-open | **RESOLVED** (SPRINT-D-CONST-8, UTV2-1199) |
+| D-CONST-7 types drift | **RESOLVED** (UTV2-1198, PR #957) |
+| D-CONST-8 doc fail-open | **RESOLVED** (UTV2-1199, PR #956) |
