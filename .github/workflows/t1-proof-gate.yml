@@ -7,7 +7,7 @@
 # Checks enforced:
 #   C1 — pnpm verify proof: docs/06_status/proof/<ISSUE_ID>/verification.md exists
 #         and contains "pnpm verify"
-#   C2 — pnpm test:db proof: a file in the proof dir references "pnpm test:db" or "test:db"
+#   C2 — pnpm test:db execution: run the DB smoke gate and fail closed on skip/missing credentials
 #   C3 — R-level compliance: informational only (enforced by r-level-compliance-check.yml)
 #   C4 — SHA-bound proof: at least one proof file contains a 40-char hex SHA string
 #   C5 — Tier label present: informational only (enforced by tier-label-check.yml)
@@ -44,6 +44,42 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write CI local env
+        run: |
+          cat <<'EOF' > local.env
+          NODE_ENV=development
+          UNIT_TALK_APP_ENV=ci
+          COMMAND_CENTER_AUTH_TOKEN=ci-command-center-token
+          AUTH_SECRET=ci-auth-secret
+          NEXTAUTH_SECRET=ci-nextauth-secret
+          LINEAR_API_TOKEN=
+          LINEAR_TEAM_ID=
+          NOTION_TOKEN=
+          SLACK_BOT_TOKEN=
+          SLACK_SIGNING_SECRET=
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_BOT_TOKEN=
+          DISCORD_GUILD_ID=
+          DISCORD_ANNOUNCEMENT_CHANNEL_ID=
+          OPENAI_API_KEY=
+          EOF
 
       - name: Extract issue ID from branch name
         id: extract_issue
@@ -128,44 +164,27 @@ jobs:
 
           echo "C1 PASS: verification.md exists and contains 'pnpm verify'"
 
-      - name: C2 — pnpm test:db proof
+      - name: C2 — pnpm test:db execution
         id: c2
         if: steps.extract_issue.outputs.skip == 'false'
+        env:
+          CI_REQUIRE_DB_SMOKE: 'true'
         run: |
           issue_id="${{ steps.extract_issue.outputs.issue_id }}"
           proof_dir="docs/06_status/proof/${issue_id}"
 
-          echo "Checking C2: pnpm test:db proof in $proof_dir"
+          echo "Checking C2: pnpm test:db execution bound to this T1 gate"
 
           if [ ! -d "$proof_dir" ]; then
             echo "::error title=T1 Proof Gate - C2 FAIL::Proof directory missing: $proof_dir"
             echo ""
-            echo "T1 lanes require a proof directory at $proof_dir with test:db evidence."
+            echo "T1 lanes require a proof directory at $proof_dir before live DB smoke execution."
             exit 1
           fi
 
-          # Search all files in the proof dir for test:db reference
-          testdb_found=false
-          for f in "$proof_dir"/*; do
-            if [ -f "$f" ] && grep -qi 'test:db\|pnpm test:db' "$f"; then
-              testdb_found=true
-              echo "C2: test:db reference found in: $f"
-              break
-            fi
-          done
+          pnpm ci:db-smoke
 
-          if [ "$testdb_found" = "false" ]; then
-            echo "::error title=T1 Proof Gate - C2 FAIL::No file in $proof_dir references 'pnpm test:db' or 'test:db'"
-            echo ""
-            echo "T1 lanes require runtime DB proof. Add a file to $proof_dir"
-            echo "that references 'pnpm test:db' or 'test:db' with pass evidence."
-            echo ""
-            echo "Example: $proof_dir/runtime-verification.md with output from:"
-            echo "  pnpm test:db"
-            exit 1
-          fi
-
-          echo "C2 PASS: test:db evidence present in $proof_dir"
+          echo "C2 PASS: pnpm test:db executed and did not skip"
 
       - name: C3 — R-level compliance (informational)
         if: steps.extract_issue.outputs.skip == 'false'
@@ -289,7 +308,7 @@ jobs:
           echo "| Check | Description | Status |" >> "$GITHUB_STEP_SUMMARY"
           echo "|-------|-------------|--------|" >> "$GITHUB_STEP_SUMMARY"
           echo "| C1 | pnpm verify proof (verification.md) | ${{ steps.c1.outcome == 'success' && '✓ PASS' || steps.c1.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| C2 | pnpm test:db proof present | ${{ steps.c2.outcome == 'success' && '✓ PASS' || steps.c2.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C2 | pnpm test:db executed fail-closed | ${{ steps.c2.outcome == 'success' && '✓ PASS' || steps.c2.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| C3 | R-level compliance (r-level-compliance-check.yml) | ℹ INFO |" >> "$GITHUB_STEP_SUMMARY"
           echo "| C4 | SHA-bound proof | ${{ steps.c4.outcome == 'success' && '✓ PASS' || steps.c4.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
           echo "| C5 | Tier label present (tier-label-check.yml) | ℹ INFO |" >> "$GITHUB_STEP_SUMMARY"

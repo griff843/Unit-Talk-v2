@@ -1,0 +1,64 @@
+{
+  "issue_id": "UTV2-1196",
+  "tier": "T2",
+  "lane_type": "governance",
+  "captured_at": "2026-06-03T23:57:17Z",
+  "base_head_sha": "1ad3ed6e8551ec05b635e26ff5bef4ca79a582ef",
+  "changes": [
+    {
+      "path": ".github/workflows/t1-proof-gate.yml",
+      "summary": "C2 now executes pnpm ci:db-smoke with CI_REQUIRE_DB_SMOKE=true instead of accepting a text reference to pnpm test:db."
+    },
+    {
+      "path": ".github/workflows/proof-auditor-gate.yml",
+      "summary": "Runs proof-auditor-gate.ts with --require-executed-command \"pnpm test:db\" so proof bundles must include captured node:test execution evidence."
+    },
+    {
+      "path": "scripts/ops/proof-auditor-gate.ts",
+      "summary": "Adds an opt-in required executed command check that requires node:test output with pass count, fail 0, and skipped 0."
+    },
+    {
+      "path": "scripts/ops/proof-auditor-gate.test.ts",
+      "summary": "Adds regression tests for missing command evidence, string-only DB proof rejection, skipped TAP rejection, and captured TAP proof acceptance."
+    }
+  ],
+  "verification": [
+    {
+      "command": "pnpm type-check",
+      "status": "pass",
+      "exit_code": 0
+    },
+    {
+      "command": "npx tsx --test scripts/ops/proof-auditor-gate.test.ts",
+      "status": "pass",
+      "exit_code": 0,
+      "tests": 16,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "command": "pnpm test:db",
+      "status": "pass",
+      "exit_code": 0,
+      "tests": 7,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "command": "pnpm test",
+      "status": "pass",
+      "exit_code": 0
+    },
+    {
+      "command": "pnpm verify",
+      "status": "pass",
+      "exit_code": 0
+    },
+    {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "pass",
+      "exit_code": 0,
+      "output": "Verdict: PASS; Changed files: 16; Rules matched: (none) - no R-level artifacts required for this diff"
+    }
+  ]
+}

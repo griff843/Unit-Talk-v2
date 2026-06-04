@@ -120,6 +120,7 @@ jobs:
             result=$(pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
               --proof-dir "$proof_dir" \
               --sha "$HEAD_SHA" \
+              --require-executed-command "pnpm test:db" \
               --json 2>&1) || true
 
             echo "$result"

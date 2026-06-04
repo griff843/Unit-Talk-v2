@@ -134,6 +134,102 @@ test('passes when sha is passed and found in proof files', () => {
   assert.deepStrictEqual(result.output.failures, []);
 });
 
+test('fails execution-bound proof when required command is only mentioned', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    [
+      '## Summary',
+      'String-only DB proof.',
+      '## Evidence',
+      'The proof says pnpm test:db was run, but includes no captured execution output.',
+      '## Verification',
+      'pnpm test:db',
+    ].join('\n'),
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /lacks node:test pass evidence/);
+});
+
+test('fails execution-bound proof when required command is not referenced', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    [
+      '## Summary',
+      'DB proof omitted.',
+      '## Evidence',
+      'The proof includes no DB smoke command reference.',
+      '## Verification',
+      'No DB smoke evidence captured.',
+    ].join('\n'),
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /not referenced/);
+});
+
+test('fails execution-bound proof when required command evidence has skipped node:test output', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    [
+      '## Summary',
+      'Skipped DB proof.',
+      '## Evidence',
+      'Command: pnpm test:db',
+      'TAP version 13',
+      '# tests 5',
+      '# pass 4',
+      '# fail 0',
+      '# cancelled 0',
+      '# skipped 1',
+      '## Verification',
+      'Live DB smoke included skipped tests.',
+    ].join('\n'),
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /lacks node:test pass evidence/);
+});
+
+test('passes execution-bound proof when required command has node:test pass output', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    [
+      '## Summary',
+      'Execution-bound DB proof.',
+      '## Evidence',
+      'Command: pnpm test:db',
+      'TAP version 13',
+      '# tests 5',
+      '# pass 5',
+      '# fail 0',
+      '# cancelled 0',
+      '# skipped 0',
+      '## Verification',
+      'Live DB smoke completed.',
+    ].join('\n'),
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+
+  assert.strictEqual(result.status, 0);
+  assert.strictEqual(result.output.verdict, 'PASS');
+  assert.deepStrictEqual(result.output.failures, []);
+});
+
 test('warns but passes when a markdown proof file exceeds 100KB', () => {
   const proofDir = makeTempDir();
   writeFileSync(path.join(proofDir, 'proof.md'), `## Summary\n${'a'.repeat(101 * 1024)}`);

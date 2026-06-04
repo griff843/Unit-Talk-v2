@@ -16,6 +16,7 @@ type CliOptions = {
   proofDir: string | null;
   sha: string | null;
   rLevel: string | null;
+  requiredExecutedCommands: string[];
   json: boolean;
 };
 
@@ -29,6 +30,7 @@ function parseArgs(argv: string[]): CliOptions {
     proofDir: null,
     sha: null,
     rLevel: null,
+    requiredExecutedCommands: [],
     json: false,
   };
 
@@ -53,6 +55,15 @@ function parseArgs(argv: string[]): CliOptions {
       continue;
     }
 
+    if (arg === '--require-executed-command') {
+      const command = argv[index + 1] ?? '';
+      if (command.trim()) {
+        options.requiredExecutedCommands.push(command.trim());
+      }
+      index += 1;
+      continue;
+    }
+
     if (arg === '--json') {
       options.json = true;
     }
@@ -65,6 +76,26 @@ function listFiles(proofDir: string): string[] {
   return readdirSync(proofDir, { withFileTypes: true })
     .filter(entry => entry.isFile())
     .map(entry => path.join(proofDir, entry.name));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasCommandReference(content: string, command: string): boolean {
+  return new RegExp(escapeRegExp(command), 'i').test(content);
+}
+
+function hasNodeTestExecutionEvidence(content: string): boolean {
+  return (
+    /(^|\n)\s*#\s+pass\s+[1-9][0-9]*\b/i.test(content) &&
+    /(^|\n)\s*#\s+fail\s+0\b/i.test(content) &&
+    /(^|\n)\s*#\s+skipped\s+0\b/i.test(content)
+  );
+}
+
+function hasCommandExecutionEvidence(content: string, command: string): boolean {
+  return hasCommandReference(content, command) && hasNodeTestExecutionEvidence(content);
 }
 
 function createResult(options: CliOptions): GateResult {
@@ -146,6 +177,21 @@ function createResult(options: CliOptions): GateResult {
     const hasDeterminism = fileContents.some(file => file.content.toLowerCase().includes('determinism'));
     if (!hasDeterminism) {
       failures.push('R-level r2 requires a determinism keyword reference');
+    }
+  }
+
+  for (const command of options.requiredExecutedCommands) {
+    const matchingFiles = fileContents.filter(file => hasCommandReference(file.content, command));
+
+    if (matchingFiles.length === 0) {
+      failures.push(`Required executed command not referenced in proof files: ${command}`);
+      continue;
+    }
+
+    if (!matchingFiles.some(file => hasCommandExecutionEvidence(file.content, command))) {
+      failures.push(
+        `Required executed command lacks node:test pass evidence: ${command} (expected '# pass <n>', '# fail 0', and '# skipped 0')`,
+      );
     }
   }
 
