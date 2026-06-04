@@ -71,6 +71,17 @@ Rules matched: (none) — no R-level artifacts required for this diff
 - `playerAvailabilityStatus = 'ACTIVE'` → injury guard does not trigger → pick evaluated normally
 - `playerAvailabilityStatus` absent → injury guard does not trigger (empty string is not in the blocked list)
 
+## pnpm test:db
+
+**Not applicable — T2 lane.** Live-DB proof (pnpm test:db) is required for T1 lanes only. This is a T2 safety gate adding a metadata boolean check; no Supabase schema or connectivity change was made.
+
+pnpm verify (full suite — all test suites green):
+# pass 76
+# fail 0
+# skipped 0
+
+pnpm verify summary: env:check + lint + type-check + build + test all PASS (exit code 0). 76 tests across promotion-service-stale-data (6) and promotion-edge-integration (66) plus other suites.
+
 ## Type check
 
 ```
