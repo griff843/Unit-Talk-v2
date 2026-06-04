@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1199-d-const-8-fail-closed-doc",
   "branch": "claude/utv2-1199-d-const-8-fail-closed-doc",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "facf60f292b6c76ed403ae0e6bacfe3ce8c0129e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/956",
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/governance.yml",
@@ -31,14 +31,63 @@
     "docs/06_status/proof/UTV2-1199/diff-summary.md",
     "docs/06_status/proof/UTV2-1199/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-04T12:14:38.271Z",
-  "heartbeat_at": "2026-06-04T12:14:38.271Z",
+  "heartbeat_at": "2026-06-04T13:02:10.595Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1199-d-const-8-fail-closed-doc.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-04T13:00:58.768Z",
+      "verdict": "fail",
+      "merge_sha": "facf60f292b6c76ed403ae0e6bacfe3ce8c0129e",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-04T13:01:09.419Z",
+      "verdict": "fail",
+      "merge_sha": "facf60f292b6c76ed403ae0e6bacfe3ce8c0129e",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-04T13:01:35.491Z",
+      "verdict": "fail",
+      "merge_sha": "facf60f292b6c76ed403ae0e6bacfe3ce8c0129e",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-04T13:02:10.595Z",
+      "verdict": "fail",
+      "merge_sha": "facf60f292b6c76ed403ae0e6bacfe3ce8c0129e",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

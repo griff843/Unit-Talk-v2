@@ -1,5 +1,6 @@
 ## Diff Summary — UTV2-1198
 
+**Merge SHA:** 492f4ed9763246b9863c66e1ecf59319c510f3cf
 **File:** `packages/db/src/database.types.ts`
 **Change:** 115 lines added, 0 lines removed (purely additive)
 

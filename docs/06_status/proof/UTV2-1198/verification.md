@@ -1,5 +1,8 @@
 ## Verification — UTV2-1198 D-CONST-7: Regenerate database.types.ts
 
+**Merge SHA:** 492f4ed9763246b9863c66e1ecf59319c510f3cf
+**pnpm verify:** PASS (type-check + test green on merge SHA)
+
 ### Summary
 
 Regenerated `packages/db/src/database.types.ts` from live Supabase schema (project `zfzdnfwdarxucxtaojxm`) via Supabase MCP TypeScript type generation.

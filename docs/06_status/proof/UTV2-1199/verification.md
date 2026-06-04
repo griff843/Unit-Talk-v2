@@ -1,9 +1,13 @@
 # Verification — UTV2-1199 D-CONST-8
 
+**Merge SHA:** facf60f292b6c76ed403ae0e6bacfe3ce8c0129e
+**pnpm verify:** PASS (type-check + lint + test all green)
+
 ## Verification Header
 
 | Check | Result |
 |---|---|
+| `pnpm verify` | PASS — env:check + lint + type-check + build + test all green |
 | `pnpm type-check` | PASS — exit 0 |
 | `pnpm lint` | PASS — exit 0 |
 | `pnpm constitution:check` | PASS — 9/9 files, 19/19 layers, SHA b22b6e5b |
