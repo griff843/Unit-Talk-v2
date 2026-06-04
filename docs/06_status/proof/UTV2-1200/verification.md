@@ -1,5 +1,20 @@
 # UTV2-1200 Verification
 
+## Summary
+
+Wave 1 — P3 Decision Integrity safety gate. Extended the `riskBlocked` computation in `promotion-service.ts` at all 6 call sites to also block picks where `playerAvailabilityStatus` is `OUT`, `OUT_INDEFINITELY`, or `INJURED_OUT`. Added 4 unit tests covering all three blocked statuses and one ACTIVE control. `pnpm verify` PASS, promotion-service-stale-data 6/6, promotion-edge-integration 66/66.
+
+## Evidence
+
+| Item | Result |
+|------|--------|
+| `pnpm verify` | PASS — exit code 0, all test suites green |
+| `pnpm type-check` | PASS — exit 0 |
+| New tests | 4 (ok 2–5 in promotion-service-stale-data.test.ts) |
+| R-level check | PASS — no artifacts required |
+| Files changed | `promotion-service.ts` (6 call sites, +24/-6 lines), `.test.ts` (+135 lines) |
+| Scope bleed | None — candidate-scoring-service.ts not touched |
+
 ## Verification
 
 **Date:** 2026-06-04
