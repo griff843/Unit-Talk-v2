@@ -1,0 +1,12 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1199
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/executive-summary.md
+    - docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/verification-results.md
