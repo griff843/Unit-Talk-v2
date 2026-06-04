@@ -1,7 +1,7 @@
 # Certification Gap Register
 
-> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02.
-> Canonical ledger of constitutional certification gaps. D-CONST-1 and D-CONST-2 are PM-ratified; D-CONST-3 through D-CONST-8 remain OPEN. This sprint **advances no certification.**
+> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION · 2026-06-04.
+> Canonical ledger of constitutional certification gaps. D-CONST-1 and D-CONST-2 are PM-ratified; D-CONST-8 resolved by doc reconciliation; D-CONST-3 through D-CONST-7 remain OPEN. This sprint **advances no certification.**
 
 ## D-CONST-1 — Program numbering drift
 - **Status:** `PM_RATIFIED`
@@ -42,9 +42,13 @@
 - **Required next action:** regenerate types + make parity non-skippable (folds into SPRINT-CERTIFICATION-STATE-RECONCILIATION-003 or proof-gate sprint).
 
 ## D-CONST-8 — Docs say fail-open but code is fail-closed
-- **Status:** `OPEN`
-- **Detail:** `packages/db/CLAUDE.md` + `packages/contracts/CLAUDE.md` state "fail-open" where `writer-authority.ts` is fail-closed. Code wins (truth hierarchy); docs are stale.
-- **Required next action:** correct the two doc lines (low-risk doc fix; can ride any P2 governance-hardening sprint).
+- **Status:** `RESOLVED`
+- **Resolved by:** `SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION` · 2026-06-04 · UTV2-1199
+- **Files corrected:**
+  - `packages/db/CLAUDE.md` — removed "fail-open" claim; added fail-closed invariants section; `assertFieldAuthority()` behavior now accurately documented
+  - `packages/contracts/CLAUDE.md` — added explicit Fail-Closed Authority Contract section describing blocking enforcement semantics
+- **No code changed** — this was documentation reconciliation only. `writer-authority.ts` was already fail-closed; the docs now accurately reflect that behavior.
+- **Code was authoritative** — under the constitutional truth hierarchy, code wins. The documentation drift was stale description, not a code defect.
 
 ## Summary
 | Gap | Status |
@@ -55,5 +59,5 @@
 | D-CONST-4 Proof gate string-bound | OPEN |
 | D-CONST-5 Edge as echo | OPEN |
 | D-CONST-6 Ingestion stale | OPEN |
-| D-CONST-7 types drift | OPEN |
-| D-CONST-8 doc fail-open | OPEN |
+| D-CONST-7 types drift | OPEN (UTV2-1198 in progress) |
+| D-CONST-8 doc fail-open | **RESOLVED** (SPRINT-D-CONST-8, UTV2-1199) |

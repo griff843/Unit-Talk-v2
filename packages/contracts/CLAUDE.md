@@ -39,6 +39,13 @@ This package defines what the system *is* — every other package implements beh
 
 **Decision snapshot:** `PromotionDecisionSnapshot` captures full context (profile, weights, inputs, board state, override) for deterministic replay.
 
+**Fail-Closed Authority Contract:** `writerRoles` and `canonicalWriter` define the constitutional write-permit boundary. Downstream enforcement (`@unit-talk/db` → `writer-authority.ts`) is **fail-closed**: authority checks throw `UnauthorizedWriterError` on missing or invalid writer role; unregistered fields are denied, not permitted. Contracts define the authority boundary; the DB layer enforces it with no silent fallback.
+
+- Authority checks must throw or reject on missing or invalid authority — never silently continue
+- Unsupported privileged actions must not be allowed by default — every authorized action requires explicit registration
+- Cross-domain writes require an explicit writer role permit in `writerRoles`
+- Dual-auth and approval-expiration rules (e.g. `awaiting_approval` lifecycle state, `dual_auth_approvals` table) are **blocking enforcement**, not advisory hints
+
 ## Runtime Behavior
 
 None. Pure types and stateless functions.

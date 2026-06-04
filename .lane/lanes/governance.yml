@@ -25,6 +25,11 @@ allowed_path_globs:
   # (P1–P5 certification records and the certification board). Added UTV2-1195.
   - docs/06_status/programs/**
   - docs/06_status/CERT_BOARD.md
+  # Constitutional docs — drift audits, gap register, implementation matrix. Added UTV2-1199.
+  - docs/00_constitution/**
+  # Package-root CLAUDE.md files for governance/doc reconciliation lanes. Added UTV2-1199.
+  - packages/db/CLAUDE.md
+  - packages/contracts/CLAUDE.md
   - .claude/.state-stamp
   - docs/archive/**
   - CLAUDE.md

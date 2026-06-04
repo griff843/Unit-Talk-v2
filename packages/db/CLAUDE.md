@@ -30,11 +30,11 @@ Database layer: Supabase client, repository interfaces, InMemory + Database impl
 
 **Dual implementation pattern:** every repository has InMemory (tests/local dev) and Database (production) implementations. InMemory uses Maps/arrays. Database uses Supabase `.from().insert()/update()/select()`.
 
-**Atomic RPC methods:** `processSubmissionAtomic`, `enqueueDistributionAtomic`, `claimNextAtomic`, `confirmDeliveryAtomic`, `settlePickAtomic` — Database implementations call Postgres stored procedures via `.rpc()`. InMemory implementations throw (service layer catches and falls back to sequential).
+**Atomic RPC methods:** `processSubmissionAtomic`, `enqueueDistributionAtomic`, `claimNextAtomic`, `confirmDeliveryAtomic`, `settlePickAtomic` — Database implementations call Postgres stored procedures via `.rpc()`. InMemory implementations throw (InMemory/test only — production always uses atomic RPC; service layer catches and may degrade to sequential non-atomically in test environments only).
 
 **Pick lifecycle FSM:** `draft → validated → queued → posted → settled` (terminal). Any state → `voided` (terminal). No regressions. Enforced in `lifecycle.ts`.
 
-**Writer authority:** 5 fields have explicit write authorization (`status`, `promotion_target`, `posted_at`, `settled_at`, `submitted_by`). Unregistered fields are fail-open.
+**Writer authority:** 5 fields have explicit write authorization (`status`, `promotion_target`, `posted_at`, `settled_at`, `submitted_by`). Unregistered fields are **fail-closed** — `assertFieldAuthority()` throws `UnauthorizedWriterError` for any unregistered or unauthorized field. Every writable field must be explicitly registered before it can be written. Missing authority, invalid writer role, or unregistered fields must throw — production write paths never silently bypass authority.
 
 **Outbox claim lifecycle:** `claimNext` → `touchClaim` (heartbeat) → `reapStaleClaims` (release stuck rows). Atomic claim uses `SELECT FOR UPDATE SKIP LOCKED` via RPC.
 
@@ -52,6 +52,13 @@ Database layer: Supabase client, repository interfaces, InMemory + Database impl
 - `member-tier-repository.test.ts` — tier activation/deactivation, counts, idempotency
 
 Gap: no test compares InMemory vs Database behavior side-by-side. DB constraint enforcement (unique indexes, FKs) is not tested in InMemory mode.
+
+## Fail-Closed Invariants
+
+- Production repositories must throw or block on required write failure — no silent fallback or degraded-path success
+- InMemory/test helpers may exist but must not weaken production semantics — they are isolated to tests and must never be used in production code paths
+- Service-role or DB-level writes do not bypass constitutional authority — `assertFieldAuthority()` is enforced before any write, regardless of caller
+- Missing authority, invalid writer role, or unregistered field must throw `UnauthorizedWriterError` — no silent pass-through
 
 ## Rules
 
