@@ -22,6 +22,8 @@
     "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/stale-language-audit.md",
     "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/verification-results.md",
     ".ops/sync/UTV2-1199.yml",
+    "docs/06_status/proof/UTV2-1199/diff-summary.md",
+    "docs/06_status/proof/UTV2-1199/verification.md",
     "packages/contracts/CLAUDE.md",
     "packages/db/CLAUDE.md"
   ],
