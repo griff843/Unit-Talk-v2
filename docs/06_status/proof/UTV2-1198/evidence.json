@@ -1,0 +1,43 @@
+{
+  "issue_id": "UTV2-1198",
+  "lane_type": "migration",
+  "tier": "T2",
+  "branch": "codex/utv2-1198-database-types-regen",
+  "sha_binding": {
+    "verified_source_sha": "6a50dd5c8868a667d6b1ffbd37009aad787f1678",
+    "note": "Branch HEAD at time of proof generation. Merge SHA will be recorded post-merge."
+  },
+  "generated_at": "2026-06-04T00:00:00Z",
+  "executor": "claude-sonnet-4-6 (Claude fallback — Codex blocked by sandbox network restrictions)",
+  "supabase_project_ref": "zfzdnfwdarxucxtaojxm",
+  "verification": {
+    "type_check": "PASS",
+    "tests": "PASS (4 pass, 0 fail)",
+    "r_level_check": "PASS (no R-level artifacts required)"
+  },
+  "schema_changes": {
+    "tables_before": 122,
+    "tables_after": 124,
+    "new_tables": ["execution_intents", "settlement_corrections"],
+    "lines_before": 7573,
+    "lines_after": 7688,
+    "lines_added": 115,
+    "lines_removed": 0
+  },
+  "migration_backfill": {
+    "applied": "utv2_1116_immutable_model_version_artifact_sha",
+    "reason": "Migration existed in codebase (UTV2-1116 lane closed 2026-05-27) but was absent from live supabase_migrations table. Applied via Supabase MCP before regenerating types to ensure artifact_sha column presence in generated output.",
+    "result": "SUCCESS"
+  },
+  "key_assertions": {
+    "execution_intents_present": true,
+    "settlement_corrections_present": true,
+    "artifact_sha_present": true,
+    "no_existing_types_removed": true
+  },
+  "proof_files": [
+    "docs/06_status/proof/UTV2-1198/evidence.json",
+    "docs/06_status/proof/UTV2-1198/verification.md",
+    "docs/06_status/proof/UTV2-1198/diff-summary.md"
+  ]
+}
