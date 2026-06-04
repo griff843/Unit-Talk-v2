@@ -94,6 +94,141 @@ test('AC-7: promotion blocked with STALE_DATA_AT_PROMOTION when universe is stal
   assert.equal(result.pickRecord.promotion_reason, 'STALE_DATA_AT_PROMOTION', 'AC-7: promotion_reason must be STALE_DATA_AT_PROMOTION');
 });
 
+// UTV2-1200: Injury/player status guard — pick with playerAvailabilityStatus='OUT' must not be promoted
+test('UTV2-1200: pick with playerAvailabilityStatus=OUT is suppressed (riskBlocked)', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1200-out',
+    submissionId: 'sub-utv2-1200-out',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    metadata: {
+      playerAvailabilityStatus: 'OUT',
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  assert.equal(result.resolvedTarget, null, 'UTV2-1200: resolvedTarget must be null when player is OUT');
+  assert.equal(result.bestBetsDecision.qualified, false, 'UTV2-1200: bestBetsDecision must not qualify');
+  // riskBlocked causes not_eligible status (domain returns not_eligible for risk-gated picks)
+  assert.equal(result.pickRecord.promotion_target, null, 'UTV2-1200: promotion_target must be null when player is OUT');
+});
+
+test('UTV2-1200: pick with playerAvailabilityStatus=OUT_INDEFINITELY is not promoted', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1200-out-indef',
+    submissionId: 'sub-utv2-1200-out-indef',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    metadata: {
+      playerAvailabilityStatus: 'OUT_INDEFINITELY',
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  assert.equal(result.resolvedTarget, null, 'UTV2-1200: resolvedTarget must be null when player is OUT_INDEFINITELY');
+  assert.equal(result.pickRecord.promotion_target, null, 'UTV2-1200: promotion_target must be null when player is OUT_INDEFINITELY');
+});
+
+test('UTV2-1200: pick with playerAvailabilityStatus=INJURED_OUT is not promoted', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1200-injured-out',
+    submissionId: 'sub-utv2-1200-injured-out',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    metadata: {
+      playerAvailabilityStatus: 'INJURED_OUT',
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  assert.equal(result.resolvedTarget, null, 'UTV2-1200: resolvedTarget must be null when player is INJURED_OUT');
+  assert.equal(result.pickRecord.promotion_target, null, 'UTV2-1200: promotion_target must be null when player is INJURED_OUT');
+});
+
+test('UTV2-1200: pick with playerAvailabilityStatus=ACTIVE is NOT suppressed by injury guard', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1200-active',
+    submissionId: 'sub-utv2-1200-active',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    metadata: {
+      playerAvailabilityStatus: 'ACTIVE',
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  // ACTIVE status should not trigger injury guard — pick may qualify
+  assert.notEqual(result.pickRecord.promotion_reason, 'PLAYER_AVAILABILITY_BLOCKED', 'UTV2-1200: ACTIVE player must not be blocked by injury guard');
+});
+
 // AC-8: Promotion block written to audit_log
 test('AC-8: promotion block written to audit_log with promotion_blocked_stale_data event', async () => {
   const repos = createInMemoryRepositoryBundle();

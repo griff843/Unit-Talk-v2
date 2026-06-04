@@ -261,7 +261,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
     isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
     withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
     marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-    riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+    riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
+             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
+               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
+             ),
     scoreInputs,
     minimumScore: policy.minimumScore,
     // Smart Form picks are deliberate human capper submissions — confidence is
@@ -336,7 +339,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
       isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
       withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
       marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-      riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+      riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
+             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
+               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
+             ),
       confidenceFloor: policy.confidenceFloor ?? null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
@@ -548,7 +554,10 @@ async function buildSmartFormQualifiedResult(
     isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
     withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
     marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-    riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+    riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
+             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
+               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
+             ),
     scoreInputs,
     minimumScore: policy.minimumScore,
     confidenceFloor: undefined,
@@ -618,7 +627,10 @@ async function buildSmartFormQualifiedResult(
       isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
       withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
       marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-      riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+      riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
+             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
+               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
+             ),
       confidenceFloor: null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
@@ -860,7 +872,10 @@ async function persistPromotionDecisionForPick(
     isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
     withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
     marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-    riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+    riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
+             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
+               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
+             ),
     scoreInputs,
     minimumScore: policy.minimumScore,
     confidenceFloor:
@@ -911,7 +926,10 @@ async function persistPromotionDecisionForPick(
       isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
       withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
       marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-      riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+      riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
+             ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
+               readMetadataString(canonicalPick.metadata, 'playerAvailabilityStatus') ?? ''
+             ),
       confidenceFloor: policy.confidenceFloor ?? null,
       pickConfidence: canonicalPick.confidence ?? null,
     },
