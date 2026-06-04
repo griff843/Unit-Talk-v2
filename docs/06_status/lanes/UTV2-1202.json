@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1202-both-sides-fair-probability-guard",
   "branch": "codex/utv2-1202-both-sides-fair-probability-guard",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "96f3aa24b1445b7126e80e72203ce6d46b571725",
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
@@ -18,10 +18,10 @@
     "docs/06_status/proof/UTV2-1202/diff-summary.md",
     "docs/06_status/proof/UTV2-1202/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-04T15:44:10.574Z",
   "heartbeat_at": "2026-06-04T15:44:10.574Z",
-  "closed_at": null,
+  "closed_at": "2026-06-04T19:42:33Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1202-both-sides-fair-probability-guard.json",
   "created_by": "codex-cli",
