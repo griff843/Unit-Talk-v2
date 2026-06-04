@@ -714,3 +714,74 @@ test('board-construction champion is matched for nba player_prop (source_type ga
   const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
   assert.ok(rows.get('universe-1')?.model_registry_id, 'model_registry_id should be set when board-construction champion exists');
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1202: both-sides fair probability guard
+// ---------------------------------------------------------------------------
+
+test('UTV2-1202: skips candidate when fair_over_prob is set but fair_under_prob is null', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+
+  // Partial fair prob: over set, under null — must be skipped (not scored, not promoted)
+  const universeRow = makeUniverseRow({
+    id: 'universe-partial-prob',
+    fair_over_prob: 0.62,
+    fair_under_prob: null,
+    is_stale: false,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+
+  const candidate = makeCandidate({
+    id: 'candidate-partial-prob',
+    universe_id: 'universe-partial-prob',
+    status: 'qualified',
+    model_score: null,
+  });
+  seedCandidateRows(pickCandidates, [candidate]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse });
+
+  assert.equal(result.scored, 0, 'candidate with one-sided fair prob must not be scored');
+  assert.equal(result.skipped, 1, 'candidate with one-sided fair prob must be skipped');
+  assert.equal(result.errors, 0);
+
+  // Confirm the row was not mutated (model_score remains null)
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const row = rows.get('universe-partial-prob');
+  assert.equal(row?.model_score, null, 'model_score must remain null for skipped candidate');
+  assert.equal(row?.pick_id, null, 'pick_id must remain null');
+  assert.equal(row?.shadow_mode, true, 'shadow_mode must remain true');
+});
+
+test('UTV2-1202: skips candidate when fair_under_prob is set but fair_over_prob is null', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+
+  // Partial fair prob: under set, over null — must be skipped
+  const universeRow = makeUniverseRow({
+    id: 'universe-partial-prob-under',
+    fair_over_prob: null,
+    fair_under_prob: 0.58,
+    is_stale: false,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+
+  const candidate = makeCandidate({
+    id: 'candidate-partial-prob-under',
+    universe_id: 'universe-partial-prob-under',
+    status: 'qualified',
+    model_score: null,
+  });
+  seedCandidateRows(pickCandidates, [candidate]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse });
+
+  assert.equal(result.scored, 0, 'candidate with one-sided fair prob must not be scored');
+  assert.equal(result.skipped, 1, 'candidate with one-sided fair prob must be skipped');
+  assert.equal(result.errors, 0);
+
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const row = rows.get('universe-partial-prob-under');
+  assert.equal(row?.model_score, null, 'model_score must remain null for skipped candidate');
+});
