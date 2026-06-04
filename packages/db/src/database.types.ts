@@ -585,6 +585,59 @@ export type Database = {
           },
         ]
       }
+      execution_intents: {
+        Row: {
+          created_at: string
+          decision_record_id: string
+          id: string
+          idempotency_key: string | null
+          inputs_hash: string
+          intent_type: string
+          issued_at_ms: number
+          payload: Json
+          pick_id: string
+          predecessor_id: string | null
+          provenance: Json
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          decision_record_id: string
+          id?: string
+          idempotency_key?: string | null
+          inputs_hash: string
+          intent_type: string
+          issued_at_ms: number
+          payload?: Json
+          pick_id: string
+          predecessor_id?: string | null
+          provenance: Json
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          decision_record_id?: string
+          id?: string
+          idempotency_key?: string | null
+          inputs_hash?: string
+          intent_type?: string
+          issued_at_ms?: number
+          payload?: Json
+          pick_id?: string
+          predecessor_id?: string | null
+          provenance?: Json
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "execution_intents_predecessor_id_fkey"
+            columns: ["predecessor_id"]
+            isOneToOne: false
+            referencedRelation: "execution_intents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       experiment_ledger: {
         Row: {
           created_at: string
@@ -6472,6 +6525,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      settlement_corrections: {
+        Row: {
+          audit_event_id: string | null
+          authorizer_1: string
+          authorizer_2: string
+          correction_at: string
+          id: string
+          justification: string
+          prior_record_id: string
+          settlement_record_id: string
+        }
+        Insert: {
+          audit_event_id?: string | null
+          authorizer_1: string
+          authorizer_2: string
+          correction_at?: string
+          id?: string
+          justification: string
+          prior_record_id: string
+          settlement_record_id: string
+        }
+        Update: {
+          audit_event_id?: string | null
+          authorizer_1?: string
+          authorizer_2?: string
+          correction_at?: string
+          id?: string
+          justification?: string
+          prior_record_id?: string
+          settlement_record_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settlement_corrections_prior_record_id_fkey"
+            columns: ["prior_record_id"]
+            isOneToOne: false
+            referencedRelation: "settlement_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_corrections_prior_record_id_fkey"
+            columns: ["prior_record_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["settlement_id"]
+          },
+          {
+            foreignKeyName: "settlement_corrections_settlement_record_id_fkey"
+            columns: ["settlement_record_id"]
+            isOneToOne: false
+            referencedRelation: "settlement_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_corrections_settlement_record_id_fkey"
+            columns: ["settlement_record_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["settlement_id"]
+          },
+        ]
       }
       settlement_records: {
         Row: {
