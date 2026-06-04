@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1200",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1200-injury-player-status-guard",
+  "branch": "codex/utv2-1200-injury-player-status-guard",
+  "base_branch": "main",
+  "commit_sha": "8459531d03452ff0f1dd6ce82f1e4ac39becdb9b",
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "apps/api/src/promotion-service-stale-data.test.ts",
+    "apps/api/src/promotion-service.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1200/diff-summary.md",
+    "docs/06_status/proof/UTV2-1200/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-06-04T15:43:52.827Z",
+  "heartbeat_at": "2026-06-04T15:43:52.827Z",
+  "closed_at": "2026-06-04T19:42:33Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1200-injury-player-status-guard.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1200-injury-player-status-guard",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
