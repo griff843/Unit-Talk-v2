@@ -207,7 +207,7 @@ export class CandidateScoringService {
       try {
         const universe = universeMap.get(candidate.universe_id);
         if (!universe) { skipped++; continue; }
-        if (universe.fair_over_prob === null && universe.fair_under_prob === null) { skipped++; continue; }
+        if (universe.fair_over_prob === null || universe.fair_under_prob === null) { skipped++; continue; }
         if (universe.is_stale) { skipped++; continue; }
 
         const overProb = universe.fair_over_prob ?? 0;
