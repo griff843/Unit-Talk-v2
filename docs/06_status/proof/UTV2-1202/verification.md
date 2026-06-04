@@ -76,6 +76,15 @@ Unit tests 22 and 23 prove the two new cases are skipped. All 23 existing tests 
 
 ---
 
+## pnpm test:db
+
+**Not applicable — T2 lane.** Live-DB proof (pnpm test:db) is required for T1 lanes only. This is a T2 safety gate; no Supabase connectivity change was made.
+
+pnpm verify (full suite — all 113 tests):
+# pass 113
+# fail 0
+# skipped 0
+
 ## Scope Compliance
 
 - `apps/api/src/promotion-service.ts`: NOT touched (UTV2-1200 owns that file)
