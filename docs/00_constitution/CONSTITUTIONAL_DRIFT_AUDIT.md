@@ -49,7 +49,7 @@ Layers whose doctrine is written and partially scaffolded but not yet fulfilled:
 | **D-CONST-5 — Edge as echo (4.6/4.19)** | edge must be genuine +EV; "profit alone is not proof of edge" | edge = market-consensus echo; zero profitability evidence | **MEDIUM** (mission, not safety) — honestly fails-closed (no false edge claim), but the layer's purpose is undelivered. |
 | **D-CONST-6 — Ingestion freshness (4.1/4.14/§22)** | "daemon looping empty while marked healthy" is a named anti-pattern | live ingestion ~11.7d stale | **HIGH (operational)** — the exact anti-pattern §22 prohibits is occurring in production. |
 | **D-CONST-7 — `database.types.ts` drift (§7)** | domain model entities must be canonical | `execution_intents` + `settlement_corrections` live but absent from generated types | **MEDIUM** |
-| **D-CONST-8 — Doc says fail-open, code fail-closed (§8.4)** | prod repos must fail closed | `packages/db/CLAUDE.md` + `packages/contracts/CLAUDE.md` claim "fail-open"; code is fail-closed | **LOW** (doc-only; code wins) |
+| **D-CONST-8 — Doc says fail-open, code fail-closed (§8.4)** | prod repos must fail closed | ~~`packages/db/CLAUDE.md` + `packages/contracts/CLAUDE.md` claim "fail-open"; code is fail-closed~~ **RESOLVED** by SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION (2026-06-04, UTV2-1199). Documentation corrected; no code changed; code was already fail-closed. | **RESOLVED** — doc-only drift eliminated. |
 
 ## Special focus verdict — capability layers 4.1–4.19
 As predicted by the sprint spec, **the capability layers are the largest source of drift** — but the drift is **asymmetric and informative**:

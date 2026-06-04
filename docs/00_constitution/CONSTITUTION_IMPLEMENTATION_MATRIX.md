@@ -56,7 +56,7 @@
 | §5 Component Architecture (domains, boundary rules) | apps/packages boundary (domain pure, apps own side effects); `code-structure` skill + CI | **IMPLEMENTED** (boundaries enforced) |
 | §6 Technical Stack | Supabase/Postgres, immutability triggers, RLS, CI gates, live DB proof, tsx | **IMPLEMENTED** |
 | §7 Canonical Domain Model (21 entities) | most entities present (`DecisionRecord`, `SettlementRecord`, `ExecutionIntent`, `Certification`, `ProofBundle`, `AuditEvent`, `OddsSnapshot`, `RawPayload`…) | **PARTIALLY_IMPLEMENTED** — capital/treasury entities absent (frozen); `database.types.ts` drift (B8) |
-| §8 Contracts & Interfaces | `packages/contracts/*`, typed repos, in-memory vs prod fail-closed | **IMPLEMENTED** — note: CLAUDE.md "fail-open" doc lines wrong (code is fail-closed) |
+| §8 Contracts & Interfaces | `packages/contracts/*`, typed repos, in-memory vs prod fail-closed | **IMPLEMENTED** — D-CONST-8 RESOLVED: CLAUDE.md fail-closed language corrected (SPRINT-D-CONST-8, 2026-06-04); `writer-authority.ts` was already fail-closed |
 | §9 Operating Model (T1/T2/T3) | tier gates, PM verdict, adversarial review | **IMPLEMENTED** |
 | §10 Proof & Certification Framework | proof bundles, 16 cert classes, lifecycle, revocation triggers | **PARTIALLY_IMPLEMENTED** — proof-gate is string-bound not execution-bound (C-1) |
 | §11 Security & Trust | RLS deny-all, service-role audit, secrets fail-closed, dual-auth | **PARTIALLY_IMPLEMENTED** — 6 SECURITY DEFINER ERROR advisors + RPC grants (H5) |
