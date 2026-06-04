@@ -69,4 +69,4 @@ Added "Fail-Closed Authority Contract" section under Core Concepts explicitly st
 - No changes to any migration files
 - No changes to scoring, promotion, or runtime product code
 - No changes to proof gates or CI workflows (only constitution docs)
-- No changes to database.types.ts (D-CONST-7 scope — handled by UTV2-1198)
+- No changes to database.types.ts (D-CONST-7 scope — handled by a separate standalone migration lane)

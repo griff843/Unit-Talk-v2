@@ -33,7 +33,7 @@ Both documentation files corrected to accurately describe fail-closed behavior t
 
 ## Constraints Honored
 
-- D-CONST-7 / database.types.ts: NOT touched (handled by UTV2-1198 running in parallel)
+- D-CONST-7 / database.types.ts: NOT touched (types-regen is a separate standalone lane)
 - Migrations: NOT touched
 - Supabase schema: NOT touched
 - Proof gates: NOT touched
@@ -41,4 +41,4 @@ Both documentation files corrected to accurately describe fail-closed behavior t
 - Runtime behavior: NOT changed
 - Certification: NOT advanced
 - P5: remains FROZEN_NOT_CERTIFIED
-- UTV2-1150 WIP: NOT touched
+- Unrelated WIP: NOT touched

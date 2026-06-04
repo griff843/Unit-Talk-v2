@@ -10,7 +10,7 @@
 | `pnpm lint` | **PASS** — exit 0, no errors | `pnpm lint` |
 | `pnpm constitution:check` | **PASS** — 9/9 files, 19/19 layers, SHA b22b6e5b | `pnpm constitution:check` |
 | `tsx scripts/ci/r-level-check.ts` | **PASS** — no R-level artifacts required for doc-only diff | `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` |
-| `pnpm test:db` | **NOT REQUIRED** — documentation-only lane; no runtime code changed; no DB schema changed; `pnpm test:db` does not apply to doc reconciliation sprints | N/A |
+| `pnpm test:db` | **PASS** — 7 pass, 0 fail, 0 skipped | `pnpm test:db` |
 
 ## `git status --short` output
 
@@ -50,6 +50,16 @@ Exit 0 — no TypeScript errors.
 
 Exit 0 — no lint errors.
 
+## `pnpm test:db` output
+
+```
+pnpm test:db
+
+# pass 7
+# fail 0
+# skipped 0
+```
+
 ## `pnpm verify`
 
 Not run in full — documentation-only sprint; `pnpm verify` runs env:check which may fail with missing live Supabase credentials. The strongest relevant checks (type-check, lint, constitution:check, r-level-check) all pass. No code was changed, so test outcomes are unchanged from prior green CI state.
@@ -66,4 +76,4 @@ Not run in full — documentation-only sprint; `pnpm verify` runs env:check whic
 | No runtime behavior changed | PASS |
 | No certification advanced | PASS |
 | P5 remains frozen | PASS |
-| UTV2-1150 WIP not touched | PASS |
+| Unrelated WIP not touched | PASS |

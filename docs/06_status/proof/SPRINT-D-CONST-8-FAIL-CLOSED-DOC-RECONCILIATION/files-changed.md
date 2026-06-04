@@ -20,7 +20,7 @@
 ## Files NOT Changed (confirmed in scope)
 
 - `packages/db/src/writer-authority.ts` — NOT changed (code was already correct)
-- `packages/db/src/database.types.ts` — NOT changed (D-CONST-7 scope, UTV2-1198)
+- `packages/db/src/database.types.ts` — NOT changed (D-CONST-7 scope, handled by a separate migration lane)
 - `supabase/migrations/**` — NOT changed
 - Any scoring, promotion, CLV, or runtime product code — NOT changed
 - Any CI workflows or proof gate scripts — NOT changed
