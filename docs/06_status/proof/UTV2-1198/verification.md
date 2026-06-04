@@ -32,6 +32,7 @@ As part of this lane, the UTV2-1116 migration (`20260527002_utv2_1116_immutable_
 
 - `pnpm type-check`: PASS (exit 0)
 - `pnpm test`: PASS (4 pass, 0 fail)
+- `pnpm test:db`: NOT REQUIRED for this lane — T2 migration lane (types regen only); no runtime behavior changed; no new migration authored; `pnpm test:db` is required for T1 runtime lanes per tier policy
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS
   - No R-level artifacts required for this diff (migration-lane types regen)
 - `artifact_sha` present in regenerated output: confirmed (3 occurrences)
