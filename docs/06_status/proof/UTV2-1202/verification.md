@@ -1,5 +1,20 @@
 # UTV2-1202 — Verification
 
+## Summary
+
+Wave 1 — P3 Decision Integrity safety gate. Changed `&&` → `||` on the fair-probability null guard in `candidate-scoring-service.ts` so candidates with one-sided null probability are skipped rather than scored with a silent `?? 0` fallback. Added 2 unit tests proving both one-sided-null cases are skipped. `pnpm verify` PASS (113 tests, 0 failures).
+
+## Evidence
+
+| Item | Result |
+|------|--------|
+| `pnpm verify` | PASS — exit code 0, 113 tests |
+| `pnpm type-check` | PASS |
+| New tests | 2 (ok 22, ok 23 in candidate-scoring-service.test.ts) |
+| R-level check | PASS — no artifacts required |
+| Files changed | `candidate-scoring-service.ts` (+1 line), `.test.ts` (+2 tests) |
+| Scope bleed | None — `promotion-service.ts` not touched |
+
 ## Verification
 
 **Issue:** UTV2-1202 — both-sides fair probability guard in candidate scoring
