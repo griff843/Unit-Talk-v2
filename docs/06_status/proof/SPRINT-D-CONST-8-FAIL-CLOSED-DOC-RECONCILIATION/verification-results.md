@@ -10,6 +10,7 @@
 | `pnpm lint` | **PASS** — exit 0, no errors | `pnpm lint` |
 | `pnpm constitution:check` | **PASS** — 9/9 files, 19/19 layers, SHA b22b6e5b | `pnpm constitution:check` |
 | `tsx scripts/ci/r-level-check.ts` | **PASS** — no R-level artifacts required for doc-only diff | `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` |
+| `pnpm test:db` | **NOT REQUIRED** — documentation-only lane; no runtime code changed; no DB schema changed; `pnpm test:db` does not apply to doc reconciliation sprints | N/A |
 
 ## `git status --short` output
 

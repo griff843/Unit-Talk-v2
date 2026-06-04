@@ -11,10 +11,17 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".lane/lanes/governance.yml",
     "docs/00_constitution/CERTIFICATION_GAP_REGISTER.md",
     "docs/00_constitution/CONSTITUTION_IMPLEMENTATION_MATRIX.md",
     "docs/00_constitution/CONSTITUTIONAL_DRIFT_AUDIT.md",
+    "docs/06_status/lanes/UTV2-1199.json",
     "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/executive-summary.md",
+    "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/files-changed.md",
+    "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/next-actions.md",
+    "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/stale-language-audit.md",
+    "docs/06_status/proof/SPRINT-D-CONST-8-FAIL-CLOSED-DOC-RECONCILIATION/verification-results.md",
+    ".ops/sync/UTV2-1199.yml",
     "packages/contracts/CLAUDE.md",
     "packages/db/CLAUDE.md"
   ],
