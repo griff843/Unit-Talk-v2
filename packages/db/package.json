@@ -11,7 +11,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
-    "test": "tsx --test",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "types:generate": "supabase gen types typescript --local --schema public > src/database.types.ts"
   },
