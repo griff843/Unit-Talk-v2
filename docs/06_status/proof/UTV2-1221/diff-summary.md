@@ -1,4 +1,5 @@
 # Diff Summary — UTV2-1221
+<!-- merge_sha: 9a7174f8110c41b1fba52e8d7829eef3728a6f30 -->
 
 **Issue:** UTV2-1221 — Add `getTeamPreviousGameDate` helper to TeamScheduleRepository
 **Tier:** T2

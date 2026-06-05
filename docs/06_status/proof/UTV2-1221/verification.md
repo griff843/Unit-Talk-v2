@@ -1,11 +1,11 @@
-<!-- merge_sha: placeholder-update-after-merge -->
+<!-- merge_sha: 9a7174f8110c41b1fba52e8d7829eef3728a6f30 -->
 ## Verification
 
 ### pnpm verify (full pipeline)
 
 ```text
 pnpm verify — PASS (exit code 0)
-ops:sync-check + env:check + lint + type-check + build + test all passed
+ops:sync-check + env:check + lint + pnpm type-check + build + pnpm test all passed
 ```
 
 ### Tests (6/6 pass)
@@ -32,6 +32,7 @@ Test cases:
 ### R-level compliance
 
 ```text
+tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
 Rules matched: (none) — no R-level artifacts required for this diff
 Changed files: 2
