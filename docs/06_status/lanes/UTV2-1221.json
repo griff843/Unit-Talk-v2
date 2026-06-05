@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1221-get-team-previous-game-date",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/971",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1221",
