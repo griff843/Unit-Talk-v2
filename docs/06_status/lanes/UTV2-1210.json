@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1210",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1210-schedule-back-to-back-audit",
+  "branch": "claude/utv2-1210-schedule-back-to-back-audit",
+  "base_branch": "main",
+  "commit_sha": "9e1e2c8d8fe20d50aba702476a181ee972d9b8fd",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/969",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1210"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-06-05T17:53:48.095Z",
+  "heartbeat_at": "2026-06-05T18:57:14.870Z",
+  "closed_at": "2026-06-05T18:57:14.870Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1210-schedule-back-to-back-audit.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-05T18:55:53.167Z",
+      "verdict": "pass",
+      "merge_sha": "9e1e2c8d8fe20d50aba702476a181ee972d9b8fd",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/969"
+    },
+    {
+      "checked_at": "2026-06-05T18:55:58.630Z",
+      "verdict": "fail",
+      "merge_sha": "9e1e2c8d8fe20d50aba702476a181ee972d9b8fd",
+      "failures": [
+        "L2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-05T18:56:07.017Z",
+      "verdict": "fail",
+      "merge_sha": "9e1e2c8d8fe20d50aba702476a181ee972d9b8fd",
+      "failures": [
+        "L2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-05T18:56:32.118Z",
+      "verdict": "fail",
+      "merge_sha": "9e1e2c8d8fe20d50aba702476a181ee972d9b8fd",
+      "failures": [
+        "L2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-05T18:56:41.148Z",
+      "verdict": "fail",
+      "merge_sha": "9e1e2c8d8fe20d50aba702476a181ee972d9b8fd",
+      "failures": [
+        "L2"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1210-schedule-back-to-back-audit",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
