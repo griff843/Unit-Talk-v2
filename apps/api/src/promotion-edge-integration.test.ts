@@ -390,13 +390,13 @@ test('domain readiness signal activates when Kelly fraction is present', async (
     repositories,
   );
 
-  // UTV2-1022: Risk modifier now applied.
+  // UTV2-1022 / UTV2-1204 (Option B): Risk modifier applied with 3-component formula.
   // odds=+150 (decimal 2.5) → varianceScore=75; kellySizing absent in in-memory context (no devigging)
-  // → kellyScore=0 (fails closed); lineMovement absent → 50; consensus absent → 50
-  // riskScore = 75*0.35 + 0*0.35 + 50*0.20 + 50*0.10 = 41
-  // modifier = 1 - 0.15 + 0.15*(41/100) = 0.9115
-  // ti raw score ≈ 87.04 → modifiedScore ≈ 87.04 * 0.9115 ≈ 79.3 < 80 → trader-insights suppressed
-  // best-bets raw score ≈ 79.4 (different weights) → modifiedScore ≈ 72.3 ≥ 70 → qualifies
+  // → kellyScore=0 (fails closed); lineMovement no longer in riskScore (UTV2-1204 Option B); consensus absent → 50
+  // riskScore = 75*0.45 + 0*0.45 + 50*0.10 = 33.75 + 0 + 5 = 38.75 → 39
+  // modifier = 1 - 0.15 + 0.15*(39/100) = 0.85 + 0.0585 = 0.9085
+  // ti raw score ≈ 87.04 → modifiedScore ≈ 87.04 * 0.9085 ≈ 79.1 < 80 → trader-insights suppressed
+  // best-bets raw score ≈ 79.4 (different weights) → modifiedScore ≈ 72.1 ≥ 70 → qualifies
   // Pick still qualifies (at best-bets) — readiness signal is active
   assert.ok(
     result.pick.promotionStatus === 'qualified',
@@ -676,6 +676,7 @@ test('alert-agent pick with baseline confidence is not floor-clamped', async () 
       market: 'spread',
       selection: 'over',
       line: 6.5,
+      odds: -110, // UTV2-1204: explicit odds so varianceScore is deterministic (75) not neutral (50)
       confidence: 0.65,
       eventName: 'Knicks vs Celtics',
       metadata: {
@@ -707,6 +708,7 @@ test('alert-agent pick with low confidence bypasses the confidence floor entirel
       market: 'spread',
       selection: 'over',
       line: 6.5,
+      odds: -110, // UTV2-1204: explicit odds so varianceScore is deterministic (75) not neutral (50)
       confidence: 0.3,
       eventName: 'Knicks vs Celtics',
       metadata: {
@@ -1193,4 +1195,83 @@ test('snapshot includes uniquenessInputs with saturation count when same-market 
     | undefined;
   assert.ok(uniquenessInputs !== undefined, 'uniquenessInputs must be present when openPicks data is available');
   assert.ok(uniquenessInputs.sameSportMarketCount >= 1, 'sameSportMarketCount must reflect at least one same-market peer (pick1)');
+});
+
+// ── UTV2-1204: lineMovement does not affect riskScore (Option B regression) ──
+
+test('UTV2-1204: favorable lineMovement raises edge (model blend) but leaves riskScore unchanged', async () => {
+  // Both picks are identical except for lineMovement metadata.
+  // Option B: lineMovement enters ONLY through edge/model-blend (path 2), not riskScore (path 1).
+  // The riskScore (and thus riskModifier) must be identical regardless of lineMovement.
+  const repositories = createInMemoryRepositoryBundle();
+
+  // Pick with strongly favorable line movement (basisPointsDelta = +50)
+  const resultFavorable = await processSubmission(
+    {
+      source: 'api',
+      market: 'NBA points',
+      selection: 'Player Over 20.5',
+      odds: -110,
+      confidence: 0.70,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Celtics',
+        lineMovement: { basisPointsDelta: 50 }, // strongly favorable — would have boosted riskScore in risk-v1
+        promotionScores: { edge: 80, trust: 80, readiness: 80, uniqueness: 80, boardFit: 80 },
+      },
+    },
+    repositories,
+  );
+
+  // Pick with strongly adverse line movement (basisPointsDelta = -100)
+  const resultAdverse = await processSubmission(
+    {
+      source: 'api',
+      market: 'NBA points',
+      selection: 'Player Over 20.5',
+      odds: -110,
+      confidence: 0.70,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Celtics',
+        lineMovement: { basisPointsDelta: -100 }, // strongly adverse — would have suppressed riskScore in risk-v1
+        promotionScores: { edge: 80, trust: 80, readiness: 80, uniqueness: 80, boardFit: 80 },
+      },
+    },
+    repositories,
+  );
+
+  // Both picks must reach promotion evaluation
+  const histFavorable = await evaluateAndPersistBestBetsPromotion(
+    resultFavorable.pick.id,
+    'test:utv2-1204',
+    repositories.picks,
+    repositories.audit,
+  );
+  const histAdverse = await evaluateAndPersistBestBetsPromotion(
+    resultAdverse.pick.id,
+    'test:utv2-1204',
+    repositories.picks,
+    repositories.audit,
+  );
+
+  const riskScoreFavorable = histFavorable.snapshot.scoreInputs.riskScore;
+  const riskScoreAdverse = histAdverse.snapshot.scoreInputs.riskScore;
+
+  // UTV2-1204 Option B: riskScore must be identical — lineMovement no longer contributes
+  assert.equal(
+    riskScoreFavorable,
+    riskScoreAdverse,
+    `riskScore must be identical regardless of lineMovement (UTV2-1204 Option B): favorable=${riskScoreFavorable} adverse=${riskScoreAdverse}`,
+  );
+
+  // riskComponents.lineMovementScore must always be 50 (neutral marker — no longer computed from metadata)
+  const riskComponents = histFavorable.snapshot.scoreInputs.riskComponents as Record<string, unknown> | undefined;
+  if (riskComponents !== undefined) {
+    assert.equal(
+      riskComponents['lineMovementScore'],
+      50,
+      'riskComponents.lineMovementScore must always be 50 neutral marker (UTV2-1204 Option B: not computed from metadata)',
+    );
+  }
 });
