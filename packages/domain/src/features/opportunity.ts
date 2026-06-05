@@ -58,8 +58,9 @@ export interface OpportunityFeatures {
    * True when usage_rate_projection was derived from snap_share proxy (not direct
    * observation). Callers must not treat snap_share-derived usage as equivalent
    * to direct usage — flag for suppression or manual review. UTV2-1208.
+   * Optional for backwards compat with existing OpportunityFeatures literal objects.
    */
-  snap_share_suppressed: boolean;
+  snap_share_suppressed?: boolean;
 }
 
 export type OpportunityResult =
