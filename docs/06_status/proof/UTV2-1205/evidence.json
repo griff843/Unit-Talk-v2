@@ -1,11 +1,11 @@
 {
-  "schema_version": "evidence-bundle-v1",
+  "schema_version": 2,
   "issue_id": "UTV2-1205",
   "tier": "T1",
   "lane_type": "migration",
   "description": "DB constraint chk_fair_prob_both_or_neither on market_universe — fair_over_prob/fair_under_prob must be both NULL or both non-NULL",
   "sha_binding": {
-    "verified_source_sha": "b27f061cc6b6b9a5a58a20c66af8a3df9a0efc98",
+    "verified_source_sha": "ef60d13215a8d6a3655756f4097c52a998fcbcaa",
     "ci_sentinels": []
   },
   "pre_migration_check": {
@@ -56,6 +56,6 @@
     "R2": "pnpm type-check — no new TS changes (migration only)",
     "R3": "pnpm test:db PASS (7/7)",
     "R4": "Evidence bundle present — this file",
-    "R5": "SHA binding set to branch HEAD pre-merge: b27f061c"
+    "R5": "SHA binding set to post-main-merge commit: ef60d132"
   }
 }
