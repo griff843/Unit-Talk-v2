@@ -3,7 +3,7 @@
 UTV2-1205 adds a DB-level CHECK constraint (`chk_fair_prob_both_or_neither`) to the `market_universe` table. The constraint enforces that `fair_over_prob` and `fair_under_prob` are either both NULL or both non-NULL, closing the DB-boundary gap that the Wave 3 service-layer guard (UTV2-1202) enforces at scoring time. This migration ensures stale or partial data cannot enter the table via the ingestor path.
 
 Branch: `codex/utv2-1205-db-constraint-both-fair-probability-sides`
-Branch HEAD SHA: `a86a9743829f4a35b6cba9376fb0e26fab23dd0a`
+Branch HEAD SHA: `b27f061cc6b6b9a5a58a20c66af8a3df9a0efc98`
 
 ## Evidence
 
