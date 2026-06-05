@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1210",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1210-schedule-back-to-back-audit",
+  "branch": "claude/utv2-1210-schedule-back-to-back-audit",
+  "base_branch": "main",
+  "commit_sha": "023b3e29aee875c18bacf13bebc82e5ec3ca63c7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/969",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1210"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-06-05T17:53:48.095Z",
+  "heartbeat_at": "2026-06-05T17:53:48.095Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1210-schedule-back-to-back-audit.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1210-schedule-back-to-back-audit",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
