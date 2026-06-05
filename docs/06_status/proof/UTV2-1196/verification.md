@@ -1,3 +1,4 @@
+<!-- merge_sha: b2aaa72ba1b1e66535806abf9646d32128ce9e69 -->
 ## Summary
 
 UTV2-1196 closes the D-CONST-4 string-bound proof gap for T1 DB proof coverage by binding C2 to actual DB smoke execution and requiring proof-auditor bundles to include captured `node:test` execution evidence for `pnpm test:db`.

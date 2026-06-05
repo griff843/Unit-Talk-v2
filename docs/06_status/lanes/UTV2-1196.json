@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1196-sprint-proof-gate-execution-bound-004",
   "branch": "codex/utv2-1196-sprint-proof-gate-execution-bound-004",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b2aaa72ba1b1e66535806abf9646d32128ce9e69",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/954",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/proof-auditor-gate.yml",
@@ -24,14 +24,44 @@
     "docs/06_status/proof/UTV2-1196/diff-summary.md",
     "docs/06_status/proof/UTV2-1196/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-03T15:29:05.658Z",
-  "heartbeat_at": "2026-06-03T22:54:39.350Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-05T17:45:47.634Z",
+  "closed_at": "2026-06-05T17:45:47.634Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1196-sprint-proof-gate-execution-bound-004.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-05T17:41:36.540Z",
+      "verdict": "pass",
+      "merge_sha": "b2aaa72ba1b1e66535806abf9646d32128ce9e69",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/954"
+    },
+    {
+      "checked_at": "2026-06-05T17:45:21.654Z",
+      "verdict": "fail",
+      "merge_sha": "b2aaa72ba1b1e66535806abf9646d32128ce9e69",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-05T17:45:29.176Z",
+      "verdict": "fail",
+      "merge_sha": "b2aaa72ba1b1e66535806abf9646d32128ce9e69",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1150-burn-in-harness",
   "branch": "codex/utv2-1150-burn-in-harness",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a0614837aac83478a3eb8caecf96dd03048429c2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/947",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1150/evidence.json",
@@ -21,14 +21,50 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1150/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-01T22:09:24.128Z",
-  "heartbeat_at": "2026-06-01T22:09:24.128Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-05T17:45:16.803Z",
+  "closed_at": "2026-06-05T17:45:16.803Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1150-burn-in-harness.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-05T17:41:29.610Z",
+      "verdict": "pass",
+      "merge_sha": "a0614837aac83478a3eb8caecf96dd03048429c2",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/947"
+    },
+    {
+      "checked_at": "2026-06-05T17:41:55.082Z",
+      "verdict": "fail",
+      "merge_sha": "a0614837aac83478a3eb8caecf96dd03048429c2",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-05T17:44:14.953Z",
+      "verdict": "fail",
+      "merge_sha": "a0614837aac83478a3eb8caecf96dd03048429c2",
+      "failures": [
+        "P7",
+        "R1",
+        "R2"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
