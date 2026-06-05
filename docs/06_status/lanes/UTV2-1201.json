@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1201-postingwindowclosed-writer-for-promotion-enrichment",
   "branch": "codex/utv2-1201-postingwindowclosed-writer-for-promotion-enrichment",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "8f6e4f65a3794aa4684147b0317a0c41ee3cd59c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/961",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/promotion-edge-integration.test.ts",
@@ -19,10 +19,10 @@
     "docs/06_status/proof/UTV2-1201/diff-summary.md",
     "docs/06_status/proof/UTV2-1201/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-05T00:11:53.997Z",
   "heartbeat_at": "2026-06-05T00:11:53.997Z",
-  "closed_at": null,
+  "closed_at": "2026-06-05T12:26:47Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1201-postingwindowclosed-writer-for-promotion-enrichment.json",
   "created_by": "codex-cli",

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1203-book-dispersion-deduplication",
   "branch": "codex/utv2-1203-book-dispersion-deduplication",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e9e8a9678b26711b8bcbcbd992d3c658c8589d6c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/962",
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/signals/book-dispersion.test.ts",
@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1203/diff-summary.md",
     "docs/06_status/proof/UTV2-1203/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-05T06:37:13.153Z",
   "heartbeat_at": "2026-06-05T06:37:13.153Z",
-  "closed_at": null,
+  "closed_at": "2026-06-05T12:26:47Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1203-book-dispersion-deduplication.json",
   "created_by": "codex-cli",
