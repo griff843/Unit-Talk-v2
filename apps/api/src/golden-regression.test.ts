@@ -83,8 +83,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.65,
       promotionStatus: 'qualified',
       promotionTarget: 'exclusive-insights',
-      promotionScore: 93.69116000000001,
-      promotionReason: 'hard eligibility checks passed | promotion score 93.69 meets threshold 90.00',
+      promotionScore: 94.85744000000001, // UTV2-1204: riskScore updated (lineMovement removed from path 1; Kelly weight 0.35→0.45)
+      promotionReason: 'hard eligibility checks passed | promotion score 94.86 meets threshold 90.00',
       promotionVersion: 'exclusive-insights-v2',
       metadata: {
         sport: 'NBA',
@@ -162,8 +162,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.72,
       promotionStatus: 'qualified',
       promotionTarget: 'best-bets',
-      promotionScore: 76.1381775,
-      promotionReason: 'hard eligibility checks passed | promotion score 76.14 meets threshold 70.00',
+      promotionScore: 75.50334, // UTV2-1204: riskScore updated (lineMovement removed from path 1; weight rebalancing)
+      promotionReason: 'hard eligibility checks passed | promotion score 75.50 meets threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'MLB',
@@ -288,8 +288,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       // UTV2-985 fail-closed: no odds → no market data → edge=0 → suppressed
       promotionStatus: 'suppressed',
       promotionTarget: null,
-      promotionScore: 54.41075500000001,
-      promotionReason: 'promotion score 54.41 is below threshold 70.00',
+      promotionScore: 53.95708000000001, // UTV2-1204: riskScore updated (lineMovement removed from path 1; weight rebalancing)
+      promotionReason: 'promotion score 53.96 is below threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'NHL',
