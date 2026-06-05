@@ -5,7 +5,7 @@
   "lane_type": "migration",
   "description": "DB constraint chk_fair_prob_both_or_neither on market_universe — fair_over_prob/fair_under_prob must be both NULL or both non-NULL",
   "sha_binding": {
-    "verified_source_sha": "ef60d13215a8d6a3655756f4097c52a998fcbcaa",
+    "verified_source_sha": "fe486882c91b178fb83ac4071b2de2226b8c5eb8",
     "ci_sentinels": []
   },
   "pre_migration_check": {
@@ -56,6 +56,6 @@
     "R2": "pnpm type-check — no new TS changes (migration only)",
     "R3": "pnpm test:db PASS (7/7)",
     "R4": "Evidence bundle present — this file",
-    "R5": "SHA binding set to post-main-merge commit: ef60d132"
+    "R5": "SHA binding set to post-main-merge commit: fe486882"
   }
 }
