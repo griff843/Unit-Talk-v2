@@ -84,7 +84,7 @@ export interface GameLog {
 }
 ```
 
-...has no DB backing. UTV2-1207 (Wave 4 game_logs mock pipeline) implements mock/fixture data for this field as a prerequisite for Wave 5 Issue 12.
+...has no DB backing. The Wave 4 game_logs mock pipeline implements mock/fixture data for this field as a prerequisite for Wave 5 Issue 12.
 
 ---
 
@@ -114,18 +114,18 @@ The domain extractor handles null `prev_game_date` gracefully (defaults to 2 res
 | `game_date` | EXISTING | `events.event_date` |
 | `is_home` | EXISTING | `event_participants.role` |
 | `prev_game_date` | PARTIAL | Derivable from `events` via SQL; no repository helper |
-| `game_logs` (for player-form) | MISSING | No DB table; UTV2-1207 provides mock fixture |
+| `game_logs` (for player-form) | MISSING | No DB table; Wave 4 mock fixture provides coverage |
 
 ### What is needed before Wave 5 Issue 15 (game-context wiring) can start
 
 1. **`prev_game_date` helper** — Add a repository method `getTeamPreviousGameDate(teamId, beforeDate)` to `packages/db/src/runtime-repositories.ts` that executes the derivation query above. This is a new feed implementation required as a separate issue before Wave 5 Issue 15 starts.
 
-2. **Game logs** — Covered by UTV2-1207 (mock fixture pipeline). Wave 5 Issue 12 depends on that merge.
+2. **Game logs** — Covered by the Wave 4 mock fixture pipeline. Wave 5 Issue 12 depends on that merge.
 
 ### Recommended next steps
 
-- Create a new Wave 4 issue for the `prev_game_date` repository helper (separate from UTV2-1207 scope).
-- UTV2-1207 (game_logs mock) proceeds independently — no conflict.
+- Create a new Wave 4 issue for the `prev_game_date` repository helper.
+- The Wave 4 game_logs mock pipeline proceeds independently — no conflict.
 - Wave 5 Issues 1211 and 1215 must wait for both: this verdict + the new repository helper issue.
 
 ---
