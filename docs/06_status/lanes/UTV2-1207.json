@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1207",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1207-game-logs-mock-ingest-72h-guard",
+  "branch": "claude/utv2-1207-game-logs-mock-ingest-72h-guard",
+  "base_branch": "main",
+  "commit_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/968",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1207",
+    "packages/domain/src/features/player-form.test.ts",
+    "packages/domain/src/features/player-form.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1207/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-06-05T17:54:03.927Z",
+  "heartbeat_at": "2026-06-05T17:54:03.927Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1207-game-logs-mock-ingest-72h-guard.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1207-game-logs-mock-ingest-72h-guard",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

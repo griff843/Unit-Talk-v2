@@ -12,6 +12,7 @@
 // ── Input Types ──────────────────────────────────────────────────────────────
 
 export interface GameLog {
+  player_id?: string;
   game_date: string;
   minutes: number;
   stat_value: number;
@@ -54,6 +55,13 @@ export interface PlayerFormConfig {
   window_size?: number;
   /** Minimum games required to produce features (default: 3) */
   min_games?: number;
+  /**
+   * Reference game date (ISO string). When set, logs older than
+   * `max_age_hours` before this date are rejected fail-closed.
+   */
+  reference_date?: string;
+  /** Maximum age of accepted logs in hours relative to reference_date (default: 72) */
+  max_age_hours?: number;
 }
 
 const DEFAULT_WINDOW = 10;
@@ -74,9 +82,30 @@ export function extractPlayerFormFeatures(
 ): PlayerFormResult {
   const windowSize = config.window_size ?? DEFAULT_WINDOW;
   const minGames = config.min_games ?? DEFAULT_MIN_GAMES;
+  const maxAgeHours = config.max_age_hours ?? 72;
+
+  // ── 72h max-age guard ────────────────────────────────────────────────────
+  // Reject logs older than maxAgeHours relative to reference_date.
+  // Fail closed: if insufficient fresh logs remain, return error.
+  let eligible = gameLogs;
+  if (config.reference_date !== undefined) {
+    const referenceMs = new Date(config.reference_date).getTime();
+    const cutoffMs = referenceMs - maxAgeHours * 60 * 60 * 1000;
+    eligible = gameLogs.filter((log) => new Date(log.game_date).getTime() >= cutoffMs);
+    if (eligible.length < minGames) {
+      const staleSuffix =
+        gameLogs.length > 0
+          ? ` (${gameLogs.length - eligible.length} of ${gameLogs.length} logs exceed ${maxAgeHours}h max-age)`
+          : '';
+      return {
+        ok: false,
+        reason: `Stale game logs: insufficient fresh data within ${maxAgeHours}h of ${config.reference_date}${staleSuffix}`,
+      };
+    }
+  }
 
   // Sort by date descending (most recent first), take window
-  const sorted = [...gameLogs]
+  const sorted = [...eligible]
     .sort((a, b) => b.game_date.localeCompare(a.game_date))
     .slice(0, windowSize);
 
