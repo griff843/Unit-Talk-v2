@@ -9319,3 +9319,75 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
     return chain;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Team Schedule Repository (UTV2-1221)
+// Returns the most recent prior game date for a team, used by
+// extractGameContextFeatures to derive rest days / back-to-back context.
+// ---------------------------------------------------------------------------
+
+export interface TeamScheduleRepository {
+  getTeamPreviousGameDate(teamId: string, beforeDate: string): Promise<string | null>;
+}
+
+export class InMemoryTeamScheduleRepository implements TeamScheduleRepository {
+  private readonly _events: Array<{
+    event_date: string;
+    status: string;
+    participant_ids: string[];
+  }> = [];
+
+  seed(event: { event_date: string; status: string; participant_ids: string[] }): void {
+    this._events.push(event);
+  }
+
+  async getTeamPreviousGameDate(teamId: string, beforeDate: string): Promise<string | null> {
+    const matching = this._events
+      .filter(
+        (e) =>
+          e.participant_ids.includes(teamId) &&
+          e.event_date < beforeDate &&
+          (e.status === 'completed' || e.status === 'in_progress'),
+      )
+      .sort((a, b) => b.event_date.localeCompare(a.event_date));
+    return matching[0]?.event_date ?? null;
+  }
+}
+
+export class DatabaseTeamScheduleRepository implements TeamScheduleRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async getTeamPreviousGameDate(teamId: string, beforeDate: string): Promise<string | null> {
+    const { data: links, error: linkError } = await this.client
+      .from('event_participants')
+      .select('event_id')
+      .eq('participant_id', teamId);
+
+    if (linkError) {
+      throw new Error(`Failed to find participant events: ${linkError.message}`);
+    }
+
+    const eventIds = (links ?? []).map((r) => r.event_id);
+    if (eventIds.length === 0) return null;
+
+    const { data, error } = await this.client
+      .from('events')
+      .select('event_date')
+      .in('id', eventIds)
+      .lt('event_date', beforeDate)
+      .in('status', ['completed', 'in_progress'])
+      .order('event_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to query previous game date: ${error.message}`);
+    }
+
+    return data?.event_date ?? null;
+  }
+}
