@@ -22,6 +22,8 @@ export interface RoleLog {
   usage_rate: number | null;
   /** Team total minutes available per game (e.g. 240 for NBA) */
   team_minutes?: number;
+  /** Provenance: player identifier for traceability. UTV2-1208. */
+  player_id?: string;
 }
 
 // ── Output Contract ──────────────────────────────────────────────────────────
@@ -52,6 +54,12 @@ export interface OpportunityFeatures {
   usage_rate_source: 'direct' | 'snap_share';
   /** Number of games with direct usage_rate observations (vs snap_share proxy). */
   usage_rates_sampled: number;
+  /**
+   * True when usage_rate_projection was derived from snap_share proxy (not direct
+   * observation). Callers must not treat snap_share-derived usage as equivalent
+   * to direct usage — flag for suppression or manual review. UTV2-1208.
+   */
+  snap_share_suppressed: boolean;
 }
 
 export type OpportunityResult =
@@ -65,11 +73,46 @@ export interface OpportunityConfig {
   min_games?: number;
   /** Default team minutes per game (NBA=240, NFL=varies) */
   default_team_minutes?: number;
+  /**
+   * ISO date string used as the reference point for staleness checks.
+   * Role logs with game_date older than reference_date - max_age_hours are filtered.
+   * Requires max_age_hours to be set; both must be present to activate the guard.
+   */
+  reference_date?: string;
+  /**
+   * Maximum age in hours a role log may be relative to reference_date.
+   * If all logs are filtered by this guard, the function fails closed.
+   */
+  max_age_hours?: number;
 }
 
 const DEFAULT_WINDOW = 10;
 const DEFAULT_MIN_GAMES = 3;
 const DEFAULT_TEAM_MINUTES = 240; // NBA 5 players × 48 min
+
+// ── Mock Fixture ─────────────────────────────────────────────────────────────
+
+/**
+ * Canonical mock fixture for role_logs tests. UTV2-1208.
+ * All entries use direct usage_rate observations for a single mock player.
+ */
+export const MOCK_FIXTURE: RoleLog[] = [
+  { game_date: '2026-01-10', started: true,  minutes: 32, usage_rate: 0.28, player_id: 'mock-player-1' },
+  { game_date: '2026-01-08', started: true,  minutes: 30, usage_rate: 0.25, player_id: 'mock-player-1' },
+  { game_date: '2026-01-06', started: false, minutes: 22, usage_rate: 0.18, player_id: 'mock-player-1' },
+  { game_date: '2026-01-04', started: true,  minutes: 31, usage_rate: 0.27, player_id: 'mock-player-1' },
+  { game_date: '2026-01-02', started: true,  minutes: 28, usage_rate: 0.24, player_id: 'mock-player-1' },
+];
+
+/**
+ * Snap-share mock fixture for testing snap_share provenance path.
+ * All entries have null usage_rate — forces snap_share fallback. UTV2-1208.
+ */
+export const MOCK_FIXTURE_SNAP_SHARE: RoleLog[] = [
+  { game_date: '2026-01-10', started: true,  minutes: 32, usage_rate: null, player_id: 'mock-player-2' },
+  { game_date: '2026-01-08', started: true,  minutes: 30, usage_rate: null, player_id: 'mock-player-2' },
+  { game_date: '2026-01-06', started: false, minutes: 22, usage_rate: null, player_id: 'mock-player-2' },
+];
 
 // ── Core Computation ─────────────────────────────────────────────────────────
 
@@ -78,6 +121,9 @@ const DEFAULT_TEAM_MINUTES = 240; // NBA 5 players × 48 min
  *
  * minutes_projection comes from PlayerFormFeatures.
  * Role stability and usage projections come from role logs.
+ *
+ * Fail-closed: returns ok:false when insufficient logs, when the staleness
+ * guard filters all logs, or when insufficient logs remain after filtering.
  */
 export function extractOpportunityFeatures(
   roleLogs: RoleLog[],
@@ -88,7 +134,24 @@ export function extractOpportunityFeatures(
   const minGames = config.min_games ?? DEFAULT_MIN_GAMES;
   const teamMinutes = config.default_team_minutes ?? DEFAULT_TEAM_MINUTES;
 
-  const sorted = [...roleLogs]
+  // ── Staleness Guard ────────────────────────────────────────────────────────
+  // Fail-closed: logs older than reference_date - max_age_hours are stale.
+  // If both reference_date and max_age_hours are provided, apply the guard.
+  let filtered = roleLogs;
+  if (config.reference_date !== undefined && config.max_age_hours !== undefined) {
+    const cutoffMs =
+      new Date(config.reference_date).getTime() - config.max_age_hours * 3_600_000;
+    const cutoffDate = new Date(cutoffMs).toISOString().slice(0, 10);
+    filtered = roleLogs.filter((g) => g.game_date >= cutoffDate);
+    if (filtered.length === 0) {
+      return {
+        ok: false,
+        reason: `All role logs filtered by staleness guard (reference_date=${config.reference_date}, max_age_hours=${config.max_age_hours})`,
+      };
+    }
+  }
+
+  const sorted = [...filtered]
     .sort((a, b) => b.game_date.localeCompare(a.game_date))
     .slice(0, windowSize);
 
@@ -165,6 +228,7 @@ export function extractOpportunityFeatures(
       games_sampled: n,
       usage_rate_source: usageRateSource,
       usage_rates_sampled: usageRates.length,
+      snap_share_suppressed: usageRateSource === 'snap_share',
     },
   };
 }

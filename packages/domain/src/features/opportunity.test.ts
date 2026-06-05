@@ -1,7 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { extractOpportunityFeatures } from './opportunity.js';
+import {
+  extractOpportunityFeatures,
+  MOCK_FIXTURE,
+  MOCK_FIXTURE_SNAP_SHARE,
+} from './opportunity.js';
 import type { PlayerFormFeatures } from './player-form.js';
 import type { RoleLog } from './opportunity.js';
 
@@ -164,5 +168,105 @@ describe('extractOpportunityFeatures', () => {
     assert.equal(r1.data.usage_rate_source, r2.data.usage_rate_source);
     assert.equal(r1.data.usage_rates_sampled, r2.data.usage_rates_sampled);
     assert.equal(r1.data.usage_rate_projection, r2.data.usage_rate_projection);
+  });
+
+  // ── UTV2-1208: Mock fixture, provenance flag, staleness guard ─────────────
+
+  it('UTV2-1208: MOCK_FIXTURE produces a valid result with direct provenance', () => {
+    const result = extractOpportunityFeatures(MOCK_FIXTURE, baseForm);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.usage_rate_source, 'direct');
+    assert.equal(result.data.snap_share_suppressed, false);
+    assert.ok(result.data.games_sampled >= 3);
+    assert.ok(result.data.opportunity_projection > 0);
+  });
+
+  it('UTV2-1208: MOCK_FIXTURE has player_id provenance on all entries', () => {
+    for (const entry of MOCK_FIXTURE) {
+      assert.ok(entry.player_id !== undefined, `Entry ${entry.game_date} missing player_id`);
+    }
+  });
+
+  it('UTV2-1208: snap_share triggers snap_share_suppressed=true (provenance flag)', () => {
+    const result = extractOpportunityFeatures(MOCK_FIXTURE_SNAP_SHARE, baseForm);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.usage_rate_source, 'snap_share');
+    // Caller MUST check this flag before treating usage as direct observation
+    assert.equal(result.data.snap_share_suppressed, true);
+  });
+
+  it('UTV2-1208: direct usage sets snap_share_suppressed=false', () => {
+    const logs = [
+      makeRole({ game_date: '2026-01-03', usage_rate: 0.28 }),
+      makeRole({ game_date: '2026-01-02', usage_rate: 0.25 }),
+      makeRole({ game_date: '2026-01-01', usage_rate: 0.27 }),
+    ];
+    const result = extractOpportunityFeatures(logs, baseForm);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.snap_share_suppressed, false);
+  });
+
+  it('UTV2-1208: staleness guard fails closed when all logs are stale', () => {
+    const oldLogs = [
+      makeRole({ game_date: '2025-01-03' }),
+      makeRole({ game_date: '2025-01-02' }),
+      makeRole({ game_date: '2025-01-01' }),
+    ];
+    const result = extractOpportunityFeatures(oldLogs, baseForm, {
+      reference_date: '2026-01-10',
+      max_age_hours: 720, // 30 days — all logs are ~365 days old, all filtered
+    });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(
+      result.reason.includes('staleness guard'),
+      `Expected staleness guard reason, got: ${result.reason}`,
+    );
+  });
+
+  it('UTV2-1208: staleness guard fails closed when insufficient fresh logs remain', () => {
+    // 3 logs: 2 are stale, 1 is fresh — below min_games=3
+    const logs = [
+      makeRole({ game_date: '2026-01-09' }), // fresh (within 30d of 2026-01-10)
+      makeRole({ game_date: '2025-11-01' }), // stale
+      makeRole({ game_date: '2025-10-01' }), // stale
+    ];
+    const result = extractOpportunityFeatures(logs, baseForm, {
+      reference_date: '2026-01-10',
+      max_age_hours: 720, // 30 days
+    });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(
+      result.reason.includes('Insufficient role logs'),
+      `Expected insufficient logs reason, got: ${result.reason}`,
+    );
+  });
+
+  it('UTV2-1208: staleness guard passes when all logs are within window', () => {
+    const recentLogs = [
+      makeRole({ game_date: '2026-01-08' }),
+      makeRole({ game_date: '2026-01-06' }),
+      makeRole({ game_date: '2026-01-04' }),
+    ];
+    const result = extractOpportunityFeatures(recentLogs, baseForm, {
+      reference_date: '2026-01-10',
+      max_age_hours: 720, // 30 days
+    });
+    assert.equal(result.ok, true);
+  });
+
+  it('UTV2-1208: staleness guard is a no-op when reference_date not provided', () => {
+    const oldLogs = [
+      makeRole({ game_date: '2020-01-03' }),
+      makeRole({ game_date: '2020-01-02' }),
+      makeRole({ game_date: '2020-01-01' }),
+    ];
+    // No reference_date/max_age_hours — guard is inactive, old logs pass through
+    const result = extractOpportunityFeatures(oldLogs, baseForm);
+    assert.equal(result.ok, true);
   });
 });
