@@ -1,5 +1,5 @@
 <!-- merge_sha: placeholder-update-after-merge -->
-## UTV2-1207 Verification
+## Verification
 
 ### Implementation
 

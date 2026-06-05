@@ -3,11 +3,11 @@
   "issue_id": "UTV2-1207",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "placeholder-branch-head-pre-merge",
-    "verified_source_note": "SHA will be updated to merge SHA after PR merge",
-    "merge_sha": "placeholder-merge-sha",
-    "evidence_commit_sha": "placeholder-merge-sha",
-    "current_pr_head_sha": "placeholder-branch-head-pre-merge"
+    "verified_source_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
+    "verified_source_note": "Branch HEAD SHA; merge_sha will be updated to actual merge SHA after PR merges",
+    "merge_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
+    "evidence_commit_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
+    "current_pr_head_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b"
   },
   "verifier": {
     "identity": "claude-sonnet-4-6",
