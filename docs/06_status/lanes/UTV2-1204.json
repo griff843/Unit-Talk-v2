@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1204-line-movement-double-count-resolution",
   "branch": "codex/utv2-1204-line-movement-double-count-resolution",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "859da211ca0f40ce28e485c637436df63fbc0160",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/963",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/promotion-edge-integration.test.ts",
@@ -18,10 +18,10 @@
     "docs/06_status/proof/UTV2-1204/diff-summary.md",
     "docs/06_status/proof/UTV2-1204/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-05T11:51:53.461Z",
   "heartbeat_at": "2026-06-05T11:51:53.461Z",
-  "closed_at": null,
+  "closed_at": "2026-06-05T12:48:39Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1204-line-movement-double-count-resolution.json",
   "created_by": "codex-cli",
