@@ -1197,6 +1197,61 @@ test('snapshot includes uniquenessInputs with saturation count when same-market 
   assert.ok(uniquenessInputs.sameSportMarketCount >= 1, 'sameSportMarketCount must reflect at least one same-market peer (pick1)');
 });
 
+// ── UTV2-1206: multi-policy winner-selection priority ordering ───────────────
+
+test('UTV2-1206: score=82/trust=90/edge=88 routes to trader-insights, not best-bets', async () => {
+  // Policy threshold proof: trader-insights requires minimumEdge=85, minimumTrust=85, minimumScore=80.
+  // With edge=88 (≥85) and trust=90 (≥85), trader-insights gates pass.
+  // exclusive-insights requires minimumEdge=90 — edge=88 fails that gate, so it is not eligible.
+  // Winner-selection: first qualified policy in priority order wins (exclusive-insights > trader-insights > best-bets).
+  // Expected winner: trader-insights (edge=88 clears TI threshold but not EI threshold).
+  //
+  // Score derivation (spread market, game-line family, sport=NBA):
+  //   Trader-insights weights: edge*0.40, trust*0.30, readiness*0.15, uniqueness*0.10, boardFit*0.05
+  //   Weighted:      edge=35.2, trust=27, readiness=12.75, uniqueness=8.5, boardFit=4.25
+  //   Modifiers:     edgeMultiplier=1.1, uniquenessMultiplier=0.9 (game-line family)
+  //   Modified:      edge=38.72, trust=27, readiness=12.75, uniqueness=7.65, boardFit=4.25 → rawTotal=90.37
+  //   Risk:          odds=-110 → varianceScore=75; kellyScore=0 (no kellySizing); dispersionScore=50
+  //                  riskScore=39; modifier≈0.9085
+  //   Final score:   90.37 × 0.9085 ≈ 82.1 ≥ 80 → trader-insights qualifies
+  const repositories = createInMemoryRepositoryBundle();
+
+  const result = await processSubmission(
+    {
+      source: 'api',
+      market: 'spread',
+      selection: 'Hawks -3.5',
+      odds: -110,
+      confidence: 0.70,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Hawks vs Celtics',
+        promotionScores: {
+          edge: 88,
+          trust: 90,
+          readiness: 85,
+          uniqueness: 85,
+          boardFit: 85,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // trader-insights beats best-bets at these score levels
+  assert.equal(
+    result.pick.promotionTarget,
+    'trader-insights',
+    `expected trader-insights but got ${result.pick.promotionTarget} (score should be ≈82 ≥ 80 threshold)`,
+  );
+  assert.notEqual(
+    result.pick.promotionTarget,
+    'best-bets',
+    'best-bets must not win when trader-insights qualifies first',
+  );
+  assert.equal(result.pick.promotionStatus, 'qualified');
+});
+
 // ── UTV2-1204: lineMovement does not affect riskScore (Option B regression) ──
 
 test('UTV2-1204: favorable lineMovement raises edge (model blend) but leaves riskScore unchanged', async () => {
