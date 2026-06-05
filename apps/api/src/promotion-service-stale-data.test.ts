@@ -229,6 +229,151 @@ test('UTV2-1200: pick with playerAvailabilityStatus=ACTIVE is NOT suppressed by 
   assert.notEqual(result.pickRecord.promotion_reason, 'PLAYER_AVAILABILITY_BLOCKED', 'UTV2-1200: ACTIVE player must not be blocked by injury guard');
 });
 
+// UTV2-1201: postingWindowClosed event-time gate tests
+test('UTV2-1201: pick with event time in the PAST is suppressed (withinPostingWindow=false)', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1201-past-event',
+    submissionId: 'sub-utv2-1201-past-event',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    // Event started 1 hour ago — posting window should be closed
+    eventStartTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    metadata: {
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  assert.equal(result.resolvedTarget, null, 'UTV2-1201: resolvedTarget must be null when event has started');
+  assert.equal(result.bestBetsDecision.qualified, false, 'UTV2-1201: bestBetsDecision must not qualify when event has started');
+  assert.equal(result.pickRecord.promotion_target, null, 'UTV2-1201: promotion_target must be null when event has started');
+});
+
+test('UTV2-1201: pick with event time in the FUTURE is eligible to promote (withinPostingWindow=true)', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1201-future-event',
+    submissionId: 'sub-utv2-1201-future-event',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    // Event starts in 3 hours — posting window should be open
+    eventStartTime: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+    metadata: {
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  // withinPostingWindow=true — not suppressed by posting window gate
+  // (pick may still not qualify due to other gates, but posting window is not the blocker)
+  const suppressedByPostingWindow =
+    result.bestBetsDecision.explanation.suppressionReasons.includes('POSTING_WINDOW_CLOSED') ||
+    result.bestBetsDecision.explanation.suppressionReasons.includes('withinPostingWindow');
+  assert.equal(suppressedByPostingWindow, false, 'UTV2-1201: pick with future event must not be suppressed by posting window gate');
+});
+
+test('UTV2-1201: pick with no event time is not suppressed by posting window gate (fail-open)', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1201-no-event-time',
+    submissionId: 'sub-utv2-1201-no-event-time',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    // No eventStartTime — fail-open: assume window is still open
+    metadata: {
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  // No event time — isEventStarted returns false (fail-open), posting window gate does not suppress
+  const suppressedByPostingWindow =
+    result.bestBetsDecision.explanation.suppressionReasons.includes('POSTING_WINDOW_CLOSED') ||
+    result.bestBetsDecision.explanation.suppressionReasons.includes('withinPostingWindow');
+  assert.equal(suppressedByPostingWindow, false, 'UTV2-1201: pick with no event time must not be suppressed by posting window gate (fail-open)');
+});
+
+// Also verify metadata.eventStartTime fallback path works (for existing data in metadata bag)
+test('UTV2-1201: pick with past eventStartTime in metadata is suppressed (metadata fallback path)', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick: CanonicalPick = {
+    id: 'pick-utv2-1201-metadata-past',
+    submissionId: 'sub-utv2-1201-metadata-past',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.9,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    // No top-level eventStartTime — eventStartTime carried only in metadata bag
+    metadata: {
+      eventStartTime: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  const result = await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+  );
+
+  assert.equal(result.resolvedTarget, null, 'UTV2-1201: resolvedTarget must be null when metadata.eventStartTime is in the past');
+  assert.equal(result.pickRecord.promotion_target, null, 'UTV2-1201: promotion_target must be null when metadata.eventStartTime is in the past');
+});
+
 // AC-8: Promotion block written to audit_log
 test('AC-8: promotion block written to audit_log with promotion_blocked_stale_data event', async () => {
   const repos = createInMemoryRepositoryBundle();
