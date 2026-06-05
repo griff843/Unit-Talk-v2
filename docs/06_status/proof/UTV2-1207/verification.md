@@ -1,6 +1,13 @@
 <!-- merge_sha: placeholder-update-after-merge -->
 ## Verification
 
+### pnpm verify (full pipeline)
+
+```text
+pnpm verify — PASS (exit code 0)
+env:check + lint + type-check + build + test all passed
+```
+
 ### Implementation
 
 Added to `packages/domain/src/features/player-form.ts`:
