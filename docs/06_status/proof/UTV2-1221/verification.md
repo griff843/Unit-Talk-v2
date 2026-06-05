@@ -37,6 +37,20 @@ Rules matched: (none) — no R-level artifacts required for this diff
 Changed files: 2
 ```
 
+### pnpm test:db (live Supabase smoke)
+
+```text
+pnpm test:db
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Supabase project: `zfzdnfwdarxucxtaojxm`. Live smoke passed. No DB schema changed by this lane.
+
 ### Tier
 
 T2 — bounded runtime change to `packages/db/src/runtime-repositories.ts`.
