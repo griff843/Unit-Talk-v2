@@ -12,7 +12,9 @@
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1221",
-    "packages/db/src/runtime-repositories.ts"
+    "packages/db/src/runtime-repositories.ts",
+    "packages/db/src/team-schedule-repository.test.ts",
+    "packages/db/package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1221/diff-summary.md",
