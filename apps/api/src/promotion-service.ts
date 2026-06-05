@@ -259,7 +259,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
     approvalStatus: canonicalPick.approvalStatus,
     hasRequiredFields: hasRequiredFields(canonicalPick),
     isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
+      && !isEventStarted(canonicalPick),
     marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
     riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
@@ -337,7 +338,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
       approvalStatus: canonicalPick.approvalStatus,
       hasRequiredFields: hasRequiredFields(canonicalPick),
       isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
+      && !isEventStarted(canonicalPick),
       marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
       riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
@@ -552,7 +554,8 @@ async function buildSmartFormQualifiedResult(
     approvalStatus: canonicalPick.approvalStatus,
     hasRequiredFields: hasRequiredFields(canonicalPick),
     isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
+      && !isEventStarted(canonicalPick),
     marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
     riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
@@ -625,7 +628,8 @@ async function buildSmartFormQualifiedResult(
       approvalStatus: canonicalPick.approvalStatus,
       hasRequiredFields: hasRequiredFields(canonicalPick),
       isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
+      && !isEventStarted(canonicalPick),
       marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
       riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
@@ -870,7 +874,8 @@ async function persistPromotionDecisionForPick(
     approvalStatus: canonicalPick.approvalStatus,
     hasRequiredFields: hasRequiredFields(canonicalPick),
     isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
+      && !isEventStarted(canonicalPick),
     marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
     riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
@@ -924,7 +929,8 @@ async function persistPromotionDecisionForPick(
       approvalStatus: canonicalPick.approvalStatus,
       hasRequiredFields: hasRequiredFields(canonicalPick),
       isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false)
+      && !isEventStarted(canonicalPick),
       marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
       riskBlocked: (readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false) ||
              ['OUT', 'OUT_INDEFINITELY', 'INJURED_OUT'].includes(
@@ -1562,6 +1568,29 @@ function mapAuditAction(
   }
 
   return decision.qualified ? 'promotion.qualified' : 'promotion.suppressed';
+}
+
+/**
+ * Returns true when the event associated with the pick has already started.
+ *
+ * Checks `pick.eventStartTime` (top-level field) first, then falls back to
+ * `metadata.eventStartTime` for picks that carry it only in the metadata bag.
+ *
+ * Fail-open: when no event time is available, returns false (assume window is
+ * still open). This preserves the existing behavior for picks without timing
+ * data and avoids incorrectly blocking valid in-window picks.
+ *
+ * UTV2-1201: postingWindowClosed writer for promotion enrichment.
+ */
+function isEventStarted(pick: CanonicalPick): boolean {
+  const eventTime =
+    pick.eventStartTime ??
+    readMetadataString(pick.metadata, 'eventStartTime');
+  if (!eventTime) {
+    // No event time available — assume window is open (fail-open for missing data).
+    return false;
+  }
+  return new Date(eventTime).getTime() <= Date.now();
 }
 
 function readMetadataBoolean(metadata: Record<string, unknown>, key: string) {
