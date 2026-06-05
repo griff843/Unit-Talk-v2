@@ -1,0 +1,61 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1205",
+  "tier": "T1",
+  "lane_type": "migration",
+  "description": "DB constraint chk_fair_prob_both_or_neither on market_universe — fair_over_prob/fair_under_prob must be both NULL or both non-NULL",
+  "sha_binding": {
+    "verified_source_sha": "a86a9743829f4a35b6cba9376fb0e26fab23dd0a",
+    "ci_sentinels": []
+  },
+  "pre_migration_check": {
+    "query": "SELECT COUNT(*) FROM market_universe WHERE (fair_over_prob IS NULL) != (fair_under_prob IS NULL)",
+    "result": 0,
+    "verdict": "SAFE — zero violating rows before migration"
+  },
+  "migration_applied": {
+    "file": "supabase/migrations/20260605001_utv2_1205_market_universe_fair_prob_constraint.sql",
+    "constraint_name": "chk_fair_prob_both_or_neither",
+    "table": "market_universe",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "applied_via": "mcp__claude_ai_Supabase__apply_migration",
+    "success": true
+  },
+  "constraint_verification": {
+    "query": "SELECT constraint_name, constraint_type, check_clause FROM information_schema.table_constraints tc JOIN information_schema.check_constraints cc USING (constraint_catalog, constraint_schema, constraint_name) WHERE tc.table_name = 'market_universe' AND tc.constraint_name = 'chk_fair_prob_both_or_neither'",
+    "result": {
+      "constraint_name": "chk_fair_prob_both_or_neither",
+      "constraint_type": "CHECK",
+      "check_clause": "(((fair_over_prob IS NULL) AND (fair_under_prob IS NULL)) OR ((fair_over_prob IS NOT NULL) AND (fair_under_prob IS NOT NULL)))"
+    },
+    "verdict": "LIVE — constraint confirmed in information_schema"
+  },
+  "pnpm_test_db": {
+    "verdict": "PASS",
+    "tests": 7,
+    "failures": 0,
+    "duration_ms": 125257,
+    "output_lines": [
+      "TAP version 13",
+      "ok 1 - database repository bundle persists a submission and settlement when Supabase is configured",
+      "ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "ok 5 - UTV2-883: no duplicate participants for the same external_id and sport",
+      "ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+      "ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated",
+      "# tests 7",
+      "# pass 7",
+      "# fail 0",
+      "# duration_ms 125257.354999"
+    ]
+  },
+  "migration_reversibility": "ALTER TABLE market_universe DROP CONSTRAINT IF EXISTS chk_fair_prob_both_or_neither;",
+  "r_level_compliance": {
+    "R1": "pnpm test PASS (covered by test:db run)",
+    "R2": "pnpm type-check — no new TS changes (migration only)",
+    "R3": "pnpm test:db PASS (7/7)",
+    "R4": "Evidence bundle present — this file",
+    "R5": "SHA binding set to branch HEAD pre-merge: a86a9743"
+  }
+}
