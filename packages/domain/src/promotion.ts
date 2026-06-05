@@ -59,6 +59,10 @@ export interface RiskScoreResult {
   components: {
     varianceScore: number;
     kellyScore: number;
+    /** @deprecated UTV2-1204 Option B: lineMovement no longer contributes to riskScore.
+     * Field retained for backward compatibility with stored snapshots. Always 50 (neutral).
+     * The lineMovement signal enters exclusively through the edge/model-blend path.
+     */
     lineMovementScore: number;
     dispersionScore: number;
   };
@@ -68,15 +72,24 @@ export interface RiskScoreResult {
  * Compute a composite risk/volatility score for a pick.
  *
  * Pure function — reads only from pick.odds, pick.metadata.kellySizing,
- * pick.metadata.lineMovement, and pick.metadata.consensus.
+ * and pick.metadata.consensus.
  * Absent fields default to neutral sub-scores (except kellyScore which fails closed to 0).
+ *
+ * UTV2-1204 (Option B): Line movement is no longer a component of the risk score.
+ * The `lineMovement` signal contributes to the promotion score exclusively through
+ * the edge/model-blend path (`movement_score` → `signal_adjustment` in model-blend.ts),
+ * which is the sole authoritative path. Routing it through the risk modifier as well
+ * would double-count the signal.
  *
  * Hard-block thresholds:
  *   - riskScore < 10  → hardBlock
  *   - kellyScore === 0 AND kellySizing data was present → hardBlock (degenerate Kelly)
  *
+ * Weights (risk-v2, UTV2-1204):
+ *   varianceScore * 0.45 + kellyScore * 0.45 + dispersionScore * 0.10
+ *
  * @param pick        - CanonicalPick being evaluated
- * @param _scoreInputs - Reserved for future use; not consumed in risk-v1
+ * @param _scoreInputs - Reserved for future use; not consumed in risk-v2
  */
 export function computeRiskScore(
   pick: CanonicalPick,
@@ -90,24 +103,20 @@ export function computeRiskScore(
   // ─── 2. Kelly score ────────────────────────────────────────────────────────
   const { kellyScore, kellyDataPresent } = computeKellyScore(metadata);
 
-  // ─── 3. Line movement score ────────────────────────────────────────────────
-  const lineMovementScore = computeLineMovementScore(metadata);
-
-  // ─── 4. Dispersion score (odds dispersion across books) ────────────────────
+  // ─── 3. Dispersion score (odds dispersion across books) ────────────────────
   const dispersionScore = computeDispersionScore(metadata);
 
-  // ─── 5. Composite ─────────────────────────────────────────────────────────
+  // ─── 4. Composite (risk-v2: lineMovement removed — enters only via model blend) ──
   const score = Math.round(
-    varianceScore * 0.35 +
-    kellyScore   * 0.35 +
-    lineMovementScore * 0.20 +
-    dispersionScore   * 0.10,
+    varianceScore * 0.45 +
+    kellyScore   * 0.45 +
+    dispersionScore * 0.10,
   );
 
   // modifier: 1.0 at riskScore=100, 0.85 at riskScore=0
   const modifier = 1 - RISK_MODIFIER_WEIGHT + RISK_MODIFIER_WEIGHT * (score / 100);
 
-  // ─── 6. Hard-block evaluation ─────────────────────────────────────────────
+  // ─── 5. Hard-block evaluation ─────────────────────────────────────────────
   const hardBlockReasons: string[] = [];
 
   if (score < 10) {
@@ -131,7 +140,7 @@ export function computeRiskScore(
     components: {
       varianceScore,
       kellyScore,
-      lineMovementScore,
+      lineMovementScore: 50, // UTV2-1204: neutral marker — no longer computed from metadata; use model-blend path
       dispersionScore,
     },
   };
@@ -217,34 +226,6 @@ function kellyTierScore(fraction: number): number {
   if (fraction <= 0.15) return 75;
   if (fraction <= 0.25) return 50;
   return 25;
-}
-
-/**
- * Line movement score from pick.metadata.lineMovement.basisPointsDelta.
- *
- * absent          → 50 (neutral)
- * >= +10 bps      → 100 (price improving)
- * >= 0 bps        → 75 (stable)
- * >= -20 bps      → 50 (minor adverse)
- * >= -50 bps      → 25 (significant adverse)
- * <  -50 bps      → 0  (sharp adverse movement)
- */
-function computeLineMovementScore(metadata: Record<string, unknown>): number {
-  const lineMovement = metadata['lineMovement'];
-  if (!isRecord(lineMovement)) {
-    return 50; // neutral when absent
-  }
-
-  const bps = lineMovement['basisPointsDelta'];
-  if (typeof bps !== 'number' || !Number.isFinite(bps)) {
-    return 50; // neutral when field is missing
-  }
-
-  if (bps >= 10) return 100;
-  if (bps >= 0) return 75;
-  if (bps >= -20) return 50;
-  if (bps >= -50) return 25;
-  return 0;
 }
 
 /**
