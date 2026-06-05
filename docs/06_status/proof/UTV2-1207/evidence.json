@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1207",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "placeholder-branch-head-pre-merge",
+    "verified_source_note": "SHA will be updated to merge SHA after PR merge",
+    "merge_sha": "placeholder-merge-sha",
+    "evidence_commit_sha": "placeholder-merge-sha",
+    "current_pr_head_sha": "placeholder-branch-head-pre-merge"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "branch": "claude/utv2-1207-game-logs-mock-ingest-72h-guard",
+  "summary": "Added 72h max-age guard to extractPlayerFormFeatures with mock fixture pipeline for game_logs. Pure domain change: no DB, no I/O.",
+  "changedFiles": [
+    "packages/domain/src/features/player-form.ts",
+    "packages/domain/src/features/player-form.test.ts"
+  ],
+  "static_proof": {
+    "pnpm_verify": {"status": "PASS", "exit_code": 0},
+    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "player_form_tests": {
+      "command": "npx tsx --test packages/domain/src/features/player-form.test.ts",
+      "status": "PASS",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "note": "No R-level artifacts required for this diff."
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure domain entity (packages/domain/src/features/). No DB writes by this lane. Live Supabase smoke required for T1.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed. No DB writes by this lane."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists submission/settlement",
+      "UTV2-920 invalid atomic enqueue rolls back status and lifecycle writes",
+      "invalid atomic delivery rolls back outbox, receipt, audit, and lifecycle writes",
+      "invalid atomic settlement rolls back settlement and lifecycle writes",
+      "UTV2-883 participant upsert does not create duplicate rows",
+      "UTV2-996 correction path avoids duplicate base settlement rows",
+      "settlement correction chain remains additive"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific DB rows mutated. Pure domain package: no I/O, no DB, no HTTP.",
+        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "mock_fixture_with_player_id": "PASS — GameLog.player_id optional field added; MOCK_FIXTURE uses player-001",
+    "72h_max_age_guard": "PASS — extractPlayerFormFeatures rejects logs older than max_age_hours relative to reference_date",
+    "stale_data_test": "PASS — all-stale logs return ok:false with 'Stale game logs' reason",
+    "fresh_fixture_test": "PASS — MOCK_FIXTURE logs within 72h return ok:true with non-null features",
+    "fail_closed_guard": "PASS — insufficient fresh logs after filtering return ok:false (not fallback to stale data)",
+    "no_sgO_activation": "PASS — no SGO code touched",
+    "pure_domain_invariant": "PASS — no DB, no HTTP, no env reads"
+  },
+  "verdict": "PASS — awaiting PM t1-approved label before merge"
+}
