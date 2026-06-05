@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1205",
+  "lane_type": "migration",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1205-db-constraint-both-fair-probability-sides",
+  "branch": "codex/utv2-1205-db-constraint-both-fair-probability-sides",
+  "base_branch": "main",
+  "commit_sha": "d729bd26f135ff471525a39085b75cb83dc6b843",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/964",
+  "files_changed": [
+    "supabase/migrations/20260605001_utv2_1205_market_universe_fair_prob_constraint.sql",
+    "db/migrations-rollback/20260605001_utv2_1205_market_universe_fair_prob_constraint.down.sql",
+    "docs/06_status/proof/UTV2-1205/evidence.json",
+    "docs/06_status/proof/UTV2-1205/verification.md"
+  ],
+  "file_scope_lock": [
+    "packages/db/src/database.types.ts",
+    "supabase/migrations/20260605001_utv2_1205_market_universe_fair_prob_constraint.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1205/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-06-05T12:47:42.579Z",
+  "heartbeat_at": "2026-06-05T14:32:30.000Z",
+  "closed_at": "2026-06-05T14:32:30.000Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1205-db-constraint-both-fair-probability-sides.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1205-db-constraint-both-fair-probability-sides",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
