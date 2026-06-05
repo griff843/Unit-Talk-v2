@@ -1,8 +1,11 @@
 /**
  * Book Dispersion Signal
  *
- * Enhanced market disagreement features. Adds range and sharp book count
- * for richer dispersion profiling.
+ * @alias dispersion_score — delegates to `computeDisagreementScore` in market-signals.ts.
+ * That function is the canonical single implementation of population std-dev over devigged
+ * over-probabilities. `computeBookDispersion` is preserved for callers that need the richer
+ * DispersionResult shape (range, books_count, sharp_count), but its core numeric score is
+ * now produced by one shared code path.
  */
 
 import {
@@ -10,6 +13,7 @@ import {
   proportionalDevig,
 } from '../probability/devig.js';
 import { getBookProfile } from '../market/book-profiles.js';
+import { computeDisagreementScore } from './market-signals.js';
 
 import type { ProviderOfferSlim } from './market-signals.js';
 
@@ -26,8 +30,14 @@ export interface DispersionResult {
 
 /**
  * Compute book dispersion from provider offers.
- * dispersion_score = std dev of devigged over-probabilities.
- * range = max - min fair probability.
+ *
+ * `dispersion_score` delegates to `computeDisagreementScore` (market-signals.ts) —
+ * the single canonical computation of population std-dev of devigged over-probabilities.
+ * Before UTV2-1203 this function contained a duplicate implementation; that body has
+ * been removed and replaced with a delegation call so there is exactly one code path.
+ *
+ * `range`, `books_count`, and `sharp_count` are computed here because they are
+ * additional outputs not provided by `computeDisagreementScore`.
  */
 export function computeBookDispersion(
   offers: ProviderOfferSlim[],
@@ -60,16 +70,12 @@ export function computeBookDispersion(
     };
   }
 
-  const mean = probs.reduce((a, b) => a + b, 0) / probs.length;
-  const variance =
-    probs.reduce((sum, p) => sum + (p - mean) ** 2, 0) / probs.length;
-  const stdDev = Math.sqrt(variance);
-
   const minProb = Math.min(...probs);
   const maxProb = Math.max(...probs);
 
   return {
-    dispersion_score: stdDev,
+    // Canonical single-path computation — delegates to market-signals.ts
+    dispersion_score: computeDisagreementScore(offers),
     range: maxProb - minProb,
     books_count: probs.length,
     sharp_count: sharpCount,

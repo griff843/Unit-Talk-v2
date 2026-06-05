@@ -7,6 +7,7 @@ import {
   computeSharpRetailDelta,
   computeSignalVector,
 } from './market-signals.js';
+import { computeBookDispersion } from './book-dispersion.js';
 import type { ProviderOfferSlim } from './market-signals.js';
 
 function makeOffer(overrides: Partial<ProviderOfferSlim> = {}): ProviderOfferSlim {
@@ -78,6 +79,26 @@ describe('computeSharpRetailDelta', () => {
     ];
     const delta = computeSharpRetailDelta(offers);
     assert.ok(delta > 0);
+  });
+});
+
+describe('UTV2-1203 single-path regression', () => {
+  it('computeDisagreementScore and computeBookDispersion.dispersion_score produce identical output', () => {
+    // Before UTV2-1203: two separate computations entered scoring for same offers.
+    // After UTV2-1203: computeBookDispersion delegates to computeDisagreementScore —
+    // identical output is guaranteed by shared implementation, not coincidence.
+    const offers = [
+      makeOffer({ provider: 'pinnacle', over_odds: -120, under_odds: 100 }),
+      makeOffer({ provider: 'betmgm', over_odds: -105, under_odds: -115 }),
+      makeOffer({ provider: 'fanduel', over_odds: +100, under_odds: -120 }),
+    ];
+    const disagreement = computeDisagreementScore(offers);
+    const dispersion = computeBookDispersion(offers);
+    assert.equal(
+      dispersion.dispersion_score,
+      disagreement,
+      'Single path guarantee: both function names must resolve to same numeric value',
+    );
   });
 });
 
