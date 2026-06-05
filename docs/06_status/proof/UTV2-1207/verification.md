@@ -1,4 +1,4 @@
-<!-- merge_sha: placeholder-update-after-merge -->
+<!-- merge_sha: e2cc636f659f1fbbbb5787ed9b537256fa822276 -->
 ## Verification
 
 ### pnpm verify (full pipeline)

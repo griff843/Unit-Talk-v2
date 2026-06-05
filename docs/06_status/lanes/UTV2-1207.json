@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1207-game-logs-mock-ingest-72h-guard",
   "branch": "claude/utv2-1207-game-logs-mock-ingest-72h-guard",
   "base_branch": "main",
-  "commit_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/968",
+  "commit_sha": "e2cc636f659f1fbbbb5787ed9b537256fa822276",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/970",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1207",
@@ -18,10 +18,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1207/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-05T17:54:03.927Z",
-  "heartbeat_at": "2026-06-05T17:54:03.927Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-05T19:26:18.958Z",
+  "closed_at": "2026-06-05T19:26:18.958Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1207-game-logs-mock-ingest-72h-guard.json",
   "created_by": "claude",

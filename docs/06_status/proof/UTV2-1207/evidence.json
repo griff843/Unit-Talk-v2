@@ -3,10 +3,10 @@
   "issue_id": "UTV2-1207",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
-    "verified_source_note": "Branch HEAD SHA; merge_sha will be updated to actual merge SHA after PR merges",
-    "merge_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
-    "evidence_commit_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b",
+    "verified_source_sha": "e2cc636f659f1fbbbb5787ed9b537256fa822276",
+    "verified_source_note": "Squash merge SHA \u2014 PR #970 merged 2026-06-05T19:24:29Z",
+    "merge_sha": "e2cc636f659f1fbbbb5787ed9b537256fa822276",
+    "evidence_commit_sha": "e2cc636f659f1fbbbb5787ed9b537256fa822276",
     "current_pr_head_sha": "fe4043f43a7d401f61accf1675c9e4e04b6e4a0b"
   },
   "verifier": {
@@ -20,8 +20,14 @@
     "packages/domain/src/features/player-form.test.ts"
   ],
   "static_proof": {
-    "pnpm_verify": {"status": "PASS", "exit_code": 0},
-    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
     "player_form_tests": {
       "command": "npx tsx --test packages/domain/src/features/player-form.test.ts",
       "status": "PASS",
@@ -61,18 +67,24 @@
     "row_counts": [
       {
         "note": "No lane-specific DB rows mutated. Pure domain package: no I/O, no DB, no HTTP.",
-        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
       }
     ]
   },
   "acceptance_criteria": {
-    "mock_fixture_with_player_id": "PASS — GameLog.player_id optional field added; MOCK_FIXTURE uses player-001",
-    "72h_max_age_guard": "PASS — extractPlayerFormFeatures rejects logs older than max_age_hours relative to reference_date",
-    "stale_data_test": "PASS — all-stale logs return ok:false with 'Stale game logs' reason",
-    "fresh_fixture_test": "PASS — MOCK_FIXTURE logs within 72h return ok:true with non-null features",
-    "fail_closed_guard": "PASS — insufficient fresh logs after filtering return ok:false (not fallback to stale data)",
-    "no_sgO_activation": "PASS — no SGO code touched",
-    "pure_domain_invariant": "PASS — no DB, no HTTP, no env reads"
+    "mock_fixture_with_player_id": "PASS \u2014 GameLog.player_id optional field added; MOCK_FIXTURE uses player-001",
+    "72h_max_age_guard": "PASS \u2014 extractPlayerFormFeatures rejects logs older than max_age_hours relative to reference_date",
+    "stale_data_test": "PASS \u2014 all-stale logs return ok:false with 'Stale game logs' reason",
+    "fresh_fixture_test": "PASS \u2014 MOCK_FIXTURE logs within 72h return ok:true with non-null features",
+    "fail_closed_guard": "PASS \u2014 insufficient fresh logs after filtering return ok:false (not fallback to stale data)",
+    "no_sgO_activation": "PASS \u2014 no SGO code touched",
+    "pure_domain_invariant": "PASS \u2014 no DB, no HTTP, no env reads"
   },
-  "verdict": "PASS — awaiting PM t1-approved label before merge"
+  "verdict": "PASS \u2014 awaiting PM t1-approved label before merge"
 }
