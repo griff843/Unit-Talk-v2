@@ -7,9 +7,17 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1214-efficiency-pace-cap",
   "branch": "claude/utv2-1214-efficiency-pace-cap",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "b561bd714500ae608b760604a1d5645e7b8b9758",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/978",
+  "files_changed": [
+    "packages/domain/src/features/efficiency.ts",
+    "packages/domain/src/features/efficiency.test.ts",
+    "packages/domain/src/models/stat-distribution.ts",
+    "packages/domain/src/models/stat-distribution.test.ts",
+    "docs/06_status/proof/UTV2-1214/verification.md",
+    "docs/06_status/proof/UTV2-1214/diff-summary.md",
+    "docs/06_status/proof/UTV2-1214/evidence.json"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1214/diff-summary.md",
     "docs/06_status/proof/UTV2-1214/evidence.json",
@@ -22,7 +30,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1214/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-06T18:03:27.709Z",
   "heartbeat_at": "2026-06-06T18:03:27.709Z",
   "closed_at": null,
