@@ -7,9 +7,16 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1209-opponent-defensive-stats-mock-feed",
   "branch": "claude/utv2-1209-opponent-defensive-stats-mock-feed",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "2a7e535c54bb14bd937020260e37d42f861361d5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/973",
+  "files_changed": [
+    "packages/domain/src/features/efficiency.ts",
+    "packages/domain/src/features/efficiency.test.ts",
+    ".ops/sync/UTV2-1209.yml",
+    "docs/06_status/proof/UTV2-1209/evidence.json",
+    "docs/06_status/proof/UTV2-1209/verification.md",
+    "docs/06_status/proof/UTV2-1209/diff-summary.md"
+  ],
   "file_scope_lock": [
     "packages/domain/src/features/efficiency.test.ts",
     "packages/domain/src/features/efficiency.ts",
@@ -23,7 +30,7 @@
     "docs/06_status/proof/UTV2-1209/verification.md",
     "docs/06_status/proof/UTV2-1209/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-06T03:03:20.025Z",
   "heartbeat_at": "2026-06-06T03:03:20.025Z",
   "closed_at": null,
