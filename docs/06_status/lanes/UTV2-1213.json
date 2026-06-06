@@ -28,10 +28,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1213/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-06T17:32:26.659Z",
-  "heartbeat_at": "2026-06-06T17:48:26.349Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T17:56:31.640Z",
+  "closed_at": "2026-06-06T17:56:31.640Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1213-opportunity-provenance-gate.json",
   "created_by": "claude",
@@ -46,6 +46,13 @@
         "P10",
         "S1"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-06T17:56:18.709Z",
+      "verdict": "pass",
+      "merge_sha": "aa3a7c8d103a24bcc3a267671b65ade0afdb4079",
+      "failures": [],
       "runner": "manual"
     }
   ],
