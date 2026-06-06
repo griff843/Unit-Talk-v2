@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "merge_sha": "<!-- placeholder: update to merge SHA after PR merges -->",
+  "generated_at": "2026-06-05T00:00:00.000Z",
+  "verifier": {
+    "identity": "claude/utv2-1209-opponent-defensive-stats-mock-feed"
+  },
+  "static_proof": {
+    "issue_id": "UTV2-1209",
+    "tier": "T1",
+    "lane_type": "modeling",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/973",
+    "pnpm_verify": "PASS",
+    "pnpm_type_check": "PASS",
+    "r_level_check": "PASS",
+    "unit_tests": {
+      "pass": 15,
+      "fail": 0,
+      "command": "tsx --test packages/domain/src/features/efficiency.test.ts"
+    },
+    "scope": {
+      "files_changed": [
+        "packages/domain/src/features/efficiency.ts",
+        "packages/domain/src/features/efficiency.test.ts",
+        ".ops/sync/UTV2-1209.yml"
+      ],
+      "schema_changes": false,
+      "migration_required": false,
+      "sgo_activated": false,
+      "p3_cert_advanced": false,
+      "p5_unfrozen": false
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "description": "pnpm test:db smoke suite against Supabase project zfzdnfwdarxucxtaojxm",
+        "command": "pnpm test:db",
+        "result": "7 tests, 7 pass, 0 fail"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks (smoke suite assertions)",
+        "count": "verified via test:db 7/7 pass",
+        "project": "zfzdnfwdarxucxtaojxm"
+      }
+    ],
+    "receipts": [
+      {
+        "type": "test_db_run",
+        "pass": 7,
+        "fail": 0,
+        "duration_ms": 105371,
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Domain package is pure — no DB schema changes. Smoke suite confirms existing DB contracts unaffected."
+      }
+    ]
+  }
+}
