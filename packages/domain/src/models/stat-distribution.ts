@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto';
 
 import type { EfficiencyFeatures } from '../features/efficiency.js';
+import type { GameContextFeatures } from '../features/game-context.js';
 import type { OpportunityFeatures } from '../features/opportunity.js';
 import {
   resolvePlayerFormSignal,
@@ -48,6 +49,12 @@ export interface StatProjectionOutput {
   // Pace signal (UTV2-1214)
   high_pace_flag?: boolean;
 
+  // Game context (UTV2-1215)
+  projected_game_total?: number;
+  is_back_to_back?: boolean;
+  rest_days?: number;
+  home_away_factor?: number;
+
   // Reproducibility
   feature_vector_hash: string;
   feature_set_version: string;
@@ -77,6 +84,13 @@ export interface ProjectionInput {
    * Defaults to 0 (no adjustment) for backward compatibility.
    */
   playerForm_weight?: number;
+
+  /**
+   * Game context features from extractGameContextFeatures. Optional — omit when
+   * schedule/pace data is unavailable; expected_value is computed without home/away trim.
+   * UTV2-1215.
+   */
+  gameContext?: GameContextFeatures;
 }
 
 // ── Distribution Type Selection ──────────────────────────────────────────────
@@ -122,6 +136,7 @@ export function computeStatProjection(
     opportunity,
     efficiency,
     playerForm_weight = 0,
+    gameContext,
   } = input;
 
   // ── Validate inputs ────────────────────────────────────────────────────
@@ -159,7 +174,13 @@ export function computeStatProjection(
   // by the form signal. score=0.5 is neutral; higher/lower boosts/suppresses.
   const playerFormSignal = resolvePlayerFormSignal(playerForm);
   const formAdjustment = playerForm_weight * (playerFormSignal.score - 0.5) * 2;
-  const expectedValue = round4(baseExpectedValue * (1 + formAdjustment));
+  const formAdjustedValue = round4(baseExpectedValue * (1 + formAdjustment));
+
+  // ── Step 1c: Home/Away Trim (UTV2-1215) ───────────────────────────────
+  // Apply ±1.2% home/away factor from game context when available.
+  // home_away_factor = 1.012 (home) or 0.988 (away); neutral (1.0) when absent.
+  const homeAwayFactor = gameContext?.home_away_factor ?? 1.0;
+  const expectedValue = round4(formAdjustedValue * homeAwayFactor);
 
   // ── Step 2: Non-Constant Variance ──────────────────────────────────────
   const playerVolatility = playerForm.player_base_volatility;
@@ -222,6 +243,12 @@ export function computeStatProjection(
       player_form_score: playerFormSignal.score,
       usage_rate_source: opportunity.usage_rate_source,
       high_pace_flag: efficiency.high_pace_flag,
+      ...(gameContext !== undefined ? {
+        projected_game_total: gameContext.projected_game_total,
+        is_back_to_back: gameContext.is_back_to_back,
+        rest_days: gameContext.rest_days,
+        home_away_factor: gameContext.home_away_factor,
+      } : {}),
       feature_vector_hash: featureVectorHash,
       feature_set_version: FEATURE_SET_VERSION,
     },
@@ -299,6 +326,7 @@ function buildFeatureVector(
     efficiency_projection: input.efficiency.efficiency_projection,
     matchup_variance: input.efficiency.matchup_variance,
     role_uncertainty: input.opportunity.role_uncertainty,
+    home_away_factor: input.gameContext?.home_away_factor ?? 1.0,
   };
 }
 
