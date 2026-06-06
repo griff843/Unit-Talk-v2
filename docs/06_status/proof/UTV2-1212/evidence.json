@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1212",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "branch": "codex/utv2-1212-player-form-wiring",
+  "generated_at": "2026-06-06T15:55:45Z",
+  "verifier": {
+    "identity": "codex/utv2-1212-player-form-wiring"
+  },
+  "static_proof": {
+    "pnpm_type_check": "PASS",
+    "domain_test": "PASS",
+    "pnpm_env_check": "PASS",
+    "pnpm_lint": "PASS",
+    "pnpm_build": "PASS",
+    "pnpm_test": "PASS",
+    "pnpm_verify": "PASS",
+    "r_level_check": "PASS",
+    "import_audit": {
+      "command": "rg \"@unit-talk/db|@unit-talk/config|apps/\" packages/domain/src",
+      "result": "PASS",
+      "note": "Only legacy-reference comments matched; no forbidden imports were introduced."
+    },
+    "scope": {
+      "files_changed": [
+        "packages/domain/src/features/player-form.ts",
+        "packages/domain/src/models/stat-distribution.ts",
+        "docs/06_status/proof/UTV2-1212/diff-summary.md",
+        "docs/06_status/proof/UTV2-1212/verification.md",
+        "docs/06_status/proof/UTV2-1212/evidence.json"
+      ],
+      "schema_changes": false,
+      "migration_required": false,
+      "contracts_changed": false,
+      "app_runtime_changed": false
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "description": "Live DB smoke suite against Supabase project zfzdnfwdarxucxtaojxm",
+        "command": "pnpm test:db",
+        "result": "7 tests, 7 pass, 0 fail"
+      },
+      {
+        "description": "Root test suite including T1 proof tests",
+        "command": "pnpm test",
+        "result": "PASS"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks and lifecycle-related tables",
+        "count": "verified by pnpm test:db and root T1 proof tests",
+        "project": "zfzdnfwdarxucxtaojxm"
+      }
+    ],
+    "receipts": [
+      {
+        "type": "test_db_run",
+        "pass": 7,
+        "fail": 0,
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Domain-only player-form/stat projection change; DB smoke confirms existing persistence contracts remain intact."
+      },
+      {
+        "type": "root_test_run",
+        "command": "pnpm test",
+        "result": "PASS",
+        "note": "Includes T1 proof tests. Known pre-existing stranded-row warning was observed and not modified by this lane."
+      }
+    ]
+  },
+  "r_level_compliance": {
+    "rules_file": "docs/05_operations/r1-r5-rules.json",
+    "triggered_rules": [],
+    "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "result": "PASS - no R-level artifact requirements triggered by changed paths."
+  }
+}
