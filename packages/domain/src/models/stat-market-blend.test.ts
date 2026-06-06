@@ -17,6 +17,7 @@ function makeProjection(overrides: Partial<StatProjectionOutput> = {}): StatProj
     p_over: 0.55,
     p_under: 0.45,
     confidence: 0.6,
+    usage_rate_source: 'direct',
     feature_vector_hash: 'abc123',
     feature_set_version: 'stat-proj-v2.0',
     ...overrides,

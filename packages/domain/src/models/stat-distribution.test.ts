@@ -122,6 +122,35 @@ describe('computeStatProjection', () => {
   });
 });
 
+describe('snap_share provenance gate — UTV2-1213', () => {
+  it('snap_share usage_rate_source → ok:false (fail-closed)', () => {
+    const result = computeStatProjection(makeInput({
+      opportunity: { ...baseOpportunity, usage_rate_source: 'snap_share' },
+    }));
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(result.reason.includes('snap_share'));
+  });
+
+  it('snap_share_suppressed:true → ok:false (explicit suppression flag)', () => {
+    const result = computeStatProjection(makeInput({
+      opportunity: { ...baseOpportunity, snap_share_suppressed: true },
+    }));
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(result.reason.includes('snap_share'));
+  });
+
+  it('direct usage_rate_source → ok:true and usage_rate_source in output', () => {
+    const result = computeStatProjection(makeInput({
+      opportunity: { ...baseOpportunity, usage_rate_source: 'direct' },
+    }));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.usage_rate_source, 'direct');
+  });
+});
+
 describe('normalCDF', () => {
   it('returns 0.5 at z=0', () => {
     assert.ok(Math.abs(normalCDF(0) - 0.5) < 0.001);

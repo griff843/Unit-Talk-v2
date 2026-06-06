@@ -43,6 +43,7 @@ export interface StatProjectionOutput {
   // Uncertainty
   confidence: number;
   player_form_score?: number;
+  usage_rate_source: 'direct' | 'snap_share';
 
   // Reproducibility
   feature_vector_hash: string;
@@ -131,6 +132,20 @@ export function computeStatProjection(
     return { ok: false, reason: 'Line must be non-negative' };
   }
 
+  // ── Provenance Gate (UTV2-1213) ────────────────────────────────────────
+  // snap_share-derived usage_rate is a documented proxy, not direct observation.
+  // Fail-closed: do not silently promote picks where opportunity came from snap_share.
+  if (
+    opportunity.usage_rate_source === 'snap_share' ||
+    opportunity.snap_share_suppressed === true
+  ) {
+    return {
+      ok: false,
+      reason:
+        'snap_share provenance: usage_rate derived from snap_share proxy — suppressed for manual review',
+    };
+  }
+
   // ── Step 1: Expected Value ─────────────────────────────────────────────
   const baseExpectedValue = round4(
     opportunity.opportunity_projection * efficiency.efficiency_projection,
@@ -202,6 +217,7 @@ export function computeStatProjection(
       p_under: pUnder,
       confidence,
       player_form_score: playerFormSignal.score,
+      usage_rate_source: opportunity.usage_rate_source,
       feature_vector_hash: featureVectorHash,
       feature_set_version: FEATURE_SET_VERSION,
     },
