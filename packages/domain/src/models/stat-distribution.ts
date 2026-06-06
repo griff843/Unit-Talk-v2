@@ -15,7 +15,10 @@ import { createHash } from 'node:crypto';
 
 import type { EfficiencyFeatures } from '../features/efficiency.js';
 import type { OpportunityFeatures } from '../features/opportunity.js';
-import type { PlayerFormFeatures } from '../features/player-form.js';
+import {
+  resolvePlayerFormSignal,
+  type PlayerFormFeatures,
+} from '../features/player-form.js';
 
 // ── Output Contract ──────────────────────────────────────────────────────────
 
@@ -39,6 +42,7 @@ export interface StatProjectionOutput {
 
   // Uncertainty
   confidence: number;
+  player_form_score?: number;
 
   // Reproducibility
   feature_vector_hash: string;
@@ -62,6 +66,13 @@ export interface ProjectionInput {
 
   /** Distribution override (default: auto-select based on stat_type) */
   distribution_type?: 'normal' | 'poisson';
+
+  /**
+   * Sport-specific playerForm weight from NBA/NFL/MLB/NHL_WEIGHTS.playerForm.
+   * When provided, scales the form signal's multiplicative adjustment to expectedValue.
+   * Defaults to 0 (no adjustment) for backward compatibility.
+   */
+  playerForm_weight?: number;
 }
 
 // ── Distribution Type Selection ──────────────────────────────────────────────
@@ -99,8 +110,15 @@ export const FEATURE_SET_VERSION = 'stat-proj-v2.0';
 export function computeStatProjection(
   input: ProjectionInput,
 ): StatProjectionResult {
-  const { player_id, stat_type, line, playerForm, opportunity, efficiency } =
-    input;
+  const {
+    player_id,
+    stat_type,
+    line,
+    playerForm,
+    opportunity,
+    efficiency,
+    playerForm_weight = 0,
+  } = input;
 
   // ── Validate inputs ────────────────────────────────────────────────────
   if (opportunity.opportunity_projection <= 0) {
@@ -114,9 +132,16 @@ export function computeStatProjection(
   }
 
   // ── Step 1: Expected Value ─────────────────────────────────────────────
-  const expectedValue = round4(
+  const baseExpectedValue = round4(
     opportunity.opportunity_projection * efficiency.efficiency_projection,
   );
+
+  // ── Step 1b: Player Form Adjustment ───────────────────────────────────
+  // When a sport-specific playerForm_weight is supplied, scale expected value
+  // by the form signal. score=0.5 is neutral; higher/lower boosts/suppresses.
+  const playerFormSignal = resolvePlayerFormSignal(playerForm);
+  const formAdjustment = playerForm_weight * (playerFormSignal.score - 0.5) * 2;
+  const expectedValue = round4(baseExpectedValue * (1 + formAdjustment));
 
   // ── Step 2: Non-Constant Variance ──────────────────────────────────────
   const playerVolatility = playerForm.player_base_volatility;
@@ -176,6 +201,7 @@ export function computeStatProjection(
       p_over: pOver,
       p_under: pUnder,
       confidence,
+      player_form_score: playerFormSignal.score,
       feature_vector_hash: featureVectorHash,
       feature_set_version: FEATURE_SET_VERSION,
     },
@@ -242,6 +268,9 @@ function buildFeatureVector(
     opportunity_projection: input.opportunity.opportunity_projection,
     stat_per_minute: input.playerForm.stat_per_minute,
     stat_per_opportunity: input.playerForm.stat_per_opportunity,
+    stat_trend: input.playerForm.stat_trend,
+    consistency_score: input.playerForm.consistency_score,
+    player_form_score: resolvePlayerFormSignal(input.playerForm).score,
     player_base_volatility: input.playerForm.player_base_volatility,
     minutes_uncertainty: input.playerForm.minutes_uncertainty,
     opponent_defensive_adjustment:

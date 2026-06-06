@@ -44,6 +44,14 @@ export interface PlayerFormFeatures {
   window_size: number;
 }
 
+export interface PlayerFormSignal {
+  /** Bounded score [0, 1] summarizing recent form quality for scoring. */
+  score: number;
+  trend_component: number;
+  consistency_component: number;
+  availability_component: number;
+}
+
 export type PlayerFormResult =
   | { ok: true; data: PlayerFormFeatures }
   | { ok: false; reason: string };
@@ -189,6 +197,33 @@ export function extractPlayerFormFeatures(
   };
 }
 
+/**
+ * Resolve PlayerFormFeatures into a bounded scoring signal.
+ *
+ * This uses only player/game-log derived fields. The score is intentionally
+ * conservative: trend can help or hurt, consistency must be present, and low
+ * projected minutes suppress the form signal.
+ */
+export function resolvePlayerFormSignal(
+  features: PlayerFormFeatures,
+): PlayerFormSignal {
+  const trendComponent = clamp((features.stat_trend + 1) / 2, 0, 1);
+  const consistencyComponent = clamp(features.consistency_score, 0, 1);
+  const availabilityComponent = clamp(features.minutes_projection / 36, 0, 1);
+
+  const score =
+    trendComponent * 0.35 +
+    consistencyComponent * 0.4 +
+    availabilityComponent * 0.25;
+
+  return {
+    score: round4(score),
+    trend_component: round4(trendComponent),
+    consistency_component: round4(consistencyComponent),
+    availability_component: round4(availabilityComponent),
+  };
+}
+
 // ── Math Utilities ───────────────────────────────────────────────────────────
 
 function sum(arr: number[]): number {
@@ -239,4 +274,8 @@ function computeTrend(values: number[]): number {
 
 function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
 }
