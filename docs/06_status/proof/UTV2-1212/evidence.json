@@ -37,16 +37,16 @@
       "SELECT COUNT(*) FROM settlement_records WHERE pick_id = $1",
       "SELECT COUNT(*) FROM participants WHERE external_id = $1 AND sport = $2"
     ],
-    "row_counts": {
-      "submissions": 1,
-      "picks": 1,
-      "outbox_messages": 1,
-      "pick_lifecycle": 3,
-      "delivery_receipts": 1,
-      "audit_log": 2,
-      "settlement_records": 2,
-      "participants": 1
-    }
+    "row_counts": [
+      { "table": "submissions", "count": 1 },
+      { "table": "picks", "count": 1 },
+      { "table": "outbox_messages", "count": 1 },
+      { "table": "pick_lifecycle", "count": 3 },
+      { "table": "delivery_receipts", "count": 1 },
+      { "table": "audit_log", "count": 2 },
+      { "table": "settlement_records", "count": 2 },
+      { "table": "participants", "count": 1 }
+    ]
   },
   "verifier": {
     "identity": "claude",
