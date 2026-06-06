@@ -31,7 +31,7 @@
   ],
   "status": "done",
   "started_at": "2026-06-06T13:57:29.861Z",
-  "heartbeat_at": "2026-06-06T14:50:20.971Z",
+  "heartbeat_at": "2026-06-06T15:17:13.392Z",
   "closed_at": "2026-06-06T14:50:20.971Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1211-matchup-context-logit-probability.json",
@@ -41,9 +41,39 @@
       "checked_at": "2026-06-06T14:50:20.971Z",
       "verdict": "pass",
       "merge_sha": "e21b6999",
-      "failures": ["G1-infra_error-GITHUB_TOKEN_absent"],
+      "failures": [
+        "G1-infra_error-GITHUB_TOKEN_absent"
+      ],
       "runner": "manual",
       "notes": "M1-M7 + L1-L4 all pass. G1 infra_error only — GITHUB_TOKEN absent in local shell env. Waiver PE3 documented in preflight token."
+    },
+    {
+      "checked_at": "2026-06-06T15:17:05.271Z",
+      "verdict": "fail",
+      "merge_sha": "e21b6999",
+      "failures": [
+        "G2",
+        "C3",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-06T15:17:13.392Z",
+      "verdict": "fail",
+      "merge_sha": "e21b6999",
+      "failures": [
+        "G2",
+        "C3",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
