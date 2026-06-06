@@ -21,8 +21,9 @@
 
 ### What did NOT change
 
-- `nba/nfl/mlb/nhl.ts` — weight slots were already declared; callers pass them via `playerForm_weight`
+- Sport scoring files — weight slots were already declared; callers pass them via `playerForm_weight`
 - No schema changes, no migrations, no SGO wiring, no certification advancement
+- 72h stale-guard already enforced upstream in `extractPlayerFormFeatures`
 
 ## Evidence
 

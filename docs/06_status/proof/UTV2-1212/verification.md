@@ -2,8 +2,7 @@
 
 **Issue:** UTV2-1212 — Wave 5: player-form wiring into computeStatProjection
 **Tier:** T1
-**Executor:** Claude (completing Codex scaffold)
-**Branch HEAD SHA (pre-merge):** 4903c104c593ce3598f5827d04b648d56885dadf
+**Branch HEAD SHA (pre-merge):** 01bd1f59
 
 ### pnpm verify
 
@@ -35,7 +34,7 @@ Rules matched: (none) — no R-level artifacts required
 - p_over shifts with cold form and non-zero weight
 - zero weight produces no adjustment (backward-compatible)
 - player_form_score present in output
-- 72h stale-guard covered in player-form.test.ts
+- 72h stale-guard covered in player-form feature test suite
 
 ### Constitutional constraints verified
 
