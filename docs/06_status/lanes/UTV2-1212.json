@@ -30,14 +30,43 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1212/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-06T15:07:12.809Z",
-  "heartbeat_at": "2026-06-06T17:00:41.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T17:20:34.855Z",
+  "closed_at": "2026-06-06T17:20:34.855Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1212-player-form-wiring.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T17:15:41.355Z",
+      "verdict": "fail",
+      "merge_sha": "c1e7d9a9ca4f3e5872fb333c1aa947ab9a15c312",
+      "failures": [
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-06T17:19:56.503Z",
+      "verdict": "fail",
+      "merge_sha": "c1e7d9a9ca4f3e5872fb333c1aa947ab9a15c312",
+      "failures": [
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-06T17:20:23.656Z",
+      "verdict": "pass",
+      "merge_sha": "c1e7d9a9ca4f3e5872fb333c1aa947ab9a15c312",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
