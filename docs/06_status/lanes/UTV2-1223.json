@@ -7,23 +7,34 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1223-evidence-schema-hardening",
   "branch": "codex/utv2-1223-evidence-schema-hardening",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "7bcc642d7ba52b39a4549fc33911bc2a90007fc7",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md"
+  ],
   "file_scope_lock": [
     "docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md",
     "docs/06_status/proof/UTV2-1223/evidence.json",
     "docs/06_status/proof/UTV2-1223/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-06T21:46:06.631Z",
-  "heartbeat_at": "2026-06-06T21:46:06.631Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T21:55:00.000Z",
+  "closed_at": "2026-06-06T21:55:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1223-evidence-schema-hardening.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T21:55:00.000Z",
+      "verdict": "pass",
+      "merge_sha": "7bcc642d7ba52b39a4549fc33911bc2a90007fc7",
+      "failures": ["G1-infra_error-GITHUB_TOKEN_absent"],
+      "runner": "manual",
+      "notes": "T3 hygiene direct-to-main. Docs-only change. G1 infra_error only. Adds evidence.json machine-readable schema section to EVIDENCE_BUNDLE_TEMPLATE.md documenting verifier.identity, runtime_proof.queries[], runtime_proof.row_counts[], full SHA requirement."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

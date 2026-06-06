@@ -7,22 +7,33 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1224-heartbeat-done-guard",
   "branch": "codex/utv2-1224-heartbeat-done-guard",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "7bcc642d7ba52b39a4549fc33911bc2a90007fc7",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "scripts/ops/truth-check-lib.ts"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1224/evidence.json",
     "docs/06_status/proof/UTV2-1224/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-06T21:46:15.102Z",
-  "heartbeat_at": "2026-06-06T21:46:15.102Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T21:55:00.000Z",
+  "closed_at": "2026-06-06T21:55:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1224-heartbeat-done-guard.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T21:55:00.000Z",
+      "verdict": "pass",
+      "merge_sha": "7bcc642d7ba52b39a4549fc33911bc2a90007fc7",
+      "failures": ["G1-infra_error-GITHUB_TOKEN_absent"],
+      "runner": "manual",
+      "notes": "T3 hygiene direct-to-main. Implemented alongside UTV2-1222 in commit 7bcc642d. finalizeWithManifest() now returns early for done lanes unless exitCode=4. G1 infra_error only."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

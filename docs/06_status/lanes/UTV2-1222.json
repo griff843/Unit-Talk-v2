@@ -7,9 +7,11 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1222-full-sha-normalization",
   "branch": "claude/utv2-1222-full-sha-normalization",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "7bcc642d7ba52b39a4549fc33911bc2a90007fc7",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "scripts/ops/truth-check-lib.ts"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1222/evidence.json",
     "docs/06_status/proof/UTV2-1222/verification.md",
@@ -17,14 +19,23 @@
     "scripts/ops/truth-check-lib.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-06T21:43:53.583Z",
-  "heartbeat_at": "2026-06-06T21:43:53.583Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T21:55:00.000Z",
+  "closed_at": "2026-06-06T21:55:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1222-full-sha-normalization.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T21:55:00.000Z",
+      "verdict": "pass",
+      "merge_sha": "7bcc642d7ba52b39a4549fc33911bc2a90007fc7",
+      "failures": ["G1-infra_error-GITHUB_TOKEN_absent"],
+      "runner": "manual",
+      "notes": "T3 hygiene direct-to-main. type-check pass, pnpm test 647/647. G1 infra_error only — GITHUB_TOKEN absent. No PR (T3 direct commit). Implements: shaMatches() for G2/C3 short-vs-full SHA; done-lane immutability guard in finalizeWithManifest. Also covers UTV2-1224."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
