@@ -5,11 +5,11 @@
   "tier": "T1",
   "status": "pass",
   "sha_binding": {
-    "verified_source_sha": "4903c104c593ce3598f5827d04b648d56885dadf",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-06T17:00:00.000Z",
+    "verified_source_sha": "c1e7d9a9ca4f3e5872fb333c1aa947ab9a15c312",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-06T17:00:41.000Z",
     "ci_sentinels": {
-      "merge_gate": "pending",
+      "merge_gate": "pass",
       "wfr_v2_validators": "pass",
       "sync_tier_label": "pass",
       "file_scope_lock": "pass",
@@ -35,5 +35,6 @@
     "deterministic_scoring_preserved": true
   },
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/976",
-  "generated_at": "2026-06-06T17:00:00.000Z"
+  "merge_sha": "c1e7d9a9ca4f3e5872fb333c1aa947ab9a15c312",
+  "generated_at": "2026-06-06T17:00:41.000Z"
 }
