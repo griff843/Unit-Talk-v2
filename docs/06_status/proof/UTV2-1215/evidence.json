@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1215",
+  "lane_type": "modeling",
+  "tier": "T1",
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "__MERGE_SHA_PENDING__",
+    "sha_type": "merge_sha",
+    "bound_at": "__BOUND_AT_PENDING__",
+    "ci_sentinels": {
+      "merge_gate": "__PENDING__",
+      "wfr_v2_validators": "__PENDING__",
+      "sync_tier_label": "__PENDING__",
+      "file_scope_lock": "__PENDING__",
+      "p0_protocol": "__PENDING__"
+    }
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "r_level_check": "pass",
+    "tests": "116/116 pass (3 new game-context wiring tests)"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "test_count": 7,
+    "pass_count": 7,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      "INSERT INTO submissions (id, player_id, stat_type, line, ...) VALUES (...)",
+      "SELECT * FROM picks WHERE submission_id = $1",
+      "SELECT COUNT(*) FROM outbox_messages WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM pick_lifecycle WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM delivery_receipts WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM audit_log WHERE entity_id = $1",
+      "SELECT COUNT(*) FROM settlement_records WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM participants WHERE external_id = $1 AND sport = $2"
+    ],
+    "row_counts": [
+      { "table": "submissions", "count": 1 },
+      { "table": "picks", "count": 1 },
+      { "table": "outbox_messages", "count": 1 },
+      { "table": "pick_lifecycle", "count": 3 },
+      { "table": "delivery_receipts", "count": 1 },
+      { "table": "audit_log", "count": 2 },
+      { "table": "settlement_records", "count": 2 },
+      { "table": "participants", "count": 1 }
+    ]
+  },
+  "verifier": {
+    "identity": "griff843",
+    "verified_at": "__PENDING__",
+    "method": "PM review + pnpm test:db — 7/7 live Supabase smoke tests pass against project zfzdnfwdarxucxtaojxm. t1-approved label applied by PM griff843."
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "deterministic_scoring_preserved": true
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/979",
+  "merge_sha": "__MERGE_SHA_PENDING__",
+  "generated_at": "2026-06-06T19:00:00.000Z"
+}
