@@ -1,5 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
+// UTV2-1222: Normalize short vs full SHA comparison. The GitHub API returns the
+// full 40-char SHA while lane manifests may store the abbreviated 8-char form.
+// Treat a short SHA as matching if it is a valid hex prefix (≥7 chars) of the
+// full SHA. Only accepts lowercase hex to avoid false prefix matches on branch names.
+function shaMatches(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [longer, shorter] = a.length >= b.length ? [a, b] : [b, a];
+  return shorter.length >= 7 && /^[0-9a-f]+$/i.test(shorter) && longer.toLowerCase().startsWith(shorter.toLowerCase());
+}
 import { loadEnvironment } from '@unit-talk/config';
 import {
   type CheckResult,
@@ -123,7 +134,7 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
     pass('C2', 'manifest.commit_sha requirement satisfied');
   }
 
-  if (prMergeSha && mergeSha && prMergeSha !== mergeSha) {
+  if (prMergeSha && mergeSha && !shaMatches(prMergeSha, mergeSha)) {
     fail('C3', 'PR merge SHA does not match manifest.commit_sha');
   } else {
     pass('C3', 'PR merge SHA and manifest.commit_sha agree or are not both present');
@@ -494,7 +505,7 @@ export async function runTruthCheck(
       addCheck('G1', 'pass', 'pull request is merged');
     }
 
-    if (!mergeSha || pullRequest.merge_commit_sha !== mergeSha) {
+    if (!mergeSha || !shaMatches(pullRequest.merge_commit_sha, mergeSha)) {
       addCheck('G2', 'fail', 'PR merge commit SHA does not match manifest.commit_sha');
     } else {
       addCheck('G2', 'pass', 'PR merge commit SHA matches manifest.commit_sha');
@@ -1056,6 +1067,14 @@ function finalizeWithManifest(input: {
   });
 
   if (!input.manifest || input.exitCode === 2 || input.exitCode === 3) {
+    return result;
+  }
+
+  // UTV2-1224: Done lanes are immutable except for explicit reopen events (exitCode 4).
+  // Heartbeat-triggered re-runs after lane close must not append stale history entries
+  // or advance heartbeat_at — those runs reflect post-close environment state, not the
+  // verified implementation.
+  if (input.manifest.status === 'done' && input.exitCode !== 4) {
     return result;
   }
 

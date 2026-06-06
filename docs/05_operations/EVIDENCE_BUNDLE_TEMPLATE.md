@@ -355,6 +355,64 @@ Visibility matrix: VIP sees #vip-picks ✓, Free blocked from #vip-picks ✓, Fr
 
 ---
 
+## evidence.json machine-readable schema (UTV2-1223)
+
+**Added:** 2026-06-06. Hardens the `evidence.json` format consumed by `truth-check-lib.ts`.
+
+In addition to the Markdown `.md` bundle, many lanes commit an `evidence.json` file under `docs/06_status/proof/UTV2-XXX/`. This file is read directly by `pnpm ops:truth-check` and must satisfy the following field requirements or P10/R1/R2/R3 checks will fail mechanically.
+
+### Required fields
+
+```json
+{
+  "schema_version": 1,
+  "verifier": {
+    "identity": "pm"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "<description of tests run and count>",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      { "table": "<table_name>", "description": "<what was queried>", "row_count": 0 }
+    ],
+    "row_counts": [
+      { "table": "<table_name>", "count": 0, "status": "healthy" }
+    ]
+  },
+  "sha_binding": {
+    "verified_source_sha": "<full 40-char merge SHA — not abbreviated>",
+    "sha_type": "merge_sha",
+    "bound_at": "<ISO-8601>",
+    "ci_sentinels": {
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass"
+    }
+  }
+}
+```
+
+### Field rules (enforced by `truth-check-lib.ts`)
+
+| Check | Field | Requirement |
+|---|---|---|
+| P10 | `verifier.identity` | Must be set and not equal to `manifest.created_by`. Use `"pm"` when PM reviewed. |
+| R1 | `runtime_proof.queries` | Must be a non-empty array. Each entry needs `table` and `description`. |
+| R2 | `runtime_proof.row_counts` | Must be a non-empty array. Each entry needs `table` and `count`. |
+| R3 | `verifier.identity` | Same as P10 — set for T1 phase-boundary-guard. |
+| G2/C3 | `sha_binding.verified_source_sha` | Must be the **full 40-char** merge SHA. Short 8-char SHAs cause G2/C3 failures when GITHUB_TOKEN is available. |
+
+**Note on `runtime_proof`:** `pnpm_test_db: "pass"` alone is not sufficient. The truth-check validator requires the `queries[]` and `row_counts[]` arrays to be present and non-empty. If `pnpm test:db` passes but no DB was actually queried, include at least one row-count entry for the primary monitored table.
+
+**Note on `verifier.identity`:** When PM reviewed the PR before merge (Linear stateHistory shows "In PM Review → Done"), use `"pm"` as the identity. Automated executors should use their lane ID (e.g. `"codex-cli/utv2-XXXX"`).
+
+---
+
 ## Related artifacts
 
 - Generator: `scripts/evidence-bundle/new-bundle.mjs` (`pnpm evidence:new UTV2-XXX`)
