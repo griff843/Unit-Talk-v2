@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1214",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1214-efficiency-pace-cap",
+  "branch": "claude/utv2-1214-efficiency-pace-cap",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1214/diff-summary.md",
+    "docs/06_status/proof/UTV2-1214/evidence.json",
+    "docs/06_status/proof/UTV2-1214/verification.md",
+    "packages/domain/src/features/efficiency.ts",
+    "packages/domain/src/models/stat-distribution.test.ts",
+    "packages/domain/src/models/stat-distribution.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1214/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-06-06T18:03:27.709Z",
+  "heartbeat_at": "2026-06-06T18:03:27.709Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1214-efficiency-pace-cap.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1214-efficiency-pace-cap",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
