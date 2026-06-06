@@ -6,6 +6,7 @@ import {
   emitJson,
   parseArgs,
   type LaneManifest,
+  readConfiguredEnvValue,
   readManifest,
   requireIssueId,
   validatePreflightTokenPathValue,
@@ -522,7 +523,11 @@ function recordChanged(changedFields: string[], previous: unknown, next: unknown
 
 async function transitionLinearIssueToDone(issueId: string): Promise<void> {
   const env = loadEnvironment();
-  const token = env.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
+  const token =
+    env.LINEAR_API_TOKEN?.trim() ||
+    process.env.LINEAR_API_KEY?.trim() ||
+    readConfiguredEnvValue('LINEAR_API_TOKEN') ||
+    readConfiguredEnvValue('LINEAR_API_KEY');
   if (!token) {
     throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY is required to close the Linear issue');
   }

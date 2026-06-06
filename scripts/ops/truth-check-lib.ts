@@ -13,6 +13,7 @@ import {
   git,
   issueToManifestPath,
   parseJsonFile,
+  readConfiguredEnvValue,
   readManifest,
   relativeToRoot,
   validateManifest,
@@ -394,7 +395,11 @@ export async function runTruthCheck(
       addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
     }
 
-    const linearToken = env.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
+    const linearToken =
+      env.LINEAR_API_TOKEN?.trim() ||
+      process.env.LINEAR_API_KEY?.trim() ||
+      readConfiguredEnvValue('LINEAR_API_TOKEN') ||
+      readConfiguredEnvValue('LINEAR_API_KEY');
     if (!linearToken) {
       addCheck('L1', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY is required');
       return finalizeWithManifest({
@@ -446,7 +451,7 @@ export async function runTruthCheck(
       addCheck('L4', 'pass', 'Linear attachments include manifest.pr_url');
     }
 
-    const githubToken = process.env.GITHUB_TOKEN?.trim();
+    const githubToken = process.env.GITHUB_TOKEN?.trim() || readConfiguredEnvValue('GITHUB_TOKEN');
     if (!githubToken) {
       addCheck('G1', 'fail', 'GITHUB_TOKEN is required');
       return finalizeWithManifest({
