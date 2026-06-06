@@ -1,4 +1,4 @@
-<!-- merge_sha: placeholder — update after PR #973 merges -->
+<!-- merge_sha: 0d7f20285b26fd23f88f4a673ce1f931cb22ab30 -->
 
 # Diff Summary: UTV2-1209 — Opponent Defensive Stats Mock Feed
 

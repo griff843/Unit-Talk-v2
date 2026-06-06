@@ -12,10 +12,16 @@
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/features/efficiency.test.ts",
-    "packages/domain/src/features/efficiency.ts"
+    "packages/domain/src/features/efficiency.ts",
+    ".ops/sync/UTV2-1209.yml",
+    "docs/06_status/proof/UTV2-1209/evidence.json",
+    "docs/06_status/proof/UTV2-1209/verification.md",
+    "docs/06_status/proof/UTV2-1209/diff-summary.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1209/evidence.json"
+    "docs/06_status/proof/UTV2-1209/evidence.json",
+    "docs/06_status/proof/UTV2-1209/verification.md",
+    "docs/06_status/proof/UTV2-1209/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-06-06T03:03:20.025Z",

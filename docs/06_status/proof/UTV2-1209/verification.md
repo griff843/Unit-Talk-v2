@@ -1,4 +1,4 @@
-<!-- merge_sha: placeholder — update after PR #973 merges -->
+<!-- merge_sha: 0d7f20285b26fd23f88f4a673ce1f931cb22ab30 -->
 
 # Verification: UTV2-1209 — Opponent Defensive Stats Mock Feed
 
@@ -7,14 +7,16 @@
 **Tier:** T1
 **Lane type:** modeling
 
-## Static verification
+## Verification
+
+### Static verification
 
 - `pnpm type-check` — PASS (no TypeScript errors; MOCK_DEFENSE_FIXTURE* naming avoids barrel collision with opportunity.ts)
 - `pnpm test` — PASS (113 total, 15 in efficiency.test.ts — 6 existing + 9 new UTV2-1209 tests)
 - `pnpm verify` — PASS (env:check + lint + type-check + build + test + verify:commands)
 - `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (no R-level artifacts required)
 
-## Unit test coverage
+### Unit test coverage
 
 New tests (efficiency.test.ts):
 1. `MOCK_DEFENSE_FIXTURE` produces valid result with correct team ID
@@ -27,12 +29,23 @@ New tests (efficiency.test.ts):
 8. `stat_category` field present but neutral on computation output
 9. Guard reason string includes `reference_date` and `max_age_days` values
 
-## Runtime proof
+### Runtime proof
 
 `pnpm test:db` — 7/7 PASS against Supabase project `zfzdnfwdarxucxtaojxm`, duration ~105s.
 Domain package is pure (no DB schema changes). Smoke suite confirms existing DB contracts unaffected.
 
-## PM constraints verification
+```
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105371
+```
+
+### PM constraints verification
 
 - SGO activated: NO
 - P3 cert advanced: NO
