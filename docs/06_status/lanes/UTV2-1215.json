@@ -26,14 +26,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1215/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-06T18:37:09.223Z",
-  "heartbeat_at": "2026-06-06T19:30:27.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T19:31:40.083Z",
+  "closed_at": "2026-06-06T19:31:40.083Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1215-game-context-wiring.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T19:31:29.204Z",
+      "verdict": "pass",
+      "merge_sha": "a8d3a105f48bfb0e050a85431a84f12b337a9e5b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
