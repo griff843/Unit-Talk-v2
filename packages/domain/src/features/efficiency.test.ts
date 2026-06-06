@@ -52,11 +52,12 @@ describe('extractEfficiencyFeatures', () => {
     assert.ok(Math.abs(result.data.opponent_defensive_adjustment - 1.0417) < 0.001);
   });
 
-  it('clamps pace adjustment to [0.5, 1.5]', () => {
+  it('clamps pace adjustment to [0.5, 1.3] (UTV2-1214: cap lowered from 1.5)', () => {
     const result = extractEfficiencyFeatures(baseForm, baseDefense, 2.0);
     assert.equal(result.ok, true);
     if (!result.ok) return;
-    assert.equal(result.data.pace_adjustment, 1.5);
+    assert.equal(result.data.pace_adjustment, 1.3);
+    assert.equal(result.data.high_pace_flag, true);
   });
 
   it('efficiency = skill × defense × pace', () => {

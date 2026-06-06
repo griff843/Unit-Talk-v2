@@ -45,6 +45,9 @@ export interface StatProjectionOutput {
   player_form_score?: number;
   usage_rate_source: 'direct' | 'snap_share';
 
+  // Pace signal (UTV2-1214)
+  high_pace_flag?: boolean;
+
   // Reproducibility
   feature_vector_hash: string;
   feature_set_version: string;
@@ -218,6 +221,7 @@ export function computeStatProjection(
       confidence,
       player_form_score: playerFormSignal.score,
       usage_rate_source: opportunity.usage_rate_source,
+      high_pace_flag: efficiency.high_pace_flag,
       feature_vector_hash: featureVectorHash,
       feature_set_version: FEATURE_SET_VERSION,
     },
