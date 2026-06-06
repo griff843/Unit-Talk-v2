@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "merge_sha": "<!-- placeholder: update to merge SHA after PR merges -->",
-  "generated_at": "2026-06-05T00:00:00.000Z",
+  "merge_sha": "0d7f20285b26fd23f88f4a673ce1f931cb22ab30",
+  "generated_at": "2026-06-06T09:15:00.000Z",
   "verifier": {
     "identity": "claude/utv2-1209-opponent-defensive-stats-mock-feed"
   },
