@@ -13,7 +13,7 @@
   ],
   "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "abandoned",
+  "status": "done",
   "started_at": "2026-05-02T04:43:35.762Z",
   "heartbeat_at": "2026-05-02T17:30:00.000Z",
   "closed_at": "2026-05-02T17:30:00.000Z",
@@ -28,5 +28,10 @@
     }
   ],
   "reopen_history": [],
-  "executor": "claude"
+  "executor": "claude",
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
+  }
 }

@@ -24,7 +24,7 @@
     "docs/06_status/proof/UTV2-1114/diff-summary.md",
     "docs/06_status/proof/UTV2-1114/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-29T20:45:32.561Z",
   "heartbeat_at": "2026-05-29T22:20:33.261Z",
   "closed_at": "2026-05-29T22:19:49.000Z",
@@ -50,5 +50,10 @@
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
   },
-  "merge_sha": "beb54dd0d6b20d49fe151e7d10362863c0db644b"
+  "merge_sha": "beb54dd0d6b20d49fe151e7d10362863c0db644b",
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
+  }
 }

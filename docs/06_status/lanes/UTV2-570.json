@@ -14,7 +14,7 @@
     "apps/api/src"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-04-21T08:52:00.000Z",
   "heartbeat_at": "2026-04-21T09:06:47.000Z",
   "closed_at": "2026-04-21T09:06:47.000Z",
@@ -23,5 +23,10 @@
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "executor": "claude"
+  "executor": "claude",
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
+  }
 }

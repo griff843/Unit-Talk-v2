@@ -22,7 +22,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-920/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-13T14:54:22.483Z",
   "heartbeat_at": "2026-05-14T16:00:00.000Z",
   "closed_at": "2026-05-14T16:00:00.000Z",
@@ -31,5 +31,10 @@
   "created_by": "codex-cli",
   "truth_check_history": [],
   "reopen_history": [],
-  "executor": "codex-cli"
+  "executor": "codex-cli",
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
+  }
 }

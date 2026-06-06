@@ -31,10 +31,10 @@
     "docs/06_status/proof/UTV2-1199/diff-summary.md",
     "docs/06_status/proof/UTV2-1199/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-04T12:14:38.271Z",
   "heartbeat_at": "2026-06-04T13:02:10.595Z",
-  "closed_at": null,
+  "closed_at": "2026-06-06T12:00:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1199-d-const-8-fail-closed-doc.json",
   "created_by": "claude",
@@ -95,5 +95,10 @@
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
+  },
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
   }
 }

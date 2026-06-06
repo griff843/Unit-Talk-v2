@@ -18,7 +18,7 @@
     "scripts/ops/"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-14T13:54:00.000Z",
   "heartbeat_at": "2026-05-14T15:35:00.000Z",
   "closed_at": "2026-05-14T17:30:00.000Z",
@@ -27,5 +27,10 @@
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "executor": "codex-cli"
+  "executor": "codex-cli",
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
+  }
 }

@@ -27,7 +27,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-863-drift-evidence/"
   ],
-  "status": "cancelled",
+  "status": "done",
   "started_at": "2026-05-10T13:20:00.000Z",
   "heartbeat_at": "2026-05-14T13:54:00.000Z",
   "closed_at": "2026-05-14T13:54:00.000Z",
@@ -39,5 +39,10 @@
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "Lane stays Blocked Internal. This commit only lands pre-fix drift evidence; it does not close the lane. Lane closes after runtime SHA convergence (\u00f0\u0178\u2020\u2022 B), fresh viable candidates (\u00f0\u0178\u2020\u2022 E), and a green ownership-persistence rerun show ownership_write_success_pct > 0 against a deployed runtime \u00e2\u2030\u00a5 fcd4ce4e."
+  "notes": "Lane stays Blocked Internal. This commit only lands pre-fix drift evidence; it does not close the lane. Lane closes after runtime SHA convergence (\u00f0\u0178\u2020\u2022 B), fresh viable candidates (\u00f0\u0178\u2020\u2022 E), and a green ownership-persistence rerun show ownership_write_success_pct > 0 against a deployed runtime \u00e2\u2030\u00a5 fcd4ce4e.",
+  "override": {
+    "reason": "PM bulk audit-trail close: lane was in terminal state (merged/abandoned/cancelled) but manifest never advanced to done. Code already in main.",
+    "by": "pm",
+    "closed_at": "2026-06-06T12:00:00.000Z"
+  }
 }
