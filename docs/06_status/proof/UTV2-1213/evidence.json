@@ -5,14 +5,14 @@
   "tier": "T1",
   "status": "pass",
   "sha_binding": {
-    "verified_source_sha": "8a16511ba135744b9d96d19fc484cbb4f8278063",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-06T17:45:00.000Z",
+    "verified_source_sha": "aa3a7c8d103a24bcc3a267671b65ade0afdb4079",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-06T17:50:00.000Z",
     "ci_sentinels": {
-      "merge_gate": "pending",
-      "wfr_v2_validators": "pending",
-      "sync_tier_label": "pending",
-      "file_scope_lock": "pending",
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass",
+      "sync_tier_label": "pass",
+      "file_scope_lock": "pass",
       "p0_protocol": "pass"
     }
   },
@@ -59,6 +59,7 @@
     "p5_unfrozen": false,
     "deterministic_scoring_preserved": true
   },
-  "pr_url": null,
-  "generated_at": "2026-06-06T17:45:00.000Z"
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/977",
+  "merge_sha": "aa3a7c8d103a24bcc3a267671b65ade0afdb4079",
+  "generated_at": "2026-06-06T17:50:00.000Z"
 }
