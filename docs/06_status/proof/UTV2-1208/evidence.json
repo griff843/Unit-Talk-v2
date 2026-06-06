@@ -1,0 +1,48 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1208",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "sha_binding": {
+    "verified_source_sha": "placeholder-update-after-merge",
+    "branch_head_sha": "406ea0a376ceaf70484c8cd8784e77d5662d4747",
+    "ci_sentinels": {
+      "verify": "pending",
+      "type_check": "pass",
+      "test": "pass",
+      "test_db": "pass"
+    }
+  },
+  "verification_summary": {
+    "pnpm_verify": "PASS",
+    "pnpm_type_check": "PASS",
+    "pnpm_test": "PASS",
+    "pnpm_test_db": "PASS",
+    "r_level_check": "PASS",
+    "unit_tests_pass": 18,
+    "unit_tests_fail": 0,
+    "db_tests_pass": 7,
+    "db_tests_fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm"
+  },
+  "scope": {
+    "files_changed": [
+      "packages/domain/src/features/opportunity.ts",
+      "packages/domain/src/features/opportunity.test.ts"
+    ],
+    "schema_changes": false,
+    "migration_required": false,
+    "sgo_activated": false,
+    "p3_cert_advanced": false,
+    "p5_unfrozen": false
+  },
+  "provenance_assertions": {
+    "snap_share_suppressed_field_added": true,
+    "staleness_guard_fail_closed": true,
+    "mock_fixture_exported": true,
+    "player_id_provenance_field_added": true,
+    "usage_rate_source_distinguishes_direct_vs_snap_share": true
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/972",
+  "generated_at": "2026-06-05T22:00:00.000Z"
+}
