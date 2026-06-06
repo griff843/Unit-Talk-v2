@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1215-game-context-wiring",
   "branch": "claude/utv2-1215-game-context-wiring",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "a8d3a105f48bfb0e050a85431a84f12b337a9e5b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/979",
+  "files_changed": [
+    "packages/domain/src/models/stat-distribution.ts",
+    "packages/domain/src/models/stat-distribution.test.ts",
+    "docs/06_status/proof/UTV2-1215/evidence.json",
+    "docs/06_status/proof/UTV2-1215/verification.md",
+    "docs/06_status/proof/UTV2-1215/diff-summary.md"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1215/diff-summary.md",
     "docs/06_status/proof/UTV2-1215/evidence.json",
@@ -20,9 +26,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1215/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-06T18:37:09.223Z",
-  "heartbeat_at": "2026-06-06T18:37:09.223Z",
+  "heartbeat_at": "2026-06-06T19:30:27.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1215-game-context-wiring.json",

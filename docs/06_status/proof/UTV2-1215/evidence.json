@@ -5,15 +5,15 @@
   "tier": "T1",
   "status": "pass",
   "sha_binding": {
-    "verified_source_sha": "__MERGE_SHA_PENDING__",
+    "verified_source_sha": "a8d3a105f48bfb0e050a85431a84f12b337a9e5b",
     "sha_type": "merge_sha",
-    "bound_at": "__BOUND_AT_PENDING__",
+    "bound_at": "2026-06-06T19:30:27Z",
     "ci_sentinels": {
-      "merge_gate": "__PENDING__",
-      "wfr_v2_validators": "__PENDING__",
-      "sync_tier_label": "__PENDING__",
-      "file_scope_lock": "__PENDING__",
-      "p0_protocol": "__PENDING__"
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass",
+      "sync_tier_label": "pass",
+      "file_scope_lock": "pass",
+      "p0_protocol": "pass"
     }
   },
   "static_proof": {
@@ -50,7 +50,7 @@
   },
   "verifier": {
     "identity": "griff843",
-    "verified_at": "__PENDING__",
+    "verified_at": "2026-06-06T19:30:27Z",
     "method": "PM review + pnpm test:db — 7/7 live Supabase smoke tests pass against project zfzdnfwdarxucxtaojxm. t1-approved label applied by PM griff843."
   },
   "constitutional_constraints": {
@@ -60,6 +60,6 @@
     "deterministic_scoring_preserved": true
   },
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/979",
-  "merge_sha": "__MERGE_SHA_PENDING__",
+  "merge_sha": "a8d3a105f48bfb0e050a85431a84f12b337a9e5b",
   "generated_at": "2026-06-06T19:00:00.000Z"
 }
