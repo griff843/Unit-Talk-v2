@@ -76,6 +76,23 @@
       "runner": "manual"
     }
   ],
+  "pm_waivers": [
+    {
+      "waiver_id": "UTV2-1211-POST-CLOSE-DRIFT",
+      "recorded_at": "2026-06-06T21:30:00.000Z",
+      "recorded_by": "pm",
+      "authoritative_run": "2026-06-06T14:50:20.971Z",
+      "authoritative_verdict": "pass",
+      "post_close_runs": ["2026-06-06T15:17:05.271Z", "2026-06-06T15:17:13.392Z"],
+      "findings": {
+        "G2_C3": "manifest.commit_sha stores short SHA 'e21b6999'; GitHub API returned full 40-char SHA 'e21b6999151268471291e6cdd3608a9568e1fae2'. Strict string comparison fails. Merge is correct — short SHA is a prefix of the full SHA. Harness stores short SHAs; future manifests should store full SHAs.",
+        "P10_R3": "evidence.json lacks verifier.identity field. PM was the verifier (stateHistory: In PM Review → Done). Evidence schema did not include this field. Implementation correctness unaffected.",
+        "R1_R2": "evidence.json runtime_proof uses simplified format {pnpm_test_db: 'pass', supabase_project: '...'} instead of {queries: [...], row_counts: [...]} arrays. pnpm test:db DID pass at merge time per Run 1 evidence. Schema mismatch only — no missing runtime test.",
+        "post_close_trigger": "Runs 2 and 3 were heartbeat-triggered after lane close (heartbeat_at matches Run 3 timestamp exactly). By that time GITHUB_TOKEN was available in environment, enabling GitHub PR fetch and exposing short vs full SHA mismatch. Runs are stale post-close artifacts, not re-validations of the implementation."
+      },
+      "pm_disposition": "WAIVED — Run 1 (14:50:20) is the authoritative truth-check. All six failures in Runs 2+3 are post-close harness artifacts: short SHA format, evidence schema gap, post-close heartbeat trigger. Implementation, tests, pnpm test:db, and CI sentinels all passed. Lane remains Done."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
