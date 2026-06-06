@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1213",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1213-opportunity-provenance-gate",
+  "branch": "claude/utv2-1213-opportunity-provenance-gate",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1213/diff-summary.md",
+    "docs/06_status/proof/UTV2-1213/evidence.json",
+    "docs/06_status/proof/UTV2-1213/verification.md",
+    "packages/domain/src/models/stat-distribution.test.ts",
+    "packages/domain/src/models/stat-distribution.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1213/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-06-06T17:32:26.659Z",
+  "heartbeat_at": "2026-06-06T17:32:26.659Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1213-opportunity-provenance-gate.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1213-opportunity-provenance-gate",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
