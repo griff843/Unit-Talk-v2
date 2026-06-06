@@ -67,6 +67,9 @@ export interface EfficiencyFeatures {
   // Metadata
   opponent_team_id: string;
   stat_allowed_rank: number;
+
+  // Pace flag — set when raw input pace > 1.25 (before clamping). UTV2-1214.
+  high_pace_flag: boolean;
 }
 
 export type EfficiencyResult =
@@ -198,7 +201,9 @@ export function extractEfficiencyFeatures(
   );
 
   // ── Pace Adjustment ────────────────────────────────────────────────────
-  const clampedPace = Math.max(0.5, Math.min(1.5, paceAdjustment));
+  // UTV2-1214: cap lowered from 1.5 → 1.3; flag set on raw input before clamping.
+  const highPaceFlag = paceAdjustment > 1.25;
+  const clampedPace = Math.max(0.5, Math.min(1.3, paceAdjustment));
 
   // ── Combined Efficiency Projection ─────────────────────────────────────
   const efficiencyProjection = round4(
@@ -231,6 +236,7 @@ export function extractEfficiencyFeatures(
       matchup_variance: matchupVariance,
       opponent_team_id: defense.opponent_team_id,
       stat_allowed_rank: defense.stat_allowed_rank,
+      high_pace_flag: highPaceFlag,
     },
   };
 }

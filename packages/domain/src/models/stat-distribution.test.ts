@@ -48,6 +48,7 @@ const baseEfficiency: EfficiencyFeatures = {
   matchup_variance: 0.675,
   opponent_team_id: 'opp-1',
   stat_allowed_rank: 10,
+  high_pace_flag: false,
 };
 
 function makeInput(overrides: Partial<ProjectionInput> = {}): ProjectionInput {
@@ -148,6 +149,36 @@ describe('snap_share provenance gate — UTV2-1213', () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.data.usage_rate_source, 'direct');
+  });
+});
+
+describe('efficiency pace cap + high_pace_flag — UTV2-1214', () => {
+  it('pace > 1.3 (capped) → high_pace_flag:true passes through to output', () => {
+    // Simulates extractEfficiencyFeatures clamping 1.5 → 1.3 and setting the flag
+    const result = computeStatProjection(makeInput({
+      efficiency: { ...baseEfficiency, pace_adjustment: 1.3, high_pace_flag: true },
+    }));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.high_pace_flag, true);
+  });
+
+  it('pace between 1.25 and 1.3 → high_pace_flag:true, not capped further', () => {
+    const result = computeStatProjection(makeInput({
+      efficiency: { ...baseEfficiency, pace_adjustment: 1.27, high_pace_flag: true },
+    }));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.high_pace_flag, true);
+  });
+
+  it('pace ≤ 1.25 → high_pace_flag:false in output', () => {
+    const result = computeStatProjection(makeInput({
+      efficiency: { ...baseEfficiency, pace_adjustment: 1.0, high_pace_flag: false },
+    }));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.high_pace_flag, false);
   });
 });
 
