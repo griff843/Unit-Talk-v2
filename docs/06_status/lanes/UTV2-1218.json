@@ -11,9 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "artifacts/r2-determinism-utv2-1218.json",
     "docs/06_status/proof/UTV2-1218/diff-summary.md",
     "docs/06_status/proof/UTV2-1218/evidence.json",
+    "docs/06_status/proof/UTV2-1218/r2-determinism.json",
     "docs/06_status/proof/UTV2-1218/verification.md"
   ],
   "expected_proof_paths": [
