@@ -1,35 +1,32 @@
-# Diff Summary: UTV2-1212 - Player Form Wiring
+## Summary
 
-**Branch:** `codex/utv2-1212-player-form-wiring`
-**Tier:** T1
-**Lane type:** modeling
+**Issue:** UTV2-1212 — Wave 5: player-form wiring into computeStatProjection
 
-## Files changed
+### Files changed
 
-### `packages/domain/src/features/player-form.ts`
+- `packages/domain/src/features/player-form.ts` — adds `resolvePlayerFormSignal()` and `PlayerFormSignal` interface
+- `packages/domain/src/models/stat-distribution.ts` — imports and wires form signal; adds `playerForm_weight` to `ProjectionInput`; emits `player_form_score` in output
 
-- Added `PlayerFormSignal`, a bounded [0, 1] player-form scoring signal contract.
-- Added `resolvePlayerFormSignal(features)`, a pure resolver that combines:
-  - stat trend component
-  - consistency component
-  - projected-minutes availability component
-- Resolver uses only player/game-log derived fields. It does not read market lines, odds, DB state, env, HTTP, or app code.
+### What changed
 
-### `packages/domain/src/models/stat-distribution.ts`
+**player-form.ts:**
+- `PlayerFormSignal` interface: `{ score, trend_component, consistency_component, availability_component }`
+- `resolvePlayerFormSignal(features)`: weighted score — trend 35%, consistency 40%, availability (minutes/36) 25%, bounded [0,1]
 
-- Wires `resolvePlayerFormSignal()` into `computeStatProjection()`.
-- Emits `player_form_score` on real stat projection outputs.
-- Includes `stat_trend`, `consistency_score`, and `player_form_score` in the deterministic feature vector hash.
-- Adds optional `playerForm_weight` input for sport-specific player-form adjustment.
-  - Default is `0`, so existing callers keep the previous expected-value path.
-  - When supplied, the adjustment scales expected value from the bounded player-form signal.
-  - Variance remains the existing four-component model.
-  - No market input is used as a model feature.
+**stat-distribution.ts:**
+- `ProjectionInput.playerForm_weight?: number` — sport-specific weight (default 0, backward-compatible)
+- Form adjustment: `expectedValue *= (1 + weight × (score − 0.5) × 2)`; neutral at score=0.5
+- `StatProjectionOutput.player_form_score?: number` — emitted for observability
+- Score added to deterministic feature vector hash
 
-## What was not changed
+### What did NOT change
 
-- No DB migrations.
-- No generated DB type edits.
-- No app-to-app imports.
-- No runtime service edits outside the allowed packet scope.
-- No lifecycle, promotion, settlement, or distribution authority changes.
+- `nba/nfl/mlb/nhl.ts` — weight slots were already declared; callers pass them via `playerForm_weight`
+- No schema changes, no migrations, no SGO wiring, no certification advancement
+
+## Evidence
+
+- pnpm verify: PASS
+- pnpm test:db: 7/7 pass
+- R-level: PASS, no artifacts required
+- 4 new deterministic unit tests

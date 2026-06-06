@@ -1,59 +1,46 @@
-# Verification: UTV2-1212 - Player Form Wiring
-
-**Branch:** `codex/utv2-1212-player-form-wiring`
-**Tier:** T1
-**Lane type:** modeling
-
 ## Verification
 
-### Completed checks
+**Issue:** UTV2-1212 — Wave 5: player-form wiring into computeStatProjection
+**Tier:** T1
+**Executor:** Claude (completing Codex scaffold)
+**Branch HEAD SHA (pre-merge):** 4903c104c593ce3598f5827d04b648d56885dadf
 
-- `pnpm type-check` - PASS
-- `pnpm --filter @unit-talk/domain test` - PASS
-- `rg "@unit-talk/db|@unit-talk/config|apps/" packages/domain/src` - PASS for imports; only legacy-reference comments matched
-- `git diff --check` - PASS
-- `pnpm env:check` - PASS
-- `pnpm lint` - PASS
-- `pnpm build` - PASS
-- `pnpm test` - PASS
-- `pnpm test:db` - PASS, 7/7 live DB smoke tests
+### pnpm verify
 
-### Runtime proof
-
-`pnpm test:db` ran against live Supabase project `zfzdnfwdarxucxtaojxm` and passed all 7 database smoke tests.
-
-Root `pnpm test` also ran the T1 proof suite and passed, including live DB-backed lifecycle, governance brake, review, atomicity, stranded-pick detection, immutability, authority, dual-auth, rollback, execution-intent, and settlement-correction proof tests.
-
-Known baseline runtime warning observed during `pnpm test`: stranded-row detection reported existing stranded `awaiting_approval` rows. This is known repo debt from the dispatch brief; this lane did not mutate or remediate those rows.
-
-### Final gates
-
-- `pnpm verify` - PASS
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` - PASS
-
-`pnpm verify` final tail:
-
-```text
-[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json
-[check-migration-versions] 118 migration file(s) verified - no duplicate versions.
-[lint-migrations] 118 migration file(s) checked - no findings.
+```
+PASS — exit code 0
+ops:sync-check, env:check, lint, type-check, build, test all green
 ```
 
-### R-level lookup
+### pnpm test:db
 
-Opened `docs/05_operations/r1-r5-rules.json`.
+```
+# tests 7
+# pass 7
+# fail 0
+duration_ms 107141
+```
 
-Changed paths:
+### R-level check
 
-- `packages/domain/src/features/player-form.ts`
-- `packages/domain/src/models/stat-distribution.ts`
-
-No rule path directly matched these changed files. The lifecycle, promotion, settlement, strategy, operator UI, Discord, and ingestor-provider R-level rules were not triggered by this diff.
-
-R-level command output:
-
-```text
+```
 Verdict: PASS
-Changed files: 5
-Rules matched: (none) - no R-level artifacts required for this diff
+Changed files: 2
+Rules matched: (none) — no R-level artifacts required
 ```
+
+### New tests added
+
+- p_over shifts with hot form and non-zero weight
+- p_over shifts with cold form and non-zero weight
+- zero weight produces no adjustment (backward-compatible)
+- player_form_score present in output
+- 72h stale-guard covered in player-form.test.ts
+
+### Constitutional constraints verified
+
+- SGO not activated
+- P3 remains ACTIVE_NOT_CERTIFIED
+- P5 remains FROZEN_NOT_CERTIFIED
+- Deterministic scoring preserved (playerForm_weight=0 default)
+- No DB migrations
