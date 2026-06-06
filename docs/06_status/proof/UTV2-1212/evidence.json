@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1212",
+  "lane_type": "modeling",
+  "tier": "T1",
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "4903c104c593ce3598f5827d04b648d56885dadf",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-06T17:00:00.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "wfr_v2_validators": "pass",
+      "sync_tier_label": "pass",
+      "file_scope_lock": "pass",
+      "p0_protocol": "pass"
+    }
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "r_level_check": "pass",
+    "tests": "4 new deterministic playerForm_weight tests pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "test_count": 7,
+    "pass_count": 7,
+    "supabase_project": "zfzdnfwdarxucxtaojxm"
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "deterministic_scoring_preserved": true
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/976",
+  "generated_at": "2026-06-06T17:00:00.000Z"
+}
