@@ -1,7 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { extractEfficiencyFeatures } from './efficiency.js';
+import {
+  extractEfficiencyFeatures,
+  MOCK_DEFENSE_FIXTURE as MOCK_FIXTURE,
+  MOCK_DEFENSE_FIXTURE_STALE as MOCK_FIXTURE_STALE,
+  MOCK_DEFENSE_FIXTURE_NO_DATE as MOCK_FIXTURE_NO_DATE,
+} from './efficiency.js';
 import type { PlayerFormFeatures } from './player-form.js';
 import type { OpponentDefenseInput } from './efficiency.js';
 
@@ -71,5 +76,93 @@ describe('extractEfficiencyFeatures', () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.ok(result.data.matchup_volatility > 0);
+  });
+
+  // ── UTV2-1209: Mock fixtures, max-age guard ───────────────────────────────
+
+  it('UTV2-1209: MOCK_FIXTURE produces a valid result', () => {
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE);
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.ok(result.data.efficiency_projection > 0);
+    assert.equal(result.data.opponent_team_id, 'mock-team-1');
+  });
+
+  it('UTV2-1209: MOCK_FIXTURE has rating_date and stat_category', () => {
+    assert.ok(MOCK_FIXTURE.opponent.rating_date !== undefined);
+    assert.ok(MOCK_FIXTURE.stat_category !== undefined);
+  });
+
+  it('UTV2-1209: max-age guard fails closed for stale rating', () => {
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE_STALE, 1.0, {
+      reference_date: '2026-01-10',
+      max_age_days: 7,  // 7-day window — 2025-06-01 is far outside
+    });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(
+      result.reason.includes('stale'),
+      `Expected stale reason, got: ${result.reason}`,
+    );
+  });
+
+  it('UTV2-1209: max-age guard fails closed when rating_date is absent', () => {
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE_NO_DATE, 1.0, {
+      reference_date: '2026-01-10',
+      max_age_days: 7,
+    });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(
+      result.reason.includes('no rating_date'),
+      `Expected missing date reason, got: ${result.reason}`,
+    );
+  });
+
+  it('UTV2-1209: max-age guard passes for fresh rating within window', () => {
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE, 1.0, {
+      reference_date: '2026-01-10',
+      max_age_days: 7,  // 2026-01-08 is 2 days before reference — within 7d window
+    });
+    assert.equal(result.ok, true);
+  });
+
+  it('UTV2-1209: max-age guard is a no-op without reference_date', () => {
+    // Stale fixture passes through when guard is not configured
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE_STALE);
+    assert.equal(result.ok, true);
+  });
+
+  it('UTV2-1209: max-age guard is a no-op without max_age_days', () => {
+    // Guard requires both fields — partial config is treated as inactive
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE_STALE, 1.0, {
+      reference_date: '2026-01-10',
+      // max_age_days absent — guard inactive
+    });
+    assert.equal(result.ok, true);
+  });
+
+  it('UTV2-1209: stat_category field enables multi-stat defensive keying', () => {
+    // stat_category is optional but present on MOCK_FIXTURE — verify no effect on output
+    const withCategory = { ...baseDefense, stat_category: 'rebounds' };
+    const withoutCategory = { ...baseDefense };
+    const r1 = extractEfficiencyFeatures(baseForm, withCategory);
+    const r2 = extractEfficiencyFeatures(baseForm, withoutCategory);
+    assert.equal(r1.ok, true);
+    assert.equal(r2.ok, true);
+    if (!r1.ok || !r2.ok) return;
+    // stat_category doesn't affect computation — same output
+    assert.equal(r1.data.efficiency_projection, r2.data.efficiency_projection);
+  });
+
+  it('UTV2-1209: max-age guard reason includes reference_date and max_age_days', () => {
+    const result = extractEfficiencyFeatures(baseForm, MOCK_FIXTURE_STALE, 1.0, {
+      reference_date: '2026-01-10',
+      max_age_days: 7,
+    });
+    assert.equal(result.ok, false);
+    if (result.ok) return;
+    assert.ok(result.reason.includes('2026-01-10'), `Missing reference_date in: ${result.reason}`);
+    assert.ok(result.reason.includes('7'), `Missing max_age_days in: ${result.reason}`);
   });
 });

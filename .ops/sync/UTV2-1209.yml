@@ -7,4 +7,7 @@ entities:
     - UTV2-1209
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-1209/evidence.json
+    - docs/06_status/proof/UTV2-1209/verification.md
+    - docs/06_status/proof/UTV2-1209/diff-summary.md
