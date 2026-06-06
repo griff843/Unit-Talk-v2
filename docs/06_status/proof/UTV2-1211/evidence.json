@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1211",
+  "lane_type": "modeling",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "e21b6999151268471291e6cdd3608a9568e1fae2",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-06T14:46:47.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass",
+      "sync_tier_label": "pass",
+      "file_scope_lock": "pass",
+      "p0_protocol": "pass",
+      "require_live_db_proof": "pass"
+    }
+  },
+  "verification": {
+    "pnpm_verify": "pass",
+    "pnpm_test_db": "pass",
+    "r_level_check": "pass",
+    "type_check": "pass"
+  },
+  "implementation": {
+    "logit_space_fix": "applyMatchupContextToProbability now converts to log-odds, applies multiplicative factors as additive shifts, converts back",
+    "wiring": "applyMatchupContextToProbability called after evaluateAvailabilityConfidence in CandidateScoringService; no-ops when matchup_context absent",
+    "tests": "6 deterministic logit-space tests including hand-calculated expected values and edge clamping"
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "deterministic_scoring_preserved": true
+  },
+  "status": "pass",
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "6 logit-space unit tests pass",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm"
+  },
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/974",
+  "generated_at": "2026-06-06T14:46:47.000Z"
+}

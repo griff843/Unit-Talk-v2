@@ -7,9 +7,13 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1211-matchup-context-logit-probability",
   "branch": "codex/utv2-1211-matchup-context-logit-probability",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "e21b6999",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/974",
+  "files_changed": [
+    "apps/api/src/candidate-scoring-service.ts",
+    "packages/domain/src/features/matchup-context.ts",
+    "packages/domain/src/features/matchup-context.test.ts"
+  ],
   "file_scope_lock": [
     "apps/api/src/candidate-scoring-service.ts",
     "docs/06_status/proof/UTV2-1211/diff-summary.md",
@@ -25,14 +29,23 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1211/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-06T13:57:29.861Z",
-  "heartbeat_at": "2026-06-06T13:57:29.861Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T14:50:20.971Z",
+  "closed_at": "2026-06-06T14:50:20.971Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1211-matchup-context-logit-probability.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T14:50:20.971Z",
+      "verdict": "pass",
+      "merge_sha": "e21b6999",
+      "failures": ["G1-infra_error-GITHUB_TOKEN_absent"],
+      "runner": "manual",
+      "notes": "M1-M7 + L1-L4 all pass. G1 infra_error only — GITHUB_TOKEN absent in local shell env. Waiver PE3 documented in preflight token."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
