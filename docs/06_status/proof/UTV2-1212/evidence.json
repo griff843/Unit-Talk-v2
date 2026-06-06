@@ -26,7 +26,32 @@
     "pnpm_test_db": "pass",
     "test_count": 7,
     "pass_count": 7,
-    "supabase_project": "zfzdnfwdarxucxtaojxm"
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      "INSERT INTO submissions (id, player_id, stat_type, line, ...) VALUES (...)",
+      "SELECT * FROM picks WHERE submission_id = $1",
+      "SELECT COUNT(*) FROM outbox_messages WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM pick_lifecycle WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM delivery_receipts WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM audit_log WHERE entity_id = $1",
+      "SELECT COUNT(*) FROM settlement_records WHERE pick_id = $1",
+      "SELECT COUNT(*) FROM participants WHERE external_id = $1 AND sport = $2"
+    ],
+    "row_counts": {
+      "submissions": 1,
+      "picks": 1,
+      "outbox_messages": 1,
+      "pick_lifecycle": 3,
+      "delivery_receipts": 1,
+      "audit_log": 2,
+      "settlement_records": 2,
+      "participants": 1
+    }
+  },
+  "verifier": {
+    "identity": "claude",
+    "verified_at": "2026-06-06T17:15:41.000Z",
+    "method": "pnpm test:db — 7/7 live Supabase smoke tests pass against project zfzdnfwdarxucxtaojxm"
   },
   "constitutional_constraints": {
     "sgo_activated": false,
