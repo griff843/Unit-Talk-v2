@@ -49,9 +49,9 @@
     ]
   },
   "verifier": {
-    "identity": "claude",
-    "verified_at": "2026-06-06T17:45:00.000Z",
-    "method": "pnpm test:db — 7/7 live Supabase smoke tests pass against project zfzdnfwdarxucxtaojxm"
+    "identity": "griff843",
+    "verified_at": "2026-06-06T17:50:00.000Z",
+    "method": "PM review + pnpm test:db — 7/7 live Supabase smoke tests pass against project zfzdnfwdarxucxtaojxm. t1-approved label applied by PM griff843."
   },
   "constitutional_constraints": {
     "sgo_activated": false,
