@@ -30,14 +30,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1214/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-06T18:03:27.709Z",
-  "heartbeat_at": "2026-06-06T18:03:27.709Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T18:32:28.283Z",
+  "closed_at": "2026-06-06T18:32:28.283Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1214-efficiency-pace-cap.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T18:32:17.592Z",
+      "verdict": "pass",
+      "merge_sha": "b561bd714500ae608b760604a1d5645e7b8b9758",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
