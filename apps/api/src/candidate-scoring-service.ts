@@ -19,9 +19,12 @@
 import { randomUUID } from 'node:crypto';
 import {
   computeModelBlend,
+  computeMatchupContext,
+  applyMatchupContextToProbability,
   evaluateAvailabilityConfidence,
   initialBandAssignment,
   type PlayerAvailability,
+  type MatchupContextInput,
 } from '@unit-talk/domain';
 import type {
   IPickCandidateRepository,
@@ -316,6 +319,18 @@ export class CandidateScoringService {
           model_score = Math.max(0, Math.min(1, model_score * availability.confidenceMultiplier));
           model_confidence = Math.max(0, Math.min(1, model_confidence * availability.confidenceMultiplier));
           availabilityAdjusted++;
+        }
+
+        // UTV2-1211: Apply matchup context probability adjustment in logit space.
+        // Reads matchup signals from universe metadata; gracefully no-ops when absent.
+        const matchupContextInput = buildMatchupContextInput(
+          universe.sport_key,
+          universe as unknown as Record<string, unknown>,
+        );
+        if (matchupContextInput !== null) {
+          const matchupCtx = computeMatchupContext(matchupContextInput);
+          model_score = applyMatchupContextToProbability(model_score, matchupCtx);
+          model_score = Math.max(0, Math.min(1, model_score));
         }
 
         updates.push({
@@ -781,6 +796,51 @@ function readFiniteNumber(value: unknown): number | null {
 
 function readString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+/**
+ * UTV2-1211: Build a MatchupContextInput from universe metadata fields.
+ * Returns null when no matchup signals are available (no-op path).
+ * All fields are optional — missing signals default to neutral in computeMatchupContext.
+ *
+ * @param sportKey - Sport key from the universe row (e.g. 'NBA', 'NFL').
+ * @param universeRecord - Universe row cast to unknown record for safe metadata access.
+ */
+function buildMatchupContextInput(
+  sportKey: string,
+  universeRecord: Record<string, unknown>,
+): MatchupContextInput | null {
+  const meta = asRecord(universeRecord['matchup_context']);
+  // If the universe row carries no matchup_context metadata block, skip adjustment.
+  if (Object.keys(meta).length === 0) return null;
+
+  const input: MatchupContextInput = {
+    sport: sportKey,
+  };
+
+  const opponentDefensiveRating = readFiniteNumber(meta['opponent_defensive_rating']);
+  if (opponentDefensiveRating !== null) input.opponentDefensiveRating = opponentDefensiveRating;
+
+  const opponentRankVsPosition = readFiniteNumber(meta['opponent_rank_vs_position']);
+  if (opponentRankVsPosition !== null) input.opponentRankVsPosition = opponentRankVsPosition;
+
+  const restDifferential = readFiniteNumber(meta['rest_differential']);
+  if (restDifferential !== null) input.restDifferential = restDifferential;
+
+  const paceMultiplier = readFiniteNumber(meta['pace_multiplier']);
+  if (paceMultiplier !== null) input.paceMultiplier = paceMultiplier;
+
+  if (typeof meta['is_home_team'] === 'boolean') {
+    input.isHomeTeam = meta['is_home_team'];
+  }
+
+  const h2hWins = readFiniteNumber(meta['h2h_wins']);
+  const h2hLosses = readFiniteNumber(meta['h2h_losses']);
+  if (h2hWins !== null && h2hLosses !== null) {
+    input.headToHeadRecord = { wins: h2hWins, losses: h2hLosses };
+  }
+
+  return input;
 }
 
 function makeEmptyResult(overrides: Partial<ScoringResult> = {}): ScoringResult {

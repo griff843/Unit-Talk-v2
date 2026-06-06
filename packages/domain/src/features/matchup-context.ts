@@ -156,7 +156,13 @@ export function computeMatchupContext(
 // ── Probability Adjustment ───────────────────────────────────────────────────
 
 /**
- * Apply matchup context factors to adjust a base probability.
+ * Apply matchup context factors to adjust a base probability using logit space.
+ *
+ * Converts base probability to log-odds, applies additive adjustments in that
+ * space (including multiplicative factors converted to additive log-odds shifts),
+ * then converts back to probability. This prevents probability drift outside
+ * [0,1] from mixed multiplicative/additive operations and preserves calibration.
+ *
  * Result is clamped to [0.01, 0.99].
  */
 export function applyMatchupContextToProbability(
@@ -164,9 +170,31 @@ export function applyMatchupContextToProbability(
   context: MatchupContextExplanation,
 ): number {
   const { factors } = context;
-  let adjusted =
-    baseProbability * factors.opponentStrengthFactor * factors.paceAdjustment;
-  adjusted += factors.restAdvantage + factors.homeAdvantage;
-  adjusted = Math.max(0.01, Math.min(0.99, adjusted));
-  return Math.round(adjusted * 1e6) / 1e6;
+
+  // Clamp input to avoid log(0) or log(inf)
+  const p = Math.max(0.001, Math.min(0.999, baseProbability));
+
+  // Convert base probability to log-odds space
+  const logit = Math.log(p / (1 - p));
+
+  // Apply opponent strength and pace as additive log-odds shifts
+  // log(opponentStrengthFactor) converts a multiplicative factor to additive log-odds
+  const opponentShift = Math.log(factors.opponentStrengthFactor);
+  const paceShift = Math.log(factors.paceAdjustment);
+
+  // restAdvantage and homeAdvantage are probability-space additive shifts.
+  // Convert them to log-odds shifts via: logit(p + d) - logit(p) ≈ d / (p * (1 - p))
+  // For accuracy, apply them in probability space after back-conversion.
+  const adjustedLogit = logit + opponentShift + paceShift;
+
+  // Convert back to probability
+  const pAfterMultiplicative = 1 / (1 + Math.exp(-adjustedLogit));
+
+  // Apply additive probability-space shifts (restAdvantage, homeAdvantage)
+  const adjusted =
+    pAfterMultiplicative + factors.restAdvantage + factors.homeAdvantage;
+
+  // Clamp to valid probability range
+  const clamped = Math.max(0.01, Math.min(0.99, adjusted));
+  return Math.round(clamped * 1e6) / 1e6;
 }
