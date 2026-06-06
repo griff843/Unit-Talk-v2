@@ -11,6 +11,7 @@ import type { ProjectionInput } from './stat-distribution.js';
 import type { PlayerFormFeatures } from '../features/player-form.js';
 import type { OpportunityFeatures } from '../features/opportunity.js';
 import type { EfficiencyFeatures } from '../features/efficiency.js';
+import type { GameContextFeatures } from '../features/game-context.js';
 
 const baseForm: PlayerFormFeatures = {
   minutes_avg: 30,
@@ -179,6 +180,51 @@ describe('efficiency pace cap + high_pace_flag — UTV2-1214', () => {
     assert.equal(result.ok, true);
     if (!result.ok) return;
     assert.equal(result.data.high_pace_flag, false);
+  });
+});
+
+describe('game-context wiring — UTV2-1215', () => {
+  const baseGameContext: GameContextFeatures = {
+    pace_factor: 1.0,
+    projected_game_total: 225.5,
+    pace_environment_adjustment: 1.0,
+    rest_days: 2,
+    is_back_to_back: false,
+    home_away_factor: 1.0,
+    team_id: 'team-1',
+    opponent_team_id: 'opp-1',
+  };
+
+  it('back-to-back (rest_days:0) → is_back_to_back:true in output', () => {
+    const ctx: GameContextFeatures = { ...baseGameContext, rest_days: 0, is_back_to_back: true };
+    const result = computeStatProjection(makeInput({ gameContext: ctx }));
+    assert.equal(result.ok, true);
+    if (!result.ok) return;
+    assert.equal(result.data.is_back_to_back, true);
+    assert.equal(result.data.rest_days, 0);
+  });
+
+  it('home factor (1.012) → expected_value increases ~1.2% vs neutral', () => {
+    const neutral = computeStatProjection(makeInput({ gameContext: { ...baseGameContext, home_away_factor: 1.0 } }));
+    const home = computeStatProjection(makeInput({ gameContext: { ...baseGameContext, home_away_factor: 1.012 } }));
+    assert.equal(neutral.ok, true);
+    assert.equal(home.ok, true);
+    if (!neutral.ok || !home.ok) return;
+    assert.ok(home.data.expected_value > neutral.data.expected_value);
+    assert.equal(home.data.home_away_factor, 1.012);
+    assert.equal(home.data.projected_game_total, 225.5);
+  });
+
+  it('no gameContext → game-context fields absent, expected_value unchanged', () => {
+    const withCtx = computeStatProjection(makeInput({ gameContext: { ...baseGameContext, home_away_factor: 1.0 } }));
+    const noCtx = computeStatProjection(makeInput());
+    assert.equal(withCtx.ok, true);
+    assert.equal(noCtx.ok, true);
+    if (!withCtx.ok || !noCtx.ok) return;
+    assert.equal(noCtx.data.is_back_to_back, undefined);
+    assert.equal(noCtx.data.projected_game_total, undefined);
+    assert.equal(noCtx.data.rest_days, undefined);
+    assert.equal(withCtx.data.expected_value, noCtx.data.expected_value);
   });
 });
 
