@@ -1,4 +1,4 @@
-<!-- merge_sha: placeholder-update-after-merge -->
+<!-- merge_sha: bb0441e106585661fc490efb303cdd0f64b426fe -->
 ## Verification — UTV2-1208
 
 ### pnpm verify (full pipeline)

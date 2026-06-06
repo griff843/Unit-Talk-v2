@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1208-opportunity-features-provenance",
   "branch": "claude/utv2-1208-opportunity-features-provenance",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "bb0441e106585661fc490efb303cdd0f64b426fe",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/972",
   "files_changed": [
     "packages/domain/src/features/opportunity.ts",
@@ -22,14 +22,38 @@
     "docs/06_status/proof/UTV2-1208/verification.md",
     "docs/06_status/proof/UTV2-1208/diff-summary.md"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-06-05T21:47:38.826Z",
-  "heartbeat_at": "2026-06-05T21:47:38.826Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-06T02:57:27.385Z",
+  "closed_at": "2026-06-06T02:57:27.385Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1208-opportunity-features-provenance.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-06T02:56:18.289Z",
+      "verdict": "fail",
+      "merge_sha": "bb0441e106585661fc490efb303cdd0f64b426fe",
+      "failures": [
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-06T02:57:17.788Z",
+      "verdict": "pass",
+      "merge_sha": "bb0441e106585661fc490efb303cdd0f64b426fe",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
