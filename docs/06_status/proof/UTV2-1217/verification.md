@@ -7,6 +7,40 @@
 
 ---
 
+## Verification
+
+This document records the full verification run for UTV2-1217: CLV/edge evidence collection against live Supabase. No source files were changed; this is a proof-only lane.
+
+---
+
+## pnpm test:db
+
+Command: `pnpm test:db`
+Run from main checkout against live Supabase (zfzdnfwdarxucxtaojxm).
+
+```
+ok 1 - UTV2-996: submission with new pick reaches awaiting_approval
+ok 2 - UTV2-996: re-submitted duplicate is rejected with conflict
+ok 3 - UTV2-996: approved pick reaches queued state
+ok 4 - UTV2-996: queued pick reaches distributed state via outbox
+ok 5 - UTV2-996: settlement writes settlement_records row
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 100705.626258
+```
+
+Result: **PASS** — 7 tests, 0 failures, live DB confirmed healthy.
+
+---
+
 ## pnpm type-check
 
 No source files changed. Evidence-collection only lane — no compilation required.
