@@ -140,14 +140,38 @@ export function computeStatProjection(
   } = input;
 
   // ── Validate inputs ────────────────────────────────────────────────────
+  if (!Number.isFinite(opportunity.opportunity_projection)) {
+    return { ok: false, reason: 'Opportunity projection must be finite' };
+  }
   if (opportunity.opportunity_projection <= 0) {
     return { ok: false, reason: 'Opportunity projection must be positive' };
+  }
+  if (!Number.isFinite(efficiency.efficiency_projection)) {
+    return { ok: false, reason: 'Efficiency projection must be finite' };
   }
   if (efficiency.efficiency_projection <= 0) {
     return { ok: false, reason: 'Efficiency projection must be positive' };
   }
+  if (!Number.isFinite(line)) {
+    return { ok: false, reason: 'Line must be finite' };
+  }
   if (line < 0) {
     return { ok: false, reason: 'Line must be non-negative' };
+  }
+
+  const finiteFeatureFailure = validateFiniteProjectionFeatures(input);
+  if (finiteFeatureFailure !== null) {
+    return { ok: false, reason: finiteFeatureFailure };
+  }
+
+  const varianceFailure = validateNonNegativeFiniteVariance({
+    player_base_volatility: playerForm.player_base_volatility,
+    minutes_uncertainty: playerForm.minutes_uncertainty,
+    role_uncertainty: opportunity.role_uncertainty,
+    matchup_variance: efficiency.matchup_variance,
+  });
+  if (varianceFailure !== null) {
+    return { ok: false, reason: varianceFailure };
   }
 
   // ── Provenance Gate (UTV2-1213) ────────────────────────────────────────
@@ -340,6 +364,61 @@ function hashFeatureVector(vector: Record<string, number>): string {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function validateFiniteProjectionFeatures(
+  input: ProjectionInput,
+): string | null {
+  const fields: Array<[string, number]> = [
+    ['Line', input.line],
+    ['Player form weight', input.playerForm_weight ?? 0],
+    ['Player form minutes projection', input.playerForm.minutes_projection],
+    ['Player form stat per minute', input.playerForm.stat_per_minute],
+    ['Player form stat per opportunity', input.playerForm.stat_per_opportunity],
+    ['Player form stat trend', input.playerForm.stat_trend],
+    ['Player form consistency score', input.playerForm.consistency_score],
+    ['Opportunity minutes projection', input.opportunity.minutes_projection],
+    ['Opportunity starter probability', input.opportunity.starter_probability],
+    ['Opportunity usage rate projection', input.opportunity.usage_rate_projection],
+    ['Opportunity role stability', input.opportunity.role_stability],
+    ['Opportunity projection', input.opportunity.opportunity_projection],
+    ['Efficiency player skill rate', input.efficiency.player_skill_rate],
+    [
+      'Efficiency opponent defensive adjustment',
+      input.efficiency.opponent_defensive_adjustment,
+    ],
+    ['Efficiency pace adjustment', input.efficiency.pace_adjustment],
+    ['Efficiency projection', input.efficiency.efficiency_projection],
+    ['Game context home/away factor', input.gameContext?.home_away_factor ?? 1.0],
+  ];
+
+  for (const [label, value] of fields) {
+    if (!Number.isFinite(value)) {
+      return `${label} must be finite`;
+    }
+  }
+
+  if ((input.gameContext?.home_away_factor ?? 1.0) <= 0) {
+    return 'Game context home/away factor must be positive';
+  }
+
+  return null;
+}
+
+function validateNonNegativeFiniteVariance(
+  fields: Record<string, number>,
+): string | null {
+  for (const [name, value] of Object.entries(fields)) {
+    const label = name.replaceAll('_', ' ');
+    if (!Number.isFinite(value)) {
+      return `${label} must be finite`;
+    }
+    if (value < 0) {
+      return `${label} must be non-negative`;
+    }
+  }
+
+  return null;
+}
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
