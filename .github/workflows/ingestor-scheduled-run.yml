@@ -50,6 +50,7 @@ jobs:
       UNIT_TALK_INGESTOR_AUTORUN: 'true'
       UNIT_TALK_INGESTOR_MAX_CYCLES: '2'
       UNIT_TALK_INGESTOR_POLL_MS: '30000'
+      UNIT_TALK_INGESTOR_RUNTIME_MODE: 'fail_closed'
       UNIT_TALK_APP_ENV: production
     steps:
       - name: Checkout
