@@ -1,5 +1,7 @@
 # UTV2-1225 Diff Summary
 
+**Merge SHA:** `37febff250d5543d8d9ff162405e1a945a9dec43` (PR #984, squash-merged to main 2026-06-07)
+
 ## Summary
 
 UTV2-1225 adds fail-closed finite-number guards to `computeStatProjection` so malformed `NaN`, `Infinity`, negative variance, and invalid home/away factor inputs cannot propagate into projection math, probability fitting, confidence, or feature-vector hashing.

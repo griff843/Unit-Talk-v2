@@ -5,7 +5,8 @@
 Issue: UTV2-1225  
 Tier: T2  
 Verifier: codex-cli  
-Branch: `codex/utv2-1225-nan-guards-computestatprojection`
+Branch: `codex/utv2-1225-nan-guards-computestatprojection`  
+Merge SHA: `37febff250d5543d8d9ff162405e1a945a9dec43` (PR #984, squash-merged to main 2026-06-07)
 
 ## Focused Checks
 

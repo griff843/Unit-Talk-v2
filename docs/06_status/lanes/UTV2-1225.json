@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1225-nan-guards-computestatprojection",
   "branch": "codex/utv2-1225-nan-guards-computestatprojection",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "37febff250d5543d8d9ff162405e1a945a9dec43",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/984",
   "files_changed": [],
   "file_scope_lock": [
     "packages/domain/src/models/stat-distribution.test.ts",
@@ -18,14 +18,42 @@
     "docs/06_status/proof/UTV2-1225/diff-summary.md",
     "docs/06_status/proof/UTV2-1225/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-07T15:27:22.675Z",
-  "heartbeat_at": "2026-06-07T15:27:22.675Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-07T20:08:48.845Z",
+  "closed_at": "2026-06-07T20:08:48.845Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1225-nan-guards-computestatprojection.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-07T20:06:46.449Z",
+      "verdict": "fail",
+      "merge_sha": "37febff250d5543d8d9ff162405e1a945a9dec43",
+      "failures": [
+        "L2",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-07T20:07:05.511Z",
+      "verdict": "fail",
+      "merge_sha": "37febff250d5543d8d9ff162405e1a945a9dec43",
+      "failures": [
+        "L2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-07T20:08:39.671Z",
+      "verdict": "pass",
+      "merge_sha": "37febff250d5543d8d9ff162405e1a945a9dec43",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
