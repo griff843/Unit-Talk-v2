@@ -7,9 +7,14 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1219-r4-fault-injection",
   "branch": "claude/utv2-1219-r4-fault-injection",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "43ed4621",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/982",
+  "files_changed": [
+    "apps/api/src/fault-injection.test.ts",
+    "docs/06_status/proof/UTV2-1219/diff-summary.md",
+    "docs/06_status/proof/UTV2-1219/evidence.json",
+    "docs/06_status/proof/UTV2-1219/verification.md"
+  ],
   "file_scope_lock": [
     "apps/api/src/fault-injection.test.ts",
     "docs/06_status/proof/UTV2-1219/diff-summary.md",
@@ -20,14 +25,23 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1219/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-07T01:37:11.848Z",
-  "heartbeat_at": "2026-06-07T01:37:11.848Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-07T02:15:00Z",
+  "closed_at": "2026-06-07T02:15:00Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1219-r4-fault-injection.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-07T02:15:00Z",
+      "verdict": "pass",
+      "merge_sha": "43ed4621",
+      "failures": [],
+      "runner": "manual",
+      "notes": "T1 lane. PM verdict APPROVED (pm-verdict/v1) posted by griff843. t1-approved label applied. Merge Gate pass. 74 fault injection tests pass, pnpm test:db 7/7 pass, pnpm verify pass. 5 validation gaps documented in evidence.json — not bugs per scope, flagged for hardening follow-up."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

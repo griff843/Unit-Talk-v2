@@ -20,10 +20,9 @@
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "63176980b1edad13a2ce62ecd75039f7e21cb3ce",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-06T00:00:00Z",
-    "note": "Will be updated to merge SHA post-PR"
+    "verified_source_sha": "43ed4621",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-07T02:15:00Z"
   },
   "fault_injection_results": {
     "modules_tested": ["matchup-context", "player-form", "opportunity", "efficiency", "game-context"],
