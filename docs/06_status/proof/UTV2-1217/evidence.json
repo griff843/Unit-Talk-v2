@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1217",
+  "tier": "T2",
+  "verifier": {
+    "identity": "claude/utv2-1217"
+  },
+  "static_proof": {
+    "type_check": "pass",
+    "r_level_check": "pass",
+    "notes": "No source files changed. Evidence collection only."
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "Total pick count, graded count, scored count, date range",
+        "row_count": 1
+      },
+      {
+        "table": "picks",
+        "description": "promotion_version distribution across all picks",
+        "row_count": 2
+      },
+      {
+        "table": "model_registry",
+        "description": "Champion/active models with artifact_sha — checking for Wave-5 model SHA",
+        "row_count": 6
+      },
+      {
+        "table": "pick_candidates",
+        "description": "provenance field sample to check CLV/edge data availability",
+        "row_count": 3
+      },
+      {
+        "table": "picks",
+        "description": "Wave-5 era picks (created_at >= 2026-06-01): total, graded, scored",
+        "row_count": 1
+      },
+      {
+        "table": "picks",
+        "description": "Post-Wave-5 graded picks with devig/kelly data: edge distribution, mean raw_kelly",
+        "row_count": 1
+      },
+      {
+        "table": "picks",
+        "description": "Pre-Wave-5 baseline graded picks with devig/kelly data",
+        "row_count": 1
+      },
+      {
+        "table": "picks",
+        "description": "domainAnalysis.version distribution across all picks",
+        "row_count": 1
+      },
+      {
+        "table": "picks",
+        "description": "Sport breakdown of post-Wave-5 picks",
+        "row_count": 1
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 23467,
+        "status": "healthy"
+      },
+      {
+        "table": "picks_wave5_era",
+        "count": 8896,
+        "status": "healthy",
+        "note": "picks with created_at >= 2026-06-01 (Wave-5 proxy window)"
+      },
+      {
+        "table": "picks_graded_wave5",
+        "count": 503,
+        "status": "healthy",
+        "note": "graded picks with deviggingResult and kellySizing in metadata, post-Wave-5"
+      },
+      {
+        "table": "model_registry",
+        "count": 324,
+        "status": "healthy"
+      }
+    ]
+  },
+  "sha_binding": {
+    "verified_source_sha": "9d46f54b8648e3ccb542e821ff086f2d5a226995",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-06T22:15:00Z",
+    "note": "Bound to main HEAD at time of evidence collection. Will be updated to merge SHA post-PR."
+  },
+  "evidence": {
+    "model_version_sha": null,
+    "model_version_sha_note": "artifact_sha is NULL for all champion models in model_registry. No Wave-5-specific SHA registered. domainAnalysis.version = 'domain-analysis-v1.0.0' is uniform across all 10,830 picks — no version discriminator between pre/post Wave-5.",
+    "wave5_proxy": "created_at >= 2026-06-01 (Wave-5 lanes UTV2-1211–1215 merged June 2026)",
+    "pick_count": 8896,
+    "graded_pick_count": 706,
+    "graded_with_devig_data": 503,
+    "has_edge_true_count": 0,
+    "has_edge_false_count": 503,
+    "mean_raw_kelly_post_wave5": -0.338599,
+    "mean_raw_kelly_pre_wave5_baseline": -0.321761,
+    "mean_edge_delta_vs_devig_baseline": -0.016838,
+    "median_edge_delta_vs_devig_baseline": null,
+    "mean_over_fair_post_wave5": 0.362572,
+    "devig_baseline_definition": "Picks created before 2026-06-01 with metadata.deviggingResult present and settled_at non-null. 86 graded picks, 85/86 has_edge=false.",
+    "control_group_count": 86,
+    "sport_id_null_pct": 1.0,
+    "note": "INSUFFICIENT VOLUME FOR STATISTICAL EDGE CLAIM. All 503 graded post-Wave-5 picks with devig data have sport_id=NULL, indicating a synthetic/smoke-test corpus (event names contain 'db-smoke-utv2-996'). The pipeline did not produce real production picks with the new stat-model path during this window — Wave-5 code is merged but the champion models in model_registry remain 'v0.1-baseline-2026-04-22' with artifact_sha=NULL. No CLV or edge advantage can be claimed from this data. This evidence bundle documents the current DB state honestly. A follow-up evidence collection pass is required once real production picks accumulate under the Wave-5 path."
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "edge_claim_made": false,
+    "production_readiness_claimed": false
+  }
+}
