@@ -330,3 +330,20 @@ test('poissonCDF returns 1 for very large k', () => {
 test('poissonCDF returns 0 for negative k', () => {
     assert.equal(poissonCDF(-1, 5), 0);
   });
+
+test('computeStatProjection clamps zero totalVariance to produce well-defined output', () => {
+  // All variance components are 0 — individually valid per validateNonNegativeFiniteVariance,
+  // but totalVariance = 0. The Math.max(totalVariance, 0.0001) clamp must produce finite,
+  // non-NaN output (not reject or explode).
+  const result = computeStatProjection(makeInput({
+    playerForm: { ...baseForm, player_base_volatility: 0, minutes_uncertainty: 0 },
+    opportunity: { ...baseOpportunity, role_uncertainty: 0 },
+    efficiency: { ...baseEfficiency, matchup_variance: 0 },
+  }));
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.ok(Number.isFinite(result.data.p_over), 'p_over must be finite');
+  assert.ok(Number.isFinite(result.data.p_under), 'p_under must be finite');
+  assert.ok(result.data.p_over > 0 && result.data.p_over < 1, 'p_over must be in (0,1)');
+  assert.ok(result.data.p_under > 0 && result.data.p_under < 1, 'p_under must be in (0,1)');
+});

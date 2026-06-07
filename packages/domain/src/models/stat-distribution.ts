@@ -225,6 +225,10 @@ export function computeStatProjection(
 
   if (distType === 'normal') {
     const mu = expectedValue;
+    // Defensive floor: floating-point summation of non-negative components can yield a
+    // near-zero or denormalized result. 0.0001 keeps sigma well-defined; individual
+    // negative components are already rejected by validateNonNegativeFiniteVariance above,
+    // so this clamp is not masking an upstream error — it handles floating-point edge cases only.
     const sigma = Math.sqrt(Math.max(totalVariance, 0.0001));
     params_json = { mu: round4(mu), sigma: round4(sigma) };
     const z = (line - mu) / sigma;
