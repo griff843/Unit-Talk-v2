@@ -1,3 +1,9 @@
+## Summary
+
+UTV2-1218 — R2 determinism artifacts for the post-Wave-5 fully-wired `computeStatProjection` path. All 4 sports pass determinism gate (NBA/NFL/MLB/NHL). No source files changed.
+
+---
+
 ## Verification — UTV2-1218 R2 Determinism Artifacts
 
 **Issue:** UTV2-1218  
@@ -71,3 +77,32 @@ output_hash_run_2: 873351db6260f2f176690d0f4597a2114afd882542d733212caadb72ea56e
 - The `feature_vector_hash` embedded in each output is a reproducibility fingerprint — it encodes the full input feature vector as a sorted key=value string before hashing.
 - NHL goals stat_type triggers the Poisson distribution path; NBA/NFL/MLB use Normal. Both are deterministic.
 - The `run_at` field in `r2-determinism.json` records when the test was executed but is not part of the output hash — it is metadata only.
+
+---
+
+## pnpm test:db
+
+Command: `pnpm test:db`
+Run from main checkout against live Supabase (zfzdnfwdarxucxtaojxm).
+
+```
+ok 1 - UTV2-996: submission with new pick reaches awaiting_approval
+ok 2 - UTV2-996: re-submitted duplicate is rejected with conflict
+ok 3 - UTV2-996: approved pick reaches queued state
+ok 4 - UTV2-996: queued pick reaches distributed state via outbox
+ok 5 - UTV2-996: settlement writes settlement_records row
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 100705.626258
+```
+
+Result: **PASS** — 7 tests, 0 failures, live DB confirmed healthy.
+Note: pnpm test:db verifies live DB health. This lane is a pure compute artifact (determinism gate); DB health is confirmed as a dependency of the pipeline under test.
