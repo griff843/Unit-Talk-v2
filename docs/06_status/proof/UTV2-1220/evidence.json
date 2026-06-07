@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1220",
+  "tier": "T2",
+  "verifier": { "identity": "claude/utv2-1220" },
+  "static_proof": {
+    "type_check": "pass",
+    "r_level_check": "pass",
+    "notes": "No source files changed. Constitutional evidence assembly only."
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [],
+    "row_counts": [],
+    "note": "T2 verification — no additional DB queries required; input evidence bundles from UTV2-1217/1218/1219 are SHA-bound and already verified against live Supabase."
+  },
+  "sha_binding": {
+    "verified_source_sha": "PENDING_MERGE_SHA",
+    "sha_type": "merge_sha",
+    "bound_at": "PENDING"
+  },
+  "d_const_5_resolution": {
+    "status": "RESOLVED",
+    "resolution_type": "structural",
+    "resolution_statement": "Scoring is no longer a pure market-consensus echo. Wave 5 (UTV2-1211–1215) wired five independent stat-based feature modules (matchup-context, player-form, opportunity, efficiency, game-context) into computeStatProjection alongside devig. The scoring path now incorporates stat-model projections as a distinct signal from market consensus.",
+    "empirical_evidence_status": "DEFERRED",
+    "empirical_evidence_note": "UTV2-1217 found insufficient volume for statistical CLV/edge claim — all 503 graded post-Wave-5 picks with devig data have sport_id=NULL (synthetic smoke-test corpus, not live production picks). Empirical CLV/edge evidence deferred to UTV2-1042 (state:data-gated) when real production picks accumulate under the Wave-5 path.",
+    "wave_merge_shas": {
+      "UTV2-1211": "e21b6999",
+      "UTV2-1212": "c1e7d9a9ca4f3e5872fb333c1aa947ab9a15c312",
+      "UTV2-1213": "aa3a7c8d103a24bcc3a267671b65ade0afdb4079",
+      "UTV2-1214": "b561bd714500ae608b760604a1d5645e7b8b9758",
+      "UTV2-1215": "a8d3a105f48bfb0e050a85431a84f12b337a9e5b",
+      "UTV2-1217": "98552597900e1615b8306fa5fed502034aaa2dab",
+      "UTV2-1218": "00eaa61cfdebf6cb43111929e52842db57ad577a",
+      "UTV2-1219": "43ed462127fdd0aaf8e8757d2e657d994974f4ed"
+    }
+  },
+  "input_evidence": {
+    "UTV2-1217": {
+      "proof_path": "docs/06_status/proof/UTV2-1217/evidence.json",
+      "merge_sha": "98552597900e1615b8306fa5fed502034aaa2dab",
+      "key_finding": "No CLV/edge claim supportable — corpus is synthetic/smoke-test (sport_id=NULL). Wave-5 code merged but champion models remain v0.1-baseline-2026-04-22 with artifact_sha=NULL. Follow-up evidence collection required once real production picks accumulate.",
+      "consumed": true
+    },
+    "UTV2-1218": {
+      "proof_path": "docs/06_status/proof/UTV2-1218/r2-determinism.json",
+      "merge_sha": "00eaa61cfdebf6cb43111929e52842db57ad577a",
+      "key_finding": "R2 determinism confirmed: computeStatProjection is deterministic across NBA/NFL/MLB/NHL. output_hash_run_1 === output_hash_run_2. Structural property verified by SHA-256 comparison.",
+      "consumed": true
+    },
+    "UTV2-1219": {
+      "proof_path": "docs/06_status/proof/UTV2-1219/evidence.json",
+      "merge_sha": "43ed462127fdd0aaf8e8757d2e657d994974f4ed",
+      "key_finding": "V-R4 fault injection complete. 74 tests pass. Fail-closed on opportunity/efficiency/snap_share/line guards. Five validation gaps documented (NaN propagation, zero home_away_factor, negative variance clamp).",
+      "consumed": true
+    }
+  },
+  "r4_gap_dispositions": {
+    "nan_efficiency_projection": {
+      "finding": "NaN is not caught by the <= 0 guard (NaN <= 0 is false in JS); propagates to expected_value",
+      "disposition": "deferred",
+      "rationale": "Input validation hardening required at the computeStatProjection boundary. Tracked as follow-up hardening issue. Not a data corruption risk in current pipeline (inputs are constructed from typed domain objects), but is a latent correctness gap.",
+      "follow_up": "Open hardening issue: add NaN guard at efficiency_projection and stat_per_minute inputs"
+    },
+    "nan_home_away_factor": {
+      "finding": "NaN home_away_factor is not validated; propagates to expected_value",
+      "disposition": "deferred",
+      "rationale": "Same pattern as NaN efficiency_projection. home_away_factor is currently derived from schedule data and is structurally non-null in the live pipeline, but NaN is not explicitly rejected. Hardening issue required.",
+      "follow_up": "Open hardening issue: add NaN/zero guard at home_away_factor input"
+    },
+    "zero_home_away_factor": {
+      "finding": "Zero home_away_factor is not validated; collapses expected_value to 0",
+      "disposition": "deferred",
+      "rationale": "Zero is a degenerate value (neutral home/away effect) but silently collapses output. Should be treated as an invalid sentinel and rejected. Same hardening issue as NaN.",
+      "follow_up": "Included in home_away_factor hardening issue"
+    },
+    "negative_variance_components": {
+      "finding": "Negative volatility components are not rejected; Math.max(variance, 0.0001) clamps them",
+      "disposition": "accepted_risk",
+      "rationale": "Math.max clamp is an intentional defensive floor — negative variance is physically impossible but can arise from floating-point subtraction. The clamp to 0.0001 produces a near-zero (not zero) variance, which is well-defined for the distribution functions downstream. This is correct defensive behavior. No hardening issue required.",
+      "follow_up": null
+    },
+    "nan_stat_per_minute": {
+      "finding": "NaN stat_per_minute is not validated; propagates to feature vector hash",
+      "disposition": "deferred",
+      "rationale": "stat_per_minute is a derived field; NaN propagation would corrupt the feature hash silently. Input validation required.",
+      "follow_up": "Included in NaN input validation hardening issue"
+    }
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "edge_claim_made": false,
+    "production_readiness_claimed": false,
+    "d_const_6_closed": false
+  }
+}

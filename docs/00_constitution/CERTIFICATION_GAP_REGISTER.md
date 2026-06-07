@@ -1,7 +1,7 @@
 # Certification Gap Register
 
-> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated 2026-06-04 (D-CONST-4, D-CONST-7, D-CONST-8 resolved).
-> Canonical ledger of constitutional certification gaps. D-CONST-1 through D-CONST-4 resolved; D-CONST-7/D-CONST-8 resolved 2026-06-04; D-CONST-5 and D-CONST-6 remain OPEN.
+> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated 2026-06-07 (D-CONST-5 structurally resolved by UTV2-1220, PR #983).
+> Canonical ledger of constitutional certification gaps. D-CONST-1 through D-CONST-5 resolved; D-CONST-7/D-CONST-8 resolved 2026-06-04. D-CONST-6 remains OPEN.
 
 ## D-CONST-1 — Program numbering drift
 - **Status:** `PM_RATIFIED`
@@ -24,9 +24,13 @@
 - **Resolved by:** UTV2-1196 (PR #954, 2026-06-04) — proof gate made execution-bound; `t1-proof-gate` now requires TAP node:test output pattern, not string presence; DB-trigger proofs fail closed when service role key absent.
 
 ## D-CONST-5 — Edge as market echo
-- **Status:** `OPEN`
-- **Detail:** scoring is structurally a market-consensus echo; zero realized profitability/CLV evidence.
-- **Required next action:** P3 Decision Integrity remediation **after** constitutional convergence (do not implement scoring features in this sprint).
+- **Status:** `RESOLVED` (structural) — 2026-06-07
+- **Resolved by:** UTV2-1220 (PR #983) — Wave 5 (UTV2-1211–1215) wired five stat-based feature modules (matchup-context, player-form, opportunity, efficiency, game-context) into `computeStatProjection`. Scoring is no longer a pure market-consensus echo.
+- **Wave merge SHAs:** UTV2-1211: e21b6999 · UTV2-1212: c1e7d9a9 · UTV2-1213: aa3a7c8d · UTV2-1214: b561bd71 · UTV2-1215: a8d3a105
+- **Evidence bundle SHAs:** UTV2-1217: 98552597 (CLV evidence) · UTV2-1218: 00eaa61c (R2 determinism) · UTV2-1219: 43ed4621 (V-R4 fault injection)
+- **Empirical evidence deferred:** UTV2-1217 found insufficient graded production volume (corpus is synthetic/smoke-test, sport_id=NULL). CLV/edge empirical certification deferred to UTV2-1042 (state:data-gated).
+- **P3 status:** ACTIVE_NOT_CERTIFIED (unchanged — structural resolution does not advance P3 certification).
+- **Validation gaps tracked:** 4 NaN/zero boundary gaps from UTV2-1219 deferred to hardening follow-up; 1 (negative variance clamp) accepted as correct defensive behavior.
 
 ## D-CONST-6 — Ingestion stale / runtime freshness drift
 - **Status:** `OPEN`
@@ -53,7 +57,7 @@
 | D-CONST-2 Activation state | **PM_RATIFIED** |
 | D-CONST-3 Missing cert records | **RESOLVED** (UTV2-1195, PR #950) |
 | D-CONST-4 Proof gate string-bound | **RESOLVED** (UTV2-1196, PR #954) |
-| D-CONST-5 Edge as echo | OPEN |
+| D-CONST-5 Edge as echo | **RESOLVED** structural (UTV2-1220, PR #983) — empirical deferred to UTV2-1042 |
 | D-CONST-6 Ingestion stale | OPEN |
 | D-CONST-7 types drift | **RESOLVED** (UTV2-1198, PR #957) |
 | D-CONST-8 doc fail-open | **RESOLVED** (UTV2-1199, PR #956) |
