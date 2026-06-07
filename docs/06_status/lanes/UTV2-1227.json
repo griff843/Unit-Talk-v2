@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1227-d-const-6-downstream-activation",
   "branch": "claude/utv2-1227-d-const-6-downstream-activation",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "d7b035958c3c96a802ffc27684ac8e6ab08a2e8f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/985",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
@@ -23,14 +23,42 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1227/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-07T16:32:34.991Z",
-  "heartbeat_at": "2026-06-07T16:32:34.991Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-07T18:25:32.223Z",
+  "closed_at": "2026-06-07T18:25:32.223Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1227-d-const-6-downstream-activation.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-07T18:24:10.350Z",
+      "verdict": "fail",
+      "merge_sha": "d7b035958c3c96a802ffc27684ac8e6ab08a2e8f",
+      "failures": [
+        "P6",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-07T18:24:45.078Z",
+      "verdict": "fail",
+      "merge_sha": "d7b035958c3c96a802ffc27684ac8e6ab08a2e8f",
+      "failures": [
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-07T18:25:22.534Z",
+      "verdict": "pass",
+      "merge_sha": "d7b035958c3c96a802ffc27684ac8e6ab08a2e8f",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
