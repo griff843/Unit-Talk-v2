@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "rule": "promotion-scoring",
+  "run_at": "2026-06-07T00:29:04.187Z",
+  "model_path": "post-wave-5-full-wiring",
+  "inputs_hash": "ed5e8d7604b468f0629790e841529284d1d32a22808d290a67a6e3615576003c",
+  "output_hash_run_1": "873351db6260f2f176690d0f4597a2114afd882542d733212caadb72ea56ec58",
+  "output_hash_run_2": "873351db6260f2f176690d0f4597a2114afd882542d733212caadb72ea56ec58",
+  "deterministic": true,
+  "test_cases": [
+    {
+      "description": "NBA pick with all 5 feature modules wired (points, normal dist)",
+      "input_hash": "8df457684337d623ce7bf2aa6755514665af0a78d3aa6a15802dbd924c5a7611",
+      "output_hash": "405ba28e92fd12c2d08624e4830f1ffc6097a590ee1c7bba00d8508016c4d8c8",
+      "sport": "NBA"
+    },
+    {
+      "description": "NFL pick with all 5 feature modules wired (receiving yards, normal dist)",
+      "input_hash": "bda00c42fefef1333ba05d509c673d34305faa4beb806633ff5bfeb61a6827f3",
+      "output_hash": "2c7a027f73b66d1c01eaa0d1c584110e55880739d115c0cb195e8cc5a5c61859",
+      "sport": "NFL"
+    },
+    {
+      "description": "MLB pick with all 5 feature modules wired (hits, normal dist)",
+      "input_hash": "6fe4b8a72f1c662c249cf6e84ae5ab2356aa0738c92851bbe1c10b373bb909c0",
+      "output_hash": "7631254bd51e9b20dbd7b1b5c7a35d6c7ea6ba7b78a93cae16a5ef953620ddf2",
+      "sport": "MLB"
+    },
+    {
+      "description": "NHL pick with all 5 feature modules wired (goals, poisson dist)",
+      "input_hash": "576495abc267c40084f881ea90d08cb38b81176e96cfbab7502ef91e82c97fb6",
+      "output_hash": "0fc1c6d64c8f9db695a6e32e575fed3dbd3ef80e6c1f581af235048207210f73",
+      "sport": "NHL"
+    }
+  ],
+  "note": "All 5 feature modules wired (playerForm, opportunity, efficiency, matchup-context via efficiency/game-context inputs, game-context). Hashes computed with JSON.stringify+sha256. NBA/NFL/MLB=normal dist, NHL=poisson dist (goals). run_1 and run_2 hashes are identical — confirmed deterministic. No source changes."
+}
