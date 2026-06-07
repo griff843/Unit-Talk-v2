@@ -64,14 +64,13 @@ export function deriveSportId(pick: CanonicalPick): string | null {
   }
 
   const marketTypeId = deriveMarketTypeId(pick);
-  if (!marketTypeId) {
-    return null;
-  }
 
-  if (marketTypeId.startsWith('player_batting_') || marketTypeId.startsWith('player_pitching_')) {
+  if (marketTypeId?.startsWith('player_batting_') || marketTypeId?.startsWith('player_pitching_')) {
     return 'MLB';
   }
 
+  // Market-prefix check covers SGO-format keys (e.g. 'nba-spread', 'nfl-total')
+  // and must run even when marketTypeId is null.
   const normalizedMarket = cleanString(pick.market)?.toLowerCase() ?? '';
   if (normalizedMarket.startsWith('nba')) return 'NBA';
   if (normalizedMarket.startsWith('nfl')) return 'NFL';
@@ -124,8 +123,11 @@ function normalizeSportId(value: string | null): string | null {
     return null;
   }
 
-  const canonical = cleaned.toUpperCase();
-  return CANONICAL_SPORT_IDS.has(canonical) ? canonical : null;
+  const upper = cleaned.toUpperCase();
+  for (const id of CANONICAL_SPORT_IDS) {
+    if (id.toUpperCase() === upper) return id;
+  }
+  return null;
 }
 
 function normalizeMarketTypeId(value: string | null | undefined): string | null {
@@ -176,6 +178,25 @@ const ALTERNATE_MARKET_TYPE_IDS: Record<string, string> = {
   moneyline: 'moneyline',
   spread: 'spread',
   game_spread: 'spread',
+  // SGO-prefixed game line market keys (e.g. from board-construction canonical_market_key)
+  'nba-spread': 'spread',
+  'nba-ml': 'moneyline',
+  'nba-total': 'game_total_ou',
+  'nfl-spread': 'spread',
+  'nfl-ml': 'moneyline',
+  'nfl-total': 'game_total_ou',
+  'mlb-spread': 'spread',
+  'mlb-ml': 'moneyline',
+  'mlb-total': 'game_total_ou',
+  'nhl-spread': 'spread',
+  'nhl-ml': 'moneyline',
+  'nhl-total': 'game_total_ou',
+  'ncaab-spread': 'spread',
+  'ncaab-ml': 'moneyline',
+  'ncaab-total': 'game_total_ou',
+  'ncaaf-spread': 'spread',
+  'ncaaf-ml': 'moneyline',
+  'ncaaf-total': 'game_total_ou',
   total: 'game_total_ou',
   totals: 'game_total_ou',
   game_total: 'game_total_ou',

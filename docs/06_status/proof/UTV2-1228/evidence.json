@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1228",
+  "tier": "T1",
+  "executor": "claude",
+  "lane_type": "runtime",
+  "sha_binding": {
+    "verified_source_sha": "PENDING_MERGE",
+    "ci_sentinels": {
+      "verify_exit_0": true,
+      "test_db_exit_0": true,
+      "r_level_pass": true
+    }
+  },
+  "branch": "claude/utv2-1228-sport-id-null-attribution",
+  "generated_at": "2026-06-07T23:00:00.000Z",
+  "files_changed": [
+    "packages/db/src/pick-foreign-keys.ts",
+    "packages/db/src/pick-foreign-keys.test.ts"
+  ],
+  "root_cause_summary": "deriveSportId() had an early-return guard (if (!marketTypeId) return null) before the market-string prefix checks. SGO-format market keys (nba-spread, nba-ml, nba-total) are not in ALTERNATE_MARKET_TYPE_IDS so deriveMarketTypeId() returns null, causing the early-return to fire before the market-prefix fallback. Secondary bug: normalizeSportId used toUpperCase() against a mixed-case CANONICAL_SPORT_IDS set, breaking Soccer/Tennis.",
+  "test_results": {
+    "unit_tests": { "total": 12, "pass": 12, "fail": 0, "file": "packages/db/src/pick-foreign-keys.test.ts" },
+    "test_db": { "total": 7, "pass": 7, "fail": 0, "duration_ms": 132397 },
+    "verify_pipeline": "exit_0"
+  },
+  "db_query_evidence": {
+    "post_cutover_null_picks": 1196,
+    "source_null_pct": "100%",
+    "note": "All 1196 null picks are synthetic test artifacts (source=null, empty metadata). Zero board-construction picks exist post-cutover; last board run was 2026-05-20.",
+    "events_sport_id_format": "canonical short IDs (NBA, MLB, NHL) — not compound SGO keys"
+  }
+}

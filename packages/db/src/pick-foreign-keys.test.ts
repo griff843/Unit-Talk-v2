@@ -115,3 +115,40 @@ test('returns null market type for unknown manual metadata instead of inventing 
 
   assert.equal(deriveMarketTypeId(pick), null);
 });
+
+test('derives NBA from SGO-format market key nba-spread when metadata.sport is absent', () => {
+  const pick = buildPick({ market: 'nba-spread' }, {});
+  assert.equal(deriveSportId(pick), 'NBA');
+  assert.equal(deriveMarketTypeId(pick), 'spread');
+});
+
+test('derives NBA from SGO market key nba-ml', () => {
+  const pick = buildPick({ market: 'nba-ml' }, {});
+  assert.equal(deriveSportId(pick), 'NBA');
+  assert.equal(deriveMarketTypeId(pick), 'moneyline');
+});
+
+test('derives NBA from SGO market key nba-total', () => {
+  const pick = buildPick({ market: 'nba-total' }, {});
+  assert.equal(deriveSportId(pick), 'NBA');
+  assert.equal(deriveMarketTypeId(pick), 'game_total_ou');
+});
+
+test('derives NFL from SGO market key nfl-spread when metadata.sport is absent', () => {
+  const pick = buildPick({ market: 'nfl-spread' }, {});
+  assert.equal(deriveSportId(pick), 'NFL');
+  assert.equal(deriveMarketTypeId(pick), 'spread');
+});
+
+test('normalizeSportId handles Soccer and Tennis case-insensitively', () => {
+  const soccerPick = buildPick({ market: 'soccer-ml' }, { sport: 'Soccer' });
+  assert.equal(deriveSportId(soccerPick), 'Soccer');
+
+  const tennisPick = buildPick({ market: 'tennis-ml' }, { sport: 'Tennis' });
+  assert.equal(deriveSportId(tennisPick), 'Tennis');
+});
+
+test('deriveSportId falls back to market prefix even when deriveMarketTypeId returns null', () => {
+  const pick = buildPick({ market: 'nba-spread' }, {});
+  assert.equal(deriveSportId(pick), 'NBA');
+});
