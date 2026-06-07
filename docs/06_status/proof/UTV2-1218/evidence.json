@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1218",
+  "tier": "T2",
+  "verifier": { "identity": "codex-cli/utv2-1218" },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "R2 determinism test executed: computeStatProjection called twice per input set (NBA/NFL/MLB/NHL) with all 5 post-Wave-5 feature modules wired. SHA-256 hash of JSON-serialized output matched on both runs for all 4 sports. Overall deterministic=true. output_hash_run_1 === output_hash_run_2.",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "skip",
+    "queries": [],
+    "row_counts": [],
+    "note": "T2 verification artifact — no DB queries required; determinism is a pure compute property of @unit-talk/domain (stateless, no I/O)"
+  },
+  "sha_binding": {
+    "verified_source_sha": "8169b8595cadb1414bda4fcf9d054991c8b22be2",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-07T00:29:04.187Z"
+  },
+  "artifact_path": "docs/06_status/proof/UTV2-1218/r2-determinism.json",
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false
+  }
+}
