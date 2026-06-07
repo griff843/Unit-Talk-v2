@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1227",
+  "constitutional_gap": "D-CONST-6",
+  "dimension": "downstream_pipeline",
+  "tier": "T1",
+  "verifier": { "identity": "claude/utv2-1227-d-const-6-downstream-activation" },
+  "static_proof": {
+    "type_check": "pass",
+    "lint": "pass",
+    "build": "pass",
+    "unit_tests": "pass",
+    "test_count": 113,
+    "notes": "deploy.yml gate-env patch only — SYNDICATE_MACHINE_ENABLED=true added"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "tests_pass": 7,
+    "tests_fail": 0,
+    "duration_ms": 108277
+  },
+  "r_level": {
+    "verdict": "PASS",
+    "changed_files": 2,
+    "rules_matched": []
+  },
+  "workflow_fix": {
+    "file": ".github/workflows/deploy.yml",
+    "section": "Write deploy gate env",
+    "change": "Added SYNDICATE_MACHINE_ENABLED=true to production env heredoc",
+    "root_cause": "SYNDICATE_MACHINE_ENABLED was never set in any deploy.yml commit; board scan ran with enabled:false → zero candidates → zero scoring → zero board"
+  },
+  "sha_binding": {
+    "verified_source_sha": "PENDING_MERGE",
+    "sha_type": "merge_sha",
+    "note": "SHA binding will be updated with the actual merge SHA after PM t1-approved + merge. Branch HEAD at PR open time is tracked below.",
+    "branch_head_at_pr": null
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "new_provider_subscription": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "governance_brake_bypassed": false,
+    "edge_claim_made": false,
+    "clv_claim_made": false,
+    "production_readiness_claimed": false,
+    "secret_values_in_proof": false
+  },
+  "status": "pre_merge"
+}
