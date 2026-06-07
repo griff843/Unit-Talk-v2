@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1219",
+  "tier": "T1",
+  "verifier": { "identity": "claude/utv2-1219" },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "74 tests — 5 modules × 4 sports + baselines + sentinel check; all pass (0 failures)",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      { "table": "picks", "description": "DB health check — live Supabase confirmed (UTV2-920 atomic tests passed)", "row_count": 1 }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 7, "status": "healthy" }
+    ]
+  },
+  "sha_binding": {
+    "verified_source_sha": "63176980b1edad13a2ce62ecd75039f7e21cb3ce",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-06T00:00:00Z",
+    "note": "Will be updated to merge SHA post-PR"
+  },
+  "fault_injection_results": {
+    "modules_tested": ["matchup-context", "player-form", "opportunity", "efficiency", "game-context"],
+    "sports_covered": ["NBA", "NFL", "MLB", "NHL"],
+    "fail_closed_verified": true,
+    "test_count": 74,
+    "test_file": "apps/api/src/fault-injection.test.ts",
+    "fail_closed_assertions": {
+      "opportunity_projection_zero": "ok:false — 'Opportunity projection must be positive'",
+      "opportunity_projection_negative": "ok:false — 'Opportunity projection must be positive'",
+      "snap_share_suppressed": "ok:false — 'snap_share provenance: usage_rate derived from snap_share proxy'",
+      "usage_rate_source_snap_share": "ok:false — same snap_share guard",
+      "efficiency_projection_zero": "ok:false — 'Efficiency projection must be positive'",
+      "efficiency_projection_negative": "ok:false — 'Efficiency projection must be positive'",
+      "matchup_context_null_downstream": "ok:false — opportunity/efficiency projections collapse to zero",
+      "negative_line": "ok:false — 'Line must be non-negative'"
+    },
+    "documented_gaps": {
+      "nan_efficiency_projection": "NaN is not caught by the <= 0 guard (NaN <= 0 is false in JS); NaN propagates to expected_value",
+      "nan_home_away_factor": "NaN home_away_factor is not validated; propagates to expected_value",
+      "zero_home_away_factor": "Zero home_away_factor is not validated; collapses expected_value to 0",
+      "negative_variance_components": "Negative volatility components are not rejected; Math.max(variance, 0.0001) clamps them",
+      "nan_stat_per_minute": "NaN stat_per_minute is not validated; propagates to feature vector hash"
+    }
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "production_code_modified": false
+  }
+}
