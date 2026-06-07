@@ -33,12 +33,13 @@
 - **Validation gaps tracked:** 4 NaN/zero boundary gaps from UTV2-1219 deferred to hardening follow-up; 1 (negative variance clamp) accepted as correct defensive behavior.
 
 ## D-CONST-6 — Ingestion stale / runtime freshness drift
-- **Status:** `PARTIALLY_RESOLVED` — ingestion dimension restored 2026-06-07; downstream pipeline pending full deploy
+- **Status:** `PARTIALLY_RESOLVED` — ingestion + Market Universe FRESH post-deploy; Candidates/Scoring/Board pending next scheduler cycle
 - **Resolved by (ingestion):** UTV2-1227 (2026-06-07) — SGO key set in GitHub secrets; workflow fixes committed (`e00dd43f`, `b4188980`); diagnostic run 27094141988 confirmed SGO key valid and offers written to `provider_offer_current`; `stage:freshness` Offers FRESH at age ~4m.
+- **Resolved by (deploy):** deploy run 27095266245 completed 2026-06-07T15:06Z (SHA `1e7a564f`) — all 10 deploy gates green. Post-deploy freshness check confirmed Offers FRESH (7m) + **Market Universe FRESH (4m, 355 rows)** — Wave-5 materializer running.
 - **Evidence:** `docs/06_status/proof/D-CONST-6/`
 - **Root cause was:** SGO_API_KEY absent from GitHub secrets at 2026-05-21 deploy; Hetzner `.env.production` written with empty key; ingestor silently skipped all SGO cycles for ~17 days.
-- **Remaining:** full Hetzner re-deploy with Wave-5 code (deploy run 27094264485, triggered 2026-06-07T13:42:52Z) needed to restore Market Universe / Candidates / Scoring / Board freshness. Re-run `pnpm stage:freshness` after deploy to confirm full pipeline recovery.
-- **Note:** D-CONST-6 **not fully closed** until downstream pipeline is also FRESH post-deploy. `P3 remains ACTIVE_NOT_CERTIFIED`. `UTV2-1042` remains data-gated.
+- **Remaining:** Candidates/Scoring/Board stale pending next Hetzner scheduler cycle. Not a code failure — Market Universe only turned FRESH ~4m ago. Re-run `pnpm stage:freshness` after next scheduler cycle to confirm full pipeline recovery.
+- **Note:** D-CONST-6 **not fully closed** until Candidates/Scoring/Board also FRESH. `P3 remains ACTIVE_NOT_CERTIFIED`. `UTV2-1042` remains data-gated.
 
 ## D-CONST-7 — `database.types.ts` drift
 - **Status:** `RESOLVED`
@@ -61,6 +62,6 @@
 | D-CONST-3 Missing cert records | **RESOLVED** (UTV2-1195, PR #950) |
 | D-CONST-4 Proof gate string-bound | **RESOLVED** (UTV2-1196, PR #954) |
 | D-CONST-5 Edge as echo | **RESOLVED** structural (UTV2-1220, PR #983) — empirical deferred to UTV2-1042 |
-| D-CONST-6 Ingestion stale | **PARTIALLY_RESOLVED** — ingestion FRESH; downstream pipeline pending deploy |
+| D-CONST-6 Ingestion stale | **PARTIALLY_RESOLVED** — ingestion + Market Universe FRESH; Candidates/Scoring/Board pending scheduler cycle |
 | D-CONST-7 types drift | **RESOLVED** (UTV2-1198, PR #957) |
 | D-CONST-8 doc fail-open | **RESOLVED** (UTV2-1199, PR #956) |
