@@ -16,7 +16,9 @@
     "docs/06_status/proof/D-CONST-6/deployment-report.md",
     "docs/06_status/proof/D-CONST-6/evidence.json",
     "docs/06_status/proof/D-CONST-6/freshness-report.json",
-    "docs/06_status/proof/D-CONST-6/verification.md"
+    "docs/06_status/proof/D-CONST-6/verification.md",
+    "docs/06_status/proof/UTV2-1227/evidence.json",
+    "docs/06_status/proof/UTV2-1227/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1227/evidence.json"
