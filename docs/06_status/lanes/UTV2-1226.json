@@ -7,22 +7,33 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1226-hardening-stat-projection-clamp",
   "branch": "claude/utv2-1226-hardening-stat-projection-clamp",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "9ffee6159bab1cdf6bfab56ace181c1db694eee5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/986",
+  "files_changed": [
+    "packages/domain/src/models/stat-distribution.ts",
+    "packages/domain/src/models/stat-distribution.test.ts"
+  ],
   "file_scope_lock": [
     "packages/domain/src/models/stat-distribution.test.ts",
     "packages/domain/src/models/stat-distribution.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-07T20:14:01.262Z",
-  "heartbeat_at": "2026-06-07T20:14:01.262Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-07T20:42:27.419Z",
+  "closed_at": "2026-06-07T20:42:27.419Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1226-hardening-stat-projection-clamp.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-07T20:42:09.931Z",
+      "verdict": "pass",
+      "merge_sha": "9ffee6159bab1cdf6bfab56ace181c1db694eee5",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
