@@ -1,30 +1,55 @@
 {
-  "schema_version": 2,
-  "generated_at": "2026-06-07T15:09:32Z",
+  "schema_version": 3,
+  "generated_at": "2026-06-07T18:20:00Z",
   "supabase_project": "zfzdnfwdarxucxtaojxm",
+  "utv2_1227_deploy_sha": "d7b035958c3c96a802ffc27684ac8e6ab08a2e8f",
+  "deploy_run_id": "27100062356",
+  "deploy_completed_at": "2026-06-07T17:52Z",
+
   "stage_freshness_verdict": "DEGRADED",
-  "stage_freshness_note": "Offers + Market Universe FRESH post-deploy; Candidates/Scoring/Board stale pending next Hetzner scheduler cycle",
-  "deploy_sha": "1e7a564f",
-  "deploy_run_id": "27095266245",
-  "deploy_completed_at": "2026-06-07T15:06Z",
-  "checks": [
-    { "stage": "Offers",          "status": "FRESH",  "age_minutes": 7,     "rows_in_window": 1528,  "threshold_minutes": 60  },
-    { "stage": "Market Universe", "status": "FRESH",  "age_minutes": 4,     "rows_in_window": 355,   "threshold_minutes": 120 },
-    { "stage": "Candidates",      "status": "STALE",  "age_minutes": 25589, "rows_in_window": 0,     "threshold_minutes": 240 },
-    { "stage": "Scoring",         "status": "STALE",  "age_minutes": 29549, "rows_in_window": 0,     "threshold_minutes": null },
-    { "stage": "Board",           "status": "STALE",  "age_minutes": 30069, "rows_in_window": 0,     "threshold_minutes": null },
-    { "stage": "Picks",           "status": "FRESH",  "age_minutes": 36,    "rows_in_window": 337,   "threshold_minutes": 240 },
-    { "stage": "Outbox",          "status": "FRESH",  "age_minutes": 38,    "rows_in_window": null,  "threshold_minutes": null },
-    { "stage": "Receipts",        "status": "FRESH",  "age_minutes": 40,    "rows_in_window": 8,     "threshold_minutes": 240 }
-  ],
-  "provider_offer_current": {
-    "latest_updated_at": "2026-06-07T15:02Z",
-    "age_minutes_at_query": 7,
-    "providers_fresh": ["sgo/NBA"]
+  "stage_freshness_note": "stage:freshness uses pick_candidates.created_at (all rows inserted May 20) — structural probe mismatch; pipeline IS active per updated_at evidence",
+
+  "stage_freshness_output": {
+    "run_at": "2026-06-07T18:19:50Z",
+    "stages": [
+      { "stage": "Offers",          "state": "FRESH",  "age_minutes": 5,     "detail": "latest 5m ago, 1546 rows in window (threshold 60m)" },
+      { "stage": "Market Universe", "state": "FRESH",  "age_minutes": 3,     "detail": "latest 3m ago, 355 rows in window (threshold 120m)" },
+      { "stage": "Candidates",      "state": "STALE",  "age_minutes": 25780, "detail": "latest 25780m ago — STALE; 0 rows in window" },
+      { "stage": "Scoring",         "state": "STALE",  "age_minutes": 29740, "detail": "latest scored candidate 29740m ago, 0 in window" },
+      { "stage": "Board",           "state": "STALE",  "age_minutes": 30235, "detail": "latest board candidate 30235m ago, 0 in window" },
+      { "stage": "Picks",           "state": "FRESH",  "age_minutes": 27,    "detail": "latest 27m ago, 709 rows in window (threshold 240m)" },
+      { "stage": "Outbox",          "state": "FRESH",  "age_minutes": 29,    "detail": "pending=318, completed-in-window=0" },
+      { "stage": "Receipts",        "state": "FRESH",  "age_minutes": 30,    "detail": "latest 30m ago, 16 rows in window (threshold 240m)" }
+    ],
+    "verdict": "DEGRADED"
   },
+
+  "pipeline_activity_evidence": {
+    "note": "stage:freshness measures pick_candidates.created_at but board scan uses onConflict:'universe_id' UPDATE — created_at frozen at initial insert (2026-05-20). updated_at reflects actual pipeline activity.",
+    "pick_candidates_updated_at_max": "2026-06-07T18:16:31Z",
+    "pick_candidates_total_rows": 35145,
+    "pick_candidates_scored": 9893,
+    "pick_candidates_board_candidates": 63,
+    "board_candidates_updated_at_range": {
+      "earliest": "2026-06-07T18:16:19Z",
+      "latest": "2026-06-07T18:16:31Z"
+    },
+    "scored_candidates_updated_at_max": "2026-06-07T18:16:31Z",
+    "syndicate_board_rows": 432,
+    "syndicate_board_board_runs": 24
+  },
+
+  "probe_diagnosis": {
+    "issue": "stage:freshness uses created_at for pick_candidates Candidates/Scoring/Board stages",
+    "root_cause": "Board scan uses onConflict:'universe_id' ignoreDuplicates:false — UPDATEs existing rows, changing updated_at but NOT created_at. All 35,145 pick_candidates rows inserted 2026-05-20; created_at permanently outside the 240-minute window.",
+    "impact": "Candidates/Scoring/Board always show STALE unless entirely new universe_id values appear",
+    "fix": "Update stage:freshness lines 159, 173, 200 to use updated_at instead of created_at for pick_candidates stages",
+    "fix_scope": "scripts/stage-freshness-checks.ts — T3 lane"
+  },
+
   "d_const_6_ingestion_dimension": "RESOLVED — live offers flowing from SGO into provider_offer_current",
-  "d_const_6_market_universe_dimension": "RESOLVED — Market Universe FRESH (4m) post-deploy with Wave-5 materializer",
-  "downstream_pipeline_dimension": "PENDING — Candidates/Scoring/Board require next Hetzner scheduler cycle",
-  "note": "Market Universe recovered immediately after deploy. Candidates/Scoring/Board need one scheduler run to propagate. Not a code failure.",
-  "next_action": "Re-run stage:freshness after next Hetzner scheduler cycle (~15-60m); expect full pipeline FRESH"
+  "d_const_6_market_universe_dimension": "RESOLVED — Market Universe FRESH (3m) with Wave-5 materializer",
+  "d_const_6_downstream_pipeline_dimension": "ACTIVE — pipeline running; board scan + scoring + board construction all active at 18:16:31Z. stage:freshness probe blocked by created_at vs updated_at mismatch.",
+
+  "next_action": "PM decision required: (A) accept pipeline activity evidence as D-CONST-6 downstream resolution, OR (B) open T3 lane to fix stage:freshness probe (scripts/stage-freshness-checks.ts lines 159/173/200 — use updated_at)"
 }
