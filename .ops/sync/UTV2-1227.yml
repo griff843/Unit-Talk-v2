@@ -1,0 +1,14 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1227
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/D-CONST-6/evidence.json
+    - docs/06_status/proof/D-CONST-6/freshness-report.json
+    - docs/06_status/proof/D-CONST-6/deployment-report.md
+    - docs/06_status/proof/D-CONST-6/verification.md

@@ -114,6 +114,7 @@ jobs:
           UNIT_TALK_BOT_API_KEY=${{ secrets.UNIT_TALK_BOT_API_KEY }}
           UNIT_TALK_INGESTOR_API_KEY=${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           SGO_API_KEY=${{ secrets.SGO_API_KEY }}
+          SYNDICATE_MACHINE_ENABLED=true
           EOF
 
       - name: Validate progressive delivery contract

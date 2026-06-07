@@ -15,9 +15,15 @@ Confirmed on b4188980 (current main HEAD), 2026-06-07.
 ### pnpm test:db
 
 ```
+1..7
 # tests 7
-# pass  7
-# fail  0
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108248
 ```
 
 Confirmed against live Supabase project zfzdnfwdarxucxtaojxm, 2026-06-07.
@@ -51,8 +57,28 @@ SELECT MAX(created_at), COUNT(*) FROM provider_offer_history WHERE created_at > 
 - No edge, CLV, ROI, or production-readiness claim made
 - No secret values in any proof artifact
 
+## UTV2-1227 — Downstream Activation Patch (2026-06-07)
+
+### Change
+
+Added `SYNDICATE_MACHINE_ENABLED=true` to `.github/workflows/deploy.yml` production env section.
+
+### Root cause
+
+Board scan in `apps/api/src/index.ts` is gated: `runBoardScan(deps, { enabled: environment.SYNDICATE_MACHINE_ENABLED === 'true' })`. This flag was never set in any prior deploy.yml commit — board scan ran every 5 minutes with `enabled: false`, producing zero candidates, zero scoring, zero board.
+
+### Verification (UTV2-1227 T1)
+
+```
+pnpm verify: PASS — 113 tests pass, 0 fail
+pnpm test:db: PASS — 7/7 pass against live Supabase zfzdnfwdarxucxtaojxm
+R-level: PASS — no required artifacts (2 changed files, no rules matched)
+```
+
+Full evidence: `docs/06_status/proof/UTV2-1227/verification.md`
+
 ## Summary
 
-D-CONST-6 **ingestion dimension resolved**: live SGO offers are flowing into `provider_offer_current`. The `stage:freshness` Offers check passes at age ~4 minutes. The downstream pipeline (Market Universe, Candidates, Scoring, Board) remains stale pending full Hetzner re-deploy with Wave-5 code (deploy run 27094264485 triggered 2026-06-07T13:42:52Z).
+D-CONST-6 **ingestion dimension resolved**: live SGO offers are flowing into `provider_offer_current`. Wave-5 materializer FRESH (Market Universe confirmed).
 
-D-CONST-6 is not fully closed until the downstream pipeline is also verified FRESH post-deploy.
+D-CONST-6 **downstream activation**: `SYNDICATE_MACHINE_ENABLED=true` patched in UTV2-1227. Post-deploy freshness of Candidates/Scoring/Board required to close fully.
