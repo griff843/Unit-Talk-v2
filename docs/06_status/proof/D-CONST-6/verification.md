@@ -15,9 +15,15 @@ Confirmed on b4188980 (current main HEAD), 2026-06-07.
 ### pnpm test:db
 
 ```
+1..7
 # tests 7
-# pass  7
-# fail  0
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108248
 ```
 
 Confirmed against live Supabase project zfzdnfwdarxucxtaojxm, 2026-06-07.

@@ -32,10 +32,10 @@
     "root_cause": "SYNDICATE_MACHINE_ENABLED was never set in any deploy.yml commit; board scan ran with enabled:false → zero candidates → zero scoring → zero board"
   },
   "sha_binding": {
-    "verified_source_sha": "PENDING_MERGE",
-    "sha_type": "merge_sha",
-    "note": "SHA binding will be updated with the actual merge SHA after PM t1-approved + merge. Branch HEAD at PR open time is tracked below.",
-    "branch_head_at_pr": null
+    "verified_source_sha": "2983340eff3a9e11acd371afac1ba715fc32d073",
+    "sha_type": "branch_head",
+    "note": "Branch HEAD SHA at PR time. Merge SHA will be bound post-merge via ops:truth-check.",
+    "branch_head_at_pr": "2983340eff3a9e11acd371afac1ba715fc32d073"
   },
   "constitutional_constraints": {
     "sgo_activated": false,
