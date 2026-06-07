@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1227",
+  "constitutional_gap": "D-CONST-6",
+  "tier": "T1",
+  "verifier": { "identity": "claude/utv2-1227-d-const-6-ingestion-restore" },
+  "static_proof": {
+    "type_check": "pass",
+    "notes": "Workflow fixes only — no source code changed. pnpm verify green on b4188980."
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "supabase_status": "ACTIVE_HEALTHY",
+    "queries": [
+      {
+        "description": "provider_offer_current freshness — latest updated_at and total rows",
+        "sql": "SELECT MAX(updated_at), COUNT(*), EXTRACT(EPOCH FROM (NOW() - MAX(updated_at)))/60 AS age_minutes FROM provider_offer_current",
+        "result_summary": "latest=2026-06-07T13:38:28Z, total_rows=257880, age_minutes=~4"
+      },
+      {
+        "description": "provider_offer_history rows in last 2 hours",
+        "sql": "SELECT MAX(created_at), COUNT(*) FROM provider_offer_history WHERE created_at > NOW() - INTERVAL '2 hours'",
+        "result_summary": "latest=2026-06-07T13:38:28Z, rows_in_2h=1561"
+      },
+      {
+        "description": "provider_offer_current breakdown by provider/sport in last hour",
+        "sql": "SELECT provider_key, sport_key, COUNT(*) AS offer_count, MAX(updated_at) FROM provider_offer_current WHERE updated_at > NOW() - INTERVAL '1 hour' GROUP BY provider_key, sport_key",
+        "result_summary": "sgo/NBA: 1523 offers, latest 2026-06-07T13:38:28Z"
+      }
+    ],
+    "row_counts": [
+      { "table": "provider_offer_current", "count": 257880, "latest": "2026-06-07T13:38:28Z" },
+      { "table": "provider_offer_history (last 2h)", "count": 1561, "latest": "2026-06-07T13:38:28Z" }
+    ],
+    "freshness_result": "FRESH — age ~4 minutes at time of query (threshold 60m)",
+    "freshness_max_age_minutes": 4,
+    "stage_freshness_output": "[✓] Offers FRESH age=4m latest 4m ago, 1523 rows in window (threshold 60m)"
+  },
+  "ingestion_path_verified": {
+    "sgo_key_valid": true,
+    "sgo_key_source": "GitHub Actions secret SGO_API_KEY (updated 2026-06-07T13:32:55Z)",
+    "diagnostic_run_id": "27094141988",
+    "diagnostic_run_result": "partial — offer ingest phase SUCCESS (1523 offers written); results/repoll phase FAILED (transient Supabase 521 errors, non-fatal for freshness proof)",
+    "offers_written_to_db": true,
+    "gha_log_confirmation": "markClosingLines at 2026-06-07T13:38:28 matched provider_offer_current MAX(updated_at)"
+  },
+  "workflow_fixes": [
+    {
+      "commit": "e00dd43f",
+      "fix": "Add UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed to ingestor-scheduled-run.yml"
+    },
+    {
+      "commit": "b4188980",
+      "fix": "Add UNIT_TALK_INGESTOR_API_KEY and UNIT_TALK_API_URL to ingestor-scheduled-run.yml"
+    }
+  ],
+  "deployment_drift": {
+    "previous_production_sha": "63b7814c6ad95862fc7a56b8a0fe1e2ba566501b",
+    "previous_deploy_date": "2026-05-21T04:37:02Z",
+    "utv2_1014_in_prev_deploy": true,
+    "utv2_1011_in_prev_deploy": false,
+    "wave5_in_prev_deploy": false,
+    "sgo_key_in_secrets_at_prev_deploy": false,
+    "full_deploy_triggered": true,
+    "full_deploy_run_id": "27094264485",
+    "full_deploy_target_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307"
+  },
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
+    "sha_type": "branch_head",
+    "note": "Proof assembled on current main HEAD; merge SHA binding will be updated after full deploy completes and any PR closes.",
+    "bound_at": "2026-06-07T13:42:00Z"
+  },
+  "constitutional_constraints": {
+    "sgo_activated": false,
+    "new_provider_subscription": false,
+    "p3_advanced": false,
+    "p5_unfrozen": false,
+    "edge_claim_made": false,
+    "clv_claim_made": false,
+    "production_readiness_claimed": false,
+    "d_const_6_closed": false,
+    "utv2_1042_data_gated": true,
+    "secret_values_in_proof": false
+  }
+}

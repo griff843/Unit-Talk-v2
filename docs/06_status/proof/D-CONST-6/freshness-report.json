@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-07T13:42:30Z",
+  "supabase_project": "zfzdnfwdarxucxtaojxm",
+  "stage_freshness_verdict": "DEGRADED",
+  "stage_freshness_note": "Offers FRESH; downstream pipeline stages stale pending full Hetzner re-deploy with Wave-5 code",
+  "checks": [
+    { "stage": "Offers",          "status": "FRESH",  "age_minutes": 4,     "rows_in_window": 1523,  "threshold_minutes": 60  },
+    { "stage": "Market Universe", "status": "STALE",  "age_minutes": 20256, "rows_in_window": 0,     "threshold_minutes": 120 },
+    { "stage": "Candidates",      "status": "STALE",  "age_minutes": 25502, "rows_in_window": 0,     "threshold_minutes": 240 },
+    { "stage": "Scoring",         "status": "STALE",  "age_minutes": 29462, "rows_in_window": 0,     "threshold_minutes": null },
+    { "stage": "Board",           "status": "STALE",  "age_minutes": 29982, "rows_in_window": 0,     "threshold_minutes": null },
+    { "stage": "Picks",           "status": "FRESH",  "age_minutes": 2,     "rows_in_window": 199,   "threshold_minutes": 240 },
+    { "stage": "Outbox",          "status": "FRESH",  "age_minutes": 47,    "rows_in_window": null,  "threshold_minutes": null },
+    { "stage": "Receipts",        "status": "FRESH",  "age_minutes": 49,    "rows_in_window": 5,     "threshold_minutes": 240 }
+  ],
+  "provider_offer_current": {
+    "latest_updated_at": "2026-06-07T13:38:28.297Z",
+    "total_rows": 257880,
+    "age_minutes_at_query": 4,
+    "providers_fresh": ["sgo/NBA"]
+  },
+  "d_const_6_ingestion_dimension": "RESOLVED — live offers flowing from SGO into provider_offer_current",
+  "downstream_pipeline_dimension": "PENDING — Market Universe / Scoring / Board require full Hetzner deploy with Wave-5 code",
+  "next_action": "Monitor full deploy run 27094264485; re-run stage:freshness after deploy completes"
+}

@@ -1,7 +1,7 @@
 # Certification Gap Register
 
-> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated 2026-06-07 (D-CONST-5 structurally resolved by UTV2-1220, PR #983).
-> Canonical ledger of constitutional certification gaps. D-CONST-1 through D-CONST-5 resolved; D-CONST-7/D-CONST-8 resolved 2026-06-04. D-CONST-6 remains OPEN.
+> SPRINT-CONSTITUTIONAL-CONVERGENCE-002 · 2026-06-02. Updated 2026-06-07 (D-CONST-5 structurally resolved by UTV2-1220, PR #983; D-CONST-6 ingestion dimension restored by UTV2-1227).
+> Canonical ledger of constitutional certification gaps. D-CONST-1 through D-CONST-5 resolved; D-CONST-7/D-CONST-8 resolved 2026-06-04. D-CONST-6 ingestion dimension restored 2026-06-07; downstream pipeline pending full deploy.
 
 ## D-CONST-1 — Program numbering drift
 - **Status:** `PM_RATIFIED`
@@ -33,9 +33,12 @@
 - **Validation gaps tracked:** 4 NaN/zero boundary gaps from UTV2-1219 deferred to hardening follow-up; 1 (negative variance clamp) accepted as correct defensive behavior.
 
 ## D-CONST-6 — Ingestion stale / runtime freshness drift
-- **Status:** `OPEN`
-- **Detail:** live provider freshness ~11.7d stale — the §22 "daemon looping empty while healthy" anti-pattern.
-- **Required next action:** runtime hardening + ingestion restoration **when SGO is intentionally reactivated or mocked for no-cost proof** (do not activate SGO in this sprint).
+- **Status:** `PARTIALLY_RESOLVED` — ingestion dimension restored 2026-06-07; downstream pipeline pending full deploy
+- **Resolved by (ingestion):** UTV2-1227 (2026-06-07) — SGO key set in GitHub secrets; workflow fixes committed (`e00dd43f`, `b4188980`); diagnostic run 27094141988 confirmed SGO key valid and offers written to `provider_offer_current`; `stage:freshness` Offers FRESH at age ~4m.
+- **Evidence:** `docs/06_status/proof/D-CONST-6/`
+- **Root cause was:** SGO_API_KEY absent from GitHub secrets at 2026-05-21 deploy; Hetzner `.env.production` written with empty key; ingestor silently skipped all SGO cycles for ~17 days.
+- **Remaining:** full Hetzner re-deploy with Wave-5 code (deploy run 27094264485, triggered 2026-06-07T13:42:52Z) needed to restore Market Universe / Candidates / Scoring / Board freshness. Re-run `pnpm stage:freshness` after deploy to confirm full pipeline recovery.
+- **Note:** D-CONST-6 **not fully closed** until downstream pipeline is also FRESH post-deploy. `P3 remains ACTIVE_NOT_CERTIFIED`. `UTV2-1042` remains data-gated.
 
 ## D-CONST-7 — `database.types.ts` drift
 - **Status:** `RESOLVED`
@@ -58,6 +61,6 @@
 | D-CONST-3 Missing cert records | **RESOLVED** (UTV2-1195, PR #950) |
 | D-CONST-4 Proof gate string-bound | **RESOLVED** (UTV2-1196, PR #954) |
 | D-CONST-5 Edge as echo | **RESOLVED** structural (UTV2-1220, PR #983) — empirical deferred to UTV2-1042 |
-| D-CONST-6 Ingestion stale | OPEN |
+| D-CONST-6 Ingestion stale | **PARTIALLY_RESOLVED** — ingestion FRESH; downstream pipeline pending deploy |
 | D-CONST-7 types drift | **RESOLVED** (UTV2-1198, PR #957) |
 | D-CONST-8 doc fail-open | **RESOLVED** (UTV2-1199, PR #956) |
