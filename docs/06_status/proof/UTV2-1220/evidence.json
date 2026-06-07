@@ -15,10 +15,15 @@
     "row_counts": [],
     "note": "T2 verification — no additional DB queries required; input evidence bundles from UTV2-1217/1218/1219 are SHA-bound and already verified against live Supabase."
   },
+  "status": "pass",
   "sha_binding": {
-    "verified_source_sha": "PENDING_MERGE_SHA",
+    "verified_source_sha": "b399cdf74efcce9d37459406061a593de3ec1fca",
     "sha_type": "merge_sha",
-    "bound_at": "PENDING"
+    "bound_at": "2026-06-07T02:45:00Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "proof_auditor": "pass"
+    }
   },
   "d_const_5_resolution": {
     "status": "RESOLVED",

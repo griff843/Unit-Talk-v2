@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1220-d-const-5-resolution-bundle",
   "branch": "claude/utv2-1220-d-const-5-resolution-bundle",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "b399cdf74efcce9d37459406061a593de3ec1fca",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/983",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1220/evidence.json",
+    "docs/06_status/proof/UTV2-1220/verification.md",
+    "docs/06_status/proof/UTV2-1220/diff-summary.md",
+    "docs/00_constitution/CERTIFICATION_GAP_REGISTER.md",
+    ".ops/sync/UTV2-1220.yml"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1220/evidence.json",
     "docs/06_status/proof/UTV2-1220/verification.md",
@@ -20,14 +26,21 @@
     "docs/06_status/proof/UTV2-1220/diff-summary.md",
     "docs/06_status/proof/UTV2-1220/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-07T02:17:12.855Z",
-  "heartbeat_at": "2026-06-07T02:17:12.855Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-07T02:45:00Z",
+  "closed_at": "2026-06-07T02:45:00Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1220-d-const-5-resolution-bundle.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "run_at": "2026-06-07T02:45:00Z",
+      "result": "pass",
+      "merge_sha": "b399cdf74efcce9d37459406061a593de3ec1fca",
+      "notes": "T2 lane. Type-check pass. Diff summary + verification.md present. pnpm test:db 7/7 pass. SHA bound to merge SHA b399cdf7. Constitutional constraints all false."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
