@@ -72,6 +72,26 @@ Final observed output:
 [lint-migrations] 118 migration file(s) checked - no findings.
 ```
 
+## Live-DB Proof
+
+Command: `pnpm test:db`
+
+Result: PASS — run against live Supabase project zfzdnfwdarxucxtaojxm
+
+```text
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108248
+```
+
+Note: UTV2-1225 is a domain-only change (no DB schema, no runtime). `pnpm test:db` confirms no regression in the live-DB integration layer.
+
 ## R-Level Check
 
 Command: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
