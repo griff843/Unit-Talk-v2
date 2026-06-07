@@ -4,14 +4,16 @@
   "constitutional_gap": "D-CONST-6",
   "dimension": "downstream_pipeline",
   "tier": "T1",
-  "verifier": { "identity": "claude/utv2-1227-d-const-6-downstream-activation" },
+  "verifier": {
+    "identity": "claude/utv2-1227-d-const-6-downstream-activation"
+  },
   "static_proof": {
     "type_check": "pass",
     "lint": "pass",
     "build": "pass",
     "unit_tests": "pass",
     "test_count": 113,
-    "notes": "deploy.yml gate-env patch only — SYNDICATE_MACHINE_ENABLED=true added"
+    "notes": "deploy.yml gate-env patch only \u2014 SYNDICATE_MACHINE_ENABLED=true added"
   },
   "runtime_proof": {
     "pnpm_test_db": "pass",
@@ -29,12 +31,12 @@
     "file": ".github/workflows/deploy.yml",
     "section": "Write deploy gate env",
     "change": "Added SYNDICATE_MACHINE_ENABLED=true to production env heredoc",
-    "root_cause": "SYNDICATE_MACHINE_ENABLED was never set in any deploy.yml commit; board scan ran with enabled:false → zero candidates → zero scoring → zero board"
+    "root_cause": "SYNDICATE_MACHINE_ENABLED was never set in any deploy.yml commit; board scan ran with enabled:false \u2192 zero candidates \u2192 zero scoring \u2192 zero board"
   },
   "sha_binding": {
-    "verified_source_sha": "2983340eff3a9e11acd371afac1ba715fc32d073",
-    "sha_type": "branch_head",
-    "note": "Branch HEAD SHA at PR time. Merge SHA will be bound post-merge via ops:truth-check.",
+    "verified_source_sha": "d7b035958c3c96a802ffc27684ac8e6ab08a2e8f",
+    "sha_type": "merge_sha",
+    "note": "Merge SHA \u2014 PR #985 squash-merged to main 2026-06-07",
     "branch_head_at_pr": "2983340eff3a9e11acd371afac1ba715fc32d073"
   },
   "constitutional_constraints": {
@@ -48,5 +50,5 @@
     "production_readiness_claimed": false,
     "secret_values_in_proof": false
   },
-  "status": "pre_merge"
+  "status": "pass"
 }
