@@ -86,10 +86,9 @@
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "9d46f54b8648e3ccb542e821ff086f2d5a226995",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-06T22:15:00Z",
-    "note": "Bound to main HEAD at time of evidence collection. Will be updated to merge SHA post-PR."
+    "verified_source_sha": "98552597900e1615b8306fa5fed502034aaa2dab",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-07T01:31:28Z"
   },
   "evidence": {
     "model_version_sha": null,

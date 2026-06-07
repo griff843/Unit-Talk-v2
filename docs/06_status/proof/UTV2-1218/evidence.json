@@ -16,9 +16,9 @@
     "note": "T2 verification artifact — no DB queries required; determinism is a pure compute property of @unit-talk/domain (stateless, no I/O)"
   },
   "sha_binding": {
-    "verified_source_sha": "8169b8595cadb1414bda4fcf9d054991c8b22be2",
+    "verified_source_sha": "00eaa61cfdebf6cb43111929e52842db57ad577a",
     "sha_type": "merge_sha",
-    "bound_at": "2026-06-07T00:29:04.187Z"
+    "bound_at": "2026-06-07T01:31:31Z"
   },
   "artifact_path": "docs/06_status/proof/UTV2-1218/r2-determinism.json",
   "constitutional_constraints": {

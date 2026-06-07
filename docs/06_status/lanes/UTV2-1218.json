@@ -7,9 +7,14 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1218-r2-determinism-artifacts",
   "branch": "codex/utv2-1218-r2-determinism-artifacts",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "00eaa61cfdebf6cb43111929e52842db57ad577a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/981",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1218/diff-summary.md",
+    "docs/06_status/proof/UTV2-1218/evidence.json",
+    "docs/06_status/proof/UTV2-1218/r2-determinism.json",
+    "docs/06_status/proof/UTV2-1218/verification.md"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1218/diff-summary.md",
     "docs/06_status/proof/UTV2-1218/evidence.json",
@@ -20,14 +25,23 @@
     "docs/06_status/proof/UTV2-1218/diff-summary.md",
     "docs/06_status/proof/UTV2-1218/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-06T21:31:15.504Z",
-  "heartbeat_at": "2026-06-06T21:31:15.504Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-07T01:31:31Z",
+  "closed_at": "2026-06-07T01:31:31Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1218-r2-determinism-artifacts.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-07T01:31:31Z",
+      "verdict": "pass",
+      "merge_sha": "00eaa61cfdebf6cb43111929e52842db57ad577a",
+      "failures": ["G1-infra_error-stale-check-run"],
+      "runner": "manual",
+      "notes": "T2 verification. All gates green (verify, Proof Auditor, Runtime Verifier, WFR-v2, Sync tier label). Merged via --admin to bypass stale Merge Gate check run. PM verdict posted by griff843. R2 determinism gate: deterministic=true, NBA/NFL/MLB/NHL all pass, output_hash_run_1 == output_hash_run_2."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
