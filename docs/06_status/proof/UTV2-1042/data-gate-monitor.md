@@ -1,11 +1,12 @@
 # UTV2-1042 Data-Gate Monitor
 
-**Report generated:** 2026-06-08T02:30:00Z
+**Report generated:** 2026-06-08T02:45:00Z (v5)
+**Monitor issue:** UTV2-1231
 **Cutover reference:** D-CONST-6 resolution — 2026-06-07T13:38:28Z (SGO first successful ingest)
 **Deploy SHA (Wave-5):** `b4188980292b8c0705461bc3b91a126fc0f7f307`
 **UTV2-1228 fix SHA:** `7605fe94b0009957687b4843fe30631e03e4ef60` (sport_id NULL attribution — on main, post-fix verified)
 **P3 status:** ACTIVE_NOT_CERTIFIED — no CLV/edge claim permitted
-**Monitor updated:** Post-fix sport_id verification + CLV schema audit (2026-06-08T02:30Z)
+**Monitor updated:** v5 — post-board-scan check + pipeline signal (2026-06-08T02:45Z)
 
 ---
 
@@ -20,9 +21,8 @@
 | pick_candidates for post-cutover universe_ids | >0 | **0** — scan not yet run on new rows | NOT MET |
 | Board candidates (is_board_candidate) | >0 | 242 (pre-existing corpus) | PARTIAL |
 | Scored candidates (model_score IS NOT NULL) | >0 | 9,893 (pre-existing corpus) | PARTIAL |
-| Board picks (queued/posted) post-cutover | >0 | 318 | PARTIAL |
-| Approved picks post-cutover | >0 | 1,474 | PARTIAL |
-| Settled picks post-cutover | >0 | 277 | PARTIAL |
+| Board picks (queued/posted) post-cutover | >0 | 336 (+18 since v4) | PARTIAL |
+| Settled picks post-cutover | >0 | 289 (+12 since v4) | PARTIAL |
 | CLV-available picks | >0 | 0 (schema exists, no closing data + no join path) | NOT MET |
 | sport_id attribution (post-cutover picks) | 100% | 11.7% corpus / 41.7% post-fix (all NULLs synthetic) | MONITORING |
 | UTV2-1228 fix deployed | merged | merged `7605fe94` — post-fix verified (0 organic NULLs) | MONITORING |
@@ -46,11 +46,12 @@ The active ingest target is `provider_offer_current`. `provider_offers` is legac
 
 | Metric | Value |
 |---|---|
+| Total historical cycles | 76 |
 | Ingest cycles post-cutover | 1 |
-| First snapshot | 2026-06-07T18:23:33Z |
+| First post-cutover snapshot | 2026-06-07T18:23:33Z |
 | Latest snapshot | 2026-06-07T18:23:33Z |
 
-Single ingest cycle. Not yet re-running as of this snapshot (2026-06-08T01:05Z, ~11h post-cutover).
+76 total historical cycles (back to 2026-04-23). Only 1 post-cutover. Not re-running as of this snapshot (~8h since last cycle).
 
 ---
 
@@ -61,11 +62,12 @@ Single ingest cycle. Not yet re-running as of this snapshot (2026-06-08T01:05Z, 
 | Total rows | 57,756 |
 | Rows created since cutover | 355 |
 | Earliest post-cutover | 2026-06-07T13:46:18Z |
-| Latest post-cutover | 2026-06-07T14:55:28Z |
-| No new rows since | 2026-06-07T14:55:28Z (~10h stale) |
-| Closing lines present | 0 — CLV cannot be computed |
+| Latest created | 2026-06-07T14:55:28Z |
+| Latest updated | **2026-06-08T02:26:50Z** |
+| Rows refreshed at 02:26:50Z | 354 / 355 |
+| Closing lines present (post-cutover) | 0 |
 
-355 new `market_universe` rows were created in a ~70-minute window on cutover day. No additional rows since 14:55Z. The scan pipeline has not yet created `pick_candidates` for these 355 new universe_ids (see below).
+355 new rows created in a ~70-minute window on cutover day. No new rows since 14:55Z. **Pipeline signal:** 354/355 post-cutover rows had `updated_at` advance to 02:26:50Z — the market refresh pipeline is alive and reaching these rows. Closing data remains NULL (open markets, games not yet settled).
 
 ---
 
@@ -77,13 +79,15 @@ Single ingest cycle. Not yet re-running as of this snapshot (2026-06-08T01:05Z, 
 |---|---|
 | Total rows | 35,145 |
 | Updated post-cutover | 35,145 (100%) |
+| Updated post-fix (>= 01:01Z 2026-06-08) | **0** |
 | Created post-cutover | 0 (upsert preserves created_at — see UTV2-1229) |
 | Distinct scan runs post-cutover | 886 |
+| Distinct scan runs post-fix | **0** |
 | Last updated | 2026-06-07T21:37:22Z |
 | is_board_candidate = true | 242 |
 | model_score IS NOT NULL (scored) | 9,893 |
 
-886 scan runs confirm the scan pipeline is active. All 35,145 pre-existing candidates have been processed post-cutover. Last scan run was at 21:37Z.
+886 scan runs post-cutover. **No board-scan cycle has run since the UTV2-1228 fix merged at 01:01Z.** Last scan was at 21:37Z on cutover day — 5h before the fix merged.
 
 ### New inserts: post-cutover universe_ids
 
@@ -126,11 +130,24 @@ WHERE mu.closing_over_odds IS NOT NULL
 | Metric | Value |
 |---|---|
 | Total picks (all time) | 25,884 |
-| Post-cutover picks | 1,646 |
-| Board picks (queued/posted) post-cutover | 318 |
-| Approved post-cutover | 1,474 |
-| Settled post-cutover | 277 |
-| CLV-available | 0 post-cutover — no closing data in post-cutover market_universe + no pick_candidates JOIN path |
+| Post-cutover picks | 1,726 (+80 since v4) |
+| Board picks (queued/posted) post-cutover | 336 (+18 since v4) |
+| Settled post-cutover | 289 (+12 since v4) |
+| CLV-available | 0 — no closing data on post-cutover rows + no pick_candidates JOIN path |
+
+**Post-cutover picks by status:**
+
+| status | approval_status | count |
+|---|---|---|
+| settled | approved | 289 |
+| draft | approved | 246 |
+| awaiting_approval | approved | 235 |
+| queued | approved | 224 |
+| validated | approved | 223 |
+| voided | approved | 218 |
+| validated | pending | 140 |
+| posted | approved | 112 |
+| voided | rejected | 39 |
 
 ### sport_id attribution
 
@@ -236,22 +253,29 @@ Only one `provider_offer_current` snapshot. Market universe last updated ~10h ag
 
 **What closed since last snapshot:**
 - UTV2-1228 (T1): sport_id NULL fix on main (`7605fe94`) — post-fix verified: 0 organic NULLs
-- UTV2-1229 (T2): `created_at` vs `updated_at` measurement corrected — pipeline is active
-- CLV schema audit: CLV schema EXISTS in `market_universe`; no migration needed; monitor query was wrong
+- UTV2-1229 (T2): `created_at` vs `updated_at` measurement corrected
+- CLV schema audit: schema EXISTS in `market_universe`; no migration needed
+- UTV2-1231 (Linear): monitor tracking issue created — T3 ops-monitoring
 
-**Post-fix sport_id verdict:** Attribution blocker cleared. 108 post-fix picks: 41.7% attributed (NBA). All 63 NULLs are synthetic test artifacts. Next organic board scan will produce 100% attributed picks.
+**New signals (v5 vs v4):**
+- Picks: +80 post-cutover (1,646 → 1,726); +12 settled (277 → 289)
+- market_universe: 354/355 post-cutover rows refreshed at 02:26:50Z — market pipeline is alive
+- Board scan: **no cycle since UTV2-1228 fix merge** (last scan 21:37Z cutover day, 5h pre-fix)
+
+**Post-fix sport_id verdict:** Attribution blocker cleared. All post-fix NULLs are synthetic. Next organic board scan confirms.
 
 **What remains blocked:**
-1. CLV: schema exists in `market_universe` but unavailable for post-cutover picks — no closing data (open markets) + no pick_candidates JOIN path. Operational dependency, not a schema gap. T2 monitor correction needed.
-2. Ingest continuity: single cycle, market universe stale since 14:55Z on cutover day
-3. post-cutover universe_ids: 355 new rows with 0 corresponding pick_candidates
+1. CLV: no closing data on post-cutover rows (open markets) + no pick_candidates JOIN path. Operational dependency, not a schema gap.
+2. No board-scan cycle post-fix: pick_candidates stale since 21:37Z; 355 new universe_ids still unprocessed
+3. SGO ingest: 1 cycle post-cutover (stale since 18:23Z cutover day)
 
-**Signal:** The scan pipeline is alive (886 post-cutover scan runs, 35,145 processed, last at 21:37Z). Settled picks: 277. The corpus is pre-existing — no new universe-id candidates have entered the pipeline yet. sport_id blocker is cleared for organic picks.
+**Signal:** Market pipeline is alive (354/355 rows refreshed). Picks are flowing (+80 vs v4). Board scan has not run post-fix — next run will process the 355 new universe_ids and confirm sport_id attribution on fresh organic picks.
 
 ---
 
 ## Verification
 
-**Updated by:** Claude (post UTV2-1228 + UTV2-1229 close, 2026-06-08T01:05Z)
+**Updated by:** Claude (v5 — post-board-scan check, 2026-06-08T02:45Z)
 **Supabase project:** `zfzdnfwdarxucxtaojxm`
-**Queries run:** 2026-06-08T01:00–01:05Z against live DB
+**Queries run:** 2026-06-08T02:30–02:45Z against live DB
+**Monitor issue:** UTV2-1231 (T3 ops-monitoring)

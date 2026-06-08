@@ -1,12 +1,14 @@
 {
   "schema_version": 3,
   "issue_id": "UTV2-1042",
-  "report_generated_at": "2026-06-08T02:30:00Z",
+  "report_generated_at": "2026-06-08T02:45:00Z",
+  "schema_version": 5,
   "cutover_timestamp": "2026-06-07T13:38:28Z",
   "wave5_deploy_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
   "utv2_1228_fix_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
   "supabase_project": "zfzdnfwdarxucxtaojxm",
-  "monitor_updated_by": "Post-fix sport_id verification + CLV schema audit (2026-06-08T02:30Z)",
+  "monitor_updated_by": "v5 snapshot — post-board-scan check + pipeline signal (2026-06-08T02:45Z)",
+  "linear_monitor_issue": "UTV2-1231",
   "dispatch_gate": "BLOCKED",
   "provider_offers": {
     "table": "provider_offers",
@@ -15,26 +17,37 @@
     "post_cutover": 0
   },
   "provider_offer_current": {
+    "ingest_cycles_total": 76,
     "ingest_cycles_post_cutover": 1,
     "first_snapshot": "2026-06-07T18:23:33Z",
-    "latest_snapshot": "2026-06-07T18:23:33Z"
+    "latest_snapshot": "2026-06-07T18:23:33Z",
+    "stale_since": "2026-06-07T18:23:33Z",
+    "note": "76 total historical cycles. Only 1 post-cutover. No new SGO cycle since 18:23Z cutover day."
   },
   "market_universe": {
     "total": 57756,
     "post_cutover": 355,
     "earliest_post_cutover": "2026-06-07T13:46:18Z",
-    "latest_post_cutover": "2026-06-07T14:55:28Z",
-    "closing_lines_present": 0
+    "latest_created": "2026-06-07T14:55:28Z",
+    "latest_updated": "2026-06-08T02:26:50Z",
+    "pipeline_signal": "354/355 post-cutover rows updated at 02:26:50Z — market refresh pipeline is reaching these rows",
+    "closing_lines_present": 0,
+    "closing_over_odds_present": 0,
+    "closing_under_odds_present": 0,
+    "note": "No new rows since 14:55Z cutover day. But 354/355 rows were refreshed at 02:26:50Z, indicating the market pipeline is alive."
   },
   "pick_candidates": {
     "total": 35145,
     "updated_post_cutover": 35145,
+    "updated_post_fix": 0,
     "created_post_cutover": 0,
     "distinct_scan_runs_post_cutover": 886,
+    "distinct_scan_runs_post_fix": 0,
     "last_updated": "2026-06-07T21:37:22Z",
     "board_candidates": 242,
     "scored": 9893,
     "new_inserts_for_postcutover_universe_ids": 0,
+    "board_scan_post_fix_note": "No board-scan cycle has run since UTV2-1228 fix merge (2026-06-08T01:01Z). Last scan at 21:37Z on cutover day.",
     "measurement_note": "created_at is frozen at original INSERT under upsert-on-conflict pattern (UTV2-1229). updated_at is the correct activity signal.",
     "pick_candidate_upsert_behavior": {
       "conflict_target": "universe_id",
@@ -45,10 +58,20 @@
   },
   "picks": {
     "total": 25884,
-    "post_cutover": 1646,
-    "board_post_cutover": 318,
-    "approved_post_cutover": 1474,
-    "settled_post_cutover": 277,
+    "post_cutover": 1726,
+    "board_post_cutover": 336,
+    "settled_post_cutover": 289,
+    "post_cutover_by_status": [
+      { "status": "settled", "approval_status": "approved", "count": 289 },
+      { "status": "draft", "approval_status": "approved", "count": 246 },
+      { "status": "awaiting_approval", "approval_status": "approved", "count": 235 },
+      { "status": "queued", "approval_status": "approved", "count": 224 },
+      { "status": "validated", "approval_status": "approved", "count": 223 },
+      { "status": "voided", "approval_status": "approved", "count": 218 },
+      { "status": "validated", "approval_status": "pending", "count": 140 },
+      { "status": "posted", "approval_status": "approved", "count": 112 },
+      { "status": "voided", "approval_status": "rejected", "count": 39 }
+    ],
     "sport_id_attribution": {
       "all_time_with_sport_id": 5442,
       "all_time_null_sport_id": 20442,
@@ -77,8 +100,9 @@
         "note": "All 63 post-fix NULL sport_id picks are synthetic test artifacts. Zero real organic board picks have NULL sport_id post-fix. Attribution blocker cleared for organic picks. No board-scan cycle has run post-fix yet."
       }
     },
-    "clv_available": "NOT_MET",
-    "clv_note": "CLV schema EXISTS in market_universe (closing_line, closing_over_odds, closing_under_odds). Join path: picks -> pick_candidates (pick_id) -> market_universe (universe_id). CLV unavailable because: (1) post-cutover market_universe rows have 0 closing data (open markets), (2) no pick_candidates exist for post-cutover universe_ids (no join path). No migration required — monitor query was wrong.",
+    "clv_available_post_cutover": 0,
+    "clv_status": "NOT_MET",
+    "clv_note": "CLV schema EXISTS in market_universe (closing_line, closing_over_odds, closing_under_odds). Correct join: picks -> pick_candidates (pick_id) -> market_universe (universe_id) -> closing_over_odds. CLV unavailable because: (1) 0 closing data on post-cutover market_universe rows (open markets); (2) 0 pick_candidates for post-cutover universe_ids. No migration required.",
     "clv_canonical_source": {
       "table": "market_universe",
       "columns": ["closing_line", "closing_over_odds", "closing_under_odds"],
