@@ -10,6 +10,22 @@
 
 ---
 
+## Monitor cadence
+
+**Cron:** every 4 hours at :17 past (cron job `c9ae211f`, auto-expires 7 days — re-register if needed)
+
+**Trigger conditions** — run next snapshot immediately if any change:
+- `provider_offer_current.snapshot_at` advances past 2026-06-07T18:23:33Z (new SGO cycle)
+- `pick_candidates.updated_at` advances past 2026-06-07T21:37:22Z (board scan ran)
+- `market_universe.closing_over_odds IS NOT NULL` for any post-cutover row
+
+**Stop condition** — all three must be met before returning to PM:
+1. `pick_candidates > 0` for post-cutover universe_ids
+2. `closing_over_odds IS NOT NULL` for any post-cutover `market_universe` row
+3. CLV join path (`picks → pick_candidates → market_universe → closing_over_odds`) returns > 0
+
+---
+
 ## Gate status
 
 | Gate | Required | Actual | Status |
