@@ -1,5 +1,7 @@
 # System State — 2026-05-25 07:15
 
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
 ## Branch
 main
 

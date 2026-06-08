@@ -1,5 +1,7 @@
 # Board Convergence Report — PM Execution Runtime Audit
 
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
 **Generated:** 2026-05-24  
 **Operation:** Board Convergence Cleanup — 8-task PM/runtime organization pass  
 **Authority:** PM-authorized board mutation session  

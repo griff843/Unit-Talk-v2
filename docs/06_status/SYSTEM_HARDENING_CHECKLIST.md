@@ -1,5 +1,7 @@
 # System Hardening Checklist
 
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
 Tracking document for the orchestration hardening initiative (2026-05-19).
 Implementation order: Phase 1 → Phase 2 → Phase 3. Do not start Phase 2 until Phase 1 PRs merge. Do not start Phase 3 until Phase 2 PRs merge.
 

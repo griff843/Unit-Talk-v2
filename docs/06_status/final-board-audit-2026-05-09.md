@@ -1,4 +1,7 @@
 # Final Board Audit — System Wire / unit-talk-v2
+
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
 **Date:** 2026-05-09
 **Auditor:** Claude Code (PM instruction)
 **Scope:** System Wire board hygiene pass — all state changes and annotations applied
