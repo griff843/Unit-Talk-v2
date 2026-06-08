@@ -108,7 +108,8 @@ const SCHEMA_DRIFT_REMEDIATION =
 
 function createSchemaDriftProbe(client: UnitTalkSupabaseClient): (table: string) => Promise<SchemaDriftProbeResult> {
   return async (table: string) => {
-    const { count, error } = await client.from(table).select('*', { count: 'exact', head: true });
+    // count: 'planned' uses query-planner statistics (no table scan) — safe on large tables
+    const { count, error } = await client.from(table).select('*', { count: 'planned', head: true });
     return {
       count: count ?? null,
       error: error ? { code: error.code, message: error.message } : null,

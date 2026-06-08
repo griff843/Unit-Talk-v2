@@ -213,6 +213,8 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           # Resolve worker distribution target and promotion target coverage.
           # The worker must cover all *enabled* promotion targets (default: best-bets,
@@ -274,6 +276,8 @@ jobs:
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
             "SYNDICATE_MACHINE_ENABLED=true" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
+            "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
+            "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
@@ -300,13 +304,8 @@ jobs:
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api"
-          DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
-          case "$DEEP_HEALTH_URL" in
-            */health) ;;
-            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/health" ;;
-          esac
           for attempt in $(seq 1 30); do
-            if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
+            if ssh "$DEPLOY_USER@$DEPLOY_HOST" "curl -fsS http://localhost:4000/health >/dev/null 2>&1"; then
               exit 0
             fi
             sleep 10
@@ -363,6 +362,8 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           # Resolve worker distribution target and promotion target coverage.
           # The worker must cover all *enabled* promotion targets (default: best-bets,
@@ -424,6 +425,8 @@ jobs:
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
             "SYNDICATE_MACHINE_ENABLED=true" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
+            "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
+            "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
@@ -443,13 +446,8 @@ jobs:
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
-          DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
-          case "$DEEP_HEALTH_URL" in
-            */health) ;;
-            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/health" ;;
-          esac
           for attempt in $(seq 1 30); do
-            if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
+            if ssh "$DEPLOY_USER@$DEPLOY_HOST" "curl -fsS http://localhost:4000/health >/dev/null 2>&1"; then
               exit 0
             fi
             sleep 10
