@@ -49,7 +49,7 @@ jobs:
             fi
           done
           if [ "$bad" -gt 0 ]; then
-            echo "::warning::$bad malformed manifests found — run scripts/ops/normalize-manifests.ts to fix"
+            echo "::warning::$bad malformed manifests found — run pnpm ops:manifest-repair to fix"
           else
             echo "All lane manifests have valid structure."
           fi
