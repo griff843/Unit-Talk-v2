@@ -271,6 +271,7 @@ jobs:
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
+            "SYNDICATE_MACHINE_ENABLED=true" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
@@ -416,6 +417,7 @@ jobs:
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
+            "SYNDICATE_MACHINE_ENABLED=true" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
