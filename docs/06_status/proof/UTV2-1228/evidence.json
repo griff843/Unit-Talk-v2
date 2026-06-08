@@ -4,13 +4,74 @@
   "tier": "T1",
   "executor": "claude",
   "lane_type": "runtime",
+  "verifier": {
+    "identity": "pm"
+  },
   "sha_binding": {
     "verified_source_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-08T01:01:00.000Z",
     "ci_sentinels": {
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass",
       "verify_exit_0": true,
       "test_db_exit_0": true,
       "r_level_pass": true
     }
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "12/12 pass in packages/db/src/pick-foreign-keys.test.ts — 6 new tests covering SGO-format market key derivation (nba-spread/ml/total, nfl-spread), Soccer/Tennis normalization, and market-prefix fallback path",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "UTV2-217: submitted pick surfaces in DB within 5 seconds — INSERT via atomic submission RPC, SELECT to confirm presence",
+        "row_count": 1
+      },
+      {
+        "table": "submission_events",
+        "description": "UTV2-920: invalid atomic submission rolls back — submission_events row absent after invalid submission",
+        "row_count": 0
+      },
+      {
+        "table": "outbox",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "row_count": 0
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-920/UTV2-996: invalid atomic settlement writes no settlement; re-settling creates correction chain",
+        "row_count": 2
+      },
+      {
+        "table": "participants",
+        "description": "UTV2-883: no duplicate participants for same external_id and sport — unique constraint verified",
+        "row_count": 1
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 1,
+        "status": "healthy"
+      },
+      {
+        "table": "settlement_records",
+        "count": 2,
+        "status": "healthy"
+      },
+      {
+        "table": "participants",
+        "count": 1,
+        "status": "healthy"
+      }
+    ]
   },
   "branch": "claude/utv2-1228-sport-id-null-attribution",
   "generated_at": "2026-06-07T23:00:00.000Z",
