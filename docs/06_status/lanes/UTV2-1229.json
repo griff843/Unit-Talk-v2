@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1229-pick-candidate-create-vs-update-audit",
   "branch": "codex/utv2-1229-pick-candidate-create-vs-update-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "bd45cb37f7af9ef8f05762d7335b1a86cc9ce6df",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/988",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1042/data-gate-monitor.json",
@@ -20,7 +20,7 @@
     "docs/06_status/proof/UTV2-1229/diff-summary.md",
     "docs/06_status/proof/UTV2-1229/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-07T22:25:24.559Z",
   "heartbeat_at": "2026-06-07T22:25:24.559Z",
   "closed_at": null,
