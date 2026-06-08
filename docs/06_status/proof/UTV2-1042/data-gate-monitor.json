@@ -1,155 +1,65 @@
 {
-  "schema_version": 3,
+  "schema_version": 6,
   "issue_id": "UTV2-1042",
-  "report_generated_at": "2026-06-08T02:45:00Z",
-  "schema_version": 5,
+  "report_generated_at": "2026-06-08T16:55:00Z",
   "cutover_timestamp": "2026-06-07T13:38:28Z",
   "wave5_deploy_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
   "utv2_1228_fix_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
+  "syndicate_machine_deploy_sha": "a5cdd2d1",
   "supabase_project": "zfzdnfwdarxucxtaojxm",
-  "monitor_updated_by": "v5 snapshot — post-board-scan check + pipeline signal (2026-06-08T02:45Z)",
+  "monitor_updated_by": "v6 snapshot — Gate 1 MET (pick_candidates 0→1100), SGO cycling, board scan active (2026-06-08T16:55Z)",
   "linear_monitor_issue": "UTV2-1231",
   "dispatch_gate": "BLOCKED",
-  "provider_offers": {
-    "table": "provider_offers",
-    "note": "legacy table — active ingest writes to provider_offer_current",
-    "total": 8191206,
-    "post_cutover": 0
-  },
   "provider_offer_current": {
-    "ingest_cycles_total": 76,
-    "ingest_cycles_post_cutover": 1,
-    "first_snapshot": "2026-06-07T18:23:33Z",
-    "latest_snapshot": "2026-06-07T18:23:33Z",
-    "stale_since": "2026-06-07T18:23:33Z",
-    "note": "76 total historical cycles. Only 1 post-cutover. No new SGO cycle since 18:23Z cutover day."
+    "ingest_cycles_post_cutover": 2,
+    "latest_snapshot": "2026-06-08T14:05:44Z",
+    "note": "2 post-cutover cycles (was 1). Latest at 14:05Z today. SYNDICATE_MACHINE_ENABLED=true deployed 2026-06-08T13:55Z — ingestor now cycling SGO."
   },
   "market_universe": {
-    "total": 57756,
-    "post_cutover": 355,
-    "earliest_post_cutover": "2026-06-07T13:46:18Z",
-    "latest_created": "2026-06-07T14:55:28Z",
-    "latest_updated": "2026-06-08T02:26:50Z",
-    "pipeline_signal": "354/355 post-cutover rows updated at 02:26:50Z — market refresh pipeline is reaching these rows",
-    "closing_lines_present": 0,
-    "closing_over_odds_present": 0,
-    "closing_under_odds_present": 0,
-    "note": "No new rows since 14:55Z cutover day. But 354/355 rows were refreshed at 02:26:50Z, indicating the market pipeline is alive."
+    "closing_over_odds_post_cutover": 0,
+    "note": "Post-cutover market_universe rows have no closing data yet. Open markets, not yet settled. Gate 2 still NOT MET."
   },
   "pick_candidates": {
-    "total": 35145,
-    "updated_post_cutover": 35145,
-    "updated_post_fix": 0,
-    "created_post_cutover": 0,
-    "distinct_scan_runs_post_cutover": 886,
-    "distinct_scan_runs_post_fix": 0,
-    "last_updated": "2026-06-07T21:37:22Z",
-    "board_candidates": 242,
-    "scored": 9893,
-    "new_inserts_for_postcutover_universe_ids": 0,
-    "board_scan_post_fix_note": "No board-scan cycle has run since UTV2-1228 fix merge (2026-06-08T01:01Z). Last scan at 21:37Z on cutover day.",
-    "measurement_note": "created_at is frozen at original INSERT under upsert-on-conflict pattern (UTV2-1229). updated_at is the correct activity signal.",
-    "pick_candidate_upsert_behavior": {
-      "conflict_target": "universe_id",
-      "on_conflict": "UPDATE (status, filter_details, scan_run_id, provenance, expires_at, updated_at)",
-      "created_at_behavior": "frozen at original INSERT — never updated on conflict",
-      "source": "packages/db/src/runtime-repositories.ts DatabasePickCandidateRepository.upsertCandidates()"
-    }
+    "post_cutover_universe_ids_count": 1100,
+    "updated_post_fix": 38032,
+    "last_scan": "2026-06-08T16:47:02Z",
+    "note": "1,100 pick_candidates for post-cutover universe_ids (was 0). Board scan active post-fix: 38,032 candidates scanned, last at 16:47Z."
   },
-  "picks": {
-    "total": 25884,
-    "post_cutover": 1726,
-    "board_post_cutover": 336,
-    "settled_post_cutover": 289,
-    "post_cutover_by_status": [
-      { "status": "settled", "approval_status": "approved", "count": 289 },
-      { "status": "draft", "approval_status": "approved", "count": 246 },
-      { "status": "awaiting_approval", "approval_status": "approved", "count": 235 },
-      { "status": "queued", "approval_status": "approved", "count": 224 },
-      { "status": "validated", "approval_status": "approved", "count": 223 },
-      { "status": "voided", "approval_status": "approved", "count": 218 },
-      { "status": "validated", "approval_status": "pending", "count": 140 },
-      { "status": "posted", "approval_status": "approved", "count": 112 },
-      { "status": "voided", "approval_status": "rejected", "count": 39 }
-    ],
-    "sport_id_attribution": {
-      "all_time_with_sport_id": 5442,
-      "all_time_null_sport_id": 20442,
-      "post_cutover_with_sport_id": 193,
-      "post_cutover_null_sport_id": 1453,
-      "post_cutover_attribution_pct": 11.7,
-      "breakdown_post_cutover": [
-        { "sport_id": null, "count": 1453 },
-        { "sport_id": "NBA", "count": 193 }
-      ],
-      "note": "UTV2-1228 fix on main (7605fe94). 11.7% attributed from smart-form/api picks with metadata.sport set. SGO scanner picks and test artifacts remain NULL. Fix takes effect on next board scan.",
-      "post_fix_verification": {
-        "window": ">= 2026-06-08T01:01:00Z (merge SHA 7605fe94)",
-        "total_post_fix_picks": 108,
-        "with_sport_id": 45,
-        "null_sport_id": 63,
-        "attribution_pct": 41.7,
-        "null_breakdown": [
-          { "source": "smart-form", "count": 30, "artifact_type": "metadata.testRun — DB smoke test artifacts (pnpm test:db)" },
-          { "source": "api", "count": 13, "artifact_type": "band=SUPPRESS + eventName=db-smoke or utv2-1018-proof — proof harness artifacts" },
-          { "source": "t1-proof", "count": 12, "artifact_type": "source=t1-proof — T1 proof harness picks" },
-          { "source": "system-pick-scanner", "count": 4, "artifact_type": "proof_fixture_id (UTV2-519/521) — proof harness fixtures" }
-        ],
-        "organic_null_count": 0,
-        "attribution_blocker_cleared": true,
-        "note": "All 63 post-fix NULL sport_id picks are synthetic test artifacts. Zero real organic board picks have NULL sport_id post-fix. Attribution blocker cleared for organic picks. No board-scan cycle has run post-fix yet."
-      }
-    },
-    "clv_available_post_cutover": 0,
-    "clv_status": "NOT_MET",
-    "clv_note": "CLV schema EXISTS in market_universe (closing_line, closing_over_odds, closing_under_odds). Correct join: picks -> pick_candidates (pick_id) -> market_universe (universe_id) -> closing_over_odds. CLV unavailable because: (1) 0 closing data on post-cutover market_universe rows (open markets); (2) 0 pick_candidates for post-cutover universe_ids. No migration required.",
-    "clv_canonical_source": {
-      "table": "market_universe",
-      "columns": ["closing_line", "closing_over_odds", "closing_under_odds"],
-      "rows_with_closing_line": 51890,
-      "rows_with_closing_over_odds": 55343,
-      "rows_with_closing_under_odds": 48581,
-      "post_cutover_with_closing_data": 0,
-      "join_path": "picks -> pick_candidates ON pick_id -> market_universe ON universe_id",
-      "computation_model": "on-read JOIN — not materialized on picks table",
-      "fix_required": "T2 — monitor query correction only, no migration"
-    }
+  "clv_join": {
+    "count": 0,
+    "query": "picks → pick_candidates (pick_id) → market_universe (universe_id) WHERE closing_over_odds IS NOT NULL AND picks.created_at >= cutover",
+    "note": "0 — blocked on Gate 2 (no closing data on post-cutover market_universe rows)."
   },
   "gate_status": {
-    "ingest_cycles": "PARTIAL",
-    "market_universe_post_cutover": "PARTIAL",
-    "pick_candidates_processed_postcutover": "PARTIAL",
-    "pick_candidates_new_inserts_postcutover_universe": "NOT_MET",
-    "board_picks_post_cutover": "PARTIAL",
-    "approved_post_cutover": "PARTIAL",
-    "settled_post_cutover": "MET",
-    "clv_available": "NOT_MET",
-    "sport_id_attribution": "FLAGGED"
+    "gate_1_pick_candidates_postcutover_universe": "MET",
+    "gate_2_closing_odds_postcutover": "NOT_MET",
+    "gate_3_clv_join_path": "NOT_MET",
+    "all_gates_met": false
   },
   "flags": [
     {
       "id": "FLAG-1",
       "severity": "MONITORING",
       "title": "sport_id attribution: fix verified, no organic NULLs post-fix",
-      "detail": "Post-fix verification (108 picks >= 2026-06-08T01:01Z): 45/108 attributed (41.7%). All 63 NULLs are synthetic test artifacts (testRun, proof_fixture_id, db-smoke, utv2-1018-proof). Zero real organic board picks with NULL sport_id. Attribution blocker cleared. No board-scan cycle has run post-fix — next scan will confirm on organic picks."
+      "detail": "Cleared. Board scan now active post-fix (38,032 scanned, last 16:47Z). Attribution fix confirmed live."
     },
     {
       "id": "FLAG-2",
       "severity": "BLOCKER",
-      "title": "CLV unavailable — no closing data + no join path (schema exists)",
-      "detail": "CLV schema EXISTS in market_universe (closing_line, closing_over_odds, closing_under_odds). No migration required. CLV unavailable because: (1) post-cutover market_universe rows have 0 closing data (open markets, not yet settled); (2) no pick_candidates for post-cutover universe_ids so the picks->pick_candidates->market_universe JOIN yields nothing. Fix: T2 monitor query correction + wait for closing line ingest + board scan on post-cutover universe_ids."
+      "title": "CLV unavailable — no closing data on post-cutover market_universe (Gate 2)",
+      "detail": "CLV schema exists. Gate 1 now MET (1,100 pick_candidates). Gate 2 blocked: post-cutover market_universe rows have 0 closing_over_odds. Time-dependent on market settlement. No action required — monitor on cadence."
     },
     {
       "id": "FLAG-3",
-      "severity": "HIGH",
-      "title": "Zero pick_candidates for post-cutover universe_ids",
-      "detail": "355 new market_universe rows (created 13:46-14:55Z) have 0 corresponding pick_candidates rows. Scan fetch order has not yet reached them."
+      "severity": "CLEARED",
+      "title": "pick_candidates for post-cutover universe_ids: now 1,100 (was 0)",
+      "detail": "Gate 1 MET. SYNDICATE_MACHINE_ENABLED=true deployed 2026-06-08T13:55Z. Board scan reached post-cutover universe_ids."
     },
     {
       "id": "FLAG-4",
-      "severity": "HIGH",
-      "title": "Single ingest cycle — market universe stale since 14:55Z",
-      "detail": "Only one provider_offer_current snapshot. market_universe not updated since 2026-06-07T14:55:28Z."
+      "severity": "CLEARED",
+      "title": "SGO ingest cycling: 2 post-cutover cycles, latest 2026-06-08T14:05:44Z",
+      "detail": "Ingestor active. Was stale since 2026-06-07T18:23:33Z with 1 cycle. Now 2 cycles and advancing."
     }
   ]
 }
