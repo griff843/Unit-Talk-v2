@@ -1,0 +1,76 @@
+name: Ops — Clear Port 80 Conflict
+
+on:
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  clear-port80:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Diagnose what holds port 80
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            echo '=== Port 80 listeners ==='
+            ss -tlnp 'sport = :80' 2>/dev/null || netstat -tlnp 2>/dev/null | grep ':80 ' || echo 'none'
+            echo ''
+            echo '=== Docker containers using port 80 ==='
+            docker ps -a --filter 'publish=80' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || echo 'none'
+            echo ''
+            echo '=== All docker containers ==='
+            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' 2>/dev/null || echo 'none'
+            echo ''
+            echo '=== Systemd services that might own port 80 ==='
+            systemctl list-units --type=service --state=running 2>/dev/null | grep -Ei 'nginx|apache|httpd|caddy|lighttpd' || echo 'none'
+          "
+
+      - name: Stop stale caddy container if present
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            if docker ps -a --format '{{.Names}}' | grep -q '^caddy$'; then
+              echo 'Found caddy container — stopping and removing'
+              docker rm -f caddy
+              echo 'Removed.'
+            else
+              echo 'No caddy container found.'
+            fi
+          "
+
+      - name: Stop host-level services holding port 80
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            for svc in nginx apache2 httpd caddy lighttpd; do
+              if systemctl is-active --quiet \$svc 2>/dev/null; then
+                echo \"Stopping host service: \$svc\"
+                sudo systemctl stop \$svc
+                sudo systemctl disable \$svc
+              fi
+            done
+            echo 'Done. Re-checking port 80:'
+            ss -tlnp 'sport = :80' 2>/dev/null || echo '(nothing on port 80)'
+          "
+
+      - name: Verify port 80 is free
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            if ss -tlnp 'sport = :80' 2>/dev/null | grep -q ':80'; then
+              echo 'ERROR: port 80 still in use after cleanup'
+              ss -tlnp 'sport = :80'
+              exit 1
+            else
+              echo 'Port 80 is free — safe to redeploy.'
+            fi
+          "

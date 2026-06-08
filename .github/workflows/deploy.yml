@@ -439,6 +439,7 @@ jobs:
         run: |
           ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu && cd '$DEPLOY_PATH' && \
+             docker rm -f caddy 2>/dev/null || true && \
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
