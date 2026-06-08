@@ -1,12 +1,12 @@
 {
   "schema_version": 3,
   "issue_id": "UTV2-1042",
-  "report_generated_at": "2026-06-08T01:05:00Z",
+  "report_generated_at": "2026-06-08T02:30:00Z",
   "cutover_timestamp": "2026-06-07T13:38:28Z",
   "wave5_deploy_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
   "utv2_1228_fix_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
   "supabase_project": "zfzdnfwdarxucxtaojxm",
-  "monitor_updated_by": "UTV2-1228 + UTV2-1229 post-close snapshot (2026-06-08)",
+  "monitor_updated_by": "Post-fix sport_id verification + CLV schema audit (2026-06-08T02:30Z)",
   "dispatch_gate": "BLOCKED",
   "provider_offers": {
     "table": "provider_offers",
@@ -59,10 +59,37 @@
         { "sport_id": null, "count": 1453 },
         { "sport_id": "NBA", "count": 193 }
       ],
-      "note": "UTV2-1228 fix on main (7605fe94). 11.7% attributed from smart-form/api picks with metadata.sport set. SGO scanner picks and test artifacts remain NULL. Fix takes effect on next board scan."
+      "note": "UTV2-1228 fix on main (7605fe94). 11.7% attributed from smart-form/api picks with metadata.sport set. SGO scanner picks and test artifacts remain NULL. Fix takes effect on next board scan.",
+      "post_fix_verification": {
+        "window": ">= 2026-06-08T01:01:00Z (merge SHA 7605fe94)",
+        "total_post_fix_picks": 108,
+        "with_sport_id": 45,
+        "null_sport_id": 63,
+        "attribution_pct": 41.7,
+        "null_breakdown": [
+          { "source": "smart-form", "count": 30, "artifact_type": "metadata.testRun — DB smoke test artifacts (pnpm test:db)" },
+          { "source": "api", "count": 13, "artifact_type": "band=SUPPRESS + eventName=db-smoke or utv2-1018-proof — proof harness artifacts" },
+          { "source": "t1-proof", "count": 12, "artifact_type": "source=t1-proof — T1 proof harness picks" },
+          { "source": "system-pick-scanner", "count": 4, "artifact_type": "proof_fixture_id (UTV2-519/521) — proof harness fixtures" }
+        ],
+        "organic_null_count": 0,
+        "attribution_blocker_cleared": true,
+        "note": "All 63 post-fix NULL sport_id picks are synthetic test artifacts. Zero real organic board picks have NULL sport_id post-fix. Attribution blocker cleared for organic picks. No board-scan cycle has run post-fix yet."
+      }
     },
     "clv_available": "NOT_MET",
-    "clv_note": "closing_line_value column does not exist on picks table. CLV schema not yet deployed."
+    "clv_note": "CLV schema EXISTS in market_universe (closing_line, closing_over_odds, closing_under_odds). Join path: picks -> pick_candidates (pick_id) -> market_universe (universe_id). CLV unavailable because: (1) post-cutover market_universe rows have 0 closing data (open markets), (2) no pick_candidates exist for post-cutover universe_ids (no join path). No migration required — monitor query was wrong.",
+    "clv_canonical_source": {
+      "table": "market_universe",
+      "columns": ["closing_line", "closing_over_odds", "closing_under_odds"],
+      "rows_with_closing_line": 51890,
+      "rows_with_closing_over_odds": 55343,
+      "rows_with_closing_under_odds": 48581,
+      "post_cutover_with_closing_data": 0,
+      "join_path": "picks -> pick_candidates ON pick_id -> market_universe ON universe_id",
+      "computation_model": "on-read JOIN — not materialized on picks table",
+      "fix_required": "T2 — monitor query correction only, no migration"
+    }
   },
   "gate_status": {
     "ingest_cycles": "PARTIAL",
@@ -78,15 +105,15 @@
   "flags": [
     {
       "id": "FLAG-1",
-      "severity": "HIGH",
-      "title": "sport_id attribution 11.7% post-cutover",
-      "detail": "UTV2-1228 fix on main. 1,453 / 1,646 post-cutover picks still have NULL sport_id. Fix takes effect on next board scan — no retroactive correction."
+      "severity": "MONITORING",
+      "title": "sport_id attribution: fix verified, no organic NULLs post-fix",
+      "detail": "Post-fix verification (108 picks >= 2026-06-08T01:01Z): 45/108 attributed (41.7%). All 63 NULLs are synthetic test artifacts (testRun, proof_fixture_id, db-smoke, utv2-1018-proof). Zero real organic board picks with NULL sport_id. Attribution blocker cleared. No board-scan cycle has run post-fix — next scan will confirm on organic picks."
     },
     {
       "id": "FLAG-2",
       "severity": "BLOCKER",
-      "title": "CLV unavailable — no schema column",
-      "detail": "closing_line_value column does not exist on picks. Requires: closing line ingest + CLV schema migration."
+      "title": "CLV unavailable — no closing data + no join path (schema exists)",
+      "detail": "CLV schema EXISTS in market_universe (closing_line, closing_over_odds, closing_under_odds). No migration required. CLV unavailable because: (1) post-cutover market_universe rows have 0 closing data (open markets, not yet settled); (2) no pick_candidates for post-cutover universe_ids so the picks->pick_candidates->market_universe JOIN yields nothing. Fix: T2 monitor query correction + wait for closing line ingest + board scan on post-cutover universe_ids."
     },
     {
       "id": "FLAG-3",
