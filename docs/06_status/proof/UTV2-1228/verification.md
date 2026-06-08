@@ -80,3 +80,8 @@ Verdict: PASS
 Changed files: 2
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
+
+## Merge SHA
+
+Merge commit: 7605fe94b0009957687b4843fe30631e03e4ef60
+PR #987 merged to main 2026-06-08T01:01Z.

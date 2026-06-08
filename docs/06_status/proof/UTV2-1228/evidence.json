@@ -5,7 +5,7 @@
   "executor": "claude",
   "lane_type": "runtime",
   "sha_binding": {
-    "verified_source_sha": "b1dad0d95df0eb89de676325b4619247aed72a37",
+    "verified_source_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
     "ci_sentinels": {
       "verify_exit_0": true,
       "test_db_exit_0": true,
