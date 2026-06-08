@@ -5,7 +5,7 @@
   "executor": "claude",
   "lane_type": "runtime",
   "sha_binding": {
-    "verified_source_sha": "PENDING_MERGE",
+    "verified_source_sha": "b1dad0d95df0eb89de676325b4619247aed72a37",
     "ci_sentinels": {
       "verify_exit_0": true,
       "test_db_exit_0": true,
