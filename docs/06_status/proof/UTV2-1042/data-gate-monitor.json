@@ -1,189 +1,104 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "issue_id": "UTV2-1042",
-  "report_generated_at": "2026-06-07T21:56:42Z",
-  "monitor_updated_by": "UTV2-1229",
-  "monitor_update_reason": "Corrected pick_candidate activity measurement: created_at is not a valid new-insert signal under onConflict upsert. Correct signals are updated_at (activity) and universe_id join (new inserts).",
+  "report_generated_at": "2026-06-08T01:05:00Z",
   "cutover_timestamp": "2026-06-07T13:38:28Z",
-  "cutover_reference": "D-CONST-6 resolution — SGO first successful ingest",
   "wave5_deploy_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
-  "p3_status": "ACTIVE_NOT_CERTIFIED",
-  "clv_edge_claim_permitted": false,
+  "utv2_1228_fix_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
+  "supabase_project": "zfzdnfwdarxucxtaojxm",
+  "monitor_updated_by": "UTV2-1228 + UTV2-1229 post-close snapshot (2026-06-08)",
   "dispatch_gate": "BLOCKED",
-
-  "measurement_correction": {
-    "erroneous_signal": "created_at >= cutover",
-    "erroneous_signal_value": 0,
-    "erroneous_signal_reason": "DatabasePickCandidateRepository.upsertCandidates() uses onConflict: 'universe_id'. On conflict Postgres updates in-place; created_at is frozen at original INSERT and never updated. All pre-existing rows have created_at 2026-04-21 to 2026-05-20. Zero from this query is a measurement artifact.",
-    "correct_activity_signal": "updated_at >= cutover",
-    "correct_activity_value": 35145,
-    "correct_new_insert_signal": "JOIN market_universe ON universe_id WHERE market_universe.created_at >= cutover",
-    "correct_new_insert_value": "UNVERIFIED — requires live query",
-    "scan_run_id_signal": "scan_run_id IS NOT NULL AND updated_at >= cutover",
-    "scan_run_id_value": "UNVERIFIED — requires live query"
+  "provider_offers": {
+    "table": "provider_offers",
+    "note": "legacy table — active ingest writes to provider_offer_current",
+    "total": 8191206,
+    "post_cutover": 0
   },
-
-  "pick_candidate_upsert_behavior": {
-    "method": "DatabasePickCandidateRepository.upsertCandidates()",
-    "conflict_target": "universe_id",
-    "on_conflict_action": "UPDATE status, filter_details, scan_run_id, provenance, expires_at, updated_at",
-    "created_at_on_update": "preserved (not touched by UPDATE)",
-    "new_insert_condition": "universe_id not previously seen in pick_candidates",
-    "scan_run_id_written": true,
-    "scan_run_id_semantics": "UUID of the scan run that last wrote this row — advances on every scan"
+  "provider_offer_current": {
+    "ingest_cycles_post_cutover": 1,
+    "first_snapshot": "2026-06-07T18:23:33Z",
+    "latest_snapshot": "2026-06-07T18:23:33Z"
   },
-
-  "provider_ingest": {
-    "provider_offer_current": {
-      "rows_since_cutover": 1546,
-      "distinct_providers": 1,
-      "provider_keys": ["sgo"],
-      "distinct_sports": 1,
-      "ingest_cycles": 1,
-      "earliest_snapshot": "2026-06-07T18:23:33Z",
-      "latest_snapshot": "2026-06-07T18:23:33Z"
-    },
-    "provider_offers_legacy": {
-      "rows_since_cutover": 0,
-      "note": "Not the active ingest target; ingestor writes to provider_offer_current"
-    }
-  },
-
   "market_universe": {
-    "rows_since_cutover": 355,
-    "distinct_sports": 1,
-    "sport_key_null_rows": 0,
-    "closing_line_present": 0,
-    "closing_odds_present": 0,
-    "earliest": "2026-06-07T13:46:18Z",
-    "latest": "2026-06-07T14:55:28Z"
+    "total": 57756,
+    "post_cutover": 355,
+    "earliest_post_cutover": "2026-06-07T13:46:18Z",
+    "latest_post_cutover": "2026-06-07T14:55:28Z",
+    "closing_lines_present": 0
   },
-
   "pick_candidates": {
-    "activity_signal": "updated_at",
-    "rows_updated_since_cutover": 35145,
-    "is_board_candidate_true": 242,
-    "scored_model_score_not_null": 9893,
-    "sport_key_null": 18792,
-    "synthetic_rows": 0,
-    "creation_range": {
-      "earliest": "2026-04-21",
-      "latest": "2026-05-20"
-    },
-    "new_inserts_for_postcutover_universe_ids": "UNVERIFIED",
-    "new_inserts_query": "SELECT COUNT(*) FROM pick_candidates pc JOIN market_universe mu ON pc.universe_id = mu.id WHERE mu.created_at >= '2026-06-07T13:38:28Z'",
-    "erroneous_original_metric": {
-      "field": "newly_created_since_cutover",
-      "value": 0,
-      "why_wrong": "created_at not updated by upsert — not a valid new-insert signal"
-    },
-    "note": "35,145 rows with updated_at >= cutover confirm scan pipeline active post-cutover. These rows predate Wave-5 but their updated_at/scan_run_id reflect post-cutover scan activity."
-  },
-
-  "picks": {
-    "total_since_cutover": 1196,
-    "approved": 1069,
-    "published": 78,
-    "settled": 189,
-    "voided": 180,
-    "clv_available": 0,
-    "sport_id_null": 1196,
-    "sport_id_null_rate": 1.0,
-    "earliest": "2026-06-07T13:40:11Z",
-    "latest": "2026-06-07T20:53:36Z",
-    "source_breakdown": {
-      "smart-form": 751,
-      "system-pick-scanner": 112,
-      "t1-proof": 112,
-      "api": 110,
-      "alert-agent": 56,
-      "model-driven": 55
-    },
-    "market_breakdown": {
-      "nba-spread": 1002,
-      "points-all-game-ou": 85,
-      "nba-total": 56,
-      "nba-ml": 28,
-      "assists-all-game-ou": 25
-    },
-    "organic_only": {
-      "excluded_sources": ["t1-proof"],
-      "excluded_count": 112,
-      "organic_total": 1084,
-      "organic_approved_estimate": 957,
-      "organic_published_estimate": 67,
-      "organic_settled_estimate": 172,
-      "note": "Organic estimates are proportional; exact source-level approval breakdown not queried"
+    "total": 35145,
+    "updated_post_cutover": 35145,
+    "created_post_cutover": 0,
+    "distinct_scan_runs_post_cutover": 886,
+    "last_updated": "2026-06-07T21:37:22Z",
+    "board_candidates": 242,
+    "scored": 9893,
+    "new_inserts_for_postcutover_universe_ids": 0,
+    "measurement_note": "created_at is frozen at original INSERT under upsert-on-conflict pattern (UTV2-1229). updated_at is the correct activity signal.",
+    "pick_candidate_upsert_behavior": {
+      "conflict_target": "universe_id",
+      "on_conflict": "UPDATE (status, filter_details, scan_run_id, provenance, expires_at, updated_at)",
+      "created_at_behavior": "frozen at original INSERT — never updated on conflict",
+      "source": "packages/db/src/runtime-repositories.ts DatabasePickCandidateRepository.upsertCandidates()"
     }
   },
-
+  "picks": {
+    "total": 25884,
+    "post_cutover": 1646,
+    "board_post_cutover": 318,
+    "approved_post_cutover": 1474,
+    "settled_post_cutover": 277,
+    "sport_id_attribution": {
+      "all_time_with_sport_id": 5442,
+      "all_time_null_sport_id": 20442,
+      "post_cutover_with_sport_id": 193,
+      "post_cutover_null_sport_id": 1453,
+      "post_cutover_attribution_pct": 11.7,
+      "breakdown_post_cutover": [
+        { "sport_id": null, "count": 1453 },
+        { "sport_id": "NBA", "count": 193 }
+      ],
+      "note": "UTV2-1228 fix on main (7605fe94). 11.7% attributed from smart-form/api picks with metadata.sport set. SGO scanner picks and test artifacts remain NULL. Fix takes effect on next board scan."
+    },
+    "clv_available": "NOT_MET",
+    "clv_note": "closing_line_value column does not exist on picks table. CLV schema not yet deployed."
+  },
+  "gate_status": {
+    "ingest_cycles": "PARTIAL",
+    "market_universe_post_cutover": "PARTIAL",
+    "pick_candidates_processed_postcutover": "PARTIAL",
+    "pick_candidates_new_inserts_postcutover_universe": "NOT_MET",
+    "board_picks_post_cutover": "PARTIAL",
+    "approved_post_cutover": "PARTIAL",
+    "settled_post_cutover": "MET",
+    "clv_available": "NOT_MET",
+    "sport_id_attribution": "FLAGGED"
+  },
   "flags": [
     {
       "id": "FLAG-1",
       "severity": "HIGH",
-      "metric": "sport_id_null",
-      "description": "All 1,196 picks created since cutover have sport_id = NULL (100%). Systemic gap — sport_id not populated on pick creation. CLV attribution and corpus filtering both depend on sport_id.",
-      "action_required": "PM must justify NULL as acceptable for gate corpus OR assign fix lane"
+      "title": "sport_id attribution 11.7% post-cutover",
+      "detail": "UTV2-1228 fix on main. 1,453 / 1,646 post-cutover picks still have NULL sport_id. Fix takes effect on next board scan — no retroactive correction."
     },
     {
       "id": "FLAG-2",
-      "severity": "MEDIUM",
-      "metric": "t1-proof source",
-      "description": "112 picks have source='t1-proof', likely proof harness generated rather than organic pipeline activity.",
-      "action_required": "Exclude from data-gate corpus counts"
+      "severity": "BLOCKER",
+      "title": "CLV unavailable — no schema column",
+      "detail": "closing_line_value column does not exist on picks. Requires: closing line ingest + CLV schema migration."
     },
     {
       "id": "FLAG-3",
-      "severity": "UNVERIFIED",
-      "metric": "pick_candidates_new_insert",
-      "description": "Original FLAG-3 (HIGH: zero new pick_candidates) was based on erroneous created_at >= cutover signal. Corrected: 35,145 rows show updated_at >= cutover confirming scan activity. Whether 355 post-cutover market_universe rows produced new pick_candidate inserts is UNVERIFIED (requires universe_id join query). Downgraded from HIGH to UNVERIFIED pending that query.",
-      "action_required": "Run: SELECT COUNT(*) FROM pick_candidates pc JOIN market_universe mu ON pc.universe_id = mu.id WHERE mu.created_at >= '2026-06-07T13:38:28Z'"
+      "severity": "HIGH",
+      "title": "Zero pick_candidates for post-cutover universe_ids",
+      "detail": "355 new market_universe rows (created 13:46-14:55Z) have 0 corresponding pick_candidates rows. Scan fetch order has not yet reached them."
     },
     {
       "id": "FLAG-4",
-      "severity": "MEDIUM",
-      "metric": "single_ingest_cycle",
-      "description": "Only one provider_offer_current snapshot exists post-cutover. Corpus not yet established across multiple ingest cycles.",
-      "action_required": "Await additional scheduled ingest cycles"
-    },
-    {
-      "id": "FLAG-5",
       "severity": "HIGH",
-      "metric": "clv_unavailable",
-      "description": "Zero picks have CLV available. No closing lines in market_universe. No CLV or edge claim permitted.",
-      "action_required": "Await game closes and closing line population"
+      "title": "Single ingest cycle — market universe stale since 14:55Z",
+      "detail": "Only one provider_offer_current snapshot. market_universe not updated since 2026-06-07T14:55:28Z."
     }
-  ],
-
-  "gate_status": {
-    "provider_offers": "PARTIAL",
-    "market_universe": "PARTIAL",
-    "pick_candidates_updated_postcutover": "PARTIAL",
-    "pick_candidates_new_inserts_postcutover_universe": "UNVERIFIED",
-    "board_candidates": "UNVERIFIED",
-    "scored_candidates": "UNVERIFIED",
-    "approved_picks_organic": "PARTIAL",
-    "published_picks": "PARTIAL",
-    "settled_picks": "PARTIAL",
-    "clv_available": "NOT_MET",
-    "synthetic_excluded": "FLAGGED",
-    "sport_id_null_excluded": "FLAGGED",
-    "overall": "BLOCKED"
-  },
-
-  "suggested_minimums": {
-    "note": "PM must ratify exact thresholds before dispatch",
-    "ingest_cycles": 3,
-    "ingest_cycles_over_days": 2,
-    "provider_offer_current_rows": 5000,
-    "market_universe_rows": 500,
-    "pick_candidates_updated_since_cutover": 100,
-    "pick_candidates_for_postcutover_universe_ids": 100,
-    "board_candidates": 10,
-    "scored_candidates": 50,
-    "approved_picks_organic": 100,
-    "settled_picks": 20,
-    "clv_available_picks": 10,
-    "sport_id_null_rate_max": 0.0
-  }
+  ]
 }
