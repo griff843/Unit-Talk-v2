@@ -212,6 +212,7 @@ jobs:
           UNIT_TALK_ENABLED_TARGETS: ${{ secrets.UNIT_TALK_ENABLED_TARGETS }}
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
         run: |
           # Resolve worker distribution target and promotion target coverage.
           # The worker must cover all *enabled* promotion targets (default: best-bets,
@@ -271,13 +272,17 @@ jobs:
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
+            "SYNDICATE_MACHINE_ENABLED=true" \
+            "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
-      - name: Upload compose manifest
+      - name: Upload compose manifest and config files
         run: |
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
           scp deploy/production/docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.yml"
+          scp deploy/production/loki-config.yaml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/loki-config.yaml"
+          scp deploy/production/Caddyfile "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/Caddyfile"
 
       - name: Authenticate GHCR on remote
         env:
@@ -357,6 +362,7 @@ jobs:
           UNIT_TALK_ENABLED_TARGETS: ${{ secrets.UNIT_TALK_ENABLED_TARGETS }}
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
         run: |
           # Resolve worker distribution target and promotion target coverage.
           # The worker must cover all *enabled* promotion targets (default: best-bets,
@@ -416,6 +422,8 @@ jobs:
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
+            "SYNDICATE_MACHINE_ENABLED=true" \
+            "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 

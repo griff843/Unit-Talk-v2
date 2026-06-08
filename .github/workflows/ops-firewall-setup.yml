@@ -1,0 +1,88 @@
+name: Ops — Firewall Setup (UFW)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+
+jobs:
+  firewall:
+    name: Configure UFW on production host
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Show current firewall state
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            echo '=== CURRENT UFW STATUS ==='
+            sudo ufw status verbose 2>/dev/null || echo 'UFW not installed or not running'
+          "
+
+      - name: Apply UFW rules
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -eu
+
+            # Install UFW if not present
+            if ! command -v ufw >/dev/null 2>&1; then
+              echo 'Installing UFW...'
+              sudo apt-get update -qq && sudo apt-get install -y -qq ufw
+            fi
+
+            # Reset to defaults before applying rules
+            sudo ufw --force reset
+
+            # Default policies
+            sudo ufw default deny incoming
+            sudo ufw default allow outgoing
+
+            # Allow SSH (must be first to avoid lockout)
+            sudo ufw allow 22/tcp comment 'SSH'
+
+            # Allow HTTP and HTTPS for Caddy
+            sudo ufw allow 80/tcp comment 'HTTP (Caddy redirect)'
+            sudo ufw allow 443/tcp comment 'HTTPS (Caddy TLS)'
+
+            # Enable without prompting
+            sudo ufw --force enable
+
+            echo ''
+            echo '=== NEW UFW STATUS ==='
+            sudo ufw status verbose
+          "
+
+      - name: Verify API port 4000 is NOT publicly accessible
+        run: |
+          echo "Verifying port 4000 is not in the allow list (should be internal Docker only)..."
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            if sudo ufw status | grep -q '4000'; then
+              echo 'WARNING: port 4000 is in UFW allow list — it should be Docker-internal only'
+              exit 1
+            else
+              echo 'OK: port 4000 not in UFW allow list'
+            fi
+          "

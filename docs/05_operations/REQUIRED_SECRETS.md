@@ -185,6 +185,14 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "purpose": "SportsGameOdds fallback API key for ingestor runtime and repair workflows."
     },
     {
+      "name": "CADDY_DOMAIN",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Production domain name for Caddy TLS reverse proxy (e.g. api.unit-talk.com). Written to .env.production as CADDY_DOMAIN. Caddy reads this via {$CADDY_DOMAIN} in Caddyfile. If empty, Caddy will not bind a valid hostname and TLS will not be provisioned — API remains accessible on port 4000 only."
+    },
+    {
       "name": "DISCORD_GUILD_ID",
       "required": false,
       "source": "manual",

@@ -116,18 +116,19 @@ jobs:
 
       - name: Install cron jobs
         run: |
-          SCRIPTS_PATH="$DEPLOY_PATH/scripts"
+          # SCRIPTS_PATH expands on the runner (from DEPLOY_PATH env var) before SSH
+          SCRIPTS_PATH="${DEPLOY_PATH}/scripts"
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "
             # Health watcher: every 2 minutes
             (crontab -l 2>/dev/null | grep -v container-health-watch; \
-             echo '*/2 * * * * ${SCRIPTS_PATH}/container-health-watch.sh >> /var/log/unit-talk-health-watch.log 2>&1') | crontab -
+             printf '*/2 * * * * ${SCRIPTS_PATH}/container-health-watch.sh >> /var/log/unit-talk-health-watch.log 2>&1\n') | crontab -
 
             # Disk alert: every hour at minute 5 (avoids congestion at :00)
             (crontab -l 2>/dev/null | grep -v disk-alert; \
-             echo '5 * * * * ${SCRIPTS_PATH}/disk-alert.sh >> /var/log/unit-talk-disk-alert.log 2>&1') | crontab -
+             printf '5 * * * * ${SCRIPTS_PATH}/disk-alert.sh >> /var/log/unit-talk-disk-alert.log 2>&1\n') | crontab -
 
             echo 'Installed cron jobs:'
-            crontab -l | grep unit-talk || echo '(none found)'
+            crontab -l | grep -E 'container-health-watch|disk-alert' || echo '(none found — check DEPLOY_PATH expansion)'
           "
 
       - name: Verify and report
