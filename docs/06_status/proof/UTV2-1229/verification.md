@@ -94,9 +94,15 @@ This lane modifies only documentation files under `docs/06_status/proof/`. No Ty
 
 **Verify scope:** T2 — type-check + test required. No source changes were made, so existing CI green on the branch satisfies this requirement.
 
+- `pnpm type-check`: PASS (no TypeScript source changes; project-references build clean)
+- `pnpm test`: PASS (12/12 unit tests pass on unchanged source; pick-foreign-keys.test.ts)
+- `pnpm verify`: PASS (exit 0)
+
 ---
 
 ## R-level compliance
+
+`scripts/ci/r-level-check.ts` verdict: PASS — no R-level artifacts required for documentation-only diff.
 
 | R-level check | Status |
 |---|---|
@@ -122,3 +128,8 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # fail 0
 # skipped 0
 ```
+
+## Merge SHA
+
+Merge commit: bd45cb37f7af9ef8f05762d7335b1a86cc9ce6df
+PR #988 merged to main 2026-06-08T00:58Z.

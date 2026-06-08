@@ -77,3 +77,8 @@ The measurement was incorrect. The monitor used `created_at >= cutover` to count
 ## Scope compliance
 
 File scope lock honored: only `docs/06_status/proof/UTV2-1042/data-gate-monitor.md`, `docs/06_status/proof/UTV2-1042/data-gate-monitor.json`, `docs/06_status/proof/UTV2-1229/diff-summary.md`, `docs/06_status/proof/UTV2-1229/verification.md` were written.
+
+## Merge SHA
+
+bd45cb37f7af9ef8f05762d7335b1a86cc9ce6df
+PR #988 merged to main 2026-06-08T00:58Z.
