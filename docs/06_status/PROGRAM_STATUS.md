@@ -1,5 +1,8 @@
 # Program Status
 
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
+
 > Canonical high-level status authority for Unit Talk V2.
 > Adopted 2026-03-21. Operating model: `docs/05_operations/SPRINT_MODEL_v2.md`.
 > Operational work queue: Linear live state.

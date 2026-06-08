@@ -1,5 +1,7 @@
 # Stage 2 Activation Checklist — WS-1.2 / WS-1.3
 
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
 **Generated:** 2026-05-24  
 **Status:** Pre-activation — WS-1.3 immediately activatable; WS-1.2 activates on UTV2-1087 close  
 **Authority:** PM  

@@ -1,4 +1,7 @@
 # Board Audit — System Wire / unit-talk-v2
+
+> **SUPERSEDED / HISTORICAL — This document is retained for audit history only. Current state lives in docs/06_status/CURRENT_STATE.md.**
+
 **Date:** 2026-05-09  
 **Auditor:** Claude Code (PM instruction)  
 **Scope:** All non-Done, non-Canceled workflow states in the unit-talk-v2 Linear workspace  
