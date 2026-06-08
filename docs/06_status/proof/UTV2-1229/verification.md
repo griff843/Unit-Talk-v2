@@ -133,3 +133,5 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 
 Merge commit: bd45cb37f7af9ef8f05762d7335b1a86cc9ce6df
 PR #988 merged to main 2026-06-08T00:58Z.
+
+Merge SHA: 718e4e81290311625686c7c9e6c22b6e59d50bb5

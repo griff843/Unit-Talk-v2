@@ -20,14 +20,28 @@
     "docs/06_status/proof/UTV2-1229/diff-summary.md",
     "docs/06_status/proof/UTV2-1229/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-07T22:25:24.559Z",
-  "heartbeat_at": "2026-06-07T22:25:24.559Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-08T01:00:59.033Z",
+  "closed_at": "2026-06-08T01:00:59.033Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1229-pick-candidate-create-vs-update-audit.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-08T01:00:56.716Z",
+      "verdict": "pass",
+      "merge_sha": "bd45cb37f7af9ef8f05762d7335b1a86cc9ce6df",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/988",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
