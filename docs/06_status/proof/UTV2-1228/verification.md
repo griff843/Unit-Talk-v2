@@ -1,4 +1,4 @@
-## UTV2-1228 Verification
+## Verification
 
 **Issue:** Fix post-cutover sport_id NULL attribution for live picks/candidates  
 **Branch:** claude/utv2-1228-sport-id-null-attribution  
@@ -69,7 +69,9 @@ ok 4 - UTV2-920: invalid atomic settlement writes no settlement
 ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
 ok 6 - UTV2-996: re-settling a settled pick creates correction
 ok 7 - UTV2-996: correction chain is additive
-# tests 7  pass 7  fail 0  duration_ms 132397
+# pass 7
+# fail 0
+# skipped 0
 ```
 
 ### R-level check
