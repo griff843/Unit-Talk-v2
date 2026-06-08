@@ -43,6 +43,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
     networks:
       - unit-talk
     deploy:
@@ -61,6 +67,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
     networks:
       - unit-talk
     deploy:
@@ -79,6 +91,12 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'node' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
     networks:
       - unit-talk
     deploy:
@@ -94,6 +112,7 @@ services:
       - "127.0.0.1:3100:3100"
     volumes:
       - loki-data:/loki
+      - ./loki-config.yaml:/etc/loki/local-config.yaml:ro
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
     networks:
@@ -129,6 +148,28 @@ services:
           memory: 128m
           cpus: '0.1'
 
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+          cpus: '0.1'
+
 networks:
   unit-talk:
     driver: bridge
@@ -136,3 +177,5 @@ networks:
 volumes:
   loki-data:
   grafana-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,29 @@
+# Reverse proxy for Unit Talk V2 API
+# Domain is injected via CADDY_DOMAIN env var at deploy time.
+# Caddy handles TLS issuance and renewal automatically via Let's Encrypt.
+# Port 4000 remains bound inside the Docker network only; not exposed publicly.
+
+{$CADDY_DOMAIN} {
+    reverse_proxy api:4000
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        -Server
+    }
+
+    # Health check passthrough (no auth required)
+    @health path /health
+    handle @health {
+        reverse_proxy api:4000
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
+
+# HTTP → HTTPS redirect handled automatically by Caddy

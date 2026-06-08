@@ -6,7 +6,7 @@
 #
 # Version: matched to UNIT_TALK_IMAGE_TAG at deploy time.
 
-version: 2
+version: 3
 
 services:
   api:
@@ -101,6 +101,24 @@ services:
       Operator log exploration UI. Anonymous admin access enabled (internal-only port).
       Loki datasource auto-provisioned via Docker Compose configs: block — no SCP
       of provisioning directory required.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports: [80, 443]
+    restart: unless-stopped
+    depends_on: [api]
+    resource_limits:
+      memory: 64m
+      cpus: '0.1'
+    required_env:
+      - CADDY_DOMAIN
+    config_files:
+      - Caddyfile
+    notes: >
+      TLS-terminating reverse proxy. Handles HTTP→HTTPS redirect and Let's Encrypt
+      cert issuance/renewal automatically. Domain configured via CADDY_DOMAIN secret.
+      Port 4000 is NOT exposed publicly — only reachable from caddy via Docker network.
 
 network:
   name: unit-talk
