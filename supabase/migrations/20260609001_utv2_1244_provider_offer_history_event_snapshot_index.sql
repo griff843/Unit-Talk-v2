@@ -1,17 +1,18 @@
 -- UTV2-1244: Add provider_event_id + snapshot_at index to provider_offer_history
 --
 -- Background: provider_offer_history has 713,978 rows. The table's only indexes are
--- on (snapshot_at, id) and (snapshot_at, idempotency_key). UTV2-1242 closing-line
--- timeout remediation requires an efficient lookup path by provider_event_id.
--- Without this index, any WHERE provider_event_id = $1 query performs a full
--- sequential scan on a 713K-row table, causing the observed timeouts.
+-- on (snapshot_at, id) and (snapshot_at, idempotency_key). An efficient lookup path
+-- by provider_event_id is needed. Without this index, any WHERE provider_event_id = $1
+-- query performs a full sequential scan on a 713K-row table.
 --
 -- This adds a composite index on (provider_event_id, snapshot_at) to enable
 -- both point lookups (by event) and ordered scans (by event + time).
 --
--- CONCURRENTLY: builds without holding an AccessExclusiveLock on the table.
--- Safe to apply on a live production database with active reads/writes.
--- Matches the precedent set in 202604080015_utv2_437_audit_log_created_at_index.sql.
+-- Note: CONCURRENTLY is intentionally omitted. provider_offer_history is a partitioned
+-- table (PARTITION BY RANGE snapshot_at), and PostgreSQL does not support
+-- CREATE INDEX CONCURRENTLY on the parent of a partitioned table.
+-- IF NOT EXISTS ensures this is idempotent — the index already exists on production
+-- (applied via MCP during T1 runtime proof), so supabase db push is a no-op.
 --
 -- Pre-condition verification (run read-only before applying):
 --   SELECT indexname, indexdef
@@ -27,8 +28,7 @@
 --     AND indexname = 'idx_provider_offer_history_event_snapshot';
 -- Expected: 1 row confirming index creation.
 --
--- Rollback:
---   DROP INDEX CONCURRENTLY IF EXISTS idx_provider_offer_history_event_snapshot;
+-- Rollback: see db/migrations-rollback/20260609001_utv2_1244_provider_offer_history_event_snapshot_index.down.sql
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_provider_offer_history_event_snapshot
+CREATE INDEX IF NOT EXISTS idx_provider_offer_history_event_snapshot
   ON public.provider_offer_history (provider_event_id, snapshot_at);
