@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1241-state-truth-update",
   "branch": "claude/utv2-1241-state-truth-update",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "03125f3e996d1e41504a0e3025e1038b6a6ffd2e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/995",
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/governance.yml",
@@ -16,14 +16,33 @@
     "docs/06_status/proof/UTV2-1241/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-09T14:38:32.580Z",
-  "heartbeat_at": "2026-06-09T14:38:32.580Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-09T15:32:38.233Z",
+  "closed_at": "2026-06-09T15:32:38.233Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1241-state-truth-update.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-09T15:31:53.200Z",
+      "verdict": "fail",
+      "merge_sha": "39514a6def39b7bc62d15b5375c99eff9e1f2999",
+      "failures": [
+        "G2",
+        "G3",
+        "C3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T15:32:19.316Z",
+      "verdict": "pass",
+      "merge_sha": "03125f3e996d1e41504a0e3025e1038b6a6ffd2e",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
