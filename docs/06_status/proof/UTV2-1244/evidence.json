@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1244",
   "verifier": {
     "identity": "claude/utv2-1244-migration-lane"
