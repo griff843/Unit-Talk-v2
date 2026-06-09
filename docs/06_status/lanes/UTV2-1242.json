@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1242-ingestor-recovery",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/998",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/index.ts",
