@@ -1,34 +1,35 @@
 {
-  "schema_version": 8,
+  "schema_version": 9,
   "issue_id": "UTV2-1042",
-  "report_generated_at": "2026-06-09T16:53:00Z",
+  "report_generated_at": "2026-06-09T20:50:00Z",
   "cutover_timestamp": "2026-06-07T13:38:28Z",
   "wave5_deploy_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
   "utv2_1228_fix_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
   "syndicate_machine_deploy_sha": "a5cdd2d1",
   "supabase_project": "zfzdnfwdarxucxtaojxm",
-  "monitor_updated_by": "v8 snapshot — ALL GATES STILL MET: pick_candidates 1,831→2,599 / closing_odds 1,438→2,592 / CLV join 82→122 (2026-06-09T16:53Z)",
+  "monitor_updated_by": "v9 snapshot — ALL GATES STILL MET: CLV join 122→125 / closing_odds 2,592→2,589 (minor correction) / pick_candidates unchanged 2,599 (2026-06-09T20:50Z)",
   "linear_monitor_issue": "UTV2-1231",
   "dispatch_gate": "OPEN",
   "provider_offer_current": {
     "ingest_cycles_post_cutover": 2,
     "latest_snapshot": "2026-06-08T14:05:44Z",
-    "note": "2 post-cutover cycles. Unchanged from v7. SGO ingestor cycling since SYNDICATE_MACHINE_ENABLED=true deployed 2026-06-08T13:55Z."
+    "note": "2 post-cutover cycles. Unchanged from v8. SGO ingestor fix (UTV2-1242) pending merge — next ingestor deploy expected to advance snapshot_at."
   },
   "market_universe": {
-    "closing_over_odds_post_cutover": 2592,
-    "note": "Gate 2 MET. 2,592 post-cutover market_universe rows have closing_over_odds populated (was 1,438 in v7, +1,154). Markets continuing to settle post-cutover."
+    "closing_over_odds_post_cutover": 2589,
+    "total_post_cutover": 2599,
+    "note": "Gate 2 MET. 2,589 post-cutover market_universe rows have closing_over_odds populated (was 2,592 in v8, -3 — minor correction). Markets continuing to settle."
   },
   "pick_candidates": {
     "post_cutover_universe_ids_count": 2599,
     "updated_post_fix": 39531,
-    "last_scan": "2026-06-09T16:52:02Z",
-    "note": "2,599 pick_candidates for post-cutover universe_ids (was 1,831 in v7, +768). Board scan active: 39,531 candidates scanned, last at 16:52Z today."
+    "last_scan": "2026-06-09T20:47:02Z",
+    "note": "Gate 1 MET. 2,599 pick_candidates for post-cutover universe_ids (unchanged from v8). Board scan active: 39,531 candidates, last scan advanced to 20:47Z (+3h55m from v8)."
   },
   "clv_join": {
-    "count": 122,
+    "count": 125,
     "query": "picks → pick_candidates (pick_id) → market_universe (universe_id) WHERE closing_over_odds IS NOT NULL AND picks.created_at >= cutover",
-    "note": "Gate 3 MET. 122 picks have a live CLV join path (was 82 in v7, +40). Growing as more markets settle."
+    "note": "Gate 3 MET. 125 picks have a live CLV join path (was 122 in v8, +3). Growing as more markets settle."
   },
   "gate_status": {
     "gate_1_pick_candidates_postcutover_universe": "MET",
@@ -41,31 +42,31 @@
       "id": "FLAG-1",
       "severity": "CLEARED",
       "title": "sport_id attribution: fix verified, board scan active",
-      "detail": "Cleared. Board scan active (39,531 scanned, last 16:52Z 2026-06-09). Attribution fix confirmed live."
+      "detail": "Cleared. Board scan active (39,531 scanned, last 20:47Z 2026-06-09). Attribution fix confirmed live."
     },
     {
       "id": "FLAG-2",
       "severity": "CLEARED",
-      "title": "CLV available — 2,592 closing_over_odds on post-cutover market_universe (Gate 2 MET, growing)",
-      "detail": "Gate 2 MET. 2,592 post-cutover market_universe rows have closing_over_odds populated as of 2026-06-09T16:53Z (was 1,438 in v7). Markets continuing to settle."
+      "title": "CLV available — 2,589 closing_over_odds on post-cutover market_universe (Gate 2 MET, stable)",
+      "detail": "Gate 2 MET. 2,589 post-cutover market_universe rows have closing_over_odds populated as of 2026-06-09T20:50Z (was 2,592 in v8, -3 minor correction). Markets continuing to settle."
     },
     {
       "id": "FLAG-3",
       "severity": "CLEARED",
-      "title": "pick_candidates for post-cutover universe_ids: now 2,599 (was 1,831 in v7)",
-      "detail": "Gate 1 MET. Growing — 2,599 candidates as of this snapshot (+768 from v7)."
+      "title": "pick_candidates for post-cutover universe_ids: 2,599 (unchanged from v8)",
+      "detail": "Gate 1 MET. Stable at 2,599 candidates."
     },
     {
       "id": "FLAG-4",
       "severity": "CLEARED",
       "title": "SGO ingest cycling: 2 post-cutover cycles, latest 2026-06-08T14:05:44Z (unchanged)",
-      "detail": "Ingestor active. 2 cycles. No new cycle since v7 — latest snapshot still 2026-06-08T14:05:44Z."
+      "detail": "Ingestor fix (UTV2-1242) pending merge. Latest snapshot still 2026-06-08T14:05:44Z. Next ingestor deploy expected to advance."
     },
     {
       "id": "FLAG-5",
       "severity": "CLEARED",
-      "title": "CLV join path: 122 picks with live CLV (Gate 3 MET, growing)",
-      "detail": "Gate 3 MET. 122 picks traversable via picks → pick_candidates → market_universe WHERE closing_over_odds IS NOT NULL (was 82 in v7, +40)."
+      "title": "CLV join path: 125 picks with live CLV (Gate 3 MET, growing)",
+      "detail": "Gate 3 MET. 125 picks traversable via picks → pick_candidates → market_universe WHERE closing_over_odds IS NOT NULL (was 122 in v8, +3)."
     }
   ]
 }
