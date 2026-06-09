@@ -486,6 +486,32 @@ function main(): void {
     writeManifest(manifest);
     writeSyncFile(issueId, buildSyncYml(issueId));
 
+    // Mirror manifest and sync file into the worktree and commit so the lane
+    // branch carries its own metadata without requiring a manual copy from main.
+    const worktreeManifestDir = path.join(worktreePath, 'docs', '06_status', 'lanes');
+    fs.mkdirSync(worktreeManifestDir, { recursive: true });
+    fs.copyFileSync(manifestPath, path.join(worktreeManifestDir, `${issueId}.json`));
+    const worktreeSyncDir = path.join(worktreePath, '.ops', 'sync');
+    fs.mkdirSync(worktreeSyncDir, { recursive: true });
+    fs.copyFileSync(
+      path.join(ROOT, '.ops', 'sync', `${issueId}.yml`),
+      path.join(worktreeSyncDir, `${issueId}.yml`)
+    );
+    spawnSync(
+      'git',
+      [
+        'add',
+        `docs/06_status/lanes/${issueId}.json`,
+        `.ops/sync/${issueId}.yml`,
+      ],
+      { cwd: worktreePath, stdio: 'inherit' }
+    );
+    spawnSync(
+      'git',
+      ['commit', '-m', `chore(lanes): ${issueId} lane manifest and sync metadata`],
+      { cwd: worktreePath, stdio: 'inherit' }
+    );
+
     emitJson({
       ok: true,
       code: 'lane_started',
