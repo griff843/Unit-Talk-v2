@@ -1,0 +1,34 @@
+-- UTV2-1244: Add provider_event_id + snapshot_at index to provider_offer_history
+--
+-- Background: provider_offer_history has 713,978 rows. The table's only indexes are
+-- on (snapshot_at, id) and (snapshot_at, idempotency_key). An efficient lookup path
+-- by provider_event_id is needed. Without this index, any WHERE provider_event_id = $1
+-- query performs a full sequential scan on a 713K-row table.
+--
+-- This adds a composite index on (provider_event_id, snapshot_at) to enable
+-- both point lookups (by event) and ordered scans (by event + time).
+--
+-- Note: CONCURRENTLY is intentionally omitted. provider_offer_history is a partitioned
+-- table (PARTITION BY RANGE snapshot_at), and PostgreSQL does not support
+-- CREATE INDEX CONCURRENTLY on the parent of a partitioned table.
+-- IF NOT EXISTS ensures this is idempotent — the index already exists on production
+-- (applied via MCP during T1 runtime proof), so supabase db push is a no-op.
+--
+-- Pre-condition verification (run read-only before applying):
+--   SELECT indexname, indexdef
+--   FROM pg_indexes
+--   WHERE tablename = 'provider_offer_history'
+--   ORDER BY indexname;
+-- Expected: no row with indexname = 'idx_provider_offer_history_event_snapshot'
+--
+-- Post-condition verification (run after applying):
+--   SELECT indexname, indexdef
+--   FROM pg_indexes
+--   WHERE tablename = 'provider_offer_history'
+--     AND indexname = 'idx_provider_offer_history_event_snapshot';
+-- Expected: 1 row confirming index creation.
+--
+-- Rollback: see db/migrations-rollback/20260609001_utv2_1244_provider_offer_history_event_snapshot_index.down.sql
+
+CREATE INDEX IF NOT EXISTS idx_provider_offer_history_event_snapshot
+  ON public.provider_offer_history (provider_event_id, snapshot_at);
