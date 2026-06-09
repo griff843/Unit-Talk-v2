@@ -5,7 +5,7 @@
 > docs in this repo are either authoritative on their specific sub-topic (see §Source of Truth
 > Hierarchy) or have been marked SUPERSEDED / HISTORICAL.
 >
-> **Last verified:** 2026-06-08T12:00:00Z (UTC)
+> **Last verified:** 2026-06-09T14:15:00Z (UTC) — UTV2-1241 state truth update
 >
 > **Constitutional authority:** `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 ·
 > `docs/00_constitution/CANONICAL_PROGRAM_STATE.md` (PM-ratified 2026-06-02)
@@ -47,29 +47,30 @@ Full ledger: `docs/00_constitution/CERTIFICATION_GAP_REGISTER.md`
 
 ### UTV2-1042 — Empirical CLV / Data Gate
 
-**State:** DATA-GATED — not dispatchable
+**State:** DATA-GATE OPEN — dispatch PAUSED (production-readiness RED)
 
-UTV2-1042 is the gate for empirical CLV/edge certification. It will be dispatched only when
-the data-gate stop conditions are met (closed-line data available, post-cutover pick_candidates
-scored, CLV join path returns > 0). Evidence accumulating post D-CONST-6 resolution.
+> ⚠️ **PAUSED, NOT DATA-GATED.** All three data-gate criteria are now MET (v7 monitor, 2026-06-09T01:00Z).
+> Dispatch remains paused by production-readiness RED until runtime recovery (UTV2-1238/UTV2-1242),
+> deploy alignment (UTV2-1239), and verification stability (UTV2-1240) are resolved — or PM-waived.
+> No CLV certification. No P3 certification. No edge/ROI claims.
 
-Current gate status (as of v5 monitor, 2026-06-08T02:45Z):
-- `pick_candidates` for post-cutover universe_ids: 0 (NOT MET)
-- `closing_over_odds IS NOT NULL` for any post-cutover market_universe row: 0 (NOT MET)
-- CLV join path: 0 (NOT MET)
+Current gate status (as of v7 monitor, 2026-06-09T01:00Z):
+- `pick_candidates` for post-cutover universe_ids: **1,831** (MET ✓)
+- `closing_over_odds IS NOT NULL` for post-cutover market_universe: **1,438** (MET ✓)
+- CLV join path: **82 picks** (MET ✓)
 
-**UTV2-1042 dispatch gate: BLOCKED.** Do not dispatch; do not claim CLV certified.
+**UTV2-1042 dispatch gate: OPEN.** Dispatch paused by production-readiness RED. Do not claim CLV certified.
 
-Evidence: `docs/06_status/proof/UTV2-1042/data-gate-monitor.md` (v5)
+Evidence: `docs/06_status/proof/UTV2-1042/data-gate-monitor.json` (v7, SHA `76910505`)
 
 ### UTV2-1231 — Data-Gate Accumulation Monitor
 
-**State:** ACTIVE — cron running
+**State:** STOP CONDITION MET — cron may be cancelled
 
-Cron job `c9ae211f` fires every 4 hours at :17 past. Trigger: any advance in
-`provider_offer_current.snapshot_at`, `pick_candidates.updated_at`, or first
-`closing_over_odds IS NOT NULL` in post-cutover rows. Stop condition: all three data-gate
-criteria above met.
+Cron job `c9ae211f` fires every 4 hours at :17 past. All three data-gate stop conditions are
+now met (v7 snapshot, 2026-06-09T01:00Z). SGO ingestor is currently stalled (hung run since
+2026-06-08T14:06Z — UTV2-1242 scope). Monitor may be cancelled once ingestor recovery confirms
+continued post-cutover accumulation.
 
 ---
 
@@ -77,11 +78,12 @@ criteria above met.
 
 | Blocker | Category | Notes |
 |---|---|---|
-| P3 empirical CLV/edge evidence | Certification | UTV2-1042 data-gated; dispatching forbidden until gate met |
+| Production readiness RED | **Blocking** | Runtime recovery (UTV2-1238/UTV2-1242), deploy alignment (UTV2-1239), verification stability (UTV2-1240) required before UTV2-1042 dispatch |
+| SGO ingestor stalled | Runtime | Hung run since 2026-06-08T14:06Z — UTV2-1242 scope; `markClosingLines` timeout |
+| P3 empirical CLV/edge evidence | Certification | Data gate OPEN; P3 cert requires UTV2-1042 completion (paused by readiness RED) |
 | P4 economic truth unproven | Certification | No realized CLV / attribution data; economic certification requires live settled pick corpus |
 | P5 freeze | Activation | FROZEN until burn-in PASS + P1–P4 certs + M10 Path A. Treasury/capital/scaling work forbidden. |
 | P1 re-cert deadline | Time-gated | `proof_lineage` + `freshness` domains auto-degrade 2026-08-25; re-cert prep authorized |
-| Live data accumulation | Data | Post-cutover corpus building since 2026-06-07; no closing-line data yet |
 | UTV2-884 / UTV2-885 | Feature work | Paused — no dispatch |
 | P3 certification claim | Hard constraint | Forbidden until empirical evidence passes gate |
 | ROI / CLV / edge claims | Hard constraint | Forbidden under P3 ACTIVE_NOT_CERTIFIED + P4 CONDITIONAL_NOT_CERTIFIED |
@@ -118,18 +120,16 @@ The following claims must **not** be made until the named gates are met:
 
 **Pipeline activated:** 2026-06-07 (D-CONST-6 resolution — SGO first successful ingest 13:38:28Z)
 
-Post-cutover accumulation snapshot (as of 2026-06-08T02:45Z):
-- Provider offer cycles: 1 SGO cycle (partial)
-- Market universe rows: 355 (created 13:46–14:55Z 2026-06-07)
-- Scored candidates: 9,893 (pre-existing + post-deploy activity)
-- Board candidates: 242 (`is_board_candidate=true`)
-- Board picks queued/posted: 336 (+18 since v4)
-- Settled picks: 289 (+12 since v4)
-- **CLV-available picks: 0** (no closing_over_odds data; join path not yet traversable)
-- sport_id attribution: 41.7% post-fix organic picks; 0 organic NULLs after UTV2-1228 fix
+Post-cutover accumulation snapshot (as of v7 monitor, 2026-06-09T01:00Z):
+- Provider offer cycles: 2 post-cutover SGO cycles (latest 2026-06-08T14:05:44Z — stalled, UTV2-1242)
+- Pick candidates for post-cutover universe_ids: **1,831** (Gate 1 MET)
+- Closing over odds (market_universe post-cutover): **1,438** (Gate 2 MET)
+- CLV join path (picks → pick_candidates → market_universe with closing_over_odds): **82** (Gate 3 MET)
+- Board scan: 38,763 candidates scanned, last at 2026-06-09T00:47Z
+- sport_id attribution: fix confirmed live (UTV2-1228)
 
-Empirical evidence accumulation has begun but **no certification-grade proof is available yet**.
-UTV2-1042 remains data-gated.
+All three data-gate criteria are now MET. Empirical evidence accumulating but **no certification-grade proof available**.
+UTV2-1042 dispatch paused by production-readiness RED (not data-gated).
 
 ---
 
@@ -156,7 +156,7 @@ Cert records: `docs/06_status/programs/PROGRAM_{1,2,3,4}_CERTIFICATION.md` + `PR
 | UTV2-884 | Discord Member DM Routing | Paused — do not dispatch |
 | UTV2-885 | Discord Game-Thread Routing | Paused — do not dispatch |
 | UTV2-1032 | DEVELOPING label proof run | Data-gated: needs 50+ real-edge picks |
-| UTV2-1042 | CLV / edge empirical gate | Data-gated — dispatch blocked |
+| UTV2-1042 | CLV / edge empirical gate | Data gate OPEN — dispatch **paused** (production-readiness RED) |
 
 P3 work (scoring truth, feature audits, injury/status guards, calibration) is authorized.
 P4 work (execution hardening, dead-letter remediation, settlement proof scaffolding) is conditional.
