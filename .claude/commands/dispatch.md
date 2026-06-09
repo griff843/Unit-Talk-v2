@@ -158,9 +158,52 @@ For each validated target:
 ### Phase 4: Execute
 
 **Claude lanes** (T1, T3, T2 with migration/contract, or T2 when Codex unavailable):
+
+**T1 lanes — mandatory planning phase before execution:**
+
+Spawn a planning subagent before touching any code. Use `model: "opus"` (Opus 4.8) for standard T1 work. Escalate to `model: "fable"` when the issue involves novel architecture, constitutional/governance scope, or scope ambiguity that three-brain flagged.
+
+```typescript
+Agent({
+  model: "opus",   // use "fable" for novel/constitutional/ambiguous-scope T1
+  description: `T1 planning: ${issue_id}`,
+  prompt: `You are planning a T1 lane before implementation begins. Do not write code.
+
+Issue: ${issue_id}
+Title: ${issue_title}
+Description: ${issue_description}
+Acceptance criteria: ${acceptance_criteria}
+
+Read these files for context (use Read/Grep — do not edit anything):
+- docs/CODEBASE_GUIDE.md (architecture reference)
+- The specific files named in the issue description
+- Any domain invariant files touched by this change
+
+Return a structured plan with these sections:
+## Scope
+Exact files to create or modify (absolute paths). Flag any Tier C sensitive paths.
+
+## Invariants at risk
+Which of the 11 core invariants (CLAUDE.md) this change touches, and how.
+
+## Implementation approach
+Step-by-step sequence. Smallest safe diff first.
+
+## Risk flags
+Anything that warrants Griff review beyond the standard T1 gate.
+
+## Fable 5 warranted?
+YES or NO — justify if YES (novel architecture, unresolved scope ambiguity, multi-domain cascade).`
+})
+```
+
+Block on the planning result. If the plan returns `Fable 5 warranted: YES` and you used Opus 4.8, re-spawn the plan with `model: "fable"` before proceeding. Griff reviews the plan artifact for constitutional/governance T1s.
+
 - Execute the work directly in this conversation from the dedicated lane worktree reported by `ops:lane-start`
-- Follow the acceptance criteria from the issue description
+- Follow the acceptance criteria from the issue description and the planning subagent's scope + approach
 - Run `pnpm verify` after implementation
+
+**T2/T3 Claude lanes:** No planning subagent. Execute directly.
 
 **Before opening PR — required for all lanes:**
 
@@ -230,7 +273,11 @@ When dispatching multiple lanes:
 1. Start Claude lane first (execute directly)
 2. Dispatch Codex lanes in background (they run in parallel) via `Agent({run_in_background: true})`
 3. After Claude lane PR is open, continue other work — you will be **automatically notified** when background Codex lanes complete
-4. On Codex completion notification: review diff, run critique, apply tier label, then use `PushNotification` to surface the result if the session needs a summary
+4. On Codex completion notification: determine critique model (see below), review diff, run critique, apply tier label, then use `PushNotification` to surface the result if the session needs a summary
+
+**Codex diff critique model (from `/three-brain` Codex critique table):**
+- Diff touches any Tier C path (`packages/domain/`, `packages/contracts/`, `supabase/migrations/`, `packages/db/src/lifecycle.ts`, etc.) → spawn `Agent({model: "opus", ...})` for the critique pass
+- Standard T2 diff, no Tier C → Sonnet orchestrator reviews directly
 5. If abandoning an active lane before work begins, release the lease explicitly:
    ```bash
    pnpm ops:lease release --issue UTV2-{number} --actor claude --reason "abandoned before implementation"

@@ -24,6 +24,69 @@ description: |
 | **QA Agent** | Claude action for Playwright surface verification; not a lane-start executor |
 | **Griff** | Scope authority, source-of-truth conflicts, product decisions, merge gates |
 
+## Model selection for Claude lanes
+
+Three-brain returns both an executor and a **planning model** for T1 Claude lanes. The orchestrator session stays on its current model; the planning subagent spawned in Phase 4 of `/dispatch` uses the model below.
+
+### T1 planning subagents
+
+| Condition | Planning model | Rationale |
+|---|---|---|
+| T1, standard bounded scope | `opus` (Opus 4.8) | Multi-file synthesis, domain invariant awareness |
+| T1, Fable 5 trigger checklist matches (see below) | `fable` (Fable 5) | Maximum reasoning ceiling for decisions with cascading consequences |
+| T2 / T3 Claude | *(none — no planning subagent)* | Bounded work; orchestrator session handles directly |
+
+**Default:** `opus`. Escalate to `fable` only when the checklist below fires. Fable 5 is 2× the cost of Opus 4.8 — do not default to it.
+
+#### Fable 5 trigger checklist (mechanical — first match wins)
+
+Check each item before spawning the planning subagent. If ANY item is true, use `model: "fable"`.
+
+| # | Trigger | Detection |
+|---|---|---|
+| F1 | Touches `packages/domain/src/` | File scope contains this path |
+| F2 | Touches `docs/00_constitution/` | File scope contains this path |
+| F3 | Touches `packages/contracts/src/` | File scope contains this path |
+| F4 | Migration that alters column types or drops columns on existing tables | `supabase/migrations/` + SQL contains `ALTER COLUMN`, `DROP COLUMN`, `ALTER TYPE` |
+| F5 | Crosses 3 or more packages/apps simultaneously | File scope count of distinct top-level dirs ≥ 3 |
+| F6 | `lane_type` is `modeling` or `governance` at T1 | Lane manifest fields |
+| F7 | Three-brain routing notes explicitly flag ambiguous scope | Routing output contains "ambiguous", "unclear boundary", or "two interpretations" |
+| F8 | Issue description contains "architecture", "redesign", or "new system" | Linear description text |
+
+If none of F1–F8 fire, use `model: "opus"`.
+
+### Codex lane critique model
+
+When reviewing a Codex-returned diff (Phase 5 of `/dispatch`), the critique step must use the correct model tier — Sonnet misses subtle invariant violations on Tier C paths.
+
+| Codex diff touches | Critique model | Rationale |
+|---|---|---|
+| Any Tier C path (see Rule 2) | `opus` — spawn a dedicated critique subagent | Invariant violations in domain/contracts/migrations are not always syntactically visible |
+| Standard T2 path, no Tier C | Sonnet (orchestrator session) | Sonnet is sufficient for bounded scope review |
+
+Spawn the Opus critique subagent the same way as the planning subagent — block on result before applying tier label or requesting merge.
+
+### Haiku subagents — cheap reads and summaries
+
+Spawn `haiku` subagents for work that is purely informational, deterministic, and produces no code or artifacts. These never open PRs, never touch files, and never route to a lane executor.
+
+| Use case | When to spawn | Example |
+|---|---|---|
+| Board snapshots | `ops:brief`, `ops:digest`, pre-dispatch state reads | "Summarize active lanes and Linear queue" |
+| Log summarization | CI log triage, test output parsing, error extraction | "Extract failing tests from this pnpm test output" |
+| Bulk doc/status reads | Scanning many status files, changelog aggregation | "Read all lane manifests and list which are stale" |
+| Verification output parsing | Reading `pnpm verify` or `ops:truth-check` output | "Parse this verify output and list failures only" |
+
+```typescript
+Agent({
+  model: "haiku",
+  description: "Board snapshot / log summary",
+  prompt: "... (read-only, summarize only, no edits) ..."
+})
+```
+
+**Haiku constraints:** read-only tasks only. Never use Haiku for: routing decisions, code generation, proof review, or anything where a wrong answer has downstream consequences. If the task requires judgment, use Sonnet minimum.
+
 ---
 
 ## Routing Rules (apply in order — first match wins)
