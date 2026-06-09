@@ -19,7 +19,7 @@ T1 migration lane. Adds one Supabase migration file — no app/runtime code chan
 **Table:** `provider_offer_history`
 **Columns:** `(provider_event_id, snapshot_at)`
 **Method:** btree
-**Build mode:** `CONCURRENTLY IF NOT EXISTS` (no table lock during build)
+**Build mode:** `IF NOT EXISTS` (CONCURRENTLY omitted — provider_offer_history is a partitioned table; PostgreSQL disallows CONCURRENTLY on partitioned parent tables)
 
 ## Pre-Migration Index State
 
@@ -39,18 +39,18 @@ No index on `provider_event_id`. Table has 713,978 rows.
 ## Impact
 
 No app/runtime code changes. No schema column changes. No data mutations.
-Unblocks UTV2-1242 closing-line timeout remediation.
+Provides an efficient event lookup path for the ingestor recovery lane (D4 resolution).
 
 ## Guardrails Honored
 
 - No provider offer data dropped or rewritten
 - No table schema changes beyond index addition
 - No destructive DB operations
-- No UTV2-1242 implementation in this lane
 - No Redis / Temporal
 - No P3 certification
 - No CLV / ROI claims
 
 ## SHA Binding
 
+Verified source SHA: `1a7e4b28a6390f2fe0c91f9034393252336ae977`
 Merge SHA: PENDING — update post-merge before lane close.

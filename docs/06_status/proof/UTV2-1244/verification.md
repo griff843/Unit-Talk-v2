@@ -3,9 +3,9 @@
 ## Summary
 
 T1 migration lane. Adds `idx_provider_offer_history_event_snapshot` on
-`provider_offer_history(provider_event_id, snapshot_at)` to enable efficient
-closing-line lookups for UTV2-1242. Index applied to live Supabase
-(project `zfzdnfwdarxucxtaojxm`) and confirmed present.
+`provider_offer_history(provider_event_id, snapshot_at)` for efficient event
+lookups. Index applied to live Supabase (project `zfzdnfwdarxucxtaojxm`) and
+confirmed present.
 
 ## Verification
 
@@ -79,17 +79,20 @@ Result (3 rows — new index present):
 | provider_offer_history_pkey | UNIQUE btree (snapshot_at, id) |
 | provider_offer_history_snapshot_idempotency_key | UNIQUE btree (snapshot_at, idempotency_key) |
 
-## CONCURRENTLY Confirmation
+## CONCURRENTLY Note
 
-Precedent migration `202604080015_utv2_437_audit_log_created_at_index.sql` uses
-`CREATE INDEX CONCURRENTLY IF NOT EXISTS`. The `audit_log_created_at_idx` index exists
-on the live DB (confirmed via pg_indexes). Repo convention supports CONCURRENTLY.
+`provider_offer_history` is a partitioned table (`PARTITION BY RANGE(snapshot_at)`).
+PostgreSQL does not support `CREATE INDEX CONCURRENTLY` on the parent of a partitioned
+table — this is a hard PostgreSQL limitation confirmed by the CI round-trip drill error:
+`"cannot create index on partitioned table 'provider_offer_history' concurrently"`.
 
-The `apply_migration` MCP wraps SQL in a transaction which blocks CONCURRENTLY. The
-migration was therefore applied without CONCURRENTLY via MCP for T1 runtime proof.
-The repo migration file retains `CONCURRENTLY` so that production CLI deploy
-(`supabase db push`) runs without a table lock. `IF NOT EXISTS` makes the apply
-idempotent once the index already exists.
+The migration file uses `CREATE INDEX IF NOT EXISTS` (without CONCURRENTLY). This is
+correct and safe:
+- For production CLI deploy (`supabase db push`): index already exists (`IF NOT EXISTS`
+  is a no-op), so no table lock during apply.
+- For a fresh-install database: the `IF NOT EXISTS` form takes a brief `ShareLock` (not
+  `AccessExclusiveLock`), acceptable for index creation.
+- For the schema round-trip drill on scratch Postgres: runs correctly without CONCURRENTLY.
 
 ## R-Level
 
@@ -101,4 +104,5 @@ Rules matched: (none) — migration-only diff, no R1-R5 triggers
 
 ## SHA Binding
 
+Verified source SHA: `1a7e4b28a6390f2fe0c91f9034393252336ae977` (last non-proof commit — CONCURRENTLY removal).
 Merge SHA: PENDING — update post-merge before lane close.

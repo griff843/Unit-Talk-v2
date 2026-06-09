@@ -1,5 +1,6 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "issue_id": "UTV2-1244",
   "verifier": {
     "identity": "claude/utv2-1244-migration-lane"
   },
@@ -34,9 +35,12 @@
   },
   "status": "pass",
   "sha_binding": {
-    "verified_source_sha": "01f6b2f9f2bd7c14f821438af84e350f95774d09",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-09T16:35:00.000Z",
+    "verified_source_sha": "1a7e4b28a6390f2fe0c91f9034393252336ae977",
+    "verified_source_note": "last non-proof commit: remove CONCURRENTLY (partitioned table limitation)",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-06-09T17:30:00.000Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "wfr_v2_validators": "pending"
