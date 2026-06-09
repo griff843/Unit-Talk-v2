@@ -26,6 +26,18 @@ Source: SQLite's `SQLITE_CANTOPEN` or busy-lock error under concurrent test invo
 
 **Determination: local-env-only.** Not a repo defect. CI verify is not affected.
 
+## Verification
+
+`pnpm verify` — PASS (113 tests, 0 fail). `pnpm test:db` — 7/7 pass. `test:ops` standalone — 647/0/0.
+
+```
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+```
+
 ## pnpm verify — Clean Pass Evidence
 
 Run in UTV2-1240 worktree (2026-06-09):
