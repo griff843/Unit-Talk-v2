@@ -41,9 +41,10 @@
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
     "bound_at": "2026-06-09T17:30:00.000Z",
+    "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
     "ci_sentinels": {
-      "merge_gate": "pending",
-      "wfr_v2_validators": "pending"
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass"
     }
   }
 }

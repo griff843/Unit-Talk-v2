@@ -105,4 +105,9 @@ Rules matched: (none) — migration-only diff, no R1-R5 triggers
 ## SHA Binding
 
 Verified source SHA: `1a7e4b28a6390f2fe0c91f9034393252336ae977` (last non-proof commit — CONCURRENTLY removal).
-Merge SHA: PENDING — update post-merge before lane close.
+Merge SHA: `6d74bbbe8afce119eef2d8f154359ba1ba28e860` (PR #997 squash merge onto main, 2026-06-09).
+
+pnpm type-check: PASS
+pnpm test: PASS (113 pass, 0 fail)
+pnpm verify: PASS
+scripts/ci/r-level-check.ts: PASS

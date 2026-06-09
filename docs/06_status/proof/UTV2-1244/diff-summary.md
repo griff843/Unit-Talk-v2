@@ -53,4 +53,4 @@ Provides an efficient event lookup path for the ingestor recovery lane (D4 resol
 ## SHA Binding
 
 Verified source SHA: `1a7e4b28a6390f2fe0c91f9034393252336ae977`
-Merge SHA: PENDING — update post-merge before lane close.
+Merge SHA: `6d74bbbe8afce119eef2d8f154359ba1ba28e860` (PR #997 squash merge onto main, 2026-06-09).
