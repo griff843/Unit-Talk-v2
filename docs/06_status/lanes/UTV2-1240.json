@@ -16,14 +16,22 @@
     "docs/06_status/proof/UTV2-1240/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-09T14:50:31.327Z",
-  "heartbeat_at": "2026-06-09T14:50:31.327Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-09T16:19:40.822Z",
+  "closed_at": "2026-06-09T16:19:40.822Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1240-verification-stability.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-09T16:19:30.459Z",
+      "verdict": "pass",
+      "merge_sha": "937e8403f78e09c21978de9891cd8153b24e2e9e",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
