@@ -21,11 +21,13 @@ pnpm type-check        # TypeScript project-references build check
 pnpm build             # compile all packages and apps
 pnpm lint              # ESLint
 pnpm verify            # env:check + lint + type-check + build + test
+pnpm verify:parallel   # lint + type-check in parallel, then build + test (faster)
 pnpm verify:quick      # fast pre-flight: sync-check + env + lint + type-check only
 pnpm supabase:types    # regenerate database.types.ts after a migration
 pnpm ops:brief         # current system state: lanes, Linear queue, runtime status
 pnpm ops:digest        # daily dispatch digest — surfaces executable candidates
 pnpm ops:truth-check   # done-gate for a lane (pass UTV2-### as argument)
+pnpm ops:scope-suggest # auto-suggest file scope before ops:lane-start (pass --issue UTV2-###)
 
 # Run a single test file
 tsx --test apps/api/src/submission-service.test.ts
@@ -83,10 +85,10 @@ Before starting: preflight token valid, tier label set, file scope declared, no 
 **Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
 1. `pnpm verify` green on the branch
 2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
-3. Proof tied to merge SHA (not the branch HEAD SHA — the SHA after merge)
+3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
 4. CI green on merge SHA (not just branch CI)
 5. For T1: `pnpm test:db` green + evidence bundle generated and validated
-6. Tier label set in Linear and on the PR
+6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
 7. `ops:truth-check` runs and exits 0
 
 Procedural details: `/lane-management` and `/verification` skills.

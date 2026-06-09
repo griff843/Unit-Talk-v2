@@ -238,11 +238,8 @@ Paste the PASS output into PR body under `## R-level compliance`.
 - A T1 PR must not be opened without pnpm test:db PASS
 
 - Open PR via `gh pr create`
-- After `gh pr create` returns a PR URL/number, immediately apply the tier label:
-  ```bash
-  gh pr edit <PR-number-or-URL> --add-label "tier:T1"   # replace with actual tier: T1 / T2 / T3
-  ```
-  Never leave a PR open without a tier label — tier-label-check CI will block the merge gate.
+- After `gh pr create` returns a PR URL/number, post executor-result comment on the PR.
+  Tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed. Verify CI picks up the label before merge.
 - Post executor-result comment on the PR
 
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
@@ -270,11 +267,7 @@ If `pnpm verify` fails, fix and re-run. If R-level flags missing artifacts, gene
 Re-run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — must PASS.
 Paste the PASS output into PR body under `## R-level compliance`.
 
-- After Codex opens the PR, immediately apply the tier label:
-  ```bash
-  gh pr edit <PR-number-or-URL> --add-label "tier:T2"   # replace with actual tier: T1 / T2 / T3
-  ```
-  Never leave a PR open without a tier label — tier-label-check CI will block the merge gate.
+- After Codex opens the PR, tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed. Verify CI picks up the label before review.
 - Report that Codex lane is dispatched and will need review on return
 
 ### Phase 5: Sequential execution for multiple lanes
@@ -299,9 +292,8 @@ Steps:
 1. Read the diff via: gh pr diff ${pr_number}
 2. Run the codex-return-reviewer checks (file scope, Tier C paths, test existence, commit format, tier label, R-level)
 3. Check if diff touches any Tier C path: packages/domain/, packages/contracts/, supabase/migrations/, packages/db/src/lifecycle.ts, apps/api/src/auth.ts
-4. Apply tier label: gh pr edit ${pr_number} --add-label tier:T2
-5. Post review result as Linear comment on ${issue_id}
-6. If REJECT or Tier C violation found: post a blocking comment on the PR and set Linear state to Blocked
+4. Post review result as Linear comment on ${issue_id}
+5. If REJECT or Tier C violation found: post a blocking comment on the PR and set Linear state to Blocked
 
 Return: APPROVE or REJECT with findings.`
 })

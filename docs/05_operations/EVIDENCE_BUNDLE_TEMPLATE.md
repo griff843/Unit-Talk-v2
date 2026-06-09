@@ -7,6 +7,7 @@
 This template defines the minimum structure and evidence-tie rules an evidence bundle must satisfy to be considered valid by the mechanical validator (`scripts/evidence-bundle/validate-bundle.mjs`). Existing bundles authored before this date are **not** retrofitted; see the follow-up issue list in UTV2-532 for retrofit tracking.
 
 > To generate a new bundle from this template, run: `pnpm evidence:new UTV2-XXX`.
+> To auto-populate tier and files from the lane manifest + git diff, add `--lane`: `pnpm evidence:new UTV2-XXX --lane`.
 > To validate a bundle against this shape, run: `pnpm evidence:validate docs/06_status/UTV2-XXX-EVIDENCE-BUNDLE.md`.
 
 ---
@@ -415,7 +416,7 @@ In addition to the Markdown `.md` bundle, many lanes commit an `evidence.json` f
 
 ## Related artifacts
 
-- Generator: `scripts/evidence-bundle/new-bundle.mjs` (`pnpm evidence:new UTV2-XXX`)
+- Generator: `scripts/evidence-bundle/new-bundle.mjs` (`pnpm evidence:new UTV2-XXX` or `pnpm evidence:new UTV2-XXX --lane` to auto-populate from manifest + git diff)
 - Validator: `scripts/evidence-bundle/validate-bundle.mjs` (`pnpm evidence:validate <path>` or `pnpm evidence:validate --all`)
 - Historical schema (pre-2026-04-11): `docs/06_status/PROOF_BUNDLE_SCHEMA.md` — superseded by this template for new bundles
 - Verifier identity convention: `scripts/ut-cli/` spec
