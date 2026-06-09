@@ -54,6 +54,7 @@ export function buildLaneFinalizePlan(input: {
   pr: string;
   branch?: string | null;
   dryRun?: boolean;
+  mergeSha?: string | null;
 }): LaneFinalizePlan {
   const alreadyClosed = input.manifest.status === 'done';
   const issueId = input.manifest.issue_id;
@@ -75,6 +76,11 @@ export function buildLaneFinalizePlan(input: {
         required: false,
       });
     }
+    // Explicit --merge-sha ensures the proof reflects the actual merge commit,
+    // not just the branch HEAD SHA that was current at proof-generate time.
+    // Falls back gracefully: if not provided, proof-generate reads manifest.commit_sha
+    // (written by the preceding record_merge step).
+    const mergeShaArgs = input.mergeSha ? ['--merge-sha', input.mergeSha] : [];
     steps.push({
       id: 'generate_proof',
       command: 'pnpm',
@@ -87,6 +93,7 @@ export function buildLaneFinalizePlan(input: {
         input.branch ?? input.manifest.branch,
         '--pr-url',
         normalizePrUrl(input.pr),
+        ...mergeShaArgs,
       ],
       required: true,
     });
@@ -257,6 +264,7 @@ function main(argv = process.argv.slice(2)): number {
     pr,
     branch: getFlag(flags, 'branch') ?? null,
     dryRun: bools.has('dry-run') || bools.has('explain'),
+    mergeSha: getFlag(flags, 'merge-sha') ?? null,
   });
   const result = runLaneFinalizePlan(plan);
   if (json) {

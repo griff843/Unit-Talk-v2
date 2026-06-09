@@ -175,21 +175,17 @@ jobs:
       - name: Bind proof artifacts to merge SHA
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         env:
-          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MERGE_SHA: ${{ github.sha }}
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          node -e "
-            const fs = require('fs');
-            const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, 'utf8'));
-            const proofPaths = Array.isArray(manifest.expected_proof_paths) ? manifest.expected_proof_paths : [];
-            for (const proofPath of proofPaths) {
-              if (!fs.existsSync(proofPath)) continue;
-              const text = fs.readFileSync(proofPath, 'utf8');
-              if (text.includes(process.env.MERGE_SHA)) continue;
-              fs.writeFileSync(proofPath, text.replace(/\s*$/, '') + '\n\nMerge SHA: ' + process.env.MERGE_SHA + '\n');
-              console.log('Bound proof artifact to merge SHA: ' + proofPath);
-            }
-          "
+          # Regenerate proof files with the verified merge SHA so the inline
+          # "Merge SHA:" field is correct, not just appended at the end.
+          # --merge-sha overrides manifest.commit_sha; idempotent if SHA already present.
+          pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
+            && echo "::notice title=post-merge-lane-close::Proof artifacts regenerated with merge SHA for $ISSUE_ID." \
+            || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
 
       - name: Run lane closeout (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
