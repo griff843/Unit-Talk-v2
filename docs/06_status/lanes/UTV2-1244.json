@@ -22,15 +22,66 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1244/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-09T16:29:09.365Z",
-  "heartbeat_at": "2026-06-09T18:00:00.000Z",
+  "heartbeat_at": "2026-06-09T18:01:13.818Z",
   "merged_at": "2026-06-09T17:57:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-06-09T18:01:13.818Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1244-migration-index-provider-offer-history.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-09T17:59:19.809Z",
+      "verdict": "fail",
+      "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
+      "failures": [
+        "P6"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T17:59:30.356Z",
+      "verdict": "fail",
+      "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
+      "failures": [
+        "P6"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T17:59:35.765Z",
+      "verdict": "fail",
+      "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
+      "failures": [
+        "P6"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T17:59:44.501Z",
+      "verdict": "fail",
+      "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
+      "failures": [
+        "P6"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T18:00:44.796Z",
+      "verdict": "pass",
+      "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T18:00:52.932Z",
+      "verdict": "pass",
+      "merge_sha": "6d74bbbe8afce119eef2d8f154359ba1ba28e860",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
