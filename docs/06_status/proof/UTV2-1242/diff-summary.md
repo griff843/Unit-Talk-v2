@@ -32,7 +32,7 @@ T2 data-canonical lane. Ingestor recovery: bounded queries, health state codes, 
 
 `upsertBatch` idempotency check in `packages/db/src/runtime-repositories.ts` is a separate
 Tier C path touch — not included in this lane. Primary blocking timeouts resolved by this lane +
-UTV2-1244 index.
+the composite index on `(provider_event_id, snapshot_at)` on `provider_offer_history`.
 
 ## SHA Binding
 

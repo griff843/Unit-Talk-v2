@@ -22,6 +22,19 @@ code-level recovery confirmed in place first).
 
 `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS, 0 triggers
 
+## pnpm test:db
+
+Run against live Supabase (project `zfzdnfwdarxucxtaojxm`) on branch `claude/utv2-1242-ingestor-recovery`.
+
+```
+# tests 7
+# pass 7
+# fail 0
+# duration_ms 114964
+```
+
+Result: PASS (7/7)
+
 ## Root Cause Analysis
 
 Two distinct timeout failure modes confirmed from `system_runs` before fix:
@@ -37,9 +50,9 @@ Two distinct timeout failure modes confirmed from `system_runs` before fix:
 
 **Before:** unbounded query on `provider_offer_history` for event IDs — no `snapshot_at` filter.
 
-**After:** `{ beforeSnapshotAt: snapshotAt }` added. Query now bounded to data before the current snapshot — uses the composite index `(provider_event_id, snapshot_at)` added by UTV2-1244.
+**After:** `{ beforeSnapshotAt: snapshotAt }` added. Query now bounded to data before the current snapshot — uses the composite index `(provider_event_id, snapshot_at)` on `provider_offer_history`.
 
-### Fix 2: `markClosingLines` timeout (previously fixed by UTV2-1244 index)
+### Fix 2: `markClosingLines` timeout (resolved by composite index on `provider_offer_history`)
 
 Index `idx_provider_offer_history_event_snapshot` on `(provider_event_id, snapshot_at)` now active on live DB. The 48h window filter in `markClosingLines` was already in place; the index makes this query fast.
 
@@ -73,10 +86,10 @@ error detail: "Reaped as hung singleton by UTV2-1242 ops clear — startup recov
 `upsertBatch` in `packages/db/src/runtime-repositories.ts` has an idempotency check
 that queries `provider_offer_history` by `idempotency_key` without `snapshot_at` filter
 (NHL failure at `f5a81de6`). This path is Tier C and requires a separate Griff-gated lane.
-The primary production blocker (markClosingLines timeout on MLB/NFL) is resolved by UTV2-1244's
-index + this lane's bounded `findExistingCombinations`. The NHL-specific `upsertBatch`
-timeout risk is reduced by the new `idx_provider_offer_history_event_snapshot` index which
-speeds up related scans.
+The primary production blocker (markClosingLines timeout on MLB/NFL) is resolved by the
+composite index on `(provider_event_id, snapshot_at)` + this lane's bounded `findExistingCombinations`.
+The NHL-specific `upsertBatch` timeout risk is reduced by the `idx_provider_offer_history_event_snapshot`
+index which speeds up related scans.
 
 ## SHA Binding
 
