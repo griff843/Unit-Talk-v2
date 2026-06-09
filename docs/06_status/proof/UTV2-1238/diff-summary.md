@@ -20,6 +20,10 @@ Runtime recovery was performed through production environment and database dispo
 - No `.ops` changes.
 - No proof/lane history deletion.
 
+## SHA Binding
+
+Merge SHA: `ba292a2df0c0ec29616303f239cf67ca4ce04d3f`
+
 ## Remaining Non-Code Decisions
 
 - `discord:best-bets` has 199 stale `smart-form|queued` pending rows from 2026-06-03 through 2026-06-05. They were not retried or dead-lettered because stale live-channel delivery requires PM/operator disposition.

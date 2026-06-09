@@ -218,3 +218,14 @@ discord:best-bets | sent:        729 (historical delivered)
 ```
 
 **Executed at:** `2026-06-09T14:07Z` by claude orchestrator per locked PM Decision D1.
+
+## SHA Binding
+
+Merge SHA: `ba292a2df0c0ec29616303f239cf67ca4ce04d3f`
+
+Pre-merge verification commands run on branch `griffadavi/utv2-1238-runtime-recovery-worker-outbox-dead-letter-heartbeat-proof`:
+
+- `pnpm type-check` — PASS
+- `pnpm test` — PASS (113 pass, 0 fail)
+- `pnpm verify` — PASS
+- `scripts/ci/r-level-check.ts` — PASS (rules matched: none — runtime/ops-only diff, no R1–R5 triggers)
