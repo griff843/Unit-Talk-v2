@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1244.yml",
+    "db/migrations-rollback/20260609001_utv2_1244_provider_offer_history_event_snapshot_index.down.sql",
     "docs/06_status/lanes/UTV2-1244.json",
     "docs/06_status/proof/UTV2-1244/diff-summary.md",
     "docs/06_status/proof/UTV2-1244/evidence.json",
