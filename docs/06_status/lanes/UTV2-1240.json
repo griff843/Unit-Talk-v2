@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1240",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1240-verification-stability",
+  "branch": "claude/utv2-1240-verification-stability",
+  "base_branch": "main",
+  "commit_sha": "ebd186ea",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/996",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1240.yml",
+    "docs/06_status/lanes/UTV2-1240.json",
+    "docs/06_status/proof/UTV2-1240/verification.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-06-09T14:50:31.327Z",
+  "heartbeat_at": "2026-06-09T14:50:31.327Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1240-verification-stability.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1240-verification-stability",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
