@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1244-migration-index-provider-offer-history",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/997",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1244.yml",
