@@ -15,7 +15,12 @@
     "apps/ingestor/src/ingest-odds-api.ts",
     "apps/ingestor/src/ingestor-runner.ts",
     "apps/ingestor/src/staleness.ts",
-    "apps/ingestor/src/supervisor.ts"
+    "apps/ingestor/src/supervisor.ts",
+    "apps/ingestor/src/supervisor.test.ts",
+    "docs/06_status/lanes/UTV2-1242.json",
+    ".ops/sync/UTV2-1242.yml",
+    "docs/06_status/proof/UTV2-1242/diff-summary.md",
+    "docs/06_status/proof/UTV2-1242/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1242/diff-summary.md",
