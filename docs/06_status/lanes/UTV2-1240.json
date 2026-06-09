@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1240-verification-stability",
   "branch": "claude/utv2-1240-verification-stability",
   "base_branch": "main",
-  "commit_sha": "ebd186ea",
+  "commit_sha": "937e8403f78e09c21978de9891cd8153b24e2e9e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/996",
   "files_changed": [],
   "file_scope_lock": [
@@ -16,7 +16,7 @@
     "docs/06_status/proof/UTV2-1240/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-09T14:50:31.327Z",
   "heartbeat_at": "2026-06-09T14:50:31.327Z",
   "closed_at": null,
