@@ -17,7 +17,7 @@
  */
 
 import { writeFile, mkdir, access } from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,9 +33,11 @@ function parseArgv(argv) {
   let issueId = null;
   let force = false;
   let sha = null;
+  let lane = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--force') force = true;
+    else if (a === '--lane') lane = true;
     else if (a === '--sha') {
       sha = args[++i] ?? null;
       if (!sha) {
@@ -45,7 +47,7 @@ function parseArgv(argv) {
     }
     else if (!issueId) issueId = a;
   }
-  return { issueId, force, sha };
+  return { issueId, force, sha, lane };
 }
 
 function detectGitSha() {
@@ -79,7 +81,7 @@ function today() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function buildBundleSkeleton(issueId, verifier, date, commitSha) {
+function buildBundleSkeleton(issueId, verifier, date, commitSha, tier = 'T?', scopeLines = '- <list files changed>') {
   return `# ${issueId} — Evidence Bundle
 
 > Generated from \`docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md\` on ${date}.
@@ -92,7 +94,7 @@ function buildBundleSkeleton(issueId, verifier, date, commitSha) {
 | Field | Value |
 |---|---|
 | Issue ID | ${issueId} |
-| Tier | T? |
+| Tier | ${tier} |
 | Phase / Gate | Phase ? — <short name> |
 | Owner | <lane or human> |
 | Date | ${date} |
@@ -103,6 +105,9 @@ function buildBundleSkeleton(issueId, verifier, date, commitSha) {
 ---
 
 ## Scope
+
+**Files changed (auto-detected):**
+${scopeLines}
 
 **Claims:**
 - <concrete claim 1>
@@ -159,8 +164,29 @@ None
 `;
 }
 
+function detectLaneData(issueId) {
+  const manifestPath = join(REPO_ROOT, 'docs', '06_status', 'lanes', `${issueId}.json`);
+  let tier = 'T?';
+  let filesChanged = [];
+
+  try {
+    const m = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    if (m.tier) tier = m.tier;
+    if (Array.isArray(m.files_changed) && m.files_changed.length) filesChanged = m.files_changed;
+  } catch {}
+
+  if (!filesChanged.length) {
+    try {
+      const diff = execSync('git diff --name-only origin/main...HEAD', { encoding: 'utf8' });
+      filesChanged = diff.trim().split('\n').filter(Boolean);
+    } catch {}
+  }
+
+  return { tier, filesChanged };
+}
+
 async function main() {
-  const { issueId, force, sha } = parseArgv(process.argv);
+  const { issueId, force, sha, lane } = parseArgv(process.argv);
   if (!issueId) fail('missing issue id. usage: node scripts/evidence-bundle/new-bundle.mjs UTV2-XXX');
   if (!ISSUE_ID_RE.test(issueId)) fail(`invalid issue id "${issueId}". must match /^UTV2-\\d+$/`);
 
@@ -168,6 +194,15 @@ async function main() {
     process.env.EVIDENCE_VERIFIER ?? 'UNSET — set EVIDENCE_VERIFIER before running';
   const date = today();
   const commitSha = sha ?? detectGitSha();
+
+  // --lane: auto-populate tier and files from lane manifest + git diff
+  let autoTier = null;
+  let autoFiles = [];
+  if (lane) {
+    const laneData = detectLaneData(issueId);
+    autoTier = laneData.tier;
+    autoFiles = laneData.filesChanged;
+  }
 
   const bundlePath = join(REPO_ROOT, 'docs', '06_status', `${issueId}-EVIDENCE-BUNDLE.md`);
   const evidenceDir = join(REPO_ROOT, 'docs', '06_status', 'evidence', issueId);
@@ -182,7 +217,12 @@ async function main() {
     await writeFile(gitkeep, '', 'utf8');
   }
 
-  const content = buildBundleSkeleton(issueId, verifier, date, commitSha);
+  const effectiveTier = autoTier ?? 'T?';
+  const scopeLines = autoFiles.length
+    ? autoFiles.map((f) => `- \`${f}\``).join('\n')
+    : '- <list files changed>';
+
+  const content = buildBundleSkeleton(issueId, verifier, date, commitSha, effectiveTier, scopeLines);
   await writeFile(bundlePath, content, 'utf8');
 
   process.stdout.write(`${bundlePath}\n`);

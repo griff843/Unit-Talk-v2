@@ -217,8 +217,48 @@ function runCli(): void {
     ttl_minutes: input.ttl_minutes,
   });
 
-  emitJson(result);
+  // Post-merge hooks: capture SHA, conditionally run supabase:types
+  let postMergeExtras: Record<string, unknown> = {};
+  if (result.ok && input.operation === 'pr-merge' && result.code !== 'merge_wrapper_deferred' && input.pr) {
+    postMergeExtras = runPostMergeHooks(input.pr, input.cwd);
+  }
+
+  emitJson({ ...result, ...postMergeExtras });
   process.exitCode = result.ok ? 0 : 1;
+}
+
+function runPostMergeHooks(pr: string, cwd: string): Record<string, unknown> {
+  const hooks: string[] = [];
+  let mergeSha: string | null = null;
+
+  // Capture merge SHA via gh pr view
+  try {
+    const shaRun = spawnSync('gh', ['pr', 'view', pr, '--json', 'mergeCommit', '--jq', '.mergeCommit.oid'], {
+      cwd,
+      encoding: 'utf8',
+    });
+    if (shaRun.status === 0 && shaRun.stdout) {
+      mergeSha = shaRun.stdout.trim() || null;
+      if (mergeSha) hooks.push(`merge_sha_captured: ${mergeSha.slice(0, 8)}`);
+    }
+  } catch {
+    hooks.push('merge_sha_capture: failed (gh unavailable)');
+  }
+
+  // Check if PR diff touched supabase/migrations/ → regenerate types
+  try {
+    const diffRun = spawnSync('gh', ['pr', 'diff', '--name-only', pr], { cwd, encoding: 'utf8' });
+    if (diffRun.status === 0 && diffRun.stdout?.includes('supabase/migrations/')) {
+      const typesRun = spawnSync('pnpm', ['supabase:types'], { cwd, encoding: 'utf8' });
+      hooks.push(typesRun.status === 0
+        ? 'supabase:types: regenerated'
+        : `supabase:types: FAILED — ${String(typesRun.stderr ?? '').slice(0, 120)}`);
+    }
+  } catch {
+    hooks.push('supabase:types: skipped (diff check failed)');
+  }
+
+  return { merge_sha: mergeSha, post_merge_hooks: hooks };
 }
 
 const argv1 = process.argv[1] ?? '';

@@ -13,6 +13,7 @@ import {
 export interface LaneFinalizeStep {
   id:
     | 'record_merge'
+    | 'apply_tier_label'
     | 'generate_proof'
     | 'generate_t2_proof_bundle'
     | 'close_lane'
@@ -65,6 +66,15 @@ export function buildLaneFinalizePlan(input: {
       args: ['ops:lane-manifest', 'record-merge', issueId, '--pr', input.pr, '--json'],
       required: true,
     });
+    // Apply tier label to PR — non-blocking so a missing label doesn't stall closeout
+    if (input.manifest.tier) {
+      steps.push({
+        id: 'apply_tier_label',
+        command: 'gh',
+        args: ['pr', 'edit', normalizePrUrl(input.pr), '--add-label', `tier:${input.manifest.tier}`],
+        required: false,
+      });
+    }
     steps.push({
       id: 'generate_proof',
       command: 'pnpm',
@@ -198,6 +208,10 @@ export function runLaneFinalizePlan(
       stderr: String(result.stderr ?? '').trim(),
     };
     if (status !== 0) {
+      if (!step.required) {
+        steps.push({ ...step, status: 'skipped', ...output });
+        continue;
+      }
       steps.push({ ...step, status: 'failed', ...output });
       return {
         ok: false,

@@ -118,6 +118,7 @@
     "ops:pr-block-diagnostic": "tsx scripts/ops/pr-block-diagnostic.ts",
     "ops:pr-review-packet": "tsx scripts/ops/pr-review-packet.ts",
     "ops:scope-diff": "tsx scripts/ops/scope-diff.ts",
+    "ops:scope-suggest": "tsx scripts/ops/scope-suggest.ts",
     "ops:cert-check": "tsx scripts/ops/cert-check.ts",
     "ops:truth-check": "tsx scripts/ops/truth-check.ts",
     "ops:p0-detect": "tsx scripts/ops/p0-detect.ts",
@@ -173,6 +174,7 @@
     "verify:commands": "pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs",
     "verify": "pnpm ops:sync-check && pnpm ops:system-alignment-check && pnpm ops:automation-coverage-check && pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test && pnpm --filter @unit-talk/smart-form verify && pnpm verify:commands",
     "verify:quick": "pnpm ops:sync-check && pnpm ops:system-alignment-check && pnpm ops:automation-coverage-check && pnpm env:check && pnpm lint && pnpm type-check",
+    "verify:parallel": "node scripts/verify-parallel.mjs",
     "settlement:drill": "tsx scripts/ops/settlement-drill.ts",
     "ingestor:health-check": "tsx scripts/ops/ingestor-health-check.ts"
   },

@@ -197,7 +197,17 @@ YES or NO — justify if YES (novel architecture, unresolved scope ambiguity, mu
 })
 ```
 
-Block on the planning result. If the plan returns `Fable 5 warranted: YES` and you used Opus 4.8, re-spawn the plan with `model: "fable"` before proceeding. Griff reviews the plan artifact for constitutional/governance T1s.
+Block on the planning result. If the plan returns `Fable 5 warranted: YES` and you used Opus 4.8, re-spawn the plan with `model: "fable"` before proceeding.
+
+**Deliver the plan to Linear for async PM review (mandatory for all T1):**
+After the planning subagent returns, immediately post the plan as a Linear comment so Griff can review asynchronously without being in the same session:
+```
+mcp__claude_ai_Linear__save_comment({
+  issueId: "<issue_id>",
+  body: "## T1 Plan — awaiting PM approval\n\n<paste full planning subagent output here>\n\n---\nPlanning model: opus (or fable)\nStatus: awaiting Griff review before implementation begins."
+})
+```
+Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
 
 - Execute the work directly in this conversation from the dedicated lane worktree reported by `ops:lane-start`
 - Follow the acceptance criteria from the issue description and the planning subagent's scope + approach
@@ -273,11 +283,31 @@ When dispatching multiple lanes:
 1. Start Claude lane first (execute directly)
 2. Dispatch Codex lanes in background (they run in parallel) via `Agent({run_in_background: true})`
 3. After Claude lane PR is open, continue other work — you will be **automatically notified** when background Codex lanes complete
-4. On Codex completion notification: determine critique model (see below), review diff, run critique, apply tier label, then use `PushNotification` to surface the result if the session needs a summary
+4. On Codex completion notification, spawn a background review agent — do not review inline in the orchestrator session:
 
-**Codex diff critique model (from `/three-brain` Codex critique table):**
-- Diff touches any Tier C path (`packages/domain/`, `packages/contracts/`, `supabase/migrations/`, `packages/db/src/lifecycle.ts`, etc.) → spawn `Agent({model: "opus", ...})` for the critique pass
-- Standard T2 diff, no Tier C → Sonnet orchestrator reviews directly
+```typescript
+Agent({
+  run_in_background: true,
+  model: touchesTierC ? "opus" : "sonnet",  // tier C paths → opus critique
+  subagent_type: "codex-return-reviewer",
+  description: `Codex return review: ${issue_id}`,
+  prompt: `Review the Codex-returned diff for ${issue_id}.
+PR: ${pr_url}
+Branch: ${branch}
+
+Steps:
+1. Read the diff via: gh pr diff ${pr_number}
+2. Run the codex-return-reviewer checks (file scope, Tier C paths, test existence, commit format, tier label, R-level)
+3. Check if diff touches any Tier C path: packages/domain/, packages/contracts/, supabase/migrations/, packages/db/src/lifecycle.ts, apps/api/src/auth.ts
+4. Apply tier label: gh pr edit ${pr_number} --add-label tier:T2
+5. Post review result as Linear comment on ${issue_id}
+6. If REJECT or Tier C violation found: post a blocking comment on the PR and set Linear state to Blocked
+
+Return: APPROVE or REJECT with findings.`
+})
+```
+
+**Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
 5. If abandoning an active lane before work begins, release the lease explicitly:
    ```bash
    pnpm ops:lease release --issue UTV2-{number} --actor claude --reason "abandoned before implementation"

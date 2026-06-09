@@ -1,0 +1,49 @@
+name: Worktree Cleanup
+
+# Nightly cleanup of stale lane worktrees in .out/worktrees/.
+# Runs after queue-grooming (3:07am UTC) to catch lanes closed the prior day.
+
+on:
+  schedule:
+    - cron: '7 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Clean stale worktrees
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Remove stale worktrees
+        run: pnpm ops:lane-clean --json > lane-clean-result.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+
+      - name: Upload cleanup report
+        uses: actions/upload-artifact@v4
+        with:
+          name: lane-clean-report
+          path: lane-clean-result.json
+          retention-days: 7
