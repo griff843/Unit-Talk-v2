@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1238/diff-summary.md",
     "docs/06_status/proof/UTV2-1238/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-09T12:40:18.455Z",
-  "heartbeat_at": "2026-06-09T16:14:46.410Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-09T16:18:34.084Z",
+  "closed_at": "2026-06-09T16:18:34.084Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1238-runtime-recovery-worker-outbox-dead-letter-heartbeat-proof.json",
   "created_by": "codex-cli",
@@ -50,6 +50,13 @@
         "P12",
         "P14"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-09T16:18:24.727Z",
+      "verdict": "pass",
+      "merge_sha": "ba292a2df0c0ec29616303f239cf67ca4ce04d3f",
+      "failures": [],
       "runner": "manual"
     }
   ],
