@@ -1,0 +1,34 @@
+-- UTV2-1244: Add provider_event_id + snapshot_at index to provider_offer_history
+--
+-- Background: provider_offer_history has 713,978 rows. The table's only indexes are
+-- on (snapshot_at, id) and (snapshot_at, idempotency_key). UTV2-1242 closing-line
+-- timeout remediation requires an efficient lookup path by provider_event_id.
+-- Without this index, any WHERE provider_event_id = $1 query performs a full
+-- sequential scan on a 713K-row table, causing the observed timeouts.
+--
+-- This adds a composite index on (provider_event_id, snapshot_at) to enable
+-- both point lookups (by event) and ordered scans (by event + time).
+--
+-- CONCURRENTLY: builds without holding an AccessExclusiveLock on the table.
+-- Safe to apply on a live production database with active reads/writes.
+-- Matches the precedent set in 202604080015_utv2_437_audit_log_created_at_index.sql.
+--
+-- Pre-condition verification (run read-only before applying):
+--   SELECT indexname, indexdef
+--   FROM pg_indexes
+--   WHERE tablename = 'provider_offer_history'
+--   ORDER BY indexname;
+-- Expected: no row with indexname = 'idx_provider_offer_history_event_snapshot'
+--
+-- Post-condition verification (run after applying):
+--   SELECT indexname, indexdef
+--   FROM pg_indexes
+--   WHERE tablename = 'provider_offer_history'
+--     AND indexname = 'idx_provider_offer_history_event_snapshot';
+-- Expected: 1 row confirming index creation.
+--
+-- Rollback:
+--   DROP INDEX CONCURRENTLY IF EXISTS idx_provider_offer_history_event_snapshot;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_provider_offer_history_event_snapshot
+  ON public.provider_offer_history (provider_event_id, snapshot_at);
