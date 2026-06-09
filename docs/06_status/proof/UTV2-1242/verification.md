@@ -30,6 +30,9 @@ Run against live Supabase (project `zfzdnfwdarxucxtaojxm`) on branch `claude/utv
 # tests 7
 # pass 7
 # fail 0
+# cancelled 0
+# skipped 0
+# todo 0
 # duration_ms 114964
 ```
 
