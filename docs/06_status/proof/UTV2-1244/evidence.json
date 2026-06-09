@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "verifier": {
+    "identity": "claude/utv2-1244-migration-lane"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "pnpm test:db 7/7 pass; pnpm verify 113 unit tests pass, 0 fail",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "provider_offer_history",
+        "description": "Pre-check: confirmed no provider_event_id index existed — only (snapshot_at, id) and (snapshot_at, idempotency_key)",
+        "row_count": 2
+      },
+      {
+        "table": "provider_offer_history",
+        "description": "Post-apply: idx_provider_offer_history_event_snapshot exists on btree(provider_event_id, snapshot_at)",
+        "row_count": 1
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "provider_offer_history",
+        "count": 713978,
+        "status": "healthy"
+      }
+    ]
+  },
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "01f6b2f9f2bd7c14f821438af84e350f95774d09",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-09T16:35:00.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "wfr_v2_validators": "pending"
+    }
+  }
+}
