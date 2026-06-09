@@ -11,7 +11,7 @@
  *   pnpm ops:scope-suggest --issue UTV2-### --json
  */
 
-import { execSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -173,13 +173,13 @@ function detectLaneData(issueId) {
     const m = JSON.parse(readFileSync(manifestPath, 'utf8'));
     if (m.tier) tier = m.tier;
     if (Array.isArray(m.files_changed) && m.files_changed.length) filesChanged = m.files_changed;
-  } catch {}
+  } catch { /* ignore — manifest may not exist yet */ }
 
   if (!filesChanged.length) {
     try {
       const diff = execSync('git diff --name-only origin/main...HEAD', { encoding: 'utf8' });
       filesChanged = diff.trim().split('\n').filter(Boolean);
-    } catch {}
+    } catch { /* ignore — git may not be available */ }
   }
 
   return { tier, filesChanged };
