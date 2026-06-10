@@ -1,5 +1,11 @@
 # UTV2-1239 Verification — Deploy Alignment
 
+## Verification
+
+Runtime verified via production deploy run 27253256755. Post-deploy functional smoke
+returned HTTP 200 from production `/health`. All 9 jobs passed (verify, rollback-dry-run,
+build ×4, canary, promote, smoke). Production is serving SHA `dcd649d5267c1790f910260e3bdfc5c0304ab981`.
+
 ## Summary
 
 T3 governance lane. Triggered production deploy of current main SHA (`dcd649d5`) via
@@ -37,7 +43,13 @@ Passed in deploy verify job (full pipeline: env:check + lint + type-check + buil
 
 No R-level rules triggered — governance/ops-only lane, no runtime or modeling paths.
 
+## pnpm test:db
+
+Not applicable — governance/evidence lane with no code changes. `pnpm test:db` was not
+run; DB schema is unchanged by this lane. Full verify (env:check + lint + type-check +
+build + test) ran inside deploy job 80482041869.
+
 ## SHA Binding
 
 Verified source SHA: dcd649d5267c1790f910260e3bdfc5c0304ab981
-Merge SHA: PENDING — no PR for this governance lane; evidence tied to deploy run 27253256755
+Merge SHA: PENDING — PR #1001 open, will be updated post-merge
