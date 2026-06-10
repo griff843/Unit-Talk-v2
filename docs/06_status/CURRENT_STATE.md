@@ -5,7 +5,7 @@
 > docs in this repo are either authoritative on their specific sub-topic (see §Source of Truth
 > Hierarchy) or have been marked SUPERSEDED / HISTORICAL.
 >
-> **Last verified:** 2026-06-10T05:05:00Z (UTC) — UTV2-1242 DONE, UTV2-1239 DONE (3eab0665), production at dcd649d5, 0 active lanes
+> **Last verified:** 2026-06-10T08:00:00Z (UTC) — UTV2-1042 dispatch pause LIFTED (PM decision), readiness YELLOW, 0 active lanes
 >
 > **Constitutional authority:** `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 ·
 > `docs/00_constitution/CANONICAL_PROGRAM_STATE.md` (PM-ratified 2026-06-02)
@@ -47,20 +47,26 @@ Full ledger: `docs/00_constitution/CERTIFICATION_GAP_REGISTER.md`
 
 ### UTV2-1042 — Empirical CLV / Data Gate
 
-**State:** DATA-GATE OPEN — dispatch PAUSED (production-readiness RED)
+**State:** DATA-GATE OPEN — dispatch OPEN (PM decision 2026-06-10)
 
-> ⚠️ **PAUSED, NOT DATA-GATED.** All three data-gate criteria are now MET (v10 monitor, 2026-06-10T00:55Z).
-> Dispatch remains paused by production-readiness RED until deploy alignment (UTV2-1239) is resolved — or PM-waived.
-> UTV2-1242 ingestor recovery DONE (891512f1). No CLV certification. No P3 certification. No edge/ROI claims.
+> **DISPATCH OPEN.** PM lifted the production-readiness-RED pause. Readiness re-audit verdict: YELLOW.
+> Prior RED blockers resolved (UTV2-1239 DONE, UTV2-1242 DONE, production at dcd649d5).
+> UTV2-1042 authorized as empirical evidence evaluation lane — honest pass/fail/defer outcome required.
+> No CLV certification. No P3 certification. No edge/ROI/STRONG/ELITE claims.
 
-Current gate status (as of v10 monitor, 2026-06-10T00:55Z):
-- `pick_candidates` for post-cutover universe_ids: **2,609** (MET ✓)
-- `closing_over_odds IS NOT NULL` for post-cutover market_universe: **2,602** (MET ✓)
-- CLV join path: **125 picks** (MET ✓)
+Current gate status (as of v11 monitor, 2026-06-10T05:38:13Z):
+- `pick_candidates` for post-cutover universe_ids: **2,964** (MET ✓)
+- `closing_over_odds IS NOT NULL` for post-cutover market_universe: **2,606** (MET ✓)
+- CLV join path: **126 picks** (MET ✓)
 
-**UTV2-1042 dispatch gate: OPEN.** Dispatch paused by production-readiness RED. Do not claim CLV certified.
+**dispatch_gate: OPEN · paused: false**
 
-Evidence: `docs/06_status/proof/UTV2-1042/data-gate-monitor.json` (v10, SHA `ad3010fb`)
+Evidence: `docs/06_status/proof/UTV2-1042/data-gate-monitor.json` (v11, SGO snapshot 2026-06-10T05:38:13Z)
+
+Accepted YELLOW residuals (PM-acknowledged):
+- Health scripts count governance brake rows as failures (fix: UTV2-1248)
+- `pipeline:health` delivery_freshness contradicted by live DB truth (fix: UTV2-1249)
+- 199 stale_pending_operator_review rows are accepted governance queue, not system failures
 
 ### UTV2-1231 — Data-Gate Accumulation Monitor
 
@@ -77,8 +83,8 @@ active to confirm continued post-cutover accumulation after next ingestor cycle.
 
 | Blocker | Category | Notes |
 |---|---|---|
-| Production readiness AMBER | **Partial** | UTV2-1242 DONE (891512f1). UTV2-1239 DONE — production now at dcd649d5 (deploy run 27253256755, smoke PASS 2026-06-10T04:41Z). UTV2-1240 verification stability still open. |
-| P3 empirical CLV/edge evidence | Certification | Data gate OPEN; P3 cert requires UTV2-1042 completion (paused by readiness RED) |
+| Production readiness YELLOW | **Partial** | UTV2-1242 DONE (891512f1). UTV2-1239 DONE — production now at dcd649d5 (deploy run 27253256755, smoke PASS 2026-06-10T04:41Z). Health script false negatives tracked in UTV2-1248/UTV2-1249. |
+| P3 empirical CLV/edge evidence | Certification | Data gate OPEN; dispatch OPEN (PM lift 2026-06-10). P3 cert requires UTV2-1042 honest pass/fail outcome. |
 | P4 economic truth unproven | Certification | No realized CLV / attribution data; economic certification requires live settled pick corpus |
 | P5 freeze | Activation | FROZEN until burn-in PASS + P1–P4 certs + M10 Path A. Treasury/capital/scaling work forbidden. |
 | P1 re-cert deadline | Time-gated | `proof_lineage` + `freshness` domains auto-degrade 2026-08-25; re-cert prep authorized |
@@ -118,16 +124,15 @@ The following claims must **not** be made until the named gates are met:
 
 **Pipeline activated:** 2026-06-07 (D-CONST-6 resolution — SGO first successful ingest 13:38:28Z)
 
-Post-cutover accumulation snapshot (as of v10 monitor, 2026-06-10T00:55Z):
-- Provider offer cycles: 2 post-cutover SGO cycles (latest 2026-06-08T14:05:44Z — UTV2-1242 fix deployed, next cycle pending UTV2-1239 deploy)
-- Pick candidates for post-cutover universe_ids: **2,609** (Gate 1 MET)
-- Closing over odds (market_universe post-cutover): **2,602** (Gate 2 MET)
-- CLV join path (picks → pick_candidates → market_universe with closing_over_odds): **125** (Gate 3 MET)
-- Board scan: 39,541 candidates scanned, last at 2026-06-10T00:47Z
+Post-cutover accumulation snapshot (as of v11 monitor, 2026-06-10T05:38:13Z):
+- SGO snapshot advanced to 2026-06-10T05:38:13Z (5 cycles post-UTV2-1242)
+- Pick candidates for post-cutover universe_ids: **2,964** (Gate 1 MET)
+- Closing over odds (market_universe post-cutover): **2,606** (Gate 2 MET)
+- CLV join path (picks → pick_candidates → market_universe with closing_over_odds): **126** (Gate 3 MET)
 - sport_id attribution: fix confirmed live (UTV2-1228)
 
-All three data-gate criteria are now MET. Empirical evidence accumulating but **no certification-grade proof available**.
-UTV2-1042 dispatch paused by production-readiness RED (not data-gated).
+All three data-gate criteria MET. **dispatch_gate: OPEN · paused: false** (PM decision 2026-06-10).
+No certification-grade proof available — UTV2-1042 runs as empirical evidence evaluation.
 
 ---
 
@@ -154,7 +159,9 @@ Cert records: `docs/06_status/programs/PROGRAM_{1,2,3,4}_CERTIFICATION.md` + `PR
 | UTV2-884 | Discord Member DM Routing | Paused — do not dispatch |
 | UTV2-885 | Discord Game-Thread Routing | Paused — do not dispatch |
 | UTV2-1032 | DEVELOPING label proof run | Data-gated: needs 50+ real-edge picks |
-| UTV2-1042 | CLV / edge empirical gate | Data gate OPEN — dispatch **paused** (production-readiness RED) |
+| UTV2-1042 | CLV / edge empirical gate | Data gate OPEN — dispatch **OPEN** (PM lift 2026-06-10, readiness YELLOW) |
+| UTV2-1248 | Health scripts — governance brake false negatives | Authorized follow-up lane |
+| UTV2-1249 | Pipeline health — fix delivery_freshness metric | Authorized follow-up lane |
 
 P3 work (scoring truth, feature audits, injury/status guards, calibration) is authorized.
 P4 work (execution hardening, dead-letter remediation, settlement proof scaffolding) is conditional.
