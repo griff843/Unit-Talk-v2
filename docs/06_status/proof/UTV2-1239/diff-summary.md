@@ -17,4 +17,4 @@ No code changes. Governance/evidence lane only.
 ## SHA Binding
 
 Verified source SHA: dcd649d5267c1790f910260e3bdfc5c0304ab981
-Merge SHA: PENDING — no PR for this governance lane; evidence tied to deploy run 27253256755
+Merge SHA: 3eab06658bc55010702e8c29cb8e6b304e9befe0

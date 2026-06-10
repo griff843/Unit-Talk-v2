@@ -63,4 +63,4 @@ to satisfy proof gate requirement. All tests pass; no regressions introduced.
 ## SHA Binding
 
 Verified source SHA: dcd649d5267c1790f910260e3bdfc5c0304ab981
-Merge SHA: PENDING — PR #1001 open, will be updated post-merge
+Merge SHA: 3eab06658bc55010702e8c29cb8e6b304e9befe0
