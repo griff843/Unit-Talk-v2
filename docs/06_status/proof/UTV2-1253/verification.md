@@ -27,7 +27,19 @@ Architecture doc `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` cre
 
 - `pnpm type-check`: PASS
 - `pnpm test`: PASS
-- `pnpm verify`: PASS (or scoped to docs — no runtime code changed)
+- `pnpm verify:quick`: PASS
+- `pnpm test:db`:
+
+```
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 109506.264064
+```
 
 ---
 
