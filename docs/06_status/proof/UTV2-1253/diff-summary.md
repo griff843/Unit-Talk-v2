@@ -4,11 +4,15 @@
 
 Docs-first architecture lane. Creates `PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` defining four operating modes and three control planes. Adds `docs/02_architecture/**` to governance lane allowed paths. No runtime code changes.
 
+**Merge SHA:** `51be3689`
+
 ## Evidence
 
 - `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` — new, 662 lines
 - `.lane/lanes/governance.yml` — `docs/02_architecture/**` added to allowed_path_globs
 - `pnpm verify:quick` PASS
+- `pnpm test:db` PASS (7/7, 0 fail)
+- `scripts/ci/r-level-check.ts` PASS (no rules matched — docs-only lane)
 - PM_VERDICT: APPROVED (2026-06-10)
 
 **Issue:** UTV2-1253 — Architecture Doc: Pick lifecycle and evidence modes
