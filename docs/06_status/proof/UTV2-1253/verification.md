@@ -1,5 +1,17 @@
 # UTV2-1253 — Verification
 
+## Summary
+
+Architecture doc `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` created. Four operating modes and three control planes defined. All exit criteria met. `pnpm verify:quick` passes. No runtime code changes. No P3 certification. No CLV/ROI/edge claims.
+
+## Evidence
+
+- New file: `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` — 662 lines, PM-approved content
+- `.lane/lanes/governance.yml` updated to add `docs/02_architecture/**` to allowed paths
+- `pnpm verify:quick` PASS (lint clean, type-check clean, docs-only diff)
+- All five cross-references verified to exist at stated paths
+- PM_VERDICT: APPROVED (2026-06-10)
+
 ## Verification
 
 **Issue:** UTV2-1253

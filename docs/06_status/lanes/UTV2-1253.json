@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1253",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1253-pick-lifecycle-and-evidence-modes",
@@ -13,7 +13,8 @@
   "file_scope_lock": [
     "docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md",
     "docs/06_status/proof/UTV2-1253/diff-summary.md",
-    "docs/06_status/proof/UTV2-1253/verification.md"
+    "docs/06_status/proof/UTV2-1253/verification.md",
+    ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1253/diff-summary.md",

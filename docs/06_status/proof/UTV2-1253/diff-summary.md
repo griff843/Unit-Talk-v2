@@ -1,5 +1,16 @@
 # UTV2-1253 — Diff Summary
 
+## Summary
+
+Docs-first architecture lane. Creates `PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` defining four operating modes and three control planes. Adds `docs/02_architecture/**` to governance lane allowed paths. No runtime code changes.
+
+## Evidence
+
+- `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` — new, 662 lines
+- `.lane/lanes/governance.yml` — `docs/02_architecture/**` added to allowed_path_globs
+- `pnpm verify:quick` PASS
+- PM_VERDICT: APPROVED (2026-06-10)
+
 **Issue:** UTV2-1253 — Architecture Doc: Pick lifecycle and evidence modes
 **Tier:** T2
 **Lane type:** hygiene (docs-first architecture)

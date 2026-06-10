@@ -28,6 +28,8 @@ allowed_path_globs:
   - docs/06_status/CERT_BOARD.md
   # Constitutional docs — drift audits, gap register, implementation matrix. Added UTV2-1199.
   - docs/00_constitution/**
+  # Architecture policy and doctrine docs — added UTV2-1253.
+  - docs/02_architecture/**
   # Package-root CLAUDE.md files for governance/doc reconciliation lanes. Added UTV2-1199.
   - packages/db/CLAUDE.md
   - packages/contracts/CLAUDE.md
