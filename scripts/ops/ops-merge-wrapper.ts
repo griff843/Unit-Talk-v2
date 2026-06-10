@@ -103,6 +103,20 @@ export function runExtendedMergeWrapper(
   },
   options: Parameters<typeof runMergeWrapper>[1] = {},
 ): MergeWrapperResult {
+  if (input.operation === 'main-sync') {
+    const ffResult = runMergeWrapper(input as MergeWrapperInput, options);
+    if (ffResult.ok) return ffResult;
+    // When the branch has diverged, ff-only fails. Detect that specific condition
+    // and automatically fall back to rebase so callers don't need to retry manually.
+    const isNotFastForward =
+      ffResult.code === 'merge_wrapper_command_failed' &&
+      (ffResult.stderr?.includes('not possible to fast-forward') ||
+        ffResult.stderr?.includes('Cannot fast-forward') ||
+        ffResult.stderr?.includes('fatal: Not possible to fast-forward'));
+    if (!isNotFastForward) return ffResult;
+    return runExtendedMergeWrapper({ ...input, operation: 'git-rebase-main' }, options);
+  }
+
   if (input.operation !== 'git-merge-main' && input.operation !== 'git-rebase-main') {
     return runMergeWrapper(input as MergeWrapperInput, options);
   }

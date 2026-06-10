@@ -159,6 +159,73 @@ test('buildExtendedCommand constructs main-sync command', () => {
 });
 
 // ---------------------------------------------------------------------------
+// main-sync rebase fallback — UTV2-1247
+// ---------------------------------------------------------------------------
+
+test('main-sync succeeds on fast-forward without rebase', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runExtendedMergeWrapper(
+      { ...BASE, operation: 'main-sync' },
+      { lockPath, deferredDir, runner: okRunner(calls) },
+    );
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(calls, [['git', 'pull', '--ff-only', 'origin', 'main']]);
+  });
+});
+
+test('main-sync falls back to rebase on not-possible-to-fast-forward error', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    let callIndex = 0;
+    const divergedRunner: CommandRunner = (command, args) => {
+      calls.push([command, ...args]);
+      // First call (ff-only pull) signals divergence; second call (rebase) succeeds.
+      const isDivergence = callIndex === 0;
+      callIndex++;
+      return {
+        status: isDivergence ? 128 : 0,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(isDivergence ? 'fatal: Not possible to fast-forward, aborting.' : ''),
+        error: undefined,
+      };
+    };
+    const result = runExtendedMergeWrapper(
+      { ...BASE, operation: 'main-sync' },
+      { lockPath, deferredDir, runner: divergedRunner },
+    );
+    assert.strictEqual(result.ok, true, 'should succeed after rebase fallback');
+    assert.deepStrictEqual(calls, [
+      ['git', 'pull', '--ff-only', 'origin', 'main'],
+      ['git', 'rebase', 'origin/main'],
+    ]);
+  });
+});
+
+test('main-sync does not fall back to rebase on non-divergence error', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const networkErrorRunner: CommandRunner = (command, args) => {
+      calls.push([command, ...args]);
+      return {
+        status: 128,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from('fatal: unable to access remote'),
+        error: undefined,
+      };
+    };
+    const result = runExtendedMergeWrapper(
+      { ...BASE, operation: 'main-sync' },
+      { lockPath, deferredDir, runner: networkErrorRunner },
+    );
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'merge_wrapper_command_failed');
+    assert.deepStrictEqual(calls, [['git', 'pull', '--ff-only', 'origin', 'main']],
+      'should not attempt rebase on non-divergence failure');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Held-lock rejection — fail closed
 // ---------------------------------------------------------------------------
 
