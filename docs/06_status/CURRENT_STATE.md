@@ -5,7 +5,7 @@
 > docs in this repo are either authoritative on their specific sub-topic (see §Source of Truth
 > Hierarchy) or have been marked SUPERSEDED / HISTORICAL.
 >
-> **Last verified:** 2026-06-09T14:15:00Z (UTC) — UTV2-1241 state truth update
+> **Last verified:** 2026-06-10T04:35:00Z (UTC) — UTV2-1242 DONE, monitor v10, deploy alignment in progress (UTV2-1239)
 >
 > **Constitutional authority:** `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 ·
 > `docs/00_constitution/CANONICAL_PROGRAM_STATE.md` (PM-ratified 2026-06-02)
@@ -49,28 +49,27 @@ Full ledger: `docs/00_constitution/CERTIFICATION_GAP_REGISTER.md`
 
 **State:** DATA-GATE OPEN — dispatch PAUSED (production-readiness RED)
 
-> ⚠️ **PAUSED, NOT DATA-GATED.** All three data-gate criteria are now MET (v7 monitor, 2026-06-09T01:00Z).
-> Dispatch remains paused by production-readiness RED until runtime recovery (UTV2-1238/UTV2-1242),
-> deploy alignment (UTV2-1239), and verification stability (UTV2-1240) are resolved — or PM-waived.
-> No CLV certification. No P3 certification. No edge/ROI claims.
+> ⚠️ **PAUSED, NOT DATA-GATED.** All three data-gate criteria are now MET (v10 monitor, 2026-06-10T00:55Z).
+> Dispatch remains paused by production-readiness RED until deploy alignment (UTV2-1239) is resolved — or PM-waived.
+> UTV2-1242 ingestor recovery DONE (891512f1). No CLV certification. No P3 certification. No edge/ROI claims.
 
-Current gate status (as of v7 monitor, 2026-06-09T01:00Z):
-- `pick_candidates` for post-cutover universe_ids: **1,831** (MET ✓)
-- `closing_over_odds IS NOT NULL` for post-cutover market_universe: **1,438** (MET ✓)
-- CLV join path: **82 picks** (MET ✓)
+Current gate status (as of v10 monitor, 2026-06-10T00:55Z):
+- `pick_candidates` for post-cutover universe_ids: **2,609** (MET ✓)
+- `closing_over_odds IS NOT NULL` for post-cutover market_universe: **2,602** (MET ✓)
+- CLV join path: **125 picks** (MET ✓)
 
 **UTV2-1042 dispatch gate: OPEN.** Dispatch paused by production-readiness RED. Do not claim CLV certified.
 
-Evidence: `docs/06_status/proof/UTV2-1042/data-gate-monitor.json` (v7, SHA `76910505`)
+Evidence: `docs/06_status/proof/UTV2-1042/data-gate-monitor.json` (v10, SHA `ad3010fb`)
 
 ### UTV2-1231 — Data-Gate Accumulation Monitor
 
 **State:** STOP CONDITION MET — cron may be cancelled
 
 Cron job `c9ae211f` fires every 4 hours at :17 past. All three data-gate stop conditions are
-now met (v7 snapshot, 2026-06-09T01:00Z). SGO ingestor is currently stalled (hung run since
-2026-06-08T14:06Z — UTV2-1242 scope). Monitor may be cancelled once ingestor recovery confirms
-continued post-cutover accumulation.
+met (v10 snapshot, 2026-06-10T00:55Z). UTV2-1242 ingestor recovery DONE — hung run cleared,
+bounded queries deployed. SGO ingestor stall resolved pending UTV2-1239 deploy. Monitor remains
+active to confirm continued post-cutover accumulation after next ingestor cycle.
 
 ---
 
@@ -78,8 +77,7 @@ continued post-cutover accumulation.
 
 | Blocker | Category | Notes |
 |---|---|---|
-| Production readiness RED | **Blocking** | Runtime recovery (UTV2-1238/UTV2-1242), deploy alignment (UTV2-1239), verification stability (UTV2-1240) required before UTV2-1042 dispatch |
-| SGO ingestor stalled | Runtime | Hung run since 2026-06-08T14:06Z — UTV2-1242 scope; `markClosingLines` timeout |
+| Production readiness RED | **Blocking** | UTV2-1242 DONE (891512f1). Deploy alignment UTV2-1239 in progress — deploy run 27253256755 on dcd649d5. UTV2-1240 verification stability still open. |
 | P3 empirical CLV/edge evidence | Certification | Data gate OPEN; P3 cert requires UTV2-1042 completion (paused by readiness RED) |
 | P4 economic truth unproven | Certification | No realized CLV / attribution data; economic certification requires live settled pick corpus |
 | P5 freeze | Activation | FROZEN until burn-in PASS + P1–P4 certs + M10 Path A. Treasury/capital/scaling work forbidden. |
@@ -120,12 +118,12 @@ The following claims must **not** be made until the named gates are met:
 
 **Pipeline activated:** 2026-06-07 (D-CONST-6 resolution — SGO first successful ingest 13:38:28Z)
 
-Post-cutover accumulation snapshot (as of v7 monitor, 2026-06-09T01:00Z):
-- Provider offer cycles: 2 post-cutover SGO cycles (latest 2026-06-08T14:05:44Z — stalled, UTV2-1242)
-- Pick candidates for post-cutover universe_ids: **1,831** (Gate 1 MET)
-- Closing over odds (market_universe post-cutover): **1,438** (Gate 2 MET)
-- CLV join path (picks → pick_candidates → market_universe with closing_over_odds): **82** (Gate 3 MET)
-- Board scan: 38,763 candidates scanned, last at 2026-06-09T00:47Z
+Post-cutover accumulation snapshot (as of v10 monitor, 2026-06-10T00:55Z):
+- Provider offer cycles: 2 post-cutover SGO cycles (latest 2026-06-08T14:05:44Z — UTV2-1242 fix deployed, next cycle pending UTV2-1239 deploy)
+- Pick candidates for post-cutover universe_ids: **2,609** (Gate 1 MET)
+- Closing over odds (market_universe post-cutover): **2,602** (Gate 2 MET)
+- CLV join path (picks → pick_candidates → market_universe with closing_over_odds): **125** (Gate 3 MET)
+- Board scan: 39,541 candidates scanned, last at 2026-06-10T00:47Z
 - sport_id attribution: fix confirmed live (UTV2-1228)
 
 All three data-gate criteria are now MET. Empirical evidence accumulating but **no certification-grade proof available**.
