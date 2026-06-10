@@ -4,14 +4,16 @@
 
 Runtime decoupling of public delivery approval from evidence accumulation. `awaiting_approval` picks can now be graded and have outcomes recorded in `settlement_records` without transitioning `picks.status`. This allows evidence counting (CLV tracking, ROI analysis) to proceed without Discord delivery. Addresses the INSUFFICIENT_DATA root cause identified in UTV2-1042.
 
-**Merge SHA:** (SHA-bound post-merge by post-merge-lane-close.yml)
+**Merge SHA:** `91ca67d033dc56a3b526954bbe9cf63b0d97a9be`
 
 ## Evidence
 
 - `apps/api/src/settlement-service.ts` — new `recordEvidenceSettlement` export
 - `apps/api/src/grading-service.ts` — `runGradingPass` now processes both `posted` and `awaiting_approval` picks
+- `apps/api/src/recap-service.ts` — public recap summaries exclude `payload.evidencePlane === true` settlements
 - `apps/api/src/settlement-service.test.ts` — 5 new evidence-plane tests (all pass)
 - `apps/api/src/grading-service.test.ts` — 3 new evidence grading tests (all pass)
+- `apps/api/src/recap-service.test.ts` — evidence-plane recap exclusion tests (all pass)
 - `pnpm verify` PASS
 - Architecture reference: `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` (UTV2-1253)
 
@@ -35,6 +37,10 @@ Runtime decoupling of public delivery approval from evidence accumulation. `awai
 - `apps/api/src/settlement-service.test.ts` — Added 5 evidence settlement tests covering: pick status invariance, settlement record visibility, rejection of wrong-state picks, and delivery path unchanged.
 
 - `apps/api/src/grading-service.test.ts` — Added 3 evidence grading tests covering: evidence grading creates settlement record, Discord recap skipped, posted and awaiting_approval picks both graded in same pass.
+
+- `apps/api/src/recap-service.ts` — Excludes evidence-plane settlement records from public daily/weekly/monthly recap summaries.
+
+- `apps/api/src/recap-service.test.ts` — Adds coverage for evidence-plane exclusion, public settlement inclusion, mixed public/evidence windows, and top-play evidence exclusion.
 
 ---
 
@@ -64,3 +70,7 @@ The public delivery path is unchanged. All existing guards are preserved:
 - Explicit `if (pick.status !== 'awaiting_approval')` guard before `postSettlementRecapIfPossible` in grading service
 
 No `awaiting_approval` pick can reach Discord delivery through any code path touched in this lane.
+
+## Post-Merge SHA Binding
+
+This proof packet is bound to merged `main` commit `91ca67d033dc56a3b526954bbe9cf63b0d97a9be` for PR #1006.

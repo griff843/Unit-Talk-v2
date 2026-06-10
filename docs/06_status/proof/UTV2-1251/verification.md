@@ -8,7 +8,9 @@ Runtime decoupling of evidence accumulation from public delivery approval. `reco
 
 - `apps/api/src/settlement-service.ts` — `recordEvidenceSettlement` export added
 - `apps/api/src/grading-service.ts` — evidence path added to `runGradingPass`
+- `apps/api/src/recap-service.ts` — public recap summaries exclude evidence-plane settlement records
 - 8 new tests covering evidence settlement, delivery path invariance, and grading pass behavior
+- 4 recap tests covering evidence-plane exclusion from public recap stats and top-play selection
 - `pnpm verify` PASS
 - `pnpm type-check` PASS
 - Architecture reference: `docs/02_architecture/PICK_LIFECYCLE_AND_EVIDENCE_MODES.md` (UTV2-1253, merged SHA 51be3689)
@@ -19,7 +21,7 @@ Runtime decoupling of evidence accumulation from public delivery approval. `reco
 **Tier:** T2
 **Branch:** claude/utv2-1251-development-evidence-mode
 **Date:** 2026-06-10
-**Merge SHA:** (SHA-bound post-merge by post-merge-lane-close.yml)
+**Merge SHA:** `91ca67d033dc56a3b526954bbe9cf63b0d97a9be`
 **Evaluator:** Claude Sonnet 4.6
 
 ---
@@ -31,6 +33,8 @@ Runtime decoupling of evidence accumulation from public delivery approval. `reco
   - `tsx --test apps/api/src/settlement-service.test.ts`: 21 PASS, 0 FAIL
   - `tsx --test apps/api/src/grading-service.test.ts`: 61 PASS, 0 FAIL
 - `pnpm verify`: PASS (exit code 0, 113 tests, 0 fail)
+- `pnpm exec tsx --test apps/api/src/recap-service.test.ts`: PASS (25 tests, 0 fail)
+- `pnpm exec tsx --test apps/api/src/grading-service.test.ts apps/api/src/settlement-service.test.ts`: PASS (82 tests, 0 fail)
 - `scripts/ci/r-level-check.ts`: PASS (no rules matched — runtime-only lane, no DB schema changes)
 - `pnpm test:db`: PASS (7 tests, 0 fail) — database-smoke.test.ts against live Supabase
   ```
@@ -71,6 +75,7 @@ Runtime decoupling of evidence accumulation from public delivery approval. `reco
 | No lifecycle FSM change | PASS — `picks.status` never transitions in evidence path |
 | No schema migration added | PASS — runtime-only change |
 | No public Discord delivery path opened | PASS — existing delivery guards not modified |
+| Evidence-plane settlements excluded from public recaps | PASS — recap-service filters `payload.evidencePlane === true` before public summary/top-play selection |
 | `pnpm verify` green | PASS |
 
 ---
@@ -112,3 +117,7 @@ runGradingPass():
 ## R-Level compliance
 
 R-level check: no rules matched. Runtime-only lane — no database migrations, no schema changes, no contracts changes. T2 tier.
+
+## Post-Merge SHA Binding
+
+This verification packet is bound to merged `main` commit `91ca67d033dc56a3b526954bbe9cf63b0d97a9be` for PR #1006.
