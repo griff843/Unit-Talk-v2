@@ -5,7 +5,7 @@
 > docs in this repo are either authoritative on their specific sub-topic (see §Source of Truth
 > Hierarchy) or have been marked SUPERSEDED / HISTORICAL.
 >
-> **Last verified:** 2026-06-10T04:35:00Z (UTC) — UTV2-1242 DONE, monitor v10, deploy alignment in progress (UTV2-1239)
+> **Last verified:** 2026-06-10T05:05:00Z (UTC) — UTV2-1242 DONE, UTV2-1239 DONE (3eab0665), production at dcd649d5, 0 active lanes
 >
 > **Constitutional authority:** `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 ·
 > `docs/00_constitution/CANONICAL_PROGRAM_STATE.md` (PM-ratified 2026-06-02)
@@ -77,7 +77,7 @@ active to confirm continued post-cutover accumulation after next ingestor cycle.
 
 | Blocker | Category | Notes |
 |---|---|---|
-| Production readiness RED | **Blocking** | UTV2-1242 DONE (891512f1). Deploy alignment UTV2-1239 in progress — deploy run 27253256755 on dcd649d5. UTV2-1240 verification stability still open. |
+| Production readiness AMBER | **Partial** | UTV2-1242 DONE (891512f1). UTV2-1239 DONE — production now at dcd649d5 (deploy run 27253256755, smoke PASS 2026-06-10T04:41Z). UTV2-1240 verification stability still open. |
 | P3 empirical CLV/edge evidence | Certification | Data gate OPEN; P3 cert requires UTV2-1042 completion (paused by readiness RED) |
 | P4 economic truth unproven | Certification | No realized CLV / attribution data; economic certification requires live settled pick corpus |
 | P5 freeze | Activation | FROZEN until burn-in PASS + P1–P4 certs + M10 Path A. Treasury/capital/scaling work forbidden. |
