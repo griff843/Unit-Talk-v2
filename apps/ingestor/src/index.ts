@@ -327,6 +327,7 @@ if (runtime.autorun && runtime.sgoApiKeys.length === 0 && !runtime.oddsApiKey) {
 }
 
 if (runtime.autorun) {
+  let hungSingletonReaped = false;
   resolveActiveSgoApiKey(runtime.sgoApiKeys)
     .then(async (sgoSelection) => {
       const reaped = await runtime.repositories.runs.reapStaleRuns({
@@ -334,7 +335,12 @@ if (runtime.autorun) {
         staleAfterMs: 15 * 60 * 1000,
       });
       if (reaped > 0) {
-        logger.warn('reaped stale ingestor runs', { count: reaped });
+        hungSingletonReaped = true;
+        logger.warn('reaped stale ingestor runs — HUNG_SINGLETON recovery', {
+          count: reaped,
+          healthCode: 'HUNG_SINGLETON',
+          action: 'marked_failed',
+        });
       }
       return sgoSelection;
     })
@@ -377,6 +383,7 @@ if (runtime.autorun) {
               : null,
             sgoKeyProbe: sgoSelection.probes,
             executedCycles: cycles.length,
+            hungSingletonReaped,
             results: cycles,
           },
           null,

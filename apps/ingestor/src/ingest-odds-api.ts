@@ -175,6 +175,7 @@ export async function ingestOddsApiLeague(
     const providerEventIds = [...new Set(offers.map((o) => o.providerEventId))];
     const existingCombinations = await repositories.providerOffers.findExistingCombinations(
       providerEventIds,
+      { beforeSnapshotAt: snapshotAt },
     );
 
     // Batch upsert to provider_offers — deduplicate by idempotency key to avoid
