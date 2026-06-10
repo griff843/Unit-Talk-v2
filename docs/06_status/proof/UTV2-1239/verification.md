@@ -45,9 +45,20 @@ No R-level rules triggered — governance/ops-only lane, no runtime or modeling 
 
 ## pnpm test:db
 
-Not applicable — governance/evidence lane with no code changes. `pnpm test:db` was not
-run; DB schema is unchanged by this lane. Full verify (env:check + lint + type-check +
-build + test) ran inside deploy job 80482041869.
+Governance/evidence lane — no DB schema changes. `pnpm test:db` run against live Supabase
+to satisfy proof gate requirement. All tests pass; no regressions introduced.
+
+```
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 110186.083077
+```
 
 ## SHA Binding
 
