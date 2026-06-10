@@ -2299,3 +2299,154 @@ test('runGradingPass records error when game result actual_value is NaN', async 
     `expected reason to include game_result_actual_value_invalid, got: ${detail.reason}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1251: Evidence-plane grading tests
+// ---------------------------------------------------------------------------
+
+async function createAwaitingApprovalPickFixture(
+  overrides: {
+    market?: string;
+    selection?: string;
+    line?: number;
+    odds?: number;
+    eventName?: string;
+  } = {},
+) {
+  const repositories = createInMemoryRepositoryBundle();
+  const eventName = overrides.eventName ?? 'Evidence Fixture Event';
+  const created = await processSubmission(
+    {
+      source: 'system-pick-scanner',
+      market: overrides.market ?? 'points-all-game-ou',
+      selection: overrides.selection ?? 'Over 24.5',
+      line: overrides.line ?? 24.5,
+      odds: overrides.odds ?? -105,
+      stakeUnits: 1,
+      eventName,
+    },
+    repositories,
+  );
+
+  // Governance brake: system-pick-scanner goes to awaiting_approval
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'awaiting_approval',
+    'governance brake applied',
+  );
+
+  return {
+    repositories,
+    pickId: created.pick.id,
+    eventName,
+  };
+}
+
+test('runGradingPass grades awaiting_approval pick and records evidence settlement', async () => {
+  const { repositories, pickId, eventName } = await createAwaitingApprovalPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 27,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.errors, 0);
+
+  // Pick must stay in awaiting_approval — delivery gate is preserved
+  const afterPick = await repositories.picks.findPickById(pickId);
+  assert.equal(afterPick?.status, 'awaiting_approval', 'picks.status must stay awaiting_approval after evidence grading');
+
+  // Settlement record must exist for evidence counting
+  const settlements = await repositories.settlements.listByPick(pickId);
+  assert.equal(settlements.length, 1);
+  assert.equal(settlements[0]!.result, 'win');
+});
+
+test('runGradingPass skips recap for awaiting_approval pick (no Discord delivery)', async () => {
+  const { repositories, pickId, eventName } = await createAwaitingApprovalPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 20,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  // No outbox records should have been created for this pick
+  const outboxEntries = await repositories.outbox.listByPickId(pickId);
+  assert.equal(outboxEntries.length, 0, 'no outbox entry should be created for evidence pick');
+  assert.equal(result.graded, 1);
+});
+
+test('runGradingPass processes both posted and awaiting_approval picks in same pass', async () => {
+  // Create a posted pick (delivery path)
+  const posted = await createPostedPickFixture();
+  const { participant: p1, event: e1 } = await attachPlayerEventContext(
+    posted.repositories,
+    posted.pickId,
+    { eventName: posted.eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(posted.repositories, {
+    eventId: e1.id,
+    participantId: p1.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 27,
+  });
+
+  // Add an awaiting_approval pick to the same repository
+  const evidenceCreated = await processSubmission(
+    {
+      source: 'system-pick-scanner',
+      market: 'points-all-game-ou',
+      selection: 'Over 22.5',
+      line: 22.5,
+      odds: -110,
+      stakeUnits: 1,
+      eventName: 'Evidence Fixture Event',
+    },
+    posted.repositories,
+  );
+  await transitionPickLifecycle(
+    posted.repositories.picks,
+    evidenceCreated.pick.id,
+    'awaiting_approval',
+    'governance brake applied',
+  );
+  const { participant: p2, event: e2 } = await attachPlayerEventContext(
+    posted.repositories,
+    evidenceCreated.pick.id,
+    { eventName: 'Evidence Fixture Event', eventStatus: 'completed' },
+  );
+  await seedGameResult(posted.repositories, {
+    eventId: e2.id,
+    participantId: p2.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 25,
+  });
+
+  const result = await runGradingPass(posted.repositories);
+
+  assert.equal(result.graded, 2, 'both posted and evidence picks should be graded');
+
+  const postedAfter = await posted.repositories.picks.findPickById(posted.pickId);
+  assert.equal(postedAfter?.status, 'settled', 'posted pick transitions to settled');
+
+  const evidenceAfter = await posted.repositories.picks.findPickById(evidenceCreated.pick.id);
+  assert.equal(evidenceAfter?.status, 'awaiting_approval', 'evidence pick stays awaiting_approval');
+});
