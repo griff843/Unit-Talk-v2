@@ -45,7 +45,7 @@ function alertDetail(alert: { target?: string; status?: string; ageMs?: number; 
 // ── 1. Outbox queue state ─────────────────────────────────────────────────
 const { data: outbox, error: outboxErr } = await db
   .from('distribution_outbox')
-  .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count')
+  .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count, last_error')
 
 if (outboxErr) { console.error('outbox query failed:', outboxErr.message); process.exit(1) }
 
@@ -91,15 +91,33 @@ console.log(`  Pending >30min:    ${stuckPend.length === 0 ? 'NONE' : stuckPend.
 console.log(`  Deferred pending:   ${deferredPend.length === 0 ? 'NONE' : deferredPend.length + ' rows outside worker targets, oldest=' + ageFmt(deferredPend.sort((a,b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0].created_at)}`)
 
 // ── 3. Dead-letter & failed ───────────────────────────────────────────────
-const deadLetter = rows.filter(r => r.status === 'dead_letter')
+// Governance brake rows (P7A): last_error starts with 'proof-pick-blocked:' and were never
+// attempted (attempt_count=0). These are expected, designed behaviour — not system failures.
+// They remain visible as INFO but must not count toward CRITICAL/FAILED thresholds.
+const allDeadLetter = rows.filter(r => r.status === 'dead_letter')
+const governanceBrake = allDeadLetter.filter(r =>
+  r.attempt_count === 0 &&
+  typeof r.last_error === 'string' &&
+  r.last_error.startsWith('proof-pick-blocked:')
+)
+const trueDeadLetter = allDeadLetter.filter(r =>
+  !(r.attempt_count === 0 &&
+    typeof r.last_error === 'string' &&
+    r.last_error.startsWith('proof-pick-blocked:'))
+)
 const failed = rows.filter(r => r.status === 'failed')
 
 console.log('\n╔══ DEAD LETTER & FAILED ═════════════════════════════════════')
-if (deadLetter.length === 0) {
-  console.log('  Dead letter: NONE')
+if (trueDeadLetter.length === 0) {
+  console.log('  Dead letter (true failures): NONE')
 } else {
-  for (const r of deadLetter)
+  for (const r of trueDeadLetter)
     console.log(`  DEAD_LETTER id=${r.id.slice(0,8)} target=${r.target} pick=${r.pick_id?.slice(0,8)} attempts=${r.attempt_count} age=${ageFmt(r.created_at)}`)
+}
+if (governanceBrake.length > 0) {
+  console.log(`  Governance brake (P7A, expected): ${governanceBrake.length} rows`)
+  for (const r of governanceBrake)
+    console.log(`    INFO id=${r.id.slice(0,8)} target=${r.target} pick=${r.pick_id?.slice(0,8)} error=${r.last_error}`)
 }
 
 if (failed.length === 0) {
@@ -242,7 +260,8 @@ if (sloReport.atRiskObjectives.length > 0) {
 console.log('\n╔══ VERDICT ══════════════════════════════════════════════════')
 const warns: string[] = []
 const criticals: string[] = []
-if (deadLetter.length > 0) criticals.push(`${deadLetter.length} dead_letter rows`)
+if (trueDeadLetter.length > 0) criticals.push(`${trueDeadLetter.length} dead_letter rows (true failures)`)
+if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} governance brake row(s) (P7A, proof-pick-blocked — expected, not system failures)`)
 if (failed.length > 0) warns.push(`${failed.length} failed rows`)
 if (stuckProc.length > 0) criticals.push(`${stuckProc.length} stuck processing rows`)
 if (stuckPend.length > 0) warns.push(`${stuckPend.length} pending rows stuck >30min`)
@@ -271,7 +290,8 @@ console.log()
 if (outputJsonPath) {
   const report = {
     checked_at: now.toISOString(),
-    outbox_dead_letter_count: deadLetter.length,
+    outbox_dead_letter_count: trueDeadLetter.length,
+    outbox_governance_brake_count: governanceBrake.length,
     outbox_failed_count: failed.length,
     outbox_stuck_processing: stuckProc.length,
     outbox_pending_by_target: queueHealth.pendingByTarget,
@@ -290,7 +310,7 @@ if (outputJsonPath) {
     warns,
     has_anomaly:
       criticals.length > 0 ||
-      deadLetter.length > 0 ||
+      trueDeadLetter.length > 0 ||
       queueHealth.status !== 'healthy' ||
       queueHealth.silentStrandingRisk,
   }
