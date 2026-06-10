@@ -187,6 +187,7 @@ function collectPipelineHealth(): HealthSection {
       warnings?: string[];
       queue_health_status?: string;
       outbox_dead_letter_count?: number;
+      outbox_governance_brake_count?: number;
     } | null;
 
     if (!data) {
@@ -196,20 +197,26 @@ function collectPipelineHealth(): HealthSection {
     const criticals = data.criticals ?? [];
     const warnings = data.warnings ?? [];
     const deadLetter = data.outbox_dead_letter_count ?? 0;
+    const governanceBrake = data.outbox_governance_brake_count ?? 0;
 
+    // governance brake rows (P7A, proof-pick-blocked) are expected designed behaviour.
+    // They appear in warnings[] from pipeline-health but must not trigger FAILED here.
+    // Only true dead-letter failures (outbox_dead_letter_count) escalate to FAILED.
     const state: OverallState =
       criticals.length > 0 || deadLetter > 0 ? 'FAILED' :
       warnings.length > 0 ? 'DEGRADED' :
       result.exitCode === 0 ? 'HEALTHY' : 'DEGRADED';
 
+    const summaryParts: string[] = [];
+    if (criticals.length > 0) summaryParts.push(`CRITICAL: ${criticals.slice(0, 3).join('; ')}`);
+    else if (deadLetter > 0) summaryParts.push(`${deadLetter} true dead-letter failure(s)`);
+    if (governanceBrake > 0) summaryParts.push(`${governanceBrake} governance brake row(s) (P7A, expected)`);
+    if (summaryParts.length === 0 && warnings.length > 0) summaryParts.push(`${warnings.length} warning(s) — see detail`);
+
     return {
       source: 'pipeline:health',
       state,
-      summary: criticals.length > 0
-        ? `CRITICAL: ${criticals.slice(0, 3).join('; ')}`
-        : warnings.length > 0
-        ? `${warnings.length} warning(s) — see detail`
-        : 'outbox and pipeline healthy',
+      summary: summaryParts.length > 0 ? summaryParts.join(' | ') : 'outbox and pipeline healthy',
       detail: data,
     };
   } finally {

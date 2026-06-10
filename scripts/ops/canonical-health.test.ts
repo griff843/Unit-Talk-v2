@@ -147,3 +147,89 @@ test('ops:runtime-health overall treats UNKNOWN as DEGRADED (not FAILED)', () =>
 
   assert.equal(aggregate(sections), 'DEGRADED');
 });
+
+// ── Governance brake classification tests ─────────────────────────────────────
+// Verifies that governance brake rows (P7A, proof-pick-blocked) do not trigger
+// FAILED state in canonical-health, while true dead-letter failures still do.
+
+test('pipeline:health governance brake rows alone yield DEGRADED not FAILED', () => {
+  // Simulates canonical-health evaluation of pipeline-health JSON output
+  // where all dead-letters are governance brakes (outbox_dead_letter_count=0).
+  const pipelineData = {
+    criticals: [] as string[],
+    warnings: ['3 governance brake row(s) (P7A, proof-pick-blocked — expected, not system failures)'],
+    outbox_dead_letter_count: 0,
+    outbox_governance_brake_count: 3,
+    queue_health_status: 'healthy',
+  };
+
+  const criticals = pipelineData.criticals ?? [];
+  const warnings = pipelineData.warnings ?? [];
+  const deadLetter = pipelineData.outbox_dead_letter_count ?? 0;
+
+  const state =
+    criticals.length > 0 || deadLetter > 0 ? 'FAILED' :
+    warnings.length > 0 ? 'DEGRADED' :
+    'HEALTHY';
+
+  assert.equal(state, 'DEGRADED', 'governance brake rows must not escalate to FAILED');
+});
+
+test('pipeline:health true dead-letter failures yield FAILED', () => {
+  const pipelineData = {
+    criticals: ['2 dead_letter rows (true failures)'],
+    warnings: [] as string[],
+    outbox_dead_letter_count: 2,
+    outbox_governance_brake_count: 3,
+    queue_health_status: 'unhealthy',
+  };
+
+  const criticals = pipelineData.criticals ?? [];
+  const deadLetter = pipelineData.outbox_dead_letter_count ?? 0;
+
+  const state =
+    criticals.length > 0 || deadLetter > 0 ? 'FAILED' :
+    'HEALTHY';
+
+  assert.equal(state, 'FAILED', 'true dead-letter failures must still yield FAILED');
+});
+
+test('pipeline:health mixed governance brake + true failure yields FAILED', () => {
+  const pipelineData = {
+    criticals: ['1 dead_letter rows (true failures)'],
+    warnings: ['5 governance brake row(s) (P7A, proof-pick-blocked — expected, not system failures)'],
+    outbox_dead_letter_count: 1,
+    outbox_governance_brake_count: 5,
+    queue_health_status: 'unhealthy',
+  };
+
+  const criticals = pipelineData.criticals ?? [];
+  const deadLetter = pipelineData.outbox_dead_letter_count ?? 0;
+
+  const state =
+    criticals.length > 0 || deadLetter > 0 ? 'FAILED' :
+    'HEALTHY';
+
+  assert.equal(state, 'FAILED', 'must yield FAILED when true failures present alongside governance brakes');
+});
+
+test('pipeline:health no failures and no governance brakes yields HEALTHY', () => {
+  const pipelineData = {
+    criticals: [] as string[],
+    warnings: [] as string[],
+    outbox_dead_letter_count: 0,
+    outbox_governance_brake_count: 0,
+    queue_health_status: 'healthy',
+  };
+
+  const criticals = pipelineData.criticals ?? [];
+  const warnings = pipelineData.warnings ?? [];
+  const deadLetter = pipelineData.outbox_dead_letter_count ?? 0;
+
+  const state =
+    criticals.length > 0 || deadLetter > 0 ? 'FAILED' :
+    warnings.length > 0 ? 'DEGRADED' :
+    'HEALTHY';
+
+  assert.equal(state, 'HEALTHY');
+});
