@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1248",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1248-health-scripts-governance-brake-classification",
+  "branch": "claude/utv2-1248-health-scripts-governance-brake-classification",
+  "base_branch": "main",
+  "commit_sha": "cefc7916da53d84f78566774af45403a72929366",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1003",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/canonical-health.test.ts",
+    "scripts/ops/canonical-health.ts",
+    "scripts/pipeline-health.ts",
+    "scripts/runtime-health.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-06-10T06:10:06.757Z",
+  "heartbeat_at": "2026-06-10T07:39:54.818Z",
+  "closed_at": "2026-06-10T07:39:54.818Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1248-health-scripts-governance-brake-classification.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-10T07:39:45.120Z",
+      "verdict": "pass",
+      "merge_sha": "cefc7916da53d84f78566774af45403a72929366",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1248-health-scripts-governance-brake-classification",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
