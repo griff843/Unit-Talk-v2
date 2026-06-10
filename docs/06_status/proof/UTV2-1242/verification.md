@@ -96,5 +96,5 @@ index which speeds up related scans.
 
 ## SHA Binding
 
-Verified source SHA: 25e03d78
-Merge SHA: 891512f1
+Verified source SHA: 25e03d78ab584bd1fc9f0e6b6c125a5ce10ac51b
+Merge SHA: 891512f15a1308aa4c4525afc4bee6c6a23f1117
