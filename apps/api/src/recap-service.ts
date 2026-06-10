@@ -165,6 +165,10 @@ export async function computeRecapSummary(
       return false;
     }
 
+    if (isEvidencePlaneSettlement(settlement.payload)) {
+      return false;
+    }
+
     return settlement.created_at >= window.startsAt && settlement.created_at < window.endsAt;
   });
 
@@ -782,6 +786,10 @@ function readConfidence(pick: PickRecord): number | null {
 function readSport(pick: PickRecord): string | null {
   const metadata = asRecord(pick.metadata);
   return typeof metadata?.sport === 'string' ? metadata.sport : null;
+}
+
+function isEvidencePlaneSettlement(payload: unknown) {
+  return asRecord(payload)?.evidencePlane === true;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

@@ -265,6 +265,144 @@ export async function recordGradedSettlement(
   };
 }
 
+/**
+ * Evidence-plane settlement for picks in `awaiting_approval` state.
+ *
+ * Records the outcome and CLV in settlement_records WITHOUT transitioning
+ * picks.status. Per UTV2-1253 doctrine: public delivery approval must not
+ * block evidence accumulation. The pick stays in `awaiting_approval` so
+ * the Discord delivery gate remains intact.
+ *
+ * Evidence counting scripts (roi-by-sport.ts, model-edge-proof.ts) query
+ * settlement_records directly, so these records contribute to thresholds.
+ */
+export async function recordEvidenceSettlement(
+  pickId: string,
+  result: 'win' | 'loss' | 'push',
+  gradingContext: {
+    actualValue: number;
+    marketKey: string;
+    eventId: string;
+    gameResultId: string;
+  },
+  repositories: {
+    picks: PickRepository;
+    settlements: SettlementRepository;
+    audit: AuditLogRepository;
+    providerOffers: ProviderOfferRepository;
+    participants: ParticipantRepository;
+    events: EventRepository;
+    eventParticipants: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
+  },
+): Promise<RecordSettlementResult> {
+  const pick = await repositories.picks.findPickById(pickId);
+  if (!pick) {
+    throw new Error(`Pick not found for evidence settlement: ${pickId}`);
+  }
+
+  if (pick.status !== 'awaiting_approval') {
+    throw new Error(
+      `Evidence settlement requires awaiting_approval state; found ${pick.status}. Use recordGradedSettlement for posted picks.`,
+    );
+  }
+
+  const clvContext = await buildCLVContextFromGradingEvent(
+    gradingContext.eventId,
+    pick,
+    repositories,
+  );
+  const clvOutcome = await computeCLVOutcome(pick, repositories, {
+    ...(clvContext ? { preResolvedContext: clvContext } : {}),
+  });
+  emitClvFallbackAuditIfNeeded(clvOutcome, pick, repositories.audit).catch(() => undefined);
+  const clv = clvOutcome.result;
+
+  const payload: Record<string, unknown> = {
+    gradingContext,
+    correction: false,
+    evidencePlane: true,
+    ...buildPickProvenancePayload(pick),
+    ...buildStakeIntegrityPayload(pick.stake_units),
+    clv: clv ?? null,
+    ...buildClvDiagnosticPayload(clvOutcome),
+  };
+
+  if (clv) {
+    payload['clvRaw'] = clv.clvRaw;
+    payload['clvPercent'] = clv.clvPercent;
+    payload['beatsClosingLine'] = clv.beatsClosingLine;
+  }
+
+  const profitLossUnits = computeProfitLossUnits(result, pick.odds, pick.stake_units);
+  if (profitLossUnits !== null) {
+    payload['profitLossUnits'] = profitLossUnits;
+  }
+
+  const settledAt = new Date().toISOString();
+
+  let settlementRecord: SettlementRecord;
+  try {
+    settlementRecord = await repositories.settlements.record({
+      pickId: pick.id,
+      status: 'settled',
+      result,
+      source: 'grading',
+      confidence: 'confirmed',
+      evidenceRef: `game-result:${gradingContext.gameResultId}`,
+      notes: null,
+      reviewReason: null,
+      settledBy: 'grading-service',
+      settledAt,
+      payload,
+    });
+  } catch (err: unknown) {
+    if (isDuplicateSettlementError(err)) {
+      const existing = await repositories.settlements.findLatestForPick(pick.id);
+      if (existing) {
+        const downstream = await computeSettlementDownstreamBundle(pick, repositories.settlements);
+        return {
+          pickRecord: pick,
+          settlementRecord: existing,
+          lifecycleEvent: null,
+          auditRecords: [],
+          finalLifecycleState: pick.status,
+          downstream,
+        };
+      }
+    }
+    throw err;
+  }
+
+  const downstream = await computeSettlementDownstreamBundle(pick, repositories.settlements);
+
+  const audit = await repositories.audit.record({
+    entityType: 'settlement_records',
+    entityId: settlementRecord.id,
+    entityRef: pick.id,
+    action: 'settlement.evidence_graded',
+    actor: 'grading-service',
+    payload: {
+      pickId: pick.id,
+      settlementRecordId: settlementRecord.id,
+      result,
+      source: 'grading',
+      gradingContext,
+      evidencePlane: true,
+      downstream,
+    },
+  });
+
+  return {
+    pickRecord: pick,
+    settlementRecord,
+    lifecycleEvent: null,
+    auditRecords: [audit],
+    finalLifecycleState: pick.status,
+    downstream,
+  };
+}
+
 async function recordManualReview(
   pick: PickRecord,
   request: SettlementRequest,

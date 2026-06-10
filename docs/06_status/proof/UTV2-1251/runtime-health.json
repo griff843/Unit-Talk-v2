@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1251",
+  "branch": "claude/utv2-1251-development-evidence-mode",
+  "evaluated_at": "2026-06-10T13:00:00.000Z",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "verify_result": {
+    "exit_code": 0,
+    "tests": 113,
+    "pass": 113,
+    "fail": 0,
+    "suites": 13
+  },
+  "delivery_guards": {
+    "distribution_service_brake": "unchanged",
+    "run_audit_service_brake": "unchanged",
+    "grading_service_recap_guard": "added"
+  },
+  "evidence_path": {
+    "new_function": "recordEvidenceSettlement",
+    "picks_status_unchanged": true,
+    "discord_delivery_blocked": true,
+    "settlement_record_written": true,
+    "clv_computed": true
+  }
+}

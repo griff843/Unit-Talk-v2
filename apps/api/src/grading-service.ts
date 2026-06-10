@@ -10,7 +10,7 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
-import { recordGradedSettlement } from './settlement-service.js';
+import { recordGradedSettlement, recordEvidenceSettlement } from './settlement-service.js';
 
 export interface GradingPickResult {
   pickId: string;
@@ -73,7 +73,13 @@ export async function runGradingPass(
   >,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
-  const picks = await repositories.picks.listByLifecycleState('posted');
+  // Evidence plane: also process awaiting_approval picks so outcome data
+  // accumulates without requiring public delivery approval. Per UTV2-1253.
+  const [postedPicks, evidencePicks] = await Promise.all([
+    repositories.picks.listByLifecycleState('posted'),
+    repositories.picks.listByLifecycleState('awaiting_approval'),
+  ]);
+  const picks = [...postedPicks, ...evidencePicks];
   const details: GradingPickResult[] = [];
   const retryState = options.retryState;
 
@@ -254,43 +260,59 @@ export async function runGradingPass(
             ),
       );
 
-      const claim = await atomicClaimForTransition(
-        repositories.picks,
-        pick.id,
-        'posted',
-        'settled',
-      );
-      if (!claim.claimed) {
-        details.push({
-          pickId: pick.id,
-          outcome: 'skipped',
-          reason: 'already_claimed_by_another_process',
-        });
-        continue;
+      const gradingArgs = {
+        actualValue: gameResult.actual_value,
+        marketKey: gameResult.market_key,
+        eventId: gameResult.event_id,
+        gameResultId: gameResult.id,
+      };
+
+      let settlementResult;
+      if (pick.status === 'awaiting_approval') {
+        // Evidence plane: record outcome without lifecycle transition.
+        // atomicClaimForTransition is skipped — pick.status stays awaiting_approval.
+        settlementResult = await recordEvidenceSettlement(
+          pick.id,
+          gradedResult,
+          gradingArgs,
+          repositories,
+        );
+      } else {
+        const claim = await atomicClaimForTransition(
+          repositories.picks,
+          pick.id,
+          'posted',
+          'settled',
+        );
+        if (!claim.claimed) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: 'already_claimed_by_another_process',
+          });
+          continue;
+        }
+        settlementResult = await recordGradedSettlement(
+          pick.id,
+          gradedResult,
+          gradingArgs,
+          repositories,
+        );
       }
 
-      const settlementResult = await recordGradedSettlement(
-        pick.id,
-        gradedResult,
-        {
-          actualValue: gameResult.actual_value,
-          marketKey: gameResult.market_key,
-          eventId: gameResult.event_id,
-          gameResultId: gameResult.id,
-        },
-        repositories,
-      );
-
-      await postSettlementRecapIfPossible(
-        pick,
-        settlementResult.settlementRecord,
-        {
-          outbox: repositories.outbox,
-          receipts: repositories.receipts,
-          runs: repositories.runs,
-        },
-        options,
-      );
+      // Evidence-plane picks have no outbox record; skip Discord recap.
+      if (pick.status !== 'awaiting_approval') {
+        await postSettlementRecapIfPossible(
+          pick,
+          settlementResult.settlementRecord,
+          {
+            outbox: repositories.outbox,
+            receipts: repositories.receipts,
+            runs: repositories.runs,
+          },
+          options,
+        );
+      }
 
       details.push({
         pickId: pick.id,

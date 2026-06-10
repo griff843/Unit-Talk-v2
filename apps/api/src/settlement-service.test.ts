@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
-import { recordPickSettlement } from './settlement-service.js';
+import { recordPickSettlement, recordEvidenceSettlement } from './settlement-service.js';
 
 async function createPickInState(
   state: 'validated' | 'queued' | 'posted',
@@ -576,4 +576,114 @@ test('correcting a correction preserves a three-record additive chain', async ()
   assert.equal(firstAfter?.result, 'loss');
   assert.equal(secondAfter?.result, 'push');
   assert.equal(thirdAfter?.result, 'win');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1251: Evidence-plane settlement tests
+// ---------------------------------------------------------------------------
+
+async function createPickInAwaitingApproval() {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'system-pick-scanner',
+      market: 'player_prop_ou',
+      selection: 'Player Over 24.5',
+      stakeUnits: 1,
+      metadata: {},
+    },
+    repositories,
+  );
+  // Transition to awaiting_approval (governance brake for system sources)
+  await transitionPickLifecycle(
+    repositories.picks,
+    result.pick.id,
+    'awaiting_approval',
+    'governance brake applied',
+  );
+  return { repositories, pick: result.pick };
+}
+
+const EVIDENCE_GRADING_CONTEXT = {
+  actualValue: 27,
+  marketKey: 'player_prop_ou',
+  eventId: 'event-001',
+  gameResultId: 'game-result-001',
+};
+
+test('recordEvidenceSettlement records outcome for awaiting_approval pick without status transition', async () => {
+  const { repositories, pick } = await createPickInAwaitingApproval();
+
+  const result = await recordEvidenceSettlement(
+    pick.id,
+    'win',
+    EVIDENCE_GRADING_CONTEXT,
+    repositories,
+  );
+
+  // Pick status must remain awaiting_approval — delivery gate is preserved
+  const afterPick = await repositories.picks.findPickById(pick.id);
+  assert.equal(afterPick?.status, 'awaiting_approval', 'picks.status must stay awaiting_approval');
+
+  // Settlement record must exist and capture the outcome
+  assert.equal(result.settlementRecord.result, 'win');
+  assert.equal(result.settlementRecord.source, 'grading');
+  assert.equal(result.finalLifecycleState, 'awaiting_approval');
+  assert.equal(result.lifecycleEvent, null, 'no lifecycle transition should occur');
+
+  // Audit record must flag evidence plane
+  assert.ok(result.auditRecords.length > 0);
+  assert.equal(result.auditRecords[0]!.action, 'settlement.evidence_graded');
+  const auditPayload = result.auditRecords[0]!.payload as Record<string, unknown>;
+  assert.equal(auditPayload['evidencePlane'], true);
+});
+
+test('recordEvidenceSettlement settlement record is visible to settlement repository', async () => {
+  const { repositories, pick } = await createPickInAwaitingApproval();
+
+  await recordEvidenceSettlement(pick.id, 'loss', EVIDENCE_GRADING_CONTEXT, repositories);
+
+  const records = await repositories.settlements.listByPick(pick.id);
+  assert.equal(records.length, 1);
+  assert.equal(records[0]!.result, 'loss');
+  assert.equal(records[0]!.status, 'settled');
+});
+
+test('recordEvidenceSettlement rejects non-awaiting_approval pick', async () => {
+  const { repositories, pick } = await createPostedPick();
+
+  await assert.rejects(
+    () =>
+      recordEvidenceSettlement(pick.id, 'win', EVIDENCE_GRADING_CONTEXT, repositories),
+    /Evidence settlement requires awaiting_approval state/,
+  );
+});
+
+// Note: deduplication via unique constraint (settlement_records_pick_source_idx)
+// is enforced at the DB layer only; InMemory repos do not enforce it.
+// The isDuplicateSettlementError path is covered by production integration tests.
+
+test('recordPickSettlement still requires posted state (delivery path unchanged)', async () => {
+  const { repositories, pick } = await createPickInAwaitingApproval();
+
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        {
+          status: 'settled',
+          result: 'win',
+          source: 'operator',
+          confidence: 'confirmed',
+          evidenceRef: 'boxscore://nba/game-1',
+          settledBy: 'operator',
+        },
+        repositories,
+      ),
+    /posted or settled state/,
+  );
+
+  // Pick status must remain awaiting_approval
+  const afterPick = await repositories.picks.findPickById(pick.id);
+  assert.equal(afterPick?.status, 'awaiting_approval');
 });

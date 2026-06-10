@@ -133,6 +133,101 @@ test('computeRecapSummary returns null when no settlements land inside the reque
   assert.equal(summary, null);
 });
 
+test('computeRecapSummary excludes evidence-plane settlements from public recap stats', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const evidencePickId = await createSettledPick(repositories, {
+    selection: 'Evidence Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'ops',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+    evidencePlane: true,
+  });
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+
+  assert.equal(summary, null);
+  const internalSettlements = await repositories.settlements.listByPick(evidencePickId);
+  assert.equal(internalSettlements.length, 1);
+  assert.equal(
+    (internalSettlements[0]?.payload as Record<string, unknown> | null)?.evidencePlane,
+    true,
+  );
+});
+
+test('computeRecapSummary includes regular public settlements after evidence-plane filtering', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const publicPickId = await createSettledPick(repositories, {
+    selection: 'Public Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary.settledCount, 1);
+  assert.equal(summary.record, '1-0-0');
+  assert.equal(summary.topPlay.pickId, publicPickId);
+  assert.equal(summary.picks.length, 1);
+  assert.equal(summary.picks[0]?.selection, 'Public Over 24.5');
+});
+
+test('computeRecapSummary mixed window reports only non-evidence-plane settlements', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const publicPickId = await createSettledPick(repositories, {
+    selection: 'Public Under 8.5',
+    market: 'assists-all-game-ou',
+    odds: -110,
+    stakeUnits: 2,
+    submittedBy: 'dalton',
+    result: 'loss',
+    settledAt: '2026-03-27T10:00:00.000Z',
+  });
+  await createSettledPick(repositories, {
+    selection: 'Evidence Over 30.5',
+    market: 'points-all-game-ou',
+    odds: 300,
+    stakeUnits: 5,
+    submittedBy: 'ops',
+    result: 'win',
+    settledAt: '2026-03-27T12:00:00.000Z',
+    evidencePlane: true,
+  });
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary.settledCount, 1);
+  assert.equal(summary.knownStakeCount, 1);
+  assert.equal(summary.record, '0-1-0');
+  assert.equal(summary.netUnits, -2);
+  assert.equal(summary.totalRiskedUnits, 2);
+  assert.equal(summary.topPlay.pickId, publicPickId);
+  assert.deepEqual(
+    summary.picks.map((pick) => pick.selection),
+    ['Public Under 8.5'],
+  );
+});
+
 test('computeRecapSummary excludes historical unknown stake rows from ROI and classifies them explicitly', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const knownPickId = await createSettledPick(repositories, {
@@ -417,6 +512,78 @@ test('postRecapSummary dry run computes recap without posting to Discord', async
       delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
     } else {
       process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+  }
+});
+
+test('postRecapSummary does not enqueue a recap whose topPlay comes from an evidence-plane settlement', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const publicPickId = await createSettledPick(repositories, {
+    selection: 'Public Over 7.5',
+    market: 'rebounds-all-game-ou',
+    odds: 100,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+  const evidencePickId = await createSettledPick(repositories, {
+    selection: 'Evidence Over 30.5',
+    market: 'points-all-game-ou',
+    odds: 400,
+    stakeUnits: 5,
+    submittedBy: 'ops',
+    result: 'win',
+    settledAt: '2026-03-27T05:00:00.000Z',
+    evidencePlane: true,
+  });
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const previousDryRun = process.env.RECAP_DRY_RUN;
+
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.RECAP_DRY_RUN = 'false';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:recaps': '1300411261854547968',
+  });
+
+  try {
+    const result = await postRecapSummary('daily', repositories, {
+      now: new Date('2026-03-28T16:00:00.000Z'),
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ id: 'message-public-only' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    });
+
+    assert.equal(result.ok, true);
+    assert.ok(result.ok);
+    assert.equal(result.summary.topPlay.pickId, publicPickId);
+    assert.equal(result.summary.topPlay.selection, 'Public Over 7.5');
+
+    const publicOutboxRows = await repositories.outbox.listByPickId(publicPickId);
+    assert.equal(publicOutboxRows.length, 1);
+    assert.equal(publicOutboxRows[0]?.target, 'discord:recaps');
+
+    const evidenceOutboxRows = await repositories.outbox.listByPickId(evidencePickId);
+    assert.equal(evidenceOutboxRows.length, 0);
+  } finally {
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+    if (previousDryRun === undefined) {
+      delete process.env.RECAP_DRY_RUN;
+    } else {
+      process.env.RECAP_DRY_RUN = previousDryRun;
     }
   }
 });
@@ -817,6 +984,7 @@ async function createSettledPick(
     submittedBy: string;
     result: 'win' | 'loss' | 'push';
     settledAt: string;
+    evidencePlane?: boolean;
   },
 ) {
   const created = await processSubmission(
@@ -843,7 +1011,7 @@ async function createSettledPick(
     evidenceRef: `test://${created.pick.id}`,
     settledBy: 'recap-test',
     settledAt: input.settledAt,
-    payload: {},
+    payload: input.evidencePlane ? { evidencePlane: true } : {},
   });
 
   return created.pick.id;
