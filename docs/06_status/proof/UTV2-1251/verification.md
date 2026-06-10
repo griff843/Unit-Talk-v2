@@ -32,6 +32,30 @@ Runtime decoupling of evidence accumulation from public delivery approval. `reco
   - `tsx --test apps/api/src/grading-service.test.ts`: 61 PASS, 0 FAIL
 - `pnpm verify`: PASS (exit code 0, 113 tests, 0 fail)
 - `scripts/ci/r-level-check.ts`: PASS (no rules matched — runtime-only lane, no DB schema changes)
+- `pnpm test:db`: PASS (7 tests, 0 fail) — database-smoke.test.ts against live Supabase
+  ```
+  # tests 7
+  # suites 0
+  # pass 7
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # duration_ms 119264
+  ```
+- `tsx --test apps/api/src/t1-proof-utv2-1251-evidence-settlement.test.ts`: PASS against live Supabase
+  ```
+  # tests 2
+  # suites 0
+  # pass 2
+  # fail 0
+  # cancelled 0
+  # skipped 0
+  # duration_ms 35667
+  ```
+  Assertions verified against real Postgres:
+  - picks.status stays awaiting_approval after settlement record write
+  - distribution_outbox has zero rows (no Discord delivery)
+  - recordEvidenceSettlement rejects non-awaiting_approval pick
 
 ---
 
