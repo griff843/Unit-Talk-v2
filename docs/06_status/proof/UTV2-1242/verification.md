@@ -96,5 +96,5 @@ index which speeds up related scans.
 
 ## SHA Binding
 
-Verified source SHA: set-by-ci
-Merge SHA: PENDING — bind post-merge
+Verified source SHA: 25e03d78
+Merge SHA: 891512f1
