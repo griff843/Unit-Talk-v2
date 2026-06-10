@@ -1,36 +1,36 @@
 {
-  "schema_version": 11,
+  "schema_version": 12,
   "issue_id": "UTV2-1042",
-  "report_generated_at": "2026-06-10T05:35:00Z",
+  "report_generated_at": "2026-06-10T08:47:00Z",
   "cutover_timestamp": "2026-06-07T13:38:28Z",
   "wave5_deploy_sha": "b4188980292b8c0705461bc3b91a126fc0f7f307",
   "utv2_1228_fix_sha": "7605fe94b0009957687b4843fe30631e03e4ef60",
   "utv2_1242_fix_sha": "891512f15a1308aa4c4525afc4bee6c6a23f1117",
   "syndicate_machine_deploy_sha": "dcd649d5267c1790f910260e3bdfc5c0304ab981",
   "supabase_project": "zfzdnfwdarxucxtaojxm",
-  "monitor_updated_by": "v11 snapshot — ALL GATES STILL MET: pick_candidates 2,609→2,964 (+355) / closing_odds 2,602→2,606 (+4) / CLV join 125→126 (+1) / SGO cycles 2→5 (+3, latest 05:23Z 2026-06-10) / board scan 39,541→39,896 (+355)",
+  "monitor_updated_by": "v12 snapshot — ALL GATES STILL MET: pick_candidates 2,964→2,975 (+11) / closing_odds 2,606→2,607 (+1) / CLV join 126→126 (flat) / SGO latest 05:23Z→05:52Z (+29m, still 5 cycles) / board scan 39,896→39,907 (+11, last 08:47Z)",
   "linear_monitor_issue": "UTV2-1231",
   "dispatch_gate": "OPEN",
   "provider_offer_current": {
     "ingest_cycles_post_cutover": 5,
-    "latest_snapshot": "2026-06-10T05:23:44Z",
-    "note": "5 post-cutover cycles (was 2 in v10, +3). UTV2-1242 ingestor fix confirmed live in production (dcd649d5). Latest snapshot advanced from 2026-06-08T14:05:44Z to 2026-06-10T05:23:44Z — ~39h of new ingest data."
+    "latest_snapshot": "2026-06-10T05:52:33Z",
+    "note": "5 post-cutover cycles (unchanged from v11). Latest snapshot advanced from 05:23Z to 05:52Z (+29 min). No new full cycle since v11 — next cycle expected ~09:17Z."
   },
   "market_universe": {
-    "closing_over_odds_post_cutover": 2606,
-    "total_post_cutover": 2964,
-    "note": "Gate 2 MET. 2,606 post-cutover market_universe rows have closing_over_odds populated (was 2,602 in v10, +4). Markets continuing to settle."
+    "closing_over_odds_post_cutover": 2607,
+    "total_post_cutover": 2975,
+    "note": "Gate 2 MET. 2,607 post-cutover market_universe rows have closing_over_odds populated (was 2,606 in v11, +1). Slow continued settlement."
   },
   "pick_candidates": {
-    "post_cutover_universe_ids_count": 2964,
-    "updated_post_fix": 39896,
-    "last_scan": "2026-06-10T05:31:01Z",
-    "note": "Gate 1 MET. 2,964 pick_candidates for post-cutover universe_ids (was 2,609 in v10, +355). Board scan active: 39,896 candidates, last scan 05:31Z 2026-06-10 (+4h44m from v10). +355 driven by 3 new ingestor cycles post-UTV2-1242 fix."
+    "post_cutover_universe_ids_count": 2975,
+    "updated_post_fix": 39907,
+    "last_scan": "2026-06-10T08:47:01Z",
+    "note": "Gate 1 MET. 2,975 pick_candidates for post-cutover universe_ids (was 2,964 in v11, +11). Board scan active: last scan 08:47Z (+3h16m from v11 05:31Z). +11 candidates added since last snapshot."
   },
   "clv_join": {
     "count": 126,
     "query": "picks → pick_candidates (pick_id) → market_universe (universe_id) WHERE closing_over_odds IS NOT NULL AND picks.created_at >= cutover",
-    "note": "Gate 3 MET. 126 picks have a live CLV join path (was 125 in v10, +1). Slow growth consistent with picks being created and settling."
+    "note": "Gate 3 MET. 126 picks have a live CLV join path (unchanged from v11). No new picks crossed the CLV join threshold since last snapshot."
   },
   "gate_status": {
     "gate_1_pick_candidates_postcutover_universe": "MET",
@@ -43,31 +43,31 @@
       "id": "FLAG-1",
       "severity": "CLEARED",
       "title": "sport_id attribution: fix verified, board scan active",
-      "detail": "Cleared. Board scan active (39,896 scanned, last 05:31Z 2026-06-10). Attribution fix confirmed live."
+      "detail": "Cleared. Board scan active (39,907 scanned, last 08:47Z 2026-06-10). Attribution fix confirmed live."
     },
     {
       "id": "FLAG-2",
       "severity": "CLEARED",
-      "title": "CLV available — 2,606 closing_over_odds on post-cutover market_universe (Gate 2 MET, growing)",
-      "detail": "Gate 2 MET. 2,606 post-cutover market_universe rows have closing_over_odds populated as of 2026-06-10T05:35Z (was 2,602 in v10, +4). Markets continuing to settle."
+      "title": "CLV available — 2,607 closing_over_odds on post-cutover market_universe (Gate 2 MET, +1 from v11)",
+      "detail": "Gate 2 MET. 2,607 post-cutover market_universe rows have closing_over_odds populated as of 2026-06-10T08:47Z (was 2,606 in v11, +1). Slow continued market settlement."
     },
     {
       "id": "FLAG-3",
       "severity": "CLEARED",
-      "title": "pick_candidates for post-cutover universe_ids: 2,964 (+355 from v10)",
-      "detail": "Gate 1 MET. 2,964 candidates (was 2,609 in v10, +355). Growth driven by 3 new SGO ingestor cycles post-UTV2-1242."
+      "title": "pick_candidates for post-cutover universe_ids: 2,975 (+11 from v11)",
+      "detail": "Gate 1 MET. 2,975 candidates (was 2,964 in v11, +11). Board scan last active 08:47Z."
     },
     {
       "id": "FLAG-4",
       "severity": "CLEARED",
-      "title": "SGO ingest cycling: 5 post-cutover cycles, latest 2026-06-10T05:23:44Z (+3 from v10)",
-      "detail": "UTV2-1242 fix confirmed live. Ingestor has completed 3 additional cycles since v10. Latest snapshot advanced ~39h. Pipeline healthy."
+      "title": "SGO ingest cycling: 5 post-cutover cycles, latest 2026-06-10T05:52:33Z (+29m from v11)",
+      "detail": "Still at 5 full cycles total. Latest snapshot advanced from 05:23Z to 05:52Z. No new full cycle since v11 — ingestor cron fires every 4h at :17, next ~09:17Z."
     },
     {
       "id": "FLAG-5",
       "severity": "CLEARED",
-      "title": "CLV join path: 126 picks with live CLV (Gate 3 MET, +1 from v10)",
-      "detail": "Gate 3 MET. 126 picks traversable via picks → pick_candidates → market_universe WHERE closing_over_odds IS NOT NULL (was 125 in v10, +1)."
+      "title": "CLV join path: 126 picks with live CLV (Gate 3 MET, flat from v11)",
+      "detail": "Gate 3 MET. 126 picks traversable via picks → pick_candidates → market_universe WHERE closing_over_odds IS NOT NULL. Flat since v11 — no new picks crossed the CLV join threshold. CLV path still blocked primarily by P7A governance brake (awaiting_approval)."
     }
   ]
 }
