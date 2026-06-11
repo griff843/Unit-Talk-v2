@@ -1,5 +1,7 @@
 # UTV2-1258 Diff Summary
 
+merge_sha: f42f3077bcf4312ed9e8eb4eba38dc4d921330ed
+
 ## Problem
 
 `runGradingPass` called `picks.listByLifecycleState` with no limit or offset. Supabase's PostgREST default row cap is 1000 — picks submitted after the 1000th row in `posted` or `awaiting_approval` state were never reached by grading. Newer CLV-join picks (created by UTV2-1253) that sort later by `created_at` accumulated but never settled.

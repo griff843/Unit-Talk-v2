@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1258-fix-grading-fetch-cap",
   "branch": "claude/utv2-1258-fix-grading-fetch-cap",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "f42f3077bcf4312ed9e8eb4eba38dc4d921330ed",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1012",
+  "files_changed": [
+    "apps/api/src/grading-cron.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/t1-proof-utv2-1258-pagination.test.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
   "file_scope_lock": [
     "apps/api/src/grading-cron.test.ts",
     "apps/api/src/grading-service.ts",
@@ -24,7 +30,7 @@
     "docs/06_status/proof/UTV2-1258/diff-summary.md",
     "docs/06_status/proof/UTV2-1258/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-11T15:26:27.035Z",
   "heartbeat_at": "2026-06-11T15:26:27.035Z",
   "closed_at": null,

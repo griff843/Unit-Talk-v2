@@ -1,5 +1,7 @@
 # UTV2-1258 Verification — Fix 1000-row Grading Fetch Cap
 
+merge_sha: f42f3077bcf4312ed9e8eb4eba38dc4d921330ed
+
 ## Summary
 
 Adds pagination to `runGradingPass` so picks beyond the Supabase 1000-row PostgREST default cap are reached. Root cause: `listByLifecycleState('posted')` and `listByLifecycleState('awaiting_approval')` were called with no limit/offset, silently truncating at 1000 rows. CLV-join picks submitted after the 1000th always-`posted` row never reached grading.
