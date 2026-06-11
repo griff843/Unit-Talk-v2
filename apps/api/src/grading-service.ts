@@ -265,9 +265,12 @@ export async function runGradingPass(
       }
 
       if (!Number.isFinite(gameResult.actual_value)) {
-        throw new Error(
-          `game_result_actual_value_invalid: actual_value=${gameResult.actual_value} for result=${gameResult.id}`,
-        );
+        details.push({
+          pickId: pick.id,
+          outcome: 'skipped',
+          reason: `game_result_actual_value_invalid: actual_value=${gameResult.actual_value} for result=${gameResult.id}`,
+        });
+        continue;
       }
 
       const gradedResult = mapOutcomeToSettlementResult(
