@@ -24,6 +24,19 @@ $ unset UNIT_TALK_DISCORD_TARGET_MAP; echo "${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
 - 2026-06-11 02:38Z deploy of `fb07846a` re-stamped the same malformed value — confirming the workflow, not the host file, is the source.
 - Host hotfix to `{}` + force-recreate → `worker.startup` clean, container healthy. The workflow fix makes the hotfix permanent.
 
+### Live-DB smoke (`pnpm test:db`)
+
+```text
+$ pnpm test:db
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+```
+
+Run against real Supabase (project zfzdnfwdarxucxtaojxm) from the lane worktree on 2026-06-11.
+
 ### Checks
 
 - `pnpm verify` on the lane branch — see PR checks (CI is the binding record).
