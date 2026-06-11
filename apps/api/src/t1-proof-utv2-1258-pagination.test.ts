@@ -92,8 +92,8 @@ test(
     assert.equal(row0.length, 1, 'offset=0 limit=1 must return exactly 1 row');
     assert.equal(row1.length, 1, 'offset=1 limit=1 must return exactly 1 row');
     assert.notEqual(
-      row0[0].id,
-      row1[0].id,
+      row0[0]!.id,
+      row1[0]!.id,
       'offset=0 and offset=1 must return different row IDs — proves .range() is honored',
     );
 
