@@ -1,6 +1,8 @@
 # UTV2-1261 — Proof
 
 **Branch:** `claude/utv2-1261-canonical-pipeline-vocabulary`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1015
+**Merge SHA:** `f5a0661e`
 **Tier:** T2 / governance
 
 ## Summary
@@ -29,9 +31,11 @@ Docs-only change. No code or schema modifications.
 
 ## Verification
 
+- `pnpm verify` green on branch (lint + pnpm type-check + build + pnpm test)
 - New file: `docs/02_architecture/CANONICAL_PIPELINE_VOCABULARY.md`
 - No code changes. No test changes. No schema changes.
 - `pnpm test:db`: 7/7 pass, 0 fail — DB integrity preserved
+- `scripts/ci/r-level-check.ts` R-level compliance: docs-only change, no R-level artifacts triggered
 - All 11 required terms defined with explicit non-equivalences
 - SQL query patterns provided for evidence-settled and CLV-path counts
 - Content verified against PM clarification definitions (monitor language + data sufficiency):
@@ -40,4 +44,4 @@ Docs-only change. No code or schema modifications.
   - `posted_at IS NULL` ≠ game not started ✓
   - `awaiting_approval` ≠ excluded from grading ✓
   - `closing_for_clv snapshot absent` ≠ closing odds missing ✓
-<!-- CI trigger -->
+- Merge SHA: `f5a0661e`

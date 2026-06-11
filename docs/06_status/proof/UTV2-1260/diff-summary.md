@@ -2,6 +2,7 @@
 
 **Branch:** `claude/utv2-1260-grading-cron-failure-investigation`
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1014
+**Merge SHA:** `cfd9d2c0`
 **Tier:** T2
 
 ## Change Summary

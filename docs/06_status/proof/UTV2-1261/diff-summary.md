@@ -1,6 +1,8 @@
 # UTV2-1261 — Diff Summary
 
 **Branch:** `claude/utv2-1261-canonical-pipeline-vocabulary`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1015
+**Merge SHA:** `f5a0661e`
 **Tier:** T2 / governance
 
 ## Summary
