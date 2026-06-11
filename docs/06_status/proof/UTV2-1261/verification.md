@@ -11,18 +11,30 @@ Definitions cover: evidence-settled, true settled CLV-path, pick.status='settled
 
 ## Evidence
 
-- New file: `docs/02_architecture/CANONICAL_PIPELINE_VOCABULARY.md`
-- File size: non-empty, no placeholder text
-- Terms defined: 11 (all required by UTV2-1261 PM directive)
-- Non-equivalence table: present
-- Operational SQL query patterns: present for evidence-settled and CLV-path counts
-- Cross-references to CLV source hierarchy (INIT-4.3.1) and UTV2-1260 grading fix: present
+Docs-only change. No code or schema modifications.
+
+### pnpm test:db
+
+```
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 151047.848351
+```
 
 ## Verification
 
-- Docs-only change; no code paths modified
-- No `pnpm verify` failures possible from a docs-only commit (type-check does not validate `.md` files)
-- Content verified against PM clarification definitions from UTV2-1250 / UTV2-1042 PM message:
+- New file: `docs/02_architecture/CANONICAL_PIPELINE_VOCABULARY.md`
+- No code changes. No test changes. No schema changes.
+- `pnpm test:db`: 7/7 pass, 0 fail — DB integrity preserved
+- All 11 required terms defined with explicit non-equivalences
+- SQL query patterns provided for evidence-settled and CLV-path counts
+- Content verified against PM clarification definitions (monitor language + data sufficiency):
   - `evidence-settled` ≠ `pick.status='settled'` ✓
   - `true settled CLV-path` definition includes candidate join + clvStatus='computed' ✓
   - `posted_at IS NULL` ≠ game not started ✓

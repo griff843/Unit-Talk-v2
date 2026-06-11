@@ -15,7 +15,7 @@ Docs-only governance lane. Creates the canonical vocabulary document at `docs/02
 
 ## Change Detail
 
-The document codifies distinctions between near-synonymous terms that were causing incorrect monitoring counts in UTV2-1250 monitoring and an incorrect INSUFFICIENT_DATA verdict in UTV2-1042. Specifically:
+The document codifies distinctions between near-synonymous terms that were causing incorrect monitoring counts and an incorrect data-sufficiency verdict in the pipeline. Specifically:
 
 - `evidence-settled` vs `pick.status='settled'` — lifecycle column ≠ settlement record quality
 - `true settled CLV-path` — requires candidate join + clvStatus='computed', not just evidence-settled

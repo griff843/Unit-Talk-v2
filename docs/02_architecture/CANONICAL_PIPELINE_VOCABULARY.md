@@ -46,7 +46,7 @@ A pick is on the **true settled CLV-path** when it meets the evidence-settled cr
 2. Closing odds exist in `settlement_records.payload` with `clvStatus = 'computed'` — meaning `clvService` resolved a valid closing source (one of: `market_universe_provenance`, `pinnacle_closing`, `consensus_closing`, `market_universe_fallback`)
 3. `clvPercent` and `clvRaw` in `settlement_records.payload` are finite numbers
 
-The CLV-path count is the primary metric for model evaluation under UTV2-1042.
+The CLV-path count is the primary metric for model evaluation (50-pick threshold applies).
 
 **Closing source hierarchy (INIT-4.3.1):**
 1. `market_universe_provenance` (rank 1) — primary
@@ -135,7 +135,7 @@ A row in `pick_offer_snapshots` with `snapshot_kind = 'closing_for_clv'` is a **
 
 `system_runs.status` for `runType = 'grading.run'`:
 
-- `succeeded` — run completed; individual skipped picks (non-finite values, unsupported markets) do NOT cause `failed` status as of UTV2-1260
+- `succeeded` — run completed; individual skipped picks (non-finite values, unsupported markets) do NOT cause `failed` status (grading skip fix)
 - `failed` — run encountered a thrown error that prevented completion or exceeded the error threshold
 
 Individual pick skips are recorded in `system_runs.details.failed` for audit and in `grading-service.ts` `details[]` array with `outcome = 'skipped'` and a `reason` string containing the skip category code (e.g., `game_result_actual_value_invalid`).
