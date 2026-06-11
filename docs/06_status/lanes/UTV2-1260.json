@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1260-grading-cron-failure-investigation",
   "branch": "claude/utv2-1260-grading-cron-failure-investigation",
   "base_branch": "main",
-  "commit_sha": "8f4577a7d694b1a1af8b1e4e533277b4713e01dc",
+  "commit_sha": "90b6744cd606f171683848a93354019f26cc10f2",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1014",
   "files_changed": [
     "apps/api/src/grading-service.ts",
