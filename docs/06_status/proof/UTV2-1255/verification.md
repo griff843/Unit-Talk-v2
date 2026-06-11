@@ -41,3 +41,12 @@ Run against real Supabase (project zfzdnfwdarxucxtaojxm) from the lane worktree 
 
 - `pnpm verify` on the lane branch — see PR checks (CI is the binding record).
 - `grep -rn ':-{}' .github/workflows/ scripts/` → zero remaining occurrences post-fix.
+
+## Post-merge SHA binding
+
+Merge SHA: e5634c9878b185bb18965b182a70f97cfa6258d1 (PR #1007, squash, merged on green)
+
+- `pnpm type-check` — PASS (preflight PB1 + CI verify on branch head)
+- `pnpm test` — PASS (preflight PB2 + CI verify on branch head)
+- `pnpm verify` — green via required CI check on PR #1007
+- `scripts/ci/r-level-check.ts` — R-Level Compliance Check ✓ PASSED on PR #1007

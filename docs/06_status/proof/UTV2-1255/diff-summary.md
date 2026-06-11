@@ -28,3 +28,7 @@ recurrence after the 2026-06-11 02:38Z deploy of `fb07846a`).
 ## Pattern audit
 
 `grep -rn ':-{}' .github/workflows/ scripts/` — only these two occurrences existed; both fixed.
+
+## Merge binding
+
+Merge SHA: e5634c9878b185bb18965b182a70f97cfa6258d1 (PR #1007)
