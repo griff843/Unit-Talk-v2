@@ -1,0 +1,72 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1262",
+  "title": "Restore closing odds capture for true CLV-path evidence",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "sha_binding": {
+    "verified_source_sha": "b16ee41f546076608167e97674bab9a181a0a44a",
+    "branch": "claude/utv2-1262-restore-closing-odds-capture",
+    "note": "Branch SHA at time of proof generation. CI merge SHA will be appended by post-merge-lane-close.yml."
+  },
+  "ci_sentinels": {
+    "pnpm_verify": "PASS",
+    "r_level_check": "PASS",
+    "pnpm_test_db": "PASS"
+  },
+  "before_state": {
+    "closing_for_clv_rows": 5,
+    "note": "All 5 are UTV2-803 fixtures created 2026-04-30 as proof fixtures for one NBA event. 0 rows from live settlement pipeline."
+  },
+  "after_state": {
+    "note": "Code wired. New closing_for_clv rows will accumulate with each settlement where CLV is computed. Re-run proof script after next grading sweep to observe forward-flow writes."
+  },
+  "dry_run_backfill": {
+    "total_settled_sampled": 500,
+    "already_have_closing_for_clv": 5,
+    "eligible_candidates": 495,
+    "clv_resolvable_from_payload": 173,
+    "no_clv_data": 322,
+    "would_insert": 173,
+    "duplicate_conflict_count": 0,
+    "live_backfill_authorized": false,
+    "note": "Live backfill NOT approved. Dry-run only per PM ruling. Requires separate PM approval after forward-flow observed."
+  },
+  "settlement_isolation": {
+    "pattern": "fail-open",
+    "description": "writeClosingClvSnapshot failure never propagates to caller. Wrapped in try/catch with audit record. Call site uses .catch(() => undefined). Settlement is authoritative record regardless of snapshot outcome.",
+    "test_coverage": "settlement-service.test.ts: 'fail-open: closing_for_clv snapshot repo throws — settlement still succeeds'"
+  },
+  "unit_tests": {
+    "total": 113,
+    "pass": 113,
+    "fail": 0,
+    "new_tests": 4,
+    "new_test_names": [
+      "fail-open: closing_for_clv snapshot repo throws — settlement still succeeds",
+      "no resolvedClosingLine on CLV outcome — no snapshot written",
+      "InMemoryPickOfferSnapshotRepository: insert stores row, existsForPick returns true",
+      "InMemoryPickOfferSnapshotRepository: countByKind returns 0 for unknown kind"
+    ]
+  },
+  "live_db_tests": {
+    "total": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 144424,
+    "supabase_project": "zfzdnfwdarxucxtaojxm"
+  },
+  "guardrails_confirmed": [
+    "No fabricated closing odds",
+    "No synthetic/replay/test data counted as certification evidence",
+    "No CLV/ROI/edge/STRONG/ELITE/syndicate-ready claims",
+    "No P3 certification",
+    "UTV2-1042 NOT marked Done",
+    "No public Discord changes",
+    "Public delivery remains gated",
+    "Live backfill NOT executed — dry-run only"
+  ],
+  "generated_at": "2026-06-11T00:00:00.000Z",
+  "generated_by": "claude-sonnet-4-6"
+}
