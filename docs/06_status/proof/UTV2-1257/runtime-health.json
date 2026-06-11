@@ -10,8 +10,11 @@
     "status": "pass"
   },
   "test_db_result": {
-    "status": "pending",
-    "note": "TO BE UPDATED with pnpm test:db output"
+    "status": "pass",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 176049
   },
   "deployment_change": {
     "service_added": "grading-cron",
