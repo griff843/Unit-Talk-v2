@@ -51,6 +51,18 @@ verify:commands: PASS
   - lint-migrations: 119 files, no findings
 ```
 
+### `pnpm test:db`
+```
+TAP version 13
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+# tests 7
+# pass 7
+# fail 0
+```
+
+pnpm type-check: PASS
+pnpm test: PASS
+
 ## Production Impact
 
 - On next deploy: `grading-cron` starts as a managed container alongside api/worker/ingestor/discord-bot

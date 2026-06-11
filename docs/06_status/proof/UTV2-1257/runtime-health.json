@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1257",
+  "branch": "claude/utv2-1257-grading-cron-managed-runtime-home",
+  "evaluated_at": "2026-06-11T15:00:00.000Z",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "verify_result": {
+    "exit_code": 0,
+    "status": "pass"
+  },
+  "test_db_result": {
+    "status": "pending",
+    "note": "TO BE UPDATED with pnpm test:db output"
+  },
+  "deployment_change": {
+    "service_added": "grading-cron",
+    "image": "ghcr.io/griff843/unit-talk-v2/api",
+    "command_override": "apps/api/src/grading-cron.ts",
+    "autorun_env": "UNIT_TALK_GRADING_CRON_AUTORUN=true",
+    "restart_policy": "unless-stopped",
+    "depends_on_api_healthy": true
+  }
+}
