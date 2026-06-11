@@ -16,7 +16,8 @@
     "docs/06_status/proof/UTV2-1236/verification.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1236/evidence.json"
+    "docs/06_status/proof/UTV2-1236/verification.md",
+    "docs/06_status/proof/UTV2-1236/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-06-11T18:16:49.523Z",
