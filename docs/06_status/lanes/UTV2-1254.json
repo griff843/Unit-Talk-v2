@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1254-replay-validation-evidence-flow",
   "branch": "claude/utv2-1254-replay-validation-evidence-flow",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b9f86f99fa379cd4d71f9e3b6cbc430b749c5590",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1009",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1254/diff-summary.md",
@@ -18,14 +18,43 @@
     "docs/06_status/proof/UTV2-1254/diff-summary.md",
     "docs/06_status/proof/UTV2-1254/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-11T04:16:46.166Z",
-  "heartbeat_at": "2026-06-11T04:16:46.166Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-11T09:38:01.005Z",
+  "closed_at": "2026-06-11T09:38:01.005Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1254-replay-validation-evidence-flow.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-11T09:37:16.694Z",
+      "verdict": "pass",
+      "merge_sha": "b9f86f99fa379cd4d71f9e3b6cbc430b749c5590",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1009"
+    },
+    {
+      "checked_at": "2026-06-11T09:37:20.103Z",
+      "verdict": "fail",
+      "merge_sha": "b9f86f99fa379cd4d71f9e3b6cbc430b749c5590",
+      "failures": [
+        "G3",
+        "P4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-11T09:37:45.025Z",
+      "verdict": "pass",
+      "merge_sha": "b9f86f99fa379cd4d71f9e3b6cbc430b749c5590",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

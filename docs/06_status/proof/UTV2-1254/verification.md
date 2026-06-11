@@ -81,3 +81,11 @@ $ pnpm test:db
 ### Guardrail compliance
 
 No outcomes fabricated; replay/controlled-validation results not counted as certification evidence; no CLV/ROI/edge claims; no public Discord posts (canary untouched by this lane); UTV2-1042 not closed.
+
+## Post-merge SHA binding
+
+Merge SHA: b9f86f99fa379cd4d71f9e3b6cbc430b749c5590 (PR #1009, squash, merged on green)
+
+- `pnpm type-check` — PASS / `pnpm test` — PASS (preflight + CI verify on branch head 4cd33f83)
+- `pnpm verify` — green via required CI check on PR #1009
+- `scripts/ci/r-level-check.ts` — R-Level Compliance Check ✓ PASSED on PR #1009
