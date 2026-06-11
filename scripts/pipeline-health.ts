@@ -1,7 +1,7 @@
 // Pipeline health check — run with: tsx scripts/pipeline-health.ts [--output-json <path>]
 import { loadEnvironment } from '@unit-talk/config'
 import { resolveTargetRegistry } from '@unit-talk/contracts'
-import { evaluateQueueHealth, evaluateSlo, type QueueHealthOutboxRow } from '@unit-talk/observability'
+import { evaluateQueueHealth, evaluateSlo } from '@unit-talk/observability'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
@@ -43,31 +43,66 @@ function alertDetail(alert: { target?: string; status?: string; ageMs?: number; 
 }
 
 // ── 1. Outbox queue state ─────────────────────────────────────────────────
+// UTV2-1249: the previous unbounded select silently hit Supabase's 1000-row
+// default cap; with >1000 outbox rows the newest sent rows fell outside the
+// result set and delivery freshness was computed from a stale subset. Queue
+// evaluation only needs non-sent rows (bounded); sent-row truth (freshness,
+// count, last-5) is fetched exactly below.
 const { data: outbox, error: outboxErr } = await db
   .from('distribution_outbox')
   .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count, last_error')
+  .neq('status', 'sent')
+  .order('updated_at', { ascending: false })
+  .limit(5000)
 
 if (outboxErr) { console.error('outbox query failed:', outboxErr.message); process.exit(1) }
 
+const { data: lastSentRows, error: lastSentErr } = await db
+  .from('distribution_outbox')
+  .select('updated_at')
+  .eq('status', 'sent')
+  .order('updated_at', { ascending: false })
+  .limit(1)
+if (lastSentErr) { console.error('last-sent query failed:', lastSentErr.message); process.exit(1) }
+const lastSuccessfulDeliveryAt = lastSentRows?.[0]?.updated_at ?? null
+
+const { count: sentCount, error: sentCountErr } = await db
+  .from('distribution_outbox')
+  .select('id', { count: 'exact', head: true })
+  .eq('status', 'sent')
+if (sentCountErr) { console.error('sent-count query failed:', sentCountErr.message); process.exit(1) }
+
 const rows = outbox ?? []
-const queueHealthRows: QueueHealthOutboxRow[] = rows.map((row) => ({
-  id: row.id,
-  status: row.status,
-  target: row.target,
-  createdAt: row.created_at,
-  updatedAt: row.updated_at,
-  claimedAt: row.claimed_at,
-  attemptCount: row.attempt_count,
-}))
+const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
+  row.status === 'dead_letter' &&
+  row.attempt_count === 0 &&
+  typeof row.last_error === 'string' &&
+  (row.last_error.startsWith('proof-pick-blocked:') ||
+    row.last_error.startsWith('operator-disposition') ||
+    row.last_error.startsWith('stale_pending_operator_review'))
+const allDeadLetter = rows.filter(r => r.status === 'dead_letter')
+const governanceBrake = allDeadLetter.filter(isGovernanceBrakeDeadLetter)
+const trueDeadLetter = allDeadLetter.filter(r => !isGovernanceBrakeDeadLetter(r))
+const queueEvaluationRows = rows.filter(r => !isGovernanceBrakeDeadLetter(r))
 const queueHealth = evaluateQueueHealth({
   observedAt: now.toISOString(),
   workerTargets,
-  outboxRows: queueHealthRows,
+  lastSuccessfulDeliveryAt,
+  outboxRows: queueEvaluationRows.map((row) => ({
+    id: row.id,
+    status: row.status,
+    target: row.target,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    claimedAt: row.claimed_at,
+    attemptCount: row.attempt_count,
+  })),
   targetMismatches,
 })
 const sloReport = evaluateSlo(queueHealth)
 const counts: Record<string, number> = {}
 for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1
+counts['sent'] = sentCount ?? 0
 
 console.log('\n╔══ OUTBOX QUEUE STATE ══════════════════════════════════════')
 for (const [status, count] of Object.entries(counts)) {
@@ -94,17 +129,6 @@ console.log(`  Deferred pending:   ${deferredPend.length === 0 ? 'NONE' : deferr
 // Governance brake rows (P7A): last_error starts with 'proof-pick-blocked:' and were never
 // attempted (attempt_count=0). These are expected, designed behaviour — not system failures.
 // They remain visible as INFO but must not count toward CRITICAL/FAILED thresholds.
-const allDeadLetter = rows.filter(r => r.status === 'dead_letter')
-const governanceBrake = allDeadLetter.filter(r =>
-  r.attempt_count === 0 &&
-  typeof r.last_error === 'string' &&
-  r.last_error.startsWith('proof-pick-blocked:')
-)
-const trueDeadLetter = allDeadLetter.filter(r =>
-  !(r.attempt_count === 0 &&
-    typeof r.last_error === 'string' &&
-    r.last_error.startsWith('proof-pick-blocked:'))
-)
 const failed = rows.filter(r => r.status === 'failed')
 
 console.log('\n╔══ DEAD LETTER & FAILED ═════════════════════════════════════')
@@ -202,9 +226,15 @@ for (const alert of queueHealth.alerts) {
 }
 
 // ── 7. Delivery truth (last 5 sent rows) ──────────────────────────────────
-const sent = rows.filter(r => r.status === 'sent')
-  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  .slice(0, 5)
+// UTV2-1249: fetched exactly (newest first) instead of filtering the capped row set.
+const { data: recentSentRows, error: recentSentErr } = await db
+  .from('distribution_outbox')
+  .select('id, pick_id, created_at')
+  .eq('status', 'sent')
+  .order('created_at', { ascending: false })
+  .limit(5)
+if (recentSentErr) { console.error('recent-sent query failed:', recentSentErr.message); process.exit(1) }
+const sent = recentSentRows ?? []
 
 console.log('\n╔══ DELIVERY TRUTH (last 5 sent) ════════════════════════════')
 if (sent.length === 0) {
@@ -261,7 +291,7 @@ console.log('\n╔══ VERDICT ═══════════════�
 const warns: string[] = []
 const criticals: string[] = []
 if (trueDeadLetter.length > 0) criticals.push(`${trueDeadLetter.length} dead_letter rows (true failures)`)
-if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} governance brake row(s) (P7A, proof-pick-blocked — expected, not system failures)`)
+if (governanceBrake.length > 0) warns.push(`${governanceBrake.length} governance-class row(s) (P7A proof-pick-blocked / operator-disposition — expected, not system failures)`)
 if (failed.length > 0) warns.push(`${failed.length} failed rows`)
 if (stuckProc.length > 0) criticals.push(`${stuckProc.length} stuck processing rows`)
 if (stuckPend.length > 0) warns.push(`${stuckPend.length} pending rows stuck >30min`)

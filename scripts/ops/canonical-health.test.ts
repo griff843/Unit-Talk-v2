@@ -233,3 +233,128 @@ test('pipeline:health no failures and no governance brakes yields HEALTHY', () =
 
   assert.equal(state, 'HEALTHY');
 });
+
+test('runtime:health queue movement degrades for governance brake rows without failing', () => {
+  const rows = [
+    {
+      status: 'dead_letter',
+      attempt_count: 0,
+      last_error: 'proof-pick-blocked: source system-pick-scanner requires governance review',
+      claimed_at: null as string | null,
+    },
+  ];
+
+  const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
+    row.status === 'dead_letter' &&
+    row.attempt_count === 0 &&
+    typeof row.last_error === 'string' &&
+    row.last_error.startsWith('proof-pick-blocked:');
+  const pending = rows.filter((row) => row.status === 'pending');
+  const deadLetter = rows.filter((row) => row.status === 'dead_letter' && !isGovernanceBrakeDeadLetter(row));
+  const governanceBrake = rows.filter(isGovernanceBrakeDeadLetter);
+
+  let state = 'HEALTHY';
+  const issues: string[] = [];
+  if (deadLetter.length > 0) {
+    state = 'FAILED';
+    issues.push(`${deadLetter.length} true dead_letter rows`);
+  } else if (pending.length > 20) {
+    state = 'DEGRADED';
+  }
+  if (governanceBrake.length > 0 && state === 'HEALTHY') {
+    state = 'DEGRADED';
+    issues.push(`${governanceBrake.length} governance brake dead_letter row(s) (expected P7A proof-blocked)`);
+  }
+
+  assert.equal(state, 'DEGRADED');
+  assert.deepEqual(issues, ['1 governance brake dead_letter row(s) (expected P7A proof-blocked)']);
+});
+
+test('runtime:health queue movement fails when a true dead-letter is present', () => {
+  const rows = [
+    {
+      status: 'dead_letter',
+      attempt_count: 2,
+      last_error: 'discord delivery failed permanently',
+      claimed_at: null as string | null,
+    },
+    {
+      status: 'dead_letter',
+      attempt_count: 0,
+      last_error: 'proof-pick-blocked: source alert-agent requires governance review',
+      claimed_at: null as string | null,
+    },
+  ];
+
+  const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
+    row.status === 'dead_letter' &&
+    row.attempt_count === 0 &&
+    typeof row.last_error === 'string' &&
+    row.last_error.startsWith('proof-pick-blocked:');
+  const deadLetter = rows.filter((row) => row.status === 'dead_letter' && !isGovernanceBrakeDeadLetter(row));
+
+  const state = deadLetter.length > 0 ? 'FAILED' : 'HEALTHY';
+
+  assert.equal(deadLetter.length, 1);
+  assert.equal(state, 'FAILED');
+});
+
+test('runtime:health overall degrades when any subsystem is UNKNOWN', () => {
+  const failed: string[] = [];
+  const degraded: string[] = [];
+  const subsystems = [
+    { name: 'Queue Movement', state: 'UNKNOWN', value: 'query failed', detail: 'TypeError: fetch failed' },
+    { name: 'Discord Delivery', state: 'HEALTHY', value: 'last receipt 1m ago', detail: 'ok' },
+  ];
+
+  for (const sub of subsystems) {
+    if (sub.state === 'UNKNOWN') {
+      degraded.push(`${sub.name}: ${sub.value}${sub.detail ? ` — ${sub.detail}` : ''}`);
+    }
+  }
+
+  const overallFailed = failed.length > 0;
+  const overallDegraded = !overallFailed && degraded.length > 0;
+  const overallState = overallFailed ? 'FAILED' : overallDegraded ? 'DEGRADED' : 'HEALTHY';
+
+  assert.equal(overallState, 'DEGRADED');
+  assert.deepEqual(degraded, ['Queue Movement: query failed — TypeError: fetch failed']);
+});
+
+test('operator-disposition dead letters classify as governance-class, not true failures', () => {
+  const rows = [
+    {
+      status: 'dead_letter',
+      attempt_count: 0,
+      last_error: 'operator-disposition-2026-06-10: Mode 1 public delivery hold — stale discord:best-bets posts voided per PM go (board-clearing audit); not a system failure',
+      claimed_at: null as string | null,
+    },
+    {
+      status: 'dead_letter',
+      attempt_count: 0,
+      last_error: 'stale_pending_operator_review',
+      claimed_at: null as string | null,
+    },
+    {
+      status: 'dead_letter',
+      attempt_count: 3,
+      last_error: 'discord 500 after retries',
+      claimed_at: null as string | null,
+    },
+  ];
+
+  const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
+    row.status === 'dead_letter' &&
+    row.attempt_count === 0 &&
+    typeof row.last_error === 'string' &&
+    (row.last_error.startsWith('proof-pick-blocked:') ||
+      row.last_error.startsWith('operator-disposition') ||
+      row.last_error.startsWith('stale_pending_operator_review'));
+
+  const governanceBrake = rows.filter(isGovernanceBrakeDeadLetter);
+  const trueDeadLetter = rows.filter((row) => row.status === 'dead_letter' && !isGovernanceBrakeDeadLetter(row));
+
+  assert.equal(governanceBrake.length, 2);
+  assert.equal(trueDeadLetter.length, 1);
+  assert.match(trueDeadLetter[0]!.last_error, /discord 500/);
+});
