@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1260-grading-cron-failure-investigation",
   "branch": "claude/utv2-1260-grading-cron-failure-investigation",
   "base_branch": "main",
-  "commit_sha": "cfd9d2c00763d42e7d8f786add4c50853f1cf1ce",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1014",
+  "commit_sha": "e3df54fc770cc1f9b0fd7439438c4e1ca8762164",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1016",
   "files_changed": [
     "apps/api/src/grading-service.ts",
     "apps/api/src/grading-service.test.ts",
@@ -27,7 +27,7 @@
   ],
   "status": "merged",
   "started_at": "2026-06-11T19:48:54.079Z",
-  "heartbeat_at": "2026-06-11T20:51:46.598Z",
+  "heartbeat_at": "2026-06-11T20:59:10.518Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1260-grading-cron-failure-investigation.json",
@@ -60,6 +60,15 @@
       "checked_at": "2026-06-11T20:51:46.598Z",
       "verdict": "fail",
       "merge_sha": "cfd9d2c0",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-11T20:59:10.518Z",
+      "verdict": "fail",
+      "merge_sha": "cfd9d2c00763d42e7d8f786add4c50853f1cf1ce",
       "failures": [
         "G4"
       ],
