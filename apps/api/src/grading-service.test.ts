@@ -2271,7 +2271,7 @@ test('readEventStartTime returns null for non-ISO event_date string', () => {
   assert.equal(readEventStartTime(event), null);
 });
 
-// UTV2-808: non-finite actual_value records error detail rather than silently producing wrong verdict
+// UTV2-808 / UTV2-1260: non-finite actual_value skips pick with audit reason; does not fail the whole run
 test('runGradingPass records error when game result actual_value is NaN', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
   const { participant, event } = await attachPlayerEventContext(
@@ -2288,11 +2288,12 @@ test('runGradingPass records error when game result actual_value is NaN', async 
 
   const result = await runGradingPass(repositories);
 
-  assert.equal(result.errors, 1);
+  assert.equal(result.errors, 0);
   assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
   const detail = result.details.find((d) => d.pickId === pickId);
   assert.ok(detail);
-  assert.equal(detail.outcome, 'error');
+  assert.equal(detail.outcome, 'skipped');
   assert.ok(
     typeof detail.reason === 'string' &&
     detail.reason.includes('game_result_actual_value_invalid'),
