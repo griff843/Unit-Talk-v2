@@ -40,3 +40,4 @@ Docs-only change. No code or schema modifications.
   - `posted_at IS NULL` ≠ game not started ✓
   - `awaiting_approval` ≠ excluded from grading ✓
   - `closing_for_clv snapshot absent` ≠ closing odds missing ✓
+<!-- CI trigger -->
