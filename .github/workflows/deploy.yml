@@ -213,6 +213,7 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
@@ -276,6 +277,8 @@ jobs:
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
             "SYNDICATE_MACHINE_ENABLED=true" \
+            "UNIT_TALK_GRADING_CRON_AUTORUN=true" \
+            "UNIT_TALK_OPS_ALERT_WEBHOOK_URL=${UNIT_TALK_OPS_ALERT_WEBHOOK_URL:-}" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
             "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
             "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
@@ -363,6 +366,7 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
@@ -426,6 +430,8 @@ jobs:
             "SGO_API_KEY=$SGO_API_KEY" \
             "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
             "SYNDICATE_MACHINE_ENABLED=true" \
+            "UNIT_TALK_GRADING_CRON_AUTORUN=true" \
+            "UNIT_TALK_OPS_ALERT_WEBHOOK_URL=${UNIT_TALK_OPS_ALERT_WEBHOOK_URL:-}" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
             "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
             "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
