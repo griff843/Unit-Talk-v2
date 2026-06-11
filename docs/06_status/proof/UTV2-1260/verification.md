@@ -1,14 +1,20 @@
-# UTV2-1260 — Verification
+# UTV2-1260 — Proof
 
 **Branch:** `claude/utv2-1260-grading-cron-failure-investigation`
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1014
 **Tier:** T2
 
-## Verification
+## Summary
 
-### pnpm verify
+Root cause: `grading-service.ts` threw `Error` for `game_result_actual_value_invalid` (null/non-finite `actual_value` in `game_results`). This throw caused the whole grading run to record `run_status='failed'`, preventing downstream processing of other picks.
+
+Fix: changed throw → skip. Picks with non-finite actual_value now record `outcome='skipped'` with an explicit reason string. The grading run completes as `succeeded`, and the skip is recorded in `details[].reason` for ops visibility.
+
+## Evidence
 
 ```
+tsx --test apps/api/src/grading-service.test.ts
+
 # tests 61
 # suites 0
 # pass 61
@@ -16,27 +22,19 @@
 # cancelled 0
 # skipped 0
 # todo 0
+# duration_ms 985.292548
 ```
 
-Exit code: 0 — green
+pnpm verify exit code: 0
 
-### Test: game_result_actual_value_invalid behavior (test 55)
+## Verification
 
-**Before fix:** `outcome: 'error'`, `errors: 1`, run_status would become `'failed'`
-**After fix:** `outcome: 'skipped'`, `errors: 0`, `skipped: 1`, run_status becomes `'succeeded'`
-
-Test assertion updated to match new behavior. Test passes.
-
-### Scope check
-
-- Files changed: `apps/api/src/grading-service.ts`, `apps/api/src/grading-service.test.ts`
-- No package.json changes
-- No migration changes
-- No schema changes
-- No scope bleed outside `file_scope_lock`
-
-### PM Instructions Compliance
-
-- No fabricated results — picks remain ungraded
-- Audit detail preserved — reason string contains skip code + raw value
-- No silent degradation — `outcome: 'skipped'` is explicit with reason
+- All 61 tests pass, 0 fail
+- Test 55 (`runGradingPass records error when game result actual_value is NaN`) updated to assert:
+  - `outcome: 'skipped'` (was: `'error'`)
+  - `errors: 0` (was: `1`)
+  - `skipped: 1` (new assertion)
+  - `reason` contains `'game_result_actual_value_invalid'` (unchanged)
+- Scope confined to `apps/api/src/grading-service.ts` and `apps/api/src/grading-service.test.ts`
+- No schema changes, no migration changes, no new dependencies
+- PM instructions compliance: audit detail preserved, no fabricated results, no silent degradation
