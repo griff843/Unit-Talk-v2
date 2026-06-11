@@ -13,11 +13,22 @@
   "file_scope_lock": [
     "apps/api/src/clv-service.test.ts",
     "apps/api/src/clv-service.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/scripts/utv2-1262-backfill-closing-clv.ts",
+    "apps/api/src/scripts/utv2-1262-proof.ts",
+    "apps/api/src/server.ts",
+    "apps/api/src/settlement-service.test.ts",
+    "apps/api/src/settlement-service.ts",
+    "docs/06_status/proof/UTV2-1262/diff-summary.md",
+    "docs/06_status/proof/UTV2-1262/evidence.json",
+    "docs/06_status/proof/UTV2-1262/verification.md",
     "packages/db/src/repositories.ts",
     "packages/db/src/runtime-repositories.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1262/evidence.json"
+    "docs/06_status/proof/UTV2-1262/evidence.json",
+    "docs/06_status/proof/UTV2-1262/verification.md",
+    "docs/06_status/proof/UTV2-1262/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-06-11T21:38:42.395Z",
