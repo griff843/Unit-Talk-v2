@@ -137,10 +137,12 @@ export interface PickRepository {
   listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
     limit?: number | undefined,
+    offset?: number | undefined,
   ): Promise<PickRecord[]>;
   listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
+    offset?: number | undefined,
   ): Promise<PickRecord[]>;
   listBySource(
     source: CanonicalPick['source'],

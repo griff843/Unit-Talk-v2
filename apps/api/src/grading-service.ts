@@ -3,6 +3,7 @@ import {
   buildRecapEmbedData,
   normalizeMarketKey,
 } from '@unit-talk/domain';
+import type { CanonicalPick } from '@unit-talk/contracts';
 import type {
   EventRow,
   PickRecord,
@@ -44,6 +45,22 @@ export type GradingRetryState = Map<
 
 const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
+const GRADING_FETCH_PAGE_SIZE = 500;
+
+export async function fetchAllByLifecycleState(
+  picks: RepositoryBundle['picks'],
+  state: CanonicalPick['lifecycleState'],
+): Promise<PickRecord[]> {
+  const all: PickRecord[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await picks.listByLifecycleState(state, GRADING_FETCH_PAGE_SIZE, offset);
+    all.push(...page);
+    if (page.length < GRADING_FETCH_PAGE_SIZE) break;
+    offset += GRADING_FETCH_PAGE_SIZE;
+  }
+  return all;
+}
 
 type ParticipantRequirement = 'required' | 'forbidden';
 type GradeableMarketFamily = 'player_prop' | 'team_total' | 'game_total';
@@ -75,9 +92,10 @@ export async function runGradingPass(
 ): Promise<GradingPassResult> {
   // Evidence plane: also process awaiting_approval picks so outcome data
   // accumulates without requiring public delivery approval. Per UTV2-1253.
+  // Paginated to bypass the Supabase 1000-row default cap (UTV2-1258).
   const [postedPicks, evidencePicks] = await Promise.all([
-    repositories.picks.listByLifecycleState('posted'),
-    repositories.picks.listByLifecycleState('awaiting_approval'),
+    fetchAllByLifecycleState(repositories.picks, 'posted'),
+    fetchAllByLifecycleState(repositories.picks, 'awaiting_approval'),
   ]);
   const picks = [...postedPicks, ...evidencePicks];
   const details: GradingPickResult[] = [];

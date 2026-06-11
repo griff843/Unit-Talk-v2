@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1258",
+  "branch": "claude/utv2-1258-fix-grading-fetch-cap",
+  "evaluated_at": "2026-06-11T15:45:00.000Z",
+  "tier": "T2",
+  "lane_type": "runtime",
+  "verify_result": {
+    "exit_code": 0,
+    "status": "pass"
+  },
+  "test_db_result": {
+    "status": "pass",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 182524
+  },
+  "pagination_fix": {
+    "method": "fetchAllByLifecycleState",
+    "page_size": 500,
+    "states_paginated": ["posted", "awaiting_approval"],
+    "row_cap_bypassed": true
+  }
+}

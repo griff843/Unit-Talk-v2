@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { runGradingCronCycles, startGradingCronLoop } from './grading-cron.js';
-import type { SystemRunRecord } from '@unit-talk/db';
+import { fetchAllByLifecycleState } from './grading-service.js';
+import type { PickRecord, SystemRunRecord } from '@unit-talk/db';
 
 test('runGradingCronCycles executes each cycle and sleeps between runs', async () => {
   const calls: number[] = [];
@@ -261,4 +262,62 @@ test('runGradingCronCycles shares a single retry state across cycles', async () 
   assert.equal(retryStates.length, 2);
   assert.ok(retryStates[0] instanceof Map);
   assert.equal(retryStates[0], retryStates[1]);
+});
+
+test('fetchAllByLifecycleState paginates through more than 1000 picks', async () => {
+  const PAGE_SIZE = 500;
+  const TOTAL = 1050;
+
+  const fakeRecords: PickRecord[] = Array.from({ length: TOTAL }, (_, i) => ({
+    id: `pick-${i}`,
+    status: 'posted',
+    created_at: new Date(i).toISOString(),
+    updated_at: new Date(i).toISOString(),
+    submission_id: null,
+    participant_id: null,
+    player_id: null,
+    capper_id: null,
+    sport_id: null,
+    market_type_id: null,
+    market: 'player_points',
+    selection: 'over',
+    line: null,
+    odds: -110,
+    stake_units: null,
+    confidence: null,
+    source: 'manual',
+    approval_status: 'approved',
+    promotion_status: 'done',
+    promotion_target: null,
+    promotion_score: null,
+    promotion_reason: null,
+    promotion_version: null,
+    promotion_decided_at: null,
+    promotion_decided_by: null,
+    posted_at: null,
+    settled_at: null,
+    idempotency_key: null,
+    metadata: {},
+  } as unknown as PickRecord));
+
+  const calls: Array<[number | undefined, number | undefined]> = [];
+  const mockPicksRepo = {
+    listByLifecycleState: async (
+      _state: string,
+      limit?: number,
+      offset?: number,
+    ): Promise<PickRecord[]> => {
+      calls.push([limit, offset]);
+      const start = offset ?? 0;
+      return fakeRecords.slice(start, limit !== undefined ? start + limit : undefined);
+    },
+  } as unknown as Parameters<typeof fetchAllByLifecycleState>[0];
+
+  const result = await fetchAllByLifecycleState(mockPicksRepo, 'posted');
+
+  assert.equal(result.length, TOTAL);
+  assert.equal(calls.length, Math.ceil(TOTAL / PAGE_SIZE));
+  assert.deepEqual(calls[0], [PAGE_SIZE, 0]);
+  assert.deepEqual(calls[1], [PAGE_SIZE, PAGE_SIZE]);
+  assert.deepEqual(calls[2], [PAGE_SIZE, PAGE_SIZE * 2]);
 });
