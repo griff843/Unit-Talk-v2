@@ -18,6 +18,7 @@
   "file_scope_lock": [
     "apps/api/src/grading-cron.ts",
     "apps/api/src/grading-service.ts",
+    "apps/api/src/grading-service.test.ts",
     "docs/06_status/proof/UTV2-1260/"
   ],
   "expected_proof_paths": [
