@@ -25,10 +25,10 @@
     "docs/06_status/proof/UTV2-1260/diff-summary.md",
     "docs/06_status/proof/UTV2-1260/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-11T19:48:54.079Z",
-  "heartbeat_at": "2026-06-11T20:59:10.518Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-11T21:16:41.716Z",
+  "closed_at": "2026-06-11T21:16:41.716Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1260-grading-cron-failure-investigation.json",
   "created_by": "claude",
@@ -72,6 +72,13 @@
       "failures": [
         "G4"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-11T21:16:12.415Z",
+      "verdict": "pass",
+      "merge_sha": "e3df54fc770cc1f9b0fd7439438c4e1ca8762164",
+      "failures": [],
       "runner": "manual"
     }
   ],
