@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1261-canonical-pipeline-vocabulary",
   "branch": "claude/utv2-1261-canonical-pipeline-vocabulary",
   "base_branch": "main",
-  "commit_sha": "6aef29cc02fe00d19d14d3f88e0059012432c4ef",
+  "commit_sha": "f5a0661edf7f166aedb961da5c0cd7419ec9f04a",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1015",
   "files_changed": [
     "docs/02_architecture/CANONICAL_PIPELINE_VOCABULARY.md",
@@ -22,14 +22,31 @@
     "docs/06_status/proof/UTV2-1261/diff-summary.md",
     "docs/06_status/proof/UTV2-1261/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-06-11T20:05:29.957Z",
-  "heartbeat_at": "2026-06-11T20:05:29.957Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-11T21:01:44.854Z",
+  "closed_at": "2026-06-11T21:01:44.854Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1261-canonical-pipeline-vocabulary.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-11T21:01:09.627Z",
+      "verdict": "fail",
+      "merge_sha": "f5a0661edf7f166aedb961da5c0cd7419ec9f04a",
+      "failures": [
+        "L3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-11T21:01:34.256Z",
+      "verdict": "pass",
+      "merge_sha": "f5a0661edf7f166aedb961da5c0cd7419ec9f04a",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
