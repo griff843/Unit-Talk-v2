@@ -433,25 +433,31 @@ export class InMemoryPickRepository implements PickRepository {
   async listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
     limit?: number | undefined,
+    offset?: number | undefined,
   ): Promise<PickRecord[]> {
-    const matches = Array.from(this.picks.values())
+    const start = offset ?? 0;
+    const sorted = Array.from(this.picks.values())
       .filter((pick) => pick.status === lifecycleState)
-      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+      .sort((left, right) => left.created_at.localeCompare(right.created_at))
+      .slice(start);
 
-    return limit === undefined ? matches : matches.slice(0, limit);
+    return limit === undefined ? sorted : sorted.slice(0, limit);
   }
 
   async listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
+    offset?: number | undefined,
   ): Promise<PickRecord[]> {
     const stateSet = new Set(lifecycleStates);
-    const matches = Array.from(this.picks.values())
+    const start = offset ?? 0;
+    const sorted = Array.from(this.picks.values())
       .filter((pick) =>
         stateSet.has(pick.status as CanonicalPick['lifecycleState']),
       )
-      .sort((left, right) => left.created_at.localeCompare(right.created_at));
-    return limit === undefined ? matches : matches.slice(0, limit);
+      .sort((left, right) => left.created_at.localeCompare(right.created_at))
+      .slice(start);
+    return limit === undefined ? sorted : sorted.slice(0, limit);
   }
 
   async listBySource(
@@ -2980,6 +2986,7 @@ export class DatabasePickRepository implements PickRepository {
   async listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
     limit?: number | undefined,
+    offset?: number | undefined,
   ): Promise<PickRecord[]> {
     let query = this.client
       .from('picks')
@@ -2987,7 +2994,9 @@ export class DatabasePickRepository implements PickRepository {
       .eq('status', lifecycleState)
       .order('created_at', { ascending: true });
 
-    if (limit !== undefined) {
+    if (offset !== undefined && limit !== undefined) {
+      query = query.range(offset, offset + limit - 1);
+    } else if (limit !== undefined) {
       query = query.limit(limit);
     }
 
@@ -3005,6 +3014,7 @@ export class DatabasePickRepository implements PickRepository {
   async listByLifecycleStates(
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
+    offset?: number | undefined,
   ): Promise<PickRecord[]> {
     let query = this.client
       .from('picks')
@@ -3012,7 +3022,9 @@ export class DatabasePickRepository implements PickRepository {
       .in('status', lifecycleStates)
       .order('created_at', { ascending: true });
 
-    if (limit !== undefined) {
+    if (offset !== undefined && limit !== undefined) {
+      query = query.range(offset, offset + limit - 1);
+    } else if (limit !== undefined) {
       query = query.limit(limit);
     }
 
