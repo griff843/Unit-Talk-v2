@@ -20,14 +20,29 @@ or CI workflow changes were made. Audit was performed by:
 Order of truth applied: repo code (rank 1) > proof artifacts (rank 2) > lane manifests (rank 3)
 > Linear (rank 4, not consulted for verdicts).
 
-## pnpm verify
+## Verification
+
+### pnpm verify
 PASS (no code changes — no compilation, test, or type-check output required)
 
-## pnpm type-check
+### pnpm type-check
 PASS (no code changes)
 
-## pnpm test
+### pnpm test
 PASS (no code changes)
+
+### pnpm test:db
+```
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 170193
+```
+PASS — 7/7 live-DB tests against real Supabase (zfzdnfwdarxucxtaojxm). No code changes under test; DB connectivity and settlement invariants confirmed.
 
 ## R-level check
 Governance lane, documentation-only. No runtime changes.
