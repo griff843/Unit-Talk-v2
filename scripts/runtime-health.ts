@@ -26,7 +26,7 @@ const T = {
   outboxMaxPendingWarn: 20,  // DEGRADED if >20 pending outbox rows
   outboxMaxPendingCrit: 100, // FAILED if >100 pending outbox rows
   outboxStuckProcMin: 5,     // DEGRADED if processing row claimed >5min ago
-  outboxDeadLetterCrit: 1,   // FAILED on any dead_letter row
+  outboxDeadLetterCrit: 1,   // FAILED on any true delivery dead_letter row
 
   // Provider freshness
   providerWarnMin: 60,       // DEGRADED if latest offer >60min
@@ -133,14 +133,22 @@ async function main() {
   {
     const { data: outbox, error } = await db
       .from('distribution_outbox')
-      .select('id, status, created_at, claimed_at, attempt_count')
+      .select('id, status, created_at, claimed_at, attempt_count, last_error')
 
     if (error) {
       subsystems.push({ name: 'Queue Movement', state: 'UNKNOWN', value: 'query failed', detail: error.message })
     } else {
       const rows = outbox ?? []
       const pending = rows.filter(r => r.status === 'pending')
-      const deadLetter = rows.filter(r => r.status === 'dead_letter')
+      const isGovernanceBrakeDeadLetter = (row: (typeof rows)[number]) =>
+        row.status === 'dead_letter' &&
+        row.attempt_count === 0 &&
+        typeof row.last_error === 'string' &&
+        (row.last_error.startsWith('proof-pick-blocked:') ||
+          row.last_error.startsWith('operator-disposition') ||
+          row.last_error.startsWith('stale_pending_operator_review'))
+      const deadLetter = rows.filter(r => r.status === 'dead_letter' && !isGovernanceBrakeDeadLetter(r))
+      const governanceBrake = rows.filter(isGovernanceBrakeDeadLetter)
       const stuckProc = rows.filter(r =>
         r.status === 'processing' && r.claimed_at && ageMin(r.claimed_at) > T.outboxStuckProcMin
       )
@@ -151,7 +159,7 @@ async function main() {
 
       if (deadLetter.length >= T.outboxDeadLetterCrit) {
         state = 'FAILED'
-        issues.push(`${deadLetter.length} dead_letter rows`)
+        issues.push(`${deadLetter.length} true dead_letter rows`)
       } else if (pending.length > T.outboxMaxPendingCrit) {
         state = 'FAILED'
         issues.push(`${pending.length} pending rows (>${T.outboxMaxPendingCrit})`)
@@ -160,12 +168,16 @@ async function main() {
         if (pending.length > T.outboxMaxPendingWarn) issues.push(`${pending.length} pending (>${T.outboxMaxPendingWarn} warn)`)
         if (stuckProc.length > 0) issues.push(`${stuckProc.length} stuck processing >5m`)
       }
+      if (governanceBrake.length > 0 && state === 'HEALTHY') {
+        state = 'DEGRADED'
+        issues.push(`${governanceBrake.length} governance brake dead_letter row(s) (expected P7A proof-blocked)`)
+      }
 
       subsystems.push({
         name: 'Queue Movement',
         state,
-        value: `${pending.length} pending, ${deadLetter.length} dead_letter`,
-        detail: `total=${rows.length}; completed=${completed.length}; stuck=${stuckProc.length}; dead_letter=${deadLetter.length}; ${issues.join('; ')}`,
+        value: `${pending.length} pending, ${deadLetter.length} true dead_letter`,
+        detail: `total=${rows.length}; completed=${completed.length}; stuck=${stuckProc.length}; true_dead_letter=${deadLetter.length}; governance_brake=${governanceBrake.length}; ${issues.join('; ')}`,
       })
       if (state === 'FAILED') failed.push(`Queue: ${issues.join(', ')}`)
       if (state === 'DEGRADED') degraded.push(`Queue: ${issues.join(', ')}`)
@@ -340,6 +352,12 @@ async function main() {
 
   // ── Output ─────────────────────────────────────────────────────────────────
   const RED = '\x1b[31m', YELLOW = '\x1b[33m', GREEN = '\x1b[32m', CYAN = '\x1b[36m', RESET = '\x1b[0m', BOLD = '\x1b[1m', DIM = '\x1b[2m'
+
+  for (const sub of subsystems) {
+    if (sub.state === 'UNKNOWN') {
+      degraded.push(`${sub.name}: ${sub.value}${sub.detail ? ` — ${sub.detail}` : ''}`)
+    }
+  }
 
   const overallFailed = failed.length > 0
   const overallDegraded = !overallFailed && degraded.length > 0
