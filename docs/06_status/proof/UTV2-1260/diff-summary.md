@@ -23,3 +23,4 @@
 - Audit detail preserved: `reason` string includes `actual_value` and `result.id` for per-pick diagnosis
 - No fabrication: picks remain ungraded (not assigned a win/loss outcome)
 - No scope bleed: changes confined to `apps/api/src/grading-service.ts` and its test
+
