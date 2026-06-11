@@ -230,7 +230,8 @@ jobs:
             _dist_targets="discord:0"
             [ -z "$_enabled_targets" ] && _enabled_targets="none"
           fi
-          _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
+          _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
+          [ -z "$_target_map" ] && _target_map='{}'
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
@@ -379,7 +380,8 @@ jobs:
             _dist_targets="discord:0"
             [ -z "$_enabled_targets" ] && _enabled_targets="none"
           fi
-          _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
+          _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
+          [ -z "$_target_map" ] && _target_map='{}'
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
