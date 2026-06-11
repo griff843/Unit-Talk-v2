@@ -41,3 +41,11 @@ $ pnpm test:db
 ### Guardrails
 
 No Redis/Temporal; no ClickHouse approval implied; no data migrated; no P3 certification claims; no CLV/ROI/edge claims.
+
+## Post-merge SHA binding
+
+Merge SHA: 905a51340e8d5715dc9fbcc682eb2509b799554a (PR #1010, squash, merged on green)
+
+- `pnpm type-check` — PASS / `pnpm test` — PASS (preflight + CI verify on branch head)
+- `pnpm verify` — green via required CI check on PR #1010
+- `scripts/ci/r-level-check.ts` — R-Level Compliance Check ✓ PASSED on PR #1010

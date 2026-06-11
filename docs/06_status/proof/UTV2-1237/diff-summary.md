@@ -17,3 +17,7 @@ Grounded in live measurements (2026-06-11): `provider_offers_legacy_quarantine` 
 ## Guardrails honored
 
 No Redis/Temporal; ClickHouse explicitly deferred to separate approval; no P3 certification implications; no CLV/ROI/edge claims.
+
+## Merge binding
+
+Merge SHA: 905a51340e8d5715dc9fbcc682eb2509b799554a (PR #1010)
