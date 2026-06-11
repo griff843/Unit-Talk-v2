@@ -12,9 +12,10 @@ Fix: changed throw → skip. Picks with non-finite actual_value now record `outc
 
 ## Evidence
 
-```
-tsx --test apps/api/src/grading-service.test.ts
+### pnpm test (unit tests)
 
+```
+1..61
 # tests 61
 # suites 0
 # pass 61
@@ -25,11 +26,24 @@ tsx --test apps/api/src/grading-service.test.ts
 # duration_ms 985.292548
 ```
 
-pnpm verify exit code: 0
+### pnpm test:db
+
+```
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 146535.279136
+```
 
 ## Verification
 
-- All 61 tests pass, 0 fail
+- All 61 unit tests pass, 0 fail
+- All 7 DB tests pass, 0 fail — DB integrity preserved
 - Test 55 (`runGradingPass records error when game result actual_value is NaN`) updated to assert:
   - `outcome: 'skipped'` (was: `'error'`)
   - `errors: 0` (was: `1`)
