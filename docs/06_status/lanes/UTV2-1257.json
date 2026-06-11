@@ -13,11 +13,15 @@
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
     "deploy/production/docker-compose.yml",
-    "docs/06_status/proof/UTV2-1257/verification.md"
+    ".lane/lanes/runtime.yml",
+    "docs/06_status/proof/UTV2-1257/diff-summary.md",
+    "docs/06_status/proof/UTV2-1257/verification.md",
+    "docs/06_status/proof/UTV2-1257/runtime-health.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1257/diff-summary.md",
-    "docs/06_status/proof/UTV2-1257/verification.md"
+    "docs/06_status/proof/UTV2-1257/verification.md",
+    "docs/06_status/proof/UTV2-1257/runtime-health.json"
   ],
   "status": "started",
   "started_at": "2026-06-11T14:32:00.243Z",
