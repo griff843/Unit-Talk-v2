@@ -97,3 +97,7 @@ showed recent sent rows — was caused by an **unbounded Supabase select silentl
 Governance classification extended (both `pipeline-health.ts` and `runtime-health.ts`):
 `operator-disposition*` and `stale_pending_operator_review` (PM Decision D1, UTV2-1238)
 dead-letters now classify as governance-class, not true delivery failures.
+
+## Merge binding
+
+Merge SHA: c2909038c32b5b579e518e7ec15f796bbe0b5988 (PR #1008)

@@ -153,3 +153,12 @@ $ npx tsx --test scripts/ops/canonical-health.test.ts
 $ pnpm type-check  → PASS
 $ pnpm test:db (run by Codex pass) → PASS; pnpm verify (Codex pass) → PASS
 ```
+
+## Post-merge SHA binding
+
+Merge SHA: c2909038c32b5b579e518e7ec15f796bbe0b5988 (PR #1008, squash, merged on green)
+
+- `pnpm type-check` — PASS (CI verify on branch head de792431)
+- `pnpm test` — PASS (CI verify on branch head de792431)
+- `pnpm verify` — green via required CI check on PR #1008
+- `scripts/ci/r-level-check.ts` — R-Level Compliance Check ✓ PASSED on PR #1008
