@@ -2,7 +2,7 @@
 
 **Branch:** `claude/utv2-1260-grading-cron-failure-investigation`
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1014
-**Merge SHA:** `cfd9d2c0`
+**Merge SHA:** `cfd9d2c00763d42e7d8f786add4c50853f1cf1ce`
 **Tier:** T2
 
 ## Summary
@@ -55,4 +55,4 @@ Fix: changed throw → skip. Picks with non-finite actual_value now record `outc
 - Scope confined to `apps/api/src/grading-service.ts` and `apps/api/src/grading-service.test.ts`
 - No schema changes, no migration changes, no new dependencies
 - PM instructions compliance: audit detail preserved, no fabricated results, no silent degradation
-- Merge SHA: `cfd9d2c0`
+- Merge SHA: `cfd9d2c00763d42e7d8f786add4c50853f1cf1ce`

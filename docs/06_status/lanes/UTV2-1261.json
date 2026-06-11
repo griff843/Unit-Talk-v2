@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1261-canonical-pipeline-vocabulary",
   "branch": "claude/utv2-1261-canonical-pipeline-vocabulary",
   "base_branch": "main",
-  "commit_sha": "f5a0661e",
+  "commit_sha": "f5a0661edf7f166aedb961da5c0cd7419ec9f04a",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1015",
   "files_changed": [
     "docs/02_architecture/CANONICAL_PIPELINE_VOCABULARY.md",

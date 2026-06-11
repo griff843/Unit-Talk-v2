@@ -2,7 +2,7 @@
 
 **Branch:** `claude/utv2-1261-canonical-pipeline-vocabulary`
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1015
-**Merge SHA:** `f5a0661e`
+**Merge SHA:** `f5a0661edf7f166aedb961da5c0cd7419ec9f04a`
 **Tier:** T2 / governance
 
 ## Summary
