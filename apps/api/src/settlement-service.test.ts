@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createInMemoryRepositoryBundle } from './persistence.js';
+import { createInMemoryRepositoryBundle, InMemoryPickOfferSnapshotRepository } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { recordPickSettlement, recordEvidenceSettlement } from './settlement-service.js';
@@ -686,4 +686,82 @@ test('recordPickSettlement still requires posted state (delivery path unchanged)
   // Pick status must remain awaiting_approval
   const afterPick = await repositories.picks.findPickById(pick.id);
   assert.equal(afterPick?.status, 'awaiting_approval');
+});
+
+// UTV2-1262: closing_for_clv snapshot persistence tests
+
+test('recordEvidenceSettlement succeeds even when pickOfferSnapshots.insert throws (fail-open)', async () => {
+  const { repositories, pick } = await createPickInAwaitingApproval();
+  // Inject a failing snapshot repo to verify settlement is not affected
+  const failingRepo: import('@unit-talk/db').PickOfferSnapshotRepository = {
+    insert: async () => { throw new Error('simulated DB failure'); },
+    existsForPick: async () => false,
+    countByKind: async () => 0,
+  };
+  repositories.pickOfferSnapshots = failingRepo;
+
+  const result = await recordEvidenceSettlement(
+    pick.id,
+    'win',
+    EVIDENCE_GRADING_CONTEXT,
+    repositories,
+  );
+
+  // Settlement must succeed regardless of snapshot write failure
+  assert.equal(result.settlementRecord.result, 'win');
+  assert.equal(result.finalLifecycleState, 'awaiting_approval');
+});
+
+test('recordEvidenceSettlement does not write snapshot when no closing line resolved', async () => {
+  const { repositories, pick } = await createPickInAwaitingApproval();
+  // InMemory repos have no seeded closing line data → CLV returns null → no snapshot
+  const snapshotRepo = new InMemoryPickOfferSnapshotRepository();
+  repositories.pickOfferSnapshots = snapshotRepo;
+
+  await recordEvidenceSettlement(pick.id, 'win', EVIDENCE_GRADING_CONTEXT, repositories);
+
+  // No snapshot written because CLV could not resolve a closing line
+  const count = await snapshotRepo.countByKind('closing_for_clv');
+  assert.equal(count, 0, 'no snapshot should be written when CLV cannot resolve closing line');
+});
+
+test('InMemoryPickOfferSnapshotRepository insert and existsForPick work correctly', async () => {
+  const repo = new InMemoryPickOfferSnapshotRepository();
+
+  const before = await repo.existsForPick('pick-abc', 'closing_for_clv');
+  assert.equal(before, false);
+
+  await repo.insert({
+    pick_id: 'pick-abc',
+    settlement_record_id: 'sr-001',
+    snapshot_kind: 'closing_for_clv',
+    provider_key: 'sgo',
+    provider_event_id: 'evt-001',
+    provider_market_key: 'turnovers-all-game-ou',
+    provider_participant_id: null,
+    bookmaker_key: 'pinnacle',
+    line: 3.5,
+    over_odds: -110,
+    under_odds: -110,
+    captured_at: '2026-06-01T22:00:00Z',
+    identity_key: 'sgo:evt-001:turnovers-all-game-ou:null:pinnacle:closing_for_clv',
+    devig_mode: 'proportional',
+    payload: { writer: 'test', issue: 'UTV2-1262' },
+  });
+
+  const after = await repo.existsForPick('pick-abc', 'closing_for_clv');
+  assert.equal(after, true);
+
+  const count = await repo.countByKind('closing_for_clv');
+  assert.equal(count, 1);
+
+  // Different pick → not found
+  const other = await repo.existsForPick('pick-xyz', 'closing_for_clv');
+  assert.equal(other, false);
+});
+
+test('InMemoryPickOfferSnapshotRepository countByKind returns 0 for unknown kind', async () => {
+  const repo = new InMemoryPickOfferSnapshotRepository();
+  const count = await repo.countByKind('closing_for_clv');
+  assert.equal(count, 0);
 });

@@ -21,6 +21,7 @@ export {
   InMemoryReceiptRepository,
   InMemorySubmissionRepository,
   InMemorySystemRunRepository,
+  InMemoryPickOfferSnapshotRepository,
   createDatabaseRepositoryBundle,
   createInMemoryRepositoryBundle,
 } from '@unit-talk/db';
