@@ -1,6 +1,23 @@
 /**
- * UTV2-1267 — Classify all 172 UTV2-1262 backfilled closing_for_clv rows
- * by SGO provider-truth quality.
+ * UTV2-1267 — Sample-seeded DB-signal classification of the 172 UTV2-1262
+ * backfilled closing_for_clv rows, with per-row validation_source.
+ *
+ * IMPORTANT SEMANTICS (PM directive, Option A):
+ *   This is NOT full provider-truth verification of all 172 rows.
+ *   - validation_source='mcp_direct'    → row has a durably recorded SGO MCP
+ *     verdict from the 31-row sampled review. Only the 13 non-PASS verdicts
+ *     (6 FAIL, 7 WARN) were recorded per pick_id; sampled rows that passed
+ *     were not durably recorded and are conservatively classified
+ *     db_signal_only. provider_truth_verified=true.
+ *   - validation_source='poh_verified'  → reserved for canonical local
+ *     provider row match (provider_offer_history against expected
+ *     event/market/participant/line/side). Currently 0 rows: backfilled
+ *     snapshot payloads carry no provider identifiers, and because the
+ *     UTV2-1262 backfill derived its closing values from the same local
+ *     provider data, a POH re-match would be circular, not independent.
+ *   - validation_source='db_signal_only' → PASS/WARN derived from local DB
+ *     CLV fields alone. provider_truth_verified=false. A db_signal PASS is
+ *     NOT provider-truth verified and must never be reported as such.
  *
  * Run:
  *   tsx apps/api/src/scripts/sgo-provider-truth-audit.ts
@@ -13,16 +30,12 @@
  *   pick_offer_snapshots (snapshot_kind=closing_for_clv, backfill_lane=UTV2-1262)
  *   settlement_records.payload.clv (closingLine, closingOdds, pickOdds, providerKey)
  *
- * Classification criteria:
- *   FAIL  — SGO MCP confirmed: stale old-line odds, alt-line contamination, 1H no-close
- *   WARN  — SGO MCP confirmed or DB-signal: timing drift, line mismatch, partial data
- *   PASS  — DB-verified CLV present (closingLine + closingOdds non-null), no known failure signal
- *
  * Guardrails:
  *   - Read-only. Does NOT mutate pick_offer_snapshots or any other table.
  *   - Does NOT certify P3 or mark UTV2-1042 Done.
  *   - Does NOT count FAIL rows in certification-facing evidence metrics.
  *   - FAIL rows reported separately in fail_excluded bucket.
+ *   - db_signal_only rows must never be reported as provider-truth verified.
  */
 
 import assert from 'node:assert/strict';
@@ -34,6 +47,14 @@ import { createDatabaseClient } from '@unit-talk/db';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Verdict = 'PASS' | 'WARN' | 'FAIL';
+
+/**
+ * How a row's verdict was established.
+ *   mcp_direct     — durably recorded SGO MCP verdict (provider truth)
+ *   poh_verified   — canonical local provider_offer_history match (provider truth)
+ *   db_signal_only — local DB CLV fields only (NOT provider-truth verified)
+ */
+type ValidationSource = 'mcp_direct' | 'poh_verified' | 'db_signal_only';
 
 type FailReason =
   | 'LINE_MOVE_STALE'
@@ -50,6 +71,8 @@ type WarnReason =
   | 'SETTLEMENT_SOURCE_MISMATCH'
   | 'LINE_MOVED_DB_SIGNAL';
 
+type PassReason = 'DB_SIGNAL_PASS';
+
 interface SnapshotRow {
   pick_id: string;
   closing_line: number | null;
@@ -63,6 +86,10 @@ interface SnapshotRow {
 
 interface ClassifiedRow extends SnapshotRow {
   verdict: Verdict;
+  reason_code: FailReason | WarnReason | PassReason;
+  validation_source: ValidationSource;
+  provider_truth_verified: boolean;
+  backfill_lane: string;
   fail_reason?: FailReason;
   warn_reason?: WarnReason;
   note: string;
@@ -75,11 +102,24 @@ interface AuditResults {
   warn_count: number;
   fail_count: number;
   pass_rate_excluding_fail: string;
+  validation_source_counts: {
+    mcp_direct: number;
+    poh_verified: number;
+    db_signal_only: number;
+  };
+  split_metrics: {
+    mcp_direct_pass: number;
+    poh_verified_pass: number;
+    db_signal_pass_unverified: number;
+    warn: number;
+    fail_excluded: number;
+  };
   fail_reasons: Record<string, number>;
   warn_reasons: Record<string, number>;
   methodology_note: string;
   buckets: {
-    pass_only: ClassifiedRow[];
+    provider_truth_pass: ClassifiedRow[];
+    db_signal_pass_unverified: ClassifiedRow[];
     pass_and_warn: ClassifiedRow[];
     fail_excluded: ClassifiedRow[];
     all_rows: ClassifiedRow[];
@@ -87,6 +127,8 @@ interface AuditResults {
   posture: string;
   guardrails: string[];
 }
+
+const BACKFILL_LANE = 'UTV2-1262';
 
 // ── DB Query ──────────────────────────────────────────────────────────────────
 
@@ -153,9 +195,11 @@ async function fetchBackfilledRows(): Promise<SnapshotRow[]> {
 // ── Classification ────────────────────────────────────────────────────────────
 
 /**
- * Phase 1 DB-observable classification.
+ * Phase 1 DB-signal classification (validation_source='db_signal_only').
  * Uses settlement_records.payload.clv for closing odds presence check.
- * LINE_MOVE_STALE detection requires SGO MCP (Phase 2 — applied via KNOWN_FAILS/KNOWN_WARNS).
+ * A db_signal PASS is NOT provider-truth verified — LINE_MOVE_STALE,
+ * ALT_LINE, and source-mismatch detection require provider truth (Phase 2
+ * mcp_direct overrides, applied via KNOWN_FAILS/KNOWN_WARNS).
  */
 function classifyRow(row: SnapshotRow): ClassifiedRow {
   // FAIL: no closing data at all
@@ -163,6 +207,10 @@ function classifyRow(row: SnapshotRow): ClassifiedRow {
     return {
       ...row,
       verdict: 'FAIL',
+      reason_code: 'NULL_BOTH_SIDES',
+      validation_source: 'db_signal_only',
+      provider_truth_verified: false,
+      backfill_lane: BACKFILL_LANE,
       fail_reason: 'NULL_BOTH_SIDES',
       note: 'No closingLine or closingOdds in settlement CLV — no provider evidence captured',
     };
@@ -173,16 +221,24 @@ function classifyRow(row: SnapshotRow): ClassifiedRow {
     return {
       ...row,
       verdict: 'WARN',
+      reason_code: 'NO_CLOSE_ONE_SIDE',
+      validation_source: 'db_signal_only',
+      provider_truth_verified: false,
+      backfill_lane: BACKFILL_LANE,
       warn_reason: 'NO_CLOSE_ONE_SIDE',
       note: `closingLine=${row.closing_line} but closingOdds is null — partial provider data`,
     };
   }
 
-  // PASS from DB signals (LINE_MOVE_STALE requires SGO MCP Phase 2)
+  // PASS from DB signals only — NOT provider-truth verified.
   return {
     ...row,
     verdict: 'PASS',
-    note: `DB-verified: closingLine=${row.closing_line} closingOdds=${row.closing_odds} pickOdds=${row.pick_odds} via ${row.provider_key ?? 'unknown'}. LINE_MOVE_STALE requires SGO MCP Phase 2.`,
+    reason_code: 'DB_SIGNAL_PASS',
+    validation_source: 'db_signal_only',
+    provider_truth_verified: false,
+    backfill_lane: BACKFILL_LANE,
+    note: `DB-signal only (NOT provider-truth verified): closingLine=${row.closing_line} closingOdds=${row.closing_odds} pickOdds=${row.pick_odds} via ${row.provider_key ?? 'unknown'}.`,
   };
 }
 
@@ -259,7 +315,10 @@ const KNOWN_WARNS: Record<string, { verdict: 'WARN'; warn_reason: WarnReason; no
   },
 };
 
-// ── Override with known SGO MCP verdicts ──────────────────────────────────────
+// ── Override with known SGO MCP verdicts (validation_source='mcp_direct') ─────
+// Only these rows carry provider_truth_verified=true. The 31-row sampled
+// review also produced PASS verdicts, but those were not durably recorded
+// per pick_id, so sampled-PASS rows remain db_signal_only (conservative).
 
 function applyKnownVerdicts(rows: ClassifiedRow[]): ClassifiedRow[] {
   return rows.map((row) => {
@@ -267,10 +326,22 @@ function applyKnownVerdicts(rows: ClassifiedRow[]): ClassifiedRow[] {
     const knownFail = KNOWN_FAILS[pickIdShort];
     const knownWarn = KNOWN_WARNS[pickIdShort];
     if (knownFail) {
-      return { ...row, ...knownFail };
+      return {
+        ...row,
+        ...knownFail,
+        reason_code: knownFail.fail_reason,
+        validation_source: 'mcp_direct' as const,
+        provider_truth_verified: true,
+      };
     }
     if (knownWarn) {
-      return { ...row, ...knownWarn };
+      return {
+        ...row,
+        ...knownWarn,
+        reason_code: knownWarn.warn_reason,
+        validation_source: 'mcp_direct' as const,
+        provider_truth_verified: true,
+      };
     }
     return row;
   });
@@ -321,6 +392,13 @@ async function main() {
     ? `${((passRows.length / totalNonFail) * 100).toFixed(1)}%`
     : 'n/a';
 
+  const mcpDirectRows = classified.filter((r) => r.validation_source === 'mcp_direct');
+  const pohVerifiedRows = classified.filter((r) => r.validation_source === 'poh_verified');
+  const dbSignalRows = classified.filter((r) => r.validation_source === 'db_signal_only');
+
+  const providerTruthPassRows = passRows.filter((r) => r.provider_truth_verified);
+  const dbSignalPassRows = passRows.filter((r) => !r.provider_truth_verified);
+
   const results: AuditResults = {
     run_at: new Date().toISOString(),
     total_rows: classified.length,
@@ -328,17 +406,38 @@ async function main() {
     warn_count: warnRows.length,
     fail_count: failRows.length,
     pass_rate_excluding_fail: passRateExcludingFail,
+    validation_source_counts: {
+      mcp_direct: mcpDirectRows.length,
+      poh_verified: pohVerifiedRows.length,
+      db_signal_only: dbSignalRows.length,
+    },
+    split_metrics: {
+      mcp_direct_pass: providerTruthPassRows.filter((r) => r.validation_source === 'mcp_direct').length,
+      poh_verified_pass: providerTruthPassRows.filter((r) => r.validation_source === 'poh_verified').length,
+      db_signal_pass_unverified: dbSignalPassRows.length,
+      warn: warnRows.length,
+      fail_excluded: failRows.length,
+    },
     fail_reasons: failReasons,
     warn_reasons: warnReasons,
     methodology_note: [
-      'Phase 1 (DB-observable): all 172 rows have non-null closingLine + closingOdds in settlement_records.payload.clv.',
-      'Phase 2 (SGO MCP 31-pick sample): 6 confirmed FAILs, 7 confirmed WARNs applied by pick_id prefix.',
-      'Remaining 159 rows: PASS from DB signals. LINE_MOVE_STALE detection for unsampled picks requires full SGO MCP Phase 2.',
-      'Payload source: pick_offer_snapshots.payload stores CLV result metadata only (clv_raw, clv_percent);',
-      '  closing odds live in settlement_records.payload.clv (closingLine, closingOdds, pickOdds).',
+      '172 rows classified by DB-signal + 13-row MCP direct validation overrides.',
+      'NOT full provider-truth verification: only the 13 non-PASS verdicts from the 31-row',
+      'sampled SGO MCP review were durably recorded per pick_id (6 FAIL, 7 WARN);',
+      'sampled rows that passed were not durably recorded, so they are conservatively',
+      'classified db_signal_only. A db_signal PASS means closingLine + closingOdds are',
+      'non-null in settlement_records.payload.clv — it is NOT provider-truth verified',
+      'and may include undetected LINE_MOVE_STALE / ALT_LINE rows.',
+      'poh_verified=0 by design: backfilled snapshot payloads carry no provider',
+      'identifiers, and because the UTV2-1262 backfill derived closing values from the',
+      'same local provider data, a provider_offer_history re-match would be circular,',
+      'not independent verification.',
+      'Payload source: pick_offer_snapshots.payload stores CLV result metadata only',
+      '(clv_raw, clv_percent); closing odds live in settlement_records.payload.clv.',
     ].join(' '),
     buckets: {
-      pass_only: passRows,
+      provider_truth_pass: providerTruthPassRows,
+      db_signal_pass_unverified: dbSignalPassRows,
       pass_and_warn: [...passRows, ...warnRows],
       fail_excluded: failRows,
       all_rows: classified,
@@ -346,7 +445,8 @@ async function main() {
     posture: 'DATA_SUFFICIENT_READY_FOR_FILTERED_PM_REVIEW',
     guardrails: [
       'FAIL rows excluded from certification-facing evidence metrics',
-      'backfill provenance visible (backfill_source=UTV2-1262-historical)',
+      'db_signal_only rows must never be reported as provider-truth verified',
+      'backfill provenance visible (backfill_source=UTV2-1262-historical, backfill_lane=UTV2-1262)',
       'no production data mutated',
       'UTV2-1042 not marked Done',
       'P3 not certified',
@@ -362,6 +462,8 @@ async function main() {
   console.log(`  WARN       : ${results.warn_count} (${((results.warn_count / results.total_rows) * 100).toFixed(1)}%)`);
   console.log(`  FAIL       : ${results.fail_count} (${((results.fail_count / results.total_rows) * 100).toFixed(1)}%)`);
   console.log(`  PASS rate (excl. FAIL): ${results.pass_rate_excluding_fail}`);
+  console.log(`\n  validation_source: ${JSON.stringify(results.validation_source_counts)}`);
+  console.log(`  split_metrics    : ${JSON.stringify(results.split_metrics)}`);
   console.log(`\n  FAIL reasons: ${JSON.stringify(failReasons)}`);
   console.log(`  WARN reasons: ${JSON.stringify(warnReasons)}`);
   console.log(`\n  Methodology: ${results.methodology_note.slice(0, 120)}...`);
