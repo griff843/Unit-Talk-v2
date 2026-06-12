@@ -256,6 +256,12 @@ jobs:
             "UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity" \
             "UNIT_TALK_INGESTOR_AUTORUN=true" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
+            "UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=true" \
+            "UNIT_TALK_INGESTOR_PEAK_POLL_MS=30000" \
+            "UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS=300000" \
+            "UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET=12" \
+            "UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET=24" \
+            "UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true" \
             "UNIT_TALK_WORKER_ID=worker-prod" \
             "UNIT_TALK_WORKER_AUTORUN=true" \
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
@@ -409,6 +415,12 @@ jobs:
             "UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity" \
             "UNIT_TALK_INGESTOR_AUTORUN=true" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
+            "UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=true" \
+            "UNIT_TALK_INGESTOR_PEAK_POLL_MS=30000" \
+            "UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS=300000" \
+            "UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET=12" \
+            "UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET=24" \
+            "UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true" \
             "UNIT_TALK_WORKER_ID=worker-prod" \
             "UNIT_TALK_WORKER_AUTORUN=true" \
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \

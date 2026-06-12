@@ -176,6 +176,12 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: caddy
+    # CADDY_DOMAIN must reach the container for the {$CADDY_DOMAIN} site
+    # address in the Caddyfile; without it Caddy fails to parse the config
+    # and crash-loops. env_file matches the other services (future
+    # hardening: narrow to just CADDY_DOMAIN — caddy is the public edge).
+    env_file:
+      - .env.production
     ports:
       - "80:80"
       - "443:443"
