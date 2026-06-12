@@ -81,10 +81,15 @@ Script is read-only — no production data mutated.
 
 ```
 pnpm test:db
+1..7
 # tests 7
+# suites 0
 # pass 7
 # fail 0
-# duration_ms ~120000
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 120578
 ```
 
 7/7 DB integration tests pass against live Supabase (zfzdnfwdarxucxtaojxm).
