@@ -59,9 +59,9 @@ Tests include:
 - T1 Proof 2 — single-approver correction rejected by DB constraint
 - T1 Proof 3 — dual-authorized correction creates settlement_corrections record
 - T1 Proof 4 — PnL reproduces through correction chain
-- UTV2-920: invalid atomic delivery confirmation rolls back (3 assertions)
-- UTV2-883: no duplicate participants for same external_id and sport
-- UTV2-996: re-settling creates correction, no duplicate base rows
+- atomic delivery confirmation rollback test (3 assertions)
+- no duplicate participants for same external_id and sport
+- re-settling creates correction, no duplicate base rows
 
 ### Settlement isolation test — PASS
 
@@ -73,7 +73,7 @@ Fail-open pattern verified: `writeClosingClvSnapshot` failure never propagates t
 closing_for_clv total rows:              5
 total settled records (all):             8499
 closing_for_clv with settlement_record_id: 5
-(All 5 are UTV2-803 fixtures from 2026-04-30)
+(All 5 are legacy fixtures from 2026-04-30)
 snapshot_kind distribution: { submission: 6, posting: 5, closing_for_clv: 5, settlement_proof: 5 }
 ```
 

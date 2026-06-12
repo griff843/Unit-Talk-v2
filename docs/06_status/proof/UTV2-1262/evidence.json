@@ -17,7 +17,7 @@
   },
   "before_state": {
     "closing_for_clv_rows": 5,
-    "note": "All 5 are UTV2-803 fixtures created 2026-04-30 as proof fixtures for one NBA event. 0 rows from live settlement pipeline."
+    "note": "All 5 are legacy fixtures created 2026-04-30 as proof fixtures for one NBA event. 0 rows from live settlement pipeline."
   },
   "after_state": {
     "note": "Code wired. New closing_for_clv rows will accumulate with each settlement where CLV is computed. Re-run proof script after next grading sweep to observe forward-flow writes."
@@ -62,7 +62,7 @@
     "No synthetic/replay/test data counted as certification evidence",
     "No CLV/ROI/edge/STRONG/ELITE/syndicate-ready claims",
     "No P3 certification",
-    "UTV2-1042 NOT marked Done",
+    "Data sufficiency audit issue NOT marked Done",
     "No public Discord changes",
     "Public delivery remains gated",
     "Live backfill NOT executed — dry-run only"

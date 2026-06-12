@@ -51,4 +51,4 @@ metadata:
 
 ### Root cause addressed
 
-`pick_offer_snapshots.closing_for_clv` write path was architecturally specified (UTV2-803) but never wired in `settlement-service.ts`. CLV computation worked (169 `computed` settlements since 2026-06-07) but outcomes lived only in `settlement_records.payload` JSON, never in the queryable evidence table. This made CLV mathematically incalculable for certification queries (0 true CLV-path picks out of 221 evidence-settled).
+`pick_offer_snapshots.closing_for_clv` write path was architecturally specified in the T1 production readiness contract but never wired in `settlement-service.ts`. CLV computation worked (169 `computed` settlements since 2026-06-07) but outcomes lived only in `settlement_records.payload` JSON, never in the queryable evidence table. This made CLV mathematically incalculable for certification queries (0 true CLV-path picks out of 221 evidence-settled).
