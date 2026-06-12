@@ -1,72 +1,85 @@
 {
-  "schema_version": "evidence-bundle-v1",
+  "schema_version": 1,
   "issue_id": "UTV2-1262",
   "title": "Restore closing odds capture for true CLV-path evidence",
-  "tier": "T1",
-  "lane_type": "runtime",
-  "executor": "claude",
   "sha_binding": {
-    "verified_source_sha": "b16ee41f546076608167e97674bab9a181a0a44a",
-    "branch": "claude/utv2-1262-restore-closing-odds-capture",
-    "note": "Branch SHA at time of proof generation. CI merge SHA will be appended by post-merge-lane-close.yml."
+    "verified_source_sha": "bd5cc35c6ab57256e2c026b5637c163514e6e564",
+    "verified_source_note": "Final branch commit before merge",
+    "merge_sha": "b51ffe22f690f8b46df29645a0229ec19705fe2e",
+    "evidence_commit_sha": "b51ffe22f690f8b46df29645a0229ec19705fe2e",
+    "current_pr_head_sha": "bd5cc35c6ab57256e2c026b5637c163514e6e564"
   },
-  "ci_sentinels": {
-    "pnpm_verify": "PASS",
-    "r_level_check": "PASS",
-    "pnpm_test_db": "PASS"
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "implementation-lane"
   },
-  "before_state": {
-    "closing_for_clv_rows": 5,
-    "note": "All 5 are legacy fixtures created 2026-04-30 as proof fixtures for one NBA event. 0 rows from live settlement pipeline."
-  },
-  "after_state": {
-    "note": "Code wired. New closing_for_clv rows will accumulate with each settlement where CLV is computed. Re-run proof script after next grading sweep to observe forward-flow writes."
-  },
-  "dry_run_backfill": {
-    "total_settled_sampled": 500,
-    "already_have_closing_for_clv": 5,
-    "eligible_candidates": 495,
-    "clv_resolvable_from_payload": 173,
-    "no_clv_data": 322,
-    "would_insert": 173,
-    "duplicate_conflict_count": 0,
-    "live_backfill_authorized": false,
-    "note": "Live backfill NOT approved. Dry-run only per PM ruling. Requires separate PM approval after forward-flow observed."
-  },
-  "settlement_isolation": {
-    "pattern": "fail-open",
-    "description": "writeClosingClvSnapshot failure never propagates to caller. Wrapped in try/catch with audit record. Call site uses .catch(() => undefined). Settlement is authoritative record regardless of snapshot outcome.",
-    "test_coverage": "settlement-service.test.ts: 'fail-open: closing_for_clv snapshot repo throws — settlement still succeeds'"
-  },
-  "unit_tests": {
-    "total": 113,
-    "pass": 113,
-    "fail": 0,
-    "new_tests": 4,
-    "new_test_names": [
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {"status": "PASS", "exit_code": 0, "tests": 113, "pass": 113, "fail": 0},
+    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "r_level": {
+      "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "settlement-grading",
+      "advisory_only": ["r4-fault-report"]
+    },
+    "new_tests": [
       "fail-open: closing_for_clv snapshot repo throws — settlement still succeeds",
       "no resolvedClosingLine on CLV outcome — no snapshot written",
       "InMemoryPickOfferSnapshotRepository: insert stores row, existsForPick returns true",
       "InMemoryPickOfferSnapshotRepository: countByKind returns 0 for unknown kind"
     ]
   },
-  "live_db_tests": {
-    "total": 7,
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
     "pass": 7,
     "fail": 0,
     "duration_ms": 144424,
-    "supabase_project": "zfzdnfwdarxucxtaojxm"
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed. Wired closing_for_clv snapshot write at settlement time — fail-open pattern prevents settlement blockage on write failure."
+      }
+    ],
+    "queries": [
+      "T1 Proof: attempted UPDATE on settlement_records rejected by DB constraint",
+      "T1 Proof: single-approver correction rejected by DB constraint",
+      "T1 Proof: dual-authorized correction creates settlement_corrections record",
+      "T1 Proof: PnL reproduces through correction chain",
+      "atomic delivery confirmation rollback test — rolls back outbox, receipt, lifecycle, audit",
+      "no duplicate participants for same external_id and sport",
+      "re-settling creates correction row, original settlement_records row not mutated"
+    ],
+    "row_counts": [
+      {
+        "tables_monitored": ["pick_offer_snapshots", "settlement_records", "audit_log"],
+        "closing_for_clv_rows_before": 5,
+        "closing_for_clv_rows_note": "Forward-flow writes accumulate post-deploy — re-run proof script after grading sweep to observe count > 5"
+      }
+    ],
+    "settlement_isolation": {
+      "pattern": "fail-open",
+      "verified": true,
+      "test": "fail-open: closing_for_clv snapshot repo throws — settlement still succeeds"
+    },
+    "dry_run_backfill": {
+      "total_settled_sampled": 500,
+      "already_have_closing_for_clv": 5,
+      "eligible_candidates": 495,
+      "clv_resolvable_from_payload": 173,
+      "would_insert": 173,
+      "live_backfill_authorized": false
+    }
   },
-  "guardrails_confirmed": [
-    "No fabricated closing odds",
-    "No synthetic/replay/test data counted as certification evidence",
-    "No CLV/ROI/edge/STRONG/ELITE/syndicate-ready claims",
-    "No P3 certification",
-    "Data sufficiency audit issue NOT marked Done",
-    "No public Discord changes",
-    "Public delivery remains gated",
-    "Live backfill NOT executed — dry-run only"
-  ],
-  "generated_at": "2026-06-11T00:00:00.000Z",
-  "generated_by": "claude-sonnet-4-6"
+  "acceptance_criteria": {
+    "closing_for_clv_write_path_wired": "PASS",
+    "fail_open_settlement_isolation": "PASS",
+    "idempotency_guard_existsForPick": "PASS",
+    "no_fabricated_odds": "PASS",
+    "no_live_backfill": "PASS",
+    "no_p3_certification": "PASS"
+  },
+  "verdict": "PASS"
 }

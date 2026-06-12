@@ -10,7 +10,8 @@ metadata:
 ## Diff Summary — UTV2-1262
 
 **Branch:** `claude/utv2-1262-restore-closing-odds-capture`  
-**Commit:** `b16ee41f546076608167e97674bab9a181a0a44a`  
+**Commit:** `bd5cc35c6ab57256e2c026b5637c163514e6e564`
+**Merge SHA:** `b51ffe22f690f8b46df29645a0229ec19705fe2e`  
 **Files changed:** 8
 
 ### Changes

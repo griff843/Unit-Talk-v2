@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1262-restore-closing-odds-capture",
   "branch": "claude/utv2-1262-restore-closing-odds-capture",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b51ffe22f690f8b46df29645a0229ec19705fe2e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1017",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/clv-service.test.ts",
@@ -30,14 +30,33 @@
     "docs/06_status/proof/UTV2-1262/verification.md",
     "docs/06_status/proof/UTV2-1262/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-11T21:38:42.395Z",
-  "heartbeat_at": "2026-06-11T21:38:42.395Z",
+  "heartbeat_at": "2026-06-12T07:17:32.339Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1262-restore-closing-odds-capture.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-12T07:17:32.339Z",
+      "verdict": "fail",
+      "merge_sha": "b51ffe22f690f8b46df29645a0229ec19705fe2e",
+      "failures": [
+        "G4",
+        "P3",
+        "C4",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

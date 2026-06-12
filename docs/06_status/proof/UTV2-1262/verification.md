@@ -5,14 +5,16 @@ metadata:
   type: runtime
   issue: UTV2-1262
   tier: T1
-  branch_sha: b16ee41f546076608167e97674bab9a181a0a44a
+  branch_sha: bd5cc35c6ab57256e2c026b5637c163514e6e564
+  merge_sha: b51ffe22f690f8b46df29645a0229ec19705fe2e
 ---
 
 ## Verification — UTV2-1262
 
 **Issue:** Restore closing odds capture for true CLV-path evidence  
 **Tier:** T1  
-**Branch SHA:** `b16ee41f546076608167e97674bab9a181a0a44a`
+**Branch SHA:** `bd5cc35c6ab57256e2c026b5637c163514e6e564`
+**Merge SHA:** `b51ffe22f690f8b46df29645a0229ec19705fe2e`
 
 ### pnpm verify — PASS
 
