@@ -38,7 +38,7 @@ UTV2-1266 verification: ALL ASSERTIONS PASSED
 
 ## Verification
 
-**Branch HEAD SHA:** `296671de13bb6f7db3f5c7397c9c300fe765448d`
+**Branch HEAD SHA:** `0b59518203045f1305ae2ea3eb504d80875018b1`
 
 ### pnpm verify
 
@@ -48,10 +48,15 @@ All 86 tests pass. pnpm type-check clean. pnpm test 86/86. Build clean.
 
 ```
 pnpm test:db
+1..7
 # tests 7
+# suites 0
 # pass 7
 # fail 0
-# duration_ms ~111000
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 111012
 ```
 
 7/7 DB integration tests pass against live Supabase (zfzdnfwdarxucxtaojxm).
