@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1266-sgo-ingestor-optimizations",
   "branch": "claude/utv2-1266-sgo-ingestor-optimizations",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "219253788fc0b4df2443b7d23fae170c6e719f29",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1018",
   "files_changed": [],
   "file_scope_lock": [
     ".env.container.example",
@@ -28,14 +28,53 @@
     "docs/06_status/proof/UTV2-1266/diff-summary.md",
     "docs/06_status/proof/UTV2-1266/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-12T14:32:13.853Z",
-  "heartbeat_at": "2026-06-12T14:32:13.853Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-12T18:12:44.473Z",
+  "closed_at": "2026-06-12T18:12:44.473Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1266-sgo-ingestor-optimizations.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-12T18:04:36.156Z",
+      "verdict": "pass",
+      "merge_sha": "219253788fc0b4df2443b7d23fae170c6e719f29",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1018"
+    },
+    {
+      "checked_at": "2026-06-12T18:11:02.950Z",
+      "verdict": "fail",
+      "merge_sha": "219253788fc0b4df2443b7d23fae170c6e719f29",
+      "failures": [
+        "P3",
+        "C4",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-12T18:11:15.328Z",
+      "verdict": "fail",
+      "merge_sha": "219253788fc0b4df2443b7d23fae170c6e719f29",
+      "failures": [
+        "P3",
+        "C4",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-12T18:12:31.036Z",
+      "verdict": "pass",
+      "merge_sha": "219253788fc0b4df2443b7d23fae170c6e719f29",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

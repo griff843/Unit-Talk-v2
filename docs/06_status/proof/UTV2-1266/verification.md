@@ -82,7 +82,8 @@ UTV2-1266 verification: ALL ASSERTIONS PASSED
 
 ## Verification
 
-**Branch HEAD SHA:** `0b59518203045f1305ae2ea3eb504d80875018b1`
+**Branch HEAD SHA:** `02e329cda1dbaf56e4698029dd35f2ca097e736e`
+**Merge SHA:** `219253788fc0b4df2443b7d23fae170c6e719f29` (PR #1018, merged 2026-06-12, CI green on merge SHA)
 
 ### pnpm verify
 
@@ -104,6 +105,15 @@ pnpm test:db
 ```
 
 7/7 DB integration tests pass against live Supabase (zfzdnfwdarxucxtaojxm).
+
+### R-level check
+
+```
+tsx scripts/ci/r-level-check.ts --base 21925378^ --head 219253788fc0b4df2443b7d23fae170c6e719f29
+Verdict: PASS
+Changed files: 15
+Rules matched: ingestor-provider
+```
 
 ### Guardrails
 
