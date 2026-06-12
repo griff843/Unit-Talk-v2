@@ -24,6 +24,7 @@ import type {
   PickLifecycleRecord,
   PickRecord,
   PickRepository,
+  PickOfferSnapshotRepository,
   ProviderOfferRepository,
   ParticipantRepository,
   SettlementRecord,
@@ -36,6 +37,7 @@ import {
   isCLVFallbackSource,
   type CLVComputationOutcome,
   type CLVPreResolvedContext,
+  type ResolvedClosingLine,
 } from './clv-service.js';
 
 export interface RecordSettlementResult {
@@ -128,6 +130,7 @@ export async function recordGradedSettlement(
     events: EventRepository;
     eventParticipants: EventParticipantRepository;
     marketUniverse?: IMarketUniverseRepository;
+    pickOfferSnapshots?: PickOfferSnapshotRepository;
   },
 ): Promise<RecordSettlementResult> {
   const pick = await repositories.picks.findPickById(pickId);
@@ -156,6 +159,8 @@ export async function recordGradedSettlement(
   });
   // Non-blocking: audit failure must never break settlement (observability-only path).
   emitClvFallbackAuditIfNeeded(clvOutcome, pick, repositories.audit).catch(() => undefined);
+  // Non-blocking: snapshot write failure must never break settlement (UTV2-1262).
+  // Will be called below after settlementRecord is obtained.
   const clv = clvOutcome.result;
   const payload: Record<string, unknown> = {
     gradingContext,
@@ -217,6 +222,17 @@ export async function recordGradedSettlement(
     }
     throw err;
   }
+
+  // Write closing_for_clv snapshot — non-blocking, fail-open (UTV2-1262).
+  // Settlement is the authoritative record; the snapshot is evidence-layer only.
+  writeClosingClvSnapshot(
+    pick.id,
+    settlementRecord.id,
+    clvOutcome.resolvedClosingLine,
+    repositories.pickOfferSnapshots,
+    repositories.audit,
+    { context: 'graded', pickId: pick.id, settlementRecordId: settlementRecord.id },
+  ).catch(() => undefined);
 
   // Use ensurePickLifecycleState instead of transitionPickLifecycle so that
   // if atomicClaimForTransition already moved the pick to 'settled', we
@@ -294,6 +310,7 @@ export async function recordEvidenceSettlement(
     events: EventRepository;
     eventParticipants: EventParticipantRepository;
     marketUniverse?: IMarketUniverseRepository;
+    pickOfferSnapshots?: PickOfferSnapshotRepository;
   },
 ): Promise<RecordSettlementResult> {
   const pick = await repositories.picks.findPickById(pickId);
@@ -373,6 +390,16 @@ export async function recordEvidenceSettlement(
     }
     throw err;
   }
+
+  // Write closing_for_clv snapshot — non-blocking, fail-open (UTV2-1262).
+  writeClosingClvSnapshot(
+    pick.id,
+    settlementRecord.id,
+    clvOutcome.resolvedClosingLine,
+    repositories.pickOfferSnapshots,
+    repositories.audit,
+    { context: 'evidence', pickId: pick.id, settlementRecordId: settlementRecord.id },
+  ).catch(() => undefined);
 
   const downstream = await computeSettlementDownstreamBundle(pick, repositories.settlements);
 
@@ -1056,6 +1083,69 @@ function buildStakeIntegrityPayload(stakeUnits: number | null | undefined): Reco
   };
 }
 
+
+// UTV2-1262 — Closing CLV Snapshot Write
+// Writes a pick_offer_snapshots row with snapshot_kind='closing_for_clv' after a successful
+// settlement insert. Fail-open: settlement must not fail because the evidence write fails.
+// Every failure is audited so missing snapshots are visible to future monitor queries.
+async function writeClosingClvSnapshot(
+  pickId: string,
+  settlementRecordId: string,
+  closingLine: ResolvedClosingLine | undefined,
+  repo: PickOfferSnapshotRepository | undefined,
+  audit: AuditLogRepository,
+  context: Record<string, unknown>,
+): Promise<void> {
+  if (!closingLine || !repo) return;
+
+  const identityKey = [
+    closingLine.provider_key,
+    closingLine.provider_event_id,
+    closingLine.provider_market_key,
+    closingLine.provider_participant_id ?? 'null',
+    closingLine.bookmaker_key ?? 'any',
+    'closing_for_clv',
+  ].join(':');
+
+  // Idempotency guard — do not insert a second row for the same pick+kind.
+  const alreadyExists = await repo.existsForPick(pickId, 'closing_for_clv').catch(() => false);
+  if (alreadyExists) return;
+
+  try {
+    await repo.insert({
+      pick_id: pickId,
+      settlement_record_id: settlementRecordId,
+      snapshot_kind: 'closing_for_clv',
+      provider_key: closingLine.provider_key,
+      provider_event_id: closingLine.provider_event_id,
+      provider_market_key: closingLine.provider_market_key,
+      provider_participant_id: closingLine.provider_participant_id,
+      bookmaker_key: closingLine.bookmaker_key,
+      line: closingLine.line,
+      over_odds: closingLine.over_odds,
+      under_odds: closingLine.under_odds,
+      captured_at: closingLine.snapshot_at,
+      identity_key: identityKey,
+      devig_mode: closingLine.devig_mode,
+      payload: {
+        writer: 'settlement-service',
+        issue: 'UTV2-1262',
+        ...context,
+      },
+    });
+  } catch (err: unknown) {
+    // Fail-open: log the failure but never propagate — settlement is already committed.
+    const message = err instanceof Error ? err.message : String(err);
+    await audit.record({
+      entityType: 'pick_offer_snapshot_write_failure',
+      entityId: pickId,
+      entityRef: pickId,
+      action: 'closing_for_clv_snapshot_write_failed',
+      actor: 'settlement-service',
+      payload: { pickId, settlementRecordId, identityKey, error: message, ...context },
+    }).catch(() => undefined);
+  }
+}
 
 // INIT-4.3.3 — Fallback Audit Events
 // Emits a structured audit event when CLV resolves from a secondary fallback source (rank >= 3).

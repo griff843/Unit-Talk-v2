@@ -114,6 +114,9 @@ import type {
   OddsSnapshotRepository,
   ExecutionIntentAppendInput,
   ExecutionIntentRepository,
+  PickOfferSnapshotInsertInput,
+  PickOfferSnapshotRepository,
+  PickOfferSnapshotRow,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -8136,6 +8139,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     modelRegistry: new InMemoryModelRegistryRepository(),
     experimentLedger: new InMemoryExperimentLedgerRepository(),
     executionIntents: new InMemoryExecutionIntentRepository(),
+    pickOfferSnapshots: new InMemoryPickOfferSnapshotRepository(),
   };
 }
 
@@ -8171,6 +8175,7 @@ export function createDatabaseRepositoryBundle(
       createDatabaseClientFromConnection(connection),
     ),
     executionIntents: new DatabaseExecutionIntentRepository(connection),
+    pickOfferSnapshots: new DatabasePickOfferSnapshotRepository(connection),
   };
 }
 
@@ -8195,6 +8200,108 @@ export class InMemoryRawPayloadRepository implements RawPayloadRepository {
     };
     this.records.push(record);
     return record;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PickOfferSnapshotRepository implementations (UTV2-1262)
+// ---------------------------------------------------------------------------
+
+export class InMemoryPickOfferSnapshotRepository implements PickOfferSnapshotRepository {
+  private readonly rows: PickOfferSnapshotRow[] = [];
+
+  async insert(input: PickOfferSnapshotInsertInput): Promise<PickOfferSnapshotRow> {
+    const row: PickOfferSnapshotRow = {
+      id: crypto.randomUUID(),
+      pick_id: input.pick_id,
+      settlement_record_id: input.settlement_record_id,
+      snapshot_kind: input.snapshot_kind,
+      provider_key: input.provider_key,
+      provider_event_id: input.provider_event_id,
+      provider_market_key: input.provider_market_key,
+      provider_participant_id: input.provider_participant_id,
+      bookmaker_key: input.bookmaker_key,
+      line: input.line,
+      over_odds: input.over_odds,
+      under_odds: input.under_odds,
+      captured_at: input.captured_at,
+      identity_key: input.identity_key,
+      devig_mode: input.devig_mode,
+      payload: input.payload,
+      created_at: new Date().toISOString(),
+    };
+    this.rows.push(row);
+    return row;
+  }
+
+  async existsForPick(pickId: string, snapshotKind: string): Promise<boolean> {
+    return this.rows.some(r => r.pick_id === pickId && r.snapshot_kind === snapshotKind);
+  }
+
+  async countByKind(snapshotKind: string): Promise<number> {
+    return this.rows.filter(r => r.snapshot_kind === snapshotKind).length;
+  }
+}
+
+export class DatabasePickOfferSnapshotRepository implements PickOfferSnapshotRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async insert(input: PickOfferSnapshotInsertInput): Promise<PickOfferSnapshotRow> {
+    const { data, error } = await this.client
+      .from('pick_offer_snapshots')
+      .insert({
+        pick_id: input.pick_id,
+        settlement_record_id: input.settlement_record_id,
+        snapshot_kind: input.snapshot_kind,
+        provider_key: input.provider_key,
+        provider_event_id: input.provider_event_id,
+        provider_market_key: input.provider_market_key,
+        provider_participant_id: input.provider_participant_id,
+        bookmaker_key: input.bookmaker_key,
+        line: input.line,
+        over_odds: input.over_odds,
+        under_odds: input.under_odds,
+        captured_at: input.captured_at,
+        identity_key: input.identity_key,
+        devig_mode: input.devig_mode,
+        payload: input.payload,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error(`Failed to insert pick_offer_snapshot: ${error.message}`);
+    }
+    return data as PickOfferSnapshotRow;
+  }
+
+  async existsForPick(pickId: string, snapshotKind: string): Promise<boolean> {
+    const { count, error } = await this.client
+      .from('pick_offer_snapshots')
+      .select('id', { count: 'exact', head: true })
+      .eq('pick_id', pickId)
+      .eq('snapshot_kind', snapshotKind);
+
+    if (error) {
+      throw new Error(`Failed to check pick_offer_snapshot existence: ${error.message}`);
+    }
+    return (count ?? 0) > 0;
+  }
+
+  async countByKind(snapshotKind: string): Promise<number> {
+    const { count, error } = await this.client
+      .from('pick_offer_snapshots')
+      .select('id', { count: 'exact', head: true })
+      .eq('snapshot_kind', snapshotKind);
+
+    if (error) {
+      throw new Error(`Failed to count pick_offer_snapshots: ${error.message}`);
+    }
+    return count ?? 0;
   }
 }
 

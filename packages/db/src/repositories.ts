@@ -1066,11 +1066,66 @@ export interface RepositoryBundle {
   modelHealthSnapshots?: ModelHealthSnapshotRepository;
   executionQuality?: ExecutionQualityRepository;
   executionIntents?: ExecutionIntentRepository;
+  /** UTV2-1262: closing_for_clv snapshot evidence writes at settlement time. */
+  pickOfferSnapshots?: PickOfferSnapshotRepository;
 }
 
 export type { IMarketUniverseRepository, MarketUniverseClosingLine, MarketUniverseUpsertInput };
 export type { ISyndicateBoardRepository, SyndicateBoardInsertInput, SyndicateBoardRow };
 export type { IMarketFamilyTrustRepository, MarketFamilyTrustInsert, MarketFamilyTrustRow, ClvFeedbackInsert } from './market-family-trust-repository.js';
+
+// ---------------------------------------------------------------------------
+// PickOfferSnapshotRepository (UTV2-1262)
+// Writes pick_offer_snapshots rows with snapshot_kind='closing_for_clv' at
+// settlement time. Provides the canonical queryable evidence join for CLV path.
+// ---------------------------------------------------------------------------
+
+export interface PickOfferSnapshotInsertInput {
+  pick_id: string;
+  settlement_record_id: string;
+  snapshot_kind: 'closing_for_clv';
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  bookmaker_key: string | null;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  captured_at: string;
+  identity_key: string;
+  devig_mode: string;
+  payload: Record<string, unknown>;
+}
+
+export interface PickOfferSnapshotRow {
+  id: string;
+  pick_id: string;
+  settlement_record_id: string | null;
+  snapshot_kind: string;
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  bookmaker_key: string | null;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  captured_at: string;
+  identity_key: string;
+  devig_mode: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PickOfferSnapshotRepository {
+  /** Insert a closing_for_clv snapshot row. Throws on DB error. */
+  insert(input: PickOfferSnapshotInsertInput): Promise<PickOfferSnapshotRow>;
+  /** Returns true if a snapshot with this snapshot_kind already exists for the pick. */
+  existsForPick(pickId: string, snapshotKind: string): Promise<boolean>;
+  /** Count rows by snapshot_kind. */
+  countByKind(snapshotKind: string): Promise<number>;
+}
 
 // ---------------------------------------------------------------------------
 // IPickCandidateRepository — Phase 2 UTV2-463

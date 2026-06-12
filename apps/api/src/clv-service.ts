@@ -66,6 +66,27 @@ interface ClosingLineLike {
   provider_key: string;
 }
 
+/**
+ * Resolved closing-line data exposed on CLVComputationOutcome when status='computed'.
+ * Settlement service uses this to write pick_offer_snapshots with snapshot_kind='closing_for_clv'.
+ * UTV2-1262: expose fields needed for canonical snapshot insert with full provenance.
+ */
+export interface ResolvedClosingLine {
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  /** ISO timestamp of the closing snapshot — written as captured_at in pick_offer_snapshots. */
+  snapshot_at: string;
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  /** Specific bookmaker (e.g. 'pinnacle') or null when consensus closing line was used. */
+  bookmaker_key: string | null;
+  /** Devig mode used in CLV computation. */
+  devig_mode: string;
+}
+
 type ClvComparableOffer = ProviderOfferRecord & {
   provider_event_id: string;
   provider_market_key: string;
@@ -104,6 +125,8 @@ export interface CLVComputationOutcome {
   availableMarkets: string[];
   /** Set whenever a closing source was resolved, even if CLV computation failed after (INIT-4.3.1). */
   closingSourceVerification?: ClosingSourceVerification;
+  /** Populated when status='computed'. Raw closing line data for pick_offer_snapshots write (UTV2-1262). */
+  resolvedClosingLine?: ResolvedClosingLine;
 }
 
 /**
@@ -239,6 +262,18 @@ export async function computeCLVOutcome(
         resolvedMarketKey: directUniverseLine.resolvedMarketKey,
         availableMarkets: [],
         closingSourceVerification: sourceVerification,
+        resolvedClosingLine: {
+          line: directUniverseLine.closingLine.line,
+          over_odds: directUniverseLine.closingLine.over_odds,
+          under_odds: directUniverseLine.closingLine.under_odds,
+          snapshot_at: directUniverseLine.closingLine.snapshot_at,
+          provider_key: directUniverseLine.closingLine.provider_key,
+          provider_event_id: directUniverseLine.providerEventId,
+          provider_market_key: directUniverseLine.resolvedMarketKey,
+          provider_participant_id: directUniverseLine.providerParticipantId,
+          bookmaker_key: null,
+          devig_mode: 'proportional',
+        },
       };
     }
   }
@@ -289,12 +324,13 @@ export async function computeCLVOutcome(
     }),
   );
   let resolvedSourceType: ClosingSourceType | null = closingLine ? 'pinnacle_closing' : null;
+  let usedBookmakerKey: string | null = closingLine ? 'pinnacle' : null;
 
   if (!closingLine) {
     closingLine = asClosingLineLike(
       await repositories.providerOffers.findClosingLine(baseLineCriteria),
     );
-    if (closingLine) resolvedSourceType = 'consensus_closing';
+    if (closingLine) { resolvedSourceType = 'consensus_closing'; usedBookmakerKey = null; }
   }
 
   // Opening-line proxy path removed by INIT-4.3.2. CLV quarantines when no verified close exists.
@@ -419,13 +455,31 @@ export async function computeCLVOutcome(
     resolvedMarketKey,
     availableMarkets: [],
     closingSourceVerification: sourceVerification,
+    resolvedClosingLine: {
+      line: closingLine.line,
+      over_odds: closingLine.over_odds,
+      under_odds: closingLine.under_odds,
+      snapshot_at: closingLine.snapshot_at,
+      provider_key: closingLine.provider_key,
+      provider_event_id: baseLineCriteria.providerEventId,
+      provider_market_key: baseLineCriteria.providerMarketKey,
+      provider_participant_id: baseLineCriteria.providerParticipantId ?? null,
+      bookmaker_key: usedBookmakerKey,
+      devig_mode: 'proportional',
+    },
   };
 }
 
 async function resolveClosingLineFromPickProvenance(
   pick: PickRecord,
   marketUniverse: IMarketUniverseRepository | undefined,
-): Promise<{ closingLine: ClosingLineLike; resolvedMarketKey: string; sourceType: 'market_universe_provenance' } | null> {
+): Promise<{
+  closingLine: ClosingLineLike;
+  resolvedMarketKey: string;
+  sourceType: 'market_universe_provenance';
+  providerEventId: string;
+  providerParticipantId: string | null;
+} | null> {
   if (!marketUniverse) {
     return null;
   }
@@ -455,6 +509,8 @@ async function resolveClosingLineFromPickProvenance(
     },
     resolvedMarketKey: row.provider_market_key,
     sourceType: 'market_universe_provenance',
+    providerEventId: row.provider_event_id,
+    providerParticipantId: row.provider_participant_id ?? null,
   };
 }
 
