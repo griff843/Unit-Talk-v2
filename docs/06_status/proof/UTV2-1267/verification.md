@@ -77,6 +77,18 @@ Script is read-only — no production data mutated.
 [UTV2-1267] Audit complete.
 ```
 
+### pnpm test:db
+
+```
+pnpm test:db
+# tests 7
+# pass 7
+# fail 0
+# duration_ms ~120000
+```
+
+7/7 DB integration tests pass against live Supabase (zfzdnfwdarxucxtaojxm).
+
 ### Guardrails
 
 - No production data mutated (read-only script)
