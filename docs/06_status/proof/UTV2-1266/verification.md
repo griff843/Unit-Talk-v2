@@ -44,6 +44,18 @@ UTV2-1266 verification: ALL ASSERTIONS PASSED
 
 All 86 tests pass. pnpm type-check clean. pnpm test 86/86. Build clean.
 
+### pnpm test:db
+
+```
+pnpm test:db
+# tests 7
+# pass 7
+# fail 0
+# duration_ms ~111000
+```
+
+7/7 DB integration tests pass against live Supabase (zfzdnfwdarxucxtaojxm).
+
 ### Guardrails
 
 - Public Discord remains gated (UNIT_TALK_ENABLED_TARGETS=none unchanged)
