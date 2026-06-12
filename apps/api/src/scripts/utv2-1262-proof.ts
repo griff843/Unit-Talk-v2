@@ -97,12 +97,12 @@ async function main() {
   console.log('\n[utv2-1262] === Summary ===');
   console.log(`  closing_for_clv total:              ${clvCount}`);
   console.log(`  closing_for_clv with settlement FK: ${linkedCount}`);
-  console.log(`  (rows without FK are UTV2-803 fixtures from 2026-04-30)`);
+  console.log(`  (rows without FK are legacy fixtures from 2026-04-30)`);
 
   if (clvCount > 5) {
-    console.log('\n[utv2-1262] PASS — new closing_for_clv rows detected beyond UTV2-803 fixtures');
+    console.log('\n[utv2-1262] PASS — new closing_for_clv rows detected beyond legacy fixtures');
   } else {
-    console.log('\n[utv2-1262] INFO — still at baseline (5 UTV2-803 fixtures). Wire capture path and re-run after a grading sweep.');
+    console.log('\n[utv2-1262] INFO — still at baseline (5 legacy fixtures). Wire capture path and re-run after a grading sweep.');
   }
 }
 
