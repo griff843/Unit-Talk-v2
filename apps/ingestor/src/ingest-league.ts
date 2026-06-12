@@ -66,10 +66,12 @@ export interface IngestLeagueOptions {
   };
   /**
    * When true, fetches in historical mode with finalized events plus SGO
-   * alt-line and open/close bookmaker fields.
-   * Use for backfill of completed events. Live ingest should leave this unset.
+   * open/close bookmaker fields. Use for backfill of completed events.
+   * Live ingest should leave this unset.
    */
   historical?: boolean;
+  /** When true, passes bookmakerID=pinnacle to SGO — use during peak-window polling. */
+  pinnacleOnly?: boolean;
   providerOfferStagingMode?: ProviderOfferStagingMode;
   providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
   providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
@@ -207,6 +209,7 @@ export async function ingestLeague(
             ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
             : {}),
           ...(options.historical ? { historical: true } : {}),
+          ...(options.pinnacleOnly ? { pinnacleOnly: true } : {}),
         });
 
       const oddsCb =

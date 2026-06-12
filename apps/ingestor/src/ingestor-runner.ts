@@ -40,6 +40,8 @@ export interface IngestorRunnerOptions {
   pollIntervalMs?: number;
   /** Adaptive on-peak/off-peak scheduling. Takes precedence over pollIntervalMs when enabled. */
   schedulerConfig?: SchedulerConfig;
+  /** When true and scheduling is enabled, passes bookmakerID=pinnacle during peak-window cycles only. */
+  pinnacleOnlyPeak?: boolean;
   fetchImpl?: typeof fetch;
   skipResults?: boolean;
   resultsLookbackHours?: number;
@@ -123,6 +125,11 @@ export async function runIngestorCycles(
 
     const results: IngestLeagueSummary[] = [];
     const cycleSnapshotAt = new Date().toISOString();
+    const cycleResolution = resolveCurrentPollIntervalMs(
+      options.schedulerConfig ?? { enabled: false, peakPollMs: 0, offPeakPollMs: 0, peakStartHourEt: 0, peakEndHourEt: 0 },
+      fixedPollIntervalMs,
+    );
+    const usePinnacleOnly = options.pinnacleOnlyPeak === true && cycleResolution.mode === 'peak';
 
     for (const league of options.leagues) {
       try {
@@ -145,6 +152,7 @@ export async function runIngestorCycles(
             ...(options.providerPayloadArchivePolicy
               ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
               : {}),
+            ...(usePinnacleOnly ? { pinnacleOnly: true } : {}),
             circuitBreaker: {
               ...options.circuitBreaker,
               failClosed: true,

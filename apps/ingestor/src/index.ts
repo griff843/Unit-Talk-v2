@@ -59,7 +59,9 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
     300_000,
   );
   const apiUrl = env.UNIT_TALK_API_URL;
-  const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
+  const schedulerEnv = env as SchedulerEnv;
+  const schedulerConfig = parseSchedulerConfig(schedulerEnv);
+  const pinnacleOnlyPeak = schedulerEnv.UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK === 'true';
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
 
   const startupOptions = {
@@ -119,6 +121,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       resultsLookbackHours,
       resultsMaxFetchMs,
       schedulerConfig,
+      pinnacleOnlyPeak,
       providerOfferStagingMode,
       providerDbWritePolicy,
       providerPayloadArchivePolicy,
@@ -154,6 +157,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       resultsLookbackHours,
       resultsMaxFetchMs,
       schedulerConfig,
+      pinnacleOnlyPeak,
       providerOfferStagingMode,
       providerDbWritePolicy,
       providerPayloadArchivePolicy,
@@ -359,6 +363,7 @@ if (runtime.autorun) {
         resultsMaxFetchMs: runtime.resultsMaxFetchMs,
         pollIntervalMs: runtime.pollIntervalMs,
         schedulerConfig: runtime.schedulerConfig,
+        ...('pinnacleOnlyPeak' in runtime && runtime.pinnacleOnlyPeak ? { pinnacleOnlyPeak: true } : {}),
         providerDbWritePolicy: runtime.providerDbWritePolicy,
         providerPayloadArchivePolicy: runtime.providerPayloadArchivePolicy,
         logger: console,

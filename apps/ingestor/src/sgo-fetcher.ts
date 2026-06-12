@@ -20,11 +20,13 @@ export interface SGOFetchOptions {
   sleep?: (ms: number) => Promise<void>;
   /**
    * When true, switches from live-odds mode (oddsAvailable=true) to historical
-   * mode (finalized=true + includeAltLines=true + includeOpenCloseOdds=true).
+   * mode (finalized=true + includeOpenCloseOdds=true).
    * Use for backfill of completed events.
    * Historical events have oddsAvailable=false so they are excluded by the live filter.
    */
   historical?: boolean;
+  /** When true, passes bookmakerID=pinnacle to restrict response to Pinnacle odds only. */
+  pinnacleOnly?: boolean;
   requestObserver?: SGORequestObserver;
 }
 

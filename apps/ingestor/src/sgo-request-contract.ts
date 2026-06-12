@@ -41,6 +41,8 @@ export interface SGOBaseRequestOptions {
 
 export interface SGOOddsRequestOptions extends SGOBaseRequestOptions {
   historical?: boolean;
+  /** When true, appends bookmakerID=pinnacle to the request URL. */
+  pinnacleOnly?: boolean;
 }
 
 export interface SGOResultsRequestOptions extends SGOBaseRequestOptions {
@@ -53,10 +55,13 @@ export function buildSgoOddsRequestUrl(options: SGOOddsRequestOptions): URL {
 
   if (options.historical) {
     url.searchParams.set('finalized', 'true');
-    url.searchParams.set('includeAltLines', 'true');
     url.searchParams.set('includeOpenCloseOdds', 'true');
   } else {
     url.searchParams.set('oddsAvailable', 'true');
+  }
+
+  if (options.pinnacleOnly) {
+    url.searchParams.set('bookmakerID', 'pinnacle');
   }
 
   url.searchParams.set(

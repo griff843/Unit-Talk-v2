@@ -17,6 +17,8 @@
     "apps/ingestor/src/ingest-league.ts",
     "apps/ingestor/src/ingestor-runner.ts",
     "apps/ingestor/src/ingestor.test.ts",
+    "apps/ingestor/src/scheduler.ts",
+    "apps/ingestor/src/scripts/verify-utv2-1266.ts",
     "apps/ingestor/src/sgo-fetcher.ts",
     "apps/ingestor/src/sgo-request-contract.ts",
     "docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md",
