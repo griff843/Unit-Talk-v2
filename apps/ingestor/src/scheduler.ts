@@ -67,6 +67,7 @@ export interface SchedulerEnv {
   UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS?: string | undefined;
   UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET?: string | undefined;
   UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET?: string | undefined;
+  UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK?: string | undefined;
 }
 
 export function parseSchedulerConfig(env: SchedulerEnv): SchedulerConfig {

@@ -20,11 +20,13 @@ export interface SGOFetchOptions {
   sleep?: (ms: number) => Promise<void>;
   /**
    * When true, switches from live-odds mode (oddsAvailable=true) to historical
-   * mode (finalized=true + includeAltLines=true + includeOpenCloseOdds=true).
+   * mode (finalized=true + includeOpenCloseOdds=true).
    * Use for backfill of completed events.
    * Historical events have oddsAvailable=false so they are excluded by the live filter.
    */
   historical?: boolean;
+  /** When true, passes bookmakerID=pinnacle to restrict response to Pinnacle odds only. */
+  pinnacleOnly?: boolean;
   requestObserver?: SGORequestObserver;
 }
 
@@ -293,6 +295,8 @@ export async function fetchSGOResultsWithTelemetry(
 
 const MAX_RATE_LIMIT_RETRIES = 1;
 const DEFAULT_BACKOFF_MS = 60_000;
+const TRANSIENT_5XX_BACKOFF_MS = 3_000;
+const GATEWAY_TIMEOUT_BACKOFF_MS = 5_000;
 
 const DEFAULT_MAX_FETCH_MS = 300_000;
 
@@ -385,7 +389,19 @@ async function fetchSgoJson(input: {
     if (response.ok) {
       telemetry.successfulRequests += 1;
       const rawBody = await response.text();
-      const payload = rawBody.length === 0 ? null : JSON.parse(rawBody);
+      let payload: unknown;
+      try {
+        payload = rawBody.length === 0 ? null : JSON.parse(rawBody);
+      } catch {
+        // Non-JSON body on a 2xx — treat as transient, retry once.
+        if (attempt < MAX_RATE_LIMIT_RETRIES) {
+          await (input.sleep ?? defaultSleep)(TRANSIENT_5XX_BACKOFF_MS);
+          continue;
+        }
+        throw new Error(
+          `SGO ${input.endpoint} returned non-JSON body (status ${response.status}, page ${input.pageIndex})`,
+        );
+      }
       const completedAtMs = Date.now();
       await input.requestObserver?.({
         provider: 'sgo',
@@ -443,6 +459,24 @@ async function fetchSgoJson(input: {
       telemetry.backoffMs += backoffMs;
       telemetry.retryAfterMs = backoffMs;
       telemetry.throttled = true;
+      await (input.sleep ?? defaultSleep)(backoffMs);
+      continue;
+    }
+
+    // 5xx: retry once with short backoff (docs: "retry once after delay").
+    // 504: log query complexity hint per SGO docs recommendation.
+    if (response.status >= 500 && attempt < MAX_RATE_LIMIT_RETRIES) {
+      const backoffMs =
+        response.status === 504
+          ? GATEWAY_TIMEOUT_BACKOFF_MS
+          : TRANSIENT_5XX_BACKOFF_MS;
+      if (response.status === 504) {
+        console.warn(
+          `[sgo-fetcher] 504 gateway timeout — reduce query complexity. url=${input.url.toString()} page=${input.pageIndex}`,
+        );
+      }
+      telemetry.backoffCount += 1;
+      telemetry.backoffMs += backoffMs;
       await (input.sleep ?? defaultSleep)(backoffMs);
       continue;
     }
@@ -1236,6 +1270,33 @@ export async function fetchSGOAccountUsage(
       ) ?? null,
     raw,
   };
+}
+
+/**
+ * Strip sensitive fields from an SGO account/usage response before logging.
+ * Redacts keyID, email, and customerID — fields confirmed present in live responses.
+ */
+export function sanitizeSGOUsageForLog(raw: unknown): unknown {
+  if (!isRecord(raw)) {
+    return raw;
+  }
+  const REDACTED = '[REDACTED]';
+  const result: Record<string, unknown> = { ...raw };
+  for (const key of Object.keys(result)) {
+    const lower = key.toLowerCase();
+    if (
+      lower === 'keyid' ||
+      lower === 'email' ||
+      lower === 'customerid' ||
+      lower === 'apikey' ||
+      lower === 'api_key' ||
+      lower === 'key_id' ||
+      lower === 'customer_id'
+    ) {
+      result[key] = REDACTED;
+    }
+  }
+  return result;
 }
 
 export function deriveDisplayNameFromProviderId(providerParticipantId: string) {

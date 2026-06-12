@@ -432,9 +432,9 @@ test('fetchAndPairSGOProps requests SGO historical open/close odds fields', asyn
   assert.ok(requestedUrl);
   assert.equal(requestedUrl.searchParams.get('finalized'), 'true');
   assert.equal(requestedUrl.searchParams.get('includeOpposingOdds'), 'true');
-  assert.equal(requestedUrl.searchParams.get('includeAltLines'), 'true');
+  // UTV2-1266: includeAltLines removed — alt-line contamination fix
+  assert.equal(requestedUrl.searchParams.get('includeAltLines'), null);
   assert.equal(requestedUrl.searchParams.get('includeOpenCloseOdds'), 'true');
-  assert.equal(requestedUrl.searchParams.get('includeAltLine'), null);
   assert.equal(requestedUrl.searchParams.get('oddsAvailable'), null);
 });
 
