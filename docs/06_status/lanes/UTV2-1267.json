@@ -13,7 +13,8 @@
   "file_scope_lock": [
     "apps/api/src/scripts/sgo-provider-truth-audit.ts",
     "docs/06_status/proof/UTV2-1267/audit-results.json",
-    "docs/06_status/proof/UTV2-1267/verification.md"
+    "docs/06_status/proof/UTV2-1267/verification.md",
+    "docs/06_status/proof/UTV2-1267/diff-summary.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1267/diff-summary.md",
