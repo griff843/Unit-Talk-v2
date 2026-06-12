@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1267",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1267-provider-truth-audit",
+  "branch": "claude/utv2-1267-provider-truth-audit",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/scripts/sgo-provider-truth-audit.ts",
+    "docs/06_status/proof/UTV2-1267/audit-results.json",
+    "docs/06_status/proof/UTV2-1267/verification.md",
+    "docs/06_status/proof/UTV2-1267/diff-summary.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1267/diff-summary.md",
+    "docs/06_status/proof/UTV2-1267/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-12T14:32:23.985Z",
+  "heartbeat_at": "2026-06-12T14:32:23.985Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1267-provider-truth-audit.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1267-provider-truth-audit",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
