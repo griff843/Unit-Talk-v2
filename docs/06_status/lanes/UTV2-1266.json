@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1266",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1266-sgo-ingestor-optimizations",
+  "branch": "claude/utv2-1266-sgo-ingestor-optimizations",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".env.container.example",
+    "apps/api/src/scripts/verify-utv2-1266.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/ingestor-runner.ts",
+    "apps/ingestor/src/ingestor.test.ts",
+    "apps/ingestor/src/sgo-fetcher.ts",
+    "apps/ingestor/src/sgo-request-contract.ts",
+    "docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md",
+    "docs/06_status/proof/UTV2-1266/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1266/diff-summary.md",
+    "docs/06_status/proof/UTV2-1266/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-12T14:32:13.853Z",
+  "heartbeat_at": "2026-06-12T14:32:13.853Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1266-sgo-ingestor-optimizations.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1266-sgo-ingestor-optimizations",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
