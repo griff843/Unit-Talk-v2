@@ -91,7 +91,7 @@ Primary data endpoint. Returns events with odds, results, players, teams, status
 | `bookmakerID` | `pinnacle` | Surgical: only Pinnacle data |
 | `includeOpenCloseOdds` | `true` | Adds open/close per bookmaker (see §1.7) |
 | `includeOpposingOdds` | `true` | Auto-include other side of each oddID |
-| `includeAltLines` | `true` | Alternate spread/OU lines (large payload) |
+| `includeAltLines` | `true` | Alternate spread/OU lines (large payload) — **DISABLED in Unit Talk production (UTV2-1266)** |
 | `expandResults` | `true` | Full raw stat values in results object |
 | `startsAfter` | ISO 8601 | Date range filter |
 | `startsBefore` | ISO 8601 | Date range filter |
@@ -321,6 +321,24 @@ Call `search_docs` for any SGO API question during implementation. Faster than s
 Before a DB migration, verify the alias key you're about to insert actually matches live SGO offer keys. Prevents deploying aliases that never match.
 
 **Proven efficiency gain (UTV2-388, 2026-04-05):** NHL and NFL player prop aliases written correctly in one pass using `get_events` MCP calls. Previous approach required multiple DB samples + guessing + correction cycles.
+
+---
+
+### 1.12 includeAltLines Disposition (UTV2-1266, 2026-06-12)
+
+**Decision: DISABLED permanently in production.**
+
+Root cause discovery: `includeAltLines=true` in historical mode caused alternate-line odds to be stored as the canonical market line. Example: Champagnie 3PM game — SGO main line was always 1.5 but DB captured 2.5 (an alternate spread), contaminating the CLV calculation (+26% CLV calculated against the wrong market).
+
+**Rules going forward:**
+- `includeAltLines=true` must NOT be used in any SGO request path
+- `includeOpenCloseOdds=true` and `includeOpposingOdds=true` must be preserved (CLV and paired markets)
+- `bookmakerID=pinnacle` can be added via `UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true` for peak-window polling
+- Proof: `apps/ingestor/src/scripts/verify-utv2-1266.ts` (7 assertions)
+
+**WebSocket streaming:** AllStar plan only. Pro plan (`sportsgameodds.com`) does NOT provide WebSocket streams. Do NOT plan streaming as an active implementation lane. (Blocked until AllStar tier.)
+
+**Native close fields (future T1):** SGO Pro exposes `closeBookOdds`, `closeFairOdds`, `closeBookOverUnder`, `openBookOdds`, `openBookOverUnder` on every oddID at query time — not just at close. Capturing these natively would structurally prevent all LINE_MOVE_STALE CLV artifacts. Tracked as future T1 (not UTV2-1266).
 
 ---
 
