@@ -12,7 +12,6 @@
   "files_changed": [],
   "file_scope_lock": [
     ".env.container.example",
-    "apps/api/src/scripts/verify-utv2-1266.ts",
     "apps/ingestor/src/index.ts",
     "apps/ingestor/src/ingest-league.ts",
     "apps/ingestor/src/ingestor-runner.ts",
@@ -22,7 +21,8 @@
     "apps/ingestor/src/sgo-fetcher.ts",
     "apps/ingestor/src/sgo-request-contract.ts",
     "docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md",
-    "docs/06_status/proof/UTV2-1266/verification.md"
+    "docs/06_status/proof/UTV2-1266/verification.md",
+    ".lane/lanes/runtime.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1266/diff-summary.md",
