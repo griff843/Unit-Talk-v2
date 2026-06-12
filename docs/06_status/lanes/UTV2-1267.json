@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1267-provider-truth-audit",
   "branch": "claude/utv2-1267-provider-truth-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "fc09529861b78223de5a61077d1537d938655909",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1019",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/scripts/sgo-provider-truth-audit.ts",
@@ -20,14 +20,41 @@
     "docs/06_status/proof/UTV2-1267/diff-summary.md",
     "docs/06_status/proof/UTV2-1267/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-12T14:32:23.985Z",
-  "heartbeat_at": "2026-06-12T14:32:23.985Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-12T20:33:36.770Z",
+  "closed_at": "2026-06-12T20:33:36.770Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1267-provider-truth-audit.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-12T20:32:36.726Z",
+      "verdict": "pass",
+      "merge_sha": "fc09529861b78223de5a61077d1537d938655909",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1019"
+    },
+    {
+      "checked_at": "2026-06-12T20:33:10.256Z",
+      "verdict": "fail",
+      "merge_sha": "fc09529861b78223de5a61077d1537d938655909",
+      "failures": [
+        "P12",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-12T20:33:26.932Z",
+      "verdict": "pass",
+      "merge_sha": "fc09529861b78223de5a61077d1537d938655909",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

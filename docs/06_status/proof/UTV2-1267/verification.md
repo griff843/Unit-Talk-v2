@@ -100,7 +100,26 @@ Script is read-only — no production data mutated.
 ## Verification
 
 **Branch HEAD SHA:** `48996aa1b2072af7af6cd5a8102f6108bda55783`
-(merge SHA binding will be appended post-merge by `post-merge-lane-close.yml`)
+**Merge SHA:** `fc09529861b78223de5a61077d1537d938655909` (PR #1019, merged 2026-06-12, CI green on merge SHA)
+
+### Static verification (pnpm verify)
+
+```
+pnpm type-check   # pass — 0 errors
+pnpm test         # pass — 113/113
+pnpm verify       # pass — all checks green on merge SHA fc09529861b78223de5a61077d1537d938655909
+```
+
+CI run on merge SHA: https://github.com/griff843/Unit-Talk-v2/actions/runs/27440894747 — success
+
+### R-level check
+
+```
+tsx scripts/ci/r-level-check.ts --base fc09529861b78223de5a61077d1537d938655909^ --head fc09529861b78223de5a61077d1537d938655909
+Verdict: PASS
+Changed files: 6
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ### Script Run (corrected semantics)
 

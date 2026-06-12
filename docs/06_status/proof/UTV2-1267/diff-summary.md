@@ -1,25 +1,40 @@
 # UTV2-1267 Diff Summary
 
-## Summary
+Generated at: 2026-06-12T20:32:40.840Z
+Issue: UTV2-1267
+Tier: T2
+Lane type: runtime
+Branch: claude/utv2-1267-provider-truth-audit
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1019
+Head SHA: bc35bb198fbaf44bf95be1ad3abb916fe21750b8
+Merge SHA: fc09529861b78223de5a61077d1537d938655909
+Diff base: fc09529861b78223de5a61077d1537d938655909^1
+Diff target: fc09529861b78223de5a61077d1537d938655909
 
-SGO provider-truth audit: classify 172 backfilled closing_for_clv rows as PASS/WARN/FAIL.
+## Git Diff Stat
+```
+.ops/sync/UTV2-1267.yml                           |   10 +
+ apps/api/src/scripts/sgo-provider-truth-audit.ts  |  494 ++
+ docs/06_status/lanes/UTV2-1267.json               |   39 +
+ docs/06_status/proof/UTV2-1267/audit-results.json | 8129 +++++++++++++++++++++
+ docs/06_status/proof/UTV2-1267/diff-summary.md    |   25 +
+ docs/06_status/proof/UTV2-1267/verification.md    |  171 +
+ 6 files changed, 8868 insertions(+)
+```
 
-## Files Changed
+## Git Name Status
+```
+A	.ops/sync/UTV2-1267.yml
+A	apps/api/src/scripts/sgo-provider-truth-audit.ts
+A	docs/06_status/lanes/UTV2-1267.json
+A	docs/06_status/proof/UTV2-1267/audit-results.json
+A	docs/06_status/proof/UTV2-1267/diff-summary.md
+A	docs/06_status/proof/UTV2-1267/verification.md
+```
 
-| File | Change |
-|------|--------|
-| `apps/api/src/scripts/sgo-provider-truth-audit.ts` | New audit script (172-row classifier) |
-| `docs/06_status/proof/UTV2-1267/audit-results.json` | Full audit output with 5 reporting buckets |
-| `docs/06_status/proof/UTV2-1267/verification.md` | Proof document |
-| `docs/06_status/proof/UTV2-1267/diff-summary.md` | This file |
-| `docs/06_status/lanes/UTV2-1267.json` | Lane manifest (lane_type corrected to runtime) |
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Key Changes
-
-- **Audit script**: fetches all backfill rows via `pick_offer_snapshots` + joins `settlement_records.payload.clv` for closing odds; applies Phase 1 DB signals and Phase 2 known verdicts from 31-pick SGO MCP sample
-- **Result**: 172 rows — PASS=159 (92.4%), WARN=7 (4.1%), FAIL=6 (3.5%)
-- **No runtime changes**: script is read-only proof tooling; no production behavior modified
-
-## Evidence
-
-`docs/06_status/proof/UTV2-1267/audit-results.json` — 172 rows with full classification detail, 5 reporting buckets, posture statement, and guardrails.
+## SHA Binding
+Head SHA: bc35bb198fbaf44bf95be1ad3abb916fe21750b8
+Merge SHA: fc09529861b78223de5a61077d1537d938655909
