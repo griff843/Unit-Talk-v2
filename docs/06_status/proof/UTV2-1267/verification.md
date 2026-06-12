@@ -53,6 +53,8 @@ Script is read-only — no production data mutated.
 
 ## Verification
 
+**Branch HEAD SHA:** `ac1fee9e8c257f0f9b031b8139f6a05ac80eafa3`
+
 ### Script Run
 
 ```
