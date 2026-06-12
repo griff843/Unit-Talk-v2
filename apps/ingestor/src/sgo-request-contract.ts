@@ -3,6 +3,34 @@ const SGO_EVENTS_PAGE_LIMIT = '100';
 const LIVE_ODDS_LOOKBACK_HOURS = 12;
 const DEFAULT_RESULTS_LOOKBACK_HOURS = 48;
 
+/**
+ * PLAYER_ID-wildcard oddID patterns confirmed working via live API test (2026-06-12).
+ * Use the wildcard string 'PLAYER_ID' in the statEntityID position to match all players.
+ * freeThrowsAttempted was tested and returned no data for NBA — omitted.
+ */
+export const SGO_PLAYER_PROP_ODD_ID_PATTERNS = {
+  MLB: [
+    'batting_hits-PLAYER_ID-game-ou-over',
+    'batting_hits-PLAYER_ID-game-ou-under',
+    'batting_totalBases-PLAYER_ID-game-ou-over',
+    'batting_totalBases-PLAYER_ID-game-ou-under',
+    'batting_homeRuns-PLAYER_ID-game-ou-over',
+    'batting_homeRuns-PLAYER_ID-game-ou-under',
+    'batting_RBI-PLAYER_ID-game-ou-over',
+    'batting_RBI-PLAYER_ID-game-ou-under',
+  ],
+  NBA: [
+    'points-PLAYER_ID-game-ou-over',
+    'points-PLAYER_ID-game-ou-under',
+    'rebounds-PLAYER_ID-game-ou-over',
+    'rebounds-PLAYER_ID-game-ou-under',
+    'assists-PLAYER_ID-game-ou-over',
+    'assists-PLAYER_ID-game-ou-under',
+    'threePointersMade-PLAYER_ID-game-ou-over',
+    'threePointersMade-PLAYER_ID-game-ou-under',
+  ],
+} as const satisfies Record<string, readonly string[]>;
+
 export type SGOStatEntityKind = 'all' | 'team' | 'player';
 
 export interface SGOOddIdParts {
@@ -41,8 +69,25 @@ export interface SGOBaseRequestOptions {
 
 export interface SGOOddsRequestOptions extends SGOBaseRequestOptions {
   historical?: boolean;
-  /** When true, appends bookmakerID=pinnacle to the request URL. */
+  /** When true, appends bookmakerID=pinnacle to the request URL.
+   *  INVALID when playerPropOddIdPatterns is also set — Pinnacle carries no
+   *  player-prop odds (verified 2026-06-12 live against MLB + NBA). */
   pinnacleOnly?: boolean;
+  /**
+   * When provided, appends oddID=<patterns> to restrict the response to
+   * specific player-prop market patterns. Use PLAYER_ID as a wildcard for the
+   * statEntityID position, e.g. 'batting_hits-PLAYER_ID-game-ou-over'.
+   *
+   * Confirmed working patterns (live-tested 2026-06-12):
+   *   MLB: batting_hits, batting_totalBases, batting_homeRuns, batting_RBI
+   *   NBA: points, rebounds, assists, threePointersMade
+   *
+   * Do NOT combine with pinnacleOnly — Pinnacle has no player-prop data.
+   * When set, pinnacleOnly is silently ignored to prevent empty responses.
+   *
+   * Leave undefined to fall back to full-league fetch (all markets).
+   */
+  playerPropOddIdPatterns?: string[];
 }
 
 export interface SGOResultsRequestOptions extends SGOBaseRequestOptions {
@@ -60,7 +105,12 @@ export function buildSgoOddsRequestUrl(options: SGOOddsRequestOptions): URL {
     url.searchParams.set('oddsAvailable', 'true');
   }
 
-  if (options.pinnacleOnly) {
+  if (options.playerPropOddIdPatterns?.length) {
+    // oddID filter: use PLAYER_ID wildcard patterns to reduce response payload.
+    // Pinnacle is intentionally excluded — it carries no player-prop data.
+    url.searchParams.set('oddID', options.playerPropOddIdPatterns.join(','));
+  } else if (options.pinnacleOnly) {
+    // pinnacleOnly only applies to game-level markets (ML/spread/total).
     url.searchParams.set('bookmakerID', 'pinnacle');
   }
 

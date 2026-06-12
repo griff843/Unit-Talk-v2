@@ -20,6 +20,47 @@ Root cause fixed: `includeAltLines=true` in historical mode caused alt-line cont
 7. **Hetzner `.env.production`** updated with scheduling vars (applied 2026-06-12)
 8. **Test updated**: assert `includeAltLines=null` (previously expected `'true'`)
 9. **PROVIDER_KNOWLEDGE_BASE.md** updated: includeAltLines disposition permanently disabled
+10. **`playerPropOddIdPatterns?: string[]`** added to `SGOOddsRequestOptions` — enables PLAYER_ID wildcard filtering for player prop markets; mutually exclusive with `pinnacleOnly` (Pinnacle carries no player-prop data, verified live 2026-06-12)
+11. **`SGO_PLAYER_PROP_ODD_ID_PATTERNS`** exported constant — confirmed patterns for MLB (batting_hits, batting_totalBases, batting_homeRuns, batting_RBI) and NBA (points, rebounds, assists, threePointersMade)
+12. **5xx retry logic** added to `fetchSgoJson`: 500/503 → retry once with 3s backoff; 504 → log URL + page hint, retry once with 5s backoff. Per SGO docs: "retry once after delay"
+13. **Non-JSON body handling** added to `fetchSgoJson`: `JSON.parse` wrapped in try/catch; non-JSON responses treated as transient and retried once, then fail closed with a descriptive error
+14. **`sanitizeSGOUsageForLog`** exported function — strips keyID, email, customerID from raw usage response before logging; prevents credential exposure in log lines
+
+### SGO API Live Test Results (2026-06-12)
+
+#### Parameter Names
+- `oddID` (singular) — correct; `oddIDs` plural not accepted
+- `includeOpposingOdds` — correct per API behavior; guide shows `includeOpposingOddIDs` but code has the right name
+- `includeOpenCloseOdds=true` — confirmed works in historical mode; returns `openOdds`/`closeOdds` fields
+
+#### PLAYER_ID Wildcard
+- `batting_hits-PLAYER_ID-game-ou-over` and `*-under` → returns multi-player data for MLB ✓
+- `batting_totalBases-PLAYER_ID-game-ou-over/under` → returns multi-player data for MLB ✓
+- `batting_homeRuns-PLAYER_ID-game-ou-over/under` → returns multi-player data for MLB ✓
+- `batting_RBI-PLAYER_ID-game-ou-over/under` → returns multi-player data for MLB ✓
+- `points-PLAYER_ID-game-ou-over/under` → returns multi-player data for NBA ✓
+- `rebounds-PLAYER_ID-game-ou-over/under` → returns multi-player data for NBA ✓
+- `assists-PLAYER_ID-game-ou-over/under` → returns multi-player data for NBA ✓
+- `threePointersMade-PLAYER_ID-game-ou-over/under` → returns multi-player data for NBA ✓
+- `freeThrowsAttempted-PLAYER_ID-game-ou-over/under` → no data returned for NBA — omitted from constants
+- `statEntityID` in responses = real playerID (e.g., `BRANDON_LOWE_1_MLB`), never literal `PLAYER_ID`
+
+#### Pinnacle + Player Props
+- `bookmakerID=pinnacle` with any PLAYER_ID pattern → empty `byBookmaker` for both MLB and NBA
+- Pinnacle confirmed: **zero player-prop data** in SGO
+- Code enforces mutual exclusion: when `playerPropOddIdPatterns` is set, `pinnacleOnly` is silently ignored to prevent empty responses
+
+#### Cursor Pagination
+- `nextCursor` returned when more pages exist; `null` when final page
+- Query params (`startsAfter`, `startsBefore`, `leagueID`, `oddID`, etc.) remain stable across all pages
+- Absence of `nextCursor` (or `nextCursor: null`) = end of results
+
+#### Error Handling (per SGO docs)
+- 500/503: retry once after ~3s delay — implemented ✓
+- 504: log query complexity hint + retry once after ~5s — implemented ✓
+- Non-JSON body: retry once (transient), then fail closed — implemented ✓
+- 429: use `Retry-After` header, already implemented ✓
+- 400/401/403: throw immediately, no retry — already implemented ✓
 
 ### Proof Script Results
 
@@ -34,6 +75,9 @@ UTV2-1266 verification: ALL ASSERTIONS PASSED
   ✓ bookmakerID=pinnacle present when pinnacleOnly=true
   ✓ bookmakerID absent when pinnacleOnly not set
   ✓ pinnacleOnly + historical: no conflict
+  ✓ playerPropOddIdPatterns sets oddID param
+  ✓ playerPropOddIdPatterns takes precedence over pinnacleOnly
+  ✓ pinnacleOnly ignored when playerPropOddIdPatterns set
 ```
 
 ## Verification
@@ -68,3 +112,5 @@ pnpm test:db
 - No WebSocket streaming added
 - CLV certification logic unchanged
 - Future historical backfills: alt-line contamination eliminated
+- Pinnacle player-prop guard enforced in code (not just docs)
+- Usage monitoring: raw response redacted before any logging via `sanitizeSGOUsageForLog`
