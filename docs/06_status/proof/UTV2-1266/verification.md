@@ -38,7 +38,7 @@ UTV2-1266 verification: ALL ASSERTIONS PASSED
 
 ## Verification
 
-**Branch HEAD SHA:** `6228e0d069e7dfa7f6ef6e2c7dcf9a0c27f99c02`
+**Branch HEAD SHA:** `296671de13bb6f7db3f5c7397c9c300fe765448d`
 
 ### pnpm verify
 
