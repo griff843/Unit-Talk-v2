@@ -99,6 +99,9 @@ Script is read-only — no production data mutated.
 
 ## Verification
 
+**Branch HEAD SHA:** `48996aa1b2072af7af6cd5a8102f6108bda55783`
+(merge SHA binding will be appended post-merge by `post-merge-lane-close.yml`)
+
 ### Script Run (corrected semantics)
 
 ```
