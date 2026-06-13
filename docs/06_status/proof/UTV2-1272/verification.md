@@ -18,6 +18,34 @@ Commands run on the branch:
 - `pnpm test:db` → see `runtime-health.json` (live Supabase smoke for T1).
 - Focused: `tsx --test apps/ingestor/src/scheduler.test.ts apps/ingestor/src/sgo-key-manager.test.ts packages/config/src/env.test.ts` → **21/21 PASS**.
 
+## Executed-command evidence
+
+### `pnpm test:db` (live Supabase smoke — node:test TAP)
+
+```
+> @unit-talk/v2@0.1.0 test:db
+> tsx --test apps/api/src/database-smoke.test.ts
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 115883.44253
+```
+
+### `pnpm test` (full suite via `pnpm verify` — node:test TAP)
+
+```
+# tests 3171
+# pass 3171
+# fail 0
+# skipped 0
+```
+
+`pnpm type-check` → PASS (`tsc -b`). `pnpm verify` → PASS (sync-check, system-alignment,
+automation-coverage, env:check, lint, type-check, build, test, smart-form verify, verify:commands).
+
 ## What was proven (against the UTV2-1272 acceptance list)
 
 | Required proof | Result |
