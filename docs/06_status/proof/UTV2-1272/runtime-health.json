@@ -1,0 +1,15 @@
+{
+"status": "healthy",
+"pnpm_verify": "pass",
+"pnpm_test_db": "pass",
+"unit_tests": "3171/3171",
+"live_db_proof": "7/7",
+"focused_lane_tests": "21/21",
+"clv_forward_flow_blocker": "volume/timing \u2014 no eligible computed-CLV settlement since UTV2-1262 write path deployed (latest 2026-06-11)",
+"provider_offers_status": "legacy/frozen-2026-04-29 (not read by CLV resolver)",
+"resolver_semantics_changed": false,
+"production_rows_mutated": false,
+"timestamp": "2026-06-13T00:00:00.000Z",
+"branch_head_sha": "057ba068618746f18ea166fc42ff9248546d328d",
+"verified_source_sha": "057ba068618746f18ea166fc42ff9248546d328d"
+}

@@ -21,10 +21,11 @@ import {
   type RuntimeTruthReport,
 } from '@unit-talk/observability';
 import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js';
-import { parseSchedulerConfig, type SchedulerEnv } from './scheduler.js';
+import { parseSchedulerConfig } from './scheduler.js';
 import {
   collectConfiguredSgoApiKeyCandidates,
   resolveActiveSgoApiKey,
+  buildSgoKeyResolutionDiagnostic,
 } from './sgo-key-manager.js';
 import { parseProviderOfferStagingMode } from './provider-offer-staging.js';
 import {
@@ -59,9 +60,10 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
     300_000,
   );
   const apiUrl = env.UNIT_TALK_API_URL;
-  const schedulerEnv = env as SchedulerEnv;
-  const schedulerConfig = parseSchedulerConfig(schedulerEnv);
-  const pinnacleOnlyPeak = schedulerEnv.UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK === 'true';
+  // AppEnv now declares the scheduling vars, so it satisfies SchedulerEnv structurally —
+  // no unsafe cast. Vars set only in the container env are now surfaced via loadEnvironment().
+  const schedulerConfig = parseSchedulerConfig(env);
+  const pinnacleOnlyPeak = env.UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK === 'true';
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
 
   const startupOptions = {
@@ -344,6 +346,22 @@ if (runtime.autorun) {
           count: reaped,
           healthCode: 'HUNG_SINGLETON',
           action: 'marked_failed',
+        });
+      }
+      // UTV2-1272: when no active key resolved, emit a diagnostic that
+      // distinguishes "no keys configured" from "keys configured but the live
+      // probe failed this cycle" — the latter is transient and must not be
+      // read as misconfiguration when leagues log "SGO_API_KEY missing".
+      const sgoKeyDiagnostic = buildSgoKeyResolutionDiagnostic({
+        candidateCount: runtime.sgoApiKeys.length,
+        active: sgoSelection.active,
+        probes: sgoSelection.probes,
+      });
+      if (sgoKeyDiagnostic) {
+        logger.warn(sgoKeyDiagnostic.message, {
+          healthCode: sgoKeyDiagnostic.healthCode,
+          sgoKeyCandidateCount: sgoKeyDiagnostic.sgoKeyCandidateCount,
+          probes: sgoKeyDiagnostic.probes,
         });
       }
       return sgoSelection;

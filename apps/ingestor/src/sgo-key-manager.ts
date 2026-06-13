@@ -100,6 +100,68 @@ export function collectConfiguredSgoApiKeyCandidates(
   return candidates;
 }
 
+export interface SgoKeyResolutionDiagnostic {
+  healthCode: 'SGO_KEY_UNCONFIGURED' | 'SGO_KEY_PROBE_FAILED';
+  message: string;
+  sgoKeyCandidateCount: number;
+  probes: Array<{
+    source: string;
+    tag: string;
+    status: SgoApiKeyProbe['status'];
+    reason?: string;
+  }>;
+}
+
+/**
+ * Build a structured diagnostic when no active SGO key was resolved (UTV2-1272).
+ *
+ * Distinguishes a genuinely-unconfigured environment (`SGO_KEY_UNCONFIGURED`)
+ * from one where keys ARE configured but failed the live account probe this
+ * cycle (`SGO_KEY_PROBE_FAILED`). The latter is a transient/credential
+ * condition, NOT a missing key — so the downstream per-league
+ * "SGO_API_KEY missing; skipping ingest" warning must not be read as
+ * misconfiguration. Returns null when an active key exists.
+ *
+ * Never emits raw key material: `probe.tag` is already masked via
+ * {@link describeSgoApiKey}, and the SGO key is sent as a request header (never
+ * embedded in probe failure reasons).
+ */
+export function buildSgoKeyResolutionDiagnostic(input: {
+  candidateCount: number;
+  active: SgoApiKeyCandidate | null;
+  probes: readonly SgoApiKeyProbe[];
+}): SgoKeyResolutionDiagnostic | null {
+  if (input.active) {
+    return null;
+  }
+
+  const probes = input.probes.map((probe) => ({
+    source: probe.source,
+    tag: probe.tag,
+    status: probe.status,
+    ...(probe.reason ? { reason: probe.reason } : {}),
+  }));
+
+  if (input.candidateCount === 0) {
+    return {
+      healthCode: 'SGO_KEY_UNCONFIGURED',
+      message:
+        'No SGO API keys configured; ingest will skip all leagues until a key is provided.',
+      sgoKeyCandidateCount: 0,
+      probes,
+    };
+  }
+
+  return {
+    healthCode: 'SGO_KEY_PROBE_FAILED',
+    message:
+      `${input.candidateCount} SGO API key candidate(s) configured but none passed the ` +
+      'account probe this cycle; this is a transient/credential condition, not a missing key.',
+    sgoKeyCandidateCount: input.candidateCount,
+    probes,
+  };
+}
+
 export function describeSgoApiKey(apiKey: string) {
   const trimmed = apiKey.trim();
   if (trimmed.length <= 8) {
