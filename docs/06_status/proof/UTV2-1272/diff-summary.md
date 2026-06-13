@@ -1,7 +1,7 @@
 # UTV2-1272 — Diff Summary
 
 **Branch:** `claude/utv2-1272-appenv-scheduling-and-clv-diagnostic` · **Lane type:** runtime · **Tier:** T1
-**Base:** `e7213ad7` (main)
+**Base:** `e7213ad7` (main) · **Merge SHA:** `778ebcd34cbb43c52df9f09852dffc8377b87078` (PR #1020, squash-merged)
 
 Wave 1 of the production-evidence mission, PM-rescoped (2026-06-13): fix the confirmed AppEnv scheduling
 gap, harden SGO key-resolution diagnostics against false alarms, and read-only diagnose the forward-flow

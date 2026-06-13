@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "claude/utv2-1272-appenv-scheduling-and-clv-diagnostic",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1020",
   "files_changed": [],
   "file_scope_lock": [
     "packages/config/src/env.ts",
@@ -30,22 +30,107 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1272/diff-summary.md",
     "docs/06_status/proof/UTV2-1272/verification.md",
+    "docs/06_status/proof/UTV2-1272/evidence.json",
     "docs/06_status/proof/UTV2-1272/runtime-health.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-06-13T15:00:00.000Z",
-  "heartbeat_at": "2026-06-13T15:29:47.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-13T16:55:50.922Z",
+  "closed_at": "2026-06-13T16:55:50.922Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1272-appenv-scheduling-and-clv-diagnostic.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-13T16:51:17.953Z",
+      "verdict": "pass",
+      "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1020"
+    },
+    {
+      "checked_at": "2026-06-13T16:51:37.235Z",
+      "verdict": "fail",
+      "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-13T16:51:52.151Z",
+      "verdict": "fail",
+      "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-13T16:53:29.055Z",
+      "verdict": "fail",
+      "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+      "failures": [
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-13T16:54:10.805Z",
+      "verdict": "fail",
+      "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+      "failures": [
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-13T16:54:47.184Z",
+      "verdict": "pass",
+      "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
-    "mode": "single_worktree",
+    "mode": "main-control",
     "cwd": "/home/griff843/code/Unit-Talk-v2",
-    "package_install": "preexisting",
-    "main_checkout_control_only": false,
-    "note": "Run in the main worktree — zero concurrent lanes, so worktree isolation was unnecessary. Substrate guard PASS; no file-scope overlap."
+    "package_install": "not_required",
+    "main_checkout_control_only": true,
+    "note": "Run in the main checkout — zero concurrent lanes, so worktree isolation was unnecessary; node_modules preexisting. Substrate guard PASS; no file-scope overlap."
   }
 }

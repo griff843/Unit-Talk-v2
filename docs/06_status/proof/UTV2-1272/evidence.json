@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1272",
+  "sha_binding": {
+    "verified_source_sha": "057ba068618746f18ea166fc42ff9248546d328d",
+    "verified_source_note": "Final PR head before squash: AppEnv scheduling wiring + SGO key diagnostics + read-only CLV diagnostic + test wiring",
+    "sha_type": "pr_head_sha",
+    "bound_at": "2026-06-13T16:55:00.000Z",
+    "merge_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+    "evidence_commit_sha": "778ebcd34cbb43c52df9f09852dffc8377b87078",
+    "current_pr_head_sha": "057ba068618746f18ea166fc42ff9248546d328d",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pass",
+      "proof_auditor_gate": "pass",
+      "t1_proof_gate": "pass",
+      "runtime_verifier_gate": "pass",
+      "lane_authority": "pass",
+      "file_scope_lock": "pass",
+      "require_live_db_proof": "pass",
+      "r_level_compliance": "pass",
+      "return_review_packet": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Run on merge SHA parent and re-run on main post-merge"
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "full_test_suite": {
+      "command": "pnpm test (via pnpm verify, on main 778ebcd3)",
+      "status": "PASS",
+      "tests": 3184,
+      "pass": 3184,
+      "fail": 0,
+      "note": "3184 = 3171 pre-lane + 13 newly-wired scheduler/sgo-key-manager tests now executing in CI suite"
+    },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/scheduler.test.ts apps/ingestor/src/sgo-key-manager.test.ts packages/config/src/env.test.ts",
+      "status": "PASS",
+      "tests": 21,
+      "pass": 21,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "note": "Runtime/config + read-only live-DB diagnosis lane. No production rows mutated; CLV resolver semantics unchanged.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke (7/7) + read-only diagnostic SELECTs. No DB writes by this lane."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+      "UTV2-996: correction chain is additive — original settlement row is not mutated",
+      "DIAGNOSTIC: break-layer classification of missing_event_context settlements (pick -> participant -> event_participants -> events.external_id)",
+      "DIAGNOSTIC: characterize orphan picks by market_type_id, source, and metadata linkage keys",
+      "DIAGNOSTIC: clvStatus distribution for evidence-eligible settlements (excl. band=SUPPRESS/testRun/t1-proof)",
+      "DIAGNOSTIC: forward-flow vs backfill closing_for_clv snapshot coverage for eligible computed-CLV settlements"
+    ],
+    "row_counts": [
+      {
+        "table": "provider_offer_history",
+        "rows": 970819,
+        "rows_last_24h": 105120,
+        "status": "FRESH (canonical CLV closing-line source)"
+      },
+      {
+        "table": "provider_offer_current",
+        "rows": 317261,
+        "status": "FRESH"
+      },
+      {
+        "table": "market_universe",
+        "rows": 69404,
+        "status": "FRESH (updated within the minute)"
+      },
+      {
+        "table": "provider_offers",
+        "rows": 8191206,
+        "rows_last_24h": 0,
+        "status": "LEGACY/FROZEN since 2026-04-29 (UTV2-772 cutover) — not read by CLV resolver"
+      },
+      {
+        "table": "settlement_records (missing_event_context, 30d)",
+        "no_participant_ref": 1907,
+        "participant_not_linked": 6,
+        "note": "99.7% are band=SUPPRESS orphan picks (1147 points-all-game-ou, placeholder selection, no participant linkage) — excluded from evidence by contract"
+      },
+      {
+        "table": "settlement_records (evidence-eligible, computed CLV, 14d)",
+        "eligible_computed_clv": 45,
+        "with_forward_flow_snapshot": 0,
+        "latest_settled": "2026-06-11",
+        "note": "All 45 predate the closing-odds write-path deploy; forward-flow closing_for_clv=0 is volume/timing, not a defect"
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "sgo_key_candidate_count_gt_0_no_secrets": "PASS",
+    "sgo_missing_log_false_alarm_explained": "PASS",
+    "appenv_exposes_scheduling_vars": "PASS",
+    "scheduling_enabled_at_runtime_peak_offpeak": "PASS",
+    "canonical_clv_source_path_identified": "PASS",
+    "forward_flow_clv_blocker_proven": "PASS (volume/timing, not defect)",
+    "provider_offers_confirmed_legacy_frozen": "PASS"
+  },
+  "guardrails": {
+    "p3_certified": false,
+    "utv2_1042_marked_done": false,
+    "clv_roi_edge_claims": false,
+    "public_discord_changed": false,
+    "live_backfill": false,
+    "websocket_streaming": false,
+    "secrets_emitted": false,
+    "production_rows_mutated": false,
+    "clv_resolver_semantics_changed": false
+  },
+  "verdict": "PASS",
+  "status": "pass"
+}

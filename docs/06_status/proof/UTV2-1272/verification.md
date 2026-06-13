@@ -2,7 +2,7 @@
 
 **Issue:** UTV2-1272 — Restore SGO key delivery, AppEnv scheduling, and provider offer freshness so forward-flow CLV can compute (PM-rescoped 2026-06-13).
 **Branch:** `claude/utv2-1272-appenv-scheduling-and-clv-diagnostic` · **Lane type:** runtime · **Tier:** T1
-**Base SHA:** `e7213ad7` · **Merge SHA:** _(rebound post-merge by `post-merge-lane-close.yml`)_
+**Base SHA:** `e7213ad7` · **Merge SHA:** `778ebcd34cbb43c52df9f09852dffc8377b87078` (PR #1020, squash-merged)
 
 > Lane executed single-worktree (zero concurrent lanes; main worktree already has `node_modules`).
 > Substrate guard PASS (0 hard-fail), no active-lane file-scope overlap, sync file `.ops/sync/UTV2-1272.yml` present.
