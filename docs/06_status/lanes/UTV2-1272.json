@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1272",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "claude/utv2-1272-appenv-scheduling-and-clv-diagnostic",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "packages/config/src/env.ts",
+    "packages/config/src/env.test.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/ingestor/src/scheduler.test.ts",
+    "apps/ingestor/src/sgo-key-manager.ts",
+    "apps/ingestor/src/sgo-key-manager.test.ts",
+    ".env.example",
+    "apps/api/src/scripts/utv2-1272-missing-event-context-diagnostic.ts",
+    ".ops/sync/UTV2-1272.yml",
+    "docs/06_status/lanes/UTV2-1272.json",
+    "docs/06_status/proof/UTV2-1272/verification.md",
+    "docs/06_status/proof/UTV2-1272/diff-summary.md",
+    "docs/06_status/proof/UTV2-1272/runtime-health.json",
+    "docs/06_status/proof/UTV2-1272/missing-event-context-diagnostic.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1272/diff-summary.md",
+    "docs/06_status/proof/UTV2-1272/verification.md",
+    "docs/06_status/proof/UTV2-1272/runtime-health.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-06-13T15:00:00.000Z",
+  "heartbeat_at": "2026-06-13T15:29:47.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1272-appenv-scheduling-and-clv-diagnostic.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "single_worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "preexisting",
+    "main_checkout_control_only": false,
+    "note": "Run in the main worktree — zero concurrent lanes, so worktree isolation was unnecessary. Substrate guard PASS; no file-scope overlap."
+  }
+}

@@ -21,6 +21,15 @@ export interface AppEnv {
   ODDS_API_KEY?: string | undefined;
   UNIT_TALK_INGESTOR_LEAGUES?: string | undefined;
   UNIT_TALK_INGESTOR_POLL_MS?: string | undefined;
+  // Adaptive on-peak / off-peak poll scheduling (parsed by apps/ingestor/src/scheduler.ts).
+  // Must live in AppEnv so loadEnvironment() surfaces them at runtime — values set only in
+  // the container/deploy env are invisible to the ingestor unless declared here.
+  UNIT_TALK_INGESTOR_SCHEDULING_ENABLED?: string | undefined;
+  UNIT_TALK_INGESTOR_PEAK_POLL_MS?: string | undefined;
+  UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS?: string | undefined;
+  UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET?: string | undefined;
+  UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET?: string | undefined;
+  UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK?: string | undefined;
   UNIT_TALK_INGESTOR_MAX_CYCLES?: string | undefined;
   UNIT_TALK_INGESTOR_AUTORUN?: string | undefined;
   UNIT_TALK_INGESTOR_SKIP_RESULTS?: string | undefined;
@@ -186,6 +195,12 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     ODDS_API_KEY: optionalEnv('ODDS_API_KEY', merged),
     UNIT_TALK_INGESTOR_LEAGUES: optionalEnv('UNIT_TALK_INGESTOR_LEAGUES', merged),
     UNIT_TALK_INGESTOR_POLL_MS: optionalEnv('UNIT_TALK_INGESTOR_POLL_MS', merged),
+    UNIT_TALK_INGESTOR_SCHEDULING_ENABLED: optionalEnv('UNIT_TALK_INGESTOR_SCHEDULING_ENABLED', merged),
+    UNIT_TALK_INGESTOR_PEAK_POLL_MS: optionalEnv('UNIT_TALK_INGESTOR_PEAK_POLL_MS', merged),
+    UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS: optionalEnv('UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS', merged),
+    UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET: optionalEnv('UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET', merged),
+    UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET: optionalEnv('UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET', merged),
+    UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK: optionalEnv('UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK', merged),
     UNIT_TALK_INGESTOR_MAX_CYCLES: optionalEnv('UNIT_TALK_INGESTOR_MAX_CYCLES', merged),
     UNIT_TALK_INGESTOR_AUTORUN: optionalEnv('UNIT_TALK_INGESTOR_AUTORUN', merged),
     UNIT_TALK_INGESTOR_SKIP_RESULTS: optionalEnv('UNIT_TALK_INGESTOR_SKIP_RESULTS', merged),

@@ -148,6 +148,51 @@ test('loadEnvironment exposes provider ingestion DB and archive policy env vars'
   fs.rmSync(rootDir, { recursive: true, force: true });
 });
 
+test('loadEnvironment exposes ingestor adaptive scheduling env vars (UTV2-1272)', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-env-scheduling-'));
+
+  fs.writeFileSync(
+    path.join(rootDir, '.env.example'),
+    [
+      'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
+      'LINEAR_TEAM_KEY=UTV2',
+      'LINEAR_TEAM_NAME=unit-talk-v2',
+      'NOTION_WORKSPACE_NAME=unit-talk-v2',
+      'SLACK_WORKSPACE_NAME=unit-talk-v2',
+      'UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=false',
+      'UNIT_TALK_INGESTOR_PEAK_POLL_MS=30000',
+      'UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS=300000',
+      'UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET=12',
+      'UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET=24',
+      'UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=false',
+    ].join('\n'),
+  );
+  // Deploy/container env overrides (the case that previously fell through the gap:
+  // values set outside .env files but read via AppEnv at runtime).
+  fs.writeFileSync(
+    path.join(rootDir, 'local.env'),
+    [
+      'UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=true',
+      'UNIT_TALK_INGESTOR_PEAK_POLL_MS=15000',
+      'UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS=120000',
+      'UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET=18',
+      'UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET=23',
+      'UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true',
+    ].join('\n'),
+  );
+
+  const env = loadEnvironment(rootDir);
+
+  assert.equal(env.UNIT_TALK_INGESTOR_SCHEDULING_ENABLED, 'true');
+  assert.equal(env.UNIT_TALK_INGESTOR_PEAK_POLL_MS, '15000');
+  assert.equal(env.UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS, '120000');
+  assert.equal(env.UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET, '18');
+  assert.equal(env.UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET, '23');
+  assert.equal(env.UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK, 'true');
+
+  fs.rmSync(rootDir, { recursive: true, force: true });
+});
+
 test('assertProductionRuntimeConfig rejects ambiguous production autorun one-cycle mode', () => {
   assert.throws(
     () =>
