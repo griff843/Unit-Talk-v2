@@ -15,7 +15,7 @@ _(bound post-merge by `post-merge-lane-close.yml` / `ops:proof-generate --merge-
 - `scripts/ops/track-a-triggers.ts` — pure trigger logic + snapshot types (no I/O).
 - `scripts/ops/track-a-triggers.test.ts` — 11 unit tests for the trigger logic.
 - `scripts/ci/track-a-monitor-workflow.test.ts` — 4 tests validating the workflow YAML (6h cron, dispatch, read-only perms, secrets-as-env / no-echo, artifact).
-- `docs/06_status/proof/UTV2-1250/MONITOR_SPEC.md` — aligned to the consolidated monitor.
+- `docs/06_status/proof/UTV2-1276/MONITOR_SPEC.md` — aligned to the consolidated monitor.
 - `package.json` — both test files registered in `test:ops`.
 
 ## Required proof (per PM decision 2026-06-13)
@@ -56,3 +56,17 @@ delivery query/change); no backfill; secrets never printed.
 - `pnpm lint` (new files): clean (exit 0).
 - `pnpm verify`: **green — exit 0** (sync-check, system-alignment, automation-coverage, env:check, lint, type-check, build, full test matrix, smart-form verify, verify:commands all passed; 103 suites, 0 failures).
 - Unit tests: `track-a-triggers.test.ts` 11/11 pass; `track-a-monitor-workflow.test.ts` 4/4 pass.
+
+### Live-DB proof — `pnpm test:db`
+
+`pnpm test:db` (apps/api database smoke against real Supabase) — the same live DB this
+monitor reads — passed, confirming connectivity and schema integrity:
+
+```
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+# todo 0
+# duration_ms 111707
+```

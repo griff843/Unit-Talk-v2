@@ -3,7 +3,7 @@
  *
  * No I/O. All Supabase / Linear access lives in `track-a-monitor.ts`; this file is
  * pure so it can be unit-tested without network or env. It encodes the report/trigger
- * conditions from `docs/06_status/proof/UTV2-1250/MONITOR_SPEC.md`.
+ * conditions from `docs/06_status/proof/UTV2-1276/MONITOR_SPEC.md`.
  *
  * Read-only by construction: nothing here mutates state, certifies, or makes
  * CLV/ROI/edge claims — it only decides whether a snapshot is worth reporting.

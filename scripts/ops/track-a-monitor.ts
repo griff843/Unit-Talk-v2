@@ -2,7 +2,7 @@
  * Track A monitor (UTV2-1276) — durable, read-only CLV-path watch for UTV2-1250.
  *
  * Consolidates the read-only diagnostics described in
- * `docs/06_status/proof/UTV2-1250/MONITOR_SPEC.md` into a single snapshot, decides
+ * `docs/06_status/proof/UTV2-1276/MONITOR_SPEC.md` into a single snapshot, decides
  * whether a report is warranted (see `track-a-triggers.ts`), and posts a comment to
  * the Track A monitor lane ONLY when a trigger fires. Designed to run from a GitHub
  * Actions scheduled workflow every 6 hours.

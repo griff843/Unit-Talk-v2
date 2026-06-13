@@ -14,7 +14,7 @@ Durable GitHub Actions monitor replacing the session-only Track A cron (UTV2-125
 ## Modified
 
 - `package.json` — registered both new test files in `test:ops`.
-- `docs/06_status/proof/UTV2-1250/MONITOR_SPEC.md` — aligned to the consolidated monitor; GHA is the primary runner, session cron is temporary backup.
+- `docs/06_status/proof/UTV2-1276/MONITOR_SPEC.md` — aligned to the consolidated monitor; GHA is the primary runner, session cron is temporary backup.
 
 ## Behavior / risk
 

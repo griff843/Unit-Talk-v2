@@ -17,7 +17,7 @@
     "scripts/ops/track-a-triggers.test.ts",
     "scripts/ci/track-a-monitor-workflow.test.ts",
     "package.json",
-    "docs/06_status/proof/UTV2-1250/MONITOR_SPEC.md",
+    "docs/06_status/proof/UTV2-1276/MONITOR_SPEC.md",
     "docs/06_status/lanes/UTV2-1276.json",
     "docs/06_status/proof/UTV2-1276/verification.md",
     "docs/06_status/proof/UTV2-1276/diff-summary.md"
