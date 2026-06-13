@@ -106,7 +106,11 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/unit_talk_schema_parity
+      # sslmode=disable: the scratch Postgres service container serves no TLS, so the
+      # Supabase CLI (`supabase db push`) must not negotiate TLS against it. Without
+      # this the push fails with "tls error (server refused TLS connection)". The live
+      # ACTUAL_DATABASE_URL (Supabase) is unaffected and keeps its own TLS. (UTV2-1273)
+      EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/unit_talk_schema_parity?sslmode=disable
       ACTUAL_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - name: Checkout

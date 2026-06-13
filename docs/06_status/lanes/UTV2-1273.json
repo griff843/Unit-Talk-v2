@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1273",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "claude/utv2-1273-schema-parity-scratch-ssl",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/live-schema-parity.yml",
+    ".ops/sync/UTV2-1273.yml",
+    "docs/06_status/lanes/UTV2-1273.json",
+    "docs/06_status/proof/UTV2-1273/diff-summary.md",
+    "docs/06_status/proof/UTV2-1273/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1273/diff-summary.md",
+    "docs/06_status/proof/UTV2-1273/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-06-13T17:10:00.000Z",
+  "heartbeat_at": "2026-06-13T17:12:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1273-schema-parity-scratch-ssl.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "main_checkout_control_only": true,
+    "note": "Single-checkout infra lane (one-line workflow fix); no concurrent overlap."
+  }
+}
