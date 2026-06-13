@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1276",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "griffadavi/utv2-1276-durable-github-actions-scheduled-workflow-for-the-track-a",
+  "base_branch": "main",
+  "commit_sha": "",
+  "pr_url": "",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/track-a-monitor.yml",
+    "scripts/ops/track-a-monitor.ts",
+    "scripts/ops/track-a-triggers.ts",
+    "scripts/ops/track-a-triggers.test.ts",
+    "scripts/ci/track-a-monitor-workflow.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1250/MONITOR_SPEC.md",
+    "docs/06_status/lanes/UTV2-1276.json",
+    "docs/06_status/proof/UTV2-1276/verification.md",
+    "docs/06_status/proof/UTV2-1276/diff-summary.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1276/verification.md",
+    "docs/06_status/proof/UTV2-1276/diff-summary.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-06-13T23:25:00.000Z",
+  "heartbeat_at": "2026-06-13T23:35:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "main_checkout_control_only": true,
+    "note": "Run in main checkout — no concurrent lanes, no file-scope overlap (verified); node_modules preexisting. Read-only ops/runtime tooling lane."
+  }
+}
