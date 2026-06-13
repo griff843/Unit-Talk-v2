@@ -18,6 +18,7 @@
     "apps/ingestor/src/sgo-key-manager.ts",
     "apps/ingestor/src/sgo-key-manager.test.ts",
     ".env.example",
+    "package.json",
     "apps/api/src/scripts/utv2-1272-missing-event-context-diagnostic.ts",
     ".ops/sync/UTV2-1272.yml",
     "docs/06_status/lanes/UTV2-1272.json",
