@@ -2,8 +2,9 @@
 
 Restore SGO MLB player-prop ingestion and identity preservation for forward-flow CLV.
 
-Tier: **T1**. Lane type: runtime (ingestor request construction). PR-head SHA:
-`e7d681947856b0e2572f3e2ccd2f6fad2a96e61a` (rebound to the merge SHA post-merge).
+Tier: **T1**. Lane type: runtime (ingestor request construction).
+
+Merge SHA: `39088f31a6450b22e05feeefddd7dc6ad0a233ef` (PR #1023, merged to main 2026-06-14).
 
 ## Summary
 

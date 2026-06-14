@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1275-restore-sgo-mlb-player-prop-ingestion-and-identity",
   "base_branch": "main",
-  "commit_sha": "",
-  "pr_url": "",
+  "commit_sha": "39088f31a6450b22e05feeefddd7dc6ad0a233ef",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1023",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/sgo-request-contract.ts",
@@ -29,13 +29,42 @@
     "docs/06_status/proof/UTV2-1275/diff-summary.md",
     "docs/06_status/proof/UTV2-1275/evidence.json"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-14T04:00:00.000Z",
-  "heartbeat_at": "2026-06-14T04:40:00.000Z",
+  "heartbeat_at": "2026-06-14T13:05:54.386Z",
   "blocked_by": [],
-  "preflight_token": "",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-14T13:03:21.178Z",
+      "verdict": "pass",
+      "merge_sha": "39088f31a6450b22e05feeefddd7dc6ad0a233ef",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1023"
+    },
+    {
+      "checked_at": "2026-06-14T13:03:57.382Z",
+      "verdict": "fail",
+      "merge_sha": "39088f31a6450b22e05feeefddd7dc6ad0a233ef",
+      "failures": [
+        "P3",
+        "C4",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-14T13:05:12.360Z",
+      "verdict": "pass",
+      "merge_sha": "39088f31a6450b22e05feeefddd7dc6ad0a233ef",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "main-control",
@@ -43,5 +72,6 @@
     "package_install": "not_required",
     "main_checkout_control_only": true,
     "note": "Wave 1 of the SGO forward-flow CLV remediation. Ingestor request-construction change (split game-line vs player-prop fetch). No schema/migration; no production writes from this session."
-  }
+  },
+  "closed_at": "2026-06-14T13:05:54.386Z"
 }

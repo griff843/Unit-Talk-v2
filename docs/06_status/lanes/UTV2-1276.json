@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1276-durable-github-actions-scheduled-workflow-for-the-track-a",
   "base_branch": "main",
-  "commit_sha": "",
-  "pr_url": "",
+  "commit_sha": "f8919d52b234031e75f6df9b79cdf12b546b17f0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1022",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/track-a-monitor.yml",
@@ -27,13 +27,42 @@
     "docs/06_status/proof/UTV2-1276/verification.md",
     "docs/06_status/proof/UTV2-1276/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-13T23:25:00.000Z",
-  "heartbeat_at": "2026-06-13T23:35:00.000Z",
+  "heartbeat_at": "2026-06-14T13:05:34.465Z",
   "blocked_by": [],
-  "preflight_token": "",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-14T13:03:22.525Z",
+      "verdict": "pass",
+      "merge_sha": "f8919d52b234031e75f6df9b79cdf12b546b17f0",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1022"
+    },
+    {
+      "checked_at": "2026-06-14T13:04:04.274Z",
+      "verdict": "fail",
+      "merge_sha": "f8919d52b234031e75f6df9b79cdf12b546b17f0",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-14T13:05:18.430Z",
+      "verdict": "pass",
+      "merge_sha": "f8919d52b234031e75f6df9b79cdf12b546b17f0",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "main-control",
@@ -41,5 +70,6 @@
     "package_install": "not_required",
     "main_checkout_control_only": true,
     "note": "Run in main checkout — no concurrent lanes, no file-scope overlap (verified); node_modules preexisting. Read-only ops/runtime tooling lane."
-  }
+  },
+  "closed_at": "2026-06-14T13:05:34.465Z"
 }

@@ -2,21 +2,21 @@
   "schema_version": 1,
   "issue_id": "UTV2-1275",
   "sha_binding": {
-    "verified_source_sha": "e7d681947856b0e2572f3e2ccd2f6fad2a96e61a",
-    "verified_source_note": "PR-head commit for the SGO game-line/player-prop fetch split (UTV2-1275 Wave 1). Rebound to the merge SHA post-merge.",
-    "sha_type": "pr_head_sha",
-    "bound_at": "2026-06-14T05:00:00.000Z",
+    "verified_source_sha": "39088f31a6450b22e05feeefddd7dc6ad0a233ef",
+    "verified_source_note": "Merge SHA for PR #1023 (UTV2-1275 SGO game-line/player-prop fetch split). Rebound from PR-head SHA post-merge.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-14T13:03:21.000Z",
     "ci_sentinels": {
-      "verify": "pending",
-      "merge_gate": "pending",
-      "proof_auditor_gate": "pending",
-      "t1_proof_gate": "pending",
-      "runtime_verifier_gate": "pending",
-      "lane_authority": "pending",
-      "file_scope_lock": "pending",
-      "require_live_db_proof": "pending",
-      "r_level_compliance": "pending",
-      "return_review_packet": "pending"
+      "verify": "pass",
+      "merge_gate": "pass",
+      "proof_auditor_gate": "pass",
+      "t1_proof_gate": "pass",
+      "runtime_verifier_gate": "pass",
+      "lane_authority": "pass",
+      "file_scope_lock": "pass",
+      "require_live_db_proof": "pass",
+      "r_level_compliance": "pass",
+      "return_review_packet": "pass"
     }
   },
   "verifier": {
@@ -46,7 +46,20 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "note": "Live Supabase DB smoke. No production rows mutated by this lane; ingestor request-construction change only. Live-slate confirmation (provider_offer_history player-row increase + non-stale candidate) is a post-deploy runtime check."
+    "note": "Live Supabase DB smoke. No production rows mutated by this lane; ingestor request-construction change only. Live-slate confirmation (provider_offer_history player-row increase + non-stale candidate) is a post-deploy runtime check.",
+    "queries": [
+      {
+        "description": "DB smoke test suite (pnpm test:db) \u2014 7 live Supabase queries across picks, provider_offer_history, market_universe",
+        "command": "pnpm test:db",
+        "result": "7 tests pass, 0 fail, duration_ms 120151"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "provider_offer_history",
+        "note": "Row count confirmed live by DB smoke test; player-row increase requires post-deploy production ingest cycle (confirmed as out-of-lane per guardrails)"
+      }
+    ]
   },
   "root_cause": {
     "summary": "Single SGO odds request collapsed to bookmakerID=pinnacle on peak (UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true in prod); Pinnacle carries no MLB player props, so props were filtered out at ingestion. PLAYER_ID fetch path existed but was never wired into the runner.",
