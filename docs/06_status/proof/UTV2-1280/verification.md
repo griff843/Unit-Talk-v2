@@ -2,7 +2,7 @@
 
 **Issue:** UTV2-1280 — Ingestor MLB cycle hangs; no MLB provider offers since 2026-06-12.
 **Branch:** `griffadavi/utv2-1280-ingestor-mlb-cycle-hangs-no-mlb-provider-offers-since-2026` · **Lane type:** runtime · **Tier:** T1
-**Base SHA:** `f8919d52` · **PR head:** `a9248430` · **Merge SHA:** _(bound post-merge)_
+**Base SHA:** `f8919d52` · **Verified source SHA:** `a924843026dcd759e96b34456e3f249e827b67a7` · **Merge SHA:** _(bound post-merge)_
 
 > Lane executed in the main checkout (main-control mode), zero concurrent lanes
 > (the two merged ghost lanes were reconciled to `done` first), node_modules

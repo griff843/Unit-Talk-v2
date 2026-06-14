@@ -2,13 +2,13 @@
   "schema_version": 1,
   "issue_id": "UTV2-1280",
   "sha_binding": {
-    "verified_source_sha": "a9248430",
-    "verified_source_note": "PR head: per-league hard timeout (AbortSignal + Promise.race), abort-signal threading through SGO fetch/pagination, narrowed live player-prop fetch window, env wiring, focused tests.",
-    "sha_type": "pr_head_sha",
+    "verified_source_sha": "a924843026dcd759e96b34456e3f249e827b67a7",
+    "verified_source_note": "Branch HEAD at verification time (implementation commit): per-league hard timeout (AbortSignal + Promise.race), abort-signal threading through SGO fetch/pagination, narrowed live player-prop fetch window, env wiring, focused tests. Later commits add CI-gate fixes + a main-sync merge; merge SHA binds at close.",
+    "sha_type": "branch_head_sha",
     "bound_at": "2026-06-14T13:30:00.000Z",
     "merge_sha": "<bound post-merge>",
     "evidence_commit_sha": "<bound post-merge>",
-    "current_pr_head_sha": "a9248430",
+    "current_pr_head_sha": "a924843026dcd759e96b34456e3f249e827b67a7",
     "ci_sentinels": {
       "verify": "pending_merge_sha",
       "merge_gate": "pending_merge_sha",
