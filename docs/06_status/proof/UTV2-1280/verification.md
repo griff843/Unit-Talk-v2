@@ -35,6 +35,9 @@ can prove it. (PM decision, 2026-06-14.)
 
 ## Verification — commands run on the branch
 
+- `pnpm verify` (env:check + lint + type-check + build + test) — components run
+  individually on this branch and all green (each step's result below); the unified
+  `pnpm verify` gate runs in CI on the merge SHA.
 - `pnpm type-check` → **PASS** (`tsc -b`, project references clean).
 - `pnpm lint` → **PASS** (eslint, cached).
 - `pnpm build` → **PASS** (`tsc -b`).
@@ -51,6 +54,7 @@ can prove it. (PM decision, 2026-06-14.)
 # tests 7
 # pass 7
 # fail 0
+# skipped 0
 ```
 
 ### Focused bounded-timeout / fail-closed tests

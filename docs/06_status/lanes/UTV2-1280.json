@@ -17,6 +17,7 @@
     "apps/ingestor/src/ingestor-runner.ts",
     "apps/ingestor/src/index.ts",
     "apps/ingestor/src/ingest-league-timeout.test.ts",
+    "package.json",
     ".ops/sync/UTV2-1280.yml",
     "docs/06_status/lanes/UTV2-1280.json",
     "docs/06_status/proof/UTV2-1280/verification.md",
