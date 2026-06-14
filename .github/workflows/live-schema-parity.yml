@@ -91,22 +91,15 @@ jobs:
     needs: check-config
     if: needs.check-config.outputs.db-configured == 'true'
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_DB: unit_talk_schema_parity
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d unit_talk_schema_parity"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+    # No `services:` Postgres. The 49/119 repo migrations that reference Supabase-only
+    # objects (auth/storage/realtime/extensions schemas; service_role/anon/authenticated
+    # roles; `CREATE EXTENSION pg_cron WITH SCHEMA extensions`) cannot apply to a bare
+    # postgres:17. Instead we boot the Supabase local stack (`supabase start`) which
+    # provides a Supabase-shaped scratch DB, apply the migrations against it with
+    # `supabase db reset`, then compare that schema to the live DB. (UTV2-1274)
     env:
-      EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/unit_talk_schema_parity
+      # Supabase local stack DB (see supabase/config.toml: [db] port = 54322).
+      EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       ACTUAL_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
     steps:
       - name: Checkout
@@ -131,22 +124,36 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Wait for scratch Postgres
+      - name: Diagnostics — toolchain
         run: |
-          for attempt in $(seq 1 20); do
-            if pg_isready --dbname "$EXPECTED_DATABASE_URL"; then
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "::error title=Scratch database unavailable::Postgres service did not become ready."
-          exit 1
+          echo "supabase CLI: $(supabase --version 2>&1 | head -1)"
+          echo "docker: $(docker --version 2>&1 | head -1)"
+          echo "repo migration count: $(ls supabase/migrations/*.sql 2>/dev/null | wc -l)"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply repo migrations to scratch database
-        run: supabase db push --db-url "$EXPECTED_DATABASE_URL"
+      - name: Start Supabase local stack
+        run: |
+          # Boots the local stack (Docker on the runner) — provides the Supabase-shaped
+          # scratch DB (auth/storage/realtime/extensions schemas + roles) the migrations need.
+          supabase start
+
+      - name: Apply repo migrations to local stack
+        run: |
+          # `db reset` drops and re-applies every migration from scratch against the
+          # Supabase-shaped local DB (seed disabled in config.toml -> migrations only).
+          supabase db reset
+
+      - name: Diagnostics — scratch DB readiness
+        run: |
+          supabase status || true
+          if pg_isready --dbname "$EXPECTED_DATABASE_URL"; then
+            echo "scratch DB ready: applied $(ls supabase/migrations/*.sql 2>/dev/null | wc -l) migration files"
+          else
+            echo "::error title=Scratch database unavailable::Supabase local stack DB did not become ready."
+            exit 1
+          fi
 
       - name: Compare scratch schema to live schema
         id: compare
@@ -159,6 +166,12 @@ jobs:
           --actual-label supabase-live
           --output artifacts/schema-parity/live-schema-parity.json
           --pretty
+
+      - name: Diagnostics — compare exit status
+        if: always()
+        run: |
+          echo "schema compare step outcome: ${{ steps.compare.outcome }}"
+          echo "(a non-success outcome here is surfaced as a real parity verdict by the drift gate below, not swallowed)"
 
       - name: Authorize schema drift gate
         if: always()
@@ -179,3 +192,7 @@ jobs:
           path: artifacts/schema-parity/
           retention-days: 30
           if-no-files-found: warn
+
+      - name: Stop Supabase local stack
+        if: always()
+        run: supabase stop --no-backup || true
