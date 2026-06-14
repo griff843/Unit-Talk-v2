@@ -88,6 +88,13 @@ export interface IngestLeagueOptions {
   replayCaptureSession?: ProviderOfferReplayCaptureSession;
   /** Optional quarantine registry — receives circuit-open events for this provider. */
   quarantineRegistry?: ProviderQuarantineRegistry;
+  /**
+   * External abort signal (per-league timeout from the runner). When it fires,
+   * in-flight SGO fetches are cancelled and the next phase checkpoint throws,
+   * routing into the catch below so the cycle is recorded fail-closed rather than
+   * hanging. (UTV2-1280)
+   */
+  signal?: AbortSignal;
 }
 
 export interface IngestQuotaSummary {
@@ -213,6 +220,7 @@ export async function ingestLeague(
           : {}),
         ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         ...(options.sleep ? { sleep: options.sleep } : {}),
+        ...(options.signal ? { signal: options.signal } : {}),
         ...(options.replayCaptureSession
           ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
           : {}),
@@ -254,6 +262,10 @@ export async function ingestLeague(
       fetched = propResult
         ? mergeSgoFetchResults(gameLineResult, propResult)
         : gameLineResult;
+
+      // Checkpoint: if the per-league deadline fired during the fetch phase, stop
+      // before the heavier DB write/entity-resolution phase. (UTV2-1280)
+      options.signal?.throwIfAborted();
 
       try {
         await archiveRawProviderPayload({
@@ -502,6 +514,8 @@ export async function ingestLeague(
     if (options.skipResults) {
       fetchedResults = emptyResults;
     } else {
+      // Checkpoint before the results fetch/resolve phase. (UTV2-1280)
+      options.signal?.throwIfAborted();
       const resultsFetchFn = () =>
         fetchSGOResultsWithTelemetry({
           apiKey,
@@ -524,6 +538,7 @@ export async function ingestLeague(
             : {}),
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),
+          ...(options.signal ? { signal: options.signal } : {}),
           ...(options.replayCaptureSession
             ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
             : {}),

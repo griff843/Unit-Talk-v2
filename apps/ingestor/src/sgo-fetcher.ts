@@ -36,6 +36,12 @@ export interface SGOFetchOptions {
   /** When true, requests SGO open/close fields on a live fetch (used by the player-prop fetch). */
   includeOpenCloseOdds?: boolean;
   requestObserver?: SGORequestObserver;
+  /**
+   * External abort signal. When aborted (e.g. by the runner's per-league timeout),
+   * any in-flight page fetch is cancelled and pagination stops, surfacing the
+   * abort to the caller so the cycle fails closed rather than hanging. (UTV2-1280)
+   */
+  signal?: AbortSignal;
 }
 
 export interface SGOFetchResult {
@@ -60,6 +66,8 @@ export interface SGOResultsFetchOptions {
   /** Max total time for all paginated fetches (ms). Defaults to 300_000 (5 min). */
   maxFetchMs?: number;
   requestObserver?: SGORequestObserver;
+  /** External abort signal — cancels in-flight result fetches on per-league timeout. (UTV2-1280) */
+  signal?: AbortSignal;
 }
 
 export interface SGORequestTelemetry {
@@ -198,6 +206,7 @@ export async function fetchAndPairSGOProps(
     url,
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
     ...(options.requestObserver
       ? { requestObserver: options.requestObserver }
       : {}),
@@ -285,6 +294,7 @@ export async function fetchSGOResultsWithTelemetry(
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
     ...(options.maxFetchMs !== undefined ? { maxFetchMs: options.maxFetchMs } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
     ...(options.requestObserver
       ? { requestObserver: options.requestObserver }
       : {}),
@@ -315,6 +325,7 @@ async function fetchSgoPages(input: {
   sleep?: (ms: number) => Promise<void>;
   maxFetchMs?: number;
   requestObserver?: SGORequestObserver;
+  signal?: AbortSignal;
 }) {
   const telemetry = createEmptyTelemetry(input.endpoint);
   const payloads: unknown[] = [];
@@ -325,6 +336,9 @@ async function fetchSgoPages(input: {
   const startMs = Date.now();
 
   for (let page = 0; page < MAX_SGO_PAGINATION_PAGES; page += 1) {
+    // Fail closed promptly if the caller's deadline (per-league timeout) fired —
+    // do not start another page. (UTV2-1280)
+    input.signal?.throwIfAborted();
     const elapsedMs = Date.now() - startMs;
     if (elapsedMs >= maxFetchMs) {
       console.warn(
@@ -342,6 +356,7 @@ async function fetchSgoPages(input: {
       url: pageUrl,
       pageIndex: page + 1,
       cursor: nextCursor,
+      ...(input.signal ? { signal: input.signal } : {}),
     });
     mergeTelemetry(telemetry, result.telemetry);
     if (result.endOfResults) {
@@ -375,18 +390,26 @@ async function fetchSgoJson(input: {
   requestObserver?: SGORequestObserver;
   pageIndex: number;
   cursor: string | null;
+  signal?: AbortSignal;
 }) {
   const telemetry = createEmptyTelemetry(input.endpoint);
   let lastStatusText = 'unknown';
 
   for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
+    input.signal?.throwIfAborted();
     const startedAtMs = Date.now();
+    // Combine the per-request 30s timeout with the caller's external deadline so
+    // a hung page aborts on whichever fires first. (UTV2-1280)
+    const perRequestTimeout = AbortSignal.timeout(30_000);
+    const fetchSignal = input.signal
+      ? AbortSignal.any([input.signal, perRequestTimeout])
+      : perRequestTimeout;
     const response = await input.fetchImpl(input.url.toString(), {
       method: 'GET',
       headers: {
         accept: 'application/json',
       },
-      signal: AbortSignal.timeout(30_000),
+      signal: fetchSignal,
     });
 
     telemetry.requestCount += 1;
