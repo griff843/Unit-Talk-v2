@@ -27,6 +27,14 @@ export interface SGOFetchOptions {
   historical?: boolean;
   /** When true, passes bookmakerID=pinnacle to restrict response to Pinnacle odds only. */
   pinnacleOnly?: boolean;
+  /**
+   * When set, restricts the request to these PLAYER_ID-wildcard oddID patterns
+   * (dedicated player-prop fetch). Never combined with pinnacleOnly — Pinnacle
+   * carries no player props. See SGO_PLAYER_PROP_ODD_ID_PATTERNS. (UTV2-1275 Wave 1)
+   */
+  playerPropOddIdPatterns?: string[];
+  /** When true, requests SGO open/close fields on a live fetch (used by the player-prop fetch). */
+  includeOpenCloseOdds?: boolean;
   requestObserver?: SGORequestObserver;
 }
 

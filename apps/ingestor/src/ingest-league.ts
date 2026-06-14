@@ -72,6 +72,14 @@ export interface IngestLeagueOptions {
   historical?: boolean;
   /** When true, passes bookmakerID=pinnacle to SGO — use during peak-window polling. */
   pinnacleOnly?: boolean;
+  /**
+   * PLAYER_ID-wildcard oddID patterns for a dedicated player-prop fetch
+   * (UTV2-1275 Wave 1). When set on a live (non-historical) ingest, a SECOND SGO
+   * request is issued for these patterns WITHOUT pinnacleOnly, so player props are
+   * ingested every cycle regardless of peak Pinnacle-only game-line polling, and
+   * the props are merged with the game-line result before normalization.
+   */
+  playerPropOddIdPatterns?: string[];
   providerOfferStagingMode?: ProviderOfferStagingMode;
   providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
   providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
@@ -191,35 +199,61 @@ export async function ingestLeague(
     if (options.resultsOnly) {
       fetched = createEmptyFetchResult(snapshotAt);
     } else {
-      const oddsFetchFn = () =>
+      // Shared request options for both the game-line and player-prop fetches.
+      const sharedFetchOptions: SGOFetchOptions = {
+        apiKey,
+        league,
+        snapshotAt,
+        ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+        ...(options.startsBefore
+          ? { startsBefore: options.startsBefore }
+          : {}),
+        ...(options.providerEventIds
+          ? { providerEventIds: options.providerEventIds }
+          : {}),
+        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+        ...(options.sleep ? { sleep: options.sleep } : {}),
+        ...(options.replayCaptureSession
+          ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
+          : {}),
+        ...(options.historical ? { historical: true } : {}),
+      };
+
+      // Game-line fetch: may be Pinnacle-only during peak polling.
+      const gameLineFetchFn = () =>
         fetchAndPairSGOProps({
-          apiKey,
-          league,
-          snapshotAt,
-          ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
-          ...(options.startsBefore
-            ? { startsBefore: options.startsBefore }
-            : {}),
-          ...(options.providerEventIds
-            ? { providerEventIds: options.providerEventIds }
-            : {}),
-          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-          ...(options.sleep ? { sleep: options.sleep } : {}),
-          ...(options.replayCaptureSession
-            ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
-            : {}),
-          ...(options.historical ? { historical: true } : {}),
+          ...sharedFetchOptions,
           ...(options.pinnacleOnly ? { pinnacleOnly: true } : {}),
         });
 
       const oddsCb =
         options.circuitBreakers?.odds ??
         new CircuitBreaker(
-          oddsFetchFn,
+          gameLineFetchFn,
           createEmptyFetchResult(snapshotAt),
           options.circuitBreaker,
         );
-      fetched = await oddsCb.call(oddsFetchFn);
+      const gameLineResult = await oddsCb.call(gameLineFetchFn);
+
+      // Player-prop fetch (UTV2-1275 Wave 1): a SEPARATE request using PLAYER_ID
+      // oddID patterns, never Pinnacle-only (Pinnacle carries no player props),
+      // run every cycle on live ingest so props stay fresh and are not dropped by
+      // peak Pinnacle-only game-line polling. Merged before normalization.
+      const propPatterns = options.playerPropOddIdPatterns ?? [];
+      let propResult: SGOFetchResult | null = null;
+      if (!options.historical && propPatterns.length > 0) {
+        const propFetchFn = () =>
+          fetchAndPairSGOProps({
+            ...sharedFetchOptions,
+            playerPropOddIdPatterns: propPatterns,
+            includeOpenCloseOdds: true,
+          });
+        propResult = await oddsCb.call(propFetchFn);
+      }
+
+      fetched = propResult
+        ? mergeSgoFetchResults(gameLineResult, propResult)
+        : gameLineResult;
 
       try {
         await archiveRawProviderPayload({
@@ -740,6 +774,62 @@ function createEmptyFetchResult(_snapshotAt: string): SGOFetchResult {
     rawPayloads: [],
     rawBodies: [],
     requestTelemetry: createEmptyRequestTelemetry('odds'),
+  };
+}
+
+/**
+ * Merge the game-line and player-prop SGO fetch results (UTV2-1275 Wave 1).
+ * Events are de-duplicated by providerEventId (event metadata is identical across
+ * the two requests); paired props and raw payloads are concatenated; telemetry is
+ * summed so quota accounting reflects both requests.
+ */
+function mergeSgoFetchResults(
+  gameLine: SGOFetchResult,
+  prop: SGOFetchResult,
+): SGOFetchResult {
+  const eventsById = new Map<string, SGOFetchResult['events'][number]>();
+  for (const event of gameLine.events) {
+    eventsById.set(event.providerEventId, event);
+  }
+  for (const event of prop.events) {
+    if (!eventsById.has(event.providerEventId)) {
+      eventsById.set(event.providerEventId, event);
+    }
+  }
+  const events = [...eventsById.values()];
+  return {
+    eventsCount: events.length,
+    events,
+    pairedProps: [...gameLine.pairedProps, ...prop.pairedProps],
+    rawPayloads: [...gameLine.rawPayloads, ...prop.rawPayloads],
+    rawBodies: [...gameLine.rawBodies, ...prop.rawBodies],
+    requestTelemetry: mergeOddsTelemetry(
+      gameLine.requestTelemetry,
+      prop.requestTelemetry,
+    ),
+  };
+}
+
+function mergeOddsTelemetry(
+  a: SGORequestTelemetry,
+  b: SGORequestTelemetry,
+): SGORequestTelemetry {
+  return {
+    provider: 'sgo',
+    endpoint: 'odds',
+    requestCount: a.requestCount + b.requestCount,
+    successfulRequests: a.successfulRequests + b.successfulRequests,
+    creditsUsed: a.creditsUsed + b.creditsUsed,
+    limit: b.limit ?? a.limit,
+    remaining: b.remaining ?? a.remaining,
+    resetAt: b.resetAt ?? a.resetAt,
+    lastStatus: b.lastStatus ?? a.lastStatus,
+    rateLimitHitCount: a.rateLimitHitCount + b.rateLimitHitCount,
+    backoffCount: a.backoffCount + b.backoffCount,
+    backoffMs: a.backoffMs + b.backoffMs,
+    retryAfterMs: b.retryAfterMs ?? a.retryAfterMs,
+    throttled: a.throttled || b.throttled,
+    headersSeen: a.headersSeen || b.headersSeen,
   };
 }
 

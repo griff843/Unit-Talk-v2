@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1275",
+  "sha_binding": {
+    "verified_source_sha": "e7d681947856b0e2572f3e2ccd2f6fad2a96e61a",
+    "verified_source_note": "PR-head commit for the SGO game-line/player-prop fetch split (UTV2-1275 Wave 1). Rebound to the merge SHA post-merge.",
+    "sha_type": "pr_head_sha",
+    "bound_at": "2026-06-14T05:00:00.000Z",
+    "ci_sentinels": {
+      "verify": "pending",
+      "merge_gate": "pending",
+      "proof_auditor_gate": "pending",
+      "t1_proof_gate": "pending",
+      "runtime_verifier_gate": "pending",
+      "lane_authority": "pending",
+      "file_scope_lock": "pending",
+      "require_live_db_proof": "pending",
+      "r_level_compliance": "pending",
+      "return_review_packet": "pending"
+    }
+  },
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "suites": 104,
+      "note": "lint + type-check + build + full test matrix + smart-form verify + verify:commands"
+    },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/player-prop-ingest.test.ts",
+      "status": "PASS",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "Live Supabase DB smoke. No production rows mutated by this lane; ingestor request-construction change only. Live-slate confirmation (provider_offer_history player-row increase + non-stale candidate) is a post-deploy runtime check."
+  },
+  "root_cause": {
+    "summary": "Single SGO odds request collapsed to bookmakerID=pinnacle on peak (UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true in prod); Pinnacle carries no MLB player props, so props were filtered out at ingestion. PLAYER_ID fetch path existed but was never wired into the runner.",
+    "category": "A+B: player props filtered by Pinnacle-only request; PLAYER_ID oddID patterns not used in production"
+  }
+}

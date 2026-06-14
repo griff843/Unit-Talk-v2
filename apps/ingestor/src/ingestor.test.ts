@@ -1679,7 +1679,10 @@ test('runIngestorCycles records rate limit backoff telemetry in quota summary', 
   assert.equal(cycles[0]?.results[0]?.quota.rateLimitHitCount, 1);
   assert.equal(cycles[0]?.results[0]?.quota.backoffCount, 1);
   assert.equal(cycles[0]?.results[0]?.quota.backoffMs, 2000);
-  assert.equal(cycles[0]?.results[0]?.quota.requestCount, 3);
+  // UTV2-1275 Wave 1: a dedicated player-prop odds fetch now runs every cycle in
+  // addition to the game-line fetch, so the request count includes that extra call
+  // (game-line 429 + retry + player-prop + results).
+  assert.equal(cycles[0]?.results[0]?.quota.requestCount, 4);
 
   const storedRuns = Array.from(
     (
