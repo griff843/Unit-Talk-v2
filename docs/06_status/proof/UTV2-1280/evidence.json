@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1280",
+  "sha_binding": {
+    "verified_source_sha": "a9248430",
+    "verified_source_note": "PR head: per-league hard timeout (AbortSignal + Promise.race), abort-signal threading through SGO fetch/pagination, narrowed live player-prop fetch window, env wiring, focused tests.",
+    "sha_type": "pr_head_sha",
+    "bound_at": "2026-06-14T13:30:00.000Z",
+    "merge_sha": "<bound post-merge>",
+    "evidence_commit_sha": "<bound post-merge>",
+    "current_pr_head_sha": "a9248430",
+    "ci_sentinels": {
+      "verify": "pending_merge_sha",
+      "merge_gate": "pending_merge_sha",
+      "proof_auditor_gate": "pending_merge_sha",
+      "t1_proof_gate": "pending_merge_sha",
+      "runtime_verifier_gate": "pending_merge_sha",
+      "lane_authority": "pending_merge_sha",
+      "file_scope_lock": "pending_merge_sha",
+      "require_live_db_proof": "pending_merge_sha",
+      "r_level_compliance": "pending_merge_sha",
+      "return_review_packet": "pending_merge_sha"
+    }
+  },
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify (components run individually on the branch)",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "type-check + lint + build + test all green; env:check not re-run locally (creds gate) — runs in CI on the merge SHA."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "build": {
+      "command": "pnpm build",
+      "status": "PASS"
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "exit 0 on two independent runs; 0 'not ok' lines across all sub-suites."
+    },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/ingest-league-timeout.test.ts",
+      "status": "PASS",
+      "tests": 5,
+      "pass": 5,
+      "fail": 0
+    },
+    "regression_tests": {
+      "command": "tsx --test apps/ingestor/src/player-prop-ingest.test.ts apps/ingestor/src/ingestor.test.ts",
+      "status": "PASS",
+      "tests": 92,
+      "pass": 92,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "note": "Code/runtime-safety lane. T1 runtime proof = live Supabase smoke. Live production freshness proof (fresh MLB provider_offer_history rows + provider_participant_id) is PM-deferred to post-deploy UTV2-1279 — only deployed runtime can prove it. No production rows mutated by this lane.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke (7/7). Read-only diagnostic SELECTs on system_runs / provider_cycle_status / provider_offer_history / pg_roles established root cause; no DB writes by this lane."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "DIAGNOSTIC: system_runs ingestor.cycle MLB — hung run 49c7d04f status=running ~7.5h; 06-13 runs reaped failed",
+      "DIAGNOSTIC: provider_cycle_status sgo/MLB — last merged 2026-06-12 07:35 then dark",
+      "DIAGNOSTIC: provider_offer_history sport_key freshness — MLB latest 2026-06-12 07:35 vs NBA 2026-06-14 05:15",
+      "DIAGNOSTIC: pg_roles rolconfig — service_role/postgres have no statement_timeout"
+    ],
+    "row_counts": [
+      { "label": "MLB provider_offer_history rows (5d)", "value": 125091 },
+      { "label": "MLB latest snapshot_at", "value": "2026-06-12T07:35:51Z (stale — pre-fix)" },
+      { "label": "NBA latest snapshot_at", "value": "2026-06-14T05:15:03Z (fresh)" }
+    ]
+  },
+  "live_production_proof": {
+    "status": "DEFERRED_POST_DEPLOY",
+    "owner": "UTV2-1279",
+    "reason": "Only deployed production runtime can prove: prod SHA includes UTV2-1280; scheduled MLB cycle completes or fails closed in prod; fresh same-day MLB provider_offer_history rows with provider_participant_id; market_universe/candidates flow or exact next blocker. PM decision 2026-06-14: no local production-mutating live cycle."
+  }
+}
