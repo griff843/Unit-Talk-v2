@@ -1,6 +1,7 @@
 import type { DatabaseConnectionConfig, EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
 import { CircuitBreaker, type CircuitBreakerOptions } from './circuit-breaker.js';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
+import { SGO_PLAYER_PROP_ODD_ID_PATTERNS } from './sgo-request-contract.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
 import { ProviderQuarantineRegistry } from './provider-quarantine.js';
 import type {
@@ -132,6 +133,7 @@ export async function runIngestorCycles(
     const usePinnacleOnly = options.pinnacleOnlyPeak === true && cycleResolution.mode === 'peak';
 
     for (const league of options.leagues) {
+      const playerPropPatterns = leaguePlayerPropPatterns(league);
       try {
         results.push(
           await ingestLeague(league, options.apiKey, options.repositories, {
@@ -153,6 +155,12 @@ export async function runIngestorCycles(
               ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
               : {}),
             ...(usePinnacleOnly ? { pinnacleOnly: true } : {}),
+            // Dedicated player-prop fetch runs every cycle regardless of peak
+            // Pinnacle-only game-line polling (UTV2-1275 Wave 1), so player props
+            // are ingested fresh and are not filtered out by Pinnacle.
+            ...(playerPropPatterns
+              ? { playerPropOddIdPatterns: playerPropPatterns }
+              : {}),
             circuitBreaker: {
               ...options.circuitBreaker,
               failClosed: true,
@@ -348,6 +356,18 @@ async function runFinalizedRepollsForCycle(
   }
 
   return repolls;
+}
+
+/**
+ * PLAYER_ID-wildcard oddID patterns for a league's dedicated player-prop fetch,
+ * or undefined when none are defined (UTV2-1275 Wave 1).
+ */
+function leaguePlayerPropPatterns(league: string): string[] | undefined {
+  const patterns =
+    SGO_PLAYER_PROP_ODD_ID_PATTERNS[
+      league as keyof typeof SGO_PLAYER_PROP_ODD_ID_PATTERNS
+    ];
+  return patterns ? [...patterns] : undefined;
 }
 
 function createSgoCircuitBreakers(

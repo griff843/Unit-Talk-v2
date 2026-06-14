@@ -88,6 +88,13 @@ export interface SGOOddsRequestOptions extends SGOBaseRequestOptions {
    * Leave undefined to fall back to full-league fetch (all markets).
    */
   playerPropOddIdPatterns?: string[];
+  /**
+   * When true, requests SGO open/close bookmaker fields on a LIVE (non-historical)
+   * fetch (historical mode always sets them). Safe to combine with
+   * playerPropOddIdPatterns — used by the dedicated player-prop fetch so open/close
+   * identity is available for forward-flow CLV (UTV2-1275 Wave 1).
+   */
+  includeOpenCloseOdds?: boolean;
 }
 
 export interface SGOResultsRequestOptions extends SGOBaseRequestOptions {
@@ -103,6 +110,9 @@ export function buildSgoOddsRequestUrl(options: SGOOddsRequestOptions): URL {
     url.searchParams.set('includeOpenCloseOdds', 'true');
   } else {
     url.searchParams.set('oddsAvailable', 'true');
+    if (options.includeOpenCloseOdds) {
+      url.searchParams.set('includeOpenCloseOdds', 'true');
+    }
   }
 
   if (options.playerPropOddIdPatterns?.length) {
