@@ -8,7 +8,7 @@
   "branch": "griffadavi/utv2-1280-ingestor-mlb-cycle-hangs-no-mlb-provider-offers-since-2026",
   "base_branch": "main",
   "commit_sha": "",
-  "pr_url": "",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1024",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/sgo-request-contract.ts",
@@ -30,7 +30,7 @@
   ],
   "status": "in_progress",
   "started_at": "2026-06-14T12:55:00.000Z",
-  "heartbeat_at": "2026-06-14T16:15:00.000Z",
+  "heartbeat_at": "2026-06-14T16:16:45.634Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1280-ingestor-mlb-cycle-hangs-no-mlb-provider-offers-since-2026.json",
   "created_by": "claude",
