@@ -1,4 +1,4 @@
-﻿-- UTV2-912: market_type_id alias backfill
+-- UTV2-912: market_type_id alias backfill
 -- Adds missing market_types and provider_market_aliases to resolve 8,558 null
 -- market_type_id rows in market_universe. 671 rows remain intentionally null
 -- (MLB game_total_ou rows where provider_participant_id IS NOT NULL — participant-forbidden).

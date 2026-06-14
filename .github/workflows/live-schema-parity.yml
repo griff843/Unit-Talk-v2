@@ -158,8 +158,10 @@ jobs:
       - name: Compare scratch schema to live schema
         id: compare
         continue-on-error: true
+        # Direct `pnpm exec tsx` invocation: `pnpm <script> -- <args>` forwards the
+        # literal `--` to the script, which its arg parser rejects. (UTV2-1274)
         run: >
-          pnpm db:compare --
+          pnpm exec tsx scripts/ops/compare-databases.ts
           --expected-db-url "$EXPECTED_DATABASE_URL"
           --actual-db-url "$ACTUAL_DATABASE_URL"
           --expected-label repo-migrations
@@ -176,7 +178,7 @@ jobs:
       - name: Authorize schema drift gate
         if: always()
         run: >
-          pnpm ci:schema-drift-gate --
+          pnpm exec tsx scripts/ci/schema-drift-gate.ts
           --report artifacts/schema-parity/live-schema-parity.json
           --artifact-dir artifacts/schema-parity
           --expected-db-url "$EXPECTED_DATABASE_URL"
