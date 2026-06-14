@@ -1,5 +1,7 @@
 # UTV2-1275 — Diff Summary (Wave 1)
 
+Merge SHA: `39088f31a6450b22e05feeefddd7dc6ad0a233ef` (PR #1023, merged to main 2026-06-14)
+
 Restore SGO MLB player-prop ingestion by splitting the single SGO odds request into a
 game-line fetch and a dedicated player-prop fetch.
 

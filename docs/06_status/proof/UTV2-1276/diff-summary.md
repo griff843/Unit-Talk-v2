@@ -1,5 +1,7 @@
 # UTV2-1276 — Diff Summary
 
+Merge SHA: `f8919d52b234031e75f6df9b79cdf12b546b17f0` (PR #1022, merged to main 2026-06-14)
+
 Durable GitHub Actions monitor replacing the session-only Track A cron (UTV2-1250 watch).
 
 ## Added

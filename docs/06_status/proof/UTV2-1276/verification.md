@@ -6,7 +6,7 @@ Tier: **T2**. Lane type: ops/runtime tooling (scheduled workflow + read-only mon
 
 ## Merge SHA
 
-_(bound post-merge by `post-merge-lane-close.yml` / `ops:proof-generate --merge-sha`)_
+`f8919d52b234031e75f6df9b79cdf12b546b17f0` (PR #1022, merged to main 2026-06-14)
 
 ## What shipped
 
@@ -70,3 +70,7 @@ monitor reads — passed, confirming connectivity and schema integrity:
 # todo 0
 # duration_ms 111707
 ```
+
+## R-level check
+
+`scripts/ci/r-level-check.ts` — R-level compliance verified: T2 lane; no runtime T1 artifacts required. CI ran `pnpm type-check` (TypeScript project-references build check) and `pnpm test` (full test matrix) on the PR head SHA; both green on merge.
