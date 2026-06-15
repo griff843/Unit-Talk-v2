@@ -1,0 +1,14 @@
+-- IRREVERSIBLE: schema baseline replay root (UTV2-1274, Option B baseline/squash).
+--
+-- 00000000000000_baseline_live_schema.sql is a schema-only snapshot of the live
+-- database that serves as the single replay root for Live Schema Parity. It is not a
+-- forward migration and has no meaningful "down": reverting it would drop the entire
+-- public schema. There is no prior state to restore to — every migration before this
+-- baseline has been archived as historical/non-replayable (see
+-- supabase/migrations_archive/README.md).
+--
+-- Recovery path for the live database is Point-In-Time Recovery, never a down script.
+-- See docs/05_operations/DB_ROLLBACK_RUNBOOK.md.
+--
+-- This irreversibility is PM-ratified in
+-- db/migrations-rollback/irreversible-exemption-registry.json.

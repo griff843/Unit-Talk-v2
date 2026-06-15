@@ -15,6 +15,13 @@
       "pitr_runbook_ref": "docs/05_operations/DB_ROLLBACK_RUNBOOK.md",
       "ratified_at": "2026-05-22",
       "ratified_by": "griff843"
+    },
+    {
+      "migration": "00000000000000_baseline_live_schema",
+      "reason": "Schema-only snapshot of the live database adopted as the single Live Schema Parity replay root (Option B baseline/squash). It is not a forward migration: its only 'down' would be dropping the entire public schema, and there is no prior state to restore to because every pre-baseline migration is archived as historical/non-replayable. Live recovery is PITR, never a down script.",
+      "pitr_runbook_ref": "docs/05_operations/DB_ROLLBACK_RUNBOOK.md",
+      "ratified_at": "2026-06-15",
+      "ratified_by": "griff843"
     }
   ]
 }

@@ -192,6 +192,13 @@ jobs:
           echo "schema compare step outcome: ${{ steps.compare.outcome }}"
           echo "(a non-success outcome here is surfaced as a real parity verdict by the drift gate below, not swallowed)"
 
+      # The gate is deny-by-default. The only allowed drift is two extension-provisioning
+      # differences between the Supabase local stack and live — NOT schema content (a
+      # --schema=public baseline cannot carry extensions, which live in other schemas):
+      #   - extensions.pg_net : enabled by default on the local stack, not on live.
+      #   - pg_catalog.pg_cron: enabled on live (scheduled partition lifecycle), absent on the
+      #     local stack (pg_cron needs shared_preload_libraries, off by default locally).
+      # Every other relation/column/constraint/index/policy/trigger remains fail-closed.
       - name: Authorize schema drift gate
         if: always()
         run: >
@@ -202,6 +209,8 @@ jobs:
           --actual-db-url "$ACTUAL_DATABASE_URL"
           --schema public
           --inspect-limit 200
+          --allow-extension extensions.pg_net
+          --allow-extension pg_catalog.pg_cron
 
       - name: Upload schema parity artifact
         if: always()
