@@ -71,8 +71,7 @@ async function main(): Promise<void> {
 
   // Bounded poll: wait for the parity check to conclude, then require success.
   // (Date.now is fine here — this is a CI assertion script, not a workflow journal.)
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     const runs = await fetchCheckRuns(repo, sha, token, checkName);
     // If multiple runs exist for the name, the latest concluded one wins; otherwise track status.
     const completed = runs.filter((r) => r.status === 'completed');
