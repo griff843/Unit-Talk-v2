@@ -6,7 +6,7 @@ import { experimentRunTypes } from './schema.js';
 
 const migration = readFileSync(
   new URL(
-    '../../../supabase/migrations/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql',
+    '../../../supabase/migrations_archive/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql',
     import.meta.url,
   ),
   'utf8',

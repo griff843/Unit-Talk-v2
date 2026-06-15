@@ -6,7 +6,7 @@ import test from 'node:test';
 const FIX_MIGRATION = readFileSync(
   resolve(
     process.cwd(),
-    'supabase/migrations/202605090003_utv2_871_provider_offers_quarantine_prune_fix.sql',
+    'supabase/migrations_archive/202605090003_utv2_871_provider_offers_quarantine_prune_fix.sql',
   ),
   'utf8',
 );

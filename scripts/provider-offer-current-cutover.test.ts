@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import test from 'node:test';
 
 const SOURCE = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/202604291003_utv2_772_provider_offer_current_table_cutover.sql'),
+  resolve(process.cwd(), 'supabase/migrations_archive/202604291003_utv2_772_provider_offer_current_table_cutover.sql'),
   'utf8',
 );
 

@@ -5,7 +5,7 @@ import { experimentRunTypes } from '../schema.js';
 
 const migration = readFileSync(
   new URL(
-    '../../../../supabase/migrations/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql',
+    '../../../../supabase/migrations_archive/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql',
     import.meta.url,
   ),
   'utf8',
@@ -25,7 +25,7 @@ const verdict = {
   schema: 'experiment-ledger-shadow-proof/v1',
   issue: 'UTV2-735',
   migration:
-    'supabase/migrations/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql',
+    'supabase/migrations_archive/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql',
   table: 'experiment_ledger',
   constraint: 'experiment_ledger_run_type_check',
   allowedRunTypes: experimentRunTypes,

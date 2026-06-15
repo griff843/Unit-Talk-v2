@@ -20,7 +20,7 @@ async function main() {
   loadEnv();
   const sb = createClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
 
-  const sql = readFileSync(resolve(__dirname, '..', 'supabase/migrations/202604230001_utv2_719_fix_team_external_ids_and_league.sql'), 'utf8');
+  const sql = readFileSync(resolve(__dirname, '..', 'supabase/migrations_archive/202604230001_utv2_719_fix_team_external_ids_and_league.sql'), 'utf8');
 
   // Execute via rpc since supabase-js doesn't support raw DDL directly
   // Split by ; and run each statement
