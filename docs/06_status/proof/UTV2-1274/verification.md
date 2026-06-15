@@ -1,7 +1,7 @@
 # UTV2-1274 — Live Schema Parity end-to-end (Option B baseline) — Verification
 
 **Tier:** T1 · **Lane type:** migration · **Status:** COMPLETE
-**SHA binding:** `76afaf800fff81e576ae7ffe1dc5f9b8fa2758ac` (last non-proof commit on the lane)
+**SHA binding:** `0e1e36147fd7ecf4c089f6dd24fb1e8dc861669b` (last non-proof commit on the lane)
 
 ## Verification
 

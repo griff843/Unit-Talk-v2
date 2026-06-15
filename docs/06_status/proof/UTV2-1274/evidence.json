@@ -6,7 +6,7 @@
   "description": "Live Schema Parity — make the scratch-DB parity job run end-to-end. Option B (baseline/squash): adopt a schema-only snapshot of live as the forward-only replay root, archive the 122 non-replayable pre-baseline migrations, and reach a real fail-closed PASS verdict comparing the replayed baseline to live.",
   "status": "COMPLETE",
   "sha_binding": {
-    "verified_source_sha": "76afaf800fff81e576ae7ffe1dc5f9b8fa2758ac",
+    "verified_source_sha": "0e1e36147fd7ecf4c089f6dd24fb1e8dc861669b",
     "ci_sentinels": [
       "https://github.com/griff843/Unit-Talk-v2/actions/runs/27524264024",
       "https://github.com/griff843/Unit-Talk-v2/actions/runs/27524035425"
@@ -72,6 +72,6 @@
     "R2": "pnpm type-check PASS — compare-databases.ts --exclude-relation-pattern is type-safe.",
     "R3": "Live-DB runtime proof: Live Schema Parity ran end-to-end against real live Supabase (via pooler) and the Supabase local stack, drift gate verdict PASS (run 27524264024). Per the PM-approved C2 exception (see c2_live_db_proof_exception), this read-only parity PASS is the live-DB proof for this schema-only lane in lieu of `pnpm test:db`.",
     "R4": "Evidence bundle present — this file + verification.md.",
-    "R5": "SHA binding set to the last non-proof commit 76afaf80; the only commits after it touch proof paths only."
+    "R5": "SHA binding set to the last non-proof commit 0e1e3614; the only commits after it touch proof paths only."
   }
 }
