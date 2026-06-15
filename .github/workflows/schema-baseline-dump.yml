@@ -18,10 +18,11 @@ name: Schema Baseline Dump
 #     drift tomorrow. The parent partitioned table + partitioning function are retained.
 #
 # Operator-triggered generator, not a gate. workflow_dispatch is the long-term entry
-# point (usable once this file lands on the default branch). Until then, a path-scoped
-# push trigger on the lane branch runs the generator when this workflow file is pushed —
-# GitHub's workflow_dispatch API cannot target a workflow that is not yet on the default
-# branch, so the push trigger is the bootstrap path. (UTV2-1274)
+# point (usable once this file lands on the default branch). Until then — because the
+# workflow_dispatch API cannot target a workflow not yet on the default branch — the
+# generator is run by bumping the sentinel file supabase/.baseline-dump-trigger and
+# pushing. Editing this workflow file alone does NOT trigger a run, so the generator does
+# not fire before the SUPABASE_DB_POOLER_URL secret is provisioned. (UTV2-1274)
 
 on:
   workflow_dispatch:
@@ -29,7 +30,7 @@ on:
     branches:
       - 'griffadavi/utv2-1274-*'
     paths:
-      - '.github/workflows/schema-baseline-dump.yml'
+      - 'supabase/.baseline-dump-trigger'
 
 permissions:
   contents: read
@@ -78,11 +79,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Derive IPv4 session-pooler URL
+      - name: Select live DB connection URL (prefer pooler)
         uses: ./.github/actions/supabase-pooler-url
         with:
-          db-url: ${{ secrets.SUPABASE_DB_URL }}
-          region: us-west-2
+          pooler-url: ${{ secrets.SUPABASE_DB_POOLER_URL }}
+          direct-url: ${{ secrets.SUPABASE_DB_URL }}
 
       - name: Dump live schema (schema-only, read-only)
         env:

@@ -42,6 +42,8 @@ jobs:
       - id: check
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # Preferred IPv4-reachable session-mode pooler URL (see supabase-pooler-url action).
+          SUPABASE_DB_POOLER_URL: ${{ secrets.SUPABASE_DB_POOLER_URL }}
           # Opt-in enforcement flag (mirrors CI_REQUIRE_DB_SMOKE / required-db-smoke).
           CI_REQUIRE_SCHEMA_PARITY: ${{ vars.CI_REQUIRE_SCHEMA_PARITY }}
         run: |
@@ -61,14 +63,18 @@ jobs:
           fi
           echo "required=$required" >> "$GITHUB_OUTPUT"
 
-          if [ -n "$SUPABASE_DB_URL" ]; then
+          # Configured when EITHER the pooler URL (preferred) or the direct URL is present.
+          # Diagnostics report presence only, never the secret values.
+          echo "pooler URL configured: $([ -n "$SUPABASE_DB_POOLER_URL" ] && echo yes || echo no)"
+          echo "direct URL configured: $([ -n "$SUPABASE_DB_URL" ] && echo yes || echo no)"
+          if [ -n "$SUPABASE_DB_POOLER_URL" ] || [ -n "$SUPABASE_DB_URL" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
             if [ "$required" = "true" ]; then
-              echo "::error title=Live schema parity unverified::SUPABASE_DB_URL is not configured but parity is REQUIRED on this ref. A skip is treated as FAIL (D-CONST-4 / D-CONST-7, fail-closed). Provision the SUPABASE_DB_URL secret."
+              echo "::error title=Live schema parity unverified::Neither SUPABASE_DB_POOLER_URL nor SUPABASE_DB_URL is configured but parity is REQUIRED on this ref. A skip is treated as FAIL (D-CONST-4 / D-CONST-7, fail-closed). Provision the SUPABASE_DB_POOLER_URL secret."
             else
-              echo "::warning title=Live schema parity skipped::SUPABASE_DB_URL not configured — parity not verified on this feature ref. This is a LOUD skip, not a pass."
+              echo "::warning title=Live schema parity skipped::No live DB URL configured — parity not verified on this feature ref. This is a LOUD skip, not a pass."
             fi
           fi
 
@@ -136,11 +142,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Derive IPv4 session-pooler URL (live/ACTUAL)
+      - name: Select live DB connection URL (prefer pooler) — ACTUAL
         uses: ./.github/actions/supabase-pooler-url
         with:
-          db-url: ${{ secrets.SUPABASE_DB_URL }}
-          region: us-west-2
+          pooler-url: ${{ secrets.SUPABASE_DB_POOLER_URL }}
+          direct-url: ${{ secrets.SUPABASE_DB_URL }}
           out-env: ACTUAL_DATABASE_URL
 
       - name: Start Supabase local stack
