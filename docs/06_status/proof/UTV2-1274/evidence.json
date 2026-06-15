@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1274",
+  "tier": "T1",
+  "lane_type": "migration",
+  "description": "Live Schema Parity — make the scratch-DB parity job run end-to-end. Option B (baseline/squash): adopt a schema-only snapshot of live as the forward-only replay root, archive the 122 non-replayable pre-baseline migrations, and reach a real fail-closed PASS verdict comparing the replayed baseline to live.",
+  "status": "COMPLETE",
+  "sha_binding": {
+    "verified_source_sha": "35b35b128948216d92f6719ef274a3b4ad56cf17",
+    "ci_sentinels": [
+      "https://github.com/griff843/Unit-Talk-v2/actions/runs/27524264024",
+      "https://github.com/griff843/Unit-Talk-v2/actions/runs/27524035425"
+    ]
+  },
+  "root_cause": {
+    "ledger_not_replayable": "The pre-baseline migration ledger was bidirectionally divergent from live (live had objects the repo never created; the repo had migrations live never applied; migration 202605140001_utv2_912 referenced market_universe.provider, a column that exists in neither scratch nor live). A from-scratch replay aborted partway, so parity could never reach a verdict by replaying old migrations.",
+    "ci_connectivity": "GitHub-hosted runners are IPv4-only, but Supabase direct connections (db.<ref>.supabase.co) are served over IPv6 only, so pg_dump and the parity compare's psql failed 'Network is unreachable'. Resolved by reaching live through the IPv4 session-mode Supavisor pooler via the SUPABASE_DB_POOLER_URL secret."
+  },
+  "baseline_generation": {
+    "workflow": ".github/workflows/schema-baseline-dump.yml",
+    "ci_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/27524035425",
+    "method": "pg_dump --schema-only --no-owner --no-privileges --schema=public in a postgres:17 container against the live session pooler; read-only, no data dumped, no live mutation.",
+    "sanitized": "Stripped pg_dump 17.x \\restrict/\\unrestrict psql meta-commands; made CREATE SCHEMA public idempotent. No OWNER/GRANT/ROLE/EXTENSION statements remain.",
+    "partition_handling": "Dynamic provider_offer_history_p<YYYYMMDD> partition children are excluded from the baseline (parent partitioned table, its management function, and provider_offer_history_compact retained).",
+    "replay_validated": "Installed as the sole migration and replayed from scratch via `supabase db reset` on a Supabase local stack (Postgres 17) — clean apply.",
+    "baseline_file": "supabase/migrations/00000000000000_baseline_live_schema.sql",
+    "object_counts": { "tables": 58, "functions": 33, "indexes": 171, "data_statements": 0 }
+  },
+  "live_schema_parity": {
+    "workflow": ".github/workflows/live-schema-parity.yml",
+    "ci_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/27524264024",
+    "conclusion": "success",
+    "expected_label": "repo-migrations (baseline on Supabase local stack)",
+    "actual_label": "supabase-live (project zfzdnfwdarxucxtaojxm, via IPv4 session pooler)",
+    "drift_gate_verdict": "PASS",
+    "drift_gate_exit_code": 0,
+    "total_findings": 2,
+    "unauthorized_count": 0,
+    "allowed_count": 2,
+    "schema_drift": {
+      "relations": 0,
+      "columns": 0,
+      "constraints": 0,
+      "indexes": 0,
+      "policies": 0,
+      "triggers": 0
+    },
+    "allowed_findings": [
+      {
+        "key": "extensions.pg_net",
+        "reason": "allowed_extension — enabled by default on the Supabase local stack, not on live; environment provisioning, not schema content."
+      },
+      {
+        "key": "pg_catalog.pg_cron",
+        "reason": "allowed_extension — enabled on live for scheduled partition lifecycle, absent on the local stack (pg_cron needs shared_preload_libraries, off by default locally); environment provisioning, not schema content."
+      }
+    ],
+    "fail_closed": "Drift gate is deny-by-default. Only the two named extensions are allowlisted; every relation/column/constraint/index/policy/trigger difference still FAILS the gate. A skipped/unconfigured parity run is treated as FAIL (D-CONST-4/7).",
+    "excluded_relation_pattern": "^provider_offer_history_p[0-9]+$"
+  },
+  "migration_reversibility": "IRREVERSIBLE — the baseline is a schema snapshot, not a forward migration; its only 'down' would drop the public schema and there is no prior state to restore to (all pre-baseline migrations are archived). Recovery path is PITR. Ratified in db/migrations-rollback/irreversible-exemption-registry.json; down marker at db/migrations-rollback/00000000000000_baseline_live_schema.down.sql.",
+  "r_level_compliance": {
+    "R1": "pnpm test PASS — added filterSnapshot + updated parity workflow-shape test; full suite green on the branch.",
+    "R2": "pnpm type-check PASS — compare-databases.ts --exclude-relation-pattern is type-safe.",
+    "R3": "Live-DB runtime proof: Live Schema Parity ran end-to-end against real live Supabase (via pooler) and the Supabase local stack, drift gate verdict PASS (run 27524264024).",
+    "R4": "Evidence bundle present — this file + verification.md.",
+    "R5": "SHA binding set to the baseline-adoption commit 35b35b12; the only commits after it touch proof paths only."
+  }
+}
