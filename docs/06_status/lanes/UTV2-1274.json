@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1274",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "griffadavi/utv2-1274-live-schema-parity-make-scratch-db-parity-job-run-end-to-end",
+  "base_branch": "main",
+  "commit_sha": "8ddce5c470d2fdc6d7b9d5d2a2ac3730eb9a0f28",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1026",
+  "runtime_proof_kind": "live-schema-parity",
+  "runtime_proof_note": "Schema-only baseline/parity lane. PM-approved C2 exception: the read-only Live Schema Parity run (drift gate PASS) is the live-DB runtime proof in lieu of `pnpm test:db`, which would write to live (incl. immutable audit_log). The exception is bound to an actual Live Schema Parity PASS on the PR head (scripts/ci/assert-live-schema-parity-pass.ts) and applies only to schema-only parity/baseline lanes; normal runtime/data/scoring/API lanes still require `pnpm test:db`.",
+  "files_changed": [
+    "supabase/migrations/00000000000000_baseline_live_schema.sql",
+    "supabase/migrations_archive/",
+    "db/migrations-rollback/00000000000000_baseline_live_schema.down.sql",
+    "db/migrations-rollback/irreversible-exemption-registry.json",
+    "scripts/ops/compare-databases.ts",
+    "scripts/ci/assert-live-schema-parity-pass.ts",
+    ".github/workflows/live-schema-parity.yml",
+    ".github/workflows/schema-baseline-dump.yml",
+    ".github/actions/supabase-pooler-url/action.yml",
+    "docs/06_status/proof/UTV2-1274/evidence.json"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/**",
+    ".github/actions/**",
+    "scripts/**",
+    "packages/db/**",
+    "apps/api/**",
+    "supabase/**",
+    "db/migrations-rollback/**",
+    "docs/06_status/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1274/evidence.json"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-06-14T22:00:00.000Z",
+  "heartbeat_at": "2026-06-15T12:33:34.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": false
+  }
+}
