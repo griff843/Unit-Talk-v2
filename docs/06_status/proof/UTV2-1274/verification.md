@@ -1,7 +1,7 @@
 # UTV2-1274 — Live Schema Parity end-to-end (Option B baseline) — Verification
 
 **Tier:** T1 · **Lane type:** migration · **Status:** COMPLETE
-**SHA binding:** `ea55dcfd643fe43ea3752b21d3e3065b4a78962c` (last non-proof commit on the lane)
+**SHA binding:** `76afaf800fff81e576ae7ffe1dc5f9b8fa2758ac` (last non-proof commit on the lane)
 
 ## Verification
 
@@ -60,6 +60,21 @@ Allowlisted (deny-by-default everywhere else):
 - `pnpm verify` green on the branch (fixed the stale parity workflow-shape assertion that
   was the sole pre-existing failure).
 - `filterSnapshot` partition-exclusion unit tests pass (4/4).
+
+### C2 live-DB proof exception (PM-approved, narrow)
+
+This is a schema-only baseline/parity lane. Its live-DB runtime proof (T1 checklist C2) is the
+**read-only Live Schema Parity run** (drift gate PASS), **not** `pnpm test:db` — which would
+write to live including immutable `audit_log` rows, violating the no-production-mutation
+guardrail. The exception is:
+
+- **Opt-in & narrow** — signalled by the lane manifest `runtime_proof_kind: "live-schema-parity"`.
+  Lanes without that field are unaffected and still run `pnpm test:db`. T1 proof is not weakened
+  generally; `pnpm test:db` is not removed from runtime/data/scoring/API lanes.
+- **Bound to a real PASS** — `scripts/ci/assert-live-schema-parity-pass.ts` polls the
+  "Live Schema Parity" check-run on the PR head and fails closed unless it concluded `success`.
+  A skipped/failed/fake parity cannot satisfy C2.
+- **Enforced in** `t1-proof-gate.yml` (C2) and `proof-auditor-gate.yml`.
 
 ### Fail-closed posture preserved
 
