@@ -125,16 +125,25 @@ jobs:
           echo "Parent / compact tables present (expected):"
           grep -Eo 'CREATE TABLE [^ (]*provider_offer_history[^ (]*' artifacts/baseline/"$BASELINE_FILENAME" | sort -u || true
 
-      - name: Start Supabase local stack
-        run: supabase start
-
-      - name: Replay baseline ALONE on the local stack
+      - name: Install baseline as the sole migration
         run: |
-          # Prove the baseline is a self-contained replay root: drop every existing repo
-          # migration, install ONLY the baseline, and reset. A failure here is the dump
-          # not being faithfully replayable on a Supabase-shaped DB.
+          # `supabase start` auto-applies every file in supabase/migrations/ on boot, and the
+          # pre-baseline ledger is not replayable from scratch (it aborts on a migration that
+          # references a non-existent column). Replace the migration set with ONLY the baseline
+          # BEFORE starting the stack so the boot applies the replay root and nothing else.
           rm -f supabase/migrations/*.sql
           cp artifacts/baseline/"$BASELINE_FILENAME" supabase/migrations/"$BASELINE_FILENAME"
+          echo "supabase/migrations now contains:"
+          ls -1 supabase/migrations/
+
+      - name: Start Supabase local stack (applies baseline only)
+        run: supabase start
+
+      - name: Validate baseline replays cleanly from scratch
+        run: |
+          # Prove the baseline is a self-contained replay root: a full drop-and-reapply from
+          # scratch against the Supabase-shaped local DB. A failure here is the dump not being
+          # faithfully replayable.
           supabase db reset
 
       - name: Compare replayed baseline to live (advisory diagnostics)
