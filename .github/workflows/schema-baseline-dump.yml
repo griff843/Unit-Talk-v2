@@ -78,20 +78,28 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Derive IPv4 session-pooler URL
+        uses: ./.github/actions/supabase-pooler-url
+        with:
+          db-url: ${{ secrets.SUPABASE_DB_URL }}
+          region: us-west-2
+
       - name: Dump live schema (schema-only, read-only)
         env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          POOLER_DB_URL: ${{ env.POOLER_DB_URL }}
         run: |
-          if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "::error title=Baseline dump unconfigured::SUPABASE_DB_URL secret is not set; cannot generate the live baseline."
+          if [ -z "$POOLER_DB_URL" ]; then
+            echo "::error title=Baseline dump unconfigured::No pooler URL derived; cannot generate the live baseline."
             exit 1
           fi
           mkdir -p artifacts/baseline
           # pg_dump runs inside a postgres:17 container so the client matches the live
           # server major version. The URL and exclude glob are passed via -e and expanded
           # INSIDE the container; the URL is never echoed. No `set -x` (secret hygiene).
+          # The session-mode Supavisor pooler is IPv4-reachable from the runner (the direct
+          # db.<ref>.supabase.co host is IPv6-only and unreachable here).
           docker run --rm \
-            -e DBURL="$SUPABASE_DB_URL" \
+            -e DBURL="$POOLER_DB_URL" \
             -e EXCLUDE_GLOB="$PARTITION_CHILD_GLOB" \
             "$PG_IMAGE" \
             sh -c 'pg_dump "$DBURL" --schema-only --no-owner --no-privileges --schema=public --exclude-table="$EXCLUDE_GLOB"' \
@@ -131,7 +139,7 @@ jobs:
       - name: Compare replayed baseline to live (advisory diagnostics)
         continue-on-error: true
         env:
-          ACTUAL_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+          ACTUAL_DATABASE_URL: ${{ env.POOLER_DB_URL }}
         run: >
           pnpm exec tsx scripts/ops/compare-databases.ts
           --expected-db-url "$EXPECTED_DATABASE_URL"

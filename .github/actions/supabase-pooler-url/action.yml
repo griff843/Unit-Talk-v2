@@ -1,0 +1,89 @@
+name: Derive Supabase IPv4 pooler URL
+description: >
+  GitHub-hosted runners are IPv4-only, but Supabase direct database connections
+  (db.<ref>.supabase.co) are served over IPv6 only. Any raw-Postgres tool (psql, pg_dump)
+  run from a runner against the direct host fails with "Network is unreachable". This
+  action derives the IPv4-reachable session-mode Supavisor pooler URL from the direct
+  SUPABASE_DB_URL secret and exports it into the job environment (password masked, never
+  printed). The session pooler (port 5432) supports both psql queries and pg_dump.
+  If the supplied URL is already a pooler URL, it is passed through unchanged. (UTV2-1274)
+
+inputs:
+  db-url:
+    description: Direct Supabase DB URL (the SUPABASE_DB_URL secret).
+    required: true
+  region:
+    description: Supabase project region, e.g. us-west-2.
+    required: true
+  out-env:
+    description: Name of the environment variable to export the pooler URL into.
+    required: false
+    default: POOLER_DB_URL
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SUPABASE_DB_URL: ${{ inputs.db-url }}
+        DB_REGION: ${{ inputs.region }}
+        OUT_ENV: ${{ inputs.out-env }}
+      run: |
+        if [ -z "$SUPABASE_DB_URL" ]; then
+          echo "::error title=Pooler URL::SUPABASE_DB_URL input is empty; cannot derive a pooler URL."
+          exit 1
+        fi
+
+        # Probe which Supavisor pooler host prefix resolves for this region. Supabase has
+        # migrated regions across aws-0/aws-1; resolving avoids hard-coding the wrong one.
+        POOLER_HOST=""
+        for prefix in aws-0 aws-1 aws-2; do
+          candidate="${prefix}-${DB_REGION}.pooler.supabase.com"
+          if getent hosts "$candidate" >/dev/null 2>&1; then
+            POOLER_HOST="$candidate"
+            break
+          fi
+        done
+        export POOLER_HOST
+
+        # Derive the session-pooler URL with the WHATWG URL parser (handles percent-encoded
+        # passwords correctly). The raw password is added to the log mask BEFORE the URL is
+        # written anywhere, so it never appears unmasked. The URL itself is written only to
+        # $GITHUB_ENV, never echoed.
+        node --input-type=module -e '
+          import { appendFileSync } from "node:fs";
+          const raw = process.env.SUPABASE_DB_URL;
+          const u = new URL(raw);
+          const outEnv = process.env.OUT_ENV;
+
+          // Already a pooler URL? Pass through unchanged.
+          if (u.hostname.endsWith("pooler.supabase.com")) {
+            if (u.password) console.log(`::add-mask::${u.password}`);
+            appendFileSync(process.env.GITHUB_ENV, `${outEnv}=${raw}\n`);
+            console.log(`Pooler URL: input already targets the pooler; passing through (host ${u.hostname}).`);
+            process.exit(0);
+          }
+
+          const m = u.hostname.match(/^db\.([a-z0-9]+)\.supabase\.co$/i);
+          const ref = m ? m[1] : (u.username.includes(".") ? u.username.split(".")[1] : "");
+          if (!ref) {
+            console.log(`::error title=Pooler URL::Could not derive project ref from host ${u.hostname}.`);
+            process.exit(1);
+          }
+          const host = process.env.POOLER_HOST;
+          if (!host) {
+            console.log(`::error title=Pooler URL::No Supavisor pooler host resolved for region ${process.env.DB_REGION}.`);
+            process.exit(1);
+          }
+
+          // Mask both encoded and decoded password forms so neither can leak downstream.
+          if (u.password) {
+            console.log(`::add-mask::${u.password}`);
+            try { console.log(`::add-mask::${decodeURIComponent(u.password)}`); } catch {}
+          }
+
+          const port = "5432"; // session mode (supports pg_dump); 6543 is transaction mode
+          const url = `postgresql://postgres.${ref}:${u.password}@${host}:${port}/postgres`;
+          appendFileSync(process.env.GITHUB_ENV, `${outEnv}=${url}\n`);
+          console.log(`Pooler URL: derived session-mode connection via ${host} (user postgres.${ref}).`);
+        '

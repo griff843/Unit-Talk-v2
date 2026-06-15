@@ -100,7 +100,10 @@ jobs:
     env:
       # Supabase local stack DB (see supabase/config.toml: [db] port = 54322).
       EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-      ACTUAL_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+      # Live (ACTUAL) is reached via the IPv4 session pooler derived below — the direct
+      # db.<ref>.supabase.co host is IPv6-only and unreachable from IPv4-only runners.
+      # Dynamic partition children created at runtime on live are excluded from the diff.
+      PARTITION_CHILD_REGEX: ^provider_offer_history_p[0-9]+$
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -132,6 +135,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Derive IPv4 session-pooler URL (live/ACTUAL)
+        uses: ./.github/actions/supabase-pooler-url
+        with:
+          db-url: ${{ secrets.SUPABASE_DB_URL }}
+          region: us-west-2
+          out-env: ACTUAL_DATABASE_URL
 
       - name: Start Supabase local stack
         run: |
@@ -166,6 +176,7 @@ jobs:
           --actual-db-url "$ACTUAL_DATABASE_URL"
           --expected-label repo-migrations
           --actual-label supabase-live
+          --exclude-relation-pattern "$PARTITION_CHILD_REGEX"
           --output artifacts/schema-parity/live-schema-parity.json
           --pretty
 
