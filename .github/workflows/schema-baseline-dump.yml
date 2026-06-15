@@ -112,6 +112,26 @@ jobs:
             exit 1
           fi
 
+      - name: Sanitize baseline for the migration runner
+        run: |
+          BL=artifacts/baseline/"$BASELINE_FILENAME"
+          # 1. Strip psql client meta-commands. pg_dump 17.x wraps the dump in
+          #    `\restrict <token>` / `\unrestrict <token>` (a restore-safety feature), but the
+          #    Supabase migration runner applies SQL directly (not through psql), so a line
+          #    beginning with `\` is a syntax error (SQLSTATE 42601). These guards are client-
+          #    side only; removing them does not change the resulting schema.
+          sed -i '/^\\restrict/d; /^\\unrestrict/d' "$BL"
+          # 2. The public schema already exists on the Supabase-shaped DB (the local stack and
+          #    every fresh Postgres DB ship it). pg_dump emits a bare `CREATE SCHEMA public;`
+          #    which would abort with "schema already exists"; make it idempotent.
+          sed -i 's/^CREATE SCHEMA public;/CREATE SCHEMA IF NOT EXISTS public;/' "$BL"
+          # Fail closed if any psql meta-command survives.
+          if grep -nE '^\\' "$BL"; then
+            echo "::error title=Baseline not sanitized::A psql meta-command remains in the baseline."
+            exit 1
+          fi
+          echo "Sanitized: stripped \\restrict/\\unrestrict; public schema create is idempotent."
+
       - name: Assert dynamic partition children are excluded
         run: |
           # Fail closed if any provider_offer_history_p<digits> child table leaked into

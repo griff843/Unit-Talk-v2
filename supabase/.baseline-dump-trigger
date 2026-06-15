@@ -2,4 +2,4 @@
 # Bump the counter below and push to the lane branch to run the generator. This indirection
 # keeps the generator from firing on unrelated workflow edits and before the
 # SUPABASE_DB_POOLER_URL secret is provisioned. (UTV2-1274)
-run: 2
+run: 3
