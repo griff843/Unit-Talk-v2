@@ -2,6 +2,17 @@ const SGO_EVENTS_ENDPOINT = 'https://api.sportsgameodds.com/v2/events';
 const SGO_EVENTS_PAGE_LIMIT = '100';
 const LIVE_ODDS_LOOKBACK_HOURS = 12;
 const DEFAULT_RESULTS_LOOKBACK_HOURS = 48;
+/** Forward window for the default game-line fetch (all markets). */
+const GAME_LINE_STARTS_BEFORE_DAYS = 7;
+/**
+ * Forward window for the dedicated player-prop fetch (oddID-wildcard). This fetch
+ * is high-volume on a full slate (e.g. MLB) because PLAYER_ID wildcards expand to
+ * every player on every event; a 7-day window multiplies that across an entire
+ * week of games and overwhelms pagination/payload. Player props are only actionable
+ * near tip-off, so the player-prop fetch is bounded to the imminent slate.
+ * Game-line markets keep the full 7-day window. (UTV2-1280)
+ */
+const PLAYER_PROP_STARTS_BEFORE_HOURS = 36;
 
 /**
  * PLAYER_ID-wildcard oddID patterns confirmed working via live API test (2026-06-12).
@@ -129,9 +140,17 @@ export function buildSgoOddsRequestUrl(options: SGOOddsRequestOptions): URL {
     options.startsAfter ??
       subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
   );
+  // The player-prop fetch is bounded to the imminent slate to keep high-volume
+  // PLAYER_ID-wildcard responses (and their pagination) within budget (UTV2-1280).
+  // A caller-supplied startsBefore always wins; historical fetches keep 7 days.
+  const isLivePlayerPropFetch =
+    !options.historical && Boolean(options.playerPropOddIdPatterns?.length);
   url.searchParams.set(
     'startsBefore',
-    options.startsBefore ?? addDaysToIso(options.snapshotAt, 7),
+    options.startsBefore ??
+      (isLivePlayerPropFetch
+        ? addHoursToIso(options.snapshotAt, PLAYER_PROP_STARTS_BEFORE_HOURS)
+        : addDaysToIso(options.snapshotAt, GAME_LINE_STARTS_BEFORE_DAYS)),
   );
 
   return url;
@@ -294,6 +313,12 @@ function createBaseEventsUrl(options: SGOBaseRequestOptions): URL {
 function addDaysToIso(iso: string, days: number) {
   const date = new Date(iso);
   date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString();
+}
+
+function addHoursToIso(iso: string, hours: number) {
+  const date = new Date(iso);
+  date.setUTCHours(date.getUTCHours() + hours);
   return date.toISOString();
 }
 

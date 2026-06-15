@@ -1,6 +1,10 @@
 import type { DatabaseConnectionConfig, EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
 import { CircuitBreaker, type CircuitBreakerOptions } from './circuit-breaker.js';
-import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
+import {
+  ingestLeague,
+  type IngestLeagueOptions,
+  type IngestLeagueSummary,
+} from './ingest-league.js';
 import { SGO_PLAYER_PROP_ODD_ID_PATTERNS } from './sgo-request-contract.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
 import { ProviderQuarantineRegistry } from './provider-quarantine.js';
@@ -36,6 +40,14 @@ export interface IngestorRunnerOptions {
   ingestorApiKey?: string;
   /** undefined = run indefinitely */
   maxCycles?: number;
+  /**
+   * Hard per-league wall-clock bound (ms). When a single league's ingest exceeds
+   * this, the in-flight SGO fetch is aborted and the cycle fails closed and
+   * proceeds to the next league instead of hanging the whole run. A value <= 0
+   * disables the bound (tests / explicit opt-out). Defaults to 240_000 (4 min),
+   * comfortably under the 300s default poll. (UTV2-1280)
+   */
+  leagueTimeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
   /** Fixed poll interval (ms). Ignored when schedulerConfig.enabled=true. */
   pollIntervalMs?: number;
@@ -87,6 +99,73 @@ export interface IngestorCycleSummary {
 const CYCLE_GAP_WARN_MS = 10 * 60 * 1000;
 const DEFAULT_RESULTS_LOOKBACK_HOURS = 48;
 const FINALIZED_REPOLL_BATCH_SIZE = 25;
+/** Default hard per-league ingest bound — under the 300s default poll. (UTV2-1280) */
+const DEFAULT_LEAGUE_TIMEOUT_MS = 240_000;
+
+/**
+ * Raised when a single league's ingest exceeds the per-league wall-clock bound.
+ * The runner catches this, fails the league closed, and proceeds — a single
+ * league can never hang the entire cycle indefinitely. (UTV2-1280)
+ */
+export class LeagueIngestTimeoutError extends Error {
+  readonly league: string;
+  readonly timeoutMs: number;
+  constructor(league: string, timeoutMs: number) {
+    super(
+      `per-league ingest timeout: ${league} exceeded ${timeoutMs}ms — failing closed (UTV2-1280)`,
+    );
+    this.name = 'LeagueIngestTimeoutError';
+    this.league = league;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/**
+ * Run ingestLeague under a hard per-league wall-clock bound. On timeout the
+ * in-flight SGO fetch is aborted (graceful path: ingestLeague's own catch records
+ * a fail-closed cycle status) and the bound rejects with LeagueIngestTimeoutError
+ * so the runner advances even if an unabortable downstream call is stuck. A
+ * non-positive bound disables the timeout. (UTV2-1280)
+ */
+export async function ingestLeagueWithTimeout(
+  league: string,
+  apiKey: string | undefined,
+  repositories: IngestorRepositoryBundle,
+  options: IngestLeagueOptions,
+  timeoutMs: number,
+): Promise<IngestLeagueSummary> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return ingestLeague(league, apiKey, repositories, options);
+  }
+
+  const controller = new AbortController();
+  const work = ingestLeague(league, apiKey, repositories, {
+    ...options,
+    signal: options.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal,
+  });
+  // The race below may settle before `work` does (e.g. an unabortable downstream
+  // call). Attach a no-op catch so the orphaned rejection is never unhandled.
+  work.catch(() => {});
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new LeagueIngestTimeoutError(league, timeoutMs);
+      controller.abort(error);
+      reject(error);
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 type SgoResultsFetchResult = Awaited<
   ReturnType<typeof fetchSGOResultsWithTelemetry>
@@ -104,6 +183,8 @@ export async function runIngestorCycles(
 
   const maxCycles = options.maxCycles ?? 1;
   const fixedPollIntervalMs = options.pollIntervalMs ?? 300_000;
+  const leagueTimeoutMs =
+    options.leagueTimeoutMs ?? DEFAULT_LEAGUE_TIMEOUT_MS;
   const sleep = options.sleep ?? defaultSleep;
   const summaries: IngestorCycleSummary[] = [];
   let lastCycleEndMs: number | null = null;
@@ -136,7 +217,7 @@ export async function runIngestorCycles(
       const playerPropPatterns = leaguePlayerPropPatterns(league);
       try {
         results.push(
-          await ingestLeague(league, options.apiKey, options.repositories, {
+          await ingestLeagueWithTimeout(league, options.apiKey, options.repositories, {
             snapshotAt: cycleSnapshotAt,
             ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
             ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
@@ -167,12 +248,21 @@ export async function runIngestorCycles(
             },
             circuitBreakers: sgoCircuitBreakers,
             quarantineRegistry,
-          }),
+          }, leagueTimeoutMs),
         );
       } catch (leagueError: unknown) {
-        options.logger?.warn?.(
-          `[ingestor] league=${league} failed, skipping to next: ${leagueError instanceof Error ? leagueError.message : String(leagueError)}`,
-        );
+        if (leagueError instanceof LeagueIngestTimeoutError) {
+          // Fail closed and proceed: a single league can never hang the cycle.
+          const timeoutMsg = `[ingestor] cycle=${cycle} league=${league} TIMEOUT after ${leagueError.timeoutMs}ms — failing closed and proceeding to next league (UTV2-1280)`;
+          options.logger?.warn?.(timeoutMsg);
+          if (options.onStalenessAlert) {
+            void options.onStalenessAlert(timeoutMsg).catch(() => {/* fire-and-forget */});
+          }
+        } else {
+          options.logger?.warn?.(
+            `[ingestor] league=${league} failed, skipping to next: ${leagueError instanceof Error ? leagueError.message : String(leagueError)}`,
+          );
+        }
       }
     }
 
@@ -182,6 +272,7 @@ export async function runIngestorCycles(
       {
         circuitBreakers: sgoCircuitBreakers,
         quarantineRegistry,
+        leagueTimeoutMs,
       },
     );
 
@@ -281,6 +372,7 @@ async function runFinalizedRepollsForCycle(
   runtime: {
     circuitBreakers: SgoCircuitBreakers;
     quarantineRegistry: ProviderQuarantineRegistry;
+    leagueTimeoutMs: number;
   },
 ): Promise<IngestLeagueSummary[]> {
   if (!options.apiKey || options.skipResults) {
@@ -327,31 +419,39 @@ async function runFinalizedRepollsForCycle(
       options.logger?.info?.(
         `[ingestor] finalized-repoll league=${league} candidates=${batch.length}`,
       );
-      repolls.push(
-        await ingestLeague(league, options.apiKey, options.repositories, {
-          snapshotAt,
-          resultsOnly: true,
-          providerEventIds: batch,
-          resultsStartsAfter,
-          resultsStartsBefore: snapshotAt,
-          resultsLookbackHours: lookbackHours,
-          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-          ...(options.sleep ? { sleep: options.sleep } : {}),
-          ...(options.logger ? { logger: options.logger } : {}),
-          ...(options.providerDbWritePolicy
-            ? { providerDbWritePolicy: options.providerDbWritePolicy }
-            : {}),
-          ...(options.providerPayloadArchivePolicy
-            ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
-            : {}),
-          circuitBreaker: {
-            ...options.circuitBreaker,
-            failClosed: true,
-          },
-          circuitBreakers: runtime.circuitBreakers,
-          quarantineRegistry: runtime.quarantineRegistry,
-        }),
-      );
+      try {
+        repolls.push(
+          await ingestLeagueWithTimeout(league, options.apiKey, options.repositories, {
+            snapshotAt,
+            resultsOnly: true,
+            providerEventIds: batch,
+            resultsStartsAfter,
+            resultsStartsBefore: snapshotAt,
+            resultsLookbackHours: lookbackHours,
+            ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            ...(options.sleep ? { sleep: options.sleep } : {}),
+            ...(options.logger ? { logger: options.logger } : {}),
+            ...(options.providerDbWritePolicy
+              ? { providerDbWritePolicy: options.providerDbWritePolicy }
+              : {}),
+            ...(options.providerPayloadArchivePolicy
+              ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
+              : {}),
+            circuitBreaker: {
+              ...options.circuitBreaker,
+              failClosed: true,
+            },
+            circuitBreakers: runtime.circuitBreakers,
+            quarantineRegistry: runtime.quarantineRegistry,
+          }, runtime.leagueTimeoutMs),
+        );
+      } catch (repollError: unknown) {
+        // A hung/failed finalized-repoll batch must not block the remaining
+        // batches or the cycle. Fail closed and continue. (UTV2-1280)
+        options.logger?.warn?.(
+          `[ingestor] finalized-repoll league=${league} batch failed/timed out, skipping: ${repollError instanceof Error ? repollError.message : String(repollError)}`,
+        );
+      }
     }
   }
 

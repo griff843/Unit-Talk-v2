@@ -380,6 +380,12 @@ if (runtime.autorun) {
         resultsLookbackHours: runtime.resultsLookbackHours,
         resultsMaxFetchMs: runtime.resultsMaxFetchMs,
         pollIntervalMs: runtime.pollIntervalMs,
+        // Hard per-league wall-clock bound so a single league (e.g. MLB full slate)
+        // can never hang the whole cycle. <=0 disables. (UTV2-1280)
+        leagueTimeoutMs: parsePositiveInt(
+          process.env.UNIT_TALK_INGESTOR_LEAGUE_TIMEOUT_MS,
+          240_000,
+        ),
         schedulerConfig: runtime.schedulerConfig,
         ...('pinnacleOnlyPeak' in runtime && runtime.pinnacleOnlyPeak ? { pinnacleOnlyPeak: true } : {}),
         providerDbWritePolicy: runtime.providerDbWritePolicy,

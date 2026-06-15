@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1280",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "griffadavi/utv2-1280-ingestor-mlb-cycle-hangs-no-mlb-provider-offers-since-2026",
+  "base_branch": "main",
+  "commit_sha": "",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1024",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/ingestor/src/sgo-request-contract.ts",
+    "apps/ingestor/src/sgo-fetcher.ts",
+    "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/ingestor-runner.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/ingestor/src/ingest-league-timeout.test.ts",
+    "package.json",
+    ".ops/sync/UTV2-1280.yml",
+    "docs/06_status/lanes/UTV2-1280.json",
+    "docs/06_status/proof/UTV2-1280/verification.md",
+    "docs/06_status/proof/UTV2-1280/diff-summary.md",
+    "docs/06_status/proof/UTV2-1280/evidence.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1280/verification.md",
+    "docs/06_status/proof/UTV2-1280/diff-summary.md",
+    "docs/06_status/proof/UTV2-1280/evidence.json"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-06-14T12:55:00.000Z",
+  "heartbeat_at": "2026-06-14T16:16:45.634Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1280-ingestor-mlb-cycle-hangs-no-mlb-provider-offers-since-2026.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "main_checkout_control_only": true,
+    "note": "Code/runtime-safety fix: bound the SGO league cycle (per-league timeout + abort-signal threading) and narrow the high-volume live player-prop fetch window. No schema/migration; no production writes from this session. Live freshness proof deferred to post-deploy UTV2-1279 per PM."
+  },
+  "closed_at": null
+}
