@@ -113,6 +113,7 @@ interface CompareReport {
   expected_label: string;
   actual_label: string;
   compared_schema: string;
+  excluded_relation_pattern: string | null;
   drift_detected: boolean;
   drift_count: number;
   summary: Record<keyof SchemaDiff, { expected: number; actual: number; drift: number }>;
@@ -126,6 +127,13 @@ interface CliOptions {
   actualLabel: string;
   schema: string;
   outputPath: string | null;
+  // POSIX/JS regex matched against a relation's unqualified name. Relations whose
+  // name matches — and all of their columns/constraints/indexes/policies/triggers —
+  // are dropped from BOTH snapshots before diffing. Used to exclude dynamically
+  // created partition children (e.g. provider_offer_history_p<YYYYMMDD>) that live
+  // creates at runtime and the repo baseline intentionally does not bake in, so they
+  // never read as perpetual drift. Narrow by construction; never a wildcard. (UTV2-1274)
+  excludeRelationPattern: string | null;
 }
 
 interface ParsedArgs {
@@ -491,6 +499,34 @@ function driftCount<TItem>(collection: CollectionDiff<TItem>): number {
   );
 }
 
+/**
+ * Drop relations (and all of their relation-scoped objects) whose unqualified name
+ * matches `pattern` from a snapshot. Extensions are schema-scoped, not relation-scoped,
+ * so they are never filtered. Returns a new snapshot; the input is not mutated.
+ *
+ * This is the single, narrow exclusion point for dynamically created partition children
+ * (see CliOptions.excludeRelationPattern). Keeping it in one place — rather than baking
+ * the pattern into the snapshot SQL — keeps the exclusion auditable and unit-testable,
+ * and the report records exactly which pattern was applied. (UTV2-1274)
+ */
+export function filterSnapshot(snapshot: SchemaSnapshot, pattern: RegExp | null): SchemaSnapshot {
+  if (!pattern) {
+    return snapshot;
+  }
+
+  const matches = (name: string): boolean => pattern.test(name);
+
+  return {
+    relations: snapshot.relations.filter((item) => !matches(item.name)),
+    columns: snapshot.columns.filter((item) => !matches(item.table)),
+    constraints: snapshot.constraints.filter((item) => !matches(item.table)),
+    indexes: snapshot.indexes.filter((item) => !matches(item.table)),
+    policies: snapshot.policies.filter((item) => !matches(item.table)),
+    triggers: snapshot.triggers.filter((item) => !matches(item.table)),
+    extensions: snapshot.extensions,
+  };
+}
+
 export function buildSchemaDiff(expected: SchemaSnapshot, actual: SchemaSnapshot): SchemaDiff {
   return {
     relations: diffCollection(expected.relations, actual.relations, relationKey),
@@ -509,6 +545,7 @@ export function buildCompareReport(input: {
   schema: string;
   expected: SchemaSnapshot;
   actual: SchemaSnapshot;
+  excludedRelationPattern?: string | null;
   generatedAt?: string;
 }): CompareReport {
   const diff = buildSchemaDiff(input.expected, input.actual);
@@ -557,6 +594,7 @@ export function buildCompareReport(input: {
     expected_label: input.expectedLabel,
     actual_label: input.actualLabel,
     compared_schema: input.schema,
+    excluded_relation_pattern: input.excludedRelationPattern ?? null,
     drift_detected: drift_count > 0,
     drift_count,
     summary,
@@ -571,6 +609,9 @@ function printSummary(report: CompareReport, outputPath: string | null): void {
   console.log(`Expected:  ${report.expected_label}`);
   console.log(`Actual:    ${report.actual_label}`);
   console.log(`Schema:    ${report.compared_schema}`);
+  if (report.excluded_relation_pattern) {
+    console.log(`Excluded:  relations matching /${report.excluded_relation_pattern}/`);
+  }
   if (outputPath) {
     console.log(`Report:    ${path.relative(process.cwd(), outputPath)}`);
   }
@@ -593,6 +634,11 @@ Options:
   --actual-label <value>      Label for the actual database (default: actual)
   --schema <name>             Schema to compare (default: public)
   --output <path>             Write JSON report to an explicit path
+  --exclude-relation-pattern <regex>
+                              Drop relations whose unqualified name matches this regex
+                              (and their columns/constraints/indexes/policies/triggers)
+                              from both snapshots before diffing. Use for dynamically
+                              created partition children. Narrow patterns only.
   --pretty                    Print a human-readable summary
   --help                      Show this message
 `);
@@ -617,6 +663,7 @@ function parseArgs(argv: string[]): ParsedArgs {
   let actualLabel = 'actual';
   let schema = 'public';
   let outputPath: string | null = null;
+  let excludeRelationPattern: string | null = null;
   let pretty = false;
   let help = false;
 
@@ -643,6 +690,9 @@ function parseArgs(argv: string[]): ParsedArgs {
       index++;
     } else if (arg === '--output' && next) {
       outputPath = path.resolve(next);
+      index++;
+    } else if (arg === '--exclude-relation-pattern' && next) {
+      excludeRelationPattern = next;
       index++;
     } else if (arg === '--pretty') {
       pretty = true;
@@ -671,6 +721,7 @@ function parseArgs(argv: string[]): ParsedArgs {
       actualLabel,
       schema,
       outputPath,
+      excludeRelationPattern,
     },
     pretty,
     help,
@@ -683,12 +734,19 @@ export async function runCompare(options: CliOptions): Promise<CompareReport> {
     fetchSchemaSnapshot(options.actualDbUrl, options.schema),
   ]);
 
+  // Compile the exclusion regex up front so an invalid pattern fails loudly rather
+  // than silently comparing un-filtered snapshots (fail-closed). (UTV2-1274)
+  const excludePattern = options.excludeRelationPattern
+    ? new RegExp(options.excludeRelationPattern)
+    : null;
+
   return buildCompareReport({
     expectedLabel: options.expectedLabel,
     actualLabel: options.actualLabel,
     schema: options.schema,
-    expected: expectedSnapshot,
-    actual: actualSnapshot,
+    expected: filterSnapshot(expectedSnapshot, excludePattern),
+    actual: filterSnapshot(actualSnapshot, excludePattern),
+    excludedRelationPattern: options.excludeRelationPattern,
   });
 }
 

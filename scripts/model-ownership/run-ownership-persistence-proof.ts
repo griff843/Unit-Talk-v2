@@ -35,7 +35,7 @@ type RegistryRow = {
 
 const OUTPUT_DIR = path.resolve('docs/06_status/proof/UTV2-854');
 const MIGRATION_PATH = path.resolve(
-  'supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql',
+  'supabase/migrations_archive/202605070002_utv2_854_model_ownership_persistence.sql',
 );
 
 function pct(count: number, total: number): number {

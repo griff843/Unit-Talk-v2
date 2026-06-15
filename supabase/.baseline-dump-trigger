@@ -1,0 +1,5 @@
+# Sentinel for the Schema Baseline Dump generator (.github/workflows/schema-baseline-dump.yml).
+# Bump the counter below and push to the lane branch to run the generator. This indirection
+# keeps the generator from firing on unrelated workflow edits and before the
+# SUPABASE_DB_POOLER_URL secret is provisioned. (UTV2-1274)
+run: 3

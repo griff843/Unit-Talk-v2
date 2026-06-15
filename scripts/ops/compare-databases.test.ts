@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCompareReport, diffCollection } from './compare-databases.js';
+import { buildCompareReport, diffCollection, filterSnapshot } from './compare-databases.js';
 
 test('diffCollection reports missing and changed schema objects', () => {
   const diff = diffCollection(
@@ -95,4 +95,89 @@ test('buildCompareReport summarizes drift across schema collections', () => {
     report.diff.columns.changed.map((item) => item.key),
     ['public.picks.id'],
   );
+});
+
+test('filterSnapshot drops dynamic partition children and their scoped objects', () => {
+  const snapshot = {
+    relations: [
+      { schema: 'public', name: 'provider_offer_history', kind: 'partitioned_table' as const },
+      { schema: 'public', name: 'provider_offer_history_compact', kind: 'table' as const },
+      { schema: 'public', name: 'provider_offer_history_p20260614', kind: 'table' as const },
+    ],
+    columns: [
+      {
+        schema: 'public',
+        table: 'provider_offer_history_p20260614',
+        column: 'id',
+        ordinalPosition: 1,
+        dataType: 'uuid',
+        formattedType: 'uuid',
+        defaultExpression: null,
+        isNullable: false,
+        identityGeneration: null,
+      },
+      {
+        schema: 'public',
+        table: 'provider_offer_history_compact',
+        column: 'id',
+        ordinalPosition: 1,
+        dataType: 'uuid',
+        formattedType: 'uuid',
+        defaultExpression: null,
+        isNullable: false,
+        identityGeneration: null,
+      },
+    ],
+    constraints: [
+      {
+        schema: 'public',
+        table: 'provider_offer_history_p20260614',
+        name: 'x_pkey',
+        type: 'p',
+        definition: 'PRIMARY KEY (id)',
+      },
+    ],
+    indexes: [
+      {
+        schema: 'public',
+        table: 'provider_offer_history_p20260614',
+        name: 'x_idx',
+        definition: 'CREATE INDEX x_idx ON ...',
+      },
+    ],
+    policies: [],
+    triggers: [],
+    extensions: [{ schema: 'extensions', name: 'pg_cron', version: '1.6' }],
+  };
+
+  const pattern = /^provider_offer_history_p\d+$/;
+  const filtered = filterSnapshot(snapshot, pattern);
+
+  // Parent partitioned table and the (non-partition) compact table survive.
+  assert.deepStrictEqual(
+    filtered.relations.map((r) => r.name).sort(),
+    ['provider_offer_history', 'provider_offer_history_compact'],
+  );
+  // The dynamic child's columns/constraints/indexes are gone; compact's column remains.
+  assert.deepStrictEqual(
+    filtered.columns.map((c) => c.table),
+    ['provider_offer_history_compact'],
+  );
+  assert.strictEqual(filtered.constraints.length, 0);
+  assert.strictEqual(filtered.indexes.length, 0);
+  // Extensions are schema-scoped and never filtered.
+  assert.deepStrictEqual(filtered.extensions, snapshot.extensions);
+});
+
+test('filterSnapshot is a no-op when no pattern is supplied', () => {
+  const snapshot = {
+    relations: [{ schema: 'public', name: 'picks', kind: 'table' as const }],
+    columns: [],
+    constraints: [],
+    indexes: [],
+    policies: [],
+    triggers: [],
+    extensions: [],
+  };
+  assert.strictEqual(filterSnapshot(snapshot, null), snapshot);
 });

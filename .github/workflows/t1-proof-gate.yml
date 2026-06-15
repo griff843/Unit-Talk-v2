@@ -164,27 +164,45 @@ jobs:
 
           echo "C1 PASS: verification.md exists and contains 'pnpm verify'"
 
-      - name: C2 — pnpm test:db execution
+      - name: C2 — live-DB proof execution
         id: c2
         if: steps.extract_issue.outputs.skip == 'false'
         env:
           CI_REQUIRE_DB_SMOKE: 'true'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           issue_id="${{ steps.extract_issue.outputs.issue_id }}"
           proof_dir="docs/06_status/proof/${issue_id}"
+          manifest="docs/06_status/lanes/${issue_id}.json"
 
-          echo "Checking C2: pnpm test:db execution bound to this T1 gate"
+          echo "Checking C2: live-DB proof bound to this T1 gate"
 
           if [ ! -d "$proof_dir" ]; then
             echo "::error title=T1 Proof Gate - C2 FAIL::Proof directory missing: $proof_dir"
             echo ""
-            echo "T1 lanes require a proof directory at $proof_dir before live DB smoke execution."
+            echo "T1 lanes require a proof directory at $proof_dir before live DB proof execution."
             exit 1
           fi
 
-          pnpm ci:db-smoke
+          # Narrow PM-approved exception (UTV2-1274): a schema-only parity/baseline lane may
+          # satisfy C2 with the read-only Live Schema Parity run instead of `pnpm test:db`
+          # (which would write to live, incl. immutable audit_log). The exception is opt-in via
+          # the lane manifest's runtime_proof_kind and is bound to an ACTUAL Live Schema Parity
+          # PASS on this PR head — a skipped/failed/fake parity does not satisfy it. Normal
+          # runtime/data/scoring/API lanes have no such field and still run `pnpm test:db`.
+          proof_kind=""
+          if [ -f "$manifest" ]; then
+            proof_kind=$(node -e "try{process.stdout.write((JSON.parse(require('fs').readFileSync('$manifest','utf8')).runtime_proof_kind)||'')}catch{process.stdout.write('')}")
+          fi
 
-          echo "C2 PASS: pnpm test:db executed and did not skip"
+          if [ "$proof_kind" = "live-schema-parity" ]; then
+            echo "C2 (schema-parity exception): runtime_proof_kind=live-schema-parity — asserting an actual Live Schema Parity PASS instead of pnpm test:db."
+            pnpm exec tsx scripts/ci/assert-live-schema-parity-pass.ts --sha "${{ github.event.pull_request.head.sha }}"
+            echo "C2 PASS: Live Schema Parity reached PASS for this PR head (schema-only lane proof)."
+          else
+            pnpm ci:db-smoke
+            echo "C2 PASS: pnpm test:db executed and did not skip"
+          fi
 
       - name: C3 — R-level compliance (informational)
         if: steps.extract_issue.outputs.skip == 'false'

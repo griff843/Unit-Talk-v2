@@ -27,7 +27,9 @@ test('live-schema-parity workflow wires compare output through the drift gate', 
   assert.strictEqual(compareStep?.id, 'compare');
   assert.strictEqual(compareStep?.['continue-on-error'], true);
   assert.strictEqual(gateStep?.if, 'always()');
-  assert.match(String(gateStep?.run ?? ''), /pnpm ci:schema-drift-gate --/);
+  // Invoked via `pnpm exec tsx <script>` rather than a `pnpm <pkg-script> -- <args>` alias:
+  // the latter forwards a literal `--` that the gate's arg parser rejects. (UTV2-1274)
+  assert.match(String(gateStep?.run ?? ''), /pnpm exec tsx scripts\/ci\/schema-drift-gate\.ts/);
   assert.match(String(gateStep?.run ?? ''), /--report artifacts\/schema-parity\/live-schema-parity\.json/);
   assert.match(String(artifactStep?.with ? (artifactStep.with as Record<string, unknown>).path : ''), /artifacts\/schema-parity\/?/);
   assert.match(text, /scripts\/ci\/schema-drift-gate\.ts/);

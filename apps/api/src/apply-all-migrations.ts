@@ -12,10 +12,10 @@ if (!accessToken) throw new Error('SUPABASE_ACCESS_TOKEN not found in local.env'
 const projectRef = 'feownrheeefbcsehtsiw';
 
 const migrations = [
-  'supabase/migrations/202604010001_submission_atomicity_rpc.sql',
-  'supabase/migrations/202604010002_enqueue_atomicity_rpc.sql',
-  'supabase/migrations/202604010003_delivery_idempotency_rpc.sql',
-  'supabase/migrations/202604010004_settlement_atomicity_rpc.sql',
+  'supabase/migrations_archive/202604010001_submission_atomicity_rpc.sql',
+  'supabase/migrations_archive/202604010002_enqueue_atomicity_rpc.sql',
+  'supabase/migrations_archive/202604010003_delivery_idempotency_rpc.sql',
+  'supabase/migrations_archive/202604010004_settlement_atomicity_rpc.sql',
 ];
 
 async function executeSql(sql: string, label: string) {

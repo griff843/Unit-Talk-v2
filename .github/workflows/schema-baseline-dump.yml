@@ -1,0 +1,194 @@
+name: Schema Baseline Dump
+
+# Generates a schema-only baseline of the LIVE Supabase database, proves it replays
+# cleanly on a Supabase-shaped local stack, compares the replayed schema back to live,
+# and uploads the validated baseline as an artifact.
+#
+# This is the CI-side generator for the Live Schema Parity replay root (UTV2-1274,
+# "Option B" baseline/squash). Local Docker / pg_dump are unavailable on the operator
+# workstation, and the Supabase CLI's local .env parse trips on a stray BOM — so the
+# baseline must be produced in CI, where Docker + SUPABASE_DB_URL are available.
+#
+# Guardrails honoured here:
+#   - READ-ONLY against live. pg_dump never mutates; no DDL/DML is issued to live.
+#   - No secrets printed. The DB URL is passed via env into a container and never echoed;
+#     GitHub also masks the registered secret in logs.
+#   - Dynamic partition children (provider_offer_history_p<YYYYMMDD>) are excluded from the
+#     baseline: live creates them at runtime, so baking today's children in would guarantee
+#     drift tomorrow. The parent partitioned table + partitioning function are retained.
+#
+# Operator-triggered generator, not a gate. workflow_dispatch is the long-term entry
+# point (usable once this file lands on the default branch). Until then — because the
+# workflow_dispatch API cannot target a workflow not yet on the default branch — the
+# generator is run by bumping the sentinel file supabase/.baseline-dump-trigger and
+# pushing. Editing this workflow file alone does NOT trigger a run, so the generator does
+# not fire before the SUPABASE_DB_POOLER_URL secret is provisioned. (UTV2-1274)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'griffadavi/utv2-1274-*'
+    paths:
+      - 'supabase/.baseline-dump-trigger'
+
+permissions:
+  contents: read
+
+env:
+  # Postgres 17 to match live (db.<ref>.supabase.co reports engine 17) and the local
+  # stack (supabase/config.toml: major_version = 17). pg_dump must be >= the server.
+  PG_IMAGE: postgres:17
+  # Dynamic partition children to exclude from the baseline AND from parity compare.
+  # Narrow by construction: 'provider_offer_history_p' + a date suffix. The parent
+  # partitioned table 'provider_offer_history' and 'provider_offer_history_compact'
+  # (no '_p<digit>' segment) are NOT matched and are retained.
+  PARTITION_CHILD_GLOB: public.provider_offer_history_p[0-9]*
+  PARTITION_CHILD_REGEX: ^provider_offer_history_p[0-9]+$
+  # Supabase local stack DB (see supabase/config.toml: [db] port = 54322).
+  EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+  BASELINE_FILENAME: 00000000000000_baseline_live_schema.sql
+
+jobs:
+  dump-and-validate:
+    name: Dump live schema and validate replay
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install PostgreSQL client (for compare psql)
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Select live DB connection URL (prefer pooler)
+        uses: ./.github/actions/supabase-pooler-url
+        with:
+          pooler-url: ${{ secrets.SUPABASE_DB_POOLER_URL }}
+          direct-url: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Dump live schema (schema-only, read-only)
+        env:
+          POOLER_DB_URL: ${{ env.POOLER_DB_URL }}
+        run: |
+          if [ -z "$POOLER_DB_URL" ]; then
+            echo "::error title=Baseline dump unconfigured::No pooler URL derived; cannot generate the live baseline."
+            exit 1
+          fi
+          mkdir -p artifacts/baseline
+          # pg_dump runs inside a postgres:17 container so the client matches the live
+          # server major version. The URL and exclude glob are passed via -e and expanded
+          # INSIDE the container; the URL is never echoed. No `set -x` (secret hygiene).
+          # The session-mode Supavisor pooler is IPv4-reachable from the runner (the direct
+          # db.<ref>.supabase.co host is IPv6-only and unreachable here).
+          docker run --rm \
+            -e DBURL="$POOLER_DB_URL" \
+            -e EXCLUDE_GLOB="$PARTITION_CHILD_GLOB" \
+            "$PG_IMAGE" \
+            sh -c 'pg_dump "$DBURL" --schema-only --no-owner --no-privileges --schema=public --exclude-table="$EXCLUDE_GLOB"' \
+            > artifacts/baseline/"$BASELINE_FILENAME"
+          BYTES=$(wc -c < artifacts/baseline/"$BASELINE_FILENAME")
+          echo "baseline bytes: $BYTES"
+          if [ "$BYTES" -lt 1000 ]; then
+            echo "::error title=Baseline dump empty::pg_dump produced a suspiciously small file ($BYTES bytes)."
+            exit 1
+          fi
+
+      - name: Sanitize baseline for the migration runner
+        run: |
+          BL=artifacts/baseline/"$BASELINE_FILENAME"
+          # 1. Strip psql client meta-commands. pg_dump 17.x wraps the dump in
+          #    `\restrict <token>` / `\unrestrict <token>` (a restore-safety feature), but the
+          #    Supabase migration runner applies SQL directly (not through psql), so a line
+          #    beginning with `\` is a syntax error (SQLSTATE 42601). These guards are client-
+          #    side only; removing them does not change the resulting schema.
+          sed -i '/^\\restrict/d; /^\\unrestrict/d' "$BL"
+          # 2. The public schema already exists on the Supabase-shaped DB (the local stack and
+          #    every fresh Postgres DB ship it). pg_dump emits a bare `CREATE SCHEMA public;`
+          #    which would abort with "schema already exists"; make it idempotent.
+          sed -i 's/^CREATE SCHEMA public;/CREATE SCHEMA IF NOT EXISTS public;/' "$BL"
+          # Fail closed if any psql meta-command survives.
+          if grep -nE '^\\' "$BL"; then
+            echo "::error title=Baseline not sanitized::A psql meta-command remains in the baseline."
+            exit 1
+          fi
+          echo "Sanitized: stripped \\restrict/\\unrestrict; public schema create is idempotent."
+
+      - name: Assert dynamic partition children are excluded
+        run: |
+          # Fail closed if any provider_offer_history_p<digits> child table leaked into
+          # the baseline — those must be excluded so the baseline does not drift daily.
+          if grep -Eiq 'CREATE TABLE[^;]*provider_offer_history_p[0-9]' artifacts/baseline/"$BASELINE_FILENAME"; then
+            echo "::error title=Partition child leaked::A dynamic partition child table is present in the baseline dump."
+            grep -Ein 'CREATE TABLE[^;]*provider_offer_history_p[0-9]' artifacts/baseline/"$BASELINE_FILENAME" || true
+            exit 1
+          fi
+          echo "OK: no dynamic partition child tables in baseline."
+          echo "Parent / compact tables present (expected):"
+          grep -Eo 'CREATE TABLE [^ (]*provider_offer_history[^ (]*' artifacts/baseline/"$BASELINE_FILENAME" | sort -u || true
+
+      - name: Install baseline as the sole migration
+        run: |
+          # `supabase start` auto-applies every file in supabase/migrations/ on boot, and the
+          # pre-baseline ledger is not replayable from scratch (it aborts on a migration that
+          # references a non-existent column). Replace the migration set with ONLY the baseline
+          # BEFORE starting the stack so the boot applies the replay root and nothing else.
+          rm -f supabase/migrations/*.sql
+          cp artifacts/baseline/"$BASELINE_FILENAME" supabase/migrations/"$BASELINE_FILENAME"
+          echo "supabase/migrations now contains:"
+          ls -1 supabase/migrations/
+
+      - name: Start Supabase local stack (applies baseline only)
+        run: supabase start
+
+      - name: Validate baseline replays cleanly from scratch
+        run: |
+          # Prove the baseline is a self-contained replay root: a full drop-and-reapply from
+          # scratch against the Supabase-shaped local DB. A failure here is the dump not being
+          # faithfully replayable.
+          supabase db reset
+
+      - name: Compare replayed baseline to live (advisory diagnostics)
+        continue-on-error: true
+        env:
+          ACTUAL_DATABASE_URL: ${{ env.POOLER_DB_URL }}
+        run: >
+          pnpm exec tsx scripts/ops/compare-databases.ts
+          --expected-db-url "$EXPECTED_DATABASE_URL"
+          --actual-db-url "$ACTUAL_DATABASE_URL"
+          --expected-label baseline-replayed
+          --actual-label supabase-live
+          --exclude-relation-pattern "$PARTITION_CHILD_REGEX"
+          --output artifacts/baseline/baseline-fidelity-report.json
+          --pretty
+
+      - name: Upload baseline artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-schema-baseline
+          path: artifacts/baseline/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Stop Supabase local stack
+        if: always()
+        run: supabase stop --no-backup || true

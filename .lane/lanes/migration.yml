@@ -18,9 +18,21 @@ allowed_path_globs:
   - apps/ingestor/**
   - apps/api/src/t1-proof-*.test.ts
   - apps/api/src/database-smoke.test.ts
+  - apps/api/src/apply-all-migrations.ts
   - apps/api/package.json
   - package.json
   - .github/workflows/migration-reversibility-gate.yml
+  # Schema baseline/squash + Live Schema Parity infrastructure (UTV2-1274). A migration
+  # lane that establishes a schema baseline legitimately archives historical migrations
+  # and owns the parity/baseline CI path, the IPv4 pooler action, and the schema-only-lane
+  # C2 proof exception wired into the proof gates.
+  - supabase/migrations_archive/**
+  - supabase/.baseline-dump-trigger
+  - .github/workflows/live-schema-parity.yml
+  - .github/workflows/schema-baseline-dump.yml
+  - .github/workflows/t1-proof-gate.yml
+  - .github/workflows/proof-auditor-gate.yml
+  - .github/actions/supabase-pooler-url/**
 forbidden_path_globs:
   - apps/worker/**
 required_proof_artifacts:

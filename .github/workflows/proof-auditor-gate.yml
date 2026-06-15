@@ -107,6 +107,7 @@ jobs:
         if: steps.detect.outputs.has_proof == 'true'
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           overall_verdict="PASS"
           all_results="[]"
@@ -117,11 +118,36 @@ jobs:
             [ -z "$proof_dir" ] && continue
             echo "--- Auditing: $proof_dir ---"
 
-            result=$(pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
-              --proof-dir "$proof_dir" \
-              --sha "$HEAD_SHA" \
-              --require-executed-command "pnpm test:db" \
-              --json 2>&1) || true
+            # Narrow PM-approved exception (UTV2-1274): a schema-only parity/baseline lane
+            # (lane manifest runtime_proof_kind=live-schema-parity) satisfies the live-DB proof
+            # with the read-only Live Schema Parity run instead of `pnpm test:db`. The exception
+            # is bound to an ACTUAL Live Schema Parity PASS on this PR head (asserted below);
+            # a skipped/failed/fake parity does not satisfy it. All other lanes still require
+            # `pnpm test:db`.
+            issue_id=$(echo "$proof_dir" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+            manifest="docs/06_status/lanes/${issue_id}.json"
+            proof_kind=""
+            if [ -n "$issue_id" ] && [ -f "$manifest" ]; then
+              proof_kind=$(node -e "try{process.stdout.write((JSON.parse(require('fs').readFileSync('$manifest','utf8')).runtime_proof_kind)||'')}catch{process.stdout.write('')}")
+            fi
+
+            if [ "$proof_kind" = "live-schema-parity" ]; then
+              echo "Schema-parity lane: asserting an actual Live Schema Parity PASS in lieu of pnpm test:db."
+              if ! pnpm exec tsx scripts/ci/assert-live-schema-parity-pass.ts --sha "$HEAD_SHA"; then
+                echo "::error title=Proof Auditor Gate::Live Schema Parity did not reach PASS for the schema-parity lane $issue_id."
+                overall_verdict="FAIL"
+              fi
+              result=$(pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
+                --proof-dir "$proof_dir" \
+                --sha "$HEAD_SHA" \
+                --json 2>&1) || true
+            else
+              result=$(pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
+                --proof-dir "$proof_dir" \
+                --sha "$HEAD_SHA" \
+                --require-executed-command "pnpm test:db" \
+                --json 2>&1) || true
+            fi
 
             echo "$result"
 

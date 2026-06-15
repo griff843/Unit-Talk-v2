@@ -4,7 +4,7 @@ import test from 'node:test';
 import { canonicalTables } from './index.js';
 
 const migration = readFileSync(
-  new URL('../../../supabase/migrations/202604190001_utv2_rls_enable_canonical_tables.sql', import.meta.url),
+  new URL('../../../supabase/migrations_archive/202604190001_utv2_rls_enable_canonical_tables.sql', import.meta.url),
   'utf8',
 );
 

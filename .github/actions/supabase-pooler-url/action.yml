@@ -1,0 +1,69 @@
+name: Select Supabase DB connection URL
+description: >
+  GitHub-hosted runners are IPv4-only, but Supabase direct database connections
+  (db.<ref>.supabase.co) are served over IPv6 only, so raw-Postgres tools (psql, pg_dump)
+  run from a runner against the direct host fail with "Network is unreachable". The
+  IPv4-reachable path is the project's Session-mode Supavisor pooler, whose hostname is
+  environment-specific infrastructure config and therefore lives in a secret, not in repo
+  logic. This action selects the pooler URL when configured and otherwise falls back to the
+  direct URL, exporting the chosen value into the job environment. The password is added to
+  the log mask before the value is written and neither URL is ever printed; diagnostics
+  report only WHETHER each URL is configured, never their values. (UTV2-1274)
+
+inputs:
+  pooler-url:
+    description: Session-mode Supabase pooler URL (the SUPABASE_DB_POOLER_URL secret). Preferred.
+    required: false
+    default: ''
+  direct-url:
+    description: Direct Supabase DB URL (the SUPABASE_DB_URL secret). Fallback only.
+    required: false
+    default: ''
+  out-env:
+    description: Name of the environment variable to export the selected URL into.
+    required: false
+    default: POOLER_DB_URL
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        POOLER_URL: ${{ inputs.pooler-url }}
+        DIRECT_URL: ${{ inputs.direct-url }}
+        OUT_ENV: ${{ inputs.out-env }}
+      run: |
+        # Config-only diagnostics — presence booleans, never the values.
+        if [ -n "$POOLER_URL" ]; then POOLER_SET=yes; else POOLER_SET=no; fi
+        if [ -n "$DIRECT_URL" ]; then DIRECT_SET=yes; else DIRECT_SET=no; fi
+        echo "Pooler URL (SUPABASE_DB_POOLER_URL) configured: $POOLER_SET"
+        echo "Direct URL (SUPABASE_DB_URL) configured: $DIRECT_SET"
+
+        if [ -n "$POOLER_URL" ]; then
+          SELECTED="$POOLER_URL"
+          echo "Selected source: pooler (IPv4 session-mode Supavisor)"
+        elif [ -n "$DIRECT_URL" ]; then
+          SELECTED="$DIRECT_URL"
+          echo "::warning title=Pooler URL absent::SUPABASE_DB_POOLER_URL is not set; falling back to the direct SUPABASE_DB_URL. The direct host is IPv6-only and is typically unreachable from IPv4-only GitHub runners — expect a connection failure (this is a LOUD fallback, not a pass)."
+          echo "Selected source: direct (fallback)"
+        else
+          echo "::error title=No DB URL configured::Neither SUPABASE_DB_POOLER_URL nor SUPABASE_DB_URL is set; cannot establish a live database connection (fail-closed)."
+          exit 1
+        fi
+
+        # Mask the password (encoded and decoded forms) before exporting, then write the
+        # selected URL only to $GITHUB_ENV. The URL itself is never echoed.
+        SELECTED="$SELECTED" OUT_ENV="$OUT_ENV" node --input-type=module -e '
+          import { appendFileSync } from "node:fs";
+          const sel = process.env.SELECTED;
+          try {
+            const u = new URL(sel);
+            if (u.password) {
+              console.log(`::add-mask::${u.password}`);
+              try { console.log(`::add-mask::${decodeURIComponent(u.password)}`); } catch {}
+            }
+          } catch {
+            // Not a parseable URL — still export it; the consuming tool will surface the error.
+          }
+          appendFileSync(process.env.GITHUB_ENV, `${process.env.OUT_ENV}=${sel}\n`);
+        '
