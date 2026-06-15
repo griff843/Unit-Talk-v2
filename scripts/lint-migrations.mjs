@@ -31,6 +31,12 @@ import { fileURLToPath } from 'node:url';
 
 const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations');
 
+// The schema baseline replay-root (UTV2-1274) is a full pg_dump snapshot of live, not a
+// forward migration. Forward-migration hygiene rules (e.g. C1 sibling-constraint paired-DROP)
+// do not apply to a from-scratch snapshot — its fidelity is verified by Live Schema Parity
+// against live, not by incremental-change linting. It is skipped here (loudly, never silently).
+const BASELINE_REPLAY_ROOT = '00000000000000_baseline_live_schema.sql';
+
 const rules = [
   {
     id: 'D1',
@@ -164,7 +170,15 @@ export async function lintFile(filePath) {
 
 export async function main(argv = process.argv.slice(2)) {
   const changedOnly = argv.includes('--changed-only');
-  const files = changedOnly ? await getChangedMigrations() : await getAllMigrations();
+  const collected = changedOnly ? await getChangedMigrations() : await getAllMigrations();
+  const files = collected.filter((f) => {
+    const base = f.split(/[/\\]/).pop();
+    if (base === BASELINE_REPLAY_ROOT) {
+      console.log(`[lint-migrations] Skipping schema baseline replay-root ${base} (snapshot, not a forward migration; fidelity verified by Live Schema Parity).`);
+      return false;
+    }
+    return true;
+  });
 
   if (files.length === 0) {
     console.log('[lint-migrations] No migration files to lint.');
