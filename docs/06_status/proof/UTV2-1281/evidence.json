@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1281",
+  "sha_binding": {
+    "verified_source_sha": "ca4aaa341d628a12b847aed372b79d6e8bf2282c",
+    "verified_source_note": "Implementation commit (apps/ingestor only): event-scoped + batched player-prop fetch, new sgo-player-prop-scope pure helpers, and the focused/regression test updates. The following proof commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-17T15:35:00.000Z",
+    "merge_sha": "<bound post-merge>",
+    "evidence_commit_sha": "<bound post-merge>",
+    "current_pr_head_sha": "ca4aaa341d628a12b847aed372b79d6e8bf2282c",
+    "ci_sentinels": {
+      "verify": "pending_merge_sha",
+      "merge_gate": "pending_merge_sha",
+      "proof_auditor_gate": "pending_merge_sha",
+      "t1_proof_gate": "pending_merge_sha",
+      "runtime_verifier_gate": "pending_merge_sha",
+      "lane_authority": "pending_merge_sha",
+      "file_scope_lock": "pending_merge_sha",
+      "require_live_db_proof": "pending_merge_sha",
+      "r_level_compliance": "pending_merge_sha",
+      "return_review_packet": "pending_merge_sha"
+    }
+  },
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "lint + type-check (parallel) then build + test all green; emitted '[verify:parallel] all checks passed'. env:check runs in CI on the merge SHA (creds gate)."
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "build": { "command": "pnpm build", "status": "PASS" },
+    "full_test_suite": {
+      "command": "pnpm test (via verify:parallel)",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "0 'not ok' lines across all sub-suites."
+    },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/sgo-player-prop-scope.test.ts",
+      "status": "PASS",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0
+    },
+    "regression_tests": {
+      "command": "tsx --test apps/ingestor/src/*.test.ts",
+      "status": "PASS",
+      "tests": 198,
+      "pass": 194,
+      "fail": 0,
+      "note": "194 pass, 0 fail, 4 todo/skip. Includes the updated player-prop-ingest + ingestor telemetry tests."
+    }
+  },
+  "runtime_proof": {
+    "note": "Runtime lane. T1 runtime proof = live Supabase smoke (pnpm test:db). No production ingestion rows mutated by this lane; root-cause evidence below came from read-only SELECTs via the Supabase MCP.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke (7/7). Read-only diagnostics on system_runs / provider_cycle_status / events established the root cause; no ingestion rows written by this lane."
+      }
+    ],
+    "queries": [
+      "DIAGNOSTIC: system_runs ingestor.cycle by league (30m) — MLB 17 runs ALL status=running avg 217.7s (pinned at 240s leagueTimeoutMs); NBA 17 succeeded 5.0s; NFL 17 succeeded 2.5s",
+      "DIAGNOSTIC: provider_cycle_status by league — MLB last row 2026-06-12 07:50 then dark; NBA/NFL cycling",
+      "DIAGNOSTIC: events sport_id freshness — MLB last updated 2026-06-12 07:59 (stale); NBA fresh 2026-06-17 15:11"
+    ],
+    "row_counts": [
+      { "label": "MLB ingestor.cycle runs in 30m (all status=running)", "value": 17 },
+      { "label": "MLB cycle avg duration (s)", "value": 217.7 },
+      { "label": "NBA cycle avg duration (s)", "value": 5.0 },
+      { "label": "MLB events latest updated_at", "value": "2026-06-12T07:59Z (stale — pre-fix)" }
+    ]
+  },
+  "live_production_proof": {
+    "status": "DEFERRED_POST_DEPLOY",
+    "owner": "UTV2-1279",
+    "reason": "Only deployed production runtime can prove: prod SHA includes UTV2-1281; the scheduled MLB cycle completes (status=succeeded) within the per-league bound with no orphaned status=running runs; fresh same-day MLB provider_offer_history rows with provider_participant_id appear. This is the post-deploy re-check of the live funnel first-NO."
+  }
+}
