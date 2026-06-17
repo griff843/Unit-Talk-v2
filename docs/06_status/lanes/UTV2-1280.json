@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1280-ingestor-mlb-cycle-hangs-no-mlb-provider-offers-since-2026",
   "base_branch": "main",
-  "commit_sha": "",
+  "commit_sha": "61348ae338e029dd3a975f3b83e3ba58ff1d72ba",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1024",
   "files_changed": [],
   "file_scope_lock": [
@@ -29,7 +29,7 @@
     "docs/06_status/proof/UTV2-1280/diff-summary.md",
     "docs/06_status/proof/UTV2-1280/evidence.json"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-14T12:55:00.000Z",
   "heartbeat_at": "2026-06-14T16:16:45.634Z",
   "blocked_by": [],
@@ -44,5 +44,5 @@
     "main_checkout_control_only": true,
     "note": "Code/runtime-safety fix: bound the SGO league cycle (per-league timeout + abort-signal threading) and narrow the high-volume live player-prop fetch window. No schema/migration; no production writes from this session. Live freshness proof deferred to post-deploy UTV2-1279 per PM."
   },
-  "closed_at": null
+  "closed_at": "2026-06-17T15:21:27.000Z"
 }
