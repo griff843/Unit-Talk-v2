@@ -1655,14 +1655,30 @@ test('runIngestorCycles records rate limit backoff telemetry in quota summary', 
           });
         }
 
-        return new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
-          status: 200,
-          headers: {
-            'content-type': 'application/json',
-            'x-ratelimit-limit': '100',
-            'x-ratelimit-remaining': '99',
+        const slateEvent = createSgoApiEvent();
+        return new Response(
+          JSON.stringify({
+            data: [
+              {
+                ...slateEvent,
+                status: {
+                  ...slateEvent.status,
+                  // Imminent start so the event-scoped player-prop fetch (UTV2-1281)
+                  // fires and its request is counted in the quota telemetry below.
+                  startsAt: new Date(Date.now() + 3 * 3_600_000).toISOString(),
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              'x-ratelimit-limit': '100',
+              'x-ratelimit-remaining': '99',
+            },
           },
-        });
+        );
       }
 
       return new Response(
