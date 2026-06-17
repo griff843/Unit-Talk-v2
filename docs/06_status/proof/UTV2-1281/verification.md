@@ -33,7 +33,19 @@ row and no fresh `provider_offer_history` since 2026-06-12.
 - `pnpm lint` → **PASS** (within verify:parallel).
 - `pnpm build` → **PASS** (within verify:parallel).
 - `pnpm test` (full suite) → **PASS** — 0 `not ok` across all sub-suites.
-- `pnpm test:db` (live Supabase smoke, T1 runtime proof) → **PASS — 7/7**.
+- `pnpm test:db` (live Supabase smoke, T1 runtime proof) → **PASS — 7/7**. node:test TAP summary:
+
+```
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 126578.735971
+```
+
 - Focused: `tsx --test apps/ingestor/src/sgo-player-prop-scope.test.ts` → **8/8 PASS**.
 - Regression: `tsx --test apps/ingestor/src/*.test.ts` → **198 tests, 194 pass, 0 fail** (4 todo/skip).
 
