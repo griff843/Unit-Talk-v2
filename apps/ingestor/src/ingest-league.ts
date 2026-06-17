@@ -39,6 +39,10 @@ import {
   type SGOFetchResult,
 } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
+import {
+  chunkEventIds,
+  selectPlayerPropEventIds,
+} from './sgo-player-prop-scope.js';
 
 export interface IngestLeagueOptions {
   fetchImpl?: SGOFetchOptions['fetchImpl'];
@@ -247,16 +251,43 @@ export async function ingestLeague(
       // oddID patterns, never Pinnacle-only (Pinnacle carries no player props),
       // run every cycle on live ingest so props stay fresh and are not dropped by
       // peak Pinnacle-only game-line polling. Merged before normalization.
+      //
+      // Event-scoping (UTV2-1281): a single league-wide PLAYER_ID-wildcard query
+      // over a full slate (e.g. in-season MLB) expands to every player on every
+      // game and returns a payload large enough to exhaust the per-league
+      // wall-clock bound — so the MLB cycle never completes and MLB never produces
+      // offers. The game-line fetch above already enumerated the slate; restrict
+      // the prop fetch to the imminent subset of those events, in small batches, so
+      // each request stays small and fast (the shape that already completes in
+      // seconds for NBA/NFL). When the caller already scoped to specific events
+      // (e.g. a finalized repoll), honor that scope directly.
       const propPatterns = options.playerPropOddIdPatterns ?? [];
       let propResult: SGOFetchResult | null = null;
       if (!options.historical && propPatterns.length > 0) {
-        const propFetchFn = () =>
-          fetchAndPairSGOProps({
-            ...sharedFetchOptions,
-            playerPropOddIdPatterns: propPatterns,
-            includeOpenCloseOdds: true,
-          });
-        propResult = await oddsCb.call(propFetchFn);
+        const scopedEventIds =
+          options.providerEventIds && options.providerEventIds.length > 0
+            ? options.providerEventIds
+            : selectPlayerPropEventIds(gameLineResult.events, snapshotAt);
+
+        for (const batch of chunkEventIds(scopedEventIds)) {
+          if (batch.length === 0) {
+            continue;
+          }
+          // Stop before issuing another scoped request if the per-league deadline
+          // fired during a prior batch. (UTV2-1280)
+          options.signal?.throwIfAborted();
+          const propFetchFn = () =>
+            fetchAndPairSGOProps({
+              ...sharedFetchOptions,
+              providerEventIds: batch,
+              playerPropOddIdPatterns: propPatterns,
+              includeOpenCloseOdds: true,
+            });
+          const batchResult = await oddsCb.call(propFetchFn);
+          propResult = propResult
+            ? mergeSgoFetchResults(propResult, batchResult)
+            : batchResult;
+        }
       }
 
       fetched = propResult

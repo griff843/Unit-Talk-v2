@@ -154,30 +154,57 @@ test('MLB batting prop preserves provider_participant_id through parse + normali
 
 // --- ingest-league split + freshness --------------------------------------
 
-test('ingestLeague issues a separate non-Pinnacle player-prop request every cycle (even under peak Pinnacle-only)', async () => {
+/** A game-line response carrying a single imminent MLB event for the slate. */
+const gameLineSlateResponse = (snapshotAt: string, eventId: string) =>
+  new Response(
+    JSON.stringify({
+      data: [
+        {
+          eventID: eventId,
+          leagueID: 'MLB',
+          status: {
+            oddsAvailable: true,
+            // ~5h ahead of the snapshot — inside the imminent player-prop window.
+            startsAt: new Date(Date.parse(snapshotAt) + 5 * 3_600_000).toISOString(),
+          },
+        },
+      ],
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } },
+  );
+
+test('ingestLeague issues a separate non-Pinnacle player-prop request every cycle, event-scoped to the slate (UTV2-1281)', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
-  const eventsUrls: URL[] = [];
+  const snapshotAt = '2026-06-13T18:00:00.000Z';
+  const eventId = 'evt-mlb-slate-1';
+  const oddsUrls: URL[] = [];
 
   await ingestLeague('MLB', 'test-key', repositories, {
-    snapshotAt: '2026-06-13T18:00:00.000Z',
+    snapshotAt,
     skipResults: true,
     pinnacleOnly: true, // simulate peak window
     playerPropOddIdPatterns: [...SGO_PLAYER_PROP_ODD_ID_PATTERNS.MLB],
     fetchImpl: async (input) => {
       const url = new URL(String(input));
-      if (url.searchParams.has('leagueID')) {
-        eventsUrls.push(url);
+      if (!url.searchParams.has('leagueID')) {
+        return EMPTY_SGO_RESPONSE();
       }
-      return EMPTY_SGO_RESPONSE();
+      oddsUrls.push(url);
+      // The game-line request is the Pinnacle-only one; return the slate event so
+      // the player-prop fetch has events to scope to.
+      const isGameLine = url.searchParams.get('bookmakerID') === 'pinnacle';
+      return isGameLine
+        ? gameLineSlateResponse(snapshotAt, eventId)
+        : EMPTY_SGO_RESPONSE();
     },
   });
 
-  assert.equal(eventsUrls.length, 2, 'expected two odds requests: game-line + player-prop');
+  assert.equal(oddsUrls.length, 2, 'expected two odds requests: game-line + player-prop');
 
-  const gameLine = eventsUrls.find(
+  const gameLine = oddsUrls.find(
     (u) => u.searchParams.get('bookmakerID') === 'pinnacle',
   );
-  const playerProp = eventsUrls.find((u) =>
+  const playerProp = oddsUrls.find((u) =>
     (u.searchParams.get('oddID') ?? '').includes('PLAYER_ID'),
   );
 
@@ -189,5 +216,36 @@ test('ingestLeague issues a separate non-Pinnacle player-prop request every cycl
     playerProp.searchParams.get('bookmakerID'),
     null,
     'player-prop request must NOT inherit Pinnacle-only',
+  );
+  // The fix: the prop request is scoped to the slate's event IDs, not league-wide.
+  assert.equal(
+    playerProp.searchParams.get('eventID'),
+    eventId,
+    'player-prop request must be event-scoped to the slate (UTV2-1281)',
+  );
+});
+
+test('ingestLeague skips the player-prop fetch when the slate has no imminent events (no league-wide prop query) (UTV2-1281)', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const propUrls: URL[] = [];
+
+  await ingestLeague('MLB', 'test-key', repositories, {
+    snapshotAt: '2026-06-13T18:00:00.000Z',
+    skipResults: true,
+    playerPropOddIdPatterns: [...SGO_PLAYER_PROP_ODD_ID_PATTERNS.MLB],
+    fetchImpl: async (input) => {
+      const url = new URL(String(input));
+      if ((url.searchParams.get('oddID') ?? '').includes('PLAYER_ID')) {
+        propUrls.push(url);
+      }
+      // Empty game-line slate → no events to scope props to.
+      return EMPTY_SGO_RESPONSE();
+    },
+  });
+
+  assert.equal(
+    propUrls.length,
+    0,
+    'with an empty slate there must be no league-wide player-prop request to hang on',
   );
 });
