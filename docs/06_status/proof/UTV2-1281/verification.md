@@ -2,7 +2,7 @@
 
 **Issue:** UTV2-1281 — Event-scope the SGO MLB player-prop fetch so it stops hitting the per-league timeout.
 **Branch:** `griffadavi/utv2-1281-event-scope-mlb-player-prop-fetch` · **Lane type:** runtime · **Tier:** T1
-**Base SHA:** `b37b9afd` · **Verified source SHA:** `ca4aaa341d628a12b847aed372b79d6e8bf2282c` · **Merge SHA:** _(bound post-merge)_
+**Base SHA:** `b37b9afd` · **Verified source SHA:** `803aed716c4db2e2b8e14d6a65c455daa032fabc` · **Merge SHA:** _(bound post-merge)_
 
 > Lane executed in the main checkout (main-control mode), zero concurrent active
 > lanes (the two merged ghost lanes UTV2-1274 / UTV2-1280 were reconciled to `done`

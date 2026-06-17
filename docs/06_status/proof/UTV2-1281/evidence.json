@@ -2,13 +2,13 @@
   "schema_version": 1,
   "issue_id": "UTV2-1281",
   "sha_binding": {
-    "verified_source_sha": "ca4aaa341d628a12b847aed372b79d6e8bf2282c",
-    "verified_source_note": "Implementation commit (apps/ingestor only): event-scoped + batched player-prop fetch, new sgo-player-prop-scope pure helpers, and the focused/regression test updates. The following proof commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
+    "verified_source_sha": "803aed716c4db2e2b8e14d6a65c455daa032fabc",
+    "verified_source_note": "Implementation HEAD: event-scoped + batched player-prop fetch + new sgo-player-prop-scope helpers + focused/regression test updates (ca4aaa34), plus test-script wiring + lane sync metadata (803aed71). The following commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
     "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-17T15:35:00.000Z",
+    "bound_at": "2026-06-17T15:50:00.000Z",
     "merge_sha": "<bound post-merge>",
     "evidence_commit_sha": "<bound post-merge>",
-    "current_pr_head_sha": "ca4aaa341d628a12b847aed372b79d6e8bf2282c",
+    "current_pr_head_sha": "803aed716c4db2e2b8e14d6a65c455daa032fabc",
     "ci_sentinels": {
       "verify": "pending_merge_sha",
       "merge_gate": "pending_merge_sha",

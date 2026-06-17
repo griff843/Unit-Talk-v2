@@ -16,6 +16,8 @@
     "apps/ingestor/src/sgo-player-prop-scope.test.ts",
     "apps/ingestor/src/player-prop-ingest.test.ts",
     "apps/ingestor/src/ingestor.test.ts",
+    "apps/ingestor/package.json",
+    ".ops/sync/UTV2-1281.yml",
     "docs/06_status/lanes/UTV2-1281.json",
     "docs/06_status/proof/UTV2-1281/verification.md",
     "docs/06_status/proof/UTV2-1281/evidence.json",
