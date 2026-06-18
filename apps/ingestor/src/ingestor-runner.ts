@@ -133,9 +133,24 @@ export async function ingestLeagueWithTimeout(
   repositories: IngestorRepositoryBundle,
   options: IngestLeagueOptions,
   timeoutMs: number,
+  hooks?: {
+    /**
+     * Fires when the UNDERLYING ingest work truly settles (success, error, or
+     * after a timeout when the orphaned work finally finishes) — NOT when the
+     * timeout race settles. The runner uses this to release the per-league
+     * singleton so a timed-out league's still-running work can never overlap a
+     * new cycle. (UTV2-1282)
+     */
+    onWorkSettled?: () => void;
+  },
 ): Promise<IngestLeagueSummary> {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    return ingestLeague(league, apiKey, repositories, options);
+    const work = ingestLeague(league, apiKey, repositories, options);
+    work.then(
+      () => hooks?.onWorkSettled?.(),
+      () => hooks?.onWorkSettled?.(),
+    );
+    return work;
   }
 
   const controller = new AbortController();
@@ -146,8 +161,12 @@ export async function ingestLeagueWithTimeout(
       : controller.signal,
   });
   // The race below may settle before `work` does (e.g. an unabortable downstream
-  // call). Attach a no-op catch so the orphaned rejection is never unhandled.
-  work.catch(() => {});
+  // call). Signal when the underlying work truly settles (this also swallows the
+  // orphaned rejection so it is never unhandled). (UTV2-1282)
+  work.then(
+    () => hooks?.onWorkSettled?.(),
+    () => hooks?.onWorkSettled?.(),
+  );
 
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_, reject) => {
@@ -192,6 +211,11 @@ export async function runIngestorCycles(
     ...(options.logger ? { logger: options.logger } : {}),
   });
   const sgoCircuitBreakers = createSgoCircuitBreakers(options.circuitBreaker);
+  // Per-league singleton (UTV2-1282): true while a league's ingest work is still in
+  // flight. A league that times out leaves its work running in the background; this
+  // flag stays set (released only when that work truly settles) so the next cycle
+  // skips the league instead of starting an overlapping cycle that piles onto the DB.
+  const leagueInFlight = new Map<string, boolean>();
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     if (lastCycleEndMs !== null) {
@@ -214,7 +238,17 @@ export async function runIngestorCycles(
     const usePinnacleOnly = options.pinnacleOnlyPeak === true && cycleResolution.mode === 'peak';
 
     for (const league of options.leagues) {
+      // Singleton guard (UTV2-1282): never start a new cycle for a league whose
+      // prior cycle's work is still in flight (e.g. it timed out and the orphaned
+      // work has not settled). Skip with clear telemetry rather than overlap.
+      if (leagueInFlight.get(league) === true) {
+        options.logger?.warn?.(
+          `[ingestor] cycle=${cycle} league=${league} SKIP — prior cycle still in-flight; refusing overlapping cycle (singleton guard, UTV2-1282)`,
+        );
+        continue;
+      }
       const playerPropPatterns = leaguePlayerPropPatterns(league);
+      leagueInFlight.set(league, true);
       try {
         results.push(
           await ingestLeagueWithTimeout(league, options.apiKey, options.repositories, {
@@ -248,17 +282,28 @@ export async function runIngestorCycles(
             },
             circuitBreakers: sgoCircuitBreakers,
             quarantineRegistry,
-          }, leagueTimeoutMs),
+          }, leagueTimeoutMs, {
+            // Release the singleton only when the underlying work truly settles.
+            onWorkSettled: () => leagueInFlight.set(league, false),
+          }),
         );
+        // Success: work settled. Clear immediately (belt-and-suspenders alongside
+        // onWorkSettled) so the next league/cycle is never blocked by a stale flag.
+        leagueInFlight.set(league, false);
       } catch (leagueError: unknown) {
         if (leagueError instanceof LeagueIngestTimeoutError) {
           // Fail closed and proceed: a single league can never hang the cycle.
-          const timeoutMsg = `[ingestor] cycle=${cycle} league=${league} TIMEOUT after ${leagueError.timeoutMs}ms — failing closed and proceeding to next league (UTV2-1280)`;
+          // Do NOT clear leagueInFlight here — the underlying work is still running;
+          // onWorkSettled releases the singleton when it finally settles, so the next
+          // cycle skips this league instead of overlapping it. (UTV2-1280 / UTV2-1282)
+          const timeoutMsg = `[ingestor] cycle=${cycle} league=${league} TIMEOUT after ${leagueError.timeoutMs}ms — failing closed, holding singleton until orphaned work settles (UTV2-1280/1282)`;
           options.logger?.warn?.(timeoutMsg);
           if (options.onStalenessAlert) {
             void options.onStalenessAlert(timeoutMsg).catch(() => {/* fire-and-forget */});
           }
         } else {
+          // Non-timeout error: the underlying work threw, so it has settled — release.
+          leagueInFlight.set(league, false);
           options.logger?.warn?.(
             `[ingestor] league=${league} failed, skipping to next: ${leagueError instanceof Error ? leagueError.message : String(leagueError)}`,
           );

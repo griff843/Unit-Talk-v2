@@ -1586,7 +1586,11 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
   async findExistingCombinations(
     providerEventIds: string[],
-    options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
+    options?: {
+      includeBookmakerKey?: boolean;
+      beforeSnapshotAt?: string;
+      afterSnapshotAt?: string;
+    },
   ): Promise<Set<string>> {
     const eventIdSet = new Set(providerEventIds);
     const result = new Set<string>();
@@ -1594,7 +1598,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       if (
         eventIdSet.has(offer.provider_event_id ?? '') &&
         (options?.beforeSnapshotAt === undefined ||
-          (offer.snapshot_at ?? '') < options.beforeSnapshotAt)
+          (offer.snapshot_at ?? '') < options.beforeSnapshotAt) &&
+        (options?.afterSnapshotAt === undefined ||
+          (offer.snapshot_at ?? '') >= options.afterSnapshotAt)
       ) {
         const participantKey = offer.provider_participant_id ?? '';
         const bookmakerKey = options?.includeBookmakerKey
@@ -4978,7 +4984,11 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
   async findExistingCombinations(
     providerEventIds: string[],
-    options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
+    options?: {
+      includeBookmakerKey?: boolean;
+      beforeSnapshotAt?: string;
+      afterSnapshotAt?: string;
+    },
   ): Promise<Set<string>> {
     const result = new Set<string>();
     if (providerEventIds.length === 0) return result;
@@ -4993,6 +5003,11 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .in('provider_event_id', chunk);
       if (options?.beforeSnapshotAt !== undefined) {
         query = query.lt('snapshot_at', options.beforeSnapshotAt);
+      }
+      // Lower bound enables partition pruning on the daily-partitioned table so the
+      // lookup scans the last few partitions instead of all of history. (UTV2-1282)
+      if (options?.afterSnapshotAt !== undefined) {
+        query = query.gte('snapshot_at', options.afterSnapshotAt);
       }
       const { data, error } = await (query as unknown as Promise<{
         data: Array<{

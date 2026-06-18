@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1282",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "griffadavi/utv2-1282-fix-mlb-offer-persistence-db-timeout",
+  "base_branch": "main",
+  "commit_sha": "",
+  "pr_url": "",
+  "files_changed": [],
+  "file_scope_lock": [
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/ingestor-runner.ts",
+    "apps/ingestor/src/ingestor-cycle-singleton.test.ts",
+    "apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts",
+    "apps/ingestor/package.json",
+    "package.json",
+    ".ops/sync/UTV2-1282.yml",
+    "docs/06_status/lanes/UTV2-1282.json",
+    "docs/06_status/proof/UTV2-1282/verification.md",
+    "docs/06_status/proof/UTV2-1282/evidence.json",
+    "docs/06_status/proof/UTV2-1282/diff-summary.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1282/verification.md",
+    "docs/06_status/proof/UTV2-1282/evidence.json",
+    "docs/06_status/proof/UTV2-1282/diff-summary.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-06-18T04:15:00.000Z",
+  "heartbeat_at": "2026-06-18T04:15:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "pm-directed",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "main_checkout_control_only": true,
+    "note": "Follow-up to UTV2-1281. Bounds the opening-line dedup lookup to a recent snapshot window (partition pruning on provider_offer_history) and adds a per-league singleton + terminal-timeout release so overlapping MLB cycles can't pile onto the DB. No migration (the (provider_event_id, snapshot_at) index already exists). No production writes from this session beyond normal ingestor behavior; runtime proof is the post-deploy live funnel re-check."
+  },
+  "closed_at": null
+}
