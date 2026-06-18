@@ -2,13 +2,13 @@
   "schema_version": 1,
   "issue_id": "UTV2-1282",
   "sha_binding": {
-    "verified_source_sha": "3147b4ef1f84c7785184c0f0f063857d5a9de071",
-    "verified_source_note": "Implementation commit: bounded findExistingCombinations (afterSnapshotAt → partition pruning), per-league singleton + onWorkSettled terminal-release in the runner, ingest-league wiring, 4 focused tests, package test-script wiring, lane sync metadata. The following commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
+    "verified_source_sha": "11cb0c272d32a9774508ff10b1e3f5ebdefe70d1",
+    "verified_source_note": "Implementation HEAD: bounded findExistingCombinations (afterSnapshotAt → partition pruning), per-league singleton + onWorkSettled terminal-release, ingest-league wiring, 4 focused tests + a live-DB t1-proof (t1-proof-utv2-1282-bounded-dedup), package + test:t1-proof wiring, lane sync metadata. The following commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
     "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-18T04:35:00.000Z",
+    "bound_at": "2026-06-18T04:50:00.000Z",
     "merge_sha": "<bound post-merge>",
     "evidence_commit_sha": "<bound post-merge>",
-    "current_pr_head_sha": "3147b4ef1f84c7785184c0f0f063857d5a9de071",
+    "current_pr_head_sha": "11cb0c272d32a9774508ff10b1e3f5ebdefe70d1",
     "ci_sentinels": {
       "verify": "pending_merge_sha",
       "merge_gate": "pending_merge_sha",
@@ -50,6 +50,14 @@
       "command": "tsx --test apps/ingestor/src/*.test.ts (x2) + packages/db/src/*.test.ts",
       "status": "PASS",
       "note": "ingestor 202 tests / 198 pass / 0 fail (stable across two runs, 4 todo/skip); packages/db 237/237."
+    },
+    "live_db_proof_test": {
+      "command": "tsx --test apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts",
+      "status": "PASS",
+      "tests": 1,
+      "pass": 1,
+      "skipped": 0,
+      "note": "Read-only live-DB proof (gated on SUPABASE_SERVICE_ROLE_KEY): bounded findExistingCombinations completed promptly against the real partitioned provider_offer_history and returned the recent event's combinations — proves partition pruning works on live Postgres (not just InMemory), even under the current DB load. Satisfies the proof-coverage guard for the packages/db change."
     }
   },
   "db_evidence": {

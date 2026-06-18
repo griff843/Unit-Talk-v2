@@ -2,7 +2,7 @@
 
 **Issue:** UTV2-1282 — Fix MLB offer persistence DB timeout and overlapping ingestor cycles.
 **Branch:** `griffadavi/utv2-1282-fix-mlb-offer-persistence-db-timeout` · **Lane type:** runtime · **Tier:** T1
-**Base SHA:** `3336491a` · **Verified source SHA:** `3147b4ef1f84c7785184c0f0f063857d5a9de071` · **Merge SHA:** _(bound post-merge)_
+**Base SHA:** `3336491a` · **Verified source SHA:** `11cb0c272d32a9774508ff10b1e3f5ebdefe70d1` · **Merge SHA:** _(bound post-merge)_
 
 > Lane executed in the main checkout (main-control mode). No production rows mutated by
 > this lane beyond normal ingestor behavior. No migration (the supporting index already exists).
@@ -64,6 +64,7 @@ which this lane fixes.
   - next league proceeds when an earlier league times out;
   - `findExistingCombinations` is bounded by the snapshot window (old partitions excluded).
 - Regression: `tsx --test apps/ingestor/src/*.test.ts` → **202 tests, 198 pass, 0 fail** (stable across 2 runs); `packages/db` → **237/237**.
+- Live-DB proof: `tsx --test apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts` → **1/1 PASS** (read-only; bounded `findExistingCombinations` completed promptly against the live partitioned `provider_offer_history` and returned the recent event's combinations — partition pruning proven on real Postgres even under current load).
 
 ## DB evidence (read-only, EXPLAIN-style)
 
