@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1282",
+  "sha_binding": {
+    "verified_source_sha": "3147b4ef1f84c7785184c0f0f063857d5a9de071",
+    "verified_source_note": "Implementation commit: bounded findExistingCombinations (afterSnapshotAt → partition pruning), per-league singleton + onWorkSettled terminal-release in the runner, ingest-league wiring, 4 focused tests, package test-script wiring, lane sync metadata. The following commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-18T04:35:00.000Z",
+    "merge_sha": "<bound post-merge>",
+    "evidence_commit_sha": "<bound post-merge>",
+    "current_pr_head_sha": "3147b4ef1f84c7785184c0f0f063857d5a9de071",
+    "ci_sentinels": {
+      "verify": "pending_merge_sha",
+      "merge_gate": "pending_merge_sha",
+      "proof_auditor_gate": "pending_merge_sha",
+      "t1_proof_gate": "pending_merge_sha",
+      "runtime_verifier_gate": "pending_merge_sha",
+      "lane_authority": "pending_merge_sha",
+      "file_scope_lock": "pending_merge_sha",
+      "require_live_db_proof": "pending_merge_sha",
+      "r_level_compliance": "pending_merge_sha",
+      "return_review_packet": "pending_merge_sha"
+    }
+  },
+  "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS_WITH_ENVIRONMENTAL_RETRY",
+      "note": "All static checks (lint, type-check, build) green and all in-memory suites pass. One DB-backed apps/api test (t1-proof-awaiting-approval-review) flaked once with a LIVE statement timeout (`canceling statement due to statement timeout`) — collateral from the production DB being degraded by the very overlapping MLB cycles this lane fixes; it PASSED 5/5 on immediate retry. Not a code regression."
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "build": { "command": "pnpm build", "status": "PASS" },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/ingestor-cycle-singleton.test.ts",
+      "status": "PASS",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "cases": [
+        "singleton: a still-in-flight MLB cycle is not overlapped by the next cycle",
+        "terminal timeout: settled timed-out cycle releases the singleton + is terminalized failed",
+        "next league proceeds when an earlier league times out",
+        "findExistingCombinations is bounded by the snapshot window (old partitions excluded)"
+      ]
+    },
+    "regression_tests": {
+      "command": "tsx --test apps/ingestor/src/*.test.ts (x2) + packages/db/src/*.test.ts",
+      "status": "PASS",
+      "note": "ingestor 202 tests / 198 pass / 0 fail (stable across two runs, 4 todo/skip); packages/db 237/237."
+    }
+  },
+  "db_evidence": {
+    "note": "Read-only EXPLAIN-style evidence justifying the partition-pruning fix; no migration.",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "partition_count": 60,
+    "unbounded_plan": "Append over ~48 partitions (EXPLAIN: 'Subplans Removed: 12' = future partitions only); matching rows live in the current-day partition p20260618.",
+    "bounded_plan": "snapshot_at >= now - 72h prunes to ~3 recent daily partitions.",
+    "supporting_index": "(provider_event_id, snapshot_at) exists per partition — no migration required.",
+    "live_failure_observed": "MLB cycle: 'Failed to load existing provider offer history: canceling statement due to statement timeout'; up to 5 MLB cycles running concurrently; provider_offer_history MLB rows in last 6h = 0 at proof start."
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "Live Supabase smoke (read-only diagnostics established root cause; no ingestion rows written by this lane). TAP summary embedded in verification.md."
+  },
+  "operational_action": {
+    "restart": "Prod ingestor restarted via redeploy of 3336491a to clear the wedged/overlapping cycles; loop resumed (NBA/NFL/NHL succeeded, MLB cycling). Per PM: restart is NOT a fix — overlaps re-formed, which this lane resolves.",
+    "production_mutation": "none beyond normal ingestor behavior"
+  },
+  "live_production_proof": {
+    "status": "DEFERRED_POST_DEPLOY",
+    "owner": "UTV2-1279",
+    "reason": "Only deployed runtime can prove: MLB cycle succeeds or fails closed within the bound; no overlapping MLB cycles; fresh provider_offer_history rows persist (incl. provider_participant_id); market_universe updates; stale_price_data no longer the dominant reject (or exact next blocker reported)."
+  }
+}
