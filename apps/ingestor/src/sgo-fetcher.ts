@@ -5,6 +5,7 @@ import {
   inferSgoParticipantId,
   normalizeSgoProviderMarketKey,
 } from './sgo-request-contract.js';
+import { flatMapCooperatively, mapCooperatively } from './cooperative.js';
 
 const SGO_USAGE_ENDPOINT = 'https://api.sportsgameodds.com/v2/account/usage';
 const MAX_SGO_PAGINATION_PAGES = 100;
@@ -212,14 +213,23 @@ export async function fetchAndPairSGOProps(
       : {}),
   });
   const rawEvents = payloads.flatMap(extractEvents);
-  const events = rawEvents
-    .map(extractResolvedEvent)
-    .filter((event): event is SGOResolvedEvent => event !== null);
-  const pairedProps: SGOPairedProp[] = [];
-
-  for (const event of rawEvents) {
-    pairedProps.push(...pairEventOdds(event, options.snapshotAt));
-  }
+  // Resolve + pair cooperatively: on a full slate these synchronous transforms run
+  // over tens of thousands of markets and would block the event loop, defeating the
+  // per-league timeout (the cycle wedges instead of failing closed). Yield between
+  // chunks and observe the abort signal mid-transform. (UTV2-1283)
+  const resolvedEvents = await mapCooperatively(
+    rawEvents,
+    (event) => extractResolvedEvent(event),
+    { signal: options.signal },
+  );
+  const events = resolvedEvents.filter(
+    (event): event is SGOResolvedEvent => event !== null,
+  );
+  const pairedProps = await flatMapCooperatively(
+    rawEvents,
+    (event) => pairEventOdds(event, options.snapshotAt),
+    { signal: options.signal },
+  );
 
   return {
     eventsCount: rawEvents.length,

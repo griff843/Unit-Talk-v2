@@ -43,6 +43,7 @@ import {
   chunkEventIds,
   selectPlayerPropEventIds,
 } from './sgo-player-prop-scope.js';
+import { mapCooperatively } from './cooperative.js';
 
 /**
  * Lookback window for the opening-line dedup lookup (UTV2-1282). provider_offer_history
@@ -204,6 +205,22 @@ export async function ingestLeague(
       snapshotAt,
     },
   });
+
+  // Phase-level timing (UTV2-1283) — recorded on the run so a slow/blocking phase is
+  // visible from system_runs.details even when a cycle fails closed on timeout.
+  // Declared outside the try so the catch can record timings up to the failure point.
+  const phaseTimings: Record<string, number> = {};
+  const timePhase = async <R>(
+    name: string,
+    work: () => Promise<R>,
+  ): Promise<R> => {
+    const startedAtMs = Date.now();
+    try {
+      return await work();
+    } finally {
+      phaseTimings[name] = (phaseTimings[name] ?? 0) + (Date.now() - startedAtMs);
+    }
+  };
 
   try {
     options.quarantineRegistry?.assertAvailable('sgo');
@@ -368,42 +385,56 @@ export async function ingestLeague(
       const providerEventIds = fetched.events
         .map((event) => event.providerEventId)
         .filter((providerEventId) => providerEventId.length > 0);
-      const existingCombinations =
-        await repositories.providerOffers.findExistingCombinations(
-          providerEventIds,
-          {
-            includeBookmakerKey: true,
-            beforeSnapshotAt: snapshotAt,
-            // Bound the opening-line dedup lookup to a recent window so it prunes to
-            // the last few daily partitions of provider_offer_history instead of
-            // scanning all history (which times out on a full slate). (UTV2-1282)
-            afterSnapshotAt: subtractHoursFromIso(
-              snapshotAt,
-              OPENING_DEDUP_LOOKBACK_HOURS,
-            ),
-          },
-        );
+      const existingCombinations = await timePhase('dedup', () =>
+        repositories.providerOffers.findExistingCombinations(providerEventIds, {
+          includeBookmakerKey: true,
+          beforeSnapshotAt: snapshotAt,
+          // Bound the opening-line dedup lookup to a recent window so it prunes to
+          // the last few daily partitions of provider_offer_history instead of
+          // scanning all history (which times out on a full slate). (UTV2-1282)
+          afterSnapshotAt: subtractHoursFromIso(
+            snapshotAt,
+            OPENING_DEDUP_LOOKBACK_HOURS,
+          ),
+        }),
+      );
       const seenCombinations = new Set(existingCombinations);
 
-      const normalized = fetched.pairedProps
-        .map((prop) => normalizeSGOPairedProp(prop))
-        .filter((offer) => offer !== null)
-        .map((offer) => {
-          const combinationKey = buildSgoCombinationKey({
-            providerKey: offer.providerKey,
-            providerEventId: offer.providerEventId,
-            providerMarketKey: offer.providerMarketKey,
-            providerParticipantId: offer.providerParticipantId,
-            bookmakerKey: offer.bookmakerKey,
-          });
-          const isOpening =
-            offer.isOpening || !seenCombinations.has(combinationKey);
-          seenCombinations.add(combinationKey);
-          return {
-            ...offer,
-            isOpening,
-          };
-        });
+      // Normalize cooperatively: a full slate yields tens of thousands of paired
+      // props; a single synchronous map().filter().map() over them blocks the event
+      // loop and defeats the per-league timeout (the cycle wedges). Yield between
+      // chunks and observe the abort signal mid-transform. (UTV2-1283)
+      const normalized = await timePhase('normalize', async () => {
+        const normalizedCandidates = (
+          await mapCooperatively(
+            fetched.pairedProps,
+            (prop) => normalizeSGOPairedProp(prop),
+            { signal: options.signal },
+          )
+        ).filter(
+          (offer): offer is NonNullable<typeof offer> => offer !== null,
+        );
+        return mapCooperatively(
+          normalizedCandidates,
+          (offer) => {
+            const combinationKey = buildSgoCombinationKey({
+              providerKey: offer.providerKey,
+              providerEventId: offer.providerEventId,
+              providerMarketKey: offer.providerMarketKey,
+              providerParticipantId: offer.providerParticipantId,
+              bookmakerKey: offer.bookmakerKey,
+            });
+            const isOpening =
+              offer.isOpening || !seenCombinations.has(combinationKey);
+            seenCombinations.add(combinationKey);
+            return {
+              ...offer,
+              isOpening,
+            };
+          },
+          { signal: options.signal },
+        );
+      });
       normalizedCount = normalized.length;
       if (options.replayCaptureSession) {
         options.replayCaptureSession.recordMarketCoverage(
@@ -674,6 +705,10 @@ export async function ingestLeague(
       fetchedResults.requestTelemetry,
     ]);
 
+    options.logger?.info?.(
+      `[ingestor] cycle sgo/${league} phase timings(ms): ${JSON.stringify(phaseTimings)}`,
+    );
+
     await repositories.runs.completeRun({
       runId: run.id,
       status: 'succeeded',
@@ -693,6 +728,7 @@ export async function ingestLeague(
         insertedResultsCount: resolvedResults.insertedResults,
         skippedResultsCount: resolvedResults.skippedResults,
         resultsErrorsCount: resolvedResults.errors,
+        phaseTimings,
         quota,
       },
     });
@@ -755,6 +791,9 @@ export async function ingestLeague(
         league,
         snapshotAt,
         error: error instanceof Error ? error.message : 'unknown ingest error',
+        // Phase timings up to the failure point — on a per-league timeout this shows
+        // which phase was running when the cycle was aborted. (UTV2-1283)
+        phaseTimings,
       },
     });
     throw error;
