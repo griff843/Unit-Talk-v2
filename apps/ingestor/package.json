@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
     "dev": "tsx src/index.ts",
-    "test": "tsx --test src/ingestor.test.ts src/circuit-breaker.test.ts src/supervisor.test.ts src/ingest-fail-closed.test.ts src/t1-proof-utv2-1086-snapshot-cutover.test.ts src/provider-quarantine.test.ts src/sgo-player-prop-scope.test.ts",
+    "test": "tsx --test src/ingestor.test.ts src/circuit-breaker.test.ts src/supervisor.test.ts src/ingest-fail-closed.test.ts src/t1-proof-utv2-1086-snapshot-cutover.test.ts src/provider-quarantine.test.ts src/sgo-player-prop-scope.test.ts src/ingestor-cycle-singleton.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -44,6 +44,19 @@ import {
   selectPlayerPropEventIds,
 } from './sgo-player-prop-scope.js';
 
+/**
+ * Lookback window for the opening-line dedup lookup (UTV2-1282). provider_offer_history
+ * is daily-partitioned by snapshot_at; bounding the lookup to the last 72h prunes the
+ * scan to ~3 recent partitions instead of all ~60. Actively-polled events snapshot every
+ * cycle, so 72h is far more than enough to recognize an already-seen combination; SGO's
+ * own per-offer opening signal still applies on top of this.
+ */
+const OPENING_DEDUP_LOOKBACK_HOURS = 72;
+
+function subtractHoursFromIso(iso: string, hours: number): string {
+  return new Date(new Date(iso).getTime() - hours * 3_600_000).toISOString();
+}
+
 export interface IngestLeagueOptions {
   fetchImpl?: SGOFetchOptions['fetchImpl'];
   snapshotAt?: string;
@@ -361,6 +374,13 @@ export async function ingestLeague(
           {
             includeBookmakerKey: true,
             beforeSnapshotAt: snapshotAt,
+            // Bound the opening-line dedup lookup to a recent window so it prunes to
+            // the last few daily partitions of provider_offer_history instead of
+            // scanning all history (which times out on a full slate). (UTV2-1282)
+            afterSnapshotAt: subtractHoursFromIso(
+              snapshotAt,
+              OPENING_DEDUP_LOOKBACK_HOURS,
+            ),
           },
         );
       const seenCombinations = new Set(existingCombinations);

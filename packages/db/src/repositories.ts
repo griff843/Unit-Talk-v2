@@ -643,7 +643,18 @@ export interface ProviderOfferRepository {
    */
   findExistingCombinations(
     providerEventIds: string[],
-    options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
+    options?: {
+      includeBookmakerKey?: boolean;
+      beforeSnapshotAt?: string;
+      /**
+       * Lower bound on snapshot_at. provider_offer_history is daily-partitioned by
+       * snapshot_at; without a lower bound the lookup scans every partition (all
+       * history) and times out on a full slate. Scoping to a recent window prunes
+       * to the last few partitions. Opening-line detection only needs recent
+       * history. (UTV2-1282)
+       */
+      afterSnapshotAt?: string;
+    },
   ): Promise<Set<string>>;
   /**
    * For each event in the list where commenceTime <= snapshotAt (game has started),
