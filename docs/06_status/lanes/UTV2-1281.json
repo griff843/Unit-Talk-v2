@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1281-event-scope-mlb-player-prop-fetch",
   "base_branch": "main",
-  "commit_sha": "",
-  "pr_url": "",
+  "commit_sha": "3336491a274bcd5449040014c35da72927c3c999",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1028",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/ingest-league.ts",
@@ -28,7 +28,7 @@
     "docs/06_status/proof/UTV2-1281/evidence.json",
     "docs/06_status/proof/UTV2-1281/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-17T15:25:00.000Z",
   "heartbeat_at": "2026-06-17T15:25:00.000Z",
   "blocked_by": [],
@@ -43,5 +43,5 @@
     "main_checkout_control_only": true,
     "note": "Follow-up to the merged per-league cycle bound (PR #1024). Event-scopes the SGO player-prop fetch to the imminent slate's event IDs in small batches so a full-slate league (MLB) can no longer exhaust the per-league timeout. No schema/migration; no production writes from this session. Runtime proof is the post-deploy live funnel re-check (MLB cycles complete + fresh MLB provider_offer_history)."
   },
-  "closed_at": null
+  "closed_at": "2026-06-18T04:50:29.000Z"
 }
