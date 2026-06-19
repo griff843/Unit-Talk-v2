@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1285-restore-candidate-pick-promotion",
   "base_branch": "main",
-  "commit_sha": "",
-  "pr_url": "",
+  "commit_sha": "a3e644ee49a1fe3e2d5f2af89f9e467d61ec4b27",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1034",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/candidate-pick-scanner.ts",
