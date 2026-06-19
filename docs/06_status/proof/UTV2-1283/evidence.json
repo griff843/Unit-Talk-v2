@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1283",
+  "sha_binding": {
+    "verified_source_sha": "bbc5370451a29d6b09660fde97ec48809301817e",
+    "verified_source_note": "Implementation commit: cooperative-yield helpers + applied to SGO pairing (sgo-fetcher) and offer normalization (ingest-league); phase-level timing in run details; 6 focused tests; package test-script wiring; lane sync metadata. The following commit touches only docs/06_status/proof + docs/06_status/lanes paths; merge SHA binds at close.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-19T00:00:00.000Z",
+    "merge_sha": "<bound post-merge>",
+    "evidence_commit_sha": "<bound post-merge>",
+    "current_pr_head_sha": "bbc5370451a29d6b09660fde97ec48809301817e",
+    "ci_sentinels": {
+      "verify": "pending_merge_sha",
+      "merge_gate": "pending_merge_sha",
+      "proof_auditor_gate": "pending_merge_sha",
+      "t1_proof_gate": "pending_merge_sha",
+      "runtime_verifier_gate": "pending_merge_sha",
+      "lane_authority": "pending_merge_sha",
+      "file_scope_lock": "pending_merge_sha",
+      "require_live_db_proof": "pending_merge_sha",
+      "r_level_compliance": "pending_merge_sha",
+      "return_review_packet": "pending_merge_sha"
+    }
+  },
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS_WITH_ENVIRONMENTAL_RETRY",
+      "note": "Result recorded in verification.md. Static checks (lint/type-check/build) + in-memory suites; DB-backed smoke tests run against live Supabase (recovered now that UTV2-1282 removed the overlapping-cycle DB load)."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/cooperative.test.ts",
+      "status": "PASS",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "decisive_case": "a timer-based abort (same mechanism as the 240s per-league timeout) interrupts a 200k-item cooperative transform mid-flight (processes far fewer than all items); a blocking map would run to completion before the timer could fire."
+    },
+    "regression_tests": {
+      "command": "tsx --test apps/ingestor/src/*.test.ts",
+      "status": "PASS",
+      "tests": 209,
+      "pass": 205,
+      "fail": 0,
+      "note": "205 pass, 0 fail, 4 todo/skip."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "note": "Live Supabase smoke; TAP summary embedded in verification.md. No ingestion rows written by this lane.",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0
+  },
+  "live_production_proof": {
+    "status": "DEFERRED_POST_DEPLOY",
+    "owner": "UTV2-1279",
+    "reason": "Only deployed runtime can prove: MLB cycle succeeds or fails closed within the 240s bound (no cycle running past timeout); fresh provider_offer_history rows persist incl. provider_participant_id; results ingest reached; funnel moves past ingestion or reports the next blocker. Phase timings visible in system_runs.details post-deploy."
+  }
+}
