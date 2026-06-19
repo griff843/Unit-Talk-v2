@@ -33,6 +33,29 @@ export interface CandidatePickScanResult {
   errors: number;
 }
 
+/**
+ * Decide how to gate a freshly-submitted system pick (UTV2-1285). The lifecycle FSM
+ * only permits `validated -> awaiting_approval`, so the governance brake must be
+ * state-aware rather than always forcing the transition:
+ *   - validated         → brake to awaiting_approval (normal path);
+ *   - awaiting_approval  → idempotent re-scan, already gated;
+ *   - voided / settled   → terminal, leave as-is (never voided -> voided);
+ *   - anything else (e.g. queued) → the pick was advanced past the approval gate; a
+ *     non-human braked source must never auto-distribute, so fail closed by voiding it.
+ */
+export type GovernanceBrakeAction =
+  | 'brake_to_awaiting'
+  | 'already_gated'
+  | 'void_advanced'
+  | 'skip_terminal';
+
+export function resolveGovernanceBrakeAction(pickStatus: string): GovernanceBrakeAction {
+  if (pickStatus === 'awaiting_approval') return 'already_gated';
+  if (pickStatus === 'validated') return 'brake_to_awaiting';
+  if (pickStatus === 'voided' || pickStatus === 'settled') return 'skip_terminal';
+  return 'void_advanced';
+}
+
 export async function runCandidatePickScan(
   repos: {
     pickCandidates: IPickCandidateRepository;
@@ -214,6 +237,7 @@ export async function runCandidatePickScan(
     };
 
     let pickId: string;
+    let pickStatus = '';
     try {
       const result = await processSubmission(payload, {
         submissions: repos.submissions,
@@ -224,6 +248,7 @@ export async function runCandidatePickScan(
         events: repos.events,
       });
       pickId = result.pickRecord.id;
+      pickStatus = result.pickRecord.status ?? '';
     } catch (err) {
       errors++;
       logger?.error?.(
@@ -239,42 +264,76 @@ export async function runCandidatePickScan(
 
     // Apply governance brake — system-pick-scanner is in GOVERNANCE_BRAKE_SOURCES,
     // so picks must land in awaiting_approval before any distribution is allowed.
-    try {
-      await transitionPickLifecycle(
-        repos.picks,
-        pickId,
-        'awaiting_approval',
-        `governance brake: non-human source system-pick-scanner`,
-        'promoter',
-      );
-    } catch (brakeErr) {
-      errors++;
+    //
+    // The lifecycle FSM only permits `validated -> awaiting_approval`. The brake is
+    // therefore STATE-AWARE (UTV2-1285): force-transitioning a pick that has already
+    // advanced past validation throws "Invalid lifecycle transition: queued ->
+    // awaiting_approval", and the old void fallback then double-failed
+    // ("voided -> voided"). Instead:
+    //   - validated         → brake to awaiting_approval (the normal path);
+    //   - awaiting_approval  → idempotent re-scan, already gated → fall through to link;
+    //   - anything else      → the pick was advanced past the approval gate; a non-human
+    //                          braked source must never auto-distribute, so fail closed by
+    //                          voiding it (unless already terminal — never voided->voided).
+    const brakeAction = resolveGovernanceBrakeAction(pickStatus);
+    if (brakeAction === 'already_gated') {
+      // Idempotent re-scan — the pick is already gated. Fall through to link pick_id.
+    } else if (brakeAction === 'brake_to_awaiting') {
       try {
         await transitionPickLifecycle(
           repos.picks,
           pickId,
-          'voided',
-          `governance-brake-failed: ${brakeErr instanceof Error ? brakeErr.message : String(brakeErr)}`,
-          'operator_override',
+          'awaiting_approval',
+          `governance brake: non-human source system-pick-scanner`,
+          'promoter',
         );
-      } catch (voidErr) {
+      } catch (brakeErr) {
+        errors++;
         logger?.error?.(
           JSON.stringify({
             service: 'candidate-pick-scanner',
-            event: 'governance_brake_void_failed',
+            event: 'governance_brake_failed',
             pickId,
             candidateId: candidate.id,
-            error: voidErr instanceof Error ? voidErr.message : String(voidErr),
+            pickStatus,
+            error: brakeErr instanceof Error ? brakeErr.message : String(brakeErr),
           }),
         );
+        continue;
+      }
+    } else {
+      // void_advanced or skip_terminal — the pick was advanced past the approval gate.
+      // Fail closed: a braked source must never reach distribution without approval.
+      errors++;
+      if (brakeAction === 'void_advanced') {
+        try {
+          await transitionPickLifecycle(
+            repos.picks,
+            pickId,
+            'voided',
+            `governance-brake: braked source advanced to ${pickStatus} past the approval gate`,
+            'operator_override',
+          );
+        } catch (voidErr) {
+          logger?.error?.(
+            JSON.stringify({
+              service: 'candidate-pick-scanner',
+              event: 'governance_brake_void_failed',
+              pickId,
+              candidateId: candidate.id,
+              pickStatus,
+              error: voidErr instanceof Error ? voidErr.message : String(voidErr),
+            }),
+          );
+        }
       }
       logger?.error?.(
         JSON.stringify({
           service: 'candidate-pick-scanner',
-          event: 'governance_brake_failed',
+          event: 'governance_brake_skipped_advanced',
           pickId,
           candidateId: candidate.id,
-          error: brakeErr instanceof Error ? brakeErr.message : String(brakeErr),
+          pickStatus,
         }),
       );
       continue;
