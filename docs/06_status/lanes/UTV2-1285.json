@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1285",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "griffadavi/utv2-1285-restore-candidate-pick-promotion",
+  "base_branch": "main",
+  "commit_sha": "",
+  "pr_url": "",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/candidate-pick-scanner.ts",
+    "apps/api/src/candidate-pick-scanner.test.ts",
+    ".ops/sync/UTV2-1285.yml",
+    "docs/06_status/lanes/UTV2-1285.json",
+    "docs/06_status/proof/UTV2-1285/verification.md",
+    "docs/06_status/proof/UTV2-1285/evidence.json",
+    "docs/06_status/proof/UTV2-1285/diff-summary.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1285/verification.md",
+    "docs/06_status/proof/UTV2-1285/evidence.json",
+    "docs/06_status/proof/UTV2-1285/diff-summary.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-06-19T23:20:00.000Z",
+  "heartbeat_at": "2026-06-19T23:20:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "pm-directed",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "not_required",
+    "main_checkout_control_only": true,
+    "note": "State-aware governance brake in candidate-pick-scanner: brake validated picks to awaiting_approval, treat already-gated as idempotent, fail closed (void) any pick advanced past the gate — eliminating the invalid queued->awaiting_approval / voided->voided transitions. Preserves the public delivery gate. apps/api only, no schema change."
+  },
+  "closed_at": null
+}
