@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1282-fix-mlb-offer-persistence-db-timeout",
   "base_branch": "main",
-  "commit_sha": "",
-  "pr_url": "",
+  "commit_sha": "ae1017d1ba39a0aee27dd4206912191634007592",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1030",
   "files_changed": [],
   "file_scope_lock": [
     "packages/db/src/repositories.ts",
@@ -30,7 +30,7 @@
     "docs/06_status/proof/UTV2-1282/evidence.json",
     "docs/06_status/proof/UTV2-1282/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-18T04:15:00.000Z",
   "heartbeat_at": "2026-06-18T04:15:00.000Z",
   "blocked_by": [],
@@ -45,5 +45,5 @@
     "main_checkout_control_only": true,
     "note": "Follow-up to UTV2-1281. Bounds the opening-line dedup lookup to a recent snapshot window (partition pruning on provider_offer_history) and adds a per-league singleton + terminal-timeout release so overlapping MLB cycles can't pile onto the DB. No migration (the (provider_event_id, snapshot_at) index already exists). No production writes from this session beyond normal ingestor behavior; runtime proof is the post-deploy live funnel re-check."
   },
-  "closed_at": null
+  "closed_at": "2026-06-19T00:02:13.000Z"
 }
