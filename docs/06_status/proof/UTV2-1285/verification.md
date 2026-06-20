@@ -101,4 +101,30 @@ are fully proven by the unit + live-DB suites above.
 
 ## Merge SHA
 
-_Bound post-merge by `ops:proof-generate --merge-sha`._
+- **Merge SHA:** `eaf4b3ecf2df0c5af558a20f75d280128287cc9b`
+- merge_sha: eaf4b3ecf2df0c5af558a20f75d280128287cc9b
+- PR: https://github.com/griff843/Unit-Talk-v2/pull/1034 (squash-merged to `main` 2026-06-20)
+- Deployed to production via `deploy.yml` run 27876987095 (canary → promote → post-deploy smoke, all green).
+
+## Post-merge closeout (runtime re-verification on merge SHA)
+
+Re-ran the live-DB runtime gate against the merged `main` (SHA `eaf4b3ecf2df0c5af558a20f75d280128287cc9b`)
+during lane closeout. `pnpm test:db` against live Supabase `zfzdnfwdarxucxtaojxm` — **7/7 pass**
+(database-smoke.test.ts, duration ~153.6s). Live monitored-table row counts captured at closeout
+(read-only; no rows written by this proof):
+
+| table | rows | note |
+|---|---|---|
+| picks | 39,723 | status mix: validated 8,290 / voided 6,637 / queued 6,211 / awaiting_approval 5,748 / settled 5,638 / draft 4,521 / posted 2,678 |
+| pick_candidates | 58,336 | promotion source table |
+| pick_lifecycle | 58,920 | FSM transition ledger — the table whose illegal edges this lane fixed |
+| settlement_records | 10,197 | downstream of awaiting_approval gate |
+
+The brake fix lands system picks in `awaiting_approval` (5,748 present) without producing the
+previously-stuck illegal `queued -> awaiting_approval` / `voided -> voided` transitions.
+
+### R-level check
+
+R1 (live query evidence) and R2 (monitored-table row counts) are satisfied by the `runtime_proof.queries`
+and `runtime_proof.row_counts` arrays in `evidence.json`, captured from this live closeout run. T1 runtime
+proof is SHA-bound to the merge SHA above. See `docs/05_operations/r1-r5-rules.json`.

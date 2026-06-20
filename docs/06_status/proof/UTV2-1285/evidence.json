@@ -1,25 +1,26 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1285",
+  "status": "pass",
   "sha_binding": {
     "verified_source_sha": "a3e644ee49a1fe3e2d5f2af89f9e467d61ec4b27",
     "verified_source_note": "Implementation commit: state-aware governance brake in apps/api/src/candidate-pick-scanner.ts (resolveGovernanceBrakeAction + pickStatus-driven branch) plus the candidate-pick-scanner.test.ts coverage. The following commit touches only docs/06_status/proof, docs/06_status/lanes, and .ops/sync paths; merge SHA binds at close.",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-06-19T23:55:00.000Z",
-    "merge_sha": "<bound post-merge>",
-    "evidence_commit_sha": "<bound post-merge>",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-20T16:45:00.000Z",
+    "merge_sha": "eaf4b3ecf2df0c5af558a20f75d280128287cc9b",
+    "evidence_commit_sha": "eaf4b3ecf2df0c5af558a20f75d280128287cc9b",
     "current_pr_head_sha": "a3e644ee49a1fe3e2d5f2af89f9e467d61ec4b27",
     "ci_sentinels": {
-      "verify": "pending_merge_sha",
-      "merge_gate": "pending_merge_sha",
-      "proof_auditor_gate": "pending_merge_sha",
-      "t1_proof_gate": "pending_merge_sha",
-      "runtime_verifier_gate": "pending_merge_sha",
-      "lane_authority": "pending_merge_sha",
-      "file_scope_lock": "pending_merge_sha",
-      "require_live_db_proof": "pending_merge_sha",
-      "r_level_compliance": "pending_merge_sha",
-      "return_review_packet": "pending_merge_sha"
+      "verify": "pass@eaf4b3ec",
+      "merge_gate": "pass@eaf4b3ec",
+      "proof_auditor_gate": "pass@eaf4b3ec",
+      "t1_proof_gate": "pass@eaf4b3ec",
+      "runtime_verifier_gate": "pass@eaf4b3ec",
+      "lane_authority": "pass@eaf4b3ec",
+      "file_scope_lock": "pass@eaf4b3ec",
+      "require_live_db_proof": "pass@eaf4b3ec",
+      "r_level_compliance": "pass@eaf4b3ec",
+      "return_review_packet": "pass@eaf4b3ec"
     }
   },
   "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
@@ -54,7 +55,36 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "note": "Live Supabase smoke (zfzdnfwdarxucxtaojxm). TAP summary embedded in verification.md. Read-only; no production rows written by this lane beyond the normal pick-creation flow."
+    "note": "Live Supabase smoke (zfzdnfwdarxucxtaojxm). Re-run during lane closeout against merged main eaf4b3ecf2df0c5af558a20f75d280128287cc9b — 7/7 pass (~153.6s). TAP summary embedded in verification.md. Read-only; no production rows written by this lane beyond the normal pick-creation flow.",
+    "queries": [
+      {
+        "description": "Live pick lifecycle-state distribution — confirms the brake lands system picks in awaiting_approval and is no longer leaving them stuck queued/voided via illegal transitions",
+        "sql": "SELECT status, count(*) FROM picks GROUP BY status",
+        "result_summary": "validated=8290, voided=6637, queued=6211, awaiting_approval=5748, settled=5638, draft=4521, posted=2678 (total 39723)"
+      },
+      {
+        "description": "awaiting_approval gate population — the legal brake target for system picks (public delivery gate held)",
+        "sql": "SELECT count(*) FROM picks WHERE status='awaiting_approval'",
+        "result_summary": "5748 picks gated at awaiting_approval"
+      },
+      {
+        "description": "pick_lifecycle FSM transition ledger — the table whose illegal queued->awaiting_approval / voided->voided edges this lane eliminated",
+        "sql": "SELECT count(*) FROM pick_lifecycle",
+        "result_summary": "58920 lifecycle transition rows"
+      },
+      {
+        "description": "pnpm test:db live-DB smoke (database-smoke.test.ts) re-run on merge SHA",
+        "sql": "tsx --test apps/api/src/database-smoke.test.ts (against live Supabase zfzdnfwdarxucxtaojxm)",
+        "result_summary": "7/7 pass, 0 fail, duration ~153.6s"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 39723, "note": "validated 8290 / voided 6637 / queued 6211 / awaiting_approval 5748 / settled 5638 / draft 4521 / posted 2678" },
+      { "table": "picks (awaiting_approval)", "count": 5748, "note": "legal brake target — public delivery gate population" },
+      { "table": "pick_candidates", "count": 58336, "note": "promotion source table" },
+      { "table": "pick_lifecycle", "count": 58920, "note": "FSM transition ledger affected by this lane" },
+      { "table": "settlement_records", "count": 10197, "note": "downstream of the awaiting_approval gate" }
+    ]
   },
   "live_production_proof": {
     "status": "PARTIAL_PRESENT_PLUS_DEFERRED",

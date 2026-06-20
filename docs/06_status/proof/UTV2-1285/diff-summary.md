@@ -4,6 +4,8 @@
 **Branch:** `griffadavi/utv2-1285-restore-candidate-pick-promotion`
 **Tier:** T1
 **Scope:** `apps/api` only. No schema change, no migration, no new package.
+**Merge SHA:** `eaf4b3ecf2df0c5af558a20f75d280128287cc9b` (PR #1034, squash-merged to `main` 2026-06-20)
+**merge_sha:** eaf4b3ecf2df0c5af558a20f75d280128287cc9b
 
 ## Problem
 

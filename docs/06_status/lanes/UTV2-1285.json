@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1285-restore-candidate-pick-promotion",
   "base_branch": "main",
-  "commit_sha": "a3e644ee49a1fe3e2d5f2af89f9e467d61ec4b27",
+  "commit_sha": "eaf4b3ecf2df0c5af558a20f75d280128287cc9b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1034",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,13 +24,29 @@
     "docs/06_status/proof/UTV2-1285/evidence.json",
     "docs/06_status/proof/UTV2-1285/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-19T23:20:00.000Z",
-  "heartbeat_at": "2026-06-19T23:20:00.000Z",
+  "heartbeat_at": "2026-06-20T22:12:33.580Z",
   "blocked_by": [],
-  "preflight_token": "pm-directed",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-20T22:12:30.842Z",
+      "verdict": "pass",
+      "merge_sha": "eaf4b3ecf2df0c5af558a20f75d280128287cc9b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1034",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "main-control",
@@ -39,5 +55,5 @@
     "main_checkout_control_only": true,
     "note": "State-aware governance brake in candidate-pick-scanner: brake validated picks to awaiting_approval, treat already-gated as idempotent, fail closed (void) any pick advanced past the gate — eliminating the invalid queued->awaiting_approval / voided->voided transitions. Preserves the public delivery gate. apps/api only, no schema change."
   },
-  "closed_at": null
+  "closed_at": "2026-06-20T22:12:33.580Z"
 }
