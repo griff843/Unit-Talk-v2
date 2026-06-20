@@ -19,7 +19,6 @@
     "apps/ingestor/src/ingestor-loop-resilience.test.ts",
     "deploy/production/docker-compose.yml",
     "package.json",
-    "apps/ingestor/package.json",
     ".ops/sync/UTV2-1284.yml",
     "docs/06_status/lanes/UTV2-1284.json",
     "docs/06_status/proof/UTV2-1284/verification.md",

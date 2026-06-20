@@ -83,6 +83,22 @@ process is alive — the failure mode `pgrep node` could never detect.
 `ingestor-cycle-singleton.test.ts` 4/4 (singleton semantics changed from boolean to
 timestamped map) and `ingestor.test.ts` 86/86.
 
+### Runtime — `pnpm test:db` (live Supabase `zfzdnfwdarxucxtaojxm`)
+
+Executed `pnpm test:db` against the live database — **7/7 pass** (database-smoke.test.ts,
+duration ~114s). Confirms the runtime DB invariants hold for this branch (read-only;
+the ingestor change adds no schema and no new writes).
+
+```
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114316.597382
+```
+
 ### Live recovery (read-only, prod)
 
 Operational restart of the wedged ingestor at 22:26 UTC reaped 7 hung singletons and

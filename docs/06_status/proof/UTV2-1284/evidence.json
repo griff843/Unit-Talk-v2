@@ -51,6 +51,14 @@
       "command": "tsx --test apps/ingestor/src/ingestor-cycle-singleton.test.ts apps/ingestor/src/ingestor.test.ts",
       "status": "PASS",
       "note": "singleton 4/4 (leagueInFlight changed boolean -> timestamped map) + ingestor 86/86."
+    },
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "note": "Executed pnpm test:db against live Supabase zfzdnfwdarxucxtaojxm — 7/7 pass (database-smoke.test.ts, ~114s). Read-only; the ingestor daemon-hardening change adds no schema and no new writes."
     }
   },
   "runtime_proof": {
