@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1284",
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "d6e7d46c605cba56cf8a96036fb8579aadc0cb46",
+    "verified_source_note": "Implementation commit: ingestor daemon hardening (resilient poll loop + heartbeat/watchdog healthcheck + bounded league re-admission) in apps/ingestor/src plus deploy/production/docker-compose.yml and tests. Merge SHA binds at lane close.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-20T22:55:00.000Z",
+    "merge_sha": "<bound post-merge>",
+    "evidence_commit_sha": "<bound post-merge>",
+    "current_pr_head_sha": "d6e7d46c605cba56cf8a96036fb8579aadc0cb46",
+    "ci_sentinels": {
+      "verify": "pending_merge_sha",
+      "merge_gate": "pending_merge_sha",
+      "proof_auditor_gate": "pending_merge_sha",
+      "t1_proof_gate": "pending_merge_sha",
+      "runtime_verifier_gate": "pending_merge_sha",
+      "lane_authority": "pending_merge_sha",
+      "file_scope_lock": "pending_merge_sha",
+      "require_live_db_proof": "pending_merge_sha",
+      "r_level_compliance": "pending_merge_sha",
+      "return_review_packet": "pending_merge_sha"
+    }
+  },
+  "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS",
+      "note": "env:check, lint, type-check (project references), build, and the full unit suite all green — '[verify:parallel] all checks passed'."
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm exec eslint <changed files>", "status": "PASS", "note": "0 errors, 0 warnings after removing an unused eslint-disable." },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/ingestor-loop-resilience.test.ts apps/ingestor/src/heartbeat.test.ts",
+      "status": "PASS",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "cases": [
+        "FIX #1: a transient cycle-level DB failure does not kill the daemon loop (reproduces the 521 outage; loop resolves instead of rejecting)",
+        "FIX #1: the heartbeat hook throwing never breaks the loop",
+        "FIX #3: a timed-out league held past the re-admission bound is re-admitted",
+        "runHealthcheck exits 0 on a fresh heartbeat and 1 when stale (process alive, loop wedged)",
+        "evaluateHeartbeatLiveness fresh/stale/missing + env-override resolution + write/read round-trip"
+      ]
+    },
+    "regression": {
+      "command": "tsx --test apps/ingestor/src/ingestor-cycle-singleton.test.ts apps/ingestor/src/ingestor.test.ts",
+      "status": "PASS",
+      "note": "singleton 4/4 (leagueInFlight changed boolean -> timestamped map) + ingestor 86/86."
+    }
+  },
+  "runtime_proof": {
+    "command": "live read-only prod verification (Supabase zfzdnfwdarxucxtaojxm) + focused reproduction tests",
+    "status": "PASS",
+    "note": "The durability fix is proven by the reproduction tests (the loop survives the exact cycle-level 521 failure that caused the 5.5h outage). The live recovery path the watchdog now automates was confirmed read-only on prod after the 22:26 UTC operational restart: the funnel resumed flowing end-to-end. Full post-deploy assertion (one container, loop advances, transient-failure survival, MLB resumes) follows merge + deploy.",
+    "queries": [
+      {
+        "description": "Reproduction: a cycle-level DB throw (events.listStartedBySnapshot = 521) no longer kills the loop",
+        "sql": "tsx --test apps/ingestor/src/ingestor-loop-resilience.test.ts (FIX #1)",
+        "result_summary": "runIngestorCycles resolves (loop survives), POLL ITERATION FAILED telemetry logged per cycle, heartbeat advanced cycles 1 and 2 — PASS"
+      },
+      {
+        "description": "Healthcheck fails on a stale heartbeat even though the node process is alive",
+        "sql": "tsx --test apps/ingestor/src/heartbeat.test.ts (runHealthcheck)",
+        "result_summary": "fresh heartbeat -> exit 0; stale heartbeat -> exit 1; missing -> exit 1 — PASS"
+      },
+      {
+        "description": "Live recovery: fresh MLB provider offers advancing after restart (read-only prod)",
+        "sql": "SELECT count(*) FROM provider_offer_history WHERE snapshot_at >= now()-interval '10 minutes' AND sport_key ILIKE '%MLB%'",
+        "result_summary": "2000+ fresh MLB provider_offer_history rows / 10 min; provider_offer_current advancing in real-time"
+      },
+      {
+        "description": "Live recovery: qualified candidates + picks flowing again (read-only prod, 22:58 UTC)",
+        "sql": "SELECT status, count(*) FROM pick_candidates WHERE created_at >= now()-interval '30 min' GROUP BY status",
+        "result_summary": "446 candidates / 30 min — 390 qualified, 56 rejected (stale_price_data 23, unsupported_market_family 25, invalid_odds 8); 51 picks created / 30 min"
+      }
+    ],
+    "row_counts": [
+      { "table": "provider_offer_history (MLB, /10min)", "count": 2000, "note": "fresh MLB offers advancing post-restart" },
+      { "table": "pick_candidates (/30min)", "count": 446, "note": "390 qualified — earlier 0-qualified was post-restart catch-up, now cleared" },
+      { "table": "pick_candidates qualified (/30min)", "count": 390, "note": "funnel flows past the previous candidate->qualified NO" },
+      { "table": "picks (/30min)", "count": 51, "note": "picks created from fresh MLB candidates" }
+    ]
+  },
+  "live_production_proof": {
+    "status": "RECOVERY_CONFIRMED_DEPLOY_PENDING",
+    "observed": "Operational restart at 22:26 UTC reaped 7 HUNG_SINGLETON runs and resumed cycling NBA/NFL/MLB; the funnel flowed end-to-end again (offers -> market_universe -> 390 qualified candidates -> 51 picks). This is the recovery the in-process watchdog now automates without manual intervention.",
+    "deferred": "Full post-deploy proof (exactly one ingestor container; loop advances; simulated/observed transient DB failure does not kill the loop; healthcheck reflects loop progress; MLB offer-ingest resumes after failure/timeout) runs after this PR is merged and deployed.",
+    "production_mutation": "none beyond a container restart (operational recovery); no data backfill, no fabricated picks"
+  }
+}
