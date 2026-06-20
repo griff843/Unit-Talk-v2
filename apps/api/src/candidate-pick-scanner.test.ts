@@ -12,7 +12,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runCandidatePickScan } from './candidate-pick-scanner.js';
+import {
+  runCandidatePickScan,
+  resolveGovernanceBrakeAction,
+} from './candidate-pick-scanner.js';
 import {
   InMemoryMarketUniverseRepository,
   InMemoryPickCandidateRepository,
@@ -429,4 +432,46 @@ test('candidate-pick-scanner: skips non-O/U markets that grading cannot settle',
   const qualified = await repos.pickCandidates.findByStatus('qualified');
   const unlinked = qualified.find((row) => row.id === candidate.id);
   assert.equal(unlinked?.pick_id, null, 'unsupported candidate must not link to a pick');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1285 — state-aware governance brake (no invalid lifecycle transitions)
+// ---------------------------------------------------------------------------
+
+test('resolveGovernanceBrakeAction: validated picks brake to awaiting_approval', () => {
+  assert.equal(resolveGovernanceBrakeAction('validated'), 'brake_to_awaiting');
+});
+
+test('resolveGovernanceBrakeAction: already-gated picks are idempotent (no re-transition)', () => {
+  assert.equal(resolveGovernanceBrakeAction('awaiting_approval'), 'already_gated');
+});
+
+test('resolveGovernanceBrakeAction: a pick advanced past the gate fails closed (void)', () => {
+  // The exact bug: a pick at `queued` must NOT be force-transitioned (queued ->
+  // awaiting_approval is an invalid FSM transition) — it is voided fail-closed instead.
+  assert.equal(resolveGovernanceBrakeAction('queued'), 'void_advanced');
+  assert.equal(resolveGovernanceBrakeAction('posted'), 'void_advanced');
+});
+
+test('resolveGovernanceBrakeAction: terminal picks are skipped (never voided -> voided / settled -> awaiting_approval)', () => {
+  assert.equal(resolveGovernanceBrakeAction('voided'), 'skip_terminal');
+  assert.equal(resolveGovernanceBrakeAction('settled'), 'skip_terminal');
+});
+
+test('candidate-pick-scanner: promoted pick carries a canonical stake_units > 0 and stays gated (UTV2-1285)', async () => {
+  const universe = makeUniverseRow({ id: 'uni-stake' });
+  const candidate = makeCandidate({ id: 'cand-stake', universe_id: universe.id });
+
+  const pick = await scanSingleCandidatePick(universe, candidate);
+
+  assert.ok(
+    pick!.stake_units != null && Number(pick!.stake_units) > 0,
+    `promoted pick must have a canonical stake_units > 0, got ${pick!.stake_units}`,
+  );
+  // Public delivery gate preserved: the pick must remain in awaiting_approval.
+  assert.equal(
+    pick!.status,
+    'awaiting_approval',
+    'pick must stay gated in awaiting_approval (public delivery not triggered)',
+  );
 });

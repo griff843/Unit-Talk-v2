@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1285",
+  "sha_binding": {
+    "verified_source_sha": "a3e644ee49a1fe3e2d5f2af89f9e467d61ec4b27",
+    "verified_source_note": "Implementation commit: state-aware governance brake in apps/api/src/candidate-pick-scanner.ts (resolveGovernanceBrakeAction + pickStatus-driven branch) plus the candidate-pick-scanner.test.ts coverage. The following commit touches only docs/06_status/proof, docs/06_status/lanes, and .ops/sync paths; merge SHA binds at close.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-06-19T23:55:00.000Z",
+    "merge_sha": "<bound post-merge>",
+    "evidence_commit_sha": "<bound post-merge>",
+    "current_pr_head_sha": "a3e644ee49a1fe3e2d5f2af89f9e467d61ec4b27",
+    "ci_sentinels": {
+      "verify": "pending_merge_sha",
+      "merge_gate": "pending_merge_sha",
+      "proof_auditor_gate": "pending_merge_sha",
+      "t1_proof_gate": "pending_merge_sha",
+      "runtime_verifier_gate": "pending_merge_sha",
+      "lane_authority": "pending_merge_sha",
+      "file_scope_lock": "pending_merge_sha",
+      "require_live_db_proof": "pending_merge_sha",
+      "r_level_compliance": "pending_merge_sha",
+      "return_review_packet": "pending_merge_sha"
+    }
+  },
+  "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS_WITH_ENVIRONMENTAL_RETRY",
+      "note": "env:check, lint, type-check, and build all green. The only red was apps/api/src/t1-proof-awaiting-approval-review.test.ts (UTV2-521 regression, a live-DB-backed suite unrelated to this diff). It passes 5/5 in isolation (exit 0); the in-suite failure is the known prod-DB-under-load flake. This change touches only candidate-pick-scanner."
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "build": { "command": "pnpm build", "status": "PASS" },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/api/src/candidate-pick-scanner.test.ts",
+      "status": "PASS",
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "cases": [
+        "resolveGovernanceBrakeAction: validated picks brake to awaiting_approval",
+        "resolveGovernanceBrakeAction: already-gated picks are idempotent (no re-transition)",
+        "resolveGovernanceBrakeAction: a pick advanced past the gate fails closed (void)",
+        "resolveGovernanceBrakeAction: terminal picks are skipped (never voided -> voided / settled -> awaiting_approval)",
+        "promoted pick carries a canonical stake_units > 0 and stays gated (UTV2-1285)"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "Live Supabase smoke (zfzdnfwdarxucxtaojxm). TAP summary embedded in verification.md. Read-only; no production rows written by this lane beyond the normal pick-creation flow."
+  },
+  "live_production_proof": {
+    "status": "PARTIAL_PRESENT_PLUS_DEFERRED",
+    "observed": "At verification time, system-pick-scanner picks in production were landing in awaiting_approval with zero queued/voided brake errors in the trailing 30m window — confirming the brake fix's runtime behavior and that the public delivery gate holds.",
+    "deferred": "A full qualified-candidate → pick proof is supply-starved: the MLB ingestor intermittently re-stalls (0 MLB offers / 0 qualified candidates in the trailing 15m), so the scanner has no fresh candidates to promote during those windows. That residual ingestion-robustness limiter is tracked separately and is out of scope for this promotion-path lane.",
+    "production_mutation": "none beyond normal pick-creation flow"
+  }
+}
