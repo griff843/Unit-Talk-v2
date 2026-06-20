@@ -21,6 +21,11 @@ import {
   type RuntimeTruthReport,
 } from '@unit-talk/observability';
 import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js';
+import {
+  resolveHeartbeatFile,
+  resolveHeartbeatMaxAgeMs,
+  writeHeartbeat,
+} from './heartbeat.js';
 import { parseSchedulerConfig } from './scheduler.js';
 import {
   collectConfiguredSgoApiKeyCandidates,
@@ -334,6 +339,38 @@ if (runtime.autorun && runtime.sgoApiKeys.length === 0 && !runtime.oddsApiKey) {
 
 if (runtime.autorun) {
   let hungSingletonReaped = false;
+
+  // ── Loop heartbeat + watchdog (UTV2-1284) ──────────────────────────────────
+  // The daemon is a single runIngestorCycles call that loops forever. The old
+  // container healthcheck was `pgrep -f node`, which proves a process exists but
+  // NOT that the loop advances — so a wedged loop reported "healthy" for hours.
+  // recordIngestorHeartbeat stamps a file + memory each cycle; healthcheck.ts
+  // reads the file, and this in-process watchdog force-exits when the heartbeat
+  // goes stale so `restart: unless-stopped` recreates the container (the proven
+  // recovery path: reaps singletons, resumes cycling).
+  const heartbeatFile = resolveHeartbeatFile(process.env);
+  const heartbeatMaxAgeMs = resolveHeartbeatMaxAgeMs(process.env);
+  let lastHeartbeatTs = Date.now();
+  const recordIngestorHeartbeat = (cycle: number) => {
+    lastHeartbeatTs = Date.now();
+    writeHeartbeat(heartbeatFile, { ts: lastHeartbeatTs, cycle, pid: process.pid });
+  };
+  recordIngestorHeartbeat(0);
+  const watchdog = setInterval(() => {
+    const ageMs = Date.now() - lastHeartbeatTs;
+    if (ageMs > heartbeatMaxAgeMs) {
+      logger.error('ingestor loop watchdog: heartbeat stale — forcing exit so the container restarts', {
+        healthCode: 'STALE_CYCLE',
+        ageMs,
+        thresholdMs: heartbeatMaxAgeMs,
+        heartbeatFile,
+      });
+      process.exit(1);
+    }
+  }, Math.min(heartbeatMaxAgeMs, 60_000));
+  // Don't let the watchdog itself keep an otherwise-dead process alive.
+  watchdog.unref();
+
   resolveActiveSgoApiKey(runtime.sgoApiKeys)
     .then(async (sgoSelection) => {
       const reaped = await runtime.repositories.runs.reapStaleRuns({
@@ -386,6 +423,20 @@ if (runtime.autorun) {
           process.env.UNIT_TALK_INGESTOR_LEAGUE_TIMEOUT_MS,
           240_000,
         ),
+        // Per-cycle heartbeat for the watchdog + healthcheck (UTV2-1284).
+        recordHeartbeat: recordIngestorHeartbeat,
+        // Bounded re-admission so a timed-out league (e.g. MLB) whose orphaned
+        // work never settles is re-admitted to the rotation instead of dropped
+        // forever. Omitted unless overridden → runner uses its 2× leagueTimeoutMs
+        // default. (UTV2-1284)
+        ...(process.env.UNIT_TALK_INGESTOR_LEAGUE_READMIT_MS
+          ? {
+              leagueReadmitMs: parsePositiveInt(
+                process.env.UNIT_TALK_INGESTOR_LEAGUE_READMIT_MS,
+                0,
+              ),
+            }
+          : {}),
         schedulerConfig: runtime.schedulerConfig,
         ...('pinnacleOnlyPeak' in runtime && runtime.pinnacleOnlyPeak ? { pinnacleOnlyPeak: true } : {}),
         providerDbWritePolicy: runtime.providerDbWritePolicy,

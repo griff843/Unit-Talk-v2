@@ -76,6 +76,25 @@ export interface IngestorRunnerOptions {
   retentionConnection?: DatabaseConnectionConfig;
   /** Retention window in days. Defaults to 7. Only used when retentionConnection is set. */
   retentionDays?: number;
+  /**
+   * Per-cycle heartbeat hook (UTV2-1284). Called at the top of every cycle
+   * iteration with the cycle number, BEFORE any work — so it advances even when
+   * a cycle's work fails. Production wires it to a heartbeat file read by the
+   * in-process watchdog and the container healthcheck. Best-effort: a throw here
+   * is swallowed and must never break the loop.
+   */
+  recordHeartbeat?: (cycle: number) => void;
+  /**
+   * Bounded singleton re-admission (UTV2-1284). A league whose prior cycle timed
+   * out holds its per-league singleton until the orphaned work settles; if that
+   * work never settles the league would be skipped forever (MLB dropped out of
+   * rotation). After this many ms held, the singleton is force-released and the
+   * league re-admitted on the next cycle with telemetry. <= 0 disables.
+   * Defaults to 2 × leagueTimeoutMs.
+   */
+  leagueReadmitMs?: number;
+  /** Injectable clock (ms) for deterministic tests. Defaults to Date.now. */
+  now?: () => number;
 }
 
 export interface IngestorGradingTriggerSummary {
@@ -205,21 +224,48 @@ export async function runIngestorCycles(
   const leagueTimeoutMs =
     options.leagueTimeoutMs ?? DEFAULT_LEAGUE_TIMEOUT_MS;
   const sleep = options.sleep ?? defaultSleep;
+  const now = options.now ?? (() => Date.now());
+  // Bounded singleton re-admission (UTV2-1284): a league held in-flight longer
+  // than this is force-released so a never-settling orphan can't drop it from the
+  // rotation forever. Defaults to 2× the per-league bound; <= 0 disables.
+  const leagueReadmitMs =
+    options.leagueReadmitMs ?? (leagueTimeoutMs > 0 ? leagueTimeoutMs * 2 : 0);
   const summaries: IngestorCycleSummary[] = [];
   let lastCycleEndMs: number | null = null;
   const quarantineRegistry = new ProviderQuarantineRegistry({
     ...(options.logger ? { logger: options.logger } : {}),
   });
   const sgoCircuitBreakers = createSgoCircuitBreakers(options.circuitBreaker);
-  // Per-league singleton (UTV2-1282): true while a league's ingest work is still in
-  // flight. A league that times out leaves its work running in the background; this
-  // flag stays set (released only when that work truly settles) so the next cycle
-  // skips the league instead of starting an overlapping cycle that piles onto the DB.
-  const leagueInFlight = new Map<string, boolean>();
+  // Per-league singleton (UTV2-1282): records the epoch ms a league's ingest work
+  // went in-flight, or absent when idle. A league that times out leaves its work
+  // running in the background; the entry stays set (released only when that work
+  // truly settles) so the next cycle skips the league instead of overlapping it.
+  // UTV2-1284 adds a bounded force-release (leagueReadmitMs) so a never-settling
+  // orphan can't exclude the league (e.g. MLB) from the rotation permanently.
+  const leagueInFlight = new Map<string, number>();
+  /** Telemetry: a poll iteration failed but the daemon continued (UTV2-1284). */
+  const recordHeartbeat = (cycle: number) => {
+    try {
+      options.recordHeartbeat?.(cycle);
+    } catch {
+      // best-effort — a heartbeat write failure must never break the loop
+    }
+  };
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+    // Heartbeat at the top of every iteration proves the loop advanced even when
+    // the previous cycle's work failed. Read by the in-process watchdog and the
+    // container healthcheck. (UTV2-1284)
+    recordHeartbeat(cycle);
+
+    // FIX #1 (UTV2-1284): wrap the per-cycle body so a transient failure in
+    // cycle-level work (e.g. events.listStartedBySnapshot throwing during a
+    // provider/DB outage — the proven 2026-06-20 root cause) fails the iteration
+    // closed and continues to the next poll, instead of escaping the loop and
+    // leaving the daemon dead while the process lingers "healthy".
+    try {
     if (lastCycleEndMs !== null) {
-      const gapMs = Date.now() - lastCycleEndMs;
+      const gapMs = now() - lastCycleEndMs;
       if (gapMs > CYCLE_GAP_WARN_MS) {
         const stalenessMsg = `[ingestor] cycle=${cycle} STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last cycle — offers may be stale`;
         options.logger?.warn?.(stalenessMsg);
@@ -241,14 +287,28 @@ export async function runIngestorCycles(
       // Singleton guard (UTV2-1282): never start a new cycle for a league whose
       // prior cycle's work is still in flight (e.g. it timed out and the orphaned
       // work has not settled). Skip with clear telemetry rather than overlap.
-      if (leagueInFlight.get(league) === true) {
-        options.logger?.warn?.(
-          `[ingestor] cycle=${cycle} league=${league} SKIP — prior cycle still in-flight; refusing overlapping cycle (singleton guard, UTV2-1282)`,
-        );
-        continue;
+      // FIX #3 (UTV2-1284): bounded re-admission — once the singleton has been
+      // held longer than leagueReadmitMs, force-release and re-admit so a
+      // never-settling orphan can't drop the league (e.g. MLB) from the rotation
+      // permanently. A league skipped is always logged with the reason.
+      const inFlightSince = leagueInFlight.get(league);
+      if (inFlightSince !== undefined) {
+        const heldMs = now() - inFlightSince;
+        if (leagueReadmitMs <= 0 || heldMs < leagueReadmitMs) {
+          options.logger?.warn?.(
+            `[ingestor] cycle=${cycle} league=${league} SKIP — prior cycle still in-flight ${Math.round(heldMs / 1000)}s; refusing overlapping cycle (singleton guard, UTV2-1282)`,
+          );
+          continue;
+        }
+        const readmitMsg = `[ingestor] cycle=${cycle} league=${league} RE-ADMIT — singleton held ${Math.round(heldMs / 1000)}s > ${Math.round(leagueReadmitMs / 1000)}s bound; forcing release and re-admitting to rotation (UTV2-1284)`;
+        options.logger?.warn?.(readmitMsg);
+        if (options.onStalenessAlert) {
+          void options.onStalenessAlert(readmitMsg).catch(() => {/* fire-and-forget */});
+        }
       }
       const playerPropPatterns = leaguePlayerPropPatterns(league);
-      leagueInFlight.set(league, true);
+      const markedAt = now();
+      leagueInFlight.set(league, markedAt);
       try {
         results.push(
           await ingestLeagueWithTimeout(league, options.apiKey, options.repositories, {
@@ -283,13 +343,17 @@ export async function runIngestorCycles(
             circuitBreakers: sgoCircuitBreakers,
             quarantineRegistry,
           }, leagueTimeoutMs, {
-            // Release the singleton only when the underlying work truly settles.
-            onWorkSettled: () => leagueInFlight.set(league, false),
+            // Release the singleton only when the underlying work truly settles —
+            // and only if it still owns the slot (a bounded re-admission may have
+            // replaced it). (UTV2-1282 / UTV2-1284)
+            onWorkSettled: () => {
+              if (leagueInFlight.get(league) === markedAt) leagueInFlight.delete(league);
+            },
           }),
         );
         // Success: work settled. Clear immediately (belt-and-suspenders alongside
         // onWorkSettled) so the next league/cycle is never blocked by a stale flag.
-        leagueInFlight.set(league, false);
+        if (leagueInFlight.get(league) === markedAt) leagueInFlight.delete(league);
       } catch (leagueError: unknown) {
         if (leagueError instanceof LeagueIngestTimeoutError) {
           // Fail closed and proceed: a single league can never hang the cycle.
@@ -303,7 +367,7 @@ export async function runIngestorCycles(
           }
         } else {
           // Non-timeout error: the underlying work threw, so it has settled — release.
-          leagueInFlight.set(league, false);
+          if (leagueInFlight.get(league) === markedAt) leagueInFlight.delete(league);
           options.logger?.warn?.(
             `[ingestor] league=${league} failed, skipping to next: ${leagueError instanceof Error ? leagueError.message : String(leagueError)}`,
           );
@@ -371,8 +435,23 @@ export async function runIngestorCycles(
       gradingTrigger,
       sgoUsage,
     });
-    lastCycleEndMs = Date.now();
+    } catch (cycleError: unknown) {
+      // FIX #1 (UTV2-1284): a transient cycle-level failure must not kill the
+      // daemon loop. Fail the iteration closed, emit telemetry, and fall through
+      // to the next poll. The per-league loop already isolates league errors;
+      // this guards the cycle-level work that runs after it (finalized repolls,
+      // grading trigger, account-usage, summary push).
+      const failMsg = `[ingestor] cycle=${cycle} POLL ITERATION FAILED — daemon continuing to next poll (fail-closed, UTV2-1284): ${cycleError instanceof Error ? cycleError.message : String(cycleError)}`;
+      options.logger?.warn?.(failMsg);
+      if (options.onStalenessAlert) {
+        void options.onStalenessAlert(failMsg).catch(() => {/* fire-and-forget */});
+      }
+    } finally {
+      lastCycleEndMs = now();
+    }
 
+    // The inter-cycle sleep is OUTSIDE the try/catch so the loop always advances
+    // to the next poll, even after a failed iteration. (UTV2-1284)
     const isLastCycle = cycle >= maxCycles;
     if (!isLastCycle) {
       const resolution = resolveCurrentPollIntervalMs(
