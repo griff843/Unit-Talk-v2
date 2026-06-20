@@ -9,9 +9,11 @@ overrides:
   react-dom: 18.3.1
   # Security: force patched versions for advisories flagged by `pnpm audit --prod`.
   # @babel/core GHSA-4x5r-pxfx-6jf8 (HIGH, <=7.29.0); ws GHSA-96hv-2xvq-fx4p +
-  # GHSA-58qx-3vcg-4xpx (>=8.0.0 <8.21.0).
+  # GHSA-58qx-3vcg-4xpx (>=8.0.0 <8.21.0); undici GHSA-vxpw-j846-p89q (HIGH,
+  # WebSocket client DoS, <6.27.0) pulled in via @discordjs/rest.
   "@babel/core@<7.29.6": 7.29.6
   "ws@>=8.0.0 <8.21.0": 8.21.0
+  "undici@<6.27.0": 6.27.0
 
 peerDependencyRules:
   ignoreMissing:
