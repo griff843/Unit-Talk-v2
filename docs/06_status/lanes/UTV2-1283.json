@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1283-mlb-cycle-eventloop-block",
   "base_branch": "main",
-  "commit_sha": "",
-  "pr_url": "",
+  "commit_sha": "388f8ba8ec1c5b8a05c42016c7a882250d8e4d52",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1032",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/cooperative.ts",
@@ -27,13 +27,23 @@
     "docs/06_status/proof/UTV2-1283/evidence.json",
     "docs/06_status/proof/UTV2-1283/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-18T23:46:00.000Z",
-  "heartbeat_at": "2026-06-18T23:46:00.000Z",
+  "heartbeat_at": "2026-06-21T14:21:38.799Z",
   "blocked_by": [],
   "preflight_token": "pm-directed",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-21T14:21:32.824Z",
+      "verdict": "pass",
+      "merge_sha": "388f8ba8ec1c5b8a05c42016c7a882250d8e4d52",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1032"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "main-control",
@@ -42,5 +52,5 @@
     "main_checkout_control_only": true,
     "note": "Follow-up to UTV2-1282. Makes the heavy synchronous ingest phases (SGO pairing + offer normalization) yield to the event loop in abort-checkpointed chunks, so the per-league 240s timeout can fire and a single MLB cycle can no longer block the process. Adds phase-level timing recorded in the run details. apps/ingestor only — no DB/schema change. Runtime proof is the post-deploy live funnel re-check."
   },
-  "closed_at": null
+  "closed_at": "2026-06-21T14:21:38.799Z"
 }

@@ -30,10 +30,10 @@
     "docs/06_status/proof/UTV2-1258/diff-summary.md",
     "docs/06_status/proof/UTV2-1258/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-11T15:26:27.035Z",
-  "heartbeat_at": "2026-06-11T15:26:27.035Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-21T14:21:40.481Z",
+  "closed_at": "2026-06-21T14:21:40.481Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1258-fix-grading-fetch-cap.json",
   "created_by": "claude",
