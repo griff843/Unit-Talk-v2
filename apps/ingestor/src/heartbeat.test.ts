@@ -36,6 +36,24 @@ test('writeHeartbeat → readHeartbeat round-trips', () => {
   }
 });
 
+test('writeHeartbeat → readHeartbeat round-trips the UTV2-1286 progress fields', () => {
+  const { file, cleanup } = tempHeartbeatFile();
+  try {
+    const hb = {
+      ts: 1000,
+      cycle: 7,
+      pid: 42,
+      phase: 'league-start',
+      league: 'MLB',
+      lastProgressAt: 1000,
+    };
+    assert.equal(writeHeartbeat(file, hb), true);
+    assert.deepEqual(readHeartbeat(file), hb);
+  } finally {
+    cleanup();
+  }
+});
+
 test('readHeartbeat returns null for a missing or malformed file', () => {
   const { file, cleanup } = tempHeartbeatFile();
   try {

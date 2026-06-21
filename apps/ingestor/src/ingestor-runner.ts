@@ -27,6 +27,7 @@ import {
   resolveCurrentPollIntervalMs,
   type SchedulerConfig,
 } from './scheduler.js';
+import type { IngestorLoopProgress } from './heartbeat.js';
 
 export const SUPPORTED_SGO_LEAGUES = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
 
@@ -77,13 +78,14 @@ export interface IngestorRunnerOptions {
   /** Retention window in days. Defaults to 7. Only used when retentionConnection is set. */
   retentionDays?: number;
   /**
-   * Per-cycle heartbeat hook (UTV2-1284). Called at the top of every cycle
-   * iteration with the cycle number, BEFORE any work — so it advances even when
-   * a cycle's work fails. Production wires it to a heartbeat file read by the
-   * in-process watchdog and the container healthcheck. Best-effort: a throw here
-   * is swallowed and must never break the loop.
+   * Loop-progress hook (UTV2-1284, refined UTV2-1286). Called at EVERY phase
+   * boundary — poll start, each league start/end, finalized-repoll start/end — not
+   * just once per cycle, so a long-but-progressing cycle keeps advancing the signal
+   * and the in-process watchdog only force-exits on a true no-progress wedge.
+   * Production wires it to a heartbeat file read by the watchdog and the container
+   * healthcheck. Best-effort: a throw here is swallowed and must never break the loop.
    */
-  recordHeartbeat?: (cycle: number) => void;
+  recordHeartbeat?: (progress: IngestorLoopProgress) => void;
   /**
    * Bounded singleton re-admission (UTV2-1284). A league whose prior cycle timed
    * out holds its per-league singleton until the orphaned work settles; if that
@@ -243,20 +245,27 @@ export async function runIngestorCycles(
   // UTV2-1284 adds a bounded force-release (leagueReadmitMs) so a never-settling
   // orphan can't exclude the league (e.g. MLB) from the rotation permanently.
   const leagueInFlight = new Map<string, number>();
-  /** Telemetry: a poll iteration failed but the daemon continued (UTV2-1284). */
-  const recordHeartbeat = (cycle: number) => {
+  // Loop-progress emitter (UTV2-1286). Stamps a heartbeat at every phase boundary
+  // (poll start, league start/end, finalized-repoll start/end) so the watchdog can
+  // distinguish a slow-but-advancing cycle from a true no-progress wedge. Best-effort:
+  // a throw in the hook is swallowed and must never break the loop.
+  const recordProgress = (cycle: number, phase: string, league?: string | null) => {
     try {
-      options.recordHeartbeat?.(cycle);
+      options.recordHeartbeat?.({
+        cycle,
+        phase,
+        ...(league !== undefined ? { league } : {}),
+      });
     } catch {
       // best-effort — a heartbeat write failure must never break the loop
     }
   };
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
-    // Heartbeat at the top of every iteration proves the loop advanced even when
+    // Progress at the top of every iteration proves the loop advanced even when
     // the previous cycle's work failed. Read by the in-process watchdog and the
-    // container healthcheck. (UTV2-1284)
-    recordHeartbeat(cycle);
+    // container healthcheck. (UTV2-1284 / UTV2-1286)
+    recordProgress(cycle, 'cycle-start');
 
     // FIX #1 (UTV2-1284): wrap the per-cycle body so a transient failure in
     // cycle-level work (e.g. events.listStartedBySnapshot throwing during a
@@ -298,6 +307,9 @@ export async function runIngestorCycles(
           options.logger?.warn?.(
             `[ingestor] cycle=${cycle} league=${league} SKIP — prior cycle still in-flight ${Math.round(heldMs / 1000)}s; refusing overlapping cycle (singleton guard, UTV2-1282)`,
           );
+          // A skip is still loop progress — keep the watchdog signal fresh so a
+          // run of skipped leagues never reads as a wedge. (UTV2-1286)
+          recordProgress(cycle, 'league-skip', league);
           continue;
         }
         const readmitMsg = `[ingestor] cycle=${cycle} league=${league} RE-ADMIT — singleton held ${Math.round(heldMs / 1000)}s > ${Math.round(leagueReadmitMs / 1000)}s bound; forcing release and re-admitting to rotation (UTV2-1284)`;
@@ -309,6 +321,9 @@ export async function runIngestorCycles(
       const playerPropPatterns = leaguePlayerPropPatterns(league);
       const markedAt = now();
       leagueInFlight.set(league, markedAt);
+      // Progress before the league's (potentially minutes-long) ingest begins, so
+      // the watchdog signal advances as the loop enters each league. (UTV2-1286)
+      recordProgress(cycle, 'league-start', league);
       try {
         results.push(
           await ingestLeagueWithTimeout(league, options.apiKey, options.repositories, {
@@ -373,22 +388,33 @@ export async function runIngestorCycles(
           );
         }
       }
+      // Progress after each league settles (success, timeout, or error) so the
+      // watchdog signal advances per league rather than once per whole cycle. This
+      // is the core of the UTV2-1286 fix: bounding the inter-progress gap by a
+      // single league's wall-clock (<= leagueTimeoutMs) instead of a multi-league
+      // cycle that can exceed the watchdog threshold.
+      recordProgress(cycle, 'league-end', league);
     }
 
+    recordProgress(cycle, 'finalized-repoll-start');
     const finalizedRepolls = await runFinalizedRepollsForCycle(
       cycleSnapshotAt,
       options,
       {
+        cycle,
+        recordProgress,
         circuitBreakers: sgoCircuitBreakers,
         quarantineRegistry,
         leagueTimeoutMs,
       },
     );
+    recordProgress(cycle, 'finalized-repoll-end');
 
     // Odds API ingest (Pinnacle + multi-book consensus) — runs alongside SGO
     const oddsApiResults: OddsApiIngestSummary[] = [];
     if (options.oddsApiKey) {
       for (const league of options.leagues) {
+        recordProgress(cycle, 'odds-api', league);
         oddsApiResults.push(
           await ingestOddsApiLeague({
             apiKey: options.oddsApiKey,
@@ -407,6 +433,7 @@ export async function runIngestorCycles(
       }
     }
 
+    recordProgress(cycle, 'grading');
     const gradingTrigger = await triggerGradingForCycle(results, options);
 
     let sgoUsage: SGOAccountUsage | null = null;
@@ -435,6 +462,7 @@ export async function runIngestorCycles(
       gradingTrigger,
       sgoUsage,
     });
+    recordProgress(cycle, 'cycle-end');
     } catch (cycleError: unknown) {
       // FIX #1 (UTV2-1284): a transient cycle-level failure must not kill the
       // daemon loop. Fail the iteration closed, emit telemetry, and fall through
@@ -494,6 +522,10 @@ async function runFinalizedRepollsForCycle(
   snapshotAt: string,
   options: IngestorRunnerOptions,
   runtime: {
+    /** Cycle number, for progress telemetry. (UTV2-1286) */
+    cycle: number;
+    /** Loop-progress emitter, called per repoll batch so this cycle-level phase keeps the watchdog signal fresh. (UTV2-1286) */
+    recordProgress: (cycle: number, phase: string, league?: string | null) => void;
     circuitBreakers: SgoCircuitBreakers;
     quarantineRegistry: ProviderQuarantineRegistry;
     leagueTimeoutMs: number;
@@ -543,6 +575,9 @@ async function runFinalizedRepollsForCycle(
       options.logger?.info?.(
         `[ingestor] finalized-repoll league=${league} candidates=${batch.length}`,
       );
+      // Each repoll batch can itself run up to the per-league bound; emit progress
+      // per batch so this cycle-level phase keeps the watchdog signal fresh. (UTV2-1286)
+      runtime.recordProgress(runtime.cycle, 'finalized-repoll-batch', league);
       try {
         repolls.push(
           await ingestLeagueWithTimeout(league, options.apiKey, options.repositories, {
