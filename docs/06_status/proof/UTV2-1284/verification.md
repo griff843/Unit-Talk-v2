@@ -118,4 +118,21 @@ stop at the next NO.
 
 ## Merge SHA
 
-_Bound post-merge during lane close._
+- **Merge SHA:** `604f5b1436ef6c1eb9a5d032f1bbd2226dcd7a07`
+- merge_sha: 604f5b1436ef6c1eb9a5d032f1bbd2226dcd7a07
+- PR: https://github.com/griff843/Unit-Talk-v2/pull/1036 (squash-merged to `main` 2026-06-21)
+- Deployed via `deploy.yml` run 27888462296 (build → canary → promote succeeded; new image live).
+
+## Post-deploy proof (live, merge SHA 604f5b14)
+
+Verified on prod (`ssh unit-talk-prod`) after deploy:
+
+- **Exactly one** ingestor container on image `...:604f5b14`, `health=healthy`, via the **new healthcheck** `tsx apps/ingestor/src/healthcheck.ts` (manual run: `OK — heartbeat fresh ... cycle=N`, exit 0). The `pgrep -f node` no-op is gone.
+- **Loop advances** — cycle counter increments (`cycle=1 next-sleep ... cycle=2 ...`); multiple `ingestor.cycle` rows post-deploy.
+- **Fix #1 proven in production:** the live log shows the loop surviving the exact failure that caused the 5.5h outage:
+  `cycle=1 POLL ITERATION FAILED — daemon continuing to next poll (fail-closed, UTV2-1284): Failed to list started events: Could not query the database for the schema cache.` — a transient DB error on `listStartedBySnapshot` that previously killed the daemon is now a logged, survived hiccup; the loop slept and continued.
+- **MLB re-admitted / in rotation** — `cycle=1 league=MLB ... finalized-repoll league=MLB candidates=24`; MLB attempted across consecutive cycles after its 240s timeouts.
+- **Fresh MLB offers advance** — `provider_offer_current` advanced 2,874 rows post-deploy (last update tracking real time); MLB `provider_offer_history` rows persisting, including `provider_participant_id`.
+- Watchdog active (force-exits on a stale heartbeat → `restart: unless-stopped`); not triggered while the loop is alive, which is correct.
+
+Funnel next NO at proof time: qualified candidates 0 (13 rejected `stale_price_data`) — the known post-restart catch-up artifact (candidates scored at 00:48, before offers fully resumed at 00:50); recovers as the pipeline catches up (same pattern proven 22:30→22:58: 0→390 qualified). The residual MLB 240s cycle-overrun + DB statement-timeout on heavy writes remains a separate lane (out of this lane's scope).

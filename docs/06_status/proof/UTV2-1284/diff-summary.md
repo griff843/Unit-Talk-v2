@@ -4,6 +4,8 @@
 **Branch:** `griffadavi/utv2-1284-harden-ingestor-deploy-lifecycle-orphan-run-reaping-graceful`
 **Tier:** T1
 **Scope:** `apps/ingestor` + `deploy/production/docker-compose.yml`. No schema change, no migration.
+**Merge SHA:** `604f5b1436ef6c1eb9a5d032f1bbd2226dcd7a07` (PR #1036, squash-merged to `main` 2026-06-21)
+**merge_sha:** 604f5b1436ef6c1eb9a5d032f1bbd2226dcd7a07
 
 ## Problem (proven 2026-06-20)
 

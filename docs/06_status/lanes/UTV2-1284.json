@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "griffadavi/utv2-1284-harden-ingestor-deploy-lifecycle-orphan-run-reaping-graceful",
   "base_branch": "main",
-  "commit_sha": "d6e7d46c605cba56cf8a96036fb8579aadc0cb46",
-  "pr_url": null,
+  "commit_sha": "604f5b1436ef6c1eb9a5d032f1bbd2226dcd7a07",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1036",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/ingestor-runner.ts",
@@ -30,13 +30,29 @@
     "docs/06_status/proof/UTV2-1284/evidence.json",
     "docs/06_status/proof/UTV2-1284/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-20T22:30:00.000Z",
-  "heartbeat_at": "2026-06-20T22:55:00.000Z",
+  "heartbeat_at": "2026-06-21T00:56:27.039Z",
   "blocked_by": [],
-  "preflight_token": "pm-directed",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-21T00:56:20.201Z",
+      "verdict": "pass",
+      "merge_sha": "604f5b1436ef6c1eb9a5d032f1bbd2226dcd7a07",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1036",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "main-control",
@@ -45,5 +61,5 @@
     "main_checkout_control_only": true,
     "note": "Harden the ingestor daemon against transient-DB-outage wedge (proven 2026-06-20 ~5.5h dark): resilient per-cycle poll loop, heartbeat-based loop-progress healthcheck + in-process watchdog replacing pgrep-node, and bounded league re-admission so a timed-out MLB is not dropped from rotation forever. apps/ingestor + deploy compose; no schema change, no migration."
   },
-  "closed_at": null
+  "closed_at": "2026-06-21T00:56:27.039Z"
 }
