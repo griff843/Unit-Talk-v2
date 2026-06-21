@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1286",
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "967cc52603be4621ac04dea71eb01f09ae62c5ca",
+    "verified_source_note": "Implementation commit: emit per-phase ingestor loop progress (heartbeat.ts progress metadata + shouldWatchdogForceExit; ingestor-runner.ts per-phase recordProgress; index.ts progress-driven watchdog) plus tests in apps/ingestor/src. Merge SHA binds at lane close.",
+    "sha_type": "head_sha",
+    "bound_at": "2026-06-21T15:20:00.000Z",
+    "merge_sha": null,
+    "current_pr_head_sha": "967cc526",
+    "ci_sentinels": {
+      "verify": "pending@e29e85bd",
+      "merge_gate": "pending@e29e85bd",
+      "proof_auditor_gate": "pending@e29e85bd",
+      "t1_proof_gate": "pending@e29e85bd",
+      "runtime_verifier_gate": "pending@e29e85bd",
+      "lane_authority": "pending@e29e85bd",
+      "file_scope_lock": "pending@e29e85bd",
+      "require_live_db_proof": "pending@e29e85bd",
+      "r_level_compliance": "pending@e29e85bd",
+      "return_review_packet": "pending@e29e85bd"
+    }
+  },
+  "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS",
+      "note": "env:check, lint, type-check (project references), build, and the full unit suite all green — '[verify:parallel] all checks passed'."
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/heartbeat.test.ts apps/ingestor/src/ingestor-loop-resilience.test.ts",
+      "status": "PASS",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0,
+      "cases": [
+        "UTV2-1286: progress is emitted per-league and per-phase, not once per cycle (league-start + league-end for every league, plus cycle/finalized-repoll phases)",
+        "UTV2-1286: a slow-but-progressing cycle never trips the watchdog (total wall-clock >> threshold, each per-phase gap < threshold)",
+        "UTV2-1286: a true no-progress wedge still trips the watchdog (no progress past the bound -> force-exit)",
+        "writeHeartbeat -> readHeartbeat round-trips the new progress fields (phase, league, lastProgressAt); pre-change files still round-trip to {ts,cycle,pid}",
+        "existing resilience tests (transient cycle-level DB failure does not kill the loop; throwing hook never breaks the loop; bounded re-admission) updated to the new hook signature and still green"
+      ]
+    },
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "note": "Executed pnpm test:db against live Supabase zfzdnfwdarxucxtaojxm — 7/7 pass (~119s). Read-only; this change adds no schema and no new writes — it only changes the in-process loop-progress liveness signal that drives the watchdog and container healthcheck."
+    }
+  },
+  "runtime_proof": {
+    "command": "focused reproduction tests + pure watchdog-decision tests (post-deploy live assertion pending merge + deploy)",
+    "status": "STATIC_PASS_DEPLOY_PENDING",
+    "note": "The regression is reproduced and the fix proven by deterministic tests: a slow-but-progressing cycle whose total wall-clock far exceeds the 20-min watchdog threshold never trips the watchdog because each per-phase progress gap stays under the bound, while a true no-progress wedge still trips it. Per-league/per-phase emission is asserted against runIngestorCycles. The live post-deploy assertion runs after this PR merges and deploys.",
+    "queries": [
+      {
+        "description": "Per-phase progress emission across a real cycle (no false-positive surface)",
+        "sql": "tsx --test apps/ingestor/src/ingestor-loop-resilience.test.ts (UTV2-1286 per-league/per-phase)",
+        "result_summary": "league-start + league-end emitted for MLB and NBA, plus cycle-start/finalized-repoll-start/finalized-repoll-end/cycle-end; >= 6 progress signals per cycle (regression was exactly 1) — PASS"
+      },
+      {
+        "description": "Slow-but-progressing cycle does not trip the watchdog",
+        "sql": "tsx --test apps/ingestor/src/ingestor-loop-resilience.test.ts (UTV2-1286 slow-but-progressing)",
+        "result_summary": "30 phases × 4-min gaps (2h total, >> 20-min threshold) — shouldWatchdogForceExit false at every check — PASS"
+      },
+      {
+        "description": "True no-progress wedge still trips the watchdog",
+        "sql": "tsx --test apps/ingestor/src/ingestor-loop-resilience.test.ts (UTV2-1286 no-progress)",
+        "result_summary": "no progress past the threshold -> shouldWatchdogForceExit true; exactly-at-threshold still alive — PASS"
+      }
+    ],
+    "row_counts": []
+  },
+  "live_production_proof": {
+    "status": "DEPLOY_PENDING",
+    "observed": "Static proof complete: the watchdog now force-exits only on a true no-progress wedge, not on a slow-but-advancing cycle. Per-phase progress bounds the inter-progress gap to a single phase (<= leagueTimeoutMs, default 240s), well under the 20-min watchdog threshold.",
+    "deferred": "Post-deploy proof (read-only) after merge + deploy: exactly one ingestor container; container healthcheck OK; restart count stabilizes with no further watchdog false-positive exits in logs; the loop keeps advancing through phases; MLB provider offers continue advancing.",
+    "production_mutation": "none — in-process liveness signal change only; no schema, no new writes, no data backfill, no fabricated picks"
+  }
+}
