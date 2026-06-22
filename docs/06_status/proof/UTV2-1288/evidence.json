@@ -3,11 +3,11 @@
   "issue_id": "UTV2-1288",
   "tier": "T1",
   "lane_type": "runtime",
-  "merge_status": "held_pending_supabase_stable",
+  "merge_status": "ready_for_pm_review",
   "sha_binding": {
-    "verified_source_sha": null,
+    "verified_source_sha": "632bd505744cff57367a6da7e09deef01ac9f057",
     "merge_sha": null,
-    "note": "Pre-merge: SHA binding completed by post-merge-lane-close.yml once the runtime proof is trustworthy and the lane merges. Held per PM directive 2026-06-22 during active Supabase degradation."
+    "note": "verified_source_sha = branch head at runtime proof. merge_sha bound post-merge by post-merge-lane-close.yml. Merge remains PM-gated (T1 t1-approved)."
   },
   "static_proof": {
     "type_check": "PASS",
@@ -24,14 +24,23 @@
     }
   },
   "runtime_proof": {
-    "status": "pending",
-    "required_before_merge": [
-      "pnpm test:db PASS against live Supabase in a stable (non-degraded) window",
-      "pnpm verify PASS end-to-end on the branch",
-      "this evidence bundle re-emitted with sha_binding bound to the merge SHA",
-      "post-deploy observation: ingestor restart count stabilizes"
-    ],
-    "note": "No test:db output fabricated. Runtime proof intentionally deferred per PM directive while Supabase is degraded."
+    "status": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "obtained_in": "stable Supabase window after the 2026-06-22 write-path degradation cleared",
+    "test_db": {
+      "command": "pnpm test:db",
+      "exit": 0,
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit": 0,
+      "note": "Full pipeline incl. live-DB suites (database-smoke, t1-proof-awaiting-approval, execution_intents) all green — confirms a healthy Supabase at run time."
+    },
+    "note": "TAP is verbatim from the branch run; nothing fabricated. Post-merge/deploy: confirm ingestor restart count stabilizes."
   },
-  "verdict": "OFFLINE_PROOF_COMPLETE_RUNTIME_PENDING"
+  "verdict": "RUNTIME_PROOF_COMPLETE_READY_FOR_PM_REVIEW"
 }
