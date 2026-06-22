@@ -15,7 +15,9 @@
     "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
     "package.json",
     "scripts/ci/live-db-verdict.test.ts",
-    "scripts/ci/live-db-verdict.ts"
+    "scripts/ci/live-db-verdict.ts",
+    "docs/06_status/proof/UTV2-1292/diff-summary.md",
+    "docs/06_status/proof/UTV2-1292/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1292/diff-summary.md",
