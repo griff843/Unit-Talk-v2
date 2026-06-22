@@ -118,7 +118,7 @@ test('buildExtendedCommand constructs pr-update-branch command', () => {
   const cmd = buildExtendedCommand('pr-update-branch', { pr: '766' });
   assert.deepStrictEqual(cmd, {
     command: 'gh',
-    args: ['pr', 'update-branch', '766'],
+    args: ['api', 'repos/{owner}/{repo}/pulls/766/update-branch', '-X', 'PUT'],
     deferred: false,
   });
 });

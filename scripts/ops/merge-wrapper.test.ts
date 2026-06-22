@@ -63,7 +63,7 @@ test('buildMergeCommand constructs PR update-branch command', () => {
 
   assert.deepStrictEqual(command, {
     command: 'gh',
-    args: ['pr', 'update-branch', '761'],
+    args: ['api', 'repos/{owner}/{repo}/pulls/761/update-branch', '-X', 'PUT'],
     deferred: false,
   });
 });
@@ -144,7 +144,9 @@ test('wrapper releases the lock after command failure', () => {
 
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
-    assert.deepStrictEqual(calls, [['gh', 'pr', 'update-branch', '761']]);
+    assert.deepStrictEqual(calls, [
+      ['gh', 'api', 'repos/{owner}/{repo}/pulls/761/update-branch', '-X', 'PUT'],
+    ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
 });
