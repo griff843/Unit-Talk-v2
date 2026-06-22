@@ -49,7 +49,7 @@ Implementation complete; static + classifier proof green offline. Ready for PM r
 ---
 
 # PROOF: UTV2-1292
-MERGE_SHA: 3b071f9788a10efa6c372af511e7d650b941c1a7
+MERGE_SHA: 12b7f1dd189b12c0b44b7c043d10b087d609bbd9
 
 ASSERTIONS:
 - [x] `verify` split into `verify:static` (no live DB) + `test:live-db`; root `test` is local-only; `verify` = static + live (full local-dev behavior preserved).
