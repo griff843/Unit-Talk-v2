@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1287",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1287-game-results-finalization-telemetry",
+  "branch": "griffadavi/utv2-1287-game-results-finalization-telemetry",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/ingestor/src/results-resolver.test.ts",
+    "apps/ingestor/src/results-resolver.ts",
+    "docs/06_status/proof/UTV2-1287/diff-summary.md",
+    "docs/06_status/proof/UTV2-1287/evidence.json",
+    "docs/06_status/proof/UTV2-1287/verification.md",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1287/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-06-22T10:56:19.081Z",
+  "heartbeat_at": "2026-06-22T10:56:19.081Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1287-game-results-finalization-telemetry.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1287-game-results-finalization-telemetry",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

@@ -96,10 +96,21 @@ export const SGO_MARKET_KEY_TO_CANONICAL_ID: Record<string, string> = {
 };
 
 export interface ResultsResolutionSummary {
+  /** Finalized event-results SGO returned (the input set — already filtered to status.finalized upstream). */
   processedEvents: number;
+  /** Of those, how many matched an event row with status='completed' (the gate that lets results insert). */
   completedEvents: number;
   insertedResults: number;
   skippedResults: number;
+  /**
+   * UTV2-1287 diagnostic breakdown of skippedResults at the event gate — isolates
+   * WHY a finalized SGO result did not produce game_results:
+   *  - skippedEventNotFound: no events row matched providerEventId (external_id mapping miss)
+   *  - skippedEventNotCompleted: event row found but status !== 'completed' (status-transition gap)
+   * (Per-scored-market skips — invalid market / missing participant — are NOT counted here.)
+   */
+  skippedEventNotFound: number;
+  skippedEventNotCompleted: number;
   errors: number;
 }
 
@@ -116,6 +127,8 @@ export async function resolveAndInsertResults(
     completedEvents: 0,
     insertedResults: 0,
     skippedResults: 0,
+    skippedEventNotFound: 0,
+    skippedEventNotCompleted: 0,
     errors: 0,
   };
 
@@ -130,7 +143,15 @@ export async function resolveAndInsertResults(
         eventResult.providerEventId,
       );
       if (!event || event.status !== 'completed') {
+        // UTV2-1287: attribute the skip so the funnel log can distinguish a
+        // mapping miss (no events row) from a status-transition gap (row exists
+        // but never reached 'completed'). Both still count toward skippedResults.
         summary.skippedResults += eventResult.scoredMarkets.length;
+        if (!event) {
+          summary.skippedEventNotFound += 1;
+        } else {
+          summary.skippedEventNotCompleted += 1;
+        }
         continue;
       }
 
@@ -206,6 +227,24 @@ export async function resolveAndInsertResults(
       );
     }
   }
+
+  // UTV2-1287 finalization/results funnel telemetry. Emitted once per
+  // resolveAndInsertResults call so a prod log scan can localize where the
+  // game_results pipeline breaks for a slate, without any behavior change:
+  //   finalized_results_in  = SGO-finalized events handed to the resolver
+  //   completed             = matched an events row with status='completed'
+  //   inserted              = game_results rows written
+  //   skipped_event_not_found / skipped_event_not_completed = the two gate misses
+  //   errors                = per-event resolution failures (caught, non-fatal)
+  // Correlate with the existing `[ingestor] finalized-repoll league=… candidates=N`
+  // line: candidates(N) vs finalized_results_in(M) reveals SGO-not-finalized = N−M.
+  logger?.info?.(
+    `[results-telemetry] finalized_results_in=${summary.processedEvents} ` +
+      `completed=${summary.completedEvents} inserted=${summary.insertedResults} ` +
+      `skipped_event_not_found=${summary.skippedEventNotFound} ` +
+      `skipped_event_not_completed=${summary.skippedEventNotCompleted} ` +
+      `skipped_markets=${summary.skippedResults} errors=${summary.errors}`,
+  );
 
   return summary;
 }
