@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1259-merge-wrapper-update-branch",
   "branch": "codex/utv2-1259-merge-wrapper-update-branch",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "05e5d5c9269f1ffe2f5844e68084d35790b10944",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1040",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/merge-wrapper.test.ts",
@@ -17,14 +17,36 @@
     "scripts/ops/ops-merge-wrapper.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-22T12:51:56.252Z",
-  "heartbeat_at": "2026-06-22T12:51:56.252Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-22T14:08:09.151Z",
+  "closed_at": "2026-06-22T14:08:09.151Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1259-merge-wrapper-update-branch.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-22T14:08:04.175Z",
+      "verdict": "pass",
+      "merge_sha": "05e5d5c9269f1ffe2f5844e68084d35790b10944",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1040"
+    },
+    {
+      "checked_at": "2026-06-22T14:08:06.518Z",
+      "verdict": "pass",
+      "merge_sha": "05e5d5c9269f1ffe2f5844e68084d35790b10944",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1040",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
