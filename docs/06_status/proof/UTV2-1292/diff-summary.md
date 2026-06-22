@@ -1,24 +1,46 @@
-# UTV2-1292 — Diff Summary
+# UTV2-1292 Diff Summary
 
-**Lane:** UTV2-1292 — Implement live-DB verify isolation and infra-unavailable status
-**Tier:** T2 · **Lane type:** governance · **Executor:** Claude
-Implements the approved UTV2-1291 proposal. CI/test-harness only — no runtime/data/migration behavior change.
+Generated at: 2026-06-22T22:33:57.431Z
+Issue: UTV2-1292
+Tier: T2
+Lane type: governance
+Branch: claude/utv2-1292-live-db-verify-isolation
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1045
+Head SHA: 7005e7e8a8ab2aeda928e338c98fc339d941a2b7
+Merge SHA: 12b7f1dd189b12c0b44b7c043d10b087d609bbd9
+Diff base: 12b7f1dd189b12c0b44b7c043d10b087d609bbd9^1
+Diff target: 12b7f1dd189b12c0b44b7c043d10b087d609bbd9
 
-## Files changed
+## Git Diff Stat
+```
+.github/workflows/ci.yml                           |  30 +++--
+ .ops/sync/UTV2-1292.yml                            |  10 ++
+ .../LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md  |  68 ++++++++++
+ docs/06_status/lanes/UTV2-1292.json                |  42 +++++++
+ docs/06_status/proof/UTV2-1292/diff-summary.md     |  24 ++++
+ docs/06_status/proof/UTV2-1292/verification.md     |  67 ++++++++++
+ package.json                                       |  13 +-
+ scripts/ci/live-db-verdict.test.ts                 |  69 ++++++++++
+ scripts/ci/live-db-verdict.ts                      | 140 +++++++++++++++++++++
+ 9 files changed, 452 insertions(+), 11 deletions(-)
+```
 
-| File | Change | Purpose |
-|---|---|---|
-| `package.json` | modified | Split scripts: `test:t1-proof:local` / `:live`, root `test` now local-only, `test:live-db`, `verify:static`, `verify = verify:static && test:live-db`, `verify:live-db-verdict`. Wired the new classifier test into `test:ops`. |
-| `scripts/ci/live-db-verdict.ts` | added | Verdict classifier — runs `test:live-db`, classifies `passed`/`code_failed`/`infra_unavailable`/`proof_skipped`; exits non-zero **only** on `code_failed`. |
-| `scripts/ci/live-db-verdict.test.ts` | added | 8 deterministic offline tests of the classifier (no live DB). |
-| `.github/workflows/ci.yml` | modified | `Verify` step → `pnpm verify:static`; former DB-smoke step → `Live DB proof (classified)` (`pnpm verify:live-db-verdict`); verdict surfaced in job summary. |
-| `docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md` | added | Implementation notes + the 4-state→CI mapping + manual branch-protection/required-check recommendation. |
+## Git Name Status
+```
+M	.github/workflows/ci.yml
+A	.ops/sync/UTV2-1292.yml
+A	docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md
+A	docs/06_status/lanes/UTV2-1292.json
+A	docs/06_status/proof/UTV2-1292/diff-summary.md
+A	docs/06_status/proof/UTV2-1292/verification.md
+M	package.json
+A	scripts/ci/live-db-verdict.test.ts
+A	scripts/ci/live-db-verdict.ts
+```
 
-## live/local classification (verified, not trusted)
-Confirmed the 7 `test:t1-proof:local` files contain no `createClient`/repository/live-Supabase usage (markers were string args like `assertAuthority('service_role', …)` and comments). The 13 `:live` suites write to picks/audit_log/execution_intents/settlement/etc.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## T1 strictness preserved
-The separate fail-closed `T1 Proof Gate` (runs `ci:db-smoke` for `tier:T1`) is unchanged → T1/runtime lanes still require live proof; UTV2-1288 still cannot merge without real `test:db`. No PM-gate bypass.
-
-## Guardrails
-No weakening of T1 gates. No fabricated proof. No PM-gate bypass. No Discord. No P3 cert. No CLV/ROI/edge claims. No live backfill. No secrets.
+## SHA Binding
+Head SHA: 7005e7e8a8ab2aeda928e338c98fc339d941a2b7
+Merge SHA: 12b7f1dd189b12c0b44b7c043d10b087d609bbd9

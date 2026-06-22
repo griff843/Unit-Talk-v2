@@ -61,7 +61,11 @@ ASSERTIONS:
 EVIDENCE:
 ```text
 $ pnpm verify:static            → exit 0   (0 failures; e.g. # tests 113 # pass 113 # fail 0)
+#   verify:static includes pnpm type-check and pnpm test (local + non-DB suites, incl. the classifier test)
+$ pnpm type-check               → exit 0
+$ pnpm test                     → exit 0   (local-only after the split; live suites moved to test:live-db)
 $ pnpm exec tsx --test scripts/ci/live-db-verdict.test.ts
 # tests 8  # pass 8  # fail 0  # skipped 0
 # live-DB classification: schema-cache / statement-timeout / 520-521 / connection → infra_unavailable; assertion → code_failed
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD   → PASS (no R-level artifacts required)
 ```
