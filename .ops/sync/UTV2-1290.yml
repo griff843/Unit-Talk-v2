@@ -1,0 +1,10 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1290
+  findings: []
+  controls: []
+  proofs: []
