@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1287",
+  "status": "pass",
+  "sha_binding": {
+    "verified_source_sha": "0d9a8fe1a652033fedbadb79c5e8b70003c4060f",
+    "verified_source_note": "Implementation commit: game-results finalization/results funnel telemetry (results-resolver.ts skip-reason attribution + [results-telemetry] funnel log) + test + package.json registration. Diagnostic-only, no behavior change. Merge SHA binds at lane close.",
+    "sha_type": "head_sha",
+    "bound_at": "2026-06-22T10:55:00.000Z",
+    "merge_sha": null,
+    "current_pr_head_sha": "0d9a8fe1",
+    "ci_sentinels": {
+      "verify": "pending@0d9a8fe1",
+      "merge_gate": "pending@0d9a8fe1",
+      "proof_auditor_gate": "pending@0d9a8fe1",
+      "t1_proof_gate": "pending@0d9a8fe1",
+      "runtime_verifier_gate": "pending@0d9a8fe1",
+      "lane_authority": "pending@0d9a8fe1",
+      "file_scope_lock": "pending@0d9a8fe1",
+      "require_live_db_proof": "pending@0d9a8fe1",
+      "r_level_compliance": "pending@0d9a8fe1",
+      "return_review_packet": "pending@0d9a8fe1"
+    }
+  },
+  "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS",
+      "note": "env:check, lint, type-check (project references), build, and the full unit suite all green — '[verify:parallel] all checks passed'. (Two earlier runs flaked on a transient live-Supabase degradation unrelated to this change — confirmed by a clean standalone 'pnpm test' with 0 failures.)"
+    },
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "focused_lane_tests": {
+      "command": "tsx --test apps/ingestor/src/results-resolver.test.ts",
+      "status": "PASS",
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "cases": [
+        "a completed event inserts results and counts as completed (insert behavior unchanged)",
+        "a finished event still in_progress is attributed to skippedEventNotCompleted (the status-transition-gap residual)",
+        "an unmapped providerEventId is attributed to skippedEventNotFound (external_id mapping miss)",
+        "the [results-telemetry] funnel line is emitted with the full breakdown (finalized_results_in / completed / inserted / skipped_event_not_found / skipped_event_not_completed)"
+      ]
+    },
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "note": "Executed pnpm test:db against live Supabase zfzdnfwdarxucxtaojxm — 7/7 pass. This change is diagnostic-only (adds counters + one log line); it writes no schema and changes no DB behavior."
+    }
+  },
+  "runtime_proof": {
+    "command": "focused reproduction tests (post-deploy prod-log observation pending merge + deploy)",
+    "status": "STATIC_PASS_DEPLOY_PENDING",
+    "note": "Telemetry is observation-only; correctness is proven by the 4 focused tests asserting reason attribution and the funnel line. Post-deploy, the [results-telemetry] line appears once per finalized-repoll results pass; reading those lines across a full slate pins the residual (SGO-not-finalized vs status-transition gap vs mapping miss).",
+    "queries": [
+      {
+        "description": "Live reconciliation that motivated this lane (read-only, Supabase zfzdnfwdarxucxtaojxm): game_results unfroze after the watchdog deploy",
+        "sql": "SELECT max(created_at), count(*) FILTER (WHERE created_at >= now()-interval '24 hours') FROM game_results",
+        "result_summary": "max(created_at)=2026-06-22 03:17Z, 1157 rows in last 24h (total 97606 -> 98763) — pipeline flowing again post watchdog deploy"
+      },
+      {
+        "description": "Residual this telemetry targets (read-only): finished MLB games not transitioning to completed",
+        "sql": "SELECT status, count(*) FROM events WHERE sport_id='MLB' AND event_date IN ('2026-06-20','2026-06-21') GROUP BY status",
+        "result_summary": "completed=3, in_progress=12 (stuck — finished but never finalized -> no results), scheduled=14"
+      },
+      {
+        "description": "End-to-end path confirmed working for events that DO finalize (read-only)",
+        "sql": "SELECT external_id, status, (SELECT count(*) FROM game_results g WHERE g.event_id=e.id) FROM events e WHERE e.external_id IN ('8ERUTuxG0FX6d5KdMNk8','nhsG0vE8sQdRTzYSpII5','CSatDiAHFTis8FhFHnYl')",
+        "result_summary": "3 completed events each have fresh game_results (120 / 501 / 536 rows, created 2026-06-22 03:11-03:17Z)"
+      }
+    ],
+    "row_counts": [
+      { "table": "game_results (last 24h)", "count": 1157, "note": "unfroze after the watchdog deploy" },
+      { "table": "game_results (total)", "count": 98763, "note": "was 97606 at ~00:20Z before deploy" },
+      { "table": "events MLB 6-20/6-21 in_progress (stuck)", "count": 12, "note": "the residual this telemetry localizes" },
+      { "table": "events MLB 6-20/6-21 completed", "count": 3, "note": "completed end-to-end with results written" }
+    ]
+  },
+  "live_production_proof": {
+    "status": "DIAGNOSTIC_DEPLOY_PENDING",
+    "observed": "game_results flowing again post watchdog deploy (1157 rows/24h, 3 events completed end-to-end). A residual of ~12 finished MLB games remains stuck in_progress with no results; cause not yet isolated.",
+    "deferred": "Post-deploy: read the [results-telemetry] funnel lines across a full slate to pin the residual to SGO-not-finalized (candidates N >> finalized_results_in M) vs status-transition gap (skipped_event_not_completed) vs mapping miss (skipped_event_not_found).",
+    "production_mutation": "none — adds counters + one info log line; no schema, no new writes, no backfill, no fabricated picks"
+  }
+}
