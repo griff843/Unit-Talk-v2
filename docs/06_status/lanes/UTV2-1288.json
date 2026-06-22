@@ -23,10 +23,10 @@
     "docs/06_status/proof/UTV2-1288/verification.md",
     "docs/06_status/proof/UTV2-1288/diff-summary.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-22T17:12:09.958Z",
-  "heartbeat_at": "2026-06-22T23:05:07.066Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-22T23:42:20.198Z",
+  "closed_at": "2026-06-22T23:42:20.198Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1288-harden-ingestor-startup-chain.json",
   "created_by": "claude",
@@ -93,6 +93,56 @@
         "R3"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-22T23:05:40.869Z",
+      "verdict": "pass",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1042",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-06-22T23:05:40.876Z",
+      "verdict": "fail",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [
+        "L5",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-22T23:06:03.822Z",
+      "verdict": "fail",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [
+        "L5",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-22T23:42:14.584Z",
+      "verdict": "pass",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1042",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
