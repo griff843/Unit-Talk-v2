@@ -73,3 +73,32 @@ panel concepts, data buckets, and guardrails:
 
 Documentation deliverable complete and verified; `pnpm verify` green on the branch (re-run after a
 transient Supabase flake). Ready for T2 review.
+
+---
+
+# PROOF: UTV2-1270
+MERGE_SHA: 1b5c582d3bb1978cf21104bd8b666e0375a3df9d
+
+ASSERTIONS:
+- [x] Requirements + per-row data contract authored at `docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md`, grounded in the existing classifier (exact field names, enums, reason codes, sources).
+- [x] All six required data buckets and the verdict/reason-code vocabulary are specified verbatim from `apps/api/src/scripts/sgo-provider-truth-audit.ts`.
+- [x] `pnpm verify` PASS (exit 0) and `pnpm test:db` PASS (7/7) on the branch; R-level check PASS (no artifacts required).
+- [x] Requirements only — no implementation, no CLV/ROI/edge claims, no P3 certification, no UTV2-1042 state change, no public Discord change.
+
+EVIDENCE:
+```text
+$ pnpm verify    → exit 0   (# pass 113 # fail 0 # skipped 0, plus 7/4/4/1 suite blocks all green)
+$ pnpm test:db   → exit 0
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+$ tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS — Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+> `MERGE_SHA` records the branch head at proof authoring (`1b5c582d`); it is an ancestor of the current
+> PR head after this proof commit, as required by the executor-result-validator. The true merge SHA is
+> bound post-merge by `post-merge-lane-close.yml`.
