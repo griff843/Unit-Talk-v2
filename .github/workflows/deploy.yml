@@ -88,8 +88,14 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           EOF
 
-      - name: Run test suite (dev env — must pass before gate env is written)
-        run: pnpm verify
+      # UTV2-1288 deploy hotfix (PM-approved 2026-06-22): pre-deploy gate validates
+      # STATIC correctness/buildability only. Live-DB T1 proof is enforced pre-merge by
+      # the T1 Proof Gate (fail-closed for tier:T1); re-running the full live-DB suite
+      # here is redundant and amplifies an active Supabase write-path degradation
+      # (see UTV2-1290/1291/1292). This does NOT weaken T1: nothing merges to main
+      # without live proof; the deploy gate is post-merge operational validation.
+      - name: Run test suite (dev env — static correctness gate before gate env is written)
+        run: pnpm verify:static
 
       - name: Write deploy gate env
         run: |
