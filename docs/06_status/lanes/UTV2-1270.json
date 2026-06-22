@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1270",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1270-command-center-provider-truth-panel",
+  "branch": "claude/utv2-1270-command-center-provider-truth-panel",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md",
+    "docs/06_status/proof/UTV2-1270/diff-summary.md",
+    "docs/06_status/proof/UTV2-1270/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1270/diff-summary.md",
+    "docs/06_status/proof/UTV2-1270/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-22T15:57:36.897Z",
+  "heartbeat_at": "2026-06-22T15:57:36.897Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1270-command-center-provider-truth-panel.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1270-command-center-provider-truth-panel",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
