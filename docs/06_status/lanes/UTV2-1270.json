@@ -11,7 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md"
+    "docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md",
+    "docs/06_status/proof/UTV2-1270/diff-summary.md",
+    "docs/06_status/proof/UTV2-1270/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1270/diff-summary.md",
