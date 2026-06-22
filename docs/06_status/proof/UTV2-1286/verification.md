@@ -6,7 +6,7 @@ Lane type: runtime
 Branch: griffadavi/utv2-1286-fix-ingestor-watchdog-false-positive-restarts-during-slow
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1037
 Head SHA: 967cc52603be4621ac04dea71eb01f09ae62c5ca
-Merge SHA: N/A (binds at lane close)
+Merge SHA: 2b50bf5925cfc667ec6226c710a36c739f6da128 (PR #1037 squash merge)
 
 ## Problem
 
@@ -87,4 +87,4 @@ deploy and must show:
 ## SHA Binding
 
 Head SHA: 967cc52603be4621ac04dea71eb01f09ae62c5ca
-Merge SHA: N/A (bound automatically at lane close by `post-merge-lane-close.yml`)
+Merge SHA: 2b50bf5925cfc667ec6226c710a36c739f6da128 (PR #1037 squash merge)

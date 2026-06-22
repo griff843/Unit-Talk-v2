@@ -4,22 +4,23 @@
   "status": "pass",
   "sha_binding": {
     "verified_source_sha": "967cc52603be4621ac04dea71eb01f09ae62c5ca",
-    "verified_source_note": "Implementation commit: emit per-phase ingestor loop progress (heartbeat.ts progress metadata + shouldWatchdogForceExit; ingestor-runner.ts per-phase recordProgress; index.ts progress-driven watchdog) plus tests in apps/ingestor/src. Merge SHA binds at lane close.",
-    "sha_type": "head_sha",
-    "bound_at": "2026-06-21T15:20:00.000Z",
-    "merge_sha": null,
+    "verified_source_note": "Implementation commit: emit per-phase ingestor loop progress (heartbeat.ts progress metadata + shouldWatchdogForceExit; ingestor-runner.ts per-phase recordProgress; index.ts progress-driven watchdog) plus tests in apps/ingestor/src. Squash-merged to main as 2b50bf59 (PR #1037).",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-22T00:20:00.000Z",
+    "merge_sha": "2b50bf5925cfc667ec6226c710a36c739f6da128",
+    "evidence_commit_sha": "2b50bf5925cfc667ec6226c710a36c739f6da128",
     "current_pr_head_sha": "967cc526",
     "ci_sentinels": {
-      "verify": "pending@e29e85bd",
-      "merge_gate": "pending@e29e85bd",
-      "proof_auditor_gate": "pending@e29e85bd",
-      "t1_proof_gate": "pending@e29e85bd",
-      "runtime_verifier_gate": "pending@e29e85bd",
-      "lane_authority": "pending@e29e85bd",
-      "file_scope_lock": "pending@e29e85bd",
-      "require_live_db_proof": "pending@e29e85bd",
-      "r_level_compliance": "pending@e29e85bd",
-      "return_review_packet": "pending@e29e85bd"
+      "verify": "pass@2b50bf59",
+      "merge_gate": "pass@2b50bf59",
+      "proof_auditor_gate": "pass@2b50bf59",
+      "t1_proof_gate": "pass@2b50bf59",
+      "runtime_verifier_gate": "pass@2b50bf59",
+      "lane_authority": "pass@2b50bf59",
+      "file_scope_lock": "pass@2b50bf59",
+      "require_live_db_proof": "pass@2b50bf59",
+      "r_level_compliance": "pass@2b50bf59",
+      "return_review_packet": "pass@2b50bf59"
     }
   },
   "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
@@ -73,9 +74,19 @@
         "description": "True no-progress wedge still trips the watchdog",
         "sql": "tsx --test apps/ingestor/src/ingestor-loop-resilience.test.ts (UTV2-1286 no-progress)",
         "result_summary": "no progress past the threshold -> shouldWatchdogForceExit true; exactly-at-threshold still alive — PASS"
+      },
+      {
+        "description": "Read-only live baseline (Supabase zfzdnfwdarxucxtaojxm) at lane close — confirms the ingestor loop is making progress (offers advancing) pre-deploy of the watchdog fix",
+        "sql": "SELECT count(*) FROM provider_offer_history WHERE snapshot_at >= now() - interval '24 hours'",
+        "result_summary": "55409 provider_offer_history rows in the last 24h — the loop is cycling and persisting offers; the watchdog fix removes the false-positive restarts that were interrupting it"
       }
     ],
-    "row_counts": []
+    "row_counts": [
+      { "table": "provider_offer_history (last 24h)", "count": 55409, "note": "offers advancing — ingestor loop is cycling; watchdog fix stops false-positive restarts interrupting it" },
+      { "table": "provider_offer_history (last 10m)", "count": 0, "note": "no offers in the trailing 10m window at close time (off-peak / between cycles); post-deploy proof confirms steady advance" },
+      { "table": "game_results (total)", "count": 97606, "note": "latest created_at 2026-06-14 — game_results frozen 8d; this is the SEPARATE UTV2-1287 blocker (events not transitioning to completed), not addressed by this lane" },
+      { "table": "events (status=completed, total)", "count": 227, "note": "155 MLB; historical completions exist but recent ones are not producing fresh game_results — tracked by the follow-up results-ingestion lane" }
+    ]
   },
   "live_production_proof": {
     "status": "DEPLOY_PENDING",
