@@ -6,7 +6,7 @@
   "merge_status": "ready_for_pm_review",
   "sha_binding": {
     "verified_source_sha": "632bd505744cff57367a6da7e09deef01ac9f057",
-    "merge_sha": null,
+    "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
     "note": "verified_source_sha = branch head at runtime proof. merge_sha bound post-merge by post-merge-lane-close.yml. Merge remains PM-gated (T1 t1-approved)."
   },
   "static_proof": {
@@ -38,7 +38,7 @@
     "verify": {
       "command": "pnpm verify",
       "exit": 0,
-      "note": "Full pipeline incl. live-DB suites (database-smoke, t1-proof-awaiting-approval, execution_intents) all green — confirms a healthy Supabase at run time."
+      "note": "Full pipeline incl. live-DB suites (database-smoke, t1-proof-awaiting-approval, execution_intents) all green \u2014 confirms a healthy Supabase at run time."
     },
     "note": "TAP is verbatim from the branch run; nothing fabricated. Post-merge/deploy: confirm ingestor restart count stabilizes."
   },

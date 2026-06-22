@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1288-harden-ingestor-startup-chain",
   "branch": "claude/utv2-1288-harden-ingestor-startup-chain",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1042",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/index.ts",
@@ -23,14 +23,78 @@
     "docs/06_status/proof/UTV2-1288/verification.md",
     "docs/06_status/proof/UTV2-1288/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-22T17:12:09.958Z",
-  "heartbeat_at": "2026-06-22T17:12:09.958Z",
+  "heartbeat_at": "2026-06-22T23:05:07.066Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1288-harden-ingestor-startup-chain.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-22T23:03:06.147Z",
+      "verdict": "pass",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1042"
+    },
+    {
+      "checked_at": "2026-06-22T23:04:49.444Z",
+      "verdict": "pass",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1042",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-06-22T23:04:49.449Z",
+      "verdict": "fail",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [
+        "L5",
+        "P3",
+        "C4",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-22T23:05:07.061Z",
+      "verdict": "pass",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1042",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-06-22T23:05:07.066Z",
+      "verdict": "fail",
+      "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
+      "failures": [
+        "L5",
+        "P3",
+        "C4",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

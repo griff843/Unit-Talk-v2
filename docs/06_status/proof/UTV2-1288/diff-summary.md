@@ -1,22 +1,44 @@
-# UTV2-1288 — Diff Summary
+# UTV2-1288 Diff Summary
 
-**Lane:** UTV2-1288 — harden ingestor startup chain against transient Supabase outages
-**Tier:** T1 · **Lane type:** runtime · **Merge status:** HELD pending Supabase-stable runtime proof
+Generated at: 2026-06-22T23:03:08.225Z
+Issue: UTV2-1288
+Tier: T1
+Lane type: runtime
+Branch: claude/utv2-1288-harden-ingestor-startup-chain
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1042
+Head SHA: fde48c7479a19a1636e2aa650cb7a8d1e9cdec3d
+Merge SHA: 99006b7bb3634603b97b582c661395dbd52d01ba
+Diff base: 99006b7bb3634603b97b582c661395dbd52d01ba^1
+Diff target: 99006b7bb3634603b97b582c661395dbd52d01ba
 
-## Files changed
+## Git Diff Stat
+```
+.ops/sync/UTV2-1288.yml                        |  10 ++
+ apps/ingestor/src/index.ts                     | 114 +++++++++++++++++-----
+ apps/ingestor/src/startup-resilience.test.ts   | 126 +++++++++++++++++++++++++
+ apps/ingestor/src/startup-resilience.ts        | 114 ++++++++++++++++++++++
+ docs/06_status/lanes/UTV2-1288.json            |  42 +++++++++
+ docs/06_status/proof/UTV2-1288/diff-summary.md |  22 +++++
+ docs/06_status/proof/UTV2-1288/evidence.json   |  46 +++++++++
+ docs/06_status/proof/UTV2-1288/verification.md | 103 ++++++++++++++++++++
+ 8 files changed, 553 insertions(+), 24 deletions(-)
+```
 
-| File | Change | Purpose |
-|---|---|---|
-| `apps/ingestor/src/startup-resilience.ts` | added | Pure-function `runStartupStepWithRetry` (bounded exponential backoff, never throws, returns `{ok,value,attempts,error}`) + `startupBackoffDelayMs`. |
-| `apps/ingestor/src/startup-resilience.test.ts` | added | 6 deterministic offline tests (injected sleep, no DB): never-throws, transient recovery, first-attempt success, onRetry backoff metadata, exponential cap, maxAttempts clamp. |
-| `apps/ingestor/src/index.ts` | modified | Wrap the pre-loop startup chain (SGO-key resolution + `reapStaleRuns`) in the resilient runner; defensive try/catch around SGO-key resolution; startup-phase `recordIngestorProgress` heartbeats (`startup:sgo-key`, `startup:reap-stale-runs`, `:retry`, `startup:complete`); preserve last-resort fail-closed exit for genuine `runIngestorCycles` errors. |
-| `docs/06_status/proof/UTV2-1288/*` | added | Proof bundle (this summary, verification.md, evidence.json). |
+## Git Name Status
+```
+A	.ops/sync/UTV2-1288.yml
+M	apps/ingestor/src/index.ts
+A	apps/ingestor/src/startup-resilience.test.ts
+A	apps/ingestor/src/startup-resilience.ts
+A	docs/06_status/lanes/UTV2-1288.json
+A	docs/06_status/proof/UTV2-1288/diff-summary.md
+A	docs/06_status/proof/UTV2-1288/evidence.json
+A	docs/06_status/proof/UTV2-1288/verification.md
+```
 
-## Root cause → fix
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-- **Before:** bare promise chain; only failure handler set `process.exitCode=1`. Transient Supabase outage → `reapStaleRuns` throws → exit → `restart: unless-stopped` recreates instantly → crash-loop (`RestartCount=109`/~10h, 3 watchdog exits).
-- **After:** startup steps log + mark telemetry (`STARTUP_SGO_KEY_FAILED`, `STARTUP_REAP_RETRY`, `STARTUP_REAP_FAILED`) + continue into the already-resilient cycle loop; bounded retry/backoff for `reapStaleRuns`; startup heartbeats keep watchdog progress advancing during retries.
-
-## Guardrail compliance
-
-No Discord enablement, no auto-approval, no P3 certification, no loosened thresholds, no secrets, watchdog/healthcheck preserved. No CLV/ROI/edge claims. No fabricated runtime evidence — live `test:db` is explicitly pending.
+## SHA Binding
+Head SHA: fde48c7479a19a1636e2aa650cb7a8d1e9cdec3d
+Merge SHA: 99006b7bb3634603b97b582c661395dbd52d01ba

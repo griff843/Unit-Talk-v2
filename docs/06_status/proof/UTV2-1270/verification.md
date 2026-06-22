@@ -77,7 +77,7 @@ transient Supabase flake). Ready for T2 review.
 ---
 
 # PROOF: UTV2-1270
-MERGE_SHA: 1b5c582d3bb1978cf21104bd8b666e0375a3df9d
+MERGE_SHA: 517e6f5101596d9f56efda2d5a20a4d069a946df
 
 ASSERTIONS:
 - [x] Requirements + per-row data contract authored at `docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md`, grounded in the existing classifier (exact field names, enums, reason codes, sources).
@@ -102,3 +102,6 @@ Verdict: PASS — Rules matched: (none) — no R-level artifacts required for th
 > `MERGE_SHA` records the branch head at proof authoring (`1b5c582d`); it is an ancestor of the current
 > PR head after this proof commit, as required by the executor-result-validator. The true merge SHA is
 > bound post-merge by `post-merge-lane-close.yml`.
+
+## Closeout references
+Static gate runs `pnpm type-check` and `pnpm test`; R-level checked via `scripts/ci/r-level-check.ts`.

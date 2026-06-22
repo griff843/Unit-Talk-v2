@@ -1,38 +1,38 @@
-# UTV2-1270 — Diff Summary
+# UTV2-1270 Diff Summary
 
-**Lane:** UTV2-1270 — Command Center provider-truth validation panel (requirements + data contract)
-**Tier:** T2 · **Lane type:** governance · **Executor:** Claude
+Generated at: 2026-06-22T23:02:56.774Z
+Issue: UTV2-1270
+Tier: T2
+Lane type: governance
+Branch: claude/utv2-1270-command-center-provider-truth-panel
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1041
+Head SHA: 3d04dc9c1f5a6bc2d68c8ade48603fa752586c7e
+Merge SHA: 517e6f5101596d9f56efda2d5a20a4d069a946df
+Diff base: 517e6f5101596d9f56efda2d5a20a4d069a946df^1
+Diff target: 517e6f5101596d9f56efda2d5a20a4d069a946df
 
-## Scope
+## Git Diff Stat
+```
+.ops/sync/UTV2-1270.yml                            |  10 +
+ .../CC_PROVIDER_TRUTH_VALIDATION_PANEL.md          | 252 +++++++++++++++++++++
+ docs/06_status/lanes/UTV2-1270.json                |  38 ++++
+ docs/06_status/proof/UTV2-1270/diff-summary.md     |  38 ++++
+ docs/06_status/proof/UTV2-1270/verification.md     | 104 +++++++++
+ 5 files changed, 442 insertions(+)
+```
 
-Requirements/data-contract documentation only. No runtime, API, UI, schema, scoring, or certification
-changes. One net-new doc plus lane bookkeeping.
+## Git Name Status
+```
+A	.ops/sync/UTV2-1270.yml
+A	docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md
+A	docs/06_status/lanes/UTV2-1270.json
+A	docs/06_status/proof/UTV2-1270/diff-summary.md
+A	docs/06_status/proof/UTV2-1270/verification.md
+```
 
-## Files changed
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-| File | Change | Purpose |
-|---|---|---|
-| `docs/05_operations/CC_PROVIDER_TRUTH_VALIDATION_PANEL.md` | added | Requirements + per-row data contract for the panel. |
-| `docs/06_status/lanes/UTV2-1270.json` | added | Lane manifest (lane-start). |
-| `.ops/sync/UTV2-1270.yml` | added | Per-issue sync metadata (lane-start). |
-| `docs/06_status/proof/UTV2-1270/diff-summary.md` | added | This file. |
-| `docs/06_status/proof/UTV2-1270/verification.md` | added | Verification record. |
-
-## What the document delivers
-
-- Per-row data contract with exact field names, types, and sources grounded in the existing classifier
-  (`apps/api/src/scripts/sgo-provider-truth-audit.ts`).
-- Verdict and reason-code vocabulary reproduced verbatim (FAIL/WARN/PASS enums).
-- Six operator display buckets (provider-verified PASS, DB-signal PASS advisory, WARN, FAIL,
-  forward-flow, backfilled).
-- `provider_truth_verified` semantics: `db_signal_only` is never provider-truth verified.
-- Forward-flow vs backfill provenance contract.
-- UTV2-1042 eligibility as an advisory display-only field (no certification, no state change).
-- Enumerated upstream dependencies and net-new gaps (UTV2-1267 sampled coverage, UTV2-1268 native
-  close capture, overround band, UTV2-1250 metric).
-
-## Guardrail compliance
-
-- No CLV/ROI/edge claims. No P3 certification. No UTV2-1042 Done. No public Discord changes.
-- No write path, no threshold/freshness changes. Implementation explicitly deferred to a separate
-  PM-approved lane.
+## SHA Binding
+Head SHA: 3d04dc9c1f5a6bc2d68c8ade48603fa752586c7e
+Merge SHA: 517e6f5101596d9f56efda2d5a20a4d069a946df

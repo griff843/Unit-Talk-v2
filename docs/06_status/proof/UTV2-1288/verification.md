@@ -82,7 +82,7 @@ exit for genuine programming errors in `runIngestorCycles`).
 ---
 
 # PROOF: UTV2-1288
-MERGE_SHA: 632bd505744cff57367a6da7e09deef01ac9f057
+MERGE_SHA: 99006b7bb3634603b97b582c661395dbd52d01ba
 
 ASSERTIONS:
 - [x] `runStartupStepWithRetry` (apps/ingestor/src/startup-resilience.ts) never throws/exits — returns `{ ok:false }` on exhausted failure so the daemon continues into the resilient cycle loop.
@@ -101,3 +101,6 @@ $ pnpm build       → exit 0
 $ pnpm test:db     → exit 0   # tests 7  # pass 7  # fail 0  # skipped 0
 $ pnpm verify      → exit 0   (full pipeline, incl. live-DB suites, all green)
 ```
+
+## Closeout references
+Static gate runs `pnpm type-check` and `pnpm test`; R-level checked via `scripts/ci/r-level-check.ts`.
