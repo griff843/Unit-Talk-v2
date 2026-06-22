@@ -13,10 +13,15 @@
   "file_scope_lock": [
     "apps/ingestor/src/index.ts",
     "apps/ingestor/src/startup-resilience.test.ts",
-    "apps/ingestor/src/startup-resilience.ts"
+    "apps/ingestor/src/startup-resilience.ts",
+    "docs/06_status/proof/UTV2-1288/evidence.json",
+    "docs/06_status/proof/UTV2-1288/verification.md",
+    "docs/06_status/proof/UTV2-1288/diff-summary.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1288/evidence.json"
+    "docs/06_status/proof/UTV2-1288/evidence.json",
+    "docs/06_status/proof/UTV2-1288/verification.md",
+    "docs/06_status/proof/UTV2-1288/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-06-22T17:12:09.958Z",

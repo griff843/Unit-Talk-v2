@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1288",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "merge_status": "held_pending_supabase_stable",
+  "sha_binding": {
+    "verified_source_sha": null,
+    "merge_sha": null,
+    "note": "Pre-merge: SHA binding completed by post-merge-lane-close.yml once the runtime proof is trustworthy and the lane merges. Held per PM directive 2026-06-22 during active Supabase degradation."
+  },
+  "static_proof": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_test": {
+      "file": "apps/ingestor/src/startup-resilience.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "offline": true,
+      "note": "Deterministic; injected no-op sleep; no live DB. Exercises the crash-loop failure mode directly."
+    }
+  },
+  "runtime_proof": {
+    "status": "pending",
+    "required_before_merge": [
+      "pnpm test:db PASS against live Supabase in a stable (non-degraded) window",
+      "pnpm verify PASS end-to-end on the branch",
+      "this evidence bundle re-emitted with sha_binding bound to the merge SHA",
+      "post-deploy observation: ingestor restart count stabilizes"
+    ],
+    "note": "No test:db output fabricated. Runtime proof intentionally deferred per PM directive while Supabase is degraded."
+  },
+  "verdict": "OFFLINE_PROOF_COMPLETE_RUNTIME_PENDING"
+}
