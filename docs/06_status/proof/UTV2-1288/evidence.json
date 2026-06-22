@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1288",
   "tier": "T1",
   "lane_type": "runtime",
-  "merge_status": "ready_for_pm_review",
+  "merge_status": "merged_and_deployed",
   "sha_binding": {
     "verified_source_sha": "632bd505744cff57367a6da7e09deef01ac9f057",
     "merge_sha": "99006b7bb3634603b97b582c661395dbd52d01ba",
@@ -24,23 +24,60 @@
     }
   },
   "runtime_proof": {
-    "status": "pass",
+    "status": "post_deploy_verified_under_supabase_degradation",
     "supabase_project": "zfzdnfwdarxucxtaojxm",
-    "obtained_in": "stable Supabase window after the 2026-06-22 write-path degradation cleared",
-    "test_db": {
+    "code_correctness_historical": {
+      "source": "merge-time pnpm test:db 7/7 PASS + T1 Proof Gate green at merge SHA 99006b7b",
+      "note": "Historical proof of code correctness obtained in a clean window before merge. NOT presented as a current test:db pass."
+    },
+    "current_test_db": {
       "command": "pnpm test:db",
-      "exit": 0,
-      "tests": 7,
-      "pass": 7,
-      "fail": 0,
-      "skipped": 0
+      "status": "infra_unavailable",
+      "result": "7 tests / 0 pass / 7 fail",
+      "reason": "Active Supabase write-path degradation (upstream request timeout / schema-cache); reads also intermittently timing out",
+      "note": "Recorded as infra_unavailable per PM directive 2026-06-22. Not fabricated as passing."
     },
-    "verify": {
-      "command": "pnpm verify",
-      "exit": 0,
-      "note": "Full pipeline incl. live-DB suites (database-smoke, t1-proof-awaiting-approval, execution_intents) all green \u2014 confirms a healthy Supabase at run time."
+    "post_deploy_host_diagnostic": {
+      "tool": "ops-ingestor-diagnose.yml run 27991435933 (success)",
+      "container": "unit-talk-ingestor-1",
+      "state": "running",
+      "restarts": 0,
+      "health": "healthy",
+      "startup_chain": "reapStaleRuns executed at 2026-06-22T23:36:08Z (reaped 4 stale runs, HUNG_SINGLETON recovery, action=marked_failed) and the daemon CONTINUED into the cycle loop instead of crash-exiting \u2014 the exact UTV2-1288 resilience.",
+      "pre_deploy_baseline": "RestartCount=109 in ~10h (crash-loop). Post-deploy restarts=0."
     },
-    "note": "TAP is verbatim from the branch run; nothing fabricated. Post-merge/deploy: confirm ingestor restart count stabilizes."
+    "queries": [
+      "post-deploy host diagnostic: docker inspect unit-talk-ingestor-1 -> running restarts=0 health=healthy (single container)",
+      "ingestor startup log 2026-06-22T23:36:08Z: 'reaped stale ingestor runs - HUNG_SINGLETON recovery' count=4 action=marked_failed -> reapStaleRuns ran and the daemon continued into the cycle loop (startup chain resilient, not fatal)",
+      "read-only DB signal (supabase execute_sql): SELECT count(*) FROM picks -> advancing across session"
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "read_only_signal": true,
+        "session_progression": [
+          41873,
+          41882,
+          41902,
+          41954,
+          42151,
+          42255,
+          42353
+        ],
+        "note": "Ingestion advancing (read-only DB signal, NOT test:db). Last successful read 42353 @ 2026-06-22T23:19Z."
+      },
+      {
+        "table": "provider_offer_history",
+        "monitored_ingestor_write_table": true,
+        "note": "Fresh count read currently infra_unavailable (Supabase read timeout during degradation); ingestion advancing confirmed via picks progression above."
+      }
+    ],
+    "note": "Runtime proof = post-deploy host diagnostics + read-only DB signals (PM-directed during Supabase degradation). Code correctness proven historically at merge. Current test:db = infra_unavailable (honest, not faked)."
   },
-  "verdict": "RUNTIME_PROOF_COMPLETE_READY_FOR_PM_REVIEW"
+  "verdict": "RUNTIME_PROOF_COMPLETE_READY_FOR_PM_REVIEW",
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "orchestrator-post-deploy-runtime-verifier",
+    "note": "Distinct from manifest.created_by=claude. Runtime verification via post-deploy host diagnostics + read-only DB signals."
+  }
 }
