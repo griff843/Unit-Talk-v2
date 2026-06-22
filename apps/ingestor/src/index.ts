@@ -24,7 +24,9 @@ import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js'
 import {
   resolveHeartbeatFile,
   resolveHeartbeatMaxAgeMs,
+  shouldWatchdogForceExit,
   writeHeartbeat,
+  type IngestorLoopProgress,
 } from './heartbeat.js';
 import { parseSchedulerConfig } from './scheduler.js';
 import {
@@ -340,28 +342,41 @@ if (runtime.autorun && runtime.sgoApiKeys.length === 0 && !runtime.oddsApiKey) {
 if (runtime.autorun) {
   let hungSingletonReaped = false;
 
-  // ── Loop heartbeat + watchdog (UTV2-1284) ──────────────────────────────────
+  // ── Loop progress + watchdog (UTV2-1284, refined UTV2-1286) ─────────────────
   // The daemon is a single runIngestorCycles call that loops forever. The old
   // container healthcheck was `pgrep -f node`, which proves a process exists but
   // NOT that the loop advances — so a wedged loop reported "healthy" for hours.
-  // recordIngestorHeartbeat stamps a file + memory each cycle; healthcheck.ts
-  // reads the file, and this in-process watchdog force-exits when the heartbeat
-  // goes stale so `restart: unless-stopped` recreates the container (the proven
-  // recovery path: reaps singletons, resumes cycling).
+  //
+  // UTV2-1284 stamped one heartbeat per CYCLE. But a single MLB cycle (4 leagues ×
+  // the per-league bound + finalized-repolls) can exceed the 20-min watchdog
+  // threshold, so the watchdog force-exited slow-but-alive cycles (false positive).
+  // UTV2-1286: recordIngestorProgress is called at every PHASE boundary (poll start,
+  // each league start/end, finalized-repoll start/end). The watchdog tracks the last
+  // PROGRESS timestamp and force-exits only on a true no-progress wedge — never on a
+  // cycle that is merely slow but still advancing through phases. On a real wedge it
+  // exits so `restart: unless-stopped` recreates the container (the proven recovery
+  // path: reaps singletons, resumes cycling).
   const heartbeatFile = resolveHeartbeatFile(process.env);
   const heartbeatMaxAgeMs = resolveHeartbeatMaxAgeMs(process.env);
-  let lastHeartbeatTs = Date.now();
-  const recordIngestorHeartbeat = (cycle: number) => {
-    lastHeartbeatTs = Date.now();
-    writeHeartbeat(heartbeatFile, { ts: lastHeartbeatTs, cycle, pid: process.pid });
+  let lastProgressTs = Date.now();
+  const recordIngestorProgress = (progress: IngestorLoopProgress) => {
+    lastProgressTs = Date.now();
+    writeHeartbeat(heartbeatFile, {
+      ts: lastProgressTs,
+      cycle: progress.cycle,
+      pid: process.pid,
+      phase: progress.phase,
+      league: progress.league ?? null,
+      lastProgressAt: lastProgressTs,
+    });
   };
-  recordIngestorHeartbeat(0);
+  recordIngestorProgress({ cycle: 0, phase: 'startup' });
   const watchdog = setInterval(() => {
-    const ageMs = Date.now() - lastHeartbeatTs;
-    if (ageMs > heartbeatMaxAgeMs) {
-      logger.error('ingestor loop watchdog: heartbeat stale — forcing exit so the container restarts', {
+    const now = Date.now();
+    if (shouldWatchdogForceExit(lastProgressTs, heartbeatMaxAgeMs, now)) {
+      logger.error('ingestor loop watchdog: no loop progress — forcing exit so the container restarts', {
         healthCode: 'STALE_CYCLE',
-        ageMs,
+        ageMs: now - lastProgressTs,
         thresholdMs: heartbeatMaxAgeMs,
         heartbeatFile,
       });
@@ -423,8 +438,9 @@ if (runtime.autorun) {
           process.env.UNIT_TALK_INGESTOR_LEAGUE_TIMEOUT_MS,
           240_000,
         ),
-        // Per-cycle heartbeat for the watchdog + healthcheck (UTV2-1284).
-        recordHeartbeat: recordIngestorHeartbeat,
+        // Per-phase loop-progress signal for the watchdog + healthcheck
+        // (UTV2-1284, refined to per-phase granularity in UTV2-1286).
+        recordHeartbeat: recordIngestorProgress,
         // Bounded re-admission so a timed-out league (e.g. MLB) whose orphaned
         // work never settles is re-admitted to the rotation instead of dropped
         // forever. Omitted unless overridden → runner uses its 2× leagueTimeoutMs
