@@ -103,7 +103,7 @@ export function buildMergeCommand(input: MergeWrapperInput): MergeCommand {
     case 'pr-update-branch':
       return {
         command: 'gh',
-        args: ['pr', 'update-branch', requirePr(input.pr)],
+        args: ['api', `repos/{owner}/{repo}/pulls/${requirePr(input.pr)}/update-branch`, '-X', 'PUT'],
         deferred: false,
       };
     case 'pr-merge': {

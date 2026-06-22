@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1259",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1259-merge-wrapper-update-branch",
+  "branch": "codex/utv2-1259-merge-wrapper-update-branch",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/merge-wrapper.test.ts",
+    "scripts/ops/merge-wrapper.ts",
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    "scripts/ops/ops-merge-wrapper.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-06-22T12:51:56.252Z",
+  "heartbeat_at": "2026-06-22T12:51:56.252Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1259-merge-wrapper-update-branch.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1259-merge-wrapper-update-branch",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
