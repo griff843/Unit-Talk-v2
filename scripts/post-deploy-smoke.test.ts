@@ -101,6 +101,34 @@ test('fails when response is not JSON', async () => {
     const result = await runSmoke(url, 1, 0);
     assert.strictEqual(result.verdict, 'FAIL');
     assert.ok(result.checks.some(c => !c.passed && c.name.includes('JSON')));
+    assert.deepStrictEqual(result.failure, {
+      endpoint: url,
+      httpStatus: 200,
+      bodyPreview: 'ok',
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('fails with structured preview when response body is empty', async () => {
+  const server = createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('');
+  });
+  server.listen(0);
+  const port = (server.address() as AddressInfo).port;
+  const url = `http://127.0.0.1:${port}/health`;
+
+  try {
+    const result = await runSmoke(url, 1, 0);
+    assert.strictEqual(result.verdict, 'FAIL');
+    assert.deepStrictEqual(result.failure, {
+      endpoint: url,
+      httpStatus: 200,
+      bodyPreview: '',
+    });
+    assert.ok(result.checks.some(c => c.detail?.includes('bodyPreview=<empty>')));
   } finally {
     server.close();
   }

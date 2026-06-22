@@ -26,6 +26,11 @@ type SmokeResult = {
   healthUrl: string;
   httpStatus: number | null;
   checks: SmokeCheckResult[];
+  failure?: {
+    endpoint: string;
+    httpStatus: number | null;
+    bodyPreview: string;
+  };
   smokedAt: string;
 };
 
@@ -56,12 +61,18 @@ function parseArgs(argv: string[]): CliOptions {
   return opts;
 }
 
-async function fetchWithRetry(url: string, maxRetries: number, intervalMs: number): Promise<{ status: number; body: unknown } | { error: string }> {
+async function fetchWithRetry(
+  url: string,
+  maxRetries: number,
+  intervalMs: number,
+): Promise<{ status: number; body: unknown; bodyPreview: string } | { error: string }> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      const body = await res.json().catch(() => null);
-      return { status: res.status, body };
+      const text = await res.text();
+      const bodyPreview = previewBody(text);
+      const body = parseJsonBody(text);
+      return { status: res.status, body, bodyPreview };
     } catch (err: unknown) {
       if (attempt < maxRetries) {
         await new Promise(r => setTimeout(r, intervalMs));
@@ -81,7 +92,18 @@ export async function runSmoke(healthUrl: string, maxRetries = 3, retryIntervalM
 
   if ('error' in response) {
     checks.push({ name: 'health endpoint reachable', passed: false, detail: response.error });
-    return { verdict: 'FAIL', healthUrl, httpStatus: null, checks, smokedAt: new Date().toISOString() };
+    return {
+      verdict: 'FAIL',
+      healthUrl,
+      httpStatus: null,
+      checks,
+      failure: {
+        endpoint: healthUrl,
+        httpStatus: null,
+        bodyPreview: '',
+      },
+      smokedAt: new Date().toISOString(),
+    };
   }
 
   httpStatus = response.status;
@@ -94,8 +116,16 @@ export async function runSmoke(healthUrl: string, maxRetries = 3, retryIntervalM
   );
 
   if (!body || typeof body !== 'object') {
-    checks.push({ name: 'health response is JSON', passed: false, detail: 'response body is not JSON' });
-    return buildResult(healthUrl, httpStatus, checks);
+    checks.push({
+      name: 'health response is JSON',
+      passed: false,
+      detail: `endpoint=${healthUrl} status=${response.status} bodyPreview=${formatPreviewForDetail(response.bodyPreview)}`,
+    });
+    return buildResult(healthUrl, httpStatus, checks, {
+      endpoint: healthUrl,
+      httpStatus,
+      bodyPreview: response.bodyPreview,
+    });
   }
 
   checks.push({ name: 'health response is JSON', passed: true });
@@ -139,14 +169,39 @@ export async function runSmoke(healthUrl: string, maxRetries = 3, retryIntervalM
   return buildResult(healthUrl, httpStatus, checks);
 }
 
-function buildResult(healthUrl: string, httpStatus: number | null, checks: SmokeCheckResult[]): SmokeResult {
+function buildResult(
+  healthUrl: string,
+  httpStatus: number | null,
+  checks: SmokeCheckResult[],
+  failure?: SmokeResult['failure'],
+): SmokeResult {
   return {
     verdict: checks.every(c => c.passed) ? 'PASS' : 'FAIL',
     healthUrl,
     httpStatus,
     checks,
+    ...(failure ? { failure } : {}),
     smokedAt: new Date().toISOString(),
   };
+}
+
+function parseJsonBody(text: string): unknown {
+  if (text.trim() === '') {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function previewBody(text: string): string {
+  return text.slice(0, 500);
+}
+
+function formatPreviewForDetail(preview: string): string {
+  return preview === '' ? '<empty>' : JSON.stringify(preview);
 }
 
 function printHumanReadable(result: SmokeResult): void {
