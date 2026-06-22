@@ -4,33 +4,40 @@
   "status": "pass",
   "sha_binding": {
     "verified_source_sha": "0d9a8fe1a652033fedbadb79c5e8b70003c4060f",
-    "verified_source_note": "Implementation commit: game-results finalization/results funnel telemetry (results-resolver.ts skip-reason attribution + [results-telemetry] funnel log) + test + package.json registration. Diagnostic-only, no behavior change. Merge SHA binds at lane close.",
-    "sha_type": "head_sha",
-    "bound_at": "2026-06-22T10:55:00.000Z",
-    "merge_sha": null,
+    "verified_source_note": "Implementation commit: game-results finalization/results funnel telemetry (results-resolver.ts skip-reason attribution + [results-telemetry] funnel log) + test + package.json registration. Diagnostic-only, no behavior change. Squash-merged to main as 7c6e8922 (PR #1038).",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-06-22T11:50:00.000Z",
+    "merge_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915",
     "current_pr_head_sha": "0d9a8fe1",
     "ci_sentinels": {
-      "verify": "pending@0d9a8fe1",
-      "merge_gate": "pending@0d9a8fe1",
-      "proof_auditor_gate": "pending@0d9a8fe1",
-      "t1_proof_gate": "pending@0d9a8fe1",
-      "runtime_verifier_gate": "pending@0d9a8fe1",
-      "lane_authority": "pending@0d9a8fe1",
-      "file_scope_lock": "pending@0d9a8fe1",
-      "require_live_db_proof": "pending@0d9a8fe1",
-      "r_level_compliance": "pending@0d9a8fe1",
-      "return_review_packet": "pending@0d9a8fe1"
-    }
+      "verify": "pass@7c6e8922",
+      "merge_gate": "pass@7c6e8922",
+      "proof_auditor_gate": "pass@7c6e8922",
+      "t1_proof_gate": "pass@7c6e8922",
+      "runtime_verifier_gate": "pass@7c6e8922",
+      "lane_authority": "pass@7c6e8922",
+      "file_scope_lock": "pass@7c6e8922",
+      "require_live_db_proof": "pass@7c6e8922",
+      "r_level_compliance": "pass@7c6e8922",
+      "return_review_packet": "pass@7c6e8922"
+    },
+    "evidence_commit_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915"
   },
-  "verifier": { "identity": "claude-opus-4-8", "role": "implementation-lane" },
+  "verifier": {
+    "identity": "claude-opus-4-8",
+    "role": "implementation-lane"
+  },
   "tier": "T1",
   "static_proof": {
     "pnpm_verify": {
       "command": "pnpm verify:parallel",
       "status": "PASS",
-      "note": "env:check, lint, type-check (project references), build, and the full unit suite all green — '[verify:parallel] all checks passed'. (Two earlier runs flaked on a transient live-Supabase degradation unrelated to this change — confirmed by a clean standalone 'pnpm test' with 0 failures.)"
+      "note": "env:check, lint, type-check (project references), build, and the full unit suite all green \u2014 '[verify:parallel] all checks passed'. (Two earlier runs flaked on a transient live-Supabase degradation unrelated to this change \u2014 confirmed by a clean standalone 'pnpm test' with 0 failures.)"
     },
-    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
     "focused_lane_tests": {
       "command": "tsx --test apps/ingestor/src/results-resolver.test.ts",
       "status": "PASS",
@@ -50,7 +57,7 @@
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "note": "Executed pnpm test:db against live Supabase zfzdnfwdarxucxtaojxm — 7/7 pass. This change is diagnostic-only (adds counters + one log line); it writes no schema and changes no DB behavior."
+      "note": "Executed pnpm test:db against live Supabase zfzdnfwdarxucxtaojxm \u2014 7/7 pass. This change is diagnostic-only (adds counters + one log line); it writes no schema and changes no DB behavior."
     }
   },
   "runtime_proof": {
@@ -61,12 +68,12 @@
       {
         "description": "Live reconciliation that motivated this lane (read-only, Supabase zfzdnfwdarxucxtaojxm): game_results unfroze after the watchdog deploy",
         "sql": "SELECT max(created_at), count(*) FILTER (WHERE created_at >= now()-interval '24 hours') FROM game_results",
-        "result_summary": "max(created_at)=2026-06-22 03:17Z, 1157 rows in last 24h (total 97606 -> 98763) — pipeline flowing again post watchdog deploy"
+        "result_summary": "max(created_at)=2026-06-22 03:17Z, 1157 rows in last 24h (total 97606 -> 98763) \u2014 pipeline flowing again post watchdog deploy"
       },
       {
         "description": "Residual this telemetry targets (read-only): finished MLB games not transitioning to completed",
         "sql": "SELECT status, count(*) FROM events WHERE sport_id='MLB' AND event_date IN ('2026-06-20','2026-06-21') GROUP BY status",
-        "result_summary": "completed=3, in_progress=12 (stuck — finished but never finalized -> no results), scheduled=14"
+        "result_summary": "completed=3, in_progress=12 (stuck \u2014 finished but never finalized -> no results), scheduled=14"
       },
       {
         "description": "End-to-end path confirmed working for events that DO finalize (read-only)",
@@ -75,16 +82,32 @@
       }
     ],
     "row_counts": [
-      { "table": "game_results (last 24h)", "count": 1157, "note": "unfroze after the watchdog deploy" },
-      { "table": "game_results (total)", "count": 98763, "note": "was 97606 at ~00:20Z before deploy" },
-      { "table": "events MLB 6-20/6-21 in_progress (stuck)", "count": 12, "note": "the residual this telemetry localizes" },
-      { "table": "events MLB 6-20/6-21 completed", "count": 3, "note": "completed end-to-end with results written" }
+      {
+        "table": "game_results (last 24h)",
+        "count": 1157,
+        "note": "unfroze after the watchdog deploy"
+      },
+      {
+        "table": "game_results (total)",
+        "count": 98763,
+        "note": "was 97606 at ~00:20Z before deploy"
+      },
+      {
+        "table": "events MLB 6-20/6-21 in_progress (stuck)",
+        "count": 12,
+        "note": "the residual this telemetry localizes"
+      },
+      {
+        "table": "events MLB 6-20/6-21 completed",
+        "count": 3,
+        "note": "completed end-to-end with results written"
+      }
     ]
   },
   "live_production_proof": {
     "status": "DIAGNOSTIC_DEPLOY_PENDING",
     "observed": "game_results flowing again post watchdog deploy (1157 rows/24h, 3 events completed end-to-end). A residual of ~12 finished MLB games remains stuck in_progress with no results; cause not yet isolated.",
     "deferred": "Post-deploy: read the [results-telemetry] funnel lines across a full slate to pin the residual to SGO-not-finalized (candidates N >> finalized_results_in M) vs status-transition gap (skipped_event_not_completed) vs mapping miss (skipped_event_not_found).",
-    "production_mutation": "none — adds counters + one info log line; no schema, no new writes, no backfill, no fabricated picks"
+    "production_mutation": "none \u2014 adds counters + one info log line; no schema, no new writes, no backfill, no fabricated picks"
   }
 }

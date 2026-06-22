@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1287-game-results-finalization-telemetry",
   "branch": "griffadavi/utv2-1287-game-results-finalization-telemetry",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1038",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/results-resolver.test.ts",
@@ -21,14 +21,31 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1287/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-22T10:56:19.081Z",
-  "heartbeat_at": "2026-06-22T10:56:19.081Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-22T11:49:57.791Z",
+  "closed_at": "2026-06-22T11:49:57.791Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1287-game-results-finalization-telemetry.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-22T11:49:28.805Z",
+      "verdict": "pass",
+      "merge_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1038"
+    },
+    {
+      "checked_at": "2026-06-22T11:49:39.625Z",
+      "verdict": "pass",
+      "merge_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

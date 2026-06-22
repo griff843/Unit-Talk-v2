@@ -6,7 +6,7 @@ Lane type: runtime
 Branch: griffadavi/utv2-1287-game-results-finalization-telemetry
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1038
 Head SHA: 0d9a8fe1a652033fedbadb79c5e8b70003c4060f
-Merge SHA: N/A (binds at lane close)
+Merge SHA: 7c6e8922ae0b27faab4de2125a26c264cda94915 (PR #1038 squash merge)
 
 ## Summary
 
@@ -62,4 +62,4 @@ This is observation-only telemetry; correctness is proven by the focused tests a
 ## SHA Binding
 
 Head SHA: 0d9a8fe1a652033fedbadb79c5e8b70003c4060f
-Merge SHA: N/A (bound automatically at lane close)
+Merge SHA: 7c6e8922ae0b27faab4de2125a26c264cda94915 (PR #1038 squash merge)
