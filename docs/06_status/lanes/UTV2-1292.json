@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1292",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1292-live-db-verify-isolation",
+  "branch": "claude/utv2-1292-live-db-verify-isolation",
+  "base_branch": "main",
+  "commit_sha": "12b7f1dd189b12c0b44b7c043d10b087d609bbd9",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1045",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/ci.yml",
+    "docs/05_operations/LIVE_DB_VERIFY_ISOLATION_BRANCH_PROTECTION.md",
+    "package.json",
+    "scripts/ci/live-db-verdict.test.ts",
+    "scripts/ci/live-db-verdict.ts",
+    "docs/06_status/proof/UTV2-1292/diff-summary.md",
+    "docs/06_status/proof/UTV2-1292/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1292/diff-summary.md",
+    "docs/06_status/proof/UTV2-1292/verification.md"
+  ],
+  "status": "merged",
+  "started_at": "2026-06-22T21:41:55.858Z",
+  "heartbeat_at": "2026-06-22T22:32:51.163Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1292-live-db-verify-isolation.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-22T22:31:44.187Z",
+      "verdict": "pass",
+      "merge_sha": "12b7f1dd189b12c0b44b7c043d10b087d609bbd9",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1045"
+    },
+    {
+      "checked_at": "2026-06-22T22:31:49.329Z",
+      "verdict": "pass",
+      "merge_sha": "12b7f1dd189b12c0b44b7c043d10b087d609bbd9",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1045",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-06-22T22:31:49.333Z",
+      "verdict": "fail",
+      "merge_sha": "12b7f1dd189b12c0b44b7c043d10b087d609bbd9",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-22T22:32:51.157Z",
+      "verdict": "pass",
+      "merge_sha": "12b7f1dd189b12c0b44b7c043d10b087d609bbd9",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1045",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-06-22T22:32:51.163Z",
+      "verdict": "fail",
+      "merge_sha": "12b7f1dd189b12c0b44b7c043d10b087d609bbd9",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1292-live-db-verify-isolation",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
