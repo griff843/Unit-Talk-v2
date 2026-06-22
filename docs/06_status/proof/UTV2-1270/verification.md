@@ -24,6 +24,27 @@ Note: an initial run hit 2 transient failures in the live-DB suite
 degradation flake, unrelated to this docs-only change (it touches no code path). A clean re-run passed
 all suites (0 failures), confirming the flake was environmental.
 
+### Live-DB smoke (`pnpm test:db`)
+
+`pnpm test:db` run against live Supabase (project `zfzdnfwdarxucxtaojxm`) in the lane worktree — **PASS**
+(exit 0). This is a docs-only lane (no DB code path touched); the live-DB run is included as required
+proof evidence and confirms the branch does not regress the runtime smoke suite.
+
+```
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
 ### R-level compliance
 
 `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` → **PASS**. Rules matched: none — no
