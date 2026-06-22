@@ -35,6 +35,7 @@ import {
   buildSgoKeyResolutionDiagnostic,
 } from './sgo-key-manager.js';
 import { parseProviderOfferStagingMode } from './provider-offer-staging.js';
+import { runStartupStepWithRetry } from './startup-resilience.js';
 import {
   resolveProviderIngestionDbWritePolicy,
   resolveProviderPayloadArchivePolicy,
@@ -386,20 +387,36 @@ if (runtime.autorun) {
   // Don't let the watchdog itself keep an otherwise-dead process alive.
   watchdog.unref();
 
-  resolveActiveSgoApiKey(runtime.sgoApiKeys)
-    .then(async (sgoSelection) => {
-      const reaped = await runtime.repositories.runs.reapStaleRuns({
-        runType: 'ingestor.cycle',
-        staleAfterMs: 15 * 60 * 1000,
-      });
-      if (reaped > 0) {
-        hungSingletonReaped = true;
-        logger.warn('reaped stale ingestor runs — HUNG_SINGLETON recovery', {
-          count: reaped,
-          healthCode: 'HUNG_SINGLETON',
-          action: 'marked_failed',
-        });
+  // ── Resilient startup chain (UTV2-1288) ────────────────────────────────────
+  // Before UTV2-1288 the pre-loop chain (SGO-key resolution → reapStaleRuns →
+  // runIngestorCycles) was a bare promise chain whose only failure handler set
+  // process.exitCode=1. During a transient Supabase outage `reapStaleRuns` threw,
+  // the process exited, and `restart: unless-stopped` recreated it instantly — a
+  // tight crash-restart loop (RestartCount=109 in ~10h). UTV2-1288 extends
+  // UTV2-1284's resilient-loop principle to startup: each pre-loop step logs +
+  // marks telemetry + continues into the (already-resilient) cycle loop on a
+  // transient failure, instead of fatal-exiting. Startup-phase heartbeats keep
+  // loop progress advancing so a slow/retrying startup never looks wedged.
+  void (async () => {
+    try {
+      // Startup phase: SGO key resolution. resolveActiveSgoApiKey already swallows
+      // per-candidate probe failures and returns { active: null, probes }, but
+      // guard defensively so an unexpected throw can never fatal-exit the daemon.
+      recordIngestorProgress({ cycle: 0, phase: 'startup:sgo-key' });
+      let sgoSelection: Awaited<ReturnType<typeof resolveActiveSgoApiKey>>;
+      try {
+        sgoSelection = await resolveActiveSgoApiKey(runtime.sgoApiKeys);
+      } catch (error) {
+        logger.warn(
+          'SGO key resolution threw during startup; continuing into cycle loop without an active key (transient condition)',
+          {
+            healthCode: 'STARTUP_SGO_KEY_FAILED',
+            reason: error instanceof Error ? error.message : String(error),
+          },
+        );
+        sgoSelection = { active: null, probes: [] };
       }
+
       // UTV2-1272: when no active key resolved, emit a diagnostic that
       // distinguishes "no keys configured" from "keys configured but the live
       // probe failed this cycle" — the latter is transient and must not be
@@ -416,11 +433,56 @@ if (runtime.autorun) {
           probes: sgoKeyDiagnostic.probes,
         });
       }
-      return sgoSelection;
-    })
-    .then(async (sgoSelection) => ({
-      sgoSelection,
-      cycles: await runIngestorCycles({
+
+      // Startup phase: reap stale runs. This is the DB call that crash-looped the
+      // daemon during the Supabase outage. Retry with bounded backoff; if it still
+      // fails, log + telemetry and enter the cycle loop anyway — orphan reaping is
+      // best-effort recovery, not a precondition (a later healthy cycle's own
+      // singleton handling covers it). (UTV2-1288)
+      recordIngestorProgress({ cycle: 0, phase: 'startup:reap-stale-runs' });
+      const reapResult = await runStartupStepWithRetry(
+        () =>
+          runtime.repositories.runs.reapStaleRuns({
+            runType: 'ingestor.cycle',
+            staleAfterMs: 15 * 60 * 1000,
+          }),
+        {
+          label: 'reapStaleRuns',
+          onRetry: ({ attempt, maxAttempts, delayMs, error }) => {
+            // Keep loop progress advancing across backoff so the watchdog never
+            // reads a retrying startup as a no-progress wedge.
+            recordIngestorProgress({ cycle: 0, phase: 'startup:reap-stale-runs:retry' });
+            logger.warn('reapStaleRuns startup attempt failed; retrying with backoff', {
+              healthCode: 'STARTUP_REAP_RETRY',
+              attempt,
+              maxAttempts,
+              delayMs,
+              reason: error instanceof Error ? error.message : String(error),
+            });
+          },
+        },
+      );
+      if (reapResult.ok && (reapResult.value ?? 0) > 0) {
+        hungSingletonReaped = true;
+        logger.warn('reaped stale ingestor runs — HUNG_SINGLETON recovery', {
+          count: reapResult.value ?? 0,
+          healthCode: 'HUNG_SINGLETON',
+          action: 'marked_failed',
+        });
+      } else if (!reapResult.ok) {
+        logger.warn(
+          'reapStaleRuns failed after retries during startup; entering cycle loop without orphan reaping (transient DB condition)',
+          {
+            healthCode: 'STARTUP_REAP_FAILED',
+            attempts: reapResult.attempts,
+            reason: reapResult.error ?? 'unknown',
+          },
+        );
+      }
+
+      // Startup phase complete: enter the resilient cycle loop.
+      recordIngestorProgress({ cycle: 0, phase: 'startup:complete' });
+      const cycles = await runIngestorCycles({
         repositories: runtime.repositories,
         leagues: runtime.leagues,
         ...(sgoSelection.active ? { apiKey: sgoSelection.active.apiKey } : {}),
@@ -464,9 +526,8 @@ if (runtime.autorun) {
         ...(opsAlertWebhookUrl
           ? { onStalenessAlert: (msg: string) => postOpsAlert(opsAlertWebhookUrl, msg) }
           : {}),
-      }),
-    }))
-    .then(({ cycles, sgoSelection }) => {
+      });
+
       console.log(
         JSON.stringify(
           {
@@ -486,8 +547,12 @@ if (runtime.autorun) {
           2,
         ),
       );
-    })
-    .catch((error: unknown) => {
+    } catch (error: unknown) {
+      // Last-resort guard. After UTV2-1288 the startup steps no longer throw, so
+      // reaching here means runIngestorCycles itself rejected — a programming
+      // error, not a transient outage. Preserve the original fail-closed behavior:
+      // capture telemetry and set exitCode so the watchdog/restart path recreates
+      // the container.
       void errorTracker.captureException({
         operation: 'ingestor.autorun',
         error,
@@ -513,7 +578,8 @@ if (runtime.autorun) {
         ),
       );
       process.exitCode = 1;
-    });
+    }
+  })();
 } else {
   console.log(JSON.stringify(createIngestorRuntimeSummary(), null, 2));
 }
