@@ -465,7 +465,7 @@ if (runtime.autorun) {
       if (reapResult.ok && (reapResult.value ?? 0) > 0) {
         hungSingletonReaped = true;
         logger.warn('reaped stale ingestor runs — HUNG_SINGLETON recovery', {
-          count: reapResult.value,
+          count: reapResult.value ?? 0,
           healthCode: 'HUNG_SINGLETON',
           action: 'marked_failed',
         });
@@ -475,7 +475,7 @@ if (runtime.autorun) {
           {
             healthCode: 'STARTUP_REAP_FAILED',
             attempts: reapResult.attempts,
-            reason: reapResult.error,
+            reason: reapResult.error ?? 'unknown',
           },
         );
       }
