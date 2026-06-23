@@ -56,7 +56,12 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
   const leagues = parseConfiguredLeagues(env.UNIT_TALK_INGESTOR_LEAGUES);
   const pollIntervalMs = parsePositiveInt(env.UNIT_TALK_INGESTOR_POLL_MS, 300_000);
   const configuredMaxCycles = parsePositiveInt(env.UNIT_TALK_INGESTOR_MAX_CYCLES, 1);
-  const maxCycles = configuredMaxCycles === 0 ? undefined : configuredMaxCycles;
+  // UTV2-1288 follow-up: MAX_CYCLES=0 means "run forever" (resident daemon). The
+  // runner coalesces an absent maxCycles to 1 (`options.maxCycles ?? 1`), so passing
+  // `undefined` here silently collapsed the daemon to a single cycle → clean exit(0)
+  // every cycle → `restart: unless-stopped` churn (~35s) that re-amplifies system_runs
+  // bloat. Pass an explicit Infinity so the cycle loop is genuinely unbounded.
+  const maxCycles = configuredMaxCycles === 0 ? Number.POSITIVE_INFINITY : configuredMaxCycles;
   const autorun = env.UNIT_TALK_INGESTOR_AUTORUN === 'true';
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
   const resultsLookbackHours = parsePositiveInt(
