@@ -4570,6 +4570,24 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       };
     }
 
+    // Dedup pre-load scoped to this batch's snapshot_at partition(s). provider_offer_history
+    // is RANGE(snapshot_at) partitioned and its only idempotency_key index is the composite
+    // unique (snapshot_at, idempotency_key). Filtering on snapshot_at lets Postgres prune
+    // partitions and seek that index; without it the idempotency_key-only lookup scans every
+    // partition (60+/1.39M rows) and trips the 120s statement_timeout on the hot MLB odds
+    // path (UTV2-1296). Existence is keyed on the composite (snapshot_at, idempotency_key)
+    // pair, which also fixes the inserted/updated counts — a key that exists only in a prior
+    // snapshot is no longer miscounted as an update of this snapshot. The upsert below is
+    // already idempotent via onConflict: 'snapshot_at,idempotency_key', so this changes only
+    // the existence probe, not write semantics.
+    const compositeExistenceKey = (snapshotAt: string, idempotencyKey: string): string =>
+      `${snapshotAt} ${idempotencyKey}`;
+    const snapshotAts = [...new Set(offers.map((offer) => offer.snapshotAt))];
+    const batchExistenceKeys = new Set(
+      offers.map((offer) =>
+        compositeExistenceKey(offer.snapshotAt, offer.idempotencyKey),
+      ),
+    );
     const idempotencyKeys = [
       ...new Set(offers.map((offer) => offer.idempotencyKey)),
     ];
@@ -4580,15 +4598,22 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         this.client,
         'provider_offer_history',
       )
-        .select('idempotency_key')
+        .select('snapshot_at,idempotency_key')
+        .in('snapshot_at', snapshotAts)
         .in('idempotency_key', chunk);
       if (existingError) {
         throw new Error(
           `Failed to load existing provider offer history: ${existingError.message}`,
         );
       }
-      for (const row of (chunkRows as Array<{ idempotency_key: string }> | null) ?? []) {
-        existingKeys.add(row.idempotency_key);
+      for (const row of (chunkRows as Array<{
+        snapshot_at: string;
+        idempotency_key: string;
+      }> | null) ?? []) {
+        const key = compositeExistenceKey(row.snapshot_at, row.idempotency_key);
+        if (batchExistenceKeys.has(key)) {
+          existingKeys.add(key);
+        }
       }
     }
     // Deduplicate by idempotency_key before upsert — includeAltLine=true can produce
