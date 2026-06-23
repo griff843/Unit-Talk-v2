@@ -4,13 +4,17 @@
   "lane_type": "runtime",
   "executor": "claude",
   "tier": "T2",
-  "worktree_path": null,
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "fix/utv2-1293-ingestor-resident-daemon-maxcycles",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "9d5a5827ca55d5cdbd127654a9eed2f18f0960b7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1047",
   "files_changed": [
-    "apps/ingestor/src/index.ts"
+    "apps/ingestor/src/index.ts",
+    "docs/06_status/lanes/UTV2-1293.json",
+    ".ops/sync/UTV2-1293.yml",
+    "docs/06_status/proof/UTV2-1293/diff-summary.md",
+    "docs/06_status/proof/UTV2-1293/verification.md"
   ],
   "file_scope_lock": [
     "apps/ingestor/src/index.ts",
@@ -23,17 +27,34 @@
     "docs/06_status/proof/UTV2-1293/diff-summary.md",
     "docs/06_status/proof/UTV2-1293/verification.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-06-23T15:30:00.000Z",
-  "heartbeat_at": "2026-06-23T15:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-23T17:41:12.497Z",
+  "closed_at": "2026-06-23T17:42:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/fix/utv2-1293-ingestor-resident-daemon-maxcycles.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-23T17:40:54.347Z",
+      "verdict": "fail",
+      "merge_sha": "9d5a5827ca55d5cdbd127654a9eed2f18f0960b7",
+      "failures": [
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-23T17:41:12.497Z",
+      "verdict": "pass",
+      "merge_sha": "9d5a5827ca55d5cdbd127654a9eed2f18f0960b7",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
-    "mode": "main_checkout",
+    "mode": "main-control",
     "cwd": "/home/griff843/code/Unit-Talk-v2",
     "package_install": "verified",
     "setup_command": null,
