@@ -16,12 +16,17 @@ type ProviderOfferRepositoryHarness = {
     from(table: string): {
       select(columns: string): {
         in(
-          column: string,
-          values: string[],
-        ): Promise<{
-          data: Array<{ idempotency_key: string }>;
-          error: null;
-        }>;
+          snapshotColumn: string,
+          snapshotValues: string[],
+        ): {
+          in(
+            column: string,
+            values: string[],
+          ): Promise<{
+            data: Array<{ snapshot_at: string; idempotency_key: string }>;
+            error: null;
+          }>;
+        };
       };
       upsert(
         rows: Array<Record<string, unknown>>,
@@ -114,6 +119,7 @@ type CycleStatusHarness = {
 
 test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to preserve first-write flags', async () => {
   const selectCalls: string[][] = [];
+  const snapshotFilters: string[][] = [];
   const historyUpsertCalls: Array<{
     rows: Array<Record<string, unknown>>;
     options: Record<string, unknown>;
@@ -128,14 +134,27 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
       if (table === 'provider_offer_history') {
         return {
           select(columns: string) {
-            assert.equal(columns, 'idempotency_key');
+            // UTV2-1296: dedup pre-load must filter snapshot_at (partition pruning) and
+            // select the composite (snapshot_at, idempotency_key) pair.
+            assert.equal(columns, 'snapshot_at,idempotency_key');
             return {
-              async in(column: string, values: string[]) {
-                assert.equal(column, 'idempotency_key');
-                selectCalls.push(values);
+              in(snapshotColumn: string, snapshotValues: string[]) {
+                assert.equal(snapshotColumn, 'snapshot_at');
+                snapshotFilters.push(snapshotValues);
                 return {
-                  data: [{ idempotency_key: 'dup-key' }],
-                  error: null,
+                  async in(column: string, values: string[]) {
+                    assert.equal(column, 'idempotency_key');
+                    selectCalls.push(values);
+                    return {
+                      data: [
+                        {
+                          snapshot_at: '2026-04-06T17:15:06.008Z',
+                          idempotency_key: 'dup-key',
+                        },
+                      ],
+                      error: null,
+                    };
+                  },
                 };
               },
             };
@@ -207,6 +226,9 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
   const result = await repository.upsertBatch(offers);
 
   assert.deepEqual(selectCalls, [['dup-key']]);
+  // UTV2-1296: the dedup pre-load is scoped to the batch's distinct snapshot_at so the query
+  // prunes provider_offer_history's RANGE(snapshot_at) partitions and seeks the composite index.
+  assert.deepEqual(snapshotFilters, [['2026-04-06T17:15:06.008Z']]);
   assert.equal(historyUpsertCalls.length, 1);
   assert.deepEqual(historyUpsertCalls[0]?.options, {
     onConflict: 'snapshot_at,idempotency_key',
@@ -228,6 +250,97 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
     insertedCount: 0,
     updatedCount: 1,
     totalProcessed: 1,
+  });
+});
+
+test('DatabaseProviderOfferRepository.upsertBatch scopes dedup pre-load to all distinct batch snapshot_ats (UTV2-1296 partition pruning)', async () => {
+  const snapshotFilters: string[][] = [];
+  const idempotencyFilters: string[][] = [];
+
+  const fakeClient = {
+    from(table: string) {
+      if (table === 'provider_offer_history') {
+        return {
+          select(columns: string) {
+            assert.equal(columns, 'snapshot_at,idempotency_key');
+            return {
+              in(snapshotColumn: string, snapshotValues: string[]) {
+                assert.equal(snapshotColumn, 'snapshot_at');
+                snapshotFilters.push(snapshotValues);
+                return {
+                  async in(column: string, values: string[]) {
+                    assert.equal(column, 'idempotency_key');
+                    idempotencyFilters.push(values);
+                    // No existing rows: every offer is a fresh insert.
+                    return { data: [], error: null };
+                  },
+                };
+              },
+            };
+          },
+          async upsert() {
+            return { error: null };
+          },
+        };
+      }
+
+      assert.equal(table, 'provider_offer_current');
+      return {
+        select() {
+          throw new Error('provider_offer_current select should not be called in upsertBatch');
+        },
+        async upsert() {
+          return { error: null };
+        },
+      };
+    },
+  };
+
+  const repository = Object.create(
+    DatabaseProviderOfferRepository.prototype,
+  ) as unknown as ProviderOfferRepositoryHarness;
+  repository.client = fakeClient;
+
+  const baseOffer = {
+    providerKey: 'sgo',
+    providerEventId: 'evt-1',
+    providerMarketKey: 'points-all-game-ou',
+    providerParticipantId: null,
+    sportKey: 'NBA',
+    line: 220.5,
+    overOdds: -110,
+    underOdds: -110,
+    devigMode: 'PAIRED' as const,
+    isOpening: true,
+    isClosing: false,
+    bookmakerKey: 'pinnacle',
+  };
+  const offers: ProviderOfferUpsertInput[] = [
+    {
+      ...baseOffer,
+      snapshotAt: '2026-04-06T17:15:06.008Z',
+      idempotencyKey: 'key-a',
+    },
+    {
+      ...baseOffer,
+      snapshotAt: '2026-04-06T17:30:06.008Z',
+      idempotencyKey: 'key-b',
+    },
+  ];
+
+  const result = await repository.upsertBatch(offers);
+
+  // Both distinct snapshot_ats are passed so Postgres can prune to exactly those partitions.
+  assert.equal(snapshotFilters.length, 1);
+  assert.deepEqual(
+    [...(snapshotFilters[0] ?? [])].sort(),
+    ['2026-04-06T17:15:06.008Z', '2026-04-06T17:30:06.008Z'],
+  );
+  assert.deepEqual(idempotencyFilters, [['key-a', 'key-b']]);
+  assert.deepEqual(result, {
+    insertedCount: 2,
+    updatedCount: 0,
+    totalProcessed: 2,
   });
 });
 
