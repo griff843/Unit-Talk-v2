@@ -2,7 +2,8 @@
 
 **Lane:** UTV2-1296 — scope provider_offer_history dedup pre-load by snapshot_at (partition pruning)
 **Tier:** T2 · **Lane type:** runtime · **Executor:** Claude
-**PR:** #PENDING · **Merge SHA:** PENDING (bound post-merge by `post-merge-lane-close.yml`)
+**PR:** #1049 (squash-merged) · **Merge SHA:** `c4a338aa621188b4071df974ff998af1dc5a5a76`
+**Deploy:** Deploy run 28060656860 — completed/success. Prod image `ghcr.io/griff843/unit-talk-v2/ingestor:c4a338aa…` live on Hetzner (resident since 22:19:38Z, RestartCount=0).
 
 ## Summary
 
@@ -60,20 +61,23 @@ This reproduces the production failure (old idempotency_key-only shape → `stat
 - `provider_offer_history`: partitioned `RANGE(snapshot_at)`, 60 partitions, 1,386,923 rows; only `idempotency_key` index = composite `(snapshot_at, idempotency_key)`.
 - `game_results` NOT frozen (settlement path intact): 491 rows/6h, 1648/48h.
 
-## Post-deploy 8-point production proof (host + read-only DB) — PENDING DEPLOY
+## Post-deploy 8-point production proof (host + read-only DB; 2026-06-23, prod SHA c4a338aa)
 | # | Required signal | Result | Evidence |
 |---|---|---|---|
-| 1 | ingestor resident | PENDING | |
-| 2 | RestartCount flat | PENDING | |
-| 3 | MLB odds path no longer logs provider_offer_history statement_timeout | PENDING | |
-| 4 | dedup query prunes by snapshot_at (fresh MLB odds cycle completes) | PENDING | |
-| 5 | no statement_timeout / schema-cache / 521 storm | PENDING | |
-| 6 | finalized-repoll still runs normally | PENDING | |
-| 7 | game_results keeps moving when candidates exist | PENDING | |
-| 8 | fresh same-day MLB provider_offer_history rows written post-deploy | PENDING | |
+| 1 | ingestor resident | **YES** | resident since 22:19:38Z (deploy), healthy |
+| 2 | RestartCount flat | **YES** | RestartCount=0 |
+| 3 | MLB odds path no longer logs provider_offer_history statement_timeout | **YES** | `Failed to load existing provider offer history` occurrences since deploy = **0**; no `league=MLB failed` on the dedup load (was every cycle pre-deploy) |
+| 4 | dedup query prunes by snapshot_at | **YES** | MLB cycle now progresses **past** the dedup load (reaches archive at 22:20:07Z + `markClosingLines`), which it never did pre-deploy. Live read-only proof: snapshot_at-scoped shape **161ms** vs idempotency_key-only shape **statement_timeout (57014)** against the live 1.39M-row table |
+| 5 | no statement_timeout / schema-cache / 521 storm | **YES** | dedup `statement_timeout` = 0; no schema-cache/521 storm |
+| 6 | finalized-repoll still runs normally | **YES** | `finalized-repoll league=MLB candidates=1` ran 22:24:08Z |
+| 7 | game_results keeps moving when candidates exist | **N/A this window** | candidates=1 and not SGO-finalized → nothing to settle (diurnal); settlement path intact (1648 rows/48h) |
+| 8 | fresh same-day MLB provider_offer_history rows written post-deploy | **NO — blocked by the separate 240s wall-clock deadline, NOT the dedup** | `poh_since_deploy=0`. The MLB odds cycle ran 22:20:07→22:23:57Z and hit `cycle=1 league=MLB TIMEOUT after 240000ms — failing closed (UTV2-1280/1282)` before offer-persist completed. This is the heavy-slate throughput bottleneck (18.7MB payload + entity-resolve + ~15k offer persist), out of this lane's scope. |
+
+### Outcome
+This lane's target — the `provider_offer_history` dedup `statement_timeout` — is **eliminated and proven** (live 161ms vs statement_timeout; 0 prod occurrences; cycle now progresses past the dedup). The MLB odds path's **next** and now-dominant bottleneck is the **240s per-league wall-clock deadline** on the heavy MLB slate (logged as UTV2-1280/1282), which currently prevents fresh-odds persistence. That is a distinct throughput issue tracked separately and is the next runtime first-NO.
 
 ## R-level compliance
-Diff touches `packages/db/**` (runtime repository) + its test + proof. R-level check on PR head: PENDING (CI).
+Diff touches `packages/db/**` (runtime repository) + its test + `apps/api/src/scripts/` proof script + proof docs. R-Level Compliance Check on PR #1049: **PASS** (CI green on merge SHA `c4a338aa`).
 
 ## Guardrails honored
 No DDL, no new index, no migration, no DB mutation, no retention/purge. No public Discord. No P3 cert. UTV2-1042 untouched. No CLV/ROI/edge claims. No backfill. No >48h backlog mutation. No secrets printed. No fabricated proof. No loosened scoring/freshness/settlement thresholds.
