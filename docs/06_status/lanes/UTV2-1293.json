@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1293",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": null,
+  "branch": "fix/utv2-1293-ingestor-resident-daemon-maxcycles",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "apps/ingestor/src/index.ts"
+  ],
+  "file_scope_lock": [
+    "apps/ingestor/src/index.ts",
+    "docs/06_status/lanes/UTV2-1293.json",
+    ".ops/sync/UTV2-1293.yml",
+    "docs/06_status/proof/UTV2-1293/diff-summary.md",
+    "docs/06_status/proof/UTV2-1293/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1293/diff-summary.md",
+    "docs/06_status/proof/UTV2-1293/verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-06-23T15:30:00.000Z",
+  "heartbeat_at": "2026-06-23T15:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/fix/utv2-1293-ingestor-resident-daemon-maxcycles.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "main_checkout",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": false
+  }
+}
