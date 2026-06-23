@@ -56,7 +56,12 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
   const leagues = parseConfiguredLeagues(env.UNIT_TALK_INGESTOR_LEAGUES);
   const pollIntervalMs = parsePositiveInt(env.UNIT_TALK_INGESTOR_POLL_MS, 300_000);
   const configuredMaxCycles = parsePositiveInt(env.UNIT_TALK_INGESTOR_MAX_CYCLES, 1);
-  const maxCycles = configuredMaxCycles === 0 ? undefined : configuredMaxCycles;
+  // UTV2-1288 follow-up: MAX_CYCLES=0 means "run forever" (resident daemon). The
+  // runner coalesces an absent maxCycles to 1 (`options.maxCycles ?? 1`), so passing
+  // `undefined` here silently collapsed the daemon to a single cycle → clean exit(0)
+  // every cycle → `restart: unless-stopped` churn (~35s) that re-amplifies system_runs
+  // bloat. Pass an explicit Infinity so the cycle loop is genuinely unbounded.
+  const maxCycles = configuredMaxCycles === 0 ? Number.POSITIVE_INFINITY : configuredMaxCycles;
   const autorun = env.UNIT_TALK_INGESTOR_AUTORUN === 'true';
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
   const resultsLookbackHours = parsePositiveInt(
@@ -398,6 +403,16 @@ if (runtime.autorun) {
   // transient failure, instead of fatal-exiting. Startup-phase heartbeats keep
   // loop progress advancing so a slow/retrying startup never looks wedged.
   void (async () => {
+    // UTV2-1288 follow-up: the watchdog interval above is unref()'d, so nothing
+    // else keeps the event loop alive. When the DB is fast and out-of-season
+    // leagues are empty, a cycle's I/O can momentarily leave zero active handles
+    // mid-cycle (observed in prod: clean exit(0) right after the 2nd league,
+    // before the 3rd ever ran), draining the loop so the daemon exits and
+    // `restart: unless-stopped` churns it (~35s) — MLB never runs, results never
+    // settle. A ref'd keep-alive guarantees liveness for the daemon's lifetime;
+    // it is cleared in `finally` so an intentional return (finite maxCycles) or a
+    // fatal error can still exit cleanly.
+    const daemonKeepAlive = setInterval(() => {}, 1 << 30);
     try {
       // Startup phase: SGO key resolution. resolveActiveSgoApiKey already swallows
       // per-candidate probe failures and returns { active: null, probes }, but
@@ -578,6 +593,8 @@ if (runtime.autorun) {
         ),
       );
       process.exitCode = 1;
+    } finally {
+      clearInterval(daemonKeepAlive);
     }
   })();
 } else {
