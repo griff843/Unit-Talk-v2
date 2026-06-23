@@ -10,6 +10,7 @@ import {
   archiveRawProviderPayload,
   shouldBlockOnArchiveFailure,
 } from './raw-provider-payload-archive.js';
+import { ArchiveWriteTimeoutError } from './archive-payload-guard.js';
 
 function sha256Hex(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
@@ -119,3 +120,89 @@ test('archiveRawProviderPayload — hash is computed from raw payload before any
   const mutatedHash = sha256Hex(JSON.stringify({ events: [{ id: 'e1', odds: 999 }] }));
   assert.notEqual(record.payloadHash, mutatedHash, 'hash must be pre-mutation');
 });
+
+class HangingRawPayloadRepository implements RawPayloadRepository {
+  insert(_input: RawPayloadInsert): Promise<RawPayloadRecord> {
+    // Resolves only AFTER the write timeout (25ms) has fired — models a hung PostgREST
+    // insert. It still settles (at 40ms) so the test runner's event loop stays clean.
+    return new Promise<RawPayloadRecord>((resolve) => {
+      setTimeout(() => resolve({ id: 'raw-hang' } as unknown as RawPayloadRecord), 40);
+    });
+  }
+}
+
+test('UTV2-1294: a normal small payload is still written verbatim (regression)', async () => {
+  const repo = new InMemoryRawPayloadRepository();
+  const payload = { league: 'NFL', odds: [{ a: 1 }] };
+
+  const result = await archiveRawProviderPayload({
+    providerKey: 'sgo',
+    league: 'NFL',
+    runId: 'run-small',
+    snapshotAt: '2026-06-23T18:00:00.000Z',
+    kind: 'odds',
+    payload,
+    spoolDir: path.join(os.tmpdir(), 'ut-archive-test'),
+    rawPayloadsRepository: repo,
+    maxPayloadBytes: 1_000_000,
+  });
+
+  assert.equal(result.oversized, false);
+  assert.equal(repo.inserted.length, 1);
+  assert.deepEqual(repo.inserted[0]!.payload, payload, 'small payload persisted untouched');
+});
+
+test('UTV2-1294: an oversized payload is capped — compact metadata is written, never the giant blob, and it does not throw', async () => {
+  const repo = new InMemoryRawPayloadRepository();
+  const payload = { league: 'MLB', odds: 'x'.repeat(5_000) };
+
+  const result = await archiveRawProviderPayload({
+    providerKey: 'sgo',
+    league: 'MLB',
+    runId: 'run-big',
+    snapshotAt: '2026-06-23T18:00:00.000Z',
+    kind: 'odds',
+    payload,
+    spoolDir: path.join(os.tmpdir(), 'ut-archive-test'),
+    rawPayloadsRepository: repo,
+    eventIds: ['evt-1', 'evt-2'],
+    maxPayloadBytes: 100, // force the guard without allocating megabytes
+  });
+
+  assert.equal(result.oversized, true);
+  assert.equal(repo.inserted.length, 1);
+  const written = repo.inserted[0]!.payload as Record<string, unknown>;
+  assert.equal(written.reason, 'payload_too_large');
+  assert.equal(written.league, 'MLB');
+  assert.equal(written.kind, 'odds');
+  assert.equal(written.payloadHash, result.payloadHash);
+  assert.deepEqual(written.eventIds, ['evt-1', 'evt-2']);
+  assert.equal('odds' in written, false, 'the original giant field must be absent from the DB row');
+  assert.ok(result.payloadBytes > 100);
+  // provenance hash is still over the real payload
+  assert.equal(result.payloadHash, sha256Hex(JSON.stringify(payload)));
+});
+
+test('UTV2-1294: a hung archive insert is bounded by the write timeout (cannot consume the 120s statement window)', async () => {
+  const repo = new HangingRawPayloadRepository();
+  const start = Date.now();
+  await assert.rejects(
+    () =>
+      archiveRawProviderPayload({
+        providerKey: 'sgo',
+        league: 'MLB',
+        runId: 'run-hang',
+        snapshotAt: '2026-06-23T18:00:00.000Z',
+        kind: 'odds',
+        payload: { a: 1 },
+        spoolDir: path.join(os.tmpdir(), 'ut-archive-test'),
+        rawPayloadsRepository: repo,
+        maxPayloadBytes: 1_000_000,
+        writeTimeoutMs: 25,
+      }),
+    (error: unknown) => error instanceof ArchiveWriteTimeoutError,
+  );
+  assert.ok(Date.now() - start < 5_000, 'caller freed in ~25ms, not 120s');
+  await new Promise((resolve) => setTimeout(resolve, 60));
+});
+

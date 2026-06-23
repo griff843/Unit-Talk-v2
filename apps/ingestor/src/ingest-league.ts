@@ -7,6 +7,15 @@ import {
 } from './circuit-breaker.js';
 import { type ProviderQuarantineRegistry } from './provider-quarantine.js';
 import { archiveRawProviderPayload, shouldBlockOnArchiveFailure } from './raw-provider-payload-archive.js';
+import {
+  buildOversizedArchiveMetadata,
+  isPayloadOversized,
+  resolveArchiveWriteTimeoutMs,
+  resolveMaxArchivePayloadBytes,
+  serializedPayloadBytes,
+  sha256Hex,
+  withArchiveWriteTimeout,
+} from './archive-payload-guard.js';
 import { resolveSgoEntities } from './entity-resolver.js';
 import {
   fetchSGOResultsWithTelemetry,
@@ -328,6 +337,12 @@ export async function ingestLeague(
       // before the heavier DB write/entity-resolution phase. (UTV2-1280)
       options.signal?.throwIfAborted();
 
+      // Provider event IDs for this snapshot — recorded in compact metadata when an
+      // archive payload is too large to store as one giant JSON value (UTV2-1294).
+      const archiveEventIds = fetched.events
+        .map((event) => event.providerEventId)
+        .filter((providerEventId) => providerEventId.length > 0);
+
       try {
         await archiveRawProviderPayload({
           providerKey: 'sgo',
@@ -339,6 +354,8 @@ export async function ingestLeague(
           spoolDir: providerPayloadArchivePolicy.spoolDir,
           rawPayloadsRepository: repositories.rawPayloads,
           rawBody: fetched.rawBodies.join('\n'),
+          eventIds: archiveEventIds,
+          ...(options.logger ? { logger: options.logger } : {}),
         });
       } catch (error) {
         const message =
@@ -356,16 +373,38 @@ export async function ingestLeague(
       }
 
       // Write immutable OddsSnapshot (WS-1.1 — UTV2-1085).
-      // Best-effort: non-fatal until fail-closed policy is ratified in follow-on lane.
+      // Best-effort: non-fatal. Bounded by the same size guard + write timeout as the
+      // raw_payloads archive (UTV2-1294) so the oversized MLB game-line odds blob can
+      // never starve the settlement-critical path via PostgREST statement_timeout.
       try {
-        await repositories.oddsSnapshots.insert({
-          providerKey: 'sgo',
-          marketKey: 'odds',
-          league,
-          runId: run.id,
-          snapshotAt,
-          priceBlob: fetched.rawPayloads,
-        });
+        const snapshotSerialized = JSON.stringify(fetched.rawPayloads);
+        const snapshotBytes = serializedPayloadBytes(snapshotSerialized);
+        const snapshotMaxBytes = resolveMaxArchivePayloadBytes();
+        const snapshotPriceBlob = isPayloadOversized(snapshotBytes, snapshotMaxBytes)
+          ? buildOversizedArchiveMetadata({
+              provider: 'sgo',
+              league,
+              kind: 'odds_snapshot',
+              payloadBytes: snapshotBytes,
+              maxPayloadBytes: snapshotMaxBytes,
+              payloadHash: sha256Hex(snapshotSerialized),
+              snapshotAt,
+              eventIds: archiveEventIds,
+            })
+          : fetched.rawPayloads;
+        await withArchiveWriteTimeout(
+          () =>
+            repositories.oddsSnapshots.insert({
+              providerKey: 'sgo',
+              marketKey: 'odds',
+              league,
+              runId: run.id,
+              snapshotAt,
+              priceBlob: snapshotPriceBlob,
+            }),
+          resolveArchiveWriteTimeoutMs(),
+          `odds_snapshots:${league}`,
+        );
       } catch (snapshotError) {
         options.logger?.warn?.(
           `[ingestor] odds_snapshot write failed for sgo/${league} (non-fatal): ${
