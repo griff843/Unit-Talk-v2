@@ -8,7 +8,9 @@
 
 The MLB odds-ingest cycle aborted every cycle on `Failed to load existing provider offer history: canceling statement due to statement timeout`. Root cause: `DatabaseProviderOfferRepository.upsertBatch` dedup pre-load queried `provider_offer_history` by `idempotency_key` only, with no `snapshot_at` predicate. The table is `RANGE(snapshot_at)` partitioned (60 partitions, ~1.39M rows) and its only `idempotency_key` index is the composite unique `(snapshot_at, idempotency_key)`. Without `snapshot_at`, Postgres could neither prune partitions nor seek the composite index, so each of ~150 chunked lookups per MLB cycle scanned every partition → 120s `statement_timeout`. This lane scopes the pre-load to the batch's distinct `snapshot_at` value(s), enabling partition pruning + composite-index seek. The upsert was already idempotent via `onConflict: 'snapshot_at,idempotency_key'`; only the existence probe changed (now keyed on the composite pair, which also corrects the inserted/updated count).
 
-## Static verification (branch)
+## Verification
+
+### Static (branch)
 - `pnpm type-check`: **PASS** (exit 0).
 - `pnpm test` (`packages/db` targeted, `provider-offer-repository.test.ts`): **PASS** — 7 pass / 0 fail / 0 skipped. Updated the existing `upsertBatch` test to the chained snapshot_at+idempotency_key dedup probe; added `upsertBatch scopes dedup pre-load to all distinct batch snapshot_ats`.
 - `pnpm test` (full suite): **PASS** — see TAP block below.
@@ -23,6 +25,35 @@ The MLB odds-ingest cycle aborted every cycle on `Failed to load existing provid
 # suites 95
 ```
 (full `pnpm test` across all workspaces, exit 0)
+
+### Live-DB smoke (`pnpm test:db`, real Supabase, branch)
+```
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+```
+(`pnpm test:db` = `tsx --test apps/api/src/database-smoke.test.ts`, exit 0)
+
+### Live-DB read-only partition-pruning proof (real Supabase, branch)
+`apps/api/src/scripts/utv2-1296-dedup-pruning-proof.ts` runs the EXACT new vs old dedup pre-load query shapes against the live ~1.39M-row partitioned `provider_offer_history` (GET-only, no writes):
+```
+# sampled snapshot_at=2026-06-23T21:47:14.033+00:00
+# sampled idempotency_keys=50
+# NEW shape (snapshot_at + idempotency_key): 161ms, rows=50
+# OLD shape (idempotency_key only): canceling statement due to statement timeout (Postgres 57014)
+ok 1 - snapshot_at-scoped dedup pre-load returns in 161ms (<= 10000ms ceiling) against the live ~1.39M-row partitioned table
+# pass 1
+# fail 0
+```
+This reproduces the production failure (old idempotency_key-only shape → `statement_timeout`) and proves the fix (snapshot_at-scoped shape → **161ms**, partition-pruned) directly against live data, read-only.
 
 ## Pre-deploy production baseline (read-only, host + DB; 2026-06-23)
 - Ingestor SHA `54ef1273` resident/healthy; `league=MLB failed ... provider offer history: canceling statement due to statement timeout` every cycle (19:56, 20:05, 20:14, 20:44, 20:54, 21:01Z).
