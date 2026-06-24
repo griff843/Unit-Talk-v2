@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   flatMapCooperatively,
   mapCooperatively,
+  mapWithConcurrency,
   yieldToEventLoop,
 } from './cooperative.js';
 
@@ -80,4 +81,84 @@ test('yieldToEventLoop resolves on a later macrotask (timers can run before it)'
   }, 0);
   await yieldToEventLoop();
   assert.ok(timerRan, 'a setTimeout(0) scheduled before the yield must run during it');
+});
+
+/*
+ * UTV2-1298 — mapWithConcurrency: bounded-concurrency async map used to parallelize
+ * sequential entity-resolution PostgREST writes under a cap. Must preserve order,
+ * honor the cap, run sequentially at concurrency 1 (the reversible fallback), and
+ * fail closed deterministically on the first error.
+ */
+
+test('mapWithConcurrency preserves result order', async () => {
+  const out = await mapWithConcurrency([1, 2, 3, 4, 5], 3, async (n) => {
+    await yieldToEventLoop();
+    return n * 10;
+  });
+  assert.deepEqual(out, [10, 20, 30, 40, 50]);
+});
+
+test('mapWithConcurrency honors the concurrency cap', async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  await mapWithConcurrency(
+    Array.from({ length: 20 }, (_unused, i) => i),
+    4,
+    async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await yieldToEventLoop();
+      await yieldToEventLoop();
+      inFlight -= 1;
+      return null;
+    },
+  );
+  assert.ok(maxInFlight <= 4, `max in-flight ${maxInFlight} must not exceed cap 4`);
+  assert.ok(maxInFlight >= 2, 'should actually run concurrently above 1');
+});
+
+test('mapWithConcurrency runs sequentially at concurrency 1 (reversible fallback)', async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const order: number[] = [];
+  await mapWithConcurrency([0, 1, 2, 3], 1, async (n) => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await yieldToEventLoop();
+    order.push(n);
+    inFlight -= 1;
+    return n;
+  });
+  assert.equal(maxInFlight, 1, 'concurrency 1 must never overlap');
+  assert.deepEqual(order, [0, 1, 2, 3], 'sequential order preserved');
+});
+
+test('mapWithConcurrency coerces non-finite/zero concurrency to sequential', async () => {
+  let maxInFlight = 0;
+  let inFlight = 0;
+  await mapWithConcurrency([1, 2, 3], 0, async (n) => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await yieldToEventLoop();
+    inFlight -= 1;
+    return n;
+  });
+  assert.equal(maxInFlight, 1);
+});
+
+test('mapWithConcurrency fails closed: throws first error and stops dispatching', async () => {
+  const started: number[] = [];
+  await assert.rejects(
+    mapWithConcurrency(Array.from({ length: 30 }, (_unused, i) => i), 2, async (n) => {
+      started.push(n);
+      await yieldToEventLoop();
+      if (n === 1) {
+        throw new Error('boom');
+      }
+      return n;
+    }),
+    /boom/,
+  );
+  // With cap 2 and an early failure, it must NOT dispatch all 30 items.
+  assert.ok(started.length < 30, `expected early stop, dispatched ${started.length}/30`);
 });
