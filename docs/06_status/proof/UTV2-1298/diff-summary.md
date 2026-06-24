@@ -2,6 +2,7 @@
 
 **Lane:** UTV2-1298 — bound MLB odds-path wall-clock (entity-resolve concurrency)
 **Tier:** T2 · **Lane type:** runtime · **Executor:** Claude
+**PR:** #1052 · **Merge SHA:** `975ee453e20fe15073a88e7f65c492548e7fe69d`
 
 ## Files changed
 - `apps/ingestor/src/cooperative.ts` — add `mapWithConcurrency(items, concurrency, fn)`: bounded-concurrency async map, order-preserving, fail-closed/deterministic (captures first error, stops dispatching, rethrows). `concurrency <= 1` runs fully sequential.
