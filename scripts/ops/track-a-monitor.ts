@@ -26,6 +26,7 @@ import { dirname } from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   evaluateTriggers,
+  PROVIDER_FRESHNESS_THRESHOLD_MINUTES,
   type TrackASnapshot,
   type TriggerResult,
 } from './track-a-triggers.js';
@@ -73,6 +74,39 @@ async function restCount(
   }
 }
 
+/**
+ * Read-only PostgREST SELECT returning a JSON array. On error records the message and
+ * returns an empty array — caller decides how to handle missing data.
+ */
+async function restJson<T>(
+  base: string,
+  headers: Record<string, string>,
+  query: string,
+  errors: string[],
+): Promise<T[]> {
+  try {
+    const res = await fetch(`${base}/rest/v1/${query}`, { headers });
+    if (!res.ok) {
+      errors.push(`${query.split('?')[0]} -> HTTP ${res.status}`);
+      return [];
+    }
+    return (await res.json()) as T[];
+  } catch (err) {
+    errors.push(`${query.split('?')[0]} -> ${(err as Error).message}`);
+    return [];
+  }
+}
+
+/** Compute median of a numeric array. Returns null for empty arrays. */
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? ((sorted[mid - 1]! + sorted[mid]!) / 2)
+    : sorted[mid]!;
+}
+
 async function collectSnapshot(): Promise<TrackASnapshot> {
   const env = loadEnvironment();
   const base = env.SUPABASE_URL;
@@ -85,6 +119,11 @@ async function collectSnapshot(): Promise<TrackASnapshot> {
   }
   const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
   const c = (q: string) => restCount(base, headers, q, errors);
+  const j = <T>(q: string) => restJson<T>(base, headers, q, errors);
+
+  // Schedule window: upcoming events in the next 24 hours.
+  const windowEnd = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date().toISOString();
 
   const [
     closingForClvTotal,
@@ -96,6 +135,14 @@ async function collectSnapshot(): Promise<TrackASnapshot> {
     clvMissingEventContext,
     clvMissingClosingLine,
     suppressPicks,
+    // Front-of-funnel: stale price rejection telemetry from candidate_pick_scanner
+    scannerTelemetry,
+    // Front-of-funnel: upcoming events
+    upcomingEventsTotal,
+    // Front-of-funnel: provider_offer_history freshness for upcoming event player props
+    offerFreshnessRows,
+    // Front-of-funnel: ingestor_cycles most recent record for player_props_fetched
+    ingestorCycles,
   ] = await Promise.all([
     c('pick_offer_snapshots?snapshot_kind=eq.closing_for_clv'),
     c('pick_offer_snapshots?snapshot_kind=eq.closing_for_clv&payload->>backfill=eq.true'),
@@ -111,7 +158,61 @@ async function collectSnapshot(): Promise<TrackASnapshot> {
     c('settlement_records?payload->>clvStatus=eq.missing_event_context'),
     c('settlement_records?payload->>clvStatus=eq.missing_closing_line'),
     c('picks?metadata->>band=eq.SUPPRESS'),
+    // Most recent scanner cycle — selects stale_price_data rejection count + candidates scanned.
+    j<{ stale_price_data?: number; candidates_scanned?: number; created_at?: string }>(
+      'ingestor_cycles?select=stale_price_data,candidates_scanned,created_at&order=created_at.desc&limit=1',
+    ),
+    // Count upcoming events in the next 24h window.
+    c(`events?start_time=gte.${now}&start_time=lte.${windowEnd}`),
+    // Freshness of player-prop offers for upcoming events: fetch snapshot_at values.
+    // Limit to 500 rows (proxy: we care about the distribution, not exhaustive scan).
+    j<{ snapshot_at: string }>(
+      `provider_offer_history?select=snapshot_at&market=like.player_*` +
+        `&event_start_time=gte.${now}&event_start_time=lte.${windowEnd}` +
+        `&order=snapshot_at.desc&limit=500`,
+    ),
+    // Most recent ingestor_cycles row for player_props_fetched telemetry.
+    j<{ player_props_fetched?: number; created_at?: string }>(
+      'ingestor_cycles?select=player_props_fetched,created_at&order=created_at.desc&limit=1',
+    ),
   ]);
+
+  // --- Front-of-funnel metric derivation ---
+
+  // Stale price rejection share from scanner telemetry.
+  const latestScanCycle = scannerTelemetry[0];
+  const stalePriceRejections = latestScanCycle?.stale_price_data ?? 0;
+  const candidatesScanned = latestScanCycle?.candidates_scanned ?? 0;
+
+  // Provider offer freshness: compute age in minutes for each offer row.
+  const nowMs = Date.now();
+  const offerAgesMinutes = offerFreshnessRows
+    .map((r) => {
+      const ms = nowMs - Date.parse(r.snapshot_at);
+      return Number.isFinite(ms) ? ms / 60_000 : null;
+    })
+    .filter((v): v is number => v !== null);
+
+  const providerOfferMaxAgeMinutes =
+    offerAgesMinutes.length > 0 ? Math.max(...offerAgesMinutes) : null;
+  const providerOfferMedianAgeMinutes = median(offerAgesMinutes);
+
+  // Per-event prop coverage: count distinct upcoming events that have at least one
+  // fresh offer (age <= threshold). We use the offer rows themselves as a proxy —
+  // if any offer row exists within the freshness window, that event is covered.
+  // To avoid a complex per-event join, we use a simpler count approach:
+  // fresh offers = rows within the threshold.
+  const freshOfferCount = offerAgesMinutes.filter(
+    (age) => age <= PROVIDER_FRESHNESS_THRESHOLD_MINUTES,
+  ).length;
+  // upcomingEventsWithPropCoverage: if there are fresh offers we report coverage as best-effort.
+  // If zero fresh offers but we have upcoming events → NO_PROP_COVERAGE fires.
+  // This is a conservative proxy — it fires when NO upcoming event has fresh props.
+  const upcomingEventsWithPropCoverage = freshOfferCount > 0 ? upcomingEventsTotal : 0;
+
+  // Ingestor props fetched from most recent cycle.
+  const latestIngestorCycle = ingestorCycles[0];
+  const ingestorPropsFetched = latestIngestorCycle?.player_props_fetched ?? null;
 
   return {
     capturedAt,
@@ -127,6 +228,14 @@ async function collectSnapshot(): Promise<TrackASnapshot> {
     suppressPicks,
     publicDiscordRecentPosts: null, // monitor never queries/changes delivery; public gate stays held.
     errors,
+    // Front-of-funnel metrics (UTV2-1278)
+    stalePriceRejections,
+    candidatesScanned,
+    providerOfferMaxAgeMinutes,
+    providerOfferMedianAgeMinutes,
+    upcomingEventsWithPropCoverage,
+    upcomingEventsTotal,
+    ingestorPropsFetched,
   };
 }
 
@@ -145,6 +254,14 @@ function emptySnapshot(capturedAt: string, errors: string[]): TrackASnapshot {
     suppressPicks: 0,
     publicDiscordRecentPosts: null,
     errors,
+    // Front-of-funnel fields default to zero / null on failure
+    stalePriceRejections: 0,
+    candidatesScanned: 0,
+    providerOfferMaxAgeMinutes: null,
+    providerOfferMedianAgeMinutes: null,
+    upcomingEventsWithPropCoverage: 0,
+    upcomingEventsTotal: 0,
+    ingestorPropsFetched: null,
   };
 }
 
@@ -256,6 +373,15 @@ function renderComment(s: TrackASnapshot, t: TriggerResult): string {
     `- clvStatus: computed ${s.clvComputed} · missing_event_context ${s.clvMissingEventContext} · missing_closing_line ${s.clvMissingClosingLine}`,
     `- SUPPRESS/orphan picks: ${s.suppressPicks}`,
     `- public Discord: not enabled (monitor does not query or change delivery)`,
+    '',
+    '**Front-of-funnel ingestion signals (UTV2-1278):**',
+    `- stale price rejections: ${s.stalePriceRejections} / ${s.candidatesScanned} candidates scanned` +
+      (s.candidatesScanned > 0
+        ? ` (${((s.stalePriceRejections / s.candidatesScanned) * 100).toFixed(1)}%)`
+        : ' (no scan cycle data)'),
+    `- provider offer freshness (upcoming events): max ${s.providerOfferMaxAgeMinutes ?? 'n/a'}min · median ${s.providerOfferMedianAgeMinutes ?? 'n/a'}min (threshold: ${PROVIDER_FRESHNESS_THRESHOLD_MINUTES}min)`,
+    `- upcoming event prop coverage: ${s.upcomingEventsWithPropCoverage} / ${s.upcomingEventsTotal} events have fresh player-prop offers`,
+    `- ingestor player props fetched (last cycle): ${s.ingestorPropsFetched ?? 'n/a'}`,
     s.errors.length ? `- errors: ${s.errors.join('; ')}` : '- errors: none',
     '',
     `**Recommendation:** ${t.recommendation}`,

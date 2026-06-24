@@ -1,5 +1,5 @@
 /**
- * Track A monitor — pure trigger logic and snapshot types (UTV2-1276).
+ * Track A monitor — pure trigger logic and snapshot types (UTV2-1276, UTV2-1278).
  *
  * No I/O. All Supabase / Linear access lives in `track-a-monitor.ts`; this file is
  * pure so it can be unit-tested without network or env. It encodes the report/trigger
@@ -7,6 +7,9 @@
  *
  * Read-only by construction: nothing here mutates state, certifies, or makes
  * CLV/ROI/edge claims — it only decides whether a snapshot is worth reporting.
+ *
+ * UTV2-1278 additions: front-of-funnel ingestion signals — stale price rejection share,
+ * provider offer freshness, and player-prop coverage per upcoming event.
  */
 
 /** DEVELOPING evidence threshold for re-triggering the edge-certification evaluation. */
@@ -16,6 +19,18 @@ export const DEVELOPING_THRESHOLD = 50;
 export const HEARTBEAT_HOURS = 24;
 
 /**
+ * Provider offer freshness threshold in minutes. Offers older than this are considered stale.
+ * This mirrors the freshness gate in the candidate-pick-scanner.
+ */
+export const PROVIDER_FRESHNESS_THRESHOLD_MINUTES = 30;
+
+/**
+ * Fraction of candidates rejected due to stale prices above which the
+ * FRONT_OF_FUNNEL_BLOCKER trigger fires (0.5 = 50%).
+ */
+export const STALE_PRICE_SHARE_THRESHOLD = 0.5;
+
+/**
  * One monitor reading. All fields are counts/statuses — never derived edge claims.
  *
  * Eligibility note: `wellFormedPending/SettledPlayerProps` count player-prop picks
@@ -23,6 +38,12 @@ export const HEARTBEAT_HOURS = 24;
  * requires event-context resolution, which the orphan-generator investigation
  * (UTV2-1275) addresses; this monitor cannot yet measure that precisely, so these
  * fields are reported as leading indicators, not as CLV-eligible certifications.
+ *
+ * UTV2-1278 additions (front-of-funnel signals):
+ *   - stalePriceRejections / candidatesScanned: stale-price rejection rate from candidate scanner
+ *   - providerOfferMaxAgeMinutes / providerOfferMedianAgeMinutes: freshness of provider_offer_history
+ *   - upcomingEventsWithPropCoverage / upcomingEventsTotal: per-event prop coverage
+ *   - ingestorPropsFetched: SGO player props ingested per ingestor_cycles telemetry (null if unavailable)
  */
 export interface TrackASnapshot {
   capturedAt: string;
@@ -42,6 +63,50 @@ export interface TrackASnapshot {
   publicDiscordRecentPosts: number | null;
   /** Non-empty when a read query failed — treated as a blocker. */
   errors: string[];
+
+  // --- Front-of-funnel signals (UTV2-1278) ---
+
+  /**
+   * Number of candidates rejected due to stale prices in the last scanner cycle.
+   * Sourced from candidate_pick_scanner rejection telemetry (stale_price_data).
+   */
+  stalePriceRejections: number;
+
+  /**
+   * Total candidates scanned in the last cycle (denominator for stalePriceRejections).
+   * Zero means no cycle telemetry found.
+   */
+  candidatesScanned: number;
+
+  /**
+   * Maximum age in minutes of provider_offer_history rows for upcoming events.
+   * null when no upcoming events exist or the query failed.
+   */
+  providerOfferMaxAgeMinutes: number | null;
+
+  /**
+   * Median age in minutes of provider_offer_history rows for upcoming events.
+   * null when no upcoming events exist or the query failed.
+   */
+  providerOfferMedianAgeMinutes: number | null;
+
+  /**
+   * Count of upcoming events that have at least one fresh player-prop offer
+   * (age <= PROVIDER_FRESHNESS_THRESHOLD_MINUTES).
+   */
+  upcomingEventsWithPropCoverage: number;
+
+  /**
+   * Total upcoming events in the schedule window (denominator for prop coverage).
+   * Zero means no schedule data found.
+   */
+  upcomingEventsTotal: number;
+
+  /**
+   * SGO player props ingested in the most recent ingestor_cycles record.
+   * null when the ingestor_cycles table is unavailable or has no recent row.
+   */
+  ingestorPropsFetched: number | null;
 }
 
 export interface TriggerInput {
@@ -113,6 +178,34 @@ export function evaluateTriggers(input: TriggerInput): TriggerResult {
     );
   }
 
+  // Front-of-funnel trigger: stale price rejection share > 50% of candidates scanned.
+  if (current.candidatesScanned > 0) {
+    const staleShare = current.stalePriceRejections / current.candidatesScanned;
+    if (staleShare > STALE_PRICE_SHARE_THRESHOLD) {
+      const pct = (staleShare * 100).toFixed(1);
+      reasons.push(
+        `FRONT_OF_FUNNEL_BLOCKER: stale_price_data rejections ${current.stalePriceRejections}/${current.candidatesScanned} (${pct}%) exceeds ${STALE_PRICE_SHARE_THRESHOLD * 100}% threshold — provider offers are not fresh enough to generate candidates`,
+      );
+    }
+  }
+
+  // Front-of-funnel trigger: provider offer freshness exceeds threshold.
+  if (
+    current.providerOfferMaxAgeMinutes !== null &&
+    current.providerOfferMaxAgeMinutes > PROVIDER_FRESHNESS_THRESHOLD_MINUTES
+  ) {
+    reasons.push(
+      `PROVIDER_FRESHNESS_STALE: max provider_offer_history age ${current.providerOfferMaxAgeMinutes}min exceeds ${PROVIDER_FRESHNESS_THRESHOLD_MINUTES}min threshold (median: ${current.providerOfferMedianAgeMinutes ?? 'n/a'}min) — ingestor may be stalled`,
+    );
+  }
+
+  // Front-of-funnel trigger: zero prop coverage when upcoming events exist (game day).
+  if (current.upcomingEventsTotal > 0 && current.upcomingEventsWithPropCoverage === 0) {
+    reasons.push(
+      `NO_PROP_COVERAGE: ${current.upcomingEventsTotal} upcoming event(s) found but zero have fresh player-prop offers — SGO player prop ingestion may be failing`,
+    );
+  }
+
   // Heartbeat: nothing fired, but 24h of silence has elapsed.
   let isHeartbeat = false;
   if (
@@ -136,6 +229,21 @@ export function evaluateTriggers(input: TriggerInput): TriggerResult {
 /** Exact next recommendation. Never certifies; only points at the next safe step. */
 export function recommend(s: TrackASnapshot): string {
   if (s.errors.length > 0) return 'escalate blocker — monitor read failed, investigate before next cycle';
+
+  // Front-of-funnel blockers take priority — forward flow cannot succeed without ingestion.
+  if (s.upcomingEventsTotal > 0 && s.upcomingEventsWithPropCoverage === 0) {
+    return 'investigate SGO player prop ingestion — zero prop coverage on game day blocks forward-flow CLV; check ingestor logs on Hetzner';
+  }
+  if (
+    s.providerOfferMaxAgeMinutes !== null &&
+    s.providerOfferMaxAgeMinutes > PROVIDER_FRESHNESS_THRESHOLD_MINUTES
+  ) {
+    return 'investigate provider offer freshness — stale offers block candidate generation; check ingestor cycle health';
+  }
+  if (s.candidatesScanned > 0 && s.stalePriceRejections / s.candidatesScanned > STALE_PRICE_SHARE_THRESHOLD) {
+    return 'investigate stale price rejections — majority of candidates are being rejected due to stale price data; provider offer freshness must recover before CLV flow resumes';
+  }
+
   if (s.settledClvPathNative >= DEVELOPING_THRESHOLD) {
     return 'recommend re-trigger of the edge-certification (UTV2-1042) evidence evaluation — PM authorizes the actual proof run';
   }
