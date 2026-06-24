@@ -14,6 +14,7 @@ The MLB odds cycle hit the 240s per-league wall-clock because entity resolution 
 - `pnpm type-check`: PASS (exit 0).
 - `pnpm test` (full, all workspaces): PASS — **3052 pass / 0 fail / 0 skipped**. New: `entity-resolver.test.ts` (4) + `mapWithConcurrency` cases in `cooperative.test.ts` (5).
 - `pnpm lint` (changed files): PASS.
+- `pnpm verify` (env:check + lint + type-check + build + test): PASS — CI `verify` job green on PR #1052 head + merge SHA `975ee453`.
 - Ingestor suite: 254 pass / 0 fail (4 DB-gated skips).
 
 ### Live-DB smoke (`pnpm test:db`, real Supabase, branch)
