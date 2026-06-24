@@ -692,7 +692,7 @@ export async function ingestLeague(
           emptyResults,
           options.circuitBreaker,
         );
-      fetchedResults = await resultsCb.call(resultsFetchFn);
+      fetchedResults = await timePhase('resultsFetch', () => resultsCb.call(resultsFetchFn));
       try {
         await archiveRawProviderPayload({
           providerKey: 'sgo',
@@ -751,13 +751,32 @@ export async function ingestLeague(
           completedEvents: 0,
           insertedResults: 0,
           skippedResults: 0,
+          skippedEventNotFound: 0,
+          skippedEventNotCompleted: 0,
           errors: 0,
+          phaseTimings: {
+            resultsEventLookup: 0,
+            resultsParticipantLookup: 0,
+            resultsInsertGameResults: 0,
+            resultsPerCandidateTotal: 0,
+          },
         }
-      : await resolveAndInsertResults(
-          fetchedResults.results,
-          repositories,
-          options.logger,
+      : await timePhase('resultsResolve', () =>
+          resolveAndInsertResults(
+            fetchedResults.results,
+            repositories,
+            options.logger,
+          ),
         );
+
+    // UTV2-1297: merge per-step results-path timings into the cycle-level
+    // phaseTimings so they appear in the `phase timings(ms)` log line and in
+    // system_runs.details.phaseTimings for post-hoc deadline analysis.
+    if (resolvedResults.phaseTimings) {
+      for (const [key, val] of Object.entries(resolvedResults.phaseTimings)) {
+        phaseTimings[key] = (phaseTimings[key] ?? 0) + val;
+      }
+    }
 
     const quota = summarizeQuotaTelemetry([
       fetched.requestTelemetry,
