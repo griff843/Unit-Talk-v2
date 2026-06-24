@@ -96,18 +96,20 @@ Rows that match any carve-out condition MUST NOT be deleted, regardless of age.
 **`system_runs` carve-outs:**
 
 - `status = 'error'` AND `created_at > NOW() - INTERVAL '90 days'` — error rows retained 90 days for incident analysis
-- `id IN (SELECT source_run_id FROM proof_artifacts WHERE source_run_id IS NOT NULL)` — rows referenced by a proof bundle are permanent until the proof is superseded
 
 **`raw_payloads` carve-outs:**
 
-- `metadata->>'payload_too_large' = 'true'` — these rows are already truncated metadata; retain 90 days for UTV2-1295 class incident review
-- `metadata->>'evidence' = 'true'` — any row explicitly tagged as evidence is permanent
-- `id IN (SELECT raw_payload_id FROM proof_artifacts WHERE raw_payload_id IS NOT NULL)` — proof-referenced rows
+> **Schema note:** `raw_payloads` has no `metadata` column in the current schema (columns: id, provider_key, league, run_id, kind, payload_hash, payload, snapshot_at, created_at). Carve-out conditions based on `kind` are possible now; carve-outs based on payload content require a future schema migration lane to add a `metadata` column.
+
+- `kind = 'error'` (or equivalent error-payload kind) — error-class rows retained 90 days. Confirm actual kind values in schema before execution lane.
+- Additional carve-outs (e.g., "large payload evidence rows") require a `metadata` column — defer to the schema migration lane (§2.2).
 
 **`odds_snapshots` carve-outs:**
 
-- `metadata->>'is_baseline' = 'true'` — baseline snapshots used for CLV calculation are retained 1 year
-- `id IN (SELECT odds_snapshot_id FROM pick_offer_snapshots WHERE snapshot_kind = 'closing_for_clv')` — closing-for-CLV linked rows retained with the pick lifecycle (permanent until pick archived)
+> **Schema note:** `odds_snapshots` has no `metadata` column (columns: id, provider_key, market_key, league, run_id, raw_payload_id, snapshot_at, price_blob, prior_snapshot_id, created_at). `pick_offer_snapshots` has no `odds_snapshot_id` or `snapshot_kind` column. Carve-outs below use only real schema columns.
+
+- `prior_snapshot_id IS NULL AND created_at > NOW() - INTERVAL '1 year'` — root/baseline snapshots (no prior snapshot, i.e., first in a chain) retained 1 year for CLV reference
+- `snapshot_at > NOW() - INTERVAL '90 days'` — recent snapshots always exempt; only older snapshots are eligible for deletion
 
 ### 1.5 Execution Mechanism
 
@@ -177,29 +179,35 @@ CREATE TABLE system_runs_default PARTITION OF system_runs_partitioned DEFAULT;
 
 **Current state:** TOAST-heavy JSON payloads, no retention, no size bound enforced pre-UTV2-1294.
 
-**Proposed:** Payloads above the size threshold (see §3) should never be written to Postgres as raw bytes. For existing oversized rows already in the table: export to Hetzner Object Storage (S3-compatible), replace the `payload` column value with the object-store URL, set `metadata->>'archived_to_object_store' = 'true'`.
+**Proposed:** Payloads above the size threshold (see §3) should never be written to Postgres as raw bytes. For existing oversized rows already in the table: export to Hetzner Object Storage (S3-compatible), then delete the Postgres row (payload is preserved in object store).
 
-**Migration approach for existing rows (PM-gated):**
+> **Schema constraint:** `raw_payloads` has no `metadata` column in the current schema. Two possible approaches for the execution lane:
+> - **Option A (no schema change):** Write payload to object store → DELETE the Postgres row → insert a new row with `payload = null` and `kind = 'archived'`. Requires confirming that downstream consumers tolerate `kind = 'archived'` rows.
+> - **Option B (schema migration first):** Add a `metadata JSONB` column in a dedicated migration lane → then UPDATE rows with `metadata->>'archived_url'`. This is the cleaner approach but requires a separate T1 migration lane.
+>
+> The execution lane for this section must choose Option A or B and get PM approval for the schema impact. Do not write an UPDATE against `raw_payloads.metadata` — that column does not exist.
+
+**Migration approach for existing rows (PM-gated, read-only identification query):**
 
 ```sql
--- EXAMPLE ONLY — do not run without PM approval
+-- EXAMPLE ONLY — read-only identification query, do not mutate without PM approval
 
 -- Identify rows eligible for archival
-SELECT id, octet_length(payload::text) AS payload_bytes, created_at
+SELECT id, octet_length(payload::text) AS payload_bytes, created_at, kind
 FROM public.raw_payloads
 WHERE octet_length(payload::text) > 512 * 1024  -- 512 KB threshold
 ORDER BY payload_bytes DESC
 LIMIT 100;
 ```
 
-The archival script should:
+The archival script (to be implemented in a future execution lane) should:
 1. Read the row
 2. Write the payload to object store at `s3://unit-talk-archive/raw_payloads/{year}/{month}/{id}.json`
-3. Update the row: set `payload = null`, `metadata->>'archived_url' = '<object_store_url>'`, `metadata->>'archived_to_object_store' = 'true'`
-4. Log the operation
-5. Never delete the row (metadata + archived_url must remain queryable)
+3. On success: execute the approach chosen above (Option A DELETE+re-insert, or Option B UPDATE after migration)
+4. Log the operation (archive URL, payload size, id)
+5. On object store failure: abort and alert — do NOT delete the Postgres row
 
-**PM gate:** Separate execution lane required. Additive — no rollback needed since original payload is preserved in object store.
+**PM gate:** Separate execution lane required. Schema approach (Option A vs B) must be PM-approved before any write.
 
 ### 2.3 `odds_snapshots` — TTL-Based Drop of Old Partitions
 
@@ -258,10 +266,12 @@ Ingestor receives payload
   ├─ payload_bytes <= 512 KB → write to Postgres normally
   └─ payload_bytes > 512 KB
        ├─ write to object store: s3://unit-talk-archive/raw_payloads/{year}/{month}/{id}.json.gz
-       │    └─ on success: write DB row with payload=null, metadata->>'archived_url' = URL
-       │    └─ on failure: fall back to disk spool (UTV2-1294 guard), write metadata->>'disk_spooled'='true'
+       │    └─ on success: write DB row with payload=null, kind='archived'
+       │         (NOTE: if schema migration lane has added metadata column, also set
+       │          metadata->>'archived_url' = URL; otherwise the URL is log-only)
+       │    └─ on failure: fall back to disk spool (UTV2-1294 guard)
        │         DO NOT block settlement — spool and continue
-       └─ log: object_store_write_result = 'success' | 'failed_disk_spool'
+       └─ log: object_store_write_result = 'success' | 'failed_disk_spool' + archive URL
 ```
 
 ### 3.5 Failure Mode: Fail-Open for Archive Writes
@@ -270,7 +280,7 @@ Ingestor receives payload
 
 If the object store is unreachable:
 1. Fall back to disk spool (existing UTV2-1294 behavior)
-2. Set `metadata->>'archive_failed' = 'true'` + `metadata->>'disk_spooled' = 'true'`
+2. Log locally: `archive_failed=true, disk_spooled=true` (not written to DB — `raw_payloads` has no `metadata` column in current schema)
 3. Log an alert (Track A monitor alert action: see §5)
 4. Continue ingestor cycle normally
 
@@ -291,7 +301,7 @@ The UTV2-1294 incident demonstrated that a single telemetry/archive write (syste
 | Table | Write | Why critical |
 |---|---|---|
 | `game_results` | INSERT | The primary settlement input |
-| `pick_lifecycle` | UPDATE (completed transition) | Irreversible pick state change |
+| `pick_lifecycle` | INSERT (lifecycle event, append-only) | Event-sourced; no UPDATE operations exist on this table |
 | `distribution_outbox` | INSERT | Delivery queue — missing row = silent drop |
 | `picks` | UPDATE (result fields) | Core business truth |
 
@@ -355,6 +365,8 @@ This isolation refactor is a separate runtime lane (not part of UTV2-1295 spec s
 
 ## Section 5: DB-Health Tripwires and Monitors
 
+> **Separation from execution lanes:** All checks in this section are **read-only SELECTs**. No PM approval is required for the read queries themselves. A T3 GHA monitoring lane implementing these checks can start immediately after spec ratification — it is independent of all PM-gated execution actions in Sections 1–4. Do not block Section 5 on Sections 1–4. The SQL examples below are READ-ONLY and are safe to inspect but must not be scheduled without the GHA workflow lane.
+
 ### 5.1 Overview
 
 A DB health check should run every 6 hours (aligned with the Track A monitor schedule `23 */6 * * *`). It may run in the same GHA workflow or a separate one. All checks are read-only. Alert action for every check: log + post to the relevant Linear issue + fire Track A monitor trigger if thresholds exceeded.
@@ -365,10 +377,9 @@ A DB health check should run every 6 hours (aligned with the Track A monitor sch
 
 **Threshold:** Alert if `last_analyze IS NULL` OR `last_vacuum IS NULL` OR `NOW() - last_analyze > INTERVAL '24 hours'` for any hot table.
 
-**Example query (PM-gated, read-only):**
+**Example query (read-only — safe to inspect now; schedule implementation via T3 GHA lane):**
 
 ```sql
--- EXAMPLE ONLY — read-only, but run on schedule only after PM ratification
 SELECT
   schemaname,
   relname,
@@ -397,10 +408,9 @@ ORDER BY last_vacuum ASC NULLS FIRST;
 
 Alert if growth rate (compared to previous check) exceeds 50 MB / 6 hours for any hot table.
 
-**Example query (PM-gated, read-only):**
+**Example query (read-only):**
 
 ```sql
--- EXAMPLE ONLY
 SELECT
   relname,
   pg_size_pretty(pg_relation_size(oid)) AS table_size,
@@ -426,7 +436,7 @@ ORDER BY pg_total_relation_size(oid) DESC;
 **Query for pg_stat_statements (if extension available):**
 
 ```sql
--- EXAMPLE ONLY — requires pg_stat_statements extension
+-- requires pg_stat_statements extension
 SELECT
   query,
   calls,
@@ -447,10 +457,9 @@ LIMIT 20;
 
 **Threshold:** Alert if `(total_size - heap_size) / total_size > 0.8` (TOAST + indexes are more than 80% of total table size).
 
-**Example query (PM-gated, read-only):**
+**Example query (read-only):**
 
 ```sql
--- EXAMPLE ONLY
 SELECT
   relname,
   pg_size_pretty(pg_relation_size(oid)) AS heap_size,
