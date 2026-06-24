@@ -2,7 +2,7 @@
 
 **Lane:** UTV2-1269 — Smart Form canonical provider market identity requirements
 **Tier:** T2 · **Lane type:** governance (requirements/docs) · **Executor:** Claude
-**PR:** #PENDING · **Merge SHA:** PENDING
+**PR:** #1051 (squash-merged) · **Merge SHA:** `0d9b8a542b1bcc94fa3e324cc3c237fb183c1f7c`
 
 ## Summary
 Requirements-only lane. Delivers `docs/05_operations/SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md`: the intake contract that makes provider market identity a fail-closed precondition for evidence-eligibility (required fields, provider-truth validation axes, validation behavior, persistence requirements). No code changes.

@@ -2,6 +2,7 @@
 
 **Lane:** UTV2-1269 — Smart Form canonical provider market identity requirements
 **Tier:** T2 · **Lane type:** governance (requirements/docs) · **Executor:** Claude
+**PR:** #1051 · **Merge SHA:** `0d9b8a542b1bcc94fa3e324cc3c237fb183c1f7c`
 
 ## Files changed
 - `docs/05_operations/SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md` (new) — the canonical requirements contract for provider-truth-safe Smart Form intake.
