@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1298",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1298-bound-mlb-odds-wallclock",
+  "branch": "griffadavi/utv2-1298-bound-mlb-odds-wallclock",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/ingestor/src/entity-resolver.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1298/diff-summary.md",
+    "docs/06_status/proof/UTV2-1298/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-24T03:30:39.899Z",
+  "heartbeat_at": "2026-06-24T03:30:39.899Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1298-bound-mlb-odds-wallclock.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1298-bound-mlb-odds-wallclock",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
