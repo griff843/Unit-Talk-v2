@@ -15,13 +15,13 @@
     ["modeling", "modeling"]
   ],
   "trial": {
-    "enabled": false,
+    "enabled": true,
     "total": 8,
     "executors": {
       "claude": 3,
       "codex": 5
     },
-    "allowed_until": null,
+    "allowed_until": "2026-06-26",
     "rationale": "UTV2-1165: 7–8 lane trial governor. PM enables by setting enabled=true and allowed_until ISO date. Reverts automatically when allowed_until is in the past.",
     "safe_types_only": ["governance", "hygiene", "delivery-ui", "verification"]
   }
