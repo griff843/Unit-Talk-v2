@@ -32,6 +32,26 @@ $ npx tsx --test scripts/ops/workflow-hardening.test.ts
 # fail 0
 ```
 
+### `pnpm test:db` (live Supabase smoke — DB-health evidence)
+
+This is a governance/command-prose lane with **no** runtime or DB change, so `test:db` is not a tier requirement — it is run here as live DB-health evidence and to satisfy the Proof Auditor Gate's `--require-executed-command "pnpm test:db"`. Executed against real Supabase on the branch head:
+
+```
+$ pnpm test:db
+TAP version 13
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+...
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+```
+
+`pnpm test:db` exit 0 — live Supabase reachable and atomicity invariants hold. No DB mutation introduced by this lane.
+
 ### Required grep proof (the five lane-required assertions)
 
 ```
