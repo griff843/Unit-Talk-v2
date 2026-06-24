@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1256",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1256-lane-config-gap-hygiene-lane-requires-proof-artifacts-but",
+  "branch": "griffadavi/utv2-1256-lane-config-gap-hygiene-lane-requires-proof-artifacts-but",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/lanes/delivery-ui.yml",
+    ".lane/lanes/hygiene.yml",
+    "docs/06_status/proof/UTV2-1256/diff-summary.md",
+    "docs/06_status/proof/UTV2-1256/verification.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-06-24T20:39:03.904Z",
+  "heartbeat_at": "2026-06-24T20:39:03.904Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1256-lane-config-gap-hygiene-lane-requires-proof-artifacts-but.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1256-lane-config-gap-hygiene-lane-requires-proof-artifacts-but",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
