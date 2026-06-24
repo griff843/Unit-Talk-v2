@@ -21,10 +21,10 @@
     "docs/06_status/proof/UTV2-1296/diff-summary.md",
     "docs/06_status/proof/UTV2-1296/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-23T21:40:54.898Z",
-  "heartbeat_at": "2026-06-24T03:17:45.983Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-24T03:19:09.591Z",
+  "closed_at": "2026-06-24T03:19:09.591Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1296-odds-dedup-snapshot-prune.json",
   "created_by": "claude",
@@ -48,6 +48,13 @@
         "C6",
         "P14"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-24T03:18:55.721Z",
+      "verdict": "pass",
+      "merge_sha": "c4a338aa621188b4071df974ff998af1dc5a5a76",
+      "failures": [],
       "runner": "manual"
     }
   ],
