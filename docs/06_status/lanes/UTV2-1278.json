@@ -22,10 +22,10 @@
     "docs/06_status/proof/UTV2-1278/diff-summary.md",
     "docs/06_status/proof/UTV2-1278/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-24T20:13:24.865Z",
-  "heartbeat_at": "2026-06-24T20:36:44.955Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-24T20:38:25.336Z",
+  "closed_at": "2026-06-24T20:38:25.336Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1278-extend-track-a-monitor-to-surface-front-of-funnel-ingestion.json",
   "created_by": "claude",
@@ -38,6 +38,43 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1055"
+    },
+    {
+      "checked_at": "2026-06-24T20:37:25.543Z",
+      "verdict": "fail",
+      "merge_sha": "0a1fcfc4671a58930f06899ad24634017cb48398",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-24T20:37:37.585Z",
+      "verdict": "fail",
+      "merge_sha": "0a1fcfc4671a58930f06899ad24634017cb48398",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-24T20:38:10.154Z",
+      "verdict": "pass",
+      "merge_sha": "0a1fcfc4671a58930f06899ad24634017cb48398",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
