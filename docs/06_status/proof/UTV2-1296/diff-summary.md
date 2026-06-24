@@ -2,6 +2,7 @@
 
 **Lane:** UTV2-1296 — scope provider_offer_history dedup pre-load by snapshot_at (partition pruning)
 **Tier:** T2 · **Lane type:** runtime · **Executor:** Claude
+**PR:** #1049 · **Merge SHA:** `c4a338aa621188b4071df974ff998af1dc5a5a76`
 
 ## Files changed
 

@@ -77,7 +77,10 @@ This reproduces the production failure (old idempotency_key-only shape → `stat
 This lane's target — the `provider_offer_history` dedup `statement_timeout` — is **eliminated and proven** (live 161ms vs statement_timeout; 0 prod occurrences; cycle now progresses past the dedup). The MLB odds path's **next** and now-dominant bottleneck is the **240s per-league wall-clock deadline** on the heavy MLB slate (logged as UTV2-1280/1282), which currently prevents fresh-odds persistence. That is a distinct throughput issue tracked separately and is the next runtime first-NO.
 
 ## R-level compliance
-Diff touches `packages/db/**` (runtime repository) + its test + `apps/api/src/scripts/` proof script + proof docs. R-Level Compliance Check on PR #1049: **PASS** (CI green on merge SHA `c4a338aa`).
+Diff touches `packages/db/**` (runtime repository) + its test + `apps/api/src/scripts/` proof script + proof docs. `scripts/ci/r-level-check.ts` (CI "R-Level Compliance Check" on PR #1049): **PASS** (green on merge SHA `c4a338aa`).
+
+## Runtime proof row_counts (read-only live Supabase, post-deploy)
+runtime_proof row_counts: `provider_offer_history` rows since deploy (22:19:38Z) = 0 (240s wall-clock blocks persist, not the dedup); dedup `statement_timeout` occurrences since deploy = 0; live dedup query latency = 161ms (new shape) vs statement_timeout (old shape); `game_results` = 1648 rows/48h (settlement path intact); ingestor RestartCount = 0.
 
 ## Guardrails honored
 No DDL, no new index, no migration, no DB mutation, no retention/purge. No public Discord. No P3 cert. UTV2-1042 untouched. No CLV/ROI/edge claims. No backfill. No >48h backlog mutation. No secrets printed. No fabricated proof. No loosened scoring/freshness/settlement thresholds.

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1296-odds-dedup-snapshot-prune",
   "branch": "griffadavi/utv2-1296-odds-dedup-snapshot-prune",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "c4a338aa621188b4071df974ff998af1dc5a5a76",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1049",
   "files_changed": [],
   "file_scope_lock": [
     "packages/db/src/runtime-repositories.ts",
@@ -21,14 +21,36 @@
     "docs/06_status/proof/UTV2-1296/diff-summary.md",
     "docs/06_status/proof/UTV2-1296/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-23T21:40:54.898Z",
-  "heartbeat_at": "2026-06-23T21:40:54.898Z",
+  "heartbeat_at": "2026-06-24T03:17:45.983Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1296-odds-dedup-snapshot-prune.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-24T03:17:37.751Z",
+      "verdict": "pass",
+      "merge_sha": "c4a338aa621188b4071df974ff998af1dc5a5a76",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1049"
+    },
+    {
+      "checked_at": "2026-06-24T03:17:45.983Z",
+      "verdict": "fail",
+      "merge_sha": "c4a338aa621188b4071df974ff998af1dc5a5a76",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P14"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
