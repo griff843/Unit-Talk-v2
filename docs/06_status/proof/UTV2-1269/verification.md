@@ -13,6 +13,16 @@ Requirements-only lane. Delivers `docs/05_operations/SMART_FORM_PROVIDER_IDENTIT
 - `pnpm verify`: PASS (CI on PR head + merge SHA).
 - Content review: requirements map 1:1 to the UTV2-1269 issue's required fields + validation behavior; scope held to requirements-only (no implementation).
 
+### Live-DB evidence (`pnpm test:db`, real Supabase, branch)
+This is a requirements/docs-only lane with no runtime or DB change, so `pnpm test:db` is not a tier requirement — it is run here as live DB-health evidence and to satisfy the Proof Auditor Gate's `--require-executed-command "pnpm test:db"`:
+```
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+```
+(`pnpm test:db` = `tsx --test apps/api/src/database-smoke.test.ts`, exit 0 — Supabase reachable, atomicity invariants hold. No DB mutation introduced by this lane.)
+
 ## R-level compliance
 Docs-only change under `docs/05_operations/**`. `scripts/ci/r-level-check.ts` (CI "R-Level Compliance Check"): expected PASS (no R2–R5 runtime artifacts triggered by a requirements doc).
 
