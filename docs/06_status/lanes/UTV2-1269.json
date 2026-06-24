@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1269-smart-form-canonical-identity-reqs",
   "branch": "griffadavi/utv2-1269-smart-form-canonical-identity-reqs",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "0d9b8a542b1bcc94fa3e324cc3c237fb183c1f7c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1051",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md"
@@ -17,14 +17,41 @@
     "docs/06_status/proof/UTV2-1269/diff-summary.md",
     "docs/06_status/proof/UTV2-1269/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-24T03:24:27.670Z",
-  "heartbeat_at": "2026-06-24T03:24:27.670Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-24T14:09:39.589Z",
+  "closed_at": "2026-06-24T14:09:39.589Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1269-smart-form-canonical-identity-reqs.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-24T14:08:45.422Z",
+      "verdict": "pass",
+      "merge_sha": "0d9b8a542b1bcc94fa3e324cc3c237fb183c1f7c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1051"
+    },
+    {
+      "checked_at": "2026-06-24T14:08:46.976Z",
+      "verdict": "fail",
+      "merge_sha": "0d9b8a542b1bcc94fa3e324cc3c237fb183c1f7c",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-24T14:09:31.126Z",
+      "verdict": "pass",
+      "merge_sha": "0d9b8a542b1bcc94fa3e324cc3c237fb183c1f7c",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
