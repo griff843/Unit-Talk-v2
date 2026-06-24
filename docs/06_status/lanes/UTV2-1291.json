@@ -17,10 +17,10 @@
     "docs/06_status/proof/UTV2-1291/diff-summary.md",
     "docs/06_status/proof/UTV2-1291/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-22T21:01:00.265Z",
   "heartbeat_at": "2026-06-22T21:01:00.265Z",
-  "closed_at": null,
+  "closed_at": "2026-06-24T13:35:14.091Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1291-isolate-live-db-verify-pressure.json",
   "created_by": "codex-cli",
