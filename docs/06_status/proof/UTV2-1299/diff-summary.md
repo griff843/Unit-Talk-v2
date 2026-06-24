@@ -3,7 +3,7 @@
 **Lane:** UTV2-1299 — Harden `/loop-dispatch` into a true board-clearing orchestrator (loop-level Done governance)
 **Tier:** T2 · **Lane type:** governance · **Executor:** Claude
 **Branch:** `griffadavi/utv2-1299-harden-loop-dispatch`
-**Merge SHA:** _(bound post-merge by `post-merge-lane-close.yml` → `ops:proof-generate --merge-sha`)_
+**PR:** #1053 · **Merge SHA:** `35fca9e32850f120fa456609782abb2a80b9e7ac`
 
 ## Scope
 

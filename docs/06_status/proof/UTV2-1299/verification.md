@@ -3,9 +3,15 @@
 **Lane:** UTV2-1299 — Harden `/loop-dispatch` into a true board-clearing orchestrator
 **Tier:** T2 · **Lane type:** governance · **Executor:** Claude
 **Branch:** `griffadavi/utv2-1299-harden-loop-dispatch`
-**Merge SHA:** _(bound post-merge by `post-merge-lane-close.yml`)_
+**PR:** #1053 (squash-merged) · **Merge SHA:** `35fca9e32850f120fa456609782abb2a80b9e7ac`
 
 ## Verification
+
+### Static gates (branch)
+- `pnpm type-check`: PASS (governance command-prose + proof only; no TS change).
+- `pnpm test`: PASS — 686 pass / 0 fail / 0 skipped (includes `scripts/ops/workflow-hardening.test.ts`, the mechanical contract for these command files).
+- `pnpm verify`: PASS (env:check · lint · type-check · build · test).
+- R-level: `scripts/ci/r-level-check.ts` (CI "R-Level Compliance Check" on PR #1053): PASS — governance command-prose + docs scope, no R2–R5 runtime artifacts.
 
 ### Change class
 
