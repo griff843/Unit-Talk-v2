@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1269",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1269-smart-form-canonical-identity-reqs",
+  "branch": "griffadavi/utv2-1269-smart-form-canonical-identity-reqs",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1269/diff-summary.md",
+    "docs/06_status/proof/UTV2-1269/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-24T03:24:27.670Z",
+  "heartbeat_at": "2026-06-24T03:24:27.670Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1269-smart-form-canonical-identity-reqs.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1269-smart-form-canonical-identity-reqs",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
