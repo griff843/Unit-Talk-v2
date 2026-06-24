@@ -12,8 +12,11 @@
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DB_MAINTENANCE_RETENTION_SPEC.md",
+    "docs/06_status/lanes/UTV2-1295.json",
+    "docs/06_status/proof/UTV2-1295/diff-summary.md",
     "docs/06_status/proof/UTV2-1295/evidence.json",
-    "docs/06_status/proof/UTV2-1295/verification.md"
+    "docs/06_status/proof/UTV2-1295/verification.md",
+    ".ops/sync/UTV2-1295.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1295/diff-summary.md",
