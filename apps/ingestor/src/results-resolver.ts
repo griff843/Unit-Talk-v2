@@ -112,6 +112,20 @@ export interface ResultsResolutionSummary {
   skippedEventNotFound: number;
   skippedEventNotCompleted: number;
   errors: number;
+  /**
+   * UTV2-1297 per-step phase timing breakdown (ms) for the results-resolve path.
+   * Accumulated across all candidates so a slow step is visible at the cycle level.
+   *  - resultsEventLookup:       total time in events.findByExternalId across all candidates
+   *  - resultsParticipantLookup: total time in participants.findByExternalId (cache misses only)
+   *  - resultsInsertGameResults: total time in gradeResults.insert across all rows
+   *  - resultsPerCandidateTotal: wall-clock time for the entire per-candidate loop
+   */
+  phaseTimings: {
+    resultsEventLookup: number;
+    resultsParticipantLookup: number;
+    resultsInsertGameResults: number;
+    resultsPerCandidateTotal: number;
+  };
 }
 
 export async function resolveAndInsertResults(
@@ -122,6 +136,16 @@ export async function resolveAndInsertResults(
   >,
   logger?: Pick<Console, 'warn' | 'info'>,
 ): Promise<ResultsResolutionSummary> {
+  // UTV2-1297: per-step timing accumulators for the results-resolve path.
+  // Accumulated across all candidates so the phase timings log in ingest-league.ts
+  // shows where the 240s per-league deadline is being consumed.
+  const innerTimings = {
+    resultsEventLookup: 0,
+    resultsParticipantLookup: 0,
+    resultsInsertGameResults: 0,
+    resultsPerCandidateTotal: 0,
+  };
+
   const summary: ResultsResolutionSummary = {
     processedEvents: eventResults.length,
     completedEvents: 0,
@@ -130,6 +154,7 @@ export async function resolveAndInsertResults(
     skippedEventNotFound: 0,
     skippedEventNotCompleted: 0,
     errors: 0,
+    phaseTimings: innerTimings,
   };
 
   const participantByProviderId = new Map<
@@ -137,11 +162,15 @@ export async function resolveAndInsertResults(
     Awaited<ReturnType<typeof repositories.participants.findByExternalId>>
   >();
 
+  const loopStartMs = Date.now();
   for (const eventResult of eventResults) {
     try {
+      const eventLookupStartMs = Date.now();
       const event = await repositories.events.findByExternalId(
         eventResult.providerEventId,
       );
+      innerTimings.resultsEventLookup += Date.now() - eventLookupStartMs;
+
       if (!event || event.status !== 'completed') {
         // UTV2-1287: attribute the skip so the funnel log can distinguish a
         // mapping miss (no events row) from a status-transition gap (row exists
@@ -175,6 +204,7 @@ export async function resolveAndInsertResults(
             SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ??
             scoredMarket.baseMarketKey;
 
+          const insertStartMs = Date.now();
           await repositories.gradeResults.insert({
             eventId: event.id,
             participantId: null,
@@ -183,6 +213,7 @@ export async function resolveAndInsertResults(
             source: 'sgo',
             sourcedAt: now,
           });
+          innerTimings.resultsInsertGameResults += Date.now() - insertStartMs;
           summary.insertedResults += 1;
           continue;
         }
@@ -191,9 +222,11 @@ export async function resolveAndInsertResults(
           scoredMarket.providerParticipantId,
         );
         if (participant === undefined) {
+          const participantLookupStartMs = Date.now();
           participant = await repositories.participants.findByExternalId(
             scoredMarket.providerParticipantId,
           );
+          innerTimings.resultsParticipantLookup += Date.now() - participantLookupStartMs;
           participantByProviderId.set(
             scoredMarket.providerParticipantId,
             participant,
@@ -208,6 +241,7 @@ export async function resolveAndInsertResults(
           SGO_MARKET_KEY_TO_CANONICAL_ID[scoredMarket.baseMarketKey] ??
           scoredMarket.baseMarketKey;
 
+        const insertStartMs = Date.now();
         await repositories.gradeResults.insert({
           eventId: event.id,
           participantId: participant.id,
@@ -216,6 +250,7 @@ export async function resolveAndInsertResults(
           source: 'sgo',
           sourcedAt: now,
         });
+        innerTimings.resultsInsertGameResults += Date.now() - insertStartMs;
         summary.insertedResults += 1;
       }
     } catch (error) {
@@ -227,6 +262,7 @@ export async function resolveAndInsertResults(
       );
     }
   }
+  innerTimings.resultsPerCandidateTotal = Date.now() - loopStartMs;
 
   // UTV2-1287 finalization/results funnel telemetry. Emitted once per
   // resolveAndInsertResults call so a prod log scan can localize where the
@@ -243,7 +279,8 @@ export async function resolveAndInsertResults(
       `completed=${summary.completedEvents} inserted=${summary.insertedResults} ` +
       `skipped_event_not_found=${summary.skippedEventNotFound} ` +
       `skipped_event_not_completed=${summary.skippedEventNotCompleted} ` +
-      `skipped_markets=${summary.skippedResults} errors=${summary.errors}`,
+      `skipped_markets=${summary.skippedResults} errors=${summary.errors} ` +
+      `phase_timings_ms=${JSON.stringify(innerTimings)}`,
   );
 
   return summary;
