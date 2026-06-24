@@ -11,7 +11,13 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "apps/ingestor/src/entity-resolver.ts"
+    "apps/ingestor/src/entity-resolver.ts",
+    "apps/ingestor/src/cooperative.ts",
+    "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/entity-resolver.test.ts",
+    "apps/ingestor/src/cooperative.test.ts",
+    "docs/06_status/proof/UTV2-1298/verification.md",
+    "docs/06_status/proof/UTV2-1298/diff-summary.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1298/diff-summary.md",
