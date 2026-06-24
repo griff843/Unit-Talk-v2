@@ -143,17 +143,22 @@ Parallel dispatch guard:
 
 ### Claude lanes (you are the executor)
 
+**Pre-merge verification is not `ops:truth-check`.** `ops:truth-check` is the **done-gate**: it requires a merged/Done lane and the merge SHA, so it cannot pass before merge. `ops:lane-close` runs it *after* merge. Pre-merge, validate merge-readiness with verification + proof-check + merge-ready + R-level; never call `ops:truth-check` to "pass" a branch before merge.
+
 After PR open:
-1. CI green on PR
+1. CI green on PR (on the PR head)
 2. Run `/verification` (tier-appropriate)
-3. `ops:truth-check UTV2-###`
+3. Confirm merge-readiness pre-merge (NOT truth-check):
+   - proof artifacts present and well-formed: `pnpm ops:proof-check --issue UTV2-###`
+   - merge-readiness: `pnpm ops:merge-ready --issue UTV2-### --pr <n>`
+   - R-level required artifacts present: `npx tsx scripts/ci/r-level-check.ts --issue UTV2-###`
 4. Pre-merge diagnostic: `pnpm ops:pr-block-diagnostic --pr <n>` → if genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
 5. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
 6. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-7. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release.
+7. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
 8. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
 9. Then dispatch next Claude candidate.
-8. On FAIL: mark blocked with specific failing check → dispatch next from unblocked pool
+10. On pre-merge FAIL: mark blocked with the specific failing check → dispatch next from unblocked pool.
 
 ### Codex lanes (async)
 
@@ -187,6 +192,32 @@ After T1 PR open + evidence bundle:
      Issue: UTV2-###
    ```
 4. On `PM_VERDICT: APPROVED` detected: run `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close`, then `pnpm ops:lane-close UTV2-###`.
+
+### Gate matrix — when is a PM verdict required?
+
+Not every lane needs a PM verdict; not every T2 is auto-merge. Decide the gate from the lane's **risk class**, not just its tier:
+
+| Risk class | Examples | Gate |
+|---|---|---|
+| T2 docs / spec | requirements docs, spec markdown | Claude diff-review only — **no** PM verdict |
+| T2 hygiene / config | lane configs, lockfile, lint config | No PM **unless** it changes governance-critical command behavior (e.g. `/dispatch*`, `/loop-dispatch`, merge-wrapper, concurrency config) → then PM-visible |
+| T2 monitoring / read-only | monitor extensions, additive metrics | No PM **unless** it carries live-prod credential or change risk |
+| T2 runtime / deploy / prod-behavior | ingestor/runtime code, deploy workflows | **PM-visible gate** before merge |
+| T2 DB / retention / migration-like | retention jobs, data lifecycle | **Explicit PM approval** required |
+| T1 | any T1 lane | PM **plan** gate + PM **merge** gate |
+| P0 | `ops:p0-detect` → `is_p0:true` | Manual PM protocol (UTV2-948); never auto-merge |
+
+When a gate applies, surface it on the PR (not in chat) and wait.
+
+### PM-gate scope — pause the lane, not the board
+
+A surfaced PM gate pauses **only the gated lane**. The board continues to dispatch and close safe, unrelated lanes — **unless** the gated lane holds one of these, which serialize against conflicting work:
+
+- a **singleton** lane type (runtime, migration, modeling, data-canonical)
+- a **file-scope lock** that overlaps a queued candidate
+- the **merge mutex** (any in-flight merge/closeout)
+
+If the gated lane holds none of those, keep dispatching the rest of the board; the gated lane sits in `awaiting PM` until a verdict lands. Do not idle the whole board on one PM gate.
 
 ---
 
@@ -225,7 +256,9 @@ pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
 
 - **Never start T1 without PM plan approval.** Hold at `pending_pm_approval`.
 - **Never merge T1 without PM_VERDICT on the PR.** Comment must be on the PR, not in chat.
-- **T2 clear-scope: Claude diff-review is the sole gate.** No PM_VERDICT.
+- **T2 clear-scope: Claude diff-review is the sole gate.** No PM_VERDICT — but see the Gate matrix: a T2 that changes governance-critical command behavior, runtime/deploy/prod behavior, or DB/retention behavior is PM-visible.
+- **`ops:truth-check` is the post-merge done-gate, never a pre-merge check.** It requires a merged/Done lane + merge SHA; `ops:lane-close` runs it. Pre-merge, gate on verification + proof-check + merge-ready + R-level only.
+- **A PM gate pauses the lane, not the board.** Keep dispatching safe unrelated lanes unless the gated lane holds a singleton / file-scope / merge-mutex lock.
 - **P0 lanes never auto-merge.** Before any merge attempt, run `pnpm ops:p0-detect <UTV2-###>`. If `is_p0: true`, the merge protocol (UTV2-948) overrides tier policy: the orchestrator surfaces the merge gate to PM and waits. PM merges manually. Required artifacts: `docs/06_status/proof/<UTV2-###>/claude-critique.md` and `runtime-verification.md`, both checked by the `P0 Protocol` workflow before merge is allowed.
 - **Auto-skip external-gate labels.** No user qualifier needed.
 - **Executor limits are config-backed.** Use `docs/governance/CONCURRENCY_CONFIG.json` through `ops:execution-state` and `ops:lane-maximizer`; do not self-authorize lane expansion or duplicate numeric caps in prose.

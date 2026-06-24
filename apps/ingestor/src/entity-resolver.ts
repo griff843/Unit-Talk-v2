@@ -1,4 +1,5 @@
 import type { EventParticipantRole, IngestorRepositoryBundle, ParticipantRow } from '@unit-talk/db';
+import { mapWithConcurrency } from './cooperative.js';
 import type {
   SGOEventStatus,
   SGOResolvedEvent,
@@ -11,17 +12,67 @@ function toEasternDate(utcIso: string): string {
   return new Date(utcIso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
 }
 
+/**
+ * Conservative default for per-event player entity-resolution concurrency (UTV2-1298).
+ * Caps concurrent PostgREST writes so a heavy MLB slate (~15 events × ~55 players =
+ * ~1,700 round-trips) drains well under the 240s per-league wall-clock without a
+ * connection / schema-cache / statement-timeout storm.
+ */
+export const DEFAULT_ENTITY_RESOLUTION_CONCURRENCY = 8;
+
+/**
+ * Resolve the effective entity-resolution concurrency. Reversible + observable:
+ * `UNIT_TALK_INGESTOR_ENTITY_RESOLUTION_SEQUENTIAL=true` forces the old sequential
+ * behavior (concurrency 1); `UNIT_TALK_INGESTOR_ENTITY_CONCURRENCY=<n>` overrides the
+ * cap; an explicit `options.concurrency` (tests) wins over both. Always >= 1.
+ */
+export function resolveEntityConcurrency(options: ResolveEntityOptions): number {
+  if (
+    String(process.env.UNIT_TALK_INGESTOR_ENTITY_RESOLUTION_SEQUENTIAL).toLowerCase() ===
+    'true'
+  ) {
+    return 1;
+  }
+  if (typeof options.concurrency === 'number' && Number.isFinite(options.concurrency)) {
+    return Math.max(1, Math.floor(options.concurrency));
+  }
+  const envValue = Number(process.env.UNIT_TALK_INGESTOR_ENTITY_CONCURRENCY);
+  if (Number.isFinite(envValue) && envValue >= 1) {
+    return Math.floor(envValue);
+  }
+  return DEFAULT_ENTITY_RESOLUTION_CONCURRENCY;
+}
+
 export interface ResolveEntityOptions {
   logger?: Pick<Console, 'warn'>;
   providerKey?: string;
   ingestionCycleRunId?: string;
   snapshotAt?: string;
   historical?: boolean;
+  /** Bounded per-event player-upsert concurrency. Overrides env. 1 = sequential. */
+  concurrency?: number;
+}
+
+/** Phase timing + counts for the entity-resolution phase (UTV2-1298 observability). */
+export interface EntityResolutionTimings {
+  totalMs: number;
+  eventUpsertMs: number;
+  teamLinkMs: number;
+  playerUpsertMs: number;
+  eventParticipantMs: number;
+  concurrency: number;
+  events: number;
+  teamLinks: number;
+  players: number;
+  eventParticipants: number;
+  errors: number;
 }
 
 export interface EntityResolutionSummary {
   resolvedEventsCount: number;
   resolvedParticipantsCount: number;
+  /** Present when entity resolution actually ran; omitted on skip/default paths. */
+  timings?: EntityResolutionTimings;
 }
 
 export async function resolveSgoEntities(
@@ -35,6 +86,23 @@ export async function resolveSgoEntities(
   const resolvedEventIds = new Set<string>();
   const resolvedParticipantIds = new Set<string>();
   const teamCache = new Map<string, ParticipantRow[]>();
+  const concurrency = resolveEntityConcurrency(options);
+
+  // UTV2-1298 phase timing: aggregate time spent per DB sub-phase. Player sub-phase
+  // sums overlap under concurrency (sum > wall-clock), which is intentional — the gap
+  // between `totalMs` (wall-clock) and the summed sub-phases shows the concurrency win.
+  const t = {
+    eventUpsertMs: 0,
+    teamLinkMs: 0,
+    playerUpsertMs: 0,
+    eventParticipantMs: 0,
+    events: 0,
+    teamLinks: 0,
+    players: 0,
+    eventParticipants: 0,
+    errors: 0,
+  };
+  const startedAt = performance.now();
 
   for (const event of events) {
     const sportId = normalizeSportId(event.leagueKey ?? event.sportKey);
@@ -46,6 +114,7 @@ export async function resolveSgoEntities(
       continue;
     }
 
+    const eventUpsertStart = performance.now();
     const resolvedEvent = await repositories.events.upsertByExternalId({
       externalId: event.providerEventId,
       sportId,
@@ -66,28 +135,32 @@ export async function resolveSgoEntities(
         starts_at: event.startsAt ?? null,
       },
     });
+    t.eventUpsertMs += performance.now() - eventUpsertStart;
+    t.events += 1;
     resolvedEventIds.add(resolvedEvent.id);
 
-    await linkResolvedTeam(
-      event.teams.home,
-      'home',
-      sportId,
-      resolvedEvent.id,
-      repositories,
-      teamCache,
-      resolvedParticipantIds,
-      options,
-    );
-    await linkResolvedTeam(
-      event.teams.away,
-      'away',
-      sportId,
-      resolvedEvent.id,
-      repositories,
-      teamCache,
-      resolvedParticipantIds,
-      options,
-    );
+    // Team links stay sequential (only 2/event, and they share `teamCache`).
+    const teamLinkStart = performance.now();
+    for (const [team, role] of [
+      [event.teams.home, 'home'] as const,
+      [event.teams.away, 'away'] as const,
+    ]) {
+      if (team) {
+        t.teamLinks += 1;
+      }
+      const linkedEventParticipants = await linkResolvedTeam(
+        team,
+        role,
+        sportId,
+        resolvedEvent.id,
+        repositories,
+        teamCache,
+        resolvedParticipantIds,
+        options,
+      );
+      t.eventParticipants += linkedEventParticipants;
+    }
+    t.teamLinkMs += performance.now() - teamLinkStart;
 
     const playerMap = new Map<string, SGOResolvedPlayer>();
     for (const player of event.players) {
@@ -108,7 +181,12 @@ export async function resolveSgoEntities(
       }
     }
 
-    for (const player of playerMap.values()) {
+    // Players are independent within an event; resolve them with bounded concurrency.
+    // Each player's (participant upsert → eventParticipant link) stays ordered; the
+    // upserts are idempotent (onConflict) so concurrent distinct entities are safe.
+    const players = [...playerMap.values()];
+    await mapWithConcurrency(players, concurrency, async (player) => {
+      const participantStart = performance.now();
       const participant = await repositories.participants.upsertByExternalId({
         externalId: player.playerId,
         displayName:
@@ -125,18 +203,37 @@ export async function resolveSgoEntities(
           team_external_id: player.teamId ?? null,
         },
       });
+      t.playerUpsertMs += performance.now() - participantStart;
+      t.players += 1;
       resolvedParticipantIds.add(participant.id);
+
+      const linkStart = performance.now();
       await repositories.eventParticipants.upsert({
         eventId: resolvedEvent.id,
         participantId: participant.id,
         role: 'competitor',
       });
-    }
+      t.eventParticipantMs += performance.now() - linkStart;
+      t.eventParticipants += 1;
+    });
   }
 
   return {
     resolvedEventsCount: resolvedEventIds.size,
     resolvedParticipantsCount: resolvedParticipantIds.size,
+    timings: {
+      totalMs: Math.round(performance.now() - startedAt),
+      eventUpsertMs: Math.round(t.eventUpsertMs),
+      teamLinkMs: Math.round(t.teamLinkMs),
+      playerUpsertMs: Math.round(t.playerUpsertMs),
+      eventParticipantMs: Math.round(t.eventParticipantMs),
+      concurrency,
+      events: t.events,
+      teamLinks: t.teamLinks,
+      players: t.players,
+      eventParticipants: t.eventParticipants,
+      errors: t.errors,
+    },
   };
 }
 
@@ -149,9 +246,9 @@ async function linkResolvedTeam(
   teamCache: Map<string, ParticipantRow[]>,
   resolvedParticipantIds: Set<string>,
   options: ResolveEntityOptions,
-) {
+): Promise<number> {
   if (!team) {
-    return;
+    return 0;
   }
 
   const existingTeams = await getTeamsForSport(sportId, repositories, teamCache);
@@ -163,7 +260,7 @@ async function linkResolvedTeam(
     options.logger?.warn?.(
       `Unable to match team "${team.displayName}" for sport ${sportId}; skipping team link`,
     );
-    return;
+    return 0;
   }
 
   resolvedParticipantIds.add(match.id);
@@ -172,6 +269,7 @@ async function linkResolvedTeam(
     participantId: match.id,
     role,
   });
+  return 1;
 }
 
 async function getTeamsForSport(

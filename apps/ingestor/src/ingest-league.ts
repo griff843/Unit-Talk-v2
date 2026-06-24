@@ -16,7 +16,7 @@ import {
   sha256Hex,
   withArchiveWriteTimeout,
 } from './archive-payload-guard.js';
-import { resolveSgoEntities } from './entity-resolver.js';
+import { resolveSgoEntities, type EntityResolutionSummary } from './entity-resolver.js';
 import {
   fetchSGOResultsWithTelemetry,
   type SGORequestTelemetry,
@@ -235,7 +235,10 @@ export async function ingestLeague(
     options.quarantineRegistry?.assertAvailable('sgo');
 
     let fetched: SGOFetchResult;
-    let resolved = { resolvedEventsCount: 0, resolvedParticipantsCount: 0 };
+    let resolved: EntityResolutionSummary = {
+      resolvedEventsCount: 0,
+      resolvedParticipantsCount: 0,
+    };
     let upsert = { insertedCount: 0, updatedCount: 0 };
     let normalizedCount = 0;
     let skippedCount = 0;
@@ -420,6 +423,23 @@ export async function ingestLeague(
         snapshotAt,
         historical: options.historical ?? false,
       });
+
+      // UTV2-1298: surface entity-resolution phase timing in the cycle phase-timings log
+      // (previously the dominant, uninstrumented cost behind the 240s MLB wall-clock).
+      const entityTimings = resolved.timings;
+      if (entityTimings) {
+        phaseTimings['entityResolution'] = entityTimings.totalMs;
+        phaseTimings['entityPlayerUpsert'] = entityTimings.playerUpsertMs;
+        phaseTimings['entityEventParticipant'] = entityTimings.eventParticipantMs;
+        phaseTimings['entityEventUpsert'] = entityTimings.eventUpsertMs;
+        phaseTimings['entityTeamLink'] = entityTimings.teamLinkMs;
+        options.logger?.info?.(
+          `[ingestor] entity-resolution sgo/${league}: ${entityTimings.totalMs}ms ` +
+            `concurrency=${entityTimings.concurrency} events=${entityTimings.events} ` +
+            `players=${entityTimings.players} eventParticipants=${entityTimings.eventParticipants} ` +
+            `teamLinks=${entityTimings.teamLinks} errors=${entityTimings.errors}`,
+        );
+      }
 
       const providerEventIds = fetched.events
         .map((event) => event.providerEventId)

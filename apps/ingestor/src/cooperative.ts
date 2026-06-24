@@ -57,6 +57,52 @@ export async function mapCooperatively<T, R>(
 }
 
 /**
+ * Bounded-concurrency async map (UTV2-1298). Runs `fn` over `items` with at most
+ * `concurrency` promises in flight at once, preserving result order. `concurrency <= 1`
+ * (or non-finite) runs fully sequentially — the safe reversible fallback.
+ *
+ * Fail-closed + deterministic: the first rejection is captured, no further items are
+ * dispatched, in-flight workers drain, and that first error is rethrown. Idempotent
+ * (onConflict) writes make the already-dispatched in-flight items safe to have run.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const limit =
+    Number.isFinite(concurrency) && concurrency >= 1 ? Math.floor(concurrency) : 1;
+  const results: R[] = new Array(items.length);
+  const errorBox: Array<{ error: unknown }> = [];
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (errorBox.length === 0) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) {
+        return;
+      }
+      try {
+        results[index] = await fn(items[index] as T, index);
+      } catch (error) {
+        if (errorBox.length === 0) {
+          errorBox.push({ error });
+        }
+        return;
+      }
+    }
+  }
+
+  const workerCount = Math.min(Math.max(limit, 1), items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (errorBox.length > 0) {
+    throw errorBox[0]!.error;
+  }
+  return results;
+}
+
+/**
  * Like {@link mapCooperatively} but flattens one level — for transforms that expand
  * each item into zero or more outputs (e.g. pairing an event into many paired props).
  */

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1299",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1299-harden-loop-dispatch",
+  "branch": "griffadavi/utv2-1299-harden-loop-dispatch",
+  "base_branch": "main",
+  "commit_sha": "35fca9e32850f120fa456609782abb2a80b9e7ac",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1053",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch-board.md",
+    ".claude/commands/loop-dispatch.md",
+    "docs/06_status/proof/UTV2-1299/diff-summary.md",
+    "docs/06_status/proof/UTV2-1299/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1299/diff-summary.md",
+    "docs/06_status/proof/UTV2-1299/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-06-24T04:10:11.135Z",
+  "heartbeat_at": "2026-06-24T13:16:46.576Z",
+  "closed_at": "2026-06-24T13:16:46.576Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1299-harden-loop-dispatch.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-24T13:15:27.633Z",
+      "verdict": "pass",
+      "merge_sha": "35fca9e32850f120fa456609782abb2a80b9e7ac",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1053"
+    },
+    {
+      "checked_at": "2026-06-24T13:15:34.483Z",
+      "verdict": "fail",
+      "merge_sha": "35fca9e32850f120fa456609782abb2a80b9e7ac",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-24T13:16:27.156Z",
+      "verdict": "pass",
+      "merge_sha": "35fca9e32850f120fa456609782abb2a80b9e7ac",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1299-harden-loop-dispatch",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
