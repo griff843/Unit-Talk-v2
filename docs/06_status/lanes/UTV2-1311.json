@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1311-g-const-16-production-sha-deploy-follow-through",
   "branch": "claude/utv2-1311-g-const-16-production-sha-deploy-follow-through",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "f3b3fbda09acc5b30d857ae249a77691d475869e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1073",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1311/deploy-proof.md",
@@ -19,14 +19,34 @@
     "docs/06_status/proof/UTV2-1311/diff-summary.md",
     "docs/06_status/proof/UTV2-1311/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-25T08:47:35.951Z",
-  "heartbeat_at": "2026-06-25T08:47:35.951Z",
+  "heartbeat_at": "2026-06-25T09:22:51.176Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1311-g-const-16-production-sha-deploy-follow-through.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T09:22:47.172Z",
+      "verdict": "pass",
+      "merge_sha": "f3b3fbda09acc5b30d857ae249a77691d475869e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1073"
+    },
+    {
+      "checked_at": "2026-06-25T09:22:51.176Z",
+      "verdict": "fail",
+      "merge_sha": "f3b3fbda09acc5b30d857ae249a77691d475869e",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

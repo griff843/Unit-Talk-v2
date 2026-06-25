@@ -4,7 +4,7 @@
 **Branch:** `claude/utv2-1311-g-const-16-production-sha-deploy-follow-through`
 **Tier:** T2 (deploy-only lane)
 **Date:** 2026-06-25
-**Merge SHA:** (pending — pre-merge)
+**Merge SHA:** f3b3fbda09acc5b30d857ae249a77691d475869e
 
 ---
 

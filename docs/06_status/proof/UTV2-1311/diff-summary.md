@@ -4,7 +4,7 @@
 **Tier:** T2
 **Branch:** claude/utv2-1311-g-const-16-production-sha-deploy-follow-through
 **Generated at:** 2026-06-25T09:00:00Z
-**Merge SHA:** (pending — pre-merge)
+**Merge SHA:** f3b3fbda09acc5b30d857ae249a77691d475869e
 
 ---
 
