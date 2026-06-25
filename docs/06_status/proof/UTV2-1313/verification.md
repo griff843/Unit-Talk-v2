@@ -96,6 +96,31 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 
 Result: **PASS** — 7/7 tests pass against live Supabase.
 
+### pnpm verify
+
+```
+pnpm verify — PASS (no source files modified; env:check + lint + type-check + build + test all pass on main)
+```
+
+### R-level check (scripts/ci/r-level-check.ts)
+
+```
+tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS — 0 R-level rules triggered (docs-only diff)
+```
+
+---
+
+## Merge SHA Binding
+
+**Merge SHA:** `6680753a642a2df3966332c7bcaf3b21a856ec16`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1074
+**Merged at:** 2026-06-25T15:58:22Z
+
+This proof is SHA-bound to merge commit `6680753a642a2df3966332c7bcaf3b21a856ec16` on `main`.
+
+---
+
 ### Verdict
 
 **YELLOW** — 1 active blocker (ingestor_health). Meets PM minimum bar of YELLOW.

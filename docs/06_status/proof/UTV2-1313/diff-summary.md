@@ -45,3 +45,11 @@ The four resolved blockers were reclassified based on post-deploy evidence:
 - db_tripwires resolved by G-CONST-12/13 closures
 
 The remaining blocker (ingestor_health) is a genuine ongoing failure: markClosingLines statement_timeout due to unpartitioned provider_offer_history scan. Fix tracked separately.
+
+---
+
+## Merge SHA Binding
+
+**Merge SHA:** `6680753a642a2df3966332c7bcaf3b21a856ec16`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1074
+**Merged at:** 2026-06-25T15:58:22Z
