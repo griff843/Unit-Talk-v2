@@ -7,21 +7,38 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1304-codex-exec-sandbox-danger-full-access",
   "branch": "griffadavi/utv2-1304-codex-exec-sandbox-danger-full-access",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "53b91fce39f828e8af0206cb34b546d8214e9651",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1064",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/codex-exec.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T04:57:16.446Z",
-  "heartbeat_at": "2026-06-25T04:57:16.446Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T05:24:20.623Z",
+  "closed_at": "2026-06-25T05:24:20.623Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1304-codex-exec-sandbox-danger-full-access.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T05:24:01.776Z",
+      "verdict": "pass",
+      "merge_sha": "53b91fce39f828e8af0206cb34b546d8214e9651",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1064"
+    },
+    {
+      "checked_at": "2026-06-25T05:24:08.791Z",
+      "verdict": "pass",
+      "merge_sha": "53b91fce39f828e8af0206cb34b546d8214e9651",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
