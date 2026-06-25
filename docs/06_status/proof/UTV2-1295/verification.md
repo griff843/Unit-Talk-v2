@@ -45,8 +45,9 @@ Per PM Codex review directive, the spec was verified against actual schema:
 
 | Criterion | Status |
 |---|---|
-| No DELETE/UPDATE against immutable archive tables | PASS — pick_lifecycle corrected to INSERT-only; no archive table mutations |
-| Real schema objects only | PASS — proof_artifacts refs removed; raw_payloads.metadata replaced with kind column |
+| No DELETE/UPDATE against immutable archive tables | PASS — pick_lifecycle corrected to INSERT-only; §4.3 diagram corrected (INSERT not UPDATE); no archive table mutations |
+| Real schema objects only | PASS — proof_artifacts refs removed; raw_payloads.metadata replaced; system_runs status corrected to real constraint values ('running'/'succeeded'/'failed'/'cancelled') |
+| Append-only companion table or explicit future migration path for archive metadata | PASS — Option C (raw_payloads_archive_log companion table) added as recommended append-only path in §2.2; Option A/B retained as alternatives |
 | Read-only monitor work separated from migration/retention lanes | PASS — §5 separated as T3 GHA monitor, independently executable |
 | Every execution action separately PM-gated | PASS — all Sections 1–4 execution actions retain PM-gated label |
 

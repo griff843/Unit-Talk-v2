@@ -27,15 +27,20 @@ Linear sync metadata for this issue.
 
 Per PM Codex review, the spec was corrected before merge:
 
-1. **§1.4 carve-outs**: Removed `proof_artifacts` reference (table doesn't exist); corrected `raw_payloads` carve-out to use `kind` column (no `metadata` column exists).
+1. **§1.4 carve-outs**: Removed `proof_artifacts` reference (table doesn't exist); corrected `raw_payloads` carve-out to use `kind` column (no `metadata` column exists); corrected `system_runs` carve-out from `status = 'error'` to `status = 'failed'` (real CHECK constraint: `'running', 'succeeded', 'failed', 'cancelled'`).
 
-2. **§2.2 raw_payloads archival**: Replaced impossible `UPDATE raw_payloads SET metadata=...` with Option A/B pattern — either write to object store + DELETE + INSERT with `kind='archived'`, or schema-migration-first approach.
+2. **§2.2 raw_payloads archival**: Replaced impossible `UPDATE raw_payloads SET metadata=...` with Option A/B/C:
+   - Option A: write to object store + DELETE + INSERT with `kind='archived'`
+   - Option B: schema migration lane first, then UPDATE
+   - Option C (recommended): append-only `raw_payloads_archive_log` companion table — no mutation of `raw_payloads` schema, purely additive
 
-3. **§3.4/3.5 forward flow**: Removed `metadata` column references; documented that archived URL is log-only until migration lane adds the column.
+3. **§3.4/3.5 forward flow**: References all three Option A/B/C paths; notes PM approval required before any write.
 
-4. **§4.2 pick_lifecycle**: Corrected from `UPDATE` to `INSERT (append-only)` — this table is event-sourced with no UPDATE operations.
+4. **§4.2 pick_lifecycle**: Corrected from `UPDATE` to `INSERT (append-only)` — event-sourced, no UPDATE operations.
 
-5. **§5 monitoring**: Separated as read-only T3 GHA lane — independently executable without PM approval for execution actions.
+5. **§4.3 diagram**: Fixed `pick_lifecycle UPDATE` → `pick_lifecycle INSERT` in settlement path diagram.
+
+6. **§5 monitoring**: Separated as read-only T3 GHA lane — independently executable without PM approval for execution actions.
 
 ## What Did Not Change
 
