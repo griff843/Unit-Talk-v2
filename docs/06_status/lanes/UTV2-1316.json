@@ -7,22 +7,66 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1316-current-state-green-update",
   "branch": "claude/utv2-1316-current-state-green-update",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "5533c67efdb4f5c271bfbacde6f85a5acb74749b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1077",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/CURRENT_STATE.md",
     "docs/06_status/readiness/READINESS-GREEN-BASELINE-2026-06-25.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T18:54:57.240Z",
-  "heartbeat_at": "2026-06-25T18:54:57.240Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T19:23:53.185Z",
+  "closed_at": "2026-06-25T19:23:53.185Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1316-current-state-green-update.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T19:15:26.786Z",
+      "verdict": "pass",
+      "merge_sha": "5533c67efdb4f5c271bfbacde6f85a5acb74749b",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1077"
+    },
+    {
+      "checked_at": "2026-06-25T19:16:15.695Z",
+      "verdict": "fail",
+      "merge_sha": "5533c67efdb4f5c271bfbacde6f85a5acb74749b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T19:16:34.484Z",
+      "verdict": "fail",
+      "merge_sha": "5533c67efdb4f5c271bfbacde6f85a5acb74749b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T19:17:04.529Z",
+      "verdict": "fail",
+      "merge_sha": "5533c67efdb4f5c271bfbacde6f85a5acb74749b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T19:23:40.722Z",
+      "verdict": "pass",
+      "merge_sha": "5533c67efdb4f5c271bfbacde6f85a5acb74749b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
