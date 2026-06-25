@@ -5,7 +5,7 @@
 **Lane type:** governance
 **Branch:** griffadavi/utv2-1300-t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of
 **PR:** #1060
-**Merge SHA:** (pending — will be updated post-merge)
+**Merge SHA:** d81f2018959133a0c91607006ca462730190b86d
 
 ## Summary
 
