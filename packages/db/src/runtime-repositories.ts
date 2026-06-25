@@ -5100,6 +5100,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
           'id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing',
         )
         .eq('provider_event_id', providerEventId)
+        .gte('snapshot_at', windowStart)
         .lt('snapshot_at', commenceTime)
         .eq('is_closing', false)
         .order('snapshot_at', { ascending: false })
