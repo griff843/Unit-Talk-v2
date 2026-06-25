@@ -40,4 +40,4 @@ R-level check: PASS — no R-level artifacts required for this diff (proof files
 After this lane closes:
 - `deploy_sha_alignment`: **FAIL → PASS** (prod now aligned to main HEAD `e25c2009`)
 - Remaining blockers: `ingestor_health`, `worker_outbox_health`, `dead_letter_count`, `db_tripwires`
-- Verdict: **RED → YELLOW** (4 blocking failures, pending ingestor/outbox remediation)
+- Verdict: **RED → RED** (4 blocking failures remain > 2 threshold; ingestor/outbox/db-tripwires still open)
