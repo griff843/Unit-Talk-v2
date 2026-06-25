@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1301-constitution-gap-audit-v3-post-ingestion-incident-production",
   "branch": "griffadavi/utv2-1301-constitution-gap-audit-v3-post-ingestion-incident-production",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "13e882be1aade7598048c207be9e71ede8c7a51f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1065",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,30 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1301/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-06-25T03:39:52.162Z",
-  "heartbeat_at": "2026-06-25T05:38:30.262Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T06:03:01.758Z",
+  "closed_at": "2026-06-25T06:03:01.758Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1301-constitution-gap-audit-v3-post-ingestion-incident-production.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T06:02:58.424Z",
+      "verdict": "pass",
+      "merge_sha": "13e882be1aade7598048c207be9e71ede8c7a51f",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1065",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
