@@ -19,14 +19,22 @@
     "docs/06_status/proof/UTV2-1318/diff-summary.md",
     "docs/06_status/proof/UTV2-1318/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-25T22:07:22.791Z",
-  "heartbeat_at": "2026-06-25T22:07:22.791Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T22:44:22.458Z",
+  "closed_at": "2026-06-25T22:44:22.458Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1318-launch-gate-definition.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T22:44:08.332Z",
+      "verdict": "pass",
+      "merge_sha": "f9640963d279ff23f2b70f3b4d35e5b38e379574",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
