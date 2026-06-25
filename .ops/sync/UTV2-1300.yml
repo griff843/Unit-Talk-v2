@@ -1,5 +1,10 @@
-issue_id: UTV2-1300
-linear_url: https://linear.app/unit-talk-v2/issue/UTV2-1300/t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of-retention
-branch: griffadavi/utv2-1300-t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of
-lane_type: governance
-tier: T3
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1300
+  findings: []
+  controls: []
+  proofs: []
