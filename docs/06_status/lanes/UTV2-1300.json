@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1300-t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of",
   "branch": "griffadavi/utv2-1300-t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d81f2018959133a0c91607006ca462730190b86d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1060",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,30 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1300/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-06-25T00:35:04.000Z",
-  "heartbeat_at": "2026-06-25T00:35:04.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T01:23:32.473Z",
+  "closed_at": "2026-06-25T01:23:32.473Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1300-t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T01:23:29.134Z",
+      "verdict": "pass",
+      "merge_sha": "d81f2018959133a0c91607006ca462730190b86d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1060",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
