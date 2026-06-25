@@ -1,0 +1,44 @@
+name: DB Health Tripwire
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+env:
+  SYSTEM_RUNS_SIZE_THRESHOLD_MB: '500'
+  RAW_PAYLOADS_SIZE_THRESHOLD_MB: '2048'
+  ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB: '1024'
+  AUTOVACUUM_STALENESS_HOURS: '24'
+  STATEMENT_TIMEOUT_RATE_THRESHOLD: '5'
+
+jobs:
+  db-health-check:
+    name: DB Health Tripwire (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run DB health checks
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          SYSTEM_RUNS_SIZE_THRESHOLD_MB: ${{ env.SYSTEM_RUNS_SIZE_THRESHOLD_MB }}
+          RAW_PAYLOADS_SIZE_THRESHOLD_MB: ${{ env.RAW_PAYLOADS_SIZE_THRESHOLD_MB }}
+          ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB: ${{ env.ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB }}
+          AUTOVACUUM_STALENESS_HOURS: ${{ env.AUTOVACUUM_STALENESS_HOURS }}
+          STATEMENT_TIMEOUT_RATE_THRESHOLD: ${{ env.STATEMENT_TIMEOUT_RATE_THRESHOLD }}
+        run: tsx scripts/ops/db-health-tripwire.ts
