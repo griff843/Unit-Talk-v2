@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".lane/lanes/governance.yml",
     "docs/06_status/gap-map/canonical-gap-map.json",
     "docs/06_status/gap-map/dedup-recommendations.md",
     "docs/06_status/proof/UTV2-1310/diff-summary.md",
