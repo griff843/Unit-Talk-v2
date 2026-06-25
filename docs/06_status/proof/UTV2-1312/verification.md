@@ -8,7 +8,9 @@
 
 ---
 
-## pnpm type-check
+## Verification
+
+### pnpm type-check
 
 ```
 > @unit-talk/v2@0.1.0 type-check
@@ -21,7 +23,7 @@ Result: **PASS**
 
 ---
 
-## pnpm test
+### pnpm test
 
 ```
 > @unit-talk/v2@0.1.0 test
@@ -38,7 +40,7 @@ Result: **PASS** — all unit tests green, # fail 0 across all suites
 
 ---
 
-## pnpm test:db
+### pnpm test:db
 
 ```
 > @unit-talk/v2@0.1.0 test:db
@@ -104,7 +106,7 @@ Result: **PASS** — 7/7 tests pass against live Supabase (`zfzdnfwdarxucxtaojxm
 
 ---
 
-## R-level check
+### R-level check
 
 ```
 tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -118,7 +120,7 @@ Result: **PASS**
 
 ---
 
-## Guardrails
+### Guardrails
 
 - **No DELETE performed:** CONFIRMED
 - **No UPDATE performed:** CONFIRMED
