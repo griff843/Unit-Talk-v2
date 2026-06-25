@@ -19,10 +19,10 @@
     "docs/06_status/proof/UTV2-1311/diff-summary.md",
     "docs/06_status/proof/UTV2-1311/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-25T08:47:35.951Z",
-  "heartbeat_at": "2026-06-25T09:22:51.176Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T09:23:37.202Z",
+  "closed_at": "2026-06-25T09:23:37.202Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1311-g-const-16-production-sha-deploy-follow-through.json",
   "created_by": "claude",
@@ -44,6 +44,13 @@
         "P3",
         "C4"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T09:23:22.882Z",
+      "verdict": "pass",
+      "merge_sha": "f3b3fbda09acc5b30d857ae249a77691d475869e",
+      "failures": [],
       "runner": "manual"
     }
   ],
