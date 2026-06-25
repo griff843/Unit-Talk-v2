@@ -3,6 +3,7 @@
 **Lane:** UTV2-1305 — G-CONST-13 Deploy SHA Alignment
 **Tier:** T2 | **Lane type:** runtime | **Executor:** claude
 **Branch:** griffadavi/utv2-1305-g-const-13-deploy-sha-alignment-production-must-match
+**Merge SHA:** d8e71471452e2f7734758c7da4dba975a176ab16
 
 ---
 

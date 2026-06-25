@@ -2,7 +2,7 @@
 
 **Branch:** griffadavi/utv2-1306-g-const-11-retention-execution-preflight-schema-verified
 **Tier:** T2 | **Lane type:** governance | **Executor:** claude
-**Merge SHA:** (pending — pre-PR)
+**Merge SHA:** ca71685d29a66c8640f211e85ab338a27e3d5540
 
 ## Changes
 

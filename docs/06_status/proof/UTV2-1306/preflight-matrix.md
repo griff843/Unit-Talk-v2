@@ -3,6 +3,7 @@
 **Generated:** 2026-06-25T06:45:00Z
 **Executor:** Claude (orchestrator session)
 **Project:** zfzdnfwdarxucxtaojxm
+**Merge SHA:** ca71685d29a66c8640f211e85ab338a27e3d5540
 **Schema inspection:** read-only SQL via Supabase MCP
 **Lane type:** governance (T2) — no mutations performed
 

@@ -3,8 +3,8 @@
 **Lane:** UTV2-1306 — G-CONST-11 Retention Execution Preflight
 **Tier:** T2 | **Lane type:** governance | **Executor:** claude
 **Branch:** griffadavi/utv2-1306-g-const-11-retention-execution-preflight-schema-verified
-**Commit SHA:** (bound at merge — see Merge SHA below)
-**Merge SHA:** (pending — pre-PR)
+**Commit SHA:** ca71685d29a66c8640f211e85ab338a27e3d5540
+**Merge SHA:** ca71685d29a66c8640f211e85ab338a27e3d5540
 
 ---
 

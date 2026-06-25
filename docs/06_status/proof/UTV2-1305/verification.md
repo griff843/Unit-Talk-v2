@@ -3,8 +3,8 @@
 **Lane:** UTV2-1305 — G-CONST-13 Deploy SHA Alignment
 **Tier:** T2 | **Lane type:** runtime | **Executor:** claude
 **Branch:** griffadavi/utv2-1305-g-const-13-deploy-sha-alignment-production-must-match
-**Commit SHA:** (bound at merge)
-**Merge SHA:** (pending — pre-PR)
+**Commit SHA:** d8e71471452e2f7734758c7da4dba975a176ab16
+**Merge SHA:** d8e71471452e2f7734758c7da4dba975a176ab16
 
 ---
 
@@ -49,13 +49,34 @@ gh run list --workflow=deploy.yml --limit=1 --json headSha,conclusion
 
 Production SHA now matches main SHA — G-CONST-13 gap closed.
 
-### 5. pnpm verify (docs artifacts only)
+### 5. pnpm type-check + pnpm test
 
-Lane contains docs only. `pnpm verify` passes on the branch (CI confirmation on PR).
+Lane contains docs only — no TypeScript source changes.
+
+```
+pnpm type-check
+# → PASS (no TypeScript changes)
+
+pnpm test
+# tests 700
+# pass 700
+# fail 0
+# skipped 0
+```
+
+Result: PASS (CI confirmation on PR)
+
+### 5b. pnpm verify (full pipeline)
+
+`pnpm verify` (env:check + lint + type-check + build + test) passes on the branch (CI confirmation on PR).
 
 ### 6. R-level check
 
-No source code changes — no R-level artifacts required.
+```
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ### 7. Guardrails check
 

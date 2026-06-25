@@ -2,7 +2,7 @@
 
 **Branch:** griffadavi/utv2-1305-g-const-13-deploy-sha-alignment-production-must-match
 **Tier:** T2 | **Lane type:** runtime | **Executor:** claude
-**Merge SHA:** (pending — pre-PR)
+**Merge SHA:** d8e71471452e2f7734758c7da4dba975a176ab16
 
 ## Changes
 
