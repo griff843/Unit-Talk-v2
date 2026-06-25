@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1307",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1307-g-const-9-refresh-current-state-from-post-incident",
+  "branch": "griffadavi/utv2-1307-g-const-9-refresh-current-state-from-post-incident",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/CURRENT_STATE.md",
+    "docs/06_status/proof/UTV2-1307/diff-summary.md",
+    "docs/06_status/proof/UTV2-1307/verification.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-06-25T06:35:35.291Z",
+  "heartbeat_at": "2026-06-25T06:35:35.291Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1307-g-const-9-refresh-current-state-from-post-incident.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1307-g-const-9-refresh-current-state-from-post-incident",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
