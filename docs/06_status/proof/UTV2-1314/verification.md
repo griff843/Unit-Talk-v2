@@ -43,3 +43,65 @@
 - [x] stale_issues list cleaned — UTV2-1309/1310/1311/1312 removed from dispatch_ready
 - [x] generated_at timestamp updated to 2026-06-25T18:00:00.000Z
 - [x] state_counts updated to reflect post-session reality
+- [x] `pnpm test:db` — PASS (7/7 live Supabase tests)
+
+### pnpm test:db
+
+Run against live Supabase (`zfzdnfwdarxucxtaojxm`) in lane worktree — 7/7 pass:
+
+```
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+  ---
+  duration_ms: 16845.384267
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+  ---
+  duration_ms: 15351.89879
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+  ---
+  duration_ms: 15324.37851
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+  ---
+  duration_ms: 16641.279614
+  type: 'test'
+  ...
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+  ---
+  duration_ms: 550.454476
+  type: 'test'
+  ...
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  ---
+  duration_ms: 18171.473959
+  type: 'test'
+  ...
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  ---
+  duration_ms: 17433.376703
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 100999.218379
+```
+
+Result: **PASS** — 7/7 tests pass against live Supabase.
