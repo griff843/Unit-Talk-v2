@@ -148,6 +148,6 @@ Result: **PASS**
 
 ## Merge SHA Binding
 
-**Merge SHA:** _to be bound by post-merge-lane-close.yml_  
-**PR:** _pending_  
-**Merged at:** _pending_
+**Merge SHA:** `4745f3d0889dffb0f96195c3487e8fa912026c2c`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1080  
+**Merged at:** 2026-06-25T22:44:51Z
