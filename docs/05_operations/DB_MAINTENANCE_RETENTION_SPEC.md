@@ -95,7 +95,10 @@ Rows that match any carve-out condition MUST NOT be deleted, regardless of age.
 
 **`system_runs` carve-outs:**
 
-- `status = 'error'` AND `created_at > NOW() - INTERVAL '90 days'` — error rows retained 90 days for incident analysis
+> **Schema constraint:** `system_runs.status` CHECK allows: `'running'`, `'succeeded'`, `'failed'`, `'cancelled'`. There is no `'error'` value.
+
+- `status = 'failed'` AND `created_at > NOW() - INTERVAL '90 days'` — failed-run rows retained 90 days for incident analysis
+- `status = 'running'` — active runs are never eligible for deletion (no `finished_at` set)
 
 **`raw_payloads` carve-outs:**
 
@@ -181,11 +184,15 @@ CREATE TABLE system_runs_default PARTITION OF system_runs_partitioned DEFAULT;
 
 **Proposed:** Payloads above the size threshold (see §3) should never be written to Postgres as raw bytes. For existing oversized rows already in the table: export to Hetzner Object Storage (S3-compatible), then delete the Postgres row (payload is preserved in object store).
 
-> **Schema constraint:** `raw_payloads` has no `metadata` column in the current schema. Two possible approaches for the execution lane:
-> - **Option A (no schema change):** Write payload to object store → DELETE the Postgres row → insert a new row with `payload = null` and `kind = 'archived'`. Requires confirming that downstream consumers tolerate `kind = 'archived'` rows.
-> - **Option B (schema migration first):** Add a `metadata JSONB` column in a dedicated migration lane → then UPDATE rows with `metadata->>'archived_url'`. This is the cleaner approach but requires a separate T1 migration lane.
+> **Schema constraint:** `raw_payloads` has no `metadata` column in the current schema. Three possible approaches for the execution lane:
 >
-> The execution lane for this section must choose Option A or B and get PM approval for the schema impact. Do not write an UPDATE against `raw_payloads.metadata` — that column does not exist.
+> - **Option A (no schema change, re-insert):** Write payload to object store → DELETE the Postgres row → INSERT a new row with `payload = null` and `kind = 'archived'`. Requires confirming that downstream consumers tolerate `kind = 'archived'` rows with null payload.
+>
+> - **Option B (schema migration first):** Add a `metadata JSONB` column in a dedicated migration lane → then UPDATE rows with `metadata->>'archived_url'`. This is the cleaner in-place approach but requires a separate T1 migration lane before any archival writes.
+>
+> - **Option C (append-only companion table — recommended):** Create a `raw_payloads_archive_log` companion table (id, raw_payload_id, object_store_url, archived_at, payload_bytes) in a migration lane → INSERT a row linking the archived URL to the original `raw_payloads.id` → optionally NULL out `raw_payloads.payload` (if tolerated by consumers). The original `raw_payloads` row is preserved; the archive URL is recorded without mutating `raw_payloads` schema. This is the safest append-only path and requires a dedicated migration lane.
+>
+> The execution lane for this section must choose one option and get PM approval for the schema approach. Do not write an UPDATE against `raw_payloads.metadata` — that column does not exist in the current schema.
 
 **Migration approach for existing rows (PM-gated, read-only identification query):**
 
@@ -266,9 +273,11 @@ Ingestor receives payload
   ├─ payload_bytes <= 512 KB → write to Postgres normally
   └─ payload_bytes > 512 KB
        ├─ write to object store: s3://unit-talk-archive/raw_payloads/{year}/{month}/{id}.json.gz
-       │    └─ on success: write DB row with payload=null, kind='archived'
-       │         (NOTE: if schema migration lane has added metadata column, also set
-       │          metadata->>'archived_url' = URL; otherwise the URL is log-only)
+       │    └─ on success: record archive per the chosen schema approach (Option A/B/C from §2.2)
+       │         Option A: INSERT new row with payload=null, kind='archived'
+       │         Option B: UPDATE payload=null, metadata->>'archived_url' (after migration lane)
+       │         Option C: INSERT into raw_payloads_archive_log (after migration lane)
+       │         NOTE: approach must be PM-approved in the execution lane — do not mutate without approval
        │    └─ on failure: fall back to disk spool (UTV2-1294 guard)
        │         DO NOT block settlement — spool and continue
        └─ log: object_store_write_result = 'success' | 'failed_disk_spool' + archive URL
@@ -321,7 +330,7 @@ The UTV2-1294 incident demonstrated that a single telemetry/archive write (syste
 
 ```
 Settlement path (synchronous, fail-closed):
-  Ingestor → game_results INSERT → pick_lifecycle UPDATE → outbox INSERT
+  Ingestor → game_results INSERT → pick_lifecycle INSERT → outbox INSERT
   └─ if any step fails → hard error, ingestor stops cycle, alerting fires
 
 Telemetry path (async, fail-open):
