@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1307-g-const-9-refresh-current-state-from-post-incident",
   "branch": "griffadavi/utv2-1307-g-const-9-refresh-current-state-from-post-incident",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "18d6b1493698bee747d096c28cf6c6ebfedf8914",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1069",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/CURRENT_STATE.md",
@@ -16,14 +16,31 @@
     "docs/06_status/proof/UTV2-1307/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T06:35:35.291Z",
-  "heartbeat_at": "2026-06-25T06:35:35.291Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T07:15:52.964Z",
+  "closed_at": "2026-06-25T07:15:52.964Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1307-g-const-9-refresh-current-state-from-post-incident.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T07:15:02.684Z",
+      "verdict": "pass",
+      "merge_sha": "18d6b1493698bee747d096c28cf6c6ebfedf8914",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1069"
+    },
+    {
+      "checked_at": "2026-06-25T07:15:08.934Z",
+      "verdict": "pass",
+      "merge_sha": "18d6b1493698bee747d096c28cf6c6ebfedf8914",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
