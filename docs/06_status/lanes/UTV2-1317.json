@@ -7,21 +7,38 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1317-readiness-regression-gate",
   "branch": "claude/utv2-1317-readiness-regression-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "d1cce107ea6e2e9e5c650537ebfd02d6c4faf5ae",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1078",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/readiness-regression-gate.yml"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T18:58:02.843Z",
-  "heartbeat_at": "2026-06-25T18:58:02.843Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T19:14:40.483Z",
+  "closed_at": "2026-06-25T19:14:40.483Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1317-readiness-regression-gate.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T19:12:35.132Z",
+      "verdict": "pass",
+      "merge_sha": "d1cce107ea6e2e9e5c650537ebfd02d6c4faf5ae",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1078"
+    },
+    {
+      "checked_at": "2026-06-25T19:14:14.707Z",
+      "verdict": "pass",
+      "merge_sha": "d1cce107ea6e2e9e5c650537ebfd02d6c4faf5ae",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
