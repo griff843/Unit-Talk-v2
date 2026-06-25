@@ -1,0 +1,68 @@
+name: Readiness Regression Gate
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  readiness-regression-gate:
+    name: Readiness Regression Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check readiness-score.json
+        shell: bash
+        run: |
+          SCORE_FILE="docs/06_status/readiness/readiness-score.json"
+
+          if [ ! -f "$SCORE_FILE" ]; then
+            echo "::error::$SCORE_FILE not found — readiness ledger missing"
+            exit 1
+          fi
+
+          VERDICT=$(jq -r '.verdict' "$SCORE_FILE")
+          GENERATED_AT=$(jq -r '.generated_at' "$SCORE_FILE")
+          MAIN_SHA=$(jq -r '.main_sha' "$SCORE_FILE")
+
+          echo "Verdict:      $VERDICT"
+          echo "Generated at: $GENERATED_AT"
+          echo "Ledger SHA:   $MAIN_SHA"
+
+          # Staleness check
+          GENERATED_EPOCH=$(date -d "$GENERATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${GENERATED_AT%.*}" +%s 2>/dev/null || echo 0)
+          NOW_EPOCH=$(date +%s)
+          AGE_HOURS=$(( (NOW_EPOCH - GENERATED_EPOCH) / 3600 ))
+
+          echo "Ledger age: ${AGE_HOURS}h"
+
+          FAIL=0
+
+          if [ "$AGE_HOURS" -gt 48 ]; then
+            echo "::error::Readiness ledger is ${AGE_HOURS}h stale (>48h threshold). Update readiness-score.json before merging."
+            FAIL=1
+          elif [ "$AGE_HOURS" -gt 24 ]; then
+            echo "::warning::Readiness ledger is ${AGE_HOURS}h stale (>24h). Consider refreshing readiness-score.json."
+          fi
+
+          # Verdict check
+          if [ "$VERDICT" = "RED" ]; then
+            echo "::error::Readiness verdict is RED — production has blocking failures. Resolve before merging."
+            BLOCKERS=$(jq -r '.blockers[]?' "$SCORE_FILE" | tr '\n' ', ')
+            echo "::error::Blocking dimensions: $BLOCKERS"
+            FAIL=1
+          elif [ "$VERDICT" = "YELLOW" ]; then
+            BLOCKERS=$(jq -r '.blockers[]?' "$SCORE_FILE" | tr '\n' ', ')
+            echo "::warning::Readiness verdict is YELLOW (blockers: $BLOCKERS). GREEN required for full production clearance."
+          elif [ "$VERDICT" = "GREEN" ]; then
+            echo "Readiness verdict: GREEN — no blocking failures."
+          else
+            echo "::error::Unknown verdict '$VERDICT' in readiness-score.json"
+            FAIL=1
+          fi
+
+          if [ "$FAIL" = "1" ]; then
+            exit 1
+          fi
