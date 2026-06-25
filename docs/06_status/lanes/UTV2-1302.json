@@ -8,7 +8,7 @@
   "branch": "griffadavi/utv2-1302-production-readiness-audit-v3-post-ingestion-recovery-launch",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1061",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1302/audit-v3.md",
@@ -20,9 +20,9 @@
     "docs/06_status/proof/UTV2-1302/diff-summary.md",
     "docs/06_status/proof/UTV2-1302/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-06-25T03:40:05.968Z",
-  "heartbeat_at": "2026-06-25T03:40:05.968Z",
+  "heartbeat_at": "2026-06-25T05:38:33.082Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1302-production-readiness-audit-v3-post-ingestion-recovery-launch.json",
