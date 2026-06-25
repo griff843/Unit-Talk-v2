@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1306-g-const-11-retention-execution-preflight-schema-verified",
   "branch": "griffadavi/utv2-1306-g-const-11-retention-execution-preflight-schema-verified",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ca71685d29a66c8640f211e85ab338a27e3d5540",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1067",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1306/diff-summary.md",
@@ -19,14 +19,66 @@
     "docs/06_status/proof/UTV2-1306/diff-summary.md",
     "docs/06_status/proof/UTV2-1306/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T06:35:14.856Z",
-  "heartbeat_at": "2026-06-25T06:35:14.856Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T07:57:51.332Z",
+  "closed_at": "2026-06-25T07:57:51.332Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1306-g-const-11-retention-execution-preflight-schema-verified.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T07:48:20.061Z",
+      "verdict": "pass",
+      "merge_sha": "ca71685d29a66c8640f211e85ab338a27e3d5540",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1067"
+    },
+    {
+      "checked_at": "2026-06-25T07:48:35.438Z",
+      "verdict": "fail",
+      "merge_sha": "ca71685d29a66c8640f211e85ab338a27e3d5540",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T07:50:04.392Z",
+      "verdict": "fail",
+      "merge_sha": "ca71685d29a66c8640f211e85ab338a27e3d5540",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T07:51:57.494Z",
+      "verdict": "fail",
+      "merge_sha": "c675bd41e67727a35d7ef992cede374638d40599",
+      "failures": [
+        "G2",
+        "G3",
+        "G4",
+        "P3",
+        "P4",
+        "C3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T07:57:23.135Z",
+      "verdict": "pass",
+      "merge_sha": "ca71685d29a66c8640f211e85ab338a27e3d5540",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
