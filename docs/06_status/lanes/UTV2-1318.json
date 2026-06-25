@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1318-launch-gate-definition",
   "branch": "claude/utv2-1318-launch-gate-definition",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "f9640963d279ff23f2b70f3b4d35e5b38e379574",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1079",
   "files_changed": [],
   "file_scope_lock": [
