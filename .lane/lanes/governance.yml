@@ -18,6 +18,8 @@ allowed_path_globs:
   - docs/05_operations/**
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
+  - docs/06_status/readiness/**
+  - docs/06_status/gap-map/**
   - docs/06_status/SYSTEM_STATE.md
   - docs/06_status/CURRENT_STATE.md
   - docs/06_status/qa-roadmap-expansion.md
