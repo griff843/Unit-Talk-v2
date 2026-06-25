@@ -11,6 +11,7 @@ Required commands executed:
 
 - `pnpm type-check` — PASS
 - `pnpm test` — PASS
+- `pnpm test:db` — PASS (executed by `pnpm verify`)
 - `pnpm verify` — PASS
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS
 
