@@ -1,15 +1,38 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-25T08:30:00.000Z",
-  "total_open_issues": 27,
-  "notes": "Covers all non-Done, non-Cancelled, non-Deferred open issues across all states. 'Open' = statusType backlog or unstarted that are not future-stage-gated frozen dormant; plus started/blocked issues that are active work items.",
+  "generated_at": "2026-06-25T18:00:00.000Z",
+  "total_open_issues": 24,
+  "notes": "Refreshed 2026-06-25: G-CONST-12/13/14/15/16/17 closed post-session. G-CONST-9 resolved. G-CONST-11 PM-deferred. G-CONST-18/19 in progress. Active blockers: ingestor statement_timeout (UTV2-1315, PM-gated). 'Open' = statusType backlog or unstarted that are not future-stage-gated frozen dormant; plus started/blocked issues that are active work items.",
   "state_counts": {
-    "Ready for Claude": 5,
-    "Backlog": 15,
+    "Ready for Claude": 1,
+    "Backlog": 14,
     "Needs Standard": 2,
     "Blocked Internal": 4,
-    "future-stage-gated": 8
+    "future-stage-gated": 8,
+    "constitutional_gaps": {
+      "CLOSED": 2,
+      "DONE": 4,
+      "RESOLVED": 1,
+      "CONDITIONAL": 1,
+      "OPEN": 1,
+      "IN_PROGRESS": 2
+    }
   },
+  "active_blockers": [
+    {
+      "id": "ingestor_health",
+      "description": "markClosingLines statement_timeout in ingestor — no partition pruning over 60 partitions/1.39M rows",
+      "fix_tracked_in": "UTV2-1315",
+      "blocked_on": "PM Tier C approval",
+      "impact": "ingestor not cycling; downstream finalized-repoll stalled"
+    },
+    {
+      "id": "constitution_convergence",
+      "description": "Constitutional convergence at ~68%, threshold 80%",
+      "blocked_on": null,
+      "impact": "non-blocking — convergence improving via gap-close lanes"
+    }
+  ],
   "duplicate_groups": [
     {
       "canonical_id": "UTV2-1301",
@@ -103,39 +126,114 @@
   ],
   "constitutional_gaps": [
     {
-      "id": "UTV2-1309",
-      "title": "G-CONST-14 Readiness Score Ledger — machine-readable production verdict JSON",
-      "status": "Ready for Claude",
-      "tier": "T2",
-      "priority": 2,
-      "note": "Open G-CONST gap. Machine-readable readiness verdict. Ready to dispatch."
+      "id": "UTV2-1307",
+      "gap_id": "G-CONST-9",
+      "title": "CURRENT_STATE.md refresh — post-incident production-readiness truth",
+      "status": "RESOLVED",
+      "tier": "T3",
+      "priority": 0,
+      "closed_by": "UTV2-1307",
+      "note": "RESOLVED — UTV2-1307 closed. CURRENT_STATE.md refreshed with current production truth."
     },
     {
-      "id": "UTV2-1310",
-      "title": "G-CONST-15 Canonical Gap Map — Linear dedupe and open constitutional gap inventory",
-      "status": "Ready for Claude",
+      "id": "UTV2-1297",
+      "gap_id": "G-CONST-10",
+      "title": "Finalized-repoll runtime proof — live ingestor cycling evidence",
+      "status": "CONDITIONAL",
+      "tier": "T1",
+      "priority": 1,
+      "note": "CONDITIONAL — UTV2-1297 finalized-repoll runtime proof depends on ingestor fix (UTV2-1315, PM-gated). Cannot fully close until ingestor statement_timeout resolved."
+    },
+    {
+      "id": "UTV2-1311-retention",
+      "gap_id": "G-CONST-11",
+      "title": "Retention execution preflight — outbox P4 dead_letter purge authorization",
+      "status": "OPEN",
       "tier": "T2",
-      "priority": 2,
-      "note": "THIS LANE — currently in execution."
+      "priority": 1,
+      "note": "OPEN — PM-deferred. Retention execution requires PM gate (Tier C approval). Not executable without explicit PM authorization. 442 dead_letter rows identified by outbox classification audit."
+    },
+    {
+      "id": "UTV2-1308",
+      "gap_id": "G-CONST-12",
+      "title": "DB health tripwire CI guard",
+      "status": "CLOSED",
+      "tier": "T2",
+      "priority": 0,
+      "closed_by": "UTV2-1308",
+      "note": "CLOSED — UTV2-1308 merged. db-health-tripwire CI guard added."
     },
     {
       "id": "UTV2-1311",
-      "title": "G-CONST-16 Production SHA deploy follow-through — align prod to current main HEAD",
-      "status": "Ready for Claude",
+      "gap_id": "G-CONST-13",
+      "title": "Production SHA alignment — align prod to main HEAD",
+      "status": "CLOSED",
       "tier": "T2",
-      "priority": 2,
-      "note": "Open G-CONST gap. Prod is 7 commits behind main. Ready to dispatch."
+      "priority": 0,
+      "closed_by": "UTV2-1311",
+      "note": "CLOSED — UTV2-1311 merged. Production SHA aligned to main HEAD."
+    },
+    {
+      "id": "UTV2-1309",
+      "gap_id": "G-CONST-14",
+      "title": "Readiness Score Ledger — machine-readable production verdict JSON",
+      "status": "DONE",
+      "tier": "T2",
+      "priority": 0,
+      "closed_by": "UTV2-1309",
+      "note": "DONE — UTV2-1309 merged. Readiness score ledger created."
+    },
+    {
+      "id": "UTV2-1310",
+      "gap_id": "G-CONST-15",
+      "title": "Canonical Gap Map — Linear dedupe and open constitutional gap inventory",
+      "status": "DONE",
+      "tier": "T2",
+      "priority": 0,
+      "closed_by": "UTV2-1310",
+      "note": "DONE — UTV2-1310 merged. Canonical gap map created."
+    },
+    {
+      "id": "UTV2-1311-deploy",
+      "gap_id": "G-CONST-16",
+      "title": "Production SHA deploy follow-through",
+      "status": "DONE",
+      "tier": "T2",
+      "priority": 0,
+      "closed_by": "UTV2-1311",
+      "note": "DONE — UTV2-1311 merged. Production SHA deploy follow-through completed."
     },
     {
       "id": "UTV2-1312",
-      "title": "G-CONST-17 Outbox classification audit — P4 queue truth",
-      "status": "Ready for Claude",
+      "gap_id": "G-CONST-17",
+      "title": "Outbox classification audit — P4 queue truth",
+      "status": "DONE",
+      "tier": "T2",
+      "priority": 0,
+      "closed_by": "UTV2-1312",
+      "note": "DONE — UTV2-1312 merged. Outbox classification audit completed. 558 pending rows, 442 dead_letter identified."
+    },
+    {
+      "id": "UTV2-1313",
+      "gap_id": "G-CONST-18",
+      "title": "Readiness score refresh — post-session score recalculation",
+      "status": "IN_PROGRESS",
       "tier": "T2",
       "priority": 2,
-      "note": "Open G-CONST gap. 558 pending outbox rows, 442 dead_letter. Classification audit needed before retention execution."
+      "note": "IN_PROGRESS — UTV2-1313 readiness score refresh lane active."
+    },
+    {
+      "id": "UTV2-1314",
+      "gap_id": "G-CONST-19",
+      "title": "Canonical gap map refresh — 2026-06-25 session post-close update",
+      "status": "IN_PROGRESS",
+      "tier": "T2",
+      "priority": 2,
+      "note": "IN_PROGRESS — UTV2-1314 this lane. Refreshing gap map with post-session truth."
     },
     {
       "id": "UTV2-1042",
+      "gap_id": null,
       "title": "Syndicate-ready edge certification — prove real money edge over sufficient post-fix live sample",
       "status": "Blocked Internal",
       "tier": "T2",
@@ -144,6 +242,7 @@
     },
     {
       "id": "UTV2-1216",
+      "gap_id": "D-CONST-5",
       "title": "Wave 6 — real sharp consensus computation from sharp book data",
       "status": "future-stage-gated",
       "tier": "none",
@@ -152,30 +251,6 @@
     }
   ],
   "dispatch_ready": [
-    {
-      "id": "UTV2-1312",
-      "title": "G-CONST-17 Outbox classification audit — P4 queue truth",
-      "tier": "T2",
-      "priority": 2,
-      "status": "Ready for Claude",
-      "executor": "Claude"
-    },
-    {
-      "id": "UTV2-1311",
-      "title": "G-CONST-16 Production SHA deploy follow-through — align prod to current main HEAD",
-      "tier": "T2",
-      "priority": 2,
-      "status": "Ready for Claude",
-      "executor": "Claude"
-    },
-    {
-      "id": "UTV2-1309",
-      "title": "G-CONST-14 Readiness Score Ledger — machine-readable production verdict JSON",
-      "tier": "T2",
-      "priority": 2,
-      "status": "Ready for Claude",
-      "executor": "Claude"
-    },
     {
       "id": "UTV2-1271",
       "title": "SGO outlier foundation — PLAYER_ID, byBookmaker comparison, overround sanity, stale-line rejection",
