@@ -221,7 +221,9 @@ async function main(): Promise<void> {
   }
 
   // Execute Codex — pass prompt as CLI argument (codex exec <PROMPT>)
-  const child = spawnSync('codex', ['exec', prompt], {
+  // Use danger-full-access so Codex can commit/push inside the isolated worktree.
+  // workspace-write (the default) blocks git index writes (.git/worktrees/.../index.lock).
+  const child = spawnSync('codex', ['exec', '-s', 'danger-full-access', prompt], {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
