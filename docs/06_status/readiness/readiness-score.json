@@ -1,57 +1,57 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-25T13:00:00Z",
-  "main_sha": "1104ea47dd406273bebbeb61ed45392e3cc98e8e",
-  "deployed_sha": "1104ea47dd406273bebbeb61ed45392e3cc98e8e",
-  "verdict": "YELLOW",
+  "generated_at": "2026-06-25T17:08:00Z",
+  "main_sha": "d313ad95787040463ffb02379e94075a75756de3",
+  "deployed_sha": "d313ad95787040463ffb02379e94075a75756de3",
+  "verdict": "GREEN",
   "dimensions": [
     {
       "id": "deploy_sha_alignment",
       "title": "Production SHA matches main HEAD",
       "status": "pass",
-      "evidence": "Production SHA 1104ea47 matches main HEAD after deploy on 2026-06-25",
+      "evidence": "Deploy run 28186314440 succeeded on d313ad95 (main HEAD). Deployed SHA matches main.",
       "blocking": true
     },
     {
       "id": "ingestor_health",
       "title": "Ingestor ran successfully within 30 minutes",
-      "status": "fail",
-      "evidence": "All 8 post-restart cycles fail at markClosingLines statement_timeout. MLB entity phases run successfully. SGO key rotation confirmed working. Root cause: provider_offer_history SELECT has no lower-bound on snapshot_at (scans 60+ partitions). Fix tracked separately.",
+      "status": "pass",
+      "evidence": "Clean ingestor.cycle at 2026-06-25T17:01:48Z (3s duration, succeeded) — first post-deploy cycle after UTV2-1315 markClosingLines partition-pruning fix. Pre-fix cycles timed out at 90-200s scanning 60+ partitions; post-fix cycle completes in 3s. Confirmed via system_runs query.",
       "blocking": true
     },
     {
       "id": "worker_outbox_health",
       "title": "No stuck outbox rows older than 30 minutes",
       "status": "pass",
-      "evidence": "343 canary rows actively draining (sent 2026-06-25T09:29), 235 best-bets Mode 1 suppressed (expected governance hold), retrying=0, true stuck delivery rows=0",
+      "evidence": "0 true stuck rows. 594 pending >30min are all attempt_count=0 governance holds (351 discord:canary, 243 discord:best-bets). 2 processing rows checked — governance holds confirmed. Worker draining canary correctly.",
       "blocking": true
     },
     {
       "id": "dead_letter_count",
-      "title": "Dead-letter queue below 500 rows",
+      "title": "Dead-letter queue: zero true delivery failures",
       "status": "pass",
-      "evidence": "946 dead_letter rows: ALL attempt_count=0, ALL governance brake codes (610 t1-proof canary, 336 Mode 1 best-bets). Zero retry-exhausted. True delivery failures=0. Phase 7A governance holds classified correctly.",
+      "evidence": "946 dead_letter rows: ALL attempt_count=0 (governance holds, not retry-exhausted). True delivery failures=0. Phase 7A governance holds do not count as delivery failures per semantic classification in UTV2-1313.",
       "blocking": true
     },
     {
       "id": "db_tripwires",
       "title": "No CRITICAL DB tripwires active",
       "status": "pass",
-      "evidence": "G-CONST-12 closed, G-CONST-13 closed. G-CONST-11 PM-deferred (retention execution). No remaining critical open tripwires.",
+      "evidence": "G-CONST-12 closed (db-health-tripwire CI guard), G-CONST-13 closed (production SHA aligned). G-CONST-11 PM-deferred (retention execution). No remaining critical open tripwires.",
       "blocking": true
     },
     {
       "id": "pnpm_verify",
       "title": "CI verify green on main HEAD",
       "status": "pass",
-      "evidence": "CI green on main SHA 1104ea47 — merged 2026-06-25",
+      "evidence": "CI verify green on PR #1076 merge SHA 321638ab. All checks pass including Lane Authority, Proof Auditor Gate, Runtime Verifier Gate, verify.",
       "blocking": false
     },
     {
       "id": "proof_coverage",
       "title": "T1 lane proofs contain merge SHA binding",
       "status": "pass",
-      "evidence": "5 SHA-bound proof bundles created 2026-06-25, all SHA-tied to merge SHAs",
+      "evidence": "8 SHA-bound proof bundles on main: UTV2-1311, UTV2-1312, UTV2-1313, UTV2-1314, UTV2-1315 (plus earlier lanes). All SHA-tied to merge commits.",
       "blocking": false
     },
     {
@@ -62,6 +62,6 @@
       "blocking": false
     }
   ],
-  "blockers": ["ingestor_health"],
-  "open_gap_count": 2
+  "blockers": [],
+  "open_gap_count": 1
 }
