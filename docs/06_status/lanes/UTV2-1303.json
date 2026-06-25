@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1303-codex-full-cycle-canary-prove-safe-lane-dispatch-to-done",
   "branch": "griffadavi/utv2-1303-codex-full-cycle-canary-prove-safe-lane-dispatch-to-done",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ee4046eaa64b48276ca313b00cd7cbff09037c72",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1062",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1303/canary-report.md",
@@ -16,14 +16,31 @@
     "docs/06_status/proof/UTV2-1303/verification.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T03:52:52.467Z",
-  "heartbeat_at": "2026-06-25T03:52:52.467Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T06:07:49.581Z",
+  "closed_at": "2026-06-25T06:07:49.581Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1303-codex-full-cycle-canary-prove-safe-lane-dispatch-to-done.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T06:07:17.020Z",
+      "verdict": "pass",
+      "merge_sha": "ee4046eaa64b48276ca313b00cd7cbff09037c72",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1062"
+    },
+    {
+      "checked_at": "2026-06-25T06:07:23.011Z",
+      "verdict": "pass",
+      "merge_sha": "ee4046eaa64b48276ca313b00cd7cbff09037c72",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
