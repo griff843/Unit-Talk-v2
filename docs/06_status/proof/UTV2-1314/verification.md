@@ -105,3 +105,30 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 ```
 
 Result: **PASS** — 7/7 tests pass against live Supabase.
+
+---
+
+### pnpm verify
+
+```
+pnpm verify — PASS (no source files modified; env:check + lint + type-check + build + test all pass on main)
+```
+
+---
+
+### R-level check (scripts/ci/r-level-check.ts)
+
+```
+tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS — 0 R-level rules triggered (docs-only diff)
+```
+
+---
+
+## Merge SHA Binding
+
+**Merge SHA:** `044a72d4eb8593ff65e081dfbc3d9ab04648c044`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1075
+**Merged at:** 2026-06-25T15:35:32Z
+
+This proof is SHA-bound to merge commit `044a72d4eb8593ff65e081dfbc3d9ab04648c044` on `main`.

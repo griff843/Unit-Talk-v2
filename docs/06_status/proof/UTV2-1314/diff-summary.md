@@ -53,3 +53,11 @@ Removed from `dispatch_ready` (now Done, not dispatchable):
 ## No Code Changes
 
 This is a docs-only governance lane. No source code, tests, migrations, or TypeScript files were modified.
+
+---
+
+## Merge SHA Binding
+
+**Merge SHA:** `044a72d4eb8593ff65e081dfbc3d9ab04648c044`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1075
+**Merged at:** 2026-06-25T15:35:32Z
