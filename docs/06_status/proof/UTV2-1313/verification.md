@@ -35,6 +35,67 @@ This is a T2 governance/docs-only lane. No code changes. Verification consists o
 
 R-level check: PASS — governance/docs only lane. No code artifacts, no DB migrations, no T1 runtime proof required.
 
+### pnpm test:db
+
+Run against live Supabase (`zfzdnfwdarxucxtaojxm`) in lane worktree — 7/7 pass:
+
+```
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+  ---
+  duration_ms: 14640.065714
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+  ---
+  duration_ms: 15117.827505
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+  ---
+  duration_ms: 15724.140596
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+  ---
+  duration_ms: 14683.969838
+  type: 'test'
+  ...
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+  ---
+  duration_ms: 642.527924
+  type: 'test'
+  ...
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  ---
+  duration_ms: 15219.061955
+  type: 'test'
+  ...
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  ---
+  duration_ms: 26417.051715
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 103128.413516
+```
+
+Result: **PASS** — 7/7 tests pass against live Supabase.
+
 ### Verdict
 
 **YELLOW** — 1 active blocker (ingestor_health). Meets PM minimum bar of YELLOW.
