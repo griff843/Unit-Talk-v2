@@ -52,6 +52,6 @@ R-level check: PASS — no R-level artifacts required for docs-only diff
 
 ## Merge SHA Binding
 
-**Merge SHA:** `(to be bound post-merge)`  
-**PR:** (to be opened)  
-**Merged at:** (pending)
+**Merge SHA:** `3e7773f5a4f15a5422228ca2812551336e6762ef`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1081  
+**Merged at:** 2026-06-25T23:35:00Z
