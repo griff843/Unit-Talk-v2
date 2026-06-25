@@ -4,7 +4,8 @@
 **Tier:** T2  
 **Lane type:** governance  
 **Branch:** griffadavi/utv2-1295-durable-permanent-fix-hot-table-retentionpartition-raw  
-**PR:** #1056
+**PR:** #1059  
+**Merge SHA:** 92124569493b26de06fc84a1b846ec239db7c8db
 
 ## Changes
 

@@ -4,7 +4,8 @@
 **Tier:** T2  
 **Lane type:** governance  
 **Branch:** griffadavi/utv2-1295-durable-permanent-fix-hot-table-retentionpartition-raw  
-**PR:** #1056
+**PR:** #1059  
+**Merge SHA:** 92124569493b26de06fc84a1b846ec239db7c8db
 
 ## Verification
 
@@ -51,8 +52,8 @@ Per PM Codex review directive, the spec was verified against actual schema:
 | Read-only monitor work separated from migration/retention lanes | PASS — §5 separated as T3 GHA monitor, independently executable |
 | Every execution action separately PM-gated | PASS — all Sections 1–4 execution actions retain PM-gated label |
 
-### R-Level Check
-R-level: R4 (governance spec, no runtime changes). Required artifacts: diff-summary.md, verification.md. Both present.
+### R-Level Check (scripts/ci/r-level-check.ts)
+R-level: R4 (governance spec, no runtime changes). Required artifacts: diff-summary.md, verification.md. Both present. scripts/ci/r-level-check.ts passed on merge SHA.
 
 ## Root Cause Context
 
