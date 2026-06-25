@@ -1,6 +1,6 @@
 # Diff Summary — UTV2-1302
 
-**Merge SHA:** (pending — pre-PR)
+**Merge SHA:** 71435e4a48a5864e78a0e7f5a84ea23bdfd46ef5
 **Branch:** griffadavi/utv2-1302-production-readiness-audit-v3-post-ingestion-recovery-launch
 **Tier:** T2 | **Lane type:** verification | **Executor:** claude
 
