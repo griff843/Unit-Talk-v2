@@ -21,10 +21,10 @@
     "docs/06_status/proof/UTV2-1315/diff-summary.md",
     "docs/06_status/proof/UTV2-1315/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-25T14:55:54.165Z",
-  "heartbeat_at": "2026-06-25T16:49:00.311Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T16:50:25.257Z",
+  "closed_at": "2026-06-25T16:50:25.257Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1315-markclosinglines-snapshot-at-lower-bound.json",
   "created_by": "claude",
@@ -37,6 +37,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1076"
+    },
+    {
+      "checked_at": "2026-06-25T16:50:09.752Z",
+      "verdict": "pass",
+      "merge_sha": "321638ab98b3a25f2ed18b86c0e9aea0fc8784af",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
