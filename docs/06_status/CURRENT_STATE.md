@@ -5,7 +5,7 @@
 > docs in this repo are either authoritative on their specific sub-topic (see §Source of Truth
 > Hierarchy) or have been marked SUPERSEDED / HISTORICAL.
 >
-> **Last verified:** 2026-06-25T13:00:00Z (UTC) — UTV2-1301/UTV2-1302 post-incident audits: readiness YELLOW; no program certification state advanced
+> **Last verified:** 2026-06-25T17:08:00Z (UTC) — UTV2-1315 markClosingLines fix deployed; ingestor clean cycle confirmed; readiness verdict **GREEN** (0 blocking failures). No program certification state advanced.
 >
 > **Constitutional authority:** `docs/00_constitution/UNIT_TALK_CONSTITUTION_V1.md` §18.3 ·
 > `docs/00_constitution/CANONICAL_PROGRAM_STATE.md` (PM-ratified 2026-06-02)
@@ -50,11 +50,11 @@ Source: `docs/06_status/proof/UTV2-1301/audit-v3.md` and
 
 | Gap | Status | Required Action |
 |---|---|---|
-| **G-CONST-9** — CURRENT_STATE.md stale since 2026-06-10 | `IN_PROGRESS` | UTV2-1307 refreshes this canonical snapshot and records proof under `docs/06_status/proof/UTV2-1307/`. |
+| **G-CONST-9** — CURRENT_STATE.md stale since 2026-06-10 | `CLOSED` | UTV2-1307 (YELLOW update) + UTV2-1316 (GREEN update, this lane). |
 | **G-CONST-10** — UTV2-1297 finalized-repoll runtime proof incomplete | `CONDITIONAL` | Keep UTV2-1297 instrumentation-only until runtime telemetry validates the path. |
-| **G-CONST-11** — Retention execution preflight gate undefined | `OPEN` | Create PM-gated, read-only retention preflight before any batched DELETE, partition execution, or retention mutation. |
-| **G-CONST-12** — DB-health tripwire Section 5 parity gap | `OPEN` | Add `provider_offer_history` and `game_results`; correct thresholds; add TOAST bloat check. |
-| **G-CONST-13** — Production deploy SHA behind main | `OPEN` | PM decision required to deploy main HEAD; treat as production-readiness material. |
+| **G-CONST-11** — Retention execution preflight gate undefined | `OPEN` | Create PM-gated, read-only retention preflight before any batched DELETE, partition execution, or retention mutation. (UTV2-1306 spec complete; execution PM-gated.) |
+| **G-CONST-12** — DB-health tripwire Section 5 parity gap | `CLOSED` | UTV2-1308 (PR merged 2026-06-25): tripwire monitor now covers full ratified Section 5 surface including `provider_offer_history`, `game_results`, TOAST bloat. |
+| **G-CONST-13** — Production deploy SHA behind main | `CLOSED` | UTV2-1311 (PR merged 2026-06-25) + UTV2-1315 deploy run 28186314440 — prod SHA `d313ad95` = main HEAD. |
 | **G-CONST-CODEX** — Codex capacity restored | `RESOLVED` | Codex canary (UTV2-1303) and danger-full-access fix (UTV2-1304) passed; restore two safe parallel T3 lanes. |
 
 ---
@@ -99,20 +99,35 @@ active to confirm continued post-cutover accumulation after next ingestor cycle.
 
 ---
 
+## Production Readiness: GREEN
+
+**Verdict as of 2026-06-25T17:08:00Z — 0 blocking failures.**
+
+| Dimension | Status | Evidence |
+|---|---|---|
+| deploy_sha_alignment | **PASS** | prod `d313ad95` = main HEAD (deploy run 28186314440) |
+| ingestor_health | **PASS** | clean cycle 2026-06-25T17:01:48Z, 3s (UTV2-1315 markClosingLines fix) |
+| worker_outbox_health | **PASS** | 0 true stuck rows; 594 pending = Phase 7A governance holds (attempt_count=0) |
+| dead_letter_count | **PASS** | 946 DL rows, ALL attempt_count=0 (governance holds, not retry-exhausted) |
+| db_tripwires | **PASS** | G-CONST-12 closed (UTV2-1308); G-CONST-13 closed (UTV2-1311) |
+| constitution_convergence | FAIL (non-blocking) | ~68% vs 80% threshold; `blocking: false` per policy |
+
+Ledger: `docs/06_status/readiness/readiness-score.json` · Baseline: `docs/06_status/readiness/READINESS-GREEN-BASELINE-2026-06-25.md`
+
+---
+
 ## Current Blockers
+
+**No production-readiness blockers.** The remaining open items are certification gates and PM-deferred work:
 
 | Blocker | Category | Notes |
 |---|---|---|
-| Production readiness YELLOW | **Partial** | UTV2-1302 verdict: not RED, not GREEN. Recovery sequence restored ingestion flow and detection capability, but certification gates, elevated outbox queue, and deploy SHA gap remain. |
-| Deploy SHA gap | Production-readiness | UTV2-1301/1302 record production at `dcd649d5` (2026-06-10) while main has advanced. UTV2-1286 watchdog and UTV2-1293 daemon-resident fixes are merged but recorded as not deployed. PM deploy decision required. |
-| Outbox queue elevated | Operations | Latest `pnpm ops:brief` for this lane reported pending 533, dead_letter 467, sent 1686, pending >30min 317 rows, deferred pending 212 rows outside worker targets. No mutation authorized in this lane. |
 | P3 empirical CLV/edge evidence | Certification | Data gate OPEN; dispatch OPEN (PM lift 2026-06-10). Latest evidence snapshot is stale; P3 cert requires refreshed UTV2-1042 honest pass/fail/defer outcome. |
 | P4 economic truth unproven | Certification | No realized CLV / attribution data; economic certification requires live settled pick corpus |
 | P5 freeze | Activation | FROZEN until burn-in PASS + P1–P4 certs + M10 Path A. Treasury/capital/scaling work forbidden. |
 | P1 re-cert deadline | Time-gated | `proof_lineage` + `freshness` domains auto-degrade 2026-08-25; re-cert prep authorized |
 | UTV2-1297 runtime proof | Verification | Finalized-repoll instrumentation merged; runtime proof pending. Treat as instrumentation-only until path telemetry validates it. |
-| Retention execution preflight | DB operations | UTV2-1295 is spec-only. A schema-verified, read-only preflight must precede any retention execution or batched DELETE. |
-| DB-health tripwire parity | Monitoring | UTV2-1300 monitor is partial: missing `provider_offer_history`, `game_results`, and TOAST bloat check; thresholds need spec parity. |
+| Retention execution preflight | DB operations | G-CONST-11 open: spec complete (UTV2-1306), no execution authorized until PM-gated preflight. |
 | UTV2-884 / UTV2-885 | Feature work | Paused — no dispatch |
 | P3 certification claim | Hard constraint | Forbidden until empirical evidence passes gate |
 | ROI / CLV / edge claims | Hard constraint | Forbidden under P3 ACTIVE_NOT_CERTIFIED + P4 CONDITIONAL_NOT_CERTIFIED |
@@ -188,7 +203,8 @@ Cert records: `docs/06_status/programs/PROGRAM_{1,2,3,4}_CERTIFICATION.md` + `PR
 | UTV2-1248 | Health scripts — governance brake false negatives | Authorized follow-up lane |
 | UTV2-1249 | Pipeline health — fix delivery_freshness metric | Authorized follow-up lane |
 | UTV2-1297 | Finalized-repoll throughput instrumentation | Merged; runtime proof pending |
-| UTV2-1307 | CURRENT_STATE refresh | In progress — resolves G-CONST-9 stale canonical snapshot |
+| UTV2-1307 | CURRENT_STATE refresh (YELLOW) | Done — closed G-CONST-9 at YELLOW state |
+| UTV2-1316 | CURRENT_STATE refresh (GREEN) | Done — updated to GREEN after UTV2-1315 deploy confirmation |
 
 P3 work (scoring truth, feature audits, injury/status guards, calibration) is authorized.
 P4 work (execution hardening, dead-letter remediation, settlement proof scaffolding) is conditional.
