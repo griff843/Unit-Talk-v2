@@ -13,7 +13,9 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1315/diff-summary.md",
     "docs/06_status/proof/UTV2-1315/verification.md",
-    "packages/db/src/runtime-repositories.ts"
+    "packages/db/src/runtime-repositories.ts",
+    "apps/ingestor/src/t1-proof-utv2-1315-markclosinglines-partition-pruning.test.ts",
+    "apps/ingestor/package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1315/diff-summary.md",
