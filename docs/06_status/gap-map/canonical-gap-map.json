@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-25T08:30:00.000Z",
+  "total_open_issues": 27,
+  "notes": "Covers all non-Done, non-Cancelled, non-Deferred open issues across all states. 'Open' = statusType backlog or unstarted that are not future-stage-gated frozen dormant; plus started/blocked issues that are active work items.",
+  "state_counts": {
+    "Ready for Claude": 5,
+    "Backlog": 15,
+    "Needs Standard": 2,
+    "Blocked Internal": 4,
+    "future-stage-gated": 8
+  },
+  "duplicate_groups": [
+    {
+      "canonical_id": "UTV2-1301",
+      "duplicate_ids": ["UTV2-1302"],
+      "reason": "UTV2-1301 (Constitution Gap Audit v3 — post-ingestion incident production-readiness) and UTV2-1302 (Production Readiness Audit v3 — post-ingestion recovery launch blocker) are both Done and both represent the same v3 readiness audit effort triggered by the same incident. Both are closed; no action needed, but these should not be re-opened as separate lanes."
+    },
+    {
+      "canonical_id": "UTV2-1264",
+      "duplicate_ids": ["UTV2-1265"],
+      "reason": "UTV2-1264 (Extend CLV resolution to game totals) and UTV2-1265 (Extend CLV resolution to spread bets) are independent market-type extensions but share the same CLV resolution infrastructure pattern. They are NOT duplicates — they target different bet types — but should be dispatched sequentially (1264 first as higher priority) to avoid merge conflicts in the CLV resolver."
+    },
+    {
+      "canonical_id": "UTV2-1042",
+      "duplicate_ids": ["UTV2-1033", "UTV2-1250"],
+      "reason": "UTV2-1042 (Syndicate-ready edge certification), UTV2-1033 (STRONG label proof run), and UTV2-1250 (Monitor settled CLV-path sample) all gate on the same real-money edge data accumulation. UTV2-1042 is the canonical blocking gate; UTV2-1033 and UTV2-1250 are dependent monitors. None are duplicates per se, but they are a tight dependency chain that should not be dispatched independently."
+    }
+  ],
+  "stale_issues": [
+    {
+      "id": "UTV2-884",
+      "title": "Discord member DM routing — personal pick and injury alerts direct to members (DEBT-007)",
+      "last_updated": "2026-06-09T13:31:53.447Z",
+      "status": "Needs Standard",
+      "days_stale": 16,
+      "note": "Has tier:T2 but status is Needs Standard — needs standard spec before dispatch."
+    },
+    {
+      "id": "UTV2-885",
+      "title": "Discord game-thread routing — automated per-game threads for active picks (DEBT-006)",
+      "last_updated": "2026-06-09T13:31:53.447Z",
+      "status": "Needs Standard",
+      "days_stale": 16,
+      "note": "Has tier:T2 but status is Needs Standard — needs standard spec before dispatch."
+    },
+    {
+      "id": "UTV2-1268",
+      "title": "Capture SGO native closeBookOdds / closeFairOdds into canonical closing evidence",
+      "last_updated": "2026-06-14T04:47:07.498Z",
+      "status": "Backlog",
+      "days_stale": 11,
+      "note": "tier:T1, Backlog, no activity since Jun 14. SGO identity wave dependency."
+    },
+    {
+      "id": "UTV2-1277",
+      "title": "Canonical SGO identity schema — persist raw oddID, stat/entity/period/betType/side, open/close, byBookmaker (Wave 3)",
+      "last_updated": "2026-06-14T04:47:07.481Z",
+      "status": "Backlog",
+      "days_stale": 11,
+      "note": "tier:T1, Backlog, no activity since Jun 14. Wave 3 SGO work."
+    },
+    {
+      "id": "UTV2-1265",
+      "title": "Extend CLV resolution to spread bets (nba-spread)",
+      "last_updated": "2026-06-12T12:56:33.538Z",
+      "status": "Backlog",
+      "days_stale": 13,
+      "note": "tier:T1, Backlog, no activity since Jun 12."
+    },
+    {
+      "id": "UTV2-1264",
+      "title": "Extend CLV resolution to game totals (points-all-game-ou)",
+      "last_updated": "2026-06-12T12:56:33.538Z",
+      "status": "Backlog",
+      "days_stale": 13,
+      "note": "tier:T1, Backlog. Higher priority than 1265 (1,833 affected rows)."
+    },
+    {
+      "id": "UTV2-433",
+      "title": "MP-M3: MLB live production-readiness gate",
+      "last_updated": "2026-06-07T01:52:26.435Z",
+      "status": "Blocked Internal",
+      "days_stale": 18,
+      "note": "tier:T2, started but blocked — gated on live CLV data accumulation (3/167 CLV-backed, need 10)."
+    },
+    {
+      "id": "UTV2-1151",
+      "title": "INIT-5.3.2 — 30-Day Burn-In Execution",
+      "last_updated": "2026-05-26T16:12:19.856Z",
+      "status": "Backlog",
+      "days_stale": 30,
+      "note": "30+ days stale. tier:T1, dormant/future-gated. Cannot proceed until Programs 1-4 certified."
+    },
+    {
+      "id": "UTV2-1176",
+      "title": "Run controlled 7-lane orchestration burn-in",
+      "last_updated": "2026-06-24T21:58:58.217Z",
+      "status": "future-stage-gated",
+      "days_stale": 1,
+      "note": "Frozen by PM decision. cert-class:frozen."
+    }
+  ],
+  "constitutional_gaps": [
+    {
+      "id": "UTV2-1309",
+      "title": "G-CONST-14 Readiness Score Ledger — machine-readable production verdict JSON",
+      "status": "Ready for Claude",
+      "tier": "T2",
+      "priority": 2,
+      "note": "Open G-CONST gap. Machine-readable readiness verdict. Ready to dispatch."
+    },
+    {
+      "id": "UTV2-1310",
+      "title": "G-CONST-15 Canonical Gap Map — Linear dedupe and open constitutional gap inventory",
+      "status": "Ready for Claude",
+      "tier": "T2",
+      "priority": 2,
+      "note": "THIS LANE — currently in execution."
+    },
+    {
+      "id": "UTV2-1311",
+      "title": "G-CONST-16 Production SHA deploy follow-through — align prod to current main HEAD",
+      "status": "Ready for Claude",
+      "tier": "T2",
+      "priority": 2,
+      "note": "Open G-CONST gap. Prod is 7 commits behind main. Ready to dispatch."
+    },
+    {
+      "id": "UTV2-1312",
+      "title": "G-CONST-17 Outbox classification audit — P4 queue truth",
+      "status": "Ready for Claude",
+      "tier": "T2",
+      "priority": 2,
+      "note": "Open G-CONST gap. 558 pending outbox rows, 442 dead_letter. Classification audit needed before retention execution."
+    },
+    {
+      "id": "UTV2-1042",
+      "title": "Syndicate-ready edge certification — prove real money edge over sufficient post-fix live sample",
+      "status": "Blocked Internal",
+      "tier": "T2",
+      "priority": 1,
+      "note": "URGENT. Core product certification gate. Blocked on data accumulation (INSUFFICIENT_DATA verdict). Monitor via UTV2-1250."
+    },
+    {
+      "id": "UTV2-1216",
+      "title": "Wave 6 — real sharp consensus computation from sharp book data",
+      "status": "future-stage-gated",
+      "tier": "none",
+      "priority": 0,
+      "note": "D-CONST-5: p_sharp is currently a proxy. Future-gated — do NOT dispatch until predecessor waves done and PM authorizes."
+    }
+  ],
+  "dispatch_ready": [
+    {
+      "id": "UTV2-1312",
+      "title": "G-CONST-17 Outbox classification audit — P4 queue truth",
+      "tier": "T2",
+      "priority": 2,
+      "status": "Ready for Claude",
+      "executor": "Claude"
+    },
+    {
+      "id": "UTV2-1311",
+      "title": "G-CONST-16 Production SHA deploy follow-through — align prod to current main HEAD",
+      "tier": "T2",
+      "priority": 2,
+      "status": "Ready for Claude",
+      "executor": "Claude"
+    },
+    {
+      "id": "UTV2-1309",
+      "title": "G-CONST-14 Readiness Score Ledger — machine-readable production verdict JSON",
+      "tier": "T2",
+      "priority": 2,
+      "status": "Ready for Claude",
+      "executor": "Claude"
+    },
+    {
+      "id": "UTV2-1271",
+      "title": "SGO outlier foundation — PLAYER_ID, byBookmaker comparison, overround sanity, stale-line rejection",
+      "tier": "T1",
+      "priority": 2,
+      "status": "Ready for Claude",
+      "executor": "Claude"
+    },
+    {
+      "id": "UTV2-1264",
+      "title": "Extend CLV resolution to game totals (points-all-game-ou)",
+      "tier": "T1",
+      "priority": 2,
+      "status": "Backlog",
+      "executor": "Claude/Codex",
+      "note": "Needs ops:lane-start. 1,833 affected rows — high impact."
+    },
+    {
+      "id": "UTV2-1268",
+      "title": "Capture SGO native closeBookOdds / closeFairOdds into canonical closing evidence",
+      "tier": "T1",
+      "priority": 3,
+      "status": "Backlog",
+      "executor": "Claude/Codex",
+      "note": "Needs ops:lane-start. SGO Wave dependency."
+    },
+    {
+      "id": "UTV2-1277",
+      "title": "Canonical SGO identity schema — persist raw oddID (Wave 3)",
+      "tier": "T1",
+      "priority": 2,
+      "status": "Backlog",
+      "executor": "Claude/Codex",
+      "note": "Needs ops:lane-start. Schema migration required."
+    }
+  ],
+  "frozen_backlog": [
+    {
+      "id": "UTV2-1176",
+      "title": "Run controlled 7-lane orchestration burn-in",
+      "status": "future-stage-gated",
+      "reason": "cert-class:frozen — PM freeze decision active"
+    },
+    {
+      "id": "UTV2-1144",
+      "title": "INIT-5.1.1 — Immutable Capital Ledger",
+      "status": "future-stage-gated",
+      "reason": "Program 5: requires Programs 1-4 certified + Milestone M10 Path A ratification"
+    },
+    {
+      "id": "UTV2-1145",
+      "title": "INIT-5.1.2 — Reserve Tracking and Capital-Level Drawdown",
+      "status": "future-stage-gated",
+      "reason": "Program 5: requires Programs 1-4 certified"
+    },
+    {
+      "id": "UTV2-1146",
+      "title": "INIT-5.1.3 — Dual-Authorized Treasury Operations",
+      "status": "future-stage-gated",
+      "reason": "Program 5: requires Programs 1-4 certified"
+    },
+    {
+      "id": "UTV2-1152",
+      "title": "INIT-5.4.1 — Scaling Authorization Runtime",
+      "status": "future-stage-gated",
+      "reason": "Program 5: requires Programs 1-4 certified + M10 Path A"
+    },
+    {
+      "id": "UTV2-1153",
+      "title": "INIT-5.4.2 — Edge-Persistence, Liquidity, and Survivability Gates",
+      "status": "future-stage-gated",
+      "reason": "Program 5: requires Programs 1-4 certified + M10 Path A"
+    },
+    {
+      "id": "UTV2-1154",
+      "title": "INIT-5.4.3 — Simulation Runtime Integration",
+      "status": "future-stage-gated",
+      "reason": "Program 5: requires Programs 1-4 certified + M10 Path A"
+    },
+    {
+      "id": "UTV2-1151",
+      "title": "INIT-5.3.2 — 30-Day Burn-In Execution",
+      "status": "Backlog",
+      "reason": "cert-class:post, state:dormant — requires all prior certifications current"
+    },
+    {
+      "id": "UTV2-1216",
+      "title": "Wave 6 — real sharp consensus computation from sharp book data",
+      "status": "future-stage-gated",
+      "reason": "D-CONST-5 — DO NOT DISPATCH until predecessor waves complete and PM authorizes"
+    }
+  ]
+}
