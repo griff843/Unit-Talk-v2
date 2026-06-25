@@ -23,7 +23,7 @@
   ],
   "status": "merged",
   "started_at": "2026-06-24T20:13:11.460Z",
-  "heartbeat_at": "2026-06-24T20:36:46.011Z",
+  "heartbeat_at": "2026-06-25T03:16:36.960Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1297-mlb-finalized-repoll-throughput-instrument-results-path-then.json",
@@ -37,6 +37,22 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1054"
+    },
+    {
+      "checked_at": "2026-06-25T03:16:36.960Z",
+      "verdict": "fail",
+      "merge_sha": "736d0d41603702da50af148ae714e98dd4befcfa",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "C6",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
