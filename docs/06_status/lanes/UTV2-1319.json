@@ -19,14 +19,22 @@
     "docs/06_status/proof/UTV2-1319/diff-summary.md",
     "docs/06_status/proof/UTV2-1319/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-25T22:57:18.265Z",
-  "heartbeat_at": "2026-06-25T23:35:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T23:44:23.357Z",
+  "closed_at": "2026-06-25T23:44:23.357Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1319-discord-launch-gate-audit.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T23:44:09.277Z",
+      "verdict": "pass",
+      "merge_sha": "3e7773f5a4f15a5422228ca2812551336e6762ef",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
