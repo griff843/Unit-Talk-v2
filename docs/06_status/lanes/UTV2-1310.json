@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1310-g-const-15-canonical-gap-map",
   "branch": "claude/utv2-1310-g-const-15-canonical-gap-map",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "eed18a7328cd106c303c352be9cbb4bd08dd9f2c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1072",
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/governance.yml",
@@ -21,14 +21,24 @@
     "docs/06_status/proof/UTV2-1310/diff-summary.md",
     "docs/06_status/proof/UTV2-1310/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-25T08:07:43.454Z",
-  "heartbeat_at": "2026-06-25T08:07:43.454Z",
+  "heartbeat_at": "2026-06-25T08:43:36.915Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1310-g-const-15-canonical-gap-map.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T08:43:36.915Z",
+      "verdict": "pass",
+      "merge_sha": "eed18a7328cd106c303c352be9cbb4bd08dd9f2c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1072"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
