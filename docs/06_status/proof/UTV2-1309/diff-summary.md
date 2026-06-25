@@ -22,4 +22,4 @@ R-level check: PASS — no R-level artifacts required for this diff (docs-only, 
 ## Merge SHA
 
 <!-- post-merge-lane-close.yml will append the merge SHA here -->
-Merge SHA: (pending — pre-merge)
+Merge SHA: 388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1312-g-const-17-outbox-classification-audit",
   "branch": "claude/utv2-1312-g-const-17-outbox-classification-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "1041457b197f013986d350adf0c68dbb4964d02a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1071",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1312/diff-summary.md",
@@ -19,14 +19,64 @@
     "docs/06_status/proof/UTV2-1312/diff-summary.md",
     "docs/06_status/proof/UTV2-1312/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T08:07:43.437Z",
-  "heartbeat_at": "2026-06-25T08:07:43.437Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T08:47:05.402Z",
+  "closed_at": "2026-06-25T08:47:05.402Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1312-g-const-17-outbox-classification-audit.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T08:45:28.747Z",
+      "verdict": "pass",
+      "merge_sha": "1041457b197f013986d350adf0c68dbb4964d02a",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1071"
+    },
+    {
+      "checked_at": "2026-06-25T08:45:33.022Z",
+      "verdict": "fail",
+      "merge_sha": "1041457b197f013986d350adf0c68dbb4964d02a",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T08:45:40.998Z",
+      "verdict": "fail",
+      "merge_sha": "1041457b197f013986d350adf0c68dbb4964d02a",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T08:46:08.667Z",
+      "verdict": "fail",
+      "merge_sha": "1041457b197f013986d350adf0c68dbb4964d02a",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T08:46:36.145Z",
+      "verdict": "pass",
+      "merge_sha": "1041457b197f013986d350adf0c68dbb4964d02a",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

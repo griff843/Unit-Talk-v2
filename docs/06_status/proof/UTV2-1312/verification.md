@@ -4,7 +4,7 @@
 **Branch:** `claude/utv2-1312-g-const-17-outbox-classification-audit`  
 **Tier:** T3 (read-only proof lane)  
 **Date:** 2026-06-25  
-**Merge SHA:** (pending — pre-merge)
+**Merge SHA:** 1041457b197f013986d350adf0c68dbb4964d02a
 
 ---
 
@@ -140,3 +140,12 @@ Result: **PASS**
 | pnpm test:db | PASS (7/7, # fail 0) |
 | R-level check | PASS |
 | No mutations | CONFIRMED |
+
+### pnpm verify
+
+Full pipeline (env:check + lint + type-check + build + test):
+
+```
+pnpm verify
+Exit code: 0 (PASS) — see CI on PR #1071
+```

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1309-g-const-14-readiness-score-ledger",
   "branch": "claude/utv2-1309-g-const-14-readiness-score-ledger",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1070",
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/governance.yml",
@@ -20,14 +20,58 @@
     "docs/06_status/proof/UTV2-1309/diff-summary.md",
     "docs/06_status/proof/UTV2-1309/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-25T08:07:27.745Z",
-  "heartbeat_at": "2026-06-25T08:07:27.745Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-25T08:46:55.931Z",
+  "closed_at": "2026-06-25T08:46:55.931Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1309-g-const-14-readiness-score-ledger.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-25T08:45:28.740Z",
+      "verdict": "pass",
+      "merge_sha": "388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1070"
+    },
+    {
+      "checked_at": "2026-06-25T08:45:32.997Z",
+      "verdict": "fail",
+      "merge_sha": "388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2",
+      "failures": [
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T08:45:41.001Z",
+      "verdict": "fail",
+      "merge_sha": "388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2",
+      "failures": [
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T08:45:58.269Z",
+      "verdict": "fail",
+      "merge_sha": "388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2",
+      "failures": [
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-25T08:46:36.156Z",
+      "verdict": "pass",
+      "merge_sha": "388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -44,3 +44,5 @@ No R-level artifacts required for a docs-only proof lane.
 ## Merge order
 
 No dependencies. Base lane — can merge independently.
+
+**Merge SHA:** 1041457b197f013986d350adf0c68dbb4964d02a

@@ -122,4 +122,13 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ## Merge SHA
 
 <!-- post-merge-lane-close.yml will append the merge SHA here -->
-Merge SHA: (pending — pre-merge)
+Merge SHA: 388ef5f58c985f9da0f1c9cf9ef3305bb7a206a2
+
+## pnpm verify
+
+Full pipeline (env:check + lint + type-check + build + test):
+
+```
+pnpm verify
+Exit code: 0 (PASS) — see CI on PR #1070
+```

@@ -3,7 +3,7 @@
 **Lane:** UTV2-1310  
 **Branch:** `claude/utv2-1310-g-const-15-canonical-gap-map`  
 **Tier:** T2  
-**Merge SHA:** (pending — pre-merge)
+**Merge SHA:** eed18a7328cd106c303c352be9cbb4bd08dd9f2c
 
 ---
 

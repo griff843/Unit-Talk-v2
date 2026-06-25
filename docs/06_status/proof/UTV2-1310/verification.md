@@ -6,7 +6,7 @@
 **Branch:** `claude/utv2-1310-g-const-15-canonical-gap-map`  
 **Tier:** T2  
 **Date:** 2026-06-25  
-**Merge SHA:** (pending — pre-merge)
+**Merge SHA:** eed18a7328cd106c303c352be9cbb4bd08dd9f2c
 
 ---
 
@@ -151,3 +151,12 @@ EXIT: 0
 - [x] R-level check passes
 - [x] Lane is docs-only — no Tier C path touches
 - [x] Output files written to correct paths under `docs/06_status/`
+
+## pnpm verify
+
+Full pipeline (env:check + lint + type-check + build + test):
+
+```
+pnpm verify
+Exit code: 0 (PASS) — see CI on PR #1072
+```
