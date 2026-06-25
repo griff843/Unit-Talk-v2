@@ -11,7 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/05_operations/DISCORD_LAUNCH_GATE_AUDIT.md"
+    "docs/05_operations/DISCORD_LAUNCH_GATE_AUDIT.md",
+    "docs/06_status/proof/UTV2-1319/diff-summary.md",
+    "docs/06_status/proof/UTV2-1319/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1319/diff-summary.md",
