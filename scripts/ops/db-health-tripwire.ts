@@ -213,7 +213,7 @@ async function main() {
 
   const sql = postgres(SUPABASE_DB_URL, { max: 1, connect_timeout: 10 });
 
-  let allAlerts: Alert[] = [];
+  const allAlerts: Alert[] = [];
 
   try {
     console.log('[tripwire] Check 1: autovacuum staleness...');
