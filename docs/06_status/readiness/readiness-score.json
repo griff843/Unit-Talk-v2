@@ -23,14 +23,14 @@
       "id": "worker_outbox_health",
       "title": "No stuck outbox rows older than 30 minutes",
       "status": "pass",
-      "evidence": "0 true stuck rows. 594 pending >30min are all attempt_count=0 governance holds (351 discord:canary, 243 discord:best-bets). 2 processing rows checked — governance holds confirmed. Worker draining canary correctly.",
+      "evidence": "594 pending >30min — ALL bucket:governance_hold (attempt_count=0; 351 discord:canary, 243 discord:best-bets). True stuck rows (bucket:retryable + bucket:stale_unknown): 0. True delivery failures (bucket:true_failure): 0. Governance holds do not count as stuck rows per QUEUE_READINESS_SEMANTICS.md (UTV2-1320).",
       "blocking": true
     },
     {
       "id": "dead_letter_count",
       "title": "Dead-letter queue: zero true delivery failures",
       "status": "pass",
-      "evidence": "946 dead_letter rows: ALL attempt_count=0 (governance holds, not retry-exhausted). True delivery failures=0. Phase 7A governance holds do not count as delivery failures per semantic classification in UTV2-1313.",
+      "evidence": "946 dead_letter rows — ALL bucket:governance_hold (attempt_count=0). True delivery failures (bucket:true_failure, attempt_count>=max_attempts): 0. Phase 7A governance brake holds are not delivery failures per QUEUE_READINESS_SEMANTICS.md (UTV2-1320).",
       "blocking": true
     },
     {
@@ -63,5 +63,7 @@
     }
   ],
   "blockers": [],
-  "open_gap_count": 1
+  "open_gap_count": 1,
+  "queue_semantics_version": "1.0",
+  "queue_semantics_doc": "docs/05_operations/QUEUE_READINESS_SEMANTICS.md"
 }
