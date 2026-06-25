@@ -8,7 +8,7 @@
   "branch": "griffadavi/utv2-1300-t3-read-only-db-health-tripwire-monitor-gha-cron-from-5-of",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1060",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/db-health-tripwire.yml",
@@ -20,7 +20,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1300/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-06-25T00:35:04.000Z",
   "heartbeat_at": "2026-06-25T00:35:04.000Z",
   "closed_at": null,
