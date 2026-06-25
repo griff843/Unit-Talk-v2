@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1305",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1305-g-const-13-deploy-sha-alignment-production-must-match",
+  "branch": "griffadavi/utv2-1305-g-const-13-deploy-sha-alignment-production-must-match",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1305/deploy-proof.md",
+    "docs/06_status/proof/UTV2-1305/diff-summary.md",
+    "docs/06_status/proof/UTV2-1305/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1305/diff-summary.md",
+    "docs/06_status/proof/UTV2-1305/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-25T06:34:58.455Z",
+  "heartbeat_at": "2026-06-25T06:34:58.455Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1305-g-const-13-deploy-sha-alignment-production-must-match.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1305-g-const-13-deploy-sha-alignment-production-must-match",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
