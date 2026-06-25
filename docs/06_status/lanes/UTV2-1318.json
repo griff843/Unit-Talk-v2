@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1318",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1318-launch-gate-definition",
+  "branch": "claude/utv2-1318-launch-gate-definition",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1079",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/LAUNCH_GATE_DEFINITION.md",
+    "docs/06_status/proof/UTV2-1318/diff-summary.md",
+    "docs/06_status/proof/UTV2-1318/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1318/diff-summary.md",
+    "docs/06_status/proof/UTV2-1318/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-25T22:07:22.791Z",
+  "heartbeat_at": "2026-06-25T22:07:22.791Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1318-launch-gate-definition.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1318-launch-gate-definition",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
