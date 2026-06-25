@@ -8,7 +8,7 @@
 
 ---
 
-## Verification Steps
+## Verification
 
 ### 1. Pre-deploy SHA audit
 
