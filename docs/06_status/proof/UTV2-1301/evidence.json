@@ -1,0 +1,82 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1301",
+  "tier": "T1",
+  "lane_type": "governance",
+  "executor": "claude",
+  "audited_at": "2026-06-25T13:00:00Z",
+  "sha_binding": {
+    "verified_source_sha": "53b91fce39f828e8af0206cb34b546d8214e9651",
+    "sha_type": "main_head_at_audit",
+    "note": "Governance audit lane; merge SHA will be bound by post-merge-lane-close.yml after PR merge"
+  },
+  "verification": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "test": "PASS",
+    "test_db": "PASS",
+    "test_db_summary": "7 pass, 0 fail, 0 skipped",
+    "verify_full": "PASS"
+  },
+  "audit_verdict": "YELLOW",
+  "gaps_identified": [
+    {
+      "id": "G-CONST-9",
+      "title": "CURRENT_STATE.md stale since 2026-06-10",
+      "risk": "MEDIUM",
+      "status": "OPEN"
+    },
+    {
+      "id": "G-CONST-10",
+      "title": "UTV2-1297 runtime proof incomplete (result: not_run)",
+      "risk": "LOW-MEDIUM",
+      "status": "CONDITIONAL"
+    },
+    {
+      "id": "G-CONST-11",
+      "title": "Retention execution preflight gate undefined",
+      "risk": "HIGH_IF_EXECUTED",
+      "status": "OPEN"
+    },
+    {
+      "id": "G-CONST-12",
+      "title": "DB-health tripwire §5 partial parity — 2 hot tables + TOAST check missing",
+      "risk": "MEDIUM",
+      "status": "OPEN"
+    },
+    {
+      "id": "G-CONST-13",
+      "title": "Deploy SHA gap — prod at dcd649d5 (2026-06-10), main at 53b91fce (2026-06-25)",
+      "risk": "HIGH",
+      "status": "OPEN"
+    },
+    {
+      "id": "G-CONST-CODEX",
+      "title": "Codex canary passed — restore to two parallel T3 lanes",
+      "risk": "POSITIVE",
+      "status": "RESOLVED"
+    }
+  ],
+  "program_state_conformance": {
+    "P1": "OK — ACTIVE_CERTIFIED, re-cert 2026-08-25",
+    "P2": "OK — ACTIVE_CERTIFIED, governance brake operational",
+    "P3": "OK_UNCHANGED — ACTIVE_NOT_CERTIFIED, CLV evidence pending UTV2-1042",
+    "P4": "OK_UNCHANGED — CONDITIONAL_NOT_CERTIFIED",
+    "P5": "OK_UNCHANGED — FROZEN_NOT_CERTIFIED"
+  },
+  "guardrails": {
+    "no_p3_certification": true,
+    "utv2_1042_not_done": true,
+    "no_clv_roi_edge_claims": true,
+    "no_public_discord": true,
+    "no_db_mutation": true,
+    "no_live_backfill": true,
+    "no_48h_backlog_mutation": true
+  },
+  "proof_artifacts": [
+    "docs/06_status/proof/UTV2-1301/audit-v3.md",
+    "docs/06_status/proof/UTV2-1301/diff-summary.md",
+    "docs/06_status/proof/UTV2-1301/evidence.json",
+    "docs/06_status/proof/UTV2-1301/verification.md"
+  ]
+}
