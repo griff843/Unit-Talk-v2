@@ -169,3 +169,13 @@ After (partition-pruned to 48h window):
 | Fix scope | 1 line added to 1 method in 1 file |
 | No schema changes | CONFIRMED |
 | No migrations | CONFIRMED |
+
+---
+
+## Merge SHA Binding
+
+**Merge SHA:** `321638ab98b3a25f2ed18b86c0e9aea0fc8784af`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1076
+**Merged at:** 2026-06-25T16:48:18Z
+
+This proof is SHA-bound to merge commit `321638ab98b3a25f2ed18b86c0e9aea0fc8784af` on `main`.

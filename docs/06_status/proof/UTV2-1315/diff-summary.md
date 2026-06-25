@@ -57,3 +57,11 @@ After this lane merges and deploys:
 - `ingestor_health`: FAIL → **PASS** (markClosingLines partition scan eliminated; cycles expected to complete cleanly)
 - `blockers`: `["ingestor_health"]` → `[]`
 - `verdict`: **YELLOW → GREEN** (0 blocking failures)
+
+---
+
+## Merge SHA Binding
+
+**Merge SHA:** `321638ab98b3a25f2ed18b86c0e9aea0fc8784af`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1076
+**Merged at:** 2026-06-25T16:48:18Z
