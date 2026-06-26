@@ -135,5 +135,5 @@ This lane is a docs audit — no code changes, no DB mutation. Evidence sources:
 
 **Branch HEAD SHA:** `27a3c69c`  
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1084  
-**Merge SHA:** `335af04a5ddb9a99f7e3e3d9eca45e68d0b10558`  
+**Merge SHA:** `335af04a88e4821c6d387a77f676427111d7d4b5`  
 **Merged at:** 2026-06-26
