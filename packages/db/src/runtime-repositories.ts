@@ -1329,8 +1329,12 @@ export class InMemorySettlementRepository implements SettlementRepository {
       .sort(compareSettlementRecordsDescending);
   }
 
-  async listRecent(limit = 12): Promise<SettlementRecord[]> {
-    return [...this.settlements]
+  async listRecent(limit = 12, since?: string): Promise<SettlementRecord[]> {
+    let results = [...this.settlements];
+    if (since !== undefined) {
+      results = results.filter((s) => s.created_at >= since);
+    }
+    return results
       .sort(compareSettlementRecordsDescending)
       .slice(0, limit);
   }
@@ -4360,12 +4364,18 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     return (data ?? []).sort(compareSettlementRecordsDescending);
   }
 
-  async listRecent(limit = 12): Promise<SettlementRecord[]> {
-    const { data, error } = await this.client
+  async listRecent(limit = 12, since?: string): Promise<SettlementRecord[]> {
+    let query = this.client
       .from('settlement_records')
       .select()
       .order('created_at', { ascending: false })
       .limit(limit);
+
+    if (since !== undefined) {
+      query = query.gte('created_at', since);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(`Failed to list settlements: ${error.message}`);
