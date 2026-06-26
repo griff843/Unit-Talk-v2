@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "docs/06_status/lanes/UTV2-1324.json",
     "docs/06_status/proof/UTV2-1324/diff-summary.md",
     "docs/06_status/proof/UTV2-1324/verification.md",
     "docs/06_status/readiness/WINNING_PICKS_PIPELINE_TRUTH_AUDIT.md"
