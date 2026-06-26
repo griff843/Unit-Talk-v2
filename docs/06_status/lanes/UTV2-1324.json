@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1324-winning-picks-pipeline-truth-audit",
   "branch": "claude/utv2-1324-winning-picks-pipeline-truth-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "335af04a5ddb9a99f7e3e3d9eca45e68d0b10558",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1084",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/lanes/UTV2-1324.json",
@@ -20,7 +20,7 @@
     "docs/06_status/proof/UTV2-1324/diff-summary.md",
     "docs/06_status/proof/UTV2-1324/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-26T21:03:34.842Z",
   "heartbeat_at": "2026-06-26T21:03:34.842Z",
   "closed_at": null,

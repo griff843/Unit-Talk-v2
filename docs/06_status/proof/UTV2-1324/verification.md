@@ -133,7 +133,7 @@ This lane is a docs audit — no code changes, no DB mutation. Evidence sources:
 
 ## Merge SHA Binding
 
-**Branch HEAD SHA:** `(to be bound post-merge)`  
-**PR:** (to be opened)  
-**Merge SHA:** `(to be bound post-merge)`  
-**Merged at:** (pending)
+**Branch HEAD SHA:** `27a3c69c`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1084  
+**Merge SHA:** `335af04a5ddb9a99f7e3e3d9eca45e68d0b10558`  
+**Merged at:** 2026-06-26
