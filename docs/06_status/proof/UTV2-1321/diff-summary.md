@@ -119,6 +119,6 @@ R-level check: PASS
 
 ## Merge SHA Binding
 
-**Merge SHA:** `(to be bound post-merge)`  
-**PR:** (to be opened)  
-**Merged at:** (pending)
+**Merge SHA:** `582588dd3f602576c29a2157f392feb2da6b16e7`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1082  
+**Merged at:** 2026-06-26

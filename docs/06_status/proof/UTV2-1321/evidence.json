@@ -27,9 +27,9 @@
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "(to be bound post-merge)",
+    "verified_source_sha": "582588dd3f602576c29a2157f392feb2da6b16e7",
     "sha_type": "merge_sha",
-    "bound_at": "(to be bound post-merge)",
+    "bound_at": "2026-06-26T00:00:00Z",
     "ci_sentinels": {
       "merge_gate": "pass",
       "wfr_v2_validators": "pass"
