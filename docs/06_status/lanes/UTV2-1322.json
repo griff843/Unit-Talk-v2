@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1322/diff-summary.md",
     "docs/06_status/proof/UTV2-1322/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-26T21:24:25.316Z",
-  "heartbeat_at": "2026-06-26T21:24:25.316Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-26T21:46:06.623Z",
+  "closed_at": "2026-06-26T21:46:06.623Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1322-production-db-truth-audit.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-26T21:45:56.469Z",
+      "verdict": "pass",
+      "merge_sha": "5d0802b26f17a7b70543ada8cb2305651f3898d5",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
