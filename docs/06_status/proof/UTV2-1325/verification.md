@@ -55,6 +55,70 @@ Result: **PASS (113 unit tests, 0 failures)**
 
 ---
 
+### pnpm test:db (live-DB smoke test)
+
+Docs-only lane — no code changes. pnpm test:db run confirms DB health at time of lane.
+
+```
+pnpm test:db
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+  ---
+  duration_ms: 33946.89267
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+  ---
+  duration_ms: 17477.169568
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+  ---
+  duration_ms: 15964.938071
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+  ---
+  duration_ms: 17433.812369
+  type: 'test'
+  ...
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+  ---
+  duration_ms: 814.287881
+  type: 'test'
+  ...
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  ---
+  duration_ms: 18205.128962
+  type: 'test'
+  ...
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  ---
+  duration_ms: 17563.177204
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 121891.756142
+```
+
+Result: **PASS (7/7 live-DB tests, 0 failures)**
+
+---
+
 ### R-level check
 
 ```
