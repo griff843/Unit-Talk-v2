@@ -170,10 +170,12 @@ An earlier automated agent reported `GradeResultRepository` as "BROKEN/UNPROVEN 
 
 | Check | Result |
 |---|---|
+| pnpm verify | PASS (type-check + lint + build + test) |
 | pnpm type-check | PASS |
 | pnpm lint | PASS |
 | pnpm build | PASS |
 | pnpm test (unit) | PASS (113/113) |
+| pnpm test:db | PASS (7/7) |
 | R-level check | PASS |
 | Output artifact | `docs/06_status/readiness/GRADING_MODEL_PROOF_INVENTORY.md` |
 | DB mutation | NONE |
@@ -183,7 +185,7 @@ An earlier automated agent reported `GradeResultRepository` as "BROKEN/UNPROVEN 
 
 ## Merge SHA Binding
 
-**Branch HEAD SHA:** `(to be bound post-merge)`  
-**PR:** (to be opened)  
-**Merge SHA:** `(to be bound post-merge)`  
-**Merged at:** (pending)
+**Branch HEAD SHA:** `e461a4b6`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1083  
+**Merge SHA:** `ba83018ad14ade1234ce068f6bf5cc04759e28ce`  
+**Merged at:** 2026-06-26

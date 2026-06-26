@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1325-grading-model-proof-inventory",
   "branch": "claude/utv2-1325-grading-model-proof-inventory",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ba83018ad14ade1234ce068f6bf5cc04759e28ce",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1083",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/lanes/UTV2-1325.json",
@@ -20,14 +20,26 @@
     "docs/06_status/proof/UTV2-1325/diff-summary.md",
     "docs/06_status/proof/UTV2-1325/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-26T20:04:43.708Z",
-  "heartbeat_at": "2026-06-26T20:04:43.708Z",
+  "heartbeat_at": "2026-06-26T20:59:57.007Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1325-grading-model-proof-inventory.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-26T20:59:57.007Z",
+      "verdict": "fail",
+      "merge_sha": "ba83018ad14ade1234ce068f6bf5cc04759e28ce",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
