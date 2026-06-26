@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/clv-feedback.ts",
+    "apps/api/src/t1-proof-utv2-1321-settlement-listrecent.test.ts",
     "docs/06_status/proof/UTV2-1321/diff-summary.md",
     "docs/06_status/proof/UTV2-1321/verification.md",
     "packages/db/src/repositories.ts",
