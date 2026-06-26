@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1325/diff-summary.md",
     "docs/06_status/proof/UTV2-1325/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-26T20:04:43.708Z",
-  "heartbeat_at": "2026-06-26T20:59:57.007Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-26T21:01:08.062Z",
+  "closed_at": "2026-06-26T21:01:08.062Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1325-grading-model-proof-inventory.json",
   "created_by": "claude",
@@ -37,6 +37,13 @@
         "C4",
         "P13"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-26T21:00:56.507Z",
+      "verdict": "pass",
+      "merge_sha": "ba83018ad14ade1234ce068f6bf5cc04759e28ce",
+      "failures": [],
       "runner": "manual"
     }
   ],
