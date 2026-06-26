@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1324/diff-summary.md",
     "docs/06_status/proof/UTV2-1324/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-26T21:03:34.842Z",
-  "heartbeat_at": "2026-06-26T21:03:34.842Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-26T21:22:38.834Z",
+  "closed_at": "2026-06-26T21:22:38.834Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1324-winning-picks-pipeline-truth-audit.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-26T21:22:28.040Z",
+      "verdict": "pass",
+      "merge_sha": "335af04a88e4821c6d387a77f676427111d7d4b5",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
