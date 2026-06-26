@@ -22,12 +22,14 @@
     "packages/db/src/runtime-repositories.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1321/evidence.json"
+    "docs/06_status/proof/UTV2-1321/evidence.json",
+    "docs/06_status/proof/UTV2-1321/verification.md",
+    "docs/06_status/proof/UTV2-1321/diff-summary.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-26T15:31:58.449Z",
-  "heartbeat_at": "2026-06-26T16:20:30.533Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-26T16:21:43.228Z",
+  "closed_at": "2026-06-26T16:21:43.228Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1321-settlement-listrecent-partition-pruning.json",
   "created_by": "claude",
@@ -40,6 +42,25 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1082"
+    },
+    {
+      "checked_at": "2026-06-26T16:20:41.797Z",
+      "verdict": "fail",
+      "merge_sha": "582588dd3f602576c29a2157f392feb2da6b16e7",
+      "failures": [
+        "P11",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-26T16:21:27.649Z",
+      "verdict": "pass",
+      "merge_sha": "582588dd3f602576c29a2157f392feb2da6b16e7",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
