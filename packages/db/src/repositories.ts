@@ -513,7 +513,7 @@ export interface SettlementRepository {
   settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult>;
   findLatestForPick(pickId: string): Promise<SettlementRecord | null>;
   listByPick(pickId: string): Promise<SettlementRecord[]>;
-  listRecent(limit?: number | undefined): Promise<SettlementRecord[]>;
+  listRecent(limit?: number | undefined, since?: string | undefined): Promise<SettlementRecord[]>;
 }
 
 export interface SystemRunStartInput {

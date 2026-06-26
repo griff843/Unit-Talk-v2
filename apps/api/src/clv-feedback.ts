@@ -42,7 +42,7 @@ export async function computeClvTrustAdjustment(
   cutoff.setDate(cutoff.getDate() - lookbackDays);
   const cutoffIso = cutoff.toISOString();
 
-  const recentSettlements = await settlementRepository.listRecent(500);
+  const recentSettlements = await settlementRepository.listRecent(500, cutoffIso);
 
   const gradingSettlements = recentSettlements.filter(
     (s) => s.source === 'grading' && s.settled_at >= cutoffIso,
@@ -124,7 +124,7 @@ export async function computeAndPersistMarketFamilyClvFeedback(
   cutoff.setDate(cutoff.getDate() - lookbackDays);
   const cutoffIso = cutoff.toISOString();
 
-  const recentSettlements = await settlementRepository.listRecent(500);
+  const recentSettlements = await settlementRepository.listRecent(500, cutoffIso);
   const gradingSettlements = recentSettlements.filter(
     (s) => s.source === 'grading' && s.settled_at >= cutoffIso,
   );

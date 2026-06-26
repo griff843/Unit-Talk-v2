@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "verifier": {
+    "identity": "pm"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "113 unit tests pass (pnpm test); 7/7 pnpm test:db pass in worktree",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "settlement_records",
+        "description": "listRecent(500, cutoffIso) with created_at >= 30-day lower-bound — partition-pruned query completed in 1.9s vs prior statement_timeout"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "settlement_records",
+        "count": 500,
+        "status": "healthy"
+      }
+    ]
+  },
+  "sha_binding": {
+    "verified_source_sha": "(to be bound post-merge)",
+    "sha_type": "merge_sha",
+    "bound_at": "(to be bound post-merge)",
+    "ci_sentinels": {
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass"
+    }
+  }
+}
