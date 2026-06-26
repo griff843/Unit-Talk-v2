@@ -199,6 +199,7 @@ The authoritative T1 proof is the standalone `pnpm test:db` run above (7/7 pass)
 
 ## Merge SHA Binding
 
-**Merge SHA:** `(to be bound post-merge)`  
-**PR:** (to be opened)  
+**Branch HEAD SHA:** `4d454658ba8eb0418273f5cce9be6fca3946511c`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1082  
+**Merge SHA:** `(to be bound post-merge by post-merge-lane-close.yml)`  
 **Merged at:** (pending)
