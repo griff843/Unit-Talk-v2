@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1322-production-db-truth-audit",
   "branch": "claude/utv2-1322-production-db-truth-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "5d0802b26f17a7b70543ada8cb2305651f3898d5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1085",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/lanes/UTV2-1322.json",
@@ -20,7 +20,7 @@
     "docs/06_status/proof/UTV2-1322/diff-summary.md",
     "docs/06_status/proof/UTV2-1322/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-26T21:24:25.316Z",
   "heartbeat_at": "2026-06-26T21:24:25.316Z",
   "closed_at": null,

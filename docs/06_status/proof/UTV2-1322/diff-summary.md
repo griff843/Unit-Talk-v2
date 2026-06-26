@@ -54,6 +54,6 @@ This file.
 
 ## Merge SHA Binding
 
-**Merge SHA:** `(to be bound post-merge)`
-**PR:** (to be opened)
-**Merged at:** (pending)
+**Merge SHA:** `5d0802b26f17a7b70543ada8cb2305651f3898d5`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1085
+**Merged at:** 2026-06-26
