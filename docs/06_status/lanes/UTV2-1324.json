@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1324",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1324-winning-picks-pipeline-truth-audit",
+  "branch": "claude/utv2-1324-winning-picks-pipeline-truth-audit",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1324/diff-summary.md",
+    "docs/06_status/proof/UTV2-1324/verification.md",
+    "docs/06_status/readiness/WINNING_PICKS_PIPELINE_TRUTH_AUDIT.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1324/diff-summary.md",
+    "docs/06_status/proof/UTV2-1324/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-06-26T21:03:34.842Z",
+  "heartbeat_at": "2026-06-26T21:03:34.842Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1324-winning-picks-pipeline-truth-audit.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1324-winning-picks-pipeline-truth-audit",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
