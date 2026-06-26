@@ -11,9 +11,12 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "apps/api/package.json",
     "apps/api/src/clv-feedback.ts",
     "apps/api/src/t1-proof-utv2-1321-settlement-listrecent.test.ts",
+    "docs/06_status/lanes/UTV2-1321.json",
     "docs/06_status/proof/UTV2-1321/diff-summary.md",
+    "docs/06_status/proof/UTV2-1321/evidence.json",
     "docs/06_status/proof/UTV2-1321/verification.md",
     "packages/db/src/repositories.ts",
     "packages/db/src/runtime-repositories.ts"
