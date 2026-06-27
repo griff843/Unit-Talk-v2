@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "docs/06_status/lanes/UTV2-1323.json",
     "docs/06_status/proof/UTV2-1323/diff-summary.md",
     "docs/06_status/proof/UTV2-1323/verification.md",
     "docs/06_status/readiness/DEVOPS_PRODUCTION_POSTURE_AUDIT.md"
