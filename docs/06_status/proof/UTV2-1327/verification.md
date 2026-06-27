@@ -4,6 +4,7 @@
 **Branch:** `claude/utv2-1327-model-driven-promotion-signals`
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1088
 **Tier:** T1
+**Branch HEAD SHA:** b43560c4f4fd18ec46502a0616d34f9b5ea9ade4
 **Merge SHA:** _(bound post-merge)_
 
 ---

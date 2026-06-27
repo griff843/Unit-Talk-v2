@@ -115,13 +115,13 @@ test('UTV2-1327: enrichPickAtPromotionTime returns unchanged pick when odds are 
 // ── Live DB proofs (real Supabase connection) ─────────────────────────────────
 
 test('UTV2-1327 live-DB: picks table is accessible via listByLifecycleStates', { skip }, async () => {
-  const recentPicks = await repos.picks.listByLifecycleStates(['qualified', 'promoted', 'pending_review'], 5);
+  const recentPicks = await repos.picks.listByLifecycleStates(['validated', 'awaiting_approval', 'queued'], 5);
   assert.ok(Array.isArray(recentPicks), 'listByLifecycleStates must return an array');
   assert.ok(recentPicks.length >= 0, 'result must be a non-negative array');
 });
 
 test('UTV2-1327 live-DB: enrichPickAtPromotionTime is stable against real pick schema from DB', { skip }, async () => {
-  const recentPicks = await repos.picks.listByLifecycleStates(['qualified', 'promoted', 'pending_review'], 3);
+  const recentPicks = await repos.picks.listByLifecycleStates(['validated', 'awaiting_approval', 'queued'], 3);
   if (recentPicks.length === 0) {
     assert.ok(true, 'DB accessible — no picks in qualified/promoted/pending_review state (acceptable for proof)');
     return;

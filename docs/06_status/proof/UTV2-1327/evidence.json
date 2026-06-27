@@ -7,6 +7,7 @@
   "branch": "claude/utv2-1327-model-driven-promotion-signals",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1088",
   "sha_binding": {
+    "branch_head_sha": "b43560c4f4fd18ec46502a0616d34f9b5ea9ade4",
     "verified_source_sha": "_(bound post-merge)_",
     "ci_run_url": "_(bound post-merge)_",
     "ci_status": "pending"
