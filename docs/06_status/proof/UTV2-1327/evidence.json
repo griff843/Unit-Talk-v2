@@ -1,0 +1,49 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1327",
+  "title": "Wire domainAnalysis at promotion time — DEBT-019/020",
+  "tier": "T1",
+  "executor": "claude",
+  "branch": "claude/utv2-1327-model-driven-promotion-signals",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1088",
+  "sha_binding": {
+    "branch_head_sha": "073f389f474ed149951be6725a4dc21e6025780c",
+    "verified_source_sha": "_(bound post-merge)_",
+    "ci_run_url": "_(bound post-merge)_",
+    "ci_status": "pending"
+  },
+  "verification": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": "PASS",
+    "unit_test_count": 74,
+    "unit_test_file": "apps/api/src/promotion-edge-integration.test.ts",
+    "test_db": "_(pending — see verification.md for TAP output)_",
+    "test_db_count": 7
+  },
+  "debt_resolved": [
+    {
+      "id": "DEBT-019",
+      "description": "readDomainAnalysisEdgeScore fell back to confidence-delta for 92.4% of picks — domainAnalysis absent at promotion time",
+      "fix": "enrichPickAtPromotionTime populates domainAnalysis.edge before readPromotionScoreInputs runs",
+      "weight_in_promotion_score": "35%"
+    },
+    {
+      "id": "DEBT-020",
+      "description": "readKellyGradientReadiness returned constant 60 for 94.4% of picks — kellySizing not populated and domainAnalysis.kellyFraction absent",
+      "fix": "enrichPickAtPromotionTime populates domainAnalysis.kellyFraction; readKellyGradientReadiness already had domainAnalysis fallback at lines 1399-1404",
+      "weight_in_promotion_score": "20%"
+    }
+  ],
+  "invariants_preserved": [
+    "No DB writes — in-memory enrichment only",
+    "Idempotent — existing domainAnalysis never overwritten",
+    "Fail-closed — null return from computeSubmissionDomainAnalysis when odds absent",
+    "UTV2-985 market-backed edge zeroing unaffected — readMarketBackedEdgeScore reads realEdge not edge"
+  ],
+  "files_changed": [
+    "apps/api/src/promotion-service.ts",
+    "apps/api/src/promotion-edge-integration.test.ts"
+  ]
+}

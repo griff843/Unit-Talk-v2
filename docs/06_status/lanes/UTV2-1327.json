@@ -18,7 +18,9 @@
     "docs/06_status/lanes/UTV2-1327.json",
     "docs/06_status/proof/UTV2-1327/diff-summary.md",
     "docs/06_status/proof/UTV2-1327/evidence.json",
-    "docs/06_status/proof/UTV2-1327/verification.md"
+    "docs/06_status/proof/UTV2-1327/verification.md",
+    "docs/06_status/readiness/readiness-score.json",
+    ".lane/lanes/runtime.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1327/evidence.json"
