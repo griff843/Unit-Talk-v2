@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1327-model-driven-promotion-signals",
   "branch": "claude/utv2-1327-model-driven-promotion-signals",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e7d2b2de87ff0879c6dc9e77860511737a58fbca",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1088",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/promotion-edge-integration.test.ts",
@@ -25,14 +25,49 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1327/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-27T13:03:45.291Z",
-  "heartbeat_at": "2026-06-27T13:03:45.291Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-27T21:03:44.776Z",
+  "closed_at": "2026-06-27T21:03:44.776Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1327-model-driven-promotion-signals.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-27T20:58:28.131Z",
+      "verdict": "pass",
+      "merge_sha": "e7d2b2de87ff0879c6dc9e77860511737a58fbca",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1088"
+    },
+    {
+      "checked_at": "2026-06-27T20:58:32.927Z",
+      "verdict": "fail",
+      "merge_sha": "e7d2b2de87ff0879c6dc9e77860511737a58fbca",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-27T21:03:35.139Z",
+      "verdict": "pass",
+      "merge_sha": "e7d2b2de87ff0879c6dc9e77860511737a58fbca",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
