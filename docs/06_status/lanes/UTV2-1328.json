@@ -7,13 +7,9 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1328-db-final-architecture-hot-store-historical-archive-and-proof-db",
   "branch": "codex/utv2-1328-db-final-architecture-hot-store-historical-archive-and-proof-db",
   "base_branch": "main",
-  "commit_sha": "a02ccc9b",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1092",
-  "files_changed": [
-    "docs/05_operations/DB_ARCHITECTURE_SPEC.md",
-    "docs/06_status/proof/UTV2-1328/diff-summary.md",
-    "docs/06_status/proof/UTV2-1328/verification.md"
-  ],
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DB_ARCHITECTURE_SPEC.md"
   ],
