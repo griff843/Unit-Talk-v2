@@ -2615,6 +2615,10 @@ export class InMemoryExecutionQualityRepository implements ExecutionQualityRepos
   }
 }
 
+function isStatementTimeoutError(error: { code?: string; message?: string }): boolean {
+  return error.code === '57014' || (error.message ?? '').toLowerCase().includes('statement timeout');
+}
+
 export class DatabaseSubmissionRepository implements SubmissionRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -4297,7 +4301,7 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     input: SettlePickAtomicInput,
   ): Promise<SettlePickAtomicResult> {
     const s = input.settlement;
-    const { data, error } = await this.client.rpc('settle_pick_atomic', {
+    const params = {
       p_pick_id: input.pickId,
       p_settlement: {
         result: s.result ?? null,
@@ -4318,7 +4322,15 @@ export class DatabaseSettlementRepository implements SettlementRepository {
       p_audit_action: input.auditAction,
       p_audit_actor: input.auditActor,
       p_audit_payload: input.auditPayload,
-    });
+    };
+
+    let { data, error } = await this.client.rpc('settle_pick_atomic', params);
+
+    // Retry once on statement_timeout — the RPC is transactional so a timeout means rollback; retry is safe.
+    if (error && isStatementTimeoutError(error)) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 500));
+      ({ data, error } = await this.client.rpc('settle_pick_atomic', params));
+    }
 
     if (error) {
       throw new Error(`settle_pick_atomic failed: ${error.message}`);
