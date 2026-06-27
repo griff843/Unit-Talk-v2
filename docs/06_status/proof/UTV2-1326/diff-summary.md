@@ -55,6 +55,6 @@ Two targeted changes to `DatabaseSettlementRepository`:
 
 ## Merge SHA Binding
 
-**Merge SHA:** `(to be bound post-merge)`
-**PR:** (to be opened)
-**Merged at:** (pending)
+**Merge SHA:** `a24e05f78c17ac2c08b5c590cd32052e7cd41b65`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1086
+**Merged at:** 2026-06-27

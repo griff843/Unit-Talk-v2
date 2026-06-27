@@ -152,7 +152,7 @@ packages/db/src/runtime-repositories.ts
 
 ## Merge SHA Binding
 
-**Branch HEAD SHA:** `(to be bound post-merge)`
-**PR:** (to be opened)
-**Merge SHA:** `(to be bound post-merge)`
-**Merged at:** (pending)
+**Branch HEAD SHA:** `6b394048`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1086
+**Merge SHA:** `a24e05f78c17ac2c08b5c590cd32052e7cd41b65`
+**Merged at:** 2026-06-27

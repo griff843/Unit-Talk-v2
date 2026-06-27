@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1326-settle-pick-atomic-timeout",
   "branch": "claude/utv2-1326-settle-pick-atomic-timeout",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a24e05f78c17ac2c08b5c590cd32052e7cd41b65",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1086",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1326/diff-summary.md",
@@ -19,7 +19,7 @@
     "docs/06_status/proof/UTV2-1326/diff-summary.md",
     "docs/06_status/proof/UTV2-1326/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-27T04:17:46.193Z",
   "heartbeat_at": "2026-06-27T04:17:46.193Z",
   "closed_at": null,
