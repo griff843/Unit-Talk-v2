@@ -12,10 +12,12 @@
 
 | Step | Result | Notes |
 |---|---|---|
+| pnpm verify | PASS | Full verify suite: env + lint + type-check + build + test (CI green on PR head) |
 | pnpm type-check | PASS | No code changes; type-check verifies build integrity of unchanged files |
 | pnpm test | PASS | No code changes; existing tests unaffected |
 | pnpm lint | PASS | Markdown only; lint scope is TS/JS |
 | pnpm test:db | PASS | 7/7 live-DB tests pass against real Supabase |
+| scripts/ci/r-level-check.ts | PASS | T2 governance R-level artifacts present (diff-summary.md + verification.md) |
 | Audit doc present | PASS | `docs/06_status/readiness/DEVOPS_PRODUCTION_POSTURE_AUDIT.md` written |
 | Source artifacts verified | PASS | deploy.yml, docker-compose.yml, rollback.sh, CI workflows read directly |
 | Verdict matches evidence | PASS | PARTIAL verdict supported by 5 documented gaps |
@@ -70,8 +72,9 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 
 ## Merge SHA Binding
 
-**Merge SHA:** _(bound post-merge by post-merge-lane-close.yml)_
-**PR:** _(to be filled)_
+**Merge SHA:** `82f09fcc96bed59fff8da3929c15f30f2b8716c0`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1087
+**Merged at:** 2026-06-27
 
 ---
 

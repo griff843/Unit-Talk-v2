@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1323-devops-production-posture-audit",
   "branch": "claude/utv2-1323-devops-production-posture-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "82f09fcc96bed59fff8da3929c15f30f2b8716c0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1087",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/lanes/UTV2-1323.json",
@@ -20,14 +20,34 @@
     "docs/06_status/proof/UTV2-1323/diff-summary.md",
     "docs/06_status/proof/UTV2-1323/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-27T04:44:35.832Z",
-  "heartbeat_at": "2026-06-27T04:44:35.832Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-27T05:11:08.452Z",
+  "closed_at": "2026-06-27T05:11:08.452Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1323-devops-production-posture-audit.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-27T05:10:20.977Z",
+      "verdict": "fail",
+      "merge_sha": "82f09fcc96bed59fff8da3929c15f30f2b8716c0",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-27T05:10:59.305Z",
+      "verdict": "pass",
+      "merge_sha": "82f09fcc96bed59fff8da3929c15f30f2b8716c0",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

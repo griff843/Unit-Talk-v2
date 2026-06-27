@@ -50,5 +50,6 @@ Docs-only audit lane. No code changes. Produces one new audit document under `do
 
 ## Merge SHA Binding
 
-**Merge SHA:** _(bound post-merge by post-merge-lane-close.yml)_
-**PR:** _(to be filled)_
+**Merge SHA:** `82f09fcc96bed59fff8da3929c15f30f2b8716c0`
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1087
+**Merged at:** 2026-06-27
