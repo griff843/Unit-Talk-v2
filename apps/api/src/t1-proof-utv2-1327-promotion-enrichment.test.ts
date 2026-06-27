@@ -10,7 +10,8 @@
  * Gated on SUPABASE_SERVICE_ROLE_KEY.
  *
  * Run:
- *   pnpm test:t1-proof:live (or tsx --test apps/api/src/t1-proof-utv2-1327-promotion-enrichment.test.ts)
+ *   pnpm test:t1-proof:live
+ *   tsx --test apps/api/src/t1-proof-utv2-1327-promotion-enrichment.test.ts
  */
 
 import { test, before } from 'node:test';
