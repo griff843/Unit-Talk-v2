@@ -36,6 +36,10 @@ import type {
   SettlementRepository,
 } from '@unit-talk/db';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
+import {
+  computeSubmissionDomainAnalysis,
+  enrichMetadataWithDomainAnalysis,
+} from './domain-analysis-service.js';
 
 const activeScoringProfile = resolveScoringProfile(process.env['UNIT_TALK_SCORING_PROFILE']);
 
@@ -95,6 +99,24 @@ export interface EagerPromotionAllPoliciesResult {
   exclusiveInsightsDecision: BoardPromotionDecision;
   traderInsightsDecision: BoardPromotionDecision;
   bestBetsDecision: BoardPromotionDecision;
+}
+
+/**
+ * Enrich a pick's metadata with domainAnalysis if it is missing at promotion time.
+ *
+ * DEBT-019/020: picks submitted before real-edge enrichment was fully wired, or picks
+ * where market data was unavailable at submission, may lack domainAnalysis. Without it:
+ * - edge score falls back to confidence-delta (DEBT-019, 35% weight)
+ * - readiness score falls back to constant 60 (DEBT-020, 20% weight)
+ *
+ * This enrichment is idempotent (no-op when domainAnalysis already present) and operates
+ * only on the in-memory pick — it does not write to the database.
+ */
+export function enrichPickAtPromotionTime(pick: CanonicalPick): CanonicalPick {
+  if (pick.metadata['domainAnalysis'] != null) return pick;
+  const analysis = computeSubmissionDomainAnalysis(pick);
+  if (analysis === null) return pick;
+  return { ...pick, metadata: enrichMetadataWithDomainAnalysis(pick.metadata, analysis) };
 }
 
 /**
@@ -229,8 +251,11 @@ export async function evaluateAllPoliciesEagerAndPersist(
     }
   }
 
+  // DEBT-019/020: enrich domainAnalysis if missing — populates edge + kellyFraction signals.
+  const scoringPick = enrichPickAtPromotionTime(canonicalPick);
+
   const scoreInputs = await readPromotionScoreInputs(
-    canonicalPick,
+    scoringPick,
     openPicks,
     settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
   );
@@ -862,8 +887,10 @@ async function persistPromotionDecisionForPick(
   // Fetch open picks for correlation-aware scoring
   const openPickRecords = await pickRepository.listByLifecycleStates(['validated', 'queued', 'posted'], 300);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
+  // DEBT-019/020: enrich domainAnalysis if missing — populates edge + kellyFraction signals.
+  const scoringPick = enrichPickAtPromotionTime(canonicalPick);
   const scoreInputs = await readPromotionScoreInputs(
-    canonicalPick,
+    scoringPick,
     openPicks,
     settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
   );
