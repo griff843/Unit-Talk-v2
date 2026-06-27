@@ -19,14 +19,22 @@
     "docs/06_status/proof/UTV2-1326/diff-summary.md",
     "docs/06_status/proof/UTV2-1326/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-27T04:17:46.193Z",
-  "heartbeat_at": "2026-06-27T04:17:46.193Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-27T04:43:58.690Z",
+  "closed_at": "2026-06-27T04:43:58.690Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1326-settle-pick-atomic-timeout.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-27T04:43:47.725Z",
+      "verdict": "pass",
+      "merge_sha": "a24e05f78c17ac2c08b5c590cd32052e7cd41b65",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
