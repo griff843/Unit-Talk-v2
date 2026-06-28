@@ -21,10 +21,10 @@
     "docs/06_status/proof/UTV2-1328/diff-summary.md",
     "docs/06_status/proof/UTV2-1328/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-27T21:12:24.075Z",
-  "heartbeat_at": "2026-06-28T01:04:09.777Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T01:06:21.570Z",
+  "closed_at": "2026-06-28T01:06:21.570Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1328-db-final-architecture-hot-store-historical-archive-and-proof-db.json",
   "created_by": "codex-cli",
@@ -61,6 +61,13 @@
       "failures": [
         "G3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T01:06:09.946Z",
+      "verdict": "pass",
+      "merge_sha": "2a923c0445c48ccc34b61fc8381d5e0a3ad4e6f2",
+      "failures": [],
       "runner": "manual"
     }
   ],
