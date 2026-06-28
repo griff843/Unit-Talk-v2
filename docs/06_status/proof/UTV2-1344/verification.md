@@ -5,7 +5,7 @@
 **Branch:** codex/utv2-1344-m5-staleness-alert
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1097
 **Head SHA:** 6167a500a0b54d4f88260ca441f1402056b312c6
-**Merge SHA:** pending (auto-bound post-merge by post-merge-lane-close.yml)
+**Merge SHA:** 0a4fdb0d5662dd3790b57864b8e72a1f2b419647
 
 ## Verification
 

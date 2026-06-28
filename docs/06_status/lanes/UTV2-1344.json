@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1344-m5-staleness-alert",
   "branch": "codex/utv2-1344-m5-staleness-alert",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "0a4fdb0d5662dd3790b57864b8e72a1f2b419647",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1097",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/grading-staleness-check.yml",
@@ -20,14 +20,41 @@
     "docs/06_status/proof/UTV2-1344/diff-summary.md",
     "docs/06_status/proof/UTV2-1344/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-28T01:50:31.971Z",
-  "heartbeat_at": "2026-06-28T01:50:31.971Z",
+  "heartbeat_at": "2026-06-28T08:14:12.011Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1344-m5-staleness-alert.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T08:13:48.978Z",
+      "verdict": "pass",
+      "merge_sha": "0a4fdb0d5662dd3790b57864b8e72a1f2b419647",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1097"
+    },
+    {
+      "checked_at": "2026-06-28T08:13:58.030Z",
+      "verdict": "fail",
+      "merge_sha": "0a4fdb0d5662dd3790b57864b8e72a1f2b419647",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T08:14:12.011Z",
+      "verdict": "pass",
+      "merge_sha": "0a4fdb0d5662dd3790b57864b8e72a1f2b419647",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
