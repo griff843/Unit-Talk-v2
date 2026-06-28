@@ -4,7 +4,7 @@
 **Tier:** T2
 **Branch:** codex/utv2-1344-m5-staleness-alert
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1097
-**Head SHA:** 2ee9a68ab90e426de8d73ff283d5b89408d33bfb
+**Head SHA:** 6167a500a0b54d4f88260ca441f1402056b312c6
 **Merge SHA:** TBD (post-merge, auto-bound by post-merge-lane-close.yml)
 
 ## Verification
@@ -35,6 +35,18 @@ This lane closes that gap. The alert pattern mirrors `ingestor-staleness-alert.y
 - Table: `system_runs`
 - `run_type = 'grading.run'` — written by `grading-service.ts` per `runGradingPass()`
 - `details = { picksGraded: N, failed: N }` — counts per pass
+
+## pnpm test:db Output
+
+```text
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
 
 ## Verdict
 

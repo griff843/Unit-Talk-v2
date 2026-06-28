@@ -6,7 +6,7 @@ Tier: T2
 Lane type: governance
 Branch: codex/utv2-1344-m5-staleness-alert
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1097
-Head SHA: 2ee9a68ab90e426de8d73ff283d5b89408d33bfb
+Head SHA: 6167a500a0b54d4f88260ca441f1402056b312c6
 Merge SHA: TBD (post-merge, auto-bound by post-merge-lane-close.yml)
 
 ## Git Diff Stat (vs main)
@@ -30,5 +30,5 @@ Merge SHA: TBD (post-merge, auto-bound by post-merge-lane-close.yml)
 
 ## SHA Binding
 
-Head SHA: TBD
+Head SHA: 6167a500a0b54d4f88260ca441f1402056b312c6
 Merge SHA: TBD (auto-bound by post-merge-lane-close.yml)
