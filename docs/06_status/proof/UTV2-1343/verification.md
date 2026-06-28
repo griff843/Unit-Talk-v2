@@ -38,3 +38,17 @@ No Tier C paths touched. No code, schema, or contract changes.
 - **Verdict after:** PARTIAL — investigation documented; root cause partially identified; follow-up fix lane recommended
 - **Criterion satisfied:** Criterion 3 (investigation is now open and documented with named follow-up)
 - **Remaining gaps:** Criteria 2 (failure rate), 3 (fix deployed), 4 (no consecutive failures)
+
+## pnpm test:db
+
+`pnpm test:db` — PASS (7/7 subtests, run against live Supabase)
+
+```text
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
