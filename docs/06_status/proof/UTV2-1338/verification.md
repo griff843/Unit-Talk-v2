@@ -39,9 +39,9 @@ TAP version 13
 
 ---
 
-## pnpm verify (verify:static)
+## pnpm verify:static
 
-**Result: PASS** (static suite — env:check, lint, type-check, build, test, smart-form verify, commands)
+**Result: PASS** (env:check, lint, type-check, build, test, smart-form verify, commands)
 
 ```
 > @unit-talk/v2@0.1.0 verify:static
@@ -55,7 +55,11 @@ TAP version 13
 (exit 0)
 ```
 
-Note: `pnpm verify` (full) = `verify:static && test:live-db`. The live-db component (`pnpm test:db`) hit a pre-existing Supabase `statement_timeout` on `listByLifecycleStates` (unrelated to this docs-only lane — no source code changed). See test:db section below.
+## pnpm verify (full)
+
+**Result: FAIL — pre-existing Supabase statement_timeout (not caused by this change)**
+
+`pnpm verify` = `verify:static && test:live-db`. The static suite (above) passed clean. The live-db component (`pnpm test:db && pnpm test:t1-proof:live`) hit a pre-existing Supabase `statement_timeout` on `listByLifecycleStates` — unrelated to this docs-only lane (no source code changed). See test:db section below.
 
 ---
 
