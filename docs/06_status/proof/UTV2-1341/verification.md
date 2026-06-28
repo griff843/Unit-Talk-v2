@@ -25,6 +25,7 @@ Issue-specific verification:
 | `pnpm test` | PASS |
 | issue-specific static proof check | PASS |
 | `pnpm verify` | PASS |
+| `pnpm test:db` | PASS |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS |
 
 ## Command Evidence
