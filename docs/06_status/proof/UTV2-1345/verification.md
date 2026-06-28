@@ -60,4 +60,6 @@ await repositories.runs.completeRun({
 # todo 0
 ```
 
-**Merge SHA:** pending (auto-bound post-merge)
+**Merge SHA:** 34ba29fae23c8cb5984b9c7c9afdf8142201cbd3
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1099
+**Merged:** 2026-06-28

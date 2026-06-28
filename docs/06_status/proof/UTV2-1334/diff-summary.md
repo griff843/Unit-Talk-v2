@@ -45,3 +45,10 @@ The plan document (`trust-score-accumulation-plan.md`) provides:
 5. A monitoring query and trigger definition: when
    `clv_settled_count >= 10`, `computeClvTrustAdjustment` returns a non-null
    adjustment and trust-influenced promotion scoring becomes active.
+
+
+## Merge SHA
+
+9cddffa70c78d4aeb86dcf4ef7430e9a44f337c0
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1102
+**Merged:** 2026-06-28

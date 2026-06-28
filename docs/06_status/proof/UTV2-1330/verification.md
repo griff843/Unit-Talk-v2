@@ -9,7 +9,7 @@
 | `pnpm verify:static` | PASS |
 | `pnpm test:db` | PASS — # pass 7 / # fail 0 / # skipped 0 |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS — no R-level artifacts required |
-| **Merge SHA** | pending (auto-bound post-merge) |
+| **Merge SHA** | 7c4e62aea5c3a9bdac22502d96dcd295b70bbc7a |
 
 ### pnpm test:db TAP block
 

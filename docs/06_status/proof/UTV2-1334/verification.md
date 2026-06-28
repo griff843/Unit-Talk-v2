@@ -105,4 +105,6 @@ Exit code: 0 — docs-only diff, no R-level paths triggered.
 
 ## Merge SHA
 
-pending (auto-bound post-merge)
+9cddffa70c78d4aeb86dcf4ef7430e9a44f337c0
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1102
+**Merged:** 2026-06-28

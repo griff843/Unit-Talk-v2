@@ -107,4 +107,6 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 ## Merge SHA
 
-Merge SHA: pending (auto-bound post-merge by post-merge-lane-close.yml)
+Merge SHA: 468cd83b4b9100ab8d03c8c101d308aec20f1f39
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1100
+Merged: 2026-06-28

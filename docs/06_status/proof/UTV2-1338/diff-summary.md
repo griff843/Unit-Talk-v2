@@ -31,3 +31,9 @@ The `INCIDENT_RUNBOOK.md` covers the following 6 incident classes, each grounded
 ## No Source Code Changes
 
 This is a pure documentation lane. The file scope lock (`docs/06_status/proof/UTV2-1338/`) was respected in full. No test files, source files, migrations, or configuration files were created or modified.
+
+## Merge SHA
+
+468cd83b4b9100ab8d03c8c101d308aec20f1f39
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1100
+**Merged:** 2026-06-28
