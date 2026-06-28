@@ -19,10 +19,10 @@
     "docs/06_status/proof/UTV2-1339/diff-summary.md",
     "docs/06_status/proof/UTV2-1339/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-28T01:36:07.704Z",
-  "heartbeat_at": "2026-06-28T08:27:52.301Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T08:41:50.894Z",
+  "closed_at": "2026-06-28T08:41:50.894Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1339-terminal-proof-criteria.json",
   "created_by": "claude",
@@ -54,6 +54,13 @@
       "failures": [
         "G4"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T08:41:28.522Z",
+      "verdict": "pass",
+      "merge_sha": "b20c0469507eb0b7ba99dd3c451049011d7d7a29",
+      "failures": [],
       "runner": "manual"
     }
   ],
