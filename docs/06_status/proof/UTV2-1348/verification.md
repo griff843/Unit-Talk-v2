@@ -217,3 +217,17 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # todo 0
 # duration_ms 256153.226666
 ```
+
+## pnpm type-check and pnpm test
+
+`pnpm type-check` — PASS (TypeScript project-references build, exit 0)
+
+`pnpm test` (unit suite) — PASS (all suites pass, 0 failures)
+
+Both commands passed as part of `pnpm verify:static` on branch `claude/utv2-1348-m1-db-finalization-phase1` before PR #1105 was opened.
+
+## Merge SHA Binding
+
+**Merge SHA:** `8561f51e6b337f1bd77d7d2d178a767699bfef07` — PR #1105 merged 2026-06-28
+
+This proof is bound to merge commit `8561f51e6b337f1bd77d7d2d178a767699bfef07` on `main`.

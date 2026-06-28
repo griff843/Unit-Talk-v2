@@ -1,29 +1,36 @@
 # UTV2-1349 Diff Summary
 
-## Change
-Proof-only lane for M4 capper attribution evidence.
+Generated at: 2026-06-28T22:37:44.989Z
+Issue: UTV2-1349
+Tier: T2
+Lane type: verification
+Branch: codex/utv2-1349-m4-capper-attribution-proof
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1107
+Head SHA: 25175d418d8a45fc3b09b1a11f4398fbb47dfc04
+Merge SHA: 25175d418d8a45fc3b09b1a11f4398fbb47dfc04
+Diff base: 25175d418d8a45fc3b09b1a11f4398fbb47dfc04^1
+Diff target: 25175d418d8a45fc3b09b1a11f4398fbb47dfc04
 
-## Files
-- `docs/06_status/proof/UTV2-1349/diff-summary.md` documents the proof scope and observed evidence.
-- `docs/06_status/proof/UTV2-1349/verification.md` records verification commands and outcomes.
-
-## Runtime Diff Under Proof
-No runtime code changed in this lane.
-
-The capper attribution runtime change is already present from UTV2-1346:
-
-```text
-apps/api/src/submission-service.ts:332: ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
-apps/api/src/submission-service.ts:541: ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
+## Git Diff Stat
+```
+.ops/sync/UTV2-1349.yml                        | 10 +++
+ docs/06_status/lanes/UTV2-1349.json            | 37 ++++++++++
+ docs/06_status/proof/UTV2-1349/diff-summary.md | 29 ++++++++
+ docs/06_status/proof/UTV2-1349/verification.md | 94 ++++++++++++++++++++++++++
+ 4 files changed, 170 insertions(+)
 ```
 
-This maps `payload.submittedBy` to `metadata.capper` in both primary and shadow submission paths. The smart-form payload builder already sends `submittedBy` from the selected capper:
-
-```text
-apps/smart-form/lib/form-utils.ts:306: submittedBy: values.capper,
+## Git Name Status
+```
+A	.ops/sync/UTV2-1349.yml
+A	docs/06_status/lanes/UTV2-1349.json
+A	docs/06_status/proof/UTV2-1349/diff-summary.md
+A	docs/06_status/proof/UTV2-1349/verification.md
 ```
 
-## Live Data Note
-The existing read-only live proof script `apps/api/src/scripts/utv2-1346-capper-attribution-proof.ts` did not complete because Supabase canceled its broad ordered smart-form query with statement timeout. Narrow read-only REST queries completed and showed historical smart-form rows containing `metadata.submittedBy`; no sampled row with `metadata.capper` was returned.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-No live rows were created or mutated for this proof.
+## SHA Binding
+Head SHA: 25175d418d8a45fc3b09b1a11f4398fbb47dfc04
+Merge SHA: 25175d418d8a45fc3b09b1a11f4398fbb47dfc04

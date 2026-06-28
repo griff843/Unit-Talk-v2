@@ -92,3 +92,9 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 ### M4 Verdict
 
 PARTIAL — Code path confirmed correct (73/73 unit tests, source grep). Live data shows no new smart-form picks with `metadata.capper` yet (expected: no new submissions post-deploy in the observation window). The attribution gap is closed in code. Live corpus readiness requires new smart-form picks to flow through after deployment.
+
+## Merge SHA Binding
+
+**Merge SHA:** `25175d418d8a45fc3b09b1a11f4398fbb47dfc04` — PR #1107 merged 2026-06-28
+
+This proof is bound to merge commit `25175d418d8a45fc3b09b1a11f4398fbb47dfc04` on `main`.

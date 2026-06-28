@@ -126,3 +126,9 @@ A clean rollback is confirmed when the health endpoint returns 200 and `docker c
 ### Constraint
 
 No live rollback was executed. This is a documentation proof lane only. Execution of a rollback requires a separate PM gate and operator action per the runbook and deploy workflow policies.
+
+## Merge SHA Binding
+
+**Merge SHA:** `0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5` — PR #1106 merged 2026-06-28
+
+This proof is bound to merge commit `0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5` on `main`.

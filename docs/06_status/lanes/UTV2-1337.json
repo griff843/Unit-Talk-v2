@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1337-rollback-proof",
   "branch": "codex/utv2-1337-rollback-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1106",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1337/diff-summary.md",
@@ -18,14 +18,53 @@
     "docs/06_status/proof/UTV2-1337/diff-summary.md",
     "docs/06_status/proof/UTV2-1337/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-28T21:30:20.772Z",
-  "heartbeat_at": "2026-06-28T21:30:20.772Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T22:39:57.123Z",
+  "closed_at": "2026-06-28T22:39:57.123Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1337-rollback-proof.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T22:37:31.843Z",
+      "verdict": "pass",
+      "merge_sha": "0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1106"
+    },
+    {
+      "checked_at": "2026-06-28T22:37:52.828Z",
+      "verdict": "fail",
+      "merge_sha": "0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:38:09.488Z",
+      "verdict": "fail",
+      "merge_sha": "0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:39:37.387Z",
+      "verdict": "pass",
+      "merge_sha": "0a2139c6b2e6393cd462ef1a6a5cbc9044a2dbb5",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

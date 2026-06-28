@@ -1,22 +1,36 @@
-# Diff Summary — UTV2-1348: M1 DB Phase 1
+# UTV2-1348 Diff Summary
 
-**Issue:** UTV2-1348  
-**Branch:** `claude/utv2-1348-m1-db-finalization-phase1`  
-**Captured:** 2026-06-28  
-**Production state is read-only** — no DDL, no mutations, no schema edits.
+Generated at: 2026-06-28T22:37:42.196Z
+Issue: UTV2-1348
+Tier: T2
+Lane type: verification
+Branch: claude/utv2-1348-m1-db-finalization-phase1
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1105
+Head SHA: c38d0094a73f834913817f81e0565c2b1a829d6d
+Merge SHA: 8561f51e6b337f1bd77d7d2d178a767699bfef07
+Diff base: 8561f51e6b337f1bd77d7d2d178a767699bfef07^1
+Diff target: 8561f51e6b337f1bd77d7d2d178a767699bfef07
 
-## Key Findings
+## Git Diff Stat
+```
+.ops/sync/UTV2-1348.yml                        |  10 ++
+ docs/06_status/lanes/UTV2-1348.json            |  37 +++++
+ docs/06_status/proof/UTV2-1348/diff-summary.md |  22 +++
+ docs/06_status/proof/UTV2-1348/verification.md | 219 +++++++++++++++++++++++++
+ 4 files changed, 288 insertions(+)
+```
 
-- **Migration ledger fully divergent:** 113 remote migrations, 0 matching local files. Local directory holds only a baseline snapshot (`00000000000000`) not tracked in the remote ledger. 16 remote entries have null names. Phase 2 (Migration Queue Classification) is the required next lane.
+## Git Name Status
+```
+A	.ops/sync/UTV2-1348.yml
+A	docs/06_status/lanes/UTV2-1348.json
+A	docs/06_status/proof/UTV2-1348/diff-summary.md
+A	docs/06_status/proof/UTV2-1348/verification.md
+```
 
-- **`system_runs` autovacuum missing — critical:** 1.22 GB table with 31,380 dead tuples, NULL autovacuum/autoanalyze ever run. 3.3M live rows growing continuously. This was the root cause table in the prior write-path degradation incident. Requires a dedicated vacuum/autovacuum config fix lane before further degradation.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-- **`provider_offers_legacy_quarantine` is a 6.5 GB zombie:** 0 live rows, 0 dead tuples, NULL autovacuum. This is the renamed legacy provider_offers table with no runtime function. Requires Phase 7 PM-approved destructive maintenance lane (archive proof, before-count, maintenance window).
-
-- **9 active-path tables lack autovacuum coverage:** `submission_events` (14.5% dead), `participants` (14.4% dead), `events` (14.8% dead), `pick_promotion_history` (7.5% dead), `submissions` (7.0% dead), `pick_lifecycle` (3.5% dead), among others. All are in the live pick pipeline. Requires Phase 5 monitoring + autovacuum config fix.
-
-- **TOAST-dominated blob tables:** `raw_payloads` (693 MB for 14K rows, 99% TOAST) and `odds_snapshots` (427 MB for 8K rows, 99% TOAST). Phase 4 retention/archive analysis required before any action.
-
-## What This Lane Does NOT Do
-
-This lane adds proof documents only. No code changes, no schema changes, no DB mutations. `pnpm verify:static` exits 0. R-level check: no rules triggered.
+## SHA Binding
+Head SHA: c38d0094a73f834913817f81e0565c2b1a829d6d
+Merge SHA: 8561f51e6b337f1bd77d7d2d178a767699bfef07

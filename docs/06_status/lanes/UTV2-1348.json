@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1348-m1-db-finalization-phase1",
   "branch": "claude/utv2-1348-m1-db-finalization-phase1",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "8561f51e6b337f1bd77d7d2d178a767699bfef07",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1105",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1348/diff-summary.md",
@@ -18,14 +18,53 @@
     "docs/06_status/proof/UTV2-1348/diff-summary.md",
     "docs/06_status/proof/UTV2-1348/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-28T21:29:26.974Z",
-  "heartbeat_at": "2026-06-28T21:29:26.974Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T22:39:49.380Z",
+  "closed_at": "2026-06-28T22:39:49.380Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1348-m1-db-finalization-phase1.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T22:37:30.227Z",
+      "verdict": "pass",
+      "merge_sha": "8561f51e6b337f1bd77d7d2d178a767699bfef07",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1105"
+    },
+    {
+      "checked_at": "2026-06-28T22:37:49.117Z",
+      "verdict": "fail",
+      "merge_sha": "8561f51e6b337f1bd77d7d2d178a767699bfef07",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:38:05.183Z",
+      "verdict": "fail",
+      "merge_sha": "8561f51e6b337f1bd77d7d2d178a767699bfef07",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:39:33.432Z",
+      "verdict": "pass",
+      "merge_sha": "8561f51e6b337f1bd77d7d2d178a767699bfef07",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
