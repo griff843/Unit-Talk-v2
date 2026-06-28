@@ -63,3 +63,15 @@ Issue-specific static proof check confirmed:
 - `docs/06_status/proof/UTV2-1341/diff-summary.md` exists.
 - `docs/06_status/proof/UTV2-1341/verification.md` exists.
 - `docs/06_status/proof/UTV2-1341/verification.md` contains the required `## Verification` header.
+
+## pnpm test:db Output
+
+```text
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
