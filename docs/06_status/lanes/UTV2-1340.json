@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1340-internal-pick-approval-protocol",
   "branch": "claude/utv2-1340-internal-pick-approval-protocol",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "4a39db2fd9e86257533516f591f7feba07d5adf5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1089",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/INTERNAL_PICK_APPROVAL_PROTOCOL.md"
@@ -17,14 +17,61 @@
     "docs/06_status/proof/UTV2-1340/diff-summary.md",
     "docs/06_status/proof/UTV2-1340/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-27T21:11:34.007Z",
-  "heartbeat_at": "2026-06-27T21:11:34.007Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T00:46:35.211Z",
+  "closed_at": "2026-06-28T00:46:35.211Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1340-internal-pick-approval-protocol.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T00:44:45.117Z",
+      "verdict": "pass",
+      "merge_sha": "4a39db2fd9e86257533516f591f7feba07d5adf5",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1089"
+    },
+    {
+      "checked_at": "2026-06-28T00:44:55.849Z",
+      "verdict": "fail",
+      "merge_sha": "4a39db2fd9e86257533516f591f7feba07d5adf5",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T00:45:25.862Z",
+      "verdict": "fail",
+      "merge_sha": "4a39db2fd9e86257533516f591f7feba07d5adf5",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P12",
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T00:46:23.905Z",
+      "verdict": "pass",
+      "merge_sha": "4a39db2fd9e86257533516f591f7feba07d5adf5",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
