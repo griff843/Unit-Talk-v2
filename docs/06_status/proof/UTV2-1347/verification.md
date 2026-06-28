@@ -5,7 +5,9 @@ Tier: T2
 Branch: `claude/utv2-1347-m3-grading-root-cause-fix`
 Date: 2026-06-28
 
-## Root cause confirmed
+## Verification
+
+### Root cause confirmed
 
 UTV2-1345 added error detail propagation to `system_runs.details` in `apps/api/src/grading-service.ts`.
 
