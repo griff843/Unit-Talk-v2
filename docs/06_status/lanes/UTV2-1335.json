@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1335-alert-config-enforcement",
   "branch": "codex/utv2-1335-alert-config-enforcement",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1108",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1335/diff-summary.md",
@@ -18,14 +18,42 @@
     "docs/06_status/proof/UTV2-1335/diff-summary.md",
     "docs/06_status/proof/UTV2-1335/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-28T21:30:06.110Z",
-  "heartbeat_at": "2026-06-28T21:30:06.110Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T22:42:15.614Z",
+  "closed_at": "2026-06-28T22:42:15.614Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1335-alert-config-enforcement.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T22:41:19.606Z",
+      "verdict": "pass",
+      "merge_sha": "bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1108"
+    },
+    {
+      "checked_at": "2026-06-28T22:41:27.506Z",
+      "verdict": "fail",
+      "merge_sha": "bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:42:05.071Z",
+      "verdict": "pass",
+      "merge_sha": "bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

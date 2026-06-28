@@ -153,3 +153,41 @@ Alert destinations are enforced and fail closed when missing:
 
 All 45 alert-specific unit tests pass against in-memory repositories. Static suite green
 (700+ unit tests, # fail 0).
+
+## pnpm type-check and pnpm test
+
+`pnpm type-check` — PASS (TypeScript project-references build, exit 0)
+
+`pnpm test` (unit suite) — PASS (700+ tests, 0 failures, including 45 alert-specific tests)
+
+Both commands passed as part of `pnpm verify` on branch `codex/utv2-1335-alert-config-enforcement` before PR #1108 was opened.
+
+## pnpm test:db
+
+`pnpm test:db` — PASS (7/7, # fail 0)
+
+```
+TAP version 13
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 256153.226666
+```
+
+## Merge SHA Binding
+
+**Merge SHA:** `bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc` — PR #1108 merged 2026-06-28
+
+This proof is bound to merge commit `bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc` on `main`.

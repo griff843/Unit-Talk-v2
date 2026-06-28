@@ -1,21 +1,36 @@
-# Diff Summary: UTV2-1335 — Alert Configuration Enforcement
+# UTV2-1335 Diff Summary
 
-## Summary
+Generated at: 2026-06-28T22:41:23.355Z
+Issue: UTV2-1335
+Tier: T2
+Lane type: verification
+Branch: codex/utv2-1335-alert-config-enforcement
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1108
+Head SHA: 16ead7dc79225bd4cd5d2c45f1ebc886dab42f93
+Merge SHA: bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc
+Diff base: bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc^1
+Diff target: bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc
 
-- Alert notifications fail closed on missing `DISCORD_BOT_TOKEN`: the delivery loop increments
-  `result.failed` and continues rather than silently skipping, ensuring missing credentials
-  are observable as failures (`packages/alert-runtime/src/alert-notification-service.ts` line 266).
+## Git Diff Stat
+```
+.ops/sync/UTV2-1335.yml                        |  10 ++
+ docs/06_status/lanes/UTV2-1335.json            |  37 ++++++
+ docs/06_status/proof/UTV2-1335/diff-summary.md |  21 ++++
+ docs/06_status/proof/UTV2-1335/verification.md | 155 +++++++++++++++++++++++++
+ 4 files changed, 223 insertions(+)
+```
 
-- Missing or unresolvable `UNIT_TALK_DISCORD_TARGET_MAP` entries cause `resolveDiscordChannelId`
-  to return `null`; if all channels resolve to null, `successChannels.length === 0` triggers
-  `result.failed++` — no silent delivery (line 293).
+## Git Name Status
+```
+A	.ops/sync/UTV2-1335.yml
+A	docs/06_status/lanes/UTV2-1335.json
+A	docs/06_status/proof/UTV2-1335/diff-summary.md
+A	docs/06_status/proof/UTV2-1335/verification.md
+```
 
-- Dry-run mode is the safe default (`ALERT_DRY_RUN !== 'false'`): live Discord posting requires
-  explicit opt-out, preventing accidental production alerts from misconfigured environments.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-- Invalid numeric threshold env variables (e.g. `ALERT_THRESHOLD_SPREAD_WATCH`) cause
-  `normalizePositiveNumber` to throw at startup, making bad config a hard failure rather than
-  a silent fallback.
-
-- All 45 alert-specific unit tests pass (detection + notification + channel resolution);
-  static suite is green (700+ unit tests, # fail 0); R-level check PASS with no artifacts required.
+## SHA Binding
+Head SHA: 16ead7dc79225bd4cd5d2c45f1ebc886dab42f93
+Merge SHA: bbc20ad61416804a7cbdd35aa4da7ef79dcf14bc
