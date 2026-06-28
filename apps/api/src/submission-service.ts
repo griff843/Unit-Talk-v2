@@ -329,6 +329,7 @@ export async function processSubmission(
       ...realEdgeData,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
     },
   };
 
@@ -537,6 +538,7 @@ export async function processShadowSubmission(
       kellySizing,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
       ...(shadowThumbnailUrl ? { thumbnailUrl: shadowThumbnailUrl } : {}),
+      ...(payload.submittedBy ? { capper: payload.submittedBy } : {}),
     },
   };
 
