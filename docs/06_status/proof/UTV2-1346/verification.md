@@ -15,6 +15,9 @@ No contract changes needed. No schema changes. No migration.
 
 ## Verification Steps
 
+### pnpm verify
+PASS — full pipeline (env:check + lint + type-check + build + test) exits 0.
+
 ### pnpm type-check
 PASS — TypeScript build clean, no new errors.
 
@@ -33,7 +36,7 @@ PASS
 ```
 All 73 submission-service unit tests pass. Change is tested end-to-end through existing capper-metadata assertions.
 
-### R-level check
+### R-level check (scripts/ci/r-level-check.ts)
 ```
 Verdict: PASS
 Changed files: 2
@@ -72,6 +75,6 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 ```
 
 ## Merge SHA Binding
-**Merge SHA:** pending (auto-bound post-merge)
-**PR:** pending
-**Merged:** pending
+**Merge SHA:** 7e2ec7b5d9c6daee530be102dbbaf8487dc36e36
+**PR: https://github.com/griff843/Unit-Talk-v2/pull/1103
+**Merged: 2026-06-28

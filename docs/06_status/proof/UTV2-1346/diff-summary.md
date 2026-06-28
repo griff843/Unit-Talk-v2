@@ -33,6 +33,6 @@
 The conditional spread `...(payload.submittedBy ? { capper: payload.submittedBy } : {})` is a no-op when `submittedBy` is absent — safe for all non-smart-form sources (feed, system, model-driven) that don't provide `submittedBy`.
 
 ## Merge SHA
-**Merge SHA:** pending (auto-bound post-merge)
-**PR:** pending
-**Merged:** pending
+**Merge SHA:** 7e2ec7b5d9c6daee530be102dbbaf8487dc36e36
+**PR: https://github.com/griff843/Unit-Talk-v2/pull/1103
+**Merged: 2026-06-28
