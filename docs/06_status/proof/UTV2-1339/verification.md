@@ -34,4 +34,18 @@ All changes within declared file scope lock. No Tier C paths touched.
 - **Verdict before:** BLOCKED
 - **Verdict after:** Still BLOCKED — but this document defines Criterion 2 (terminal criteria accepted) which must be satisfied before BLOCKED → PARTIAL transition
 - **Criterion satisfied:** Criterion 2 will be satisfied upon merge of this PR
-- **Remaining gaps:** Criteria 3 (UTV2-1343 must close), 4 (UTV2-1331 must reach `done`), 5 (live flow proven), 6 (governance brake confirmed live)
+- **Remaining gaps:** Criteria 3 (the M3 grading investigation lane must close), 4 (the M3 grading heartbeat lane must reach `done`), 5 (live flow proven), 6 (governance brake confirmed live)
+
+## pnpm test:db
+
+`pnpm test:db` — PASS (7/7 subtests, run against live Supabase)
+
+```text
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
