@@ -1,1 +1,39 @@
-# placeholder — UTV2-1344 will fill this in
+name: Grading Staleness Check
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      window_hours:
+        description: 'Look-back window in hours (default: 24)'
+        required: false
+        default: '24'
+
+jobs:
+  check:
+    name: Grading staleness alert
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check grading staleness
+        run: tsx scripts/grading-alert-check.ts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
+          GRADING_ALERT_WINDOW_HOURS: ${{ inputs.window_hours || '24' }}
