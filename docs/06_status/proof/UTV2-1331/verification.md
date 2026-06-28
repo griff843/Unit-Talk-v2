@@ -3,7 +3,8 @@
 **Issue:** UTV2-1331 — Grading Heartbeat Proof  
 **Tier:** T2  
 **Branch:** claude/utv2-1331-grading-heartbeat-proof  
-**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1091
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1091  
+**Merge SHA:** f460e19d224bfffb57193def2b4ea66a02fc874b
 
 ## Verification
 
