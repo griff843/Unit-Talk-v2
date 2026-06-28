@@ -1,26 +1,38 @@
 # UTV2-1336 Diff Summary
 
-**Issue:** UTV2-1336 — Monitoring Coverage Proof  
-**Tier:** T2  
-**Merge SHA:** (pending merge)  
-**Branch:** codex/utv2-1336-monitoring-proof
+Generated at: 2026-06-28T01:19:14.769Z
+Issue: UTV2-1336
+Tier: T2
+Lane type: verification
+Branch: codex/utv2-1336-monitoring-proof
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1090
+Head SHA: 747b34191f1024b2423294c458cf0de79aa9374d
+Merge SHA: eadab32cd25787c06f2ac74ed260a13979a4bda5
+Diff base: eadab32cd25787c06f2ac74ed260a13979a4bda5^1
+Diff target: eadab32cd25787c06f2ac74ed260a13979a4bda5
 
-## Files Changed
+## Git Diff Stat
+```
+.ops/sync/UTV2-1336.yml                            |  10 ++
+ docs/06_status/lanes/UTV2-1336.json                |  36 ++++
+ docs/06_status/proof/UTV2-1336/diff-summary.md     |  26 +++
+ docs/06_status/proof/UTV2-1336/monitoring-proof.md | 188 +++++++++++++++++++++
+ docs/06_status/proof/UTV2-1336/verification.md     |  42 +++++
+ 5 files changed, 302 insertions(+)
+```
 
-| File | Change | Notes |
-|------|--------|-------|
-| `docs/06_status/proof/UTV2-1336/monitoring-proof.md` | CREATED | Monitoring coverage evidence: API/Ingestor/Worker/Pipeline PRESENT, Grading staleness ABSENT |
-| `docs/06_status/proof/UTV2-1336/verification.md` | CREATED | pnpm test:db 7/7 PASS, pnpm verify PASS, r-level PASS |
+## Git Name Status
+```
+A	.ops/sync/UTV2-1336.yml
+A	docs/06_status/lanes/UTV2-1336.json
+A	docs/06_status/proof/UTV2-1336/diff-summary.md
+A	docs/06_status/proof/UTV2-1336/monitoring-proof.md
+A	docs/06_status/proof/UTV2-1336/verification.md
+```
 
-## Summary of Changes
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-Documentation-only lane. No code, schema, or runtime changes.
-
-Added monitoring coverage proof for Milestone 5 (M5). Evidence confirms:
-- API health endpoint: PRESENT
-- Ingestor cycle monitor: PRESENT
-- Worker queue depth: PRESENT
-- Pipeline throughput: PRESENT
-- Grading staleness alert: ABSENT — no cron that fires when runs zero-grade
-
-**Verdict:** PARTIAL — M5 milestone is NOT green. Grading staleness gap creates UTV2-1344 follow-up.
+## SHA Binding
+Head SHA: 747b34191f1024b2423294c458cf0de79aa9374d
+Merge SHA: eadab32cd25787c06f2ac74ed260a13979a4bda5

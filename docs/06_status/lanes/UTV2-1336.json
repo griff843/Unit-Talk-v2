@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1336-monitoring-proof",
   "branch": "codex/utv2-1336-monitoring-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "eadab32cd25787c06f2ac74ed260a13979a4bda5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1090",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1336/monitoring-proof.md"
@@ -17,14 +17,42 @@
     "docs/06_status/proof/UTV2-1336/diff-summary.md",
     "docs/06_status/proof/UTV2-1336/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-27T21:12:38.722Z",
-  "heartbeat_at": "2026-06-27T21:12:38.722Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T01:20:02.598Z",
+  "closed_at": "2026-06-28T01:20:02.598Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1336-monitoring-proof.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T01:19:10.049Z",
+      "verdict": "pass",
+      "merge_sha": "eadab32cd25787c06f2ac74ed260a13979a4bda5",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1090"
+    },
+    {
+      "checked_at": "2026-06-28T01:19:19.181Z",
+      "verdict": "fail",
+      "merge_sha": "eadab32cd25787c06f2ac74ed260a13979a4bda5",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T01:19:48.915Z",
+      "verdict": "pass",
+      "merge_sha": "eadab32cd25787c06f2ac74ed260a13979a4bda5",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

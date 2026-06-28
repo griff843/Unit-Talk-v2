@@ -3,7 +3,8 @@
 **Issue:** UTV2-1336 — Monitoring Coverage Proof  
 **Tier:** T2  
 **Branch:** codex/utv2-1336-monitoring-proof  
-**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1090
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1090  
+**Merge SHA:** eadab32cd25787c06f2ac74ed260a13979a4bda5
 
 ## Verification
 
