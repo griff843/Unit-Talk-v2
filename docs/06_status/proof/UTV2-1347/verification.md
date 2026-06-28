@@ -137,6 +137,25 @@ Supabase statement timeouts affect all unbounded queries against large tables (p
 
 Note: confirmed correct column name is `details` (not `metadata`) per `database.types.ts` Row definition.
 
+## Merge SHA Binding
+
+**Merge SHA:** 39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1104
+**Merged:** 2026-06-28
+
+## pnpm type-check and pnpm test
+
+`pnpm type-check` PASS — TypeScript build clean.
+`pnpm test` PASS — 61/61 grading-service unit tests pass (0 fail).
+
+## scripts/ci/r-level-check.ts
+
+```
+Verdict: PASS
+Changed files: 4
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
 ## M3 Verdict
 
 **PARTIAL**

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1347-m3-grading-root-cause-fix",
   "branch": "claude/utv2-1347-m3-grading-root-cause-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1104",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1347/diff-summary.md",
@@ -18,14 +18,75 @@
     "docs/06_status/proof/UTV2-1347/diff-summary.md",
     "docs/06_status/proof/UTV2-1347/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-28T21:28:54.645Z",
-  "heartbeat_at": "2026-06-28T21:28:54.645Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-28T22:22:18.736Z",
+  "closed_at": "2026-06-28T22:22:18.736Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1347-m3-grading-root-cause-fix.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T22:20:46.112Z",
+      "verdict": "pass",
+      "merge_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1104"
+    },
+    {
+      "checked_at": "2026-06-28T22:20:51.175Z",
+      "verdict": "fail",
+      "merge_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:20:59.162Z",
+      "verdict": "fail",
+      "merge_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:21:40.532Z",
+      "verdict": "fail",
+      "merge_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:21:52.345Z",
+      "verdict": "fail",
+      "merge_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T22:22:04.991Z",
+      "verdict": "pass",
+      "merge_sha": "39cc9e78fdf8d8b9f8257788c42cddb6c678b7ba",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
