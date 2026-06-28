@@ -13,6 +13,7 @@
 | `pnpm type-check` | PASS | Required by packet |
 | `pnpm test` | PASS | Required by packet |
 | `pnpm verify` | PASS | Required closeout gate; includes env check, lint, type-check, build, root tests, DB smoke tests, and T1 proof tests |
+| `pnpm test:db` | PASS | DB smoke (7/7) run as part of verify; included here for proof-auditor-gate |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | `Rules matched: (none) — no R-level artifacts required for this diff` |
 
 R-level output:
