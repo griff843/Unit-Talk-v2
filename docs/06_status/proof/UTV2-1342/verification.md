@@ -57,3 +57,15 @@ Only the three allowed proof files were added:
 - `docs/06_status/proof/UTV2-1342/verification.md`
 
 No code, migrations, generated DB types, runtime services, or docs outside the packet scope were changed.
+
+## pnpm test:db Output
+
+```text
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
