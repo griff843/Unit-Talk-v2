@@ -68,6 +68,12 @@ Files changed: `docs/06_status/proof/UTV2-1329/` only — within declared file s
 
 No code, migration, or schema changes.
 
+## Merge SHA Binding
+
+**Merge SHA:** 20cf6cb13b2e2613325048fdea4d3640eaeb0791
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1098
+**Merged:** 2026-06-28
+
 ## pnpm test:db Output
 
 ```text
