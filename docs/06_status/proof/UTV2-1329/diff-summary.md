@@ -4,7 +4,7 @@
 **Tier:** T2
 **Lane:** claude/utv2-1329-backup-pitr-proof
 **Branch:** claude/utv2-1329-backup-pitr-proof
-**Merge SHA:** pending (auto-bound post-merge)
+**Merge SHA:** 20cf6cb13b2e2613325048fdea4d3640eaeb0791
 
 ## Git Diff Stat (vs main)
 
