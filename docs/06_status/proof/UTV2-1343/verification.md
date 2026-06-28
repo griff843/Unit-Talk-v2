@@ -11,6 +11,13 @@
 
 No code changes in this lane (proof files only). `pnpm verify` is green on main (docs-only change cannot break type-check, lint, build, or tests).
 
+| Command | Status |
+|---------|--------|
+| `pnpm type-check` | PASS |
+| `pnpm test` | PASS |
+| `pnpm verify` | PASS |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS |
+
 ### R-level compliance
 
 Investigation/docs lane — no R1 (runtime path), R2 (determinism), R3 (shadow), or R5 (QA) triggers apply.
@@ -52,3 +59,4 @@ No Tier C paths touched. No code, schema, or contract changes.
 # skipped 0
 # todo 0
 ```
+**Merge SHA:** c8e951a213d98e61add82e9e0b0c0a78686eb290

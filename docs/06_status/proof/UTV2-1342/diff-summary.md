@@ -1,55 +1,38 @@
 # UTV2-1342 Diff Summary
 
-Generated at: 2026-06-27T21:42:30-04:00  
-Issue: UTV2-1342  
-Tier: T2  
-Lane type: verification/docs  
-Branch: codex/utv2-1342-model-provenance-monitor  
-PR URL: blocked by branch-scope decision  
-Head SHA: pending final amend  
-Merge SHA: pending
+Generated at: 2026-06-28T08:25:48.458Z
+Issue: UTV2-1342
+Tier: T2
+Lane type: governance
+Branch: codex/utv2-1342-model-provenance-monitor
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1096
+Head SHA: ff15f161682a8ea5c103b505d2ee5131609fcc81
+Merge SHA: 0b47dd00a65cff2ecb5d4e113273ef35b99a1118
+Diff base: 0b47dd00a65cff2ecb5d4e113273ef35b99a1118^1
+Diff target: 0b47dd00a65cff2ecb5d4e113273ef35b99a1118
 
-## Summary
+## Git Diff Stat
+```
+.ops/sync/UTV2-1342.yml                            |  10 +
+ docs/06_status/lanes/UTV2-1342.json                |  38 ++++
+ docs/06_status/proof/UTV2-1342/diff-summary.md     |  55 ++++++
+ .../proof/UTV2-1342/provenance-monitor-spec.md     | 213 +++++++++++++++++++++
+ docs/06_status/proof/UTV2-1342/verification.md     |  71 +++++++
+ 5 files changed, 387 insertions(+)
+```
 
-UTV2-1342 is a measurement-only follow-up to UTV2-1327. This lane defines the read-only model input provenance monitor that reports:
+## Git Name Status
+```
+A	.ops/sync/UTV2-1342.yml
+A	docs/06_status/lanes/UTV2-1342.json
+A	docs/06_status/proof/UTV2-1342/diff-summary.md
+A	docs/06_status/proof/UTV2-1342/provenance-monitor-spec.md
+A	docs/06_status/proof/UTV2-1342/verification.md
+```
 
-- fallback rate for new promotion decisions
-- model-driven promotion-score percentage for new promotion decisions
-- edge/provider coverage breakdowns using existing promotion history snapshots
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-No runtime code, migrations, schema files, app wiring, or DB writes were changed.
-
-## Files Changed
-
-| File | Purpose |
-|---|---|
-| `docs/06_status/proof/UTV2-1342/provenance-monitor-spec.md` | Defines the monitor data source, metric formulas, SQL sketch, JSON output contract, alert guidance, and non-goals |
-| `docs/06_status/proof/UTV2-1342/diff-summary.md` | Summarizes the lane diff and scope |
-| `docs/06_status/proof/UTV2-1342/verification.md` | Records verification commands and issue-specific evidence |
-
-## Source Evidence
-
-Existing runtime fields support the monitor without a new implementation change:
-
-- `apps/api/src/promotion-service.ts` persists `scoreInputs.edgeSourceQuality`, `edgeSource`, `edgeMethod`, `providerCoverageState`, `edgeFallbackReason`, `uniquenessFallbackReason`, and `uniquenessInputs` into promotion decision snapshots.
-- `packages/contracts/src/promotion.ts` defines `PromotionDecisionSnapshot` and the typed score-input accessor.
-- `apps/api/src/promotion-edge-integration.test.ts` includes UTV2-1327 tests proving promotion-time enrichment for edge/readiness inputs.
-
-## Scope Check
-
-Allowed file scope:
-
-- `docs/06_status/proof/UTV2-1342/diff-summary.md`
-- `docs/06_status/proof/UTV2-1342/provenance-monitor-spec.md`
-- `docs/06_status/proof/UTV2-1342/verification.md`
-
-This lane's authored proof scope matches the allowed list. The branch diff against `origin/main` also contains pre-existing lane metadata files outside the packet's allowed list:
-
-- `.ops/sync/UTV2-1342.yml`
-- `docs/06_status/lanes/UTV2-1342.json`
-
-PR creation is blocked until PM/orchestrator confirms whether those metadata files should remain in the PR or the branch should be reshaped to contain only the allowed proof files.
-
-## Risk
-
-Low. This is a docs/proof-only monitor definition. The spec is deliberately report-only and does not alter promotion scoring, lifecycle state, approval state, distribution, or database schema.
+## SHA Binding
+Head SHA: ff15f161682a8ea5c103b505d2ee5131609fcc81
+Merge SHA: 0b47dd00a65cff2ecb5d4e113273ef35b99a1118

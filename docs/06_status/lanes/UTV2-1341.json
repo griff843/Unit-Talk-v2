@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1341-db-execution-plan",
   "branch": "codex/utv2-1341-db-execution-plan",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6997ad82a7b10a14399a8ff877536c9d12ac51b2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1095",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DB_EXECUTION_PLAN.md",
@@ -19,14 +19,42 @@
     "docs/06_status/proof/UTV2-1341/diff-summary.md",
     "docs/06_status/proof/UTV2-1341/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-28T01:40:23.457Z",
-  "heartbeat_at": "2026-06-28T01:40:23.457Z",
+  "heartbeat_at": "2026-06-28T08:27:58.608Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1341-db-execution-plan.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T08:25:49.837Z",
+      "verdict": "pass",
+      "merge_sha": "6997ad82a7b10a14399a8ff877536c9d12ac51b2",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1095"
+    },
+    {
+      "checked_at": "2026-06-28T08:26:12.557Z",
+      "verdict": "fail",
+      "merge_sha": "6997ad82a7b10a14399a8ff877536c9d12ac51b2",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T08:27:58.608Z",
+      "verdict": "fail",
+      "merge_sha": "6997ad82a7b10a14399a8ff877536c9d12ac51b2",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

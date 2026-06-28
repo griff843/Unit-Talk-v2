@@ -4,7 +4,7 @@
 **Tier:** T2  
 **Branch:** `codex/utv2-1342-model-provenance-monitor`  
 **PR:** blocked by branch-scope decision  
-**Merge SHA:** pending
+**Merge SHA:** 0b47dd00a65cff2ecb5d4e113273ef35b99a1118
 
 ## Verification
 

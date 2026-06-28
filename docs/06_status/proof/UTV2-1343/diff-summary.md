@@ -1,36 +1,38 @@
 # UTV2-1343 Diff Summary
 
-**Issue:** UTV2-1343 — M3 grading investigation  
-**Tier:** T2  
-**Branch:** claude/utv2-1343-m3-grading-investigation
+Generated at: 2026-06-28T08:25:42.949Z
+Issue: UTV2-1343
+Tier: T2
+Lane type: governance
+Branch: claude/utv2-1343-m3-grading-investigation
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1093
+Head SHA: 577c46ea50cdca3ac8ffd899143eeb806e8fbec0
+Merge SHA: c8e951a213d98e61add82e9e0b0c0a78686eb290
+Diff base: c8e951a213d98e61add82e9e0b0c0a78686eb290^1
+Diff target: c8e951a213d98e61add82e9e0b0c0a78686eb290
 
-## Files Changed
+## Git Diff Stat
+```
+.ops/sync/UTV2-1343.yml                            |  10 ++
+ docs/06_status/lanes/UTV2-1343.json                |  38 ++++++
+ docs/06_status/proof/UTV2-1343/diff-summary.md     |  36 +++++
+ .../proof/UTV2-1343/grading-investigation.md       | 146 +++++++++++++++++++++
+ docs/06_status/proof/UTV2-1343/verification.md     |  54 ++++++++
+ 5 files changed, 284 insertions(+)
+```
 
-| File | Change | Notes |
-|------|--------|-------|
-| `docs/06_status/proof/UTV2-1343/grading-investigation.md` | CREATED | Full M3 grading failure investigation report |
-| `docs/06_status/proof/UTV2-1343/diff-summary.md` | CREATED | This file |
-| `docs/06_status/proof/UTV2-1343/verification.md` | CREATED | Verification log |
+## Git Name Status
+```
+A	.ops/sync/UTV2-1343.yml
+A	docs/06_status/lanes/UTV2-1343.json
+A	docs/06_status/proof/UTV2-1343/diff-summary.md
+A	docs/06_status/proof/UTV2-1343/grading-investigation.md
+A	docs/06_status/proof/UTV2-1343/verification.md
+```
 
-## Summary of Changes
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-Investigation-only lane. No code changes.
-
-Investigated the 34.8% grading run failure rate (32/92 runs) observed today vs 1.46% historical baseline.
-
-**Key findings:**
-1. Grading heartbeat (cron.heartbeat): 69/69 PASS — scheduler is healthy
-2. Failed runs all show `{failed:1, picksGraded:0}` — one pick throws an exception per run
-3. The actual exception is NOT stored in `system_runs.details` — only the count. Error text goes to Hetzner server stdout only.
-4. A separate `closing_for_clv_snapshot_write_failed` constraint violation fires 10x/24h but is handled gracefully and does NOT cause grading failures.
-5. Root cause (specific exception + pick) requires server-side log access OR deploying a logging fix.
-
-**Recommended follow-up:** Add `errorDetails` to `system_runs.details` in `grading-service.ts` (T3 lane). After deploy, the next failed grading run will reveal the actual exception without needing Hetzner log access.
-
-## Milestone Impact
-
-- **Milestone:** M3 — Grading Runtime Proof
-- **Verdict before:** PARTIAL (heartbeat active, failure rate elevated)
-- **Verdict after:** PARTIAL — investigation completed; root cause partially diagnosed; structural fix recommended
-- **Criterion addressed:** Criterion 3 (zero-graded run investigation) — investigation is now documented
-- **Remaining gaps:** Criteria 2 (failure rate must return to ≤5%), 3 (root cause must be fixed/attributed), 4 (no consecutive zero-graded failures without explanation)
+## SHA Binding
+Head SHA: 577c46ea50cdca3ac8ffd899143eeb806e8fbec0
+Merge SHA: c8e951a213d98e61add82e9e0b0c0a78686eb290

@@ -13,6 +13,13 @@ Exit code: 0 (green)
 
 Pipeline: env:check + lint + type-check + build + test — all passed.
 
+| Command | Status |
+|---------|--------|
+| `pnpm type-check` | PASS |
+| `pnpm test` | PASS |
+| `pnpm verify` | PASS |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS |
+
 No code changes in this lane (documentation only). Verify confirms no regressions introduced.
 
 ### R-level compliance
@@ -49,3 +56,4 @@ All changes within declared file scope lock. No Tier C paths touched.
 # skipped 0
 # todo 0
 ```
+**Merge SHA:** b20c0469507eb0b7ba99dd3c451049011d7d7a29

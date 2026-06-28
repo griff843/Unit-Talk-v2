@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1339-terminal-proof-criteria",
   "branch": "claude/utv2-1339-terminal-proof-criteria",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b20c0469507eb0b7ba99dd3c451049011d7d7a29",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1094",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/PIPELINE_FINALIZATION_TERMINAL_CRITERIA.md",
@@ -19,14 +19,44 @@
     "docs/06_status/proof/UTV2-1339/diff-summary.md",
     "docs/06_status/proof/UTV2-1339/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-28T01:36:07.704Z",
-  "heartbeat_at": "2026-06-28T01:36:07.704Z",
+  "heartbeat_at": "2026-06-28T08:27:52.301Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1339-terminal-proof-criteria.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-28T08:25:45.305Z",
+      "verdict": "pass",
+      "merge_sha": "b20c0469507eb0b7ba99dd3c451049011d7d7a29",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1094"
+    },
+    {
+      "checked_at": "2026-06-28T08:26:06.036Z",
+      "verdict": "fail",
+      "merge_sha": "b20c0469507eb0b7ba99dd3c451049011d7d7a29",
+      "failures": [
+        "G4",
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-28T08:27:52.301Z",
+      "verdict": "fail",
+      "merge_sha": "b20c0469507eb0b7ba99dd3c451049011d7d7a29",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
