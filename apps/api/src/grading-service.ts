@@ -358,6 +358,10 @@ export async function runGradingPass(
     (detail) => detail.outcome === 'error',
   ).length;
 
+  const errorDetails = details
+    .filter((d) => d.outcome === 'error')
+    .map((d) => ({ pickId: d.pickId, reason: d.reason }));
+
   const runRecord = await repositories.runs.startRun({
     runType: 'grading.run',
     actor: 'grading-service',
@@ -366,7 +370,11 @@ export async function runGradingPass(
   await repositories.runs.completeRun({
     runId: runRecord.id,
     status: errorCount > 0 ? 'failed' : 'succeeded',
-    details: { picksGraded: gradedCount, failed: errorCount },
+    details: {
+      picksGraded: gradedCount,
+      failed: errorCount,
+      ...(errorCount > 0 ? { errors: errorDetails } : {}),
+    },
   });
 
   return {
