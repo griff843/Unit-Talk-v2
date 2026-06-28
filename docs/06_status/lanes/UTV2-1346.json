@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1346-smart-form-capper-attribution",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1103",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/submission-service.ts",
@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1346/diff-summary.md",
     "docs/06_status/proof/UTV2-1346/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-06-28T16:57:54.178Z",
-  "heartbeat_at": "2026-06-28T16:57:54.178Z",
+  "heartbeat_at": "2026-06-28T17:18:21.409Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1346-smart-form-capper-attribution.json",
