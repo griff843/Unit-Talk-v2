@@ -258,10 +258,14 @@ PASS — no TypeScript errors
 
 ### pnpm test
 ```
-# tests (total across all suites): all pass
+# tests 54
+# suites 0
+# pass 54
 # fail 0
+# cancelled 0
 # skipped 0
-# duration_ms 444.045123
+# todo 0
+# duration_ms 744.061857
 ```
 
 ### r-level-check
