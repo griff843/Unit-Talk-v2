@@ -41,6 +41,10 @@ Deployed main SHA `3ea31d87f0a83db3a49b4468140cc4ed83bb0055` to production via G
 
 **All jobs: PASS**
 
+## Verification
+
+All gates below confirm the deploy was successful and the deployed SHA matches main.
+
 ## Post-Deploy Verification
 
 - Deployed SHA `3ea31d87f0a83db3a49b4468140cc4ed83bb0055` matches main HEAD: **YES**
