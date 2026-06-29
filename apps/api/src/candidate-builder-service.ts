@@ -19,7 +19,63 @@ import type {
   ProviderOfferRecord,
   ProviderOfferRepository,
   MarketUniverseRow,
+  AuditLogRepository,
 } from '@unit-talk/db';
+
+// ---------------------------------------------------------------------------
+// Candidate quality gates — UTV2-1364
+// These gates fire before any candidate enters the pick pipeline.
+// ---------------------------------------------------------------------------
+
+/** Milliseconds in one hour — stale data threshold for Gate 3. */
+export const CANDIDATE_STALE_THRESHOLD_MS = 3_600_000;
+
+/** Absolute odds threshold for extreme juice rejection (Gate 1). */
+export const EXTREME_JUICE_THRESHOLD = 500;
+
+export interface BuilderQualityGateInput {
+  overOdds: number | null | undefined;
+  underOdds: number | null | undefined;
+  snapshotAt: string | null | undefined;
+}
+
+export interface BuilderQualityGateResult {
+  rejected: boolean;
+  reason?: 'extreme_juice' | 'stale_odds_data';
+}
+
+/**
+ * Pure function: evaluates candidate quality gates for the builder stage.
+ * Gate 1 — Extreme juice: |odds| > 500 on either side.
+ * Gate 3 — Stale data: snapshot is older than 1 hour.
+ *
+ * @param input  Offer data needed to evaluate the gates.
+ * @param nowMs  Current time in milliseconds (injectable for tests).
+ */
+export function evaluateBuilderQualityGates(
+  input: BuilderQualityGateInput,
+  nowMs: number,
+): BuilderQualityGateResult {
+  // Gate 1: Extreme juice
+  const overOdds = input.overOdds;
+  const underOdds = input.underOdds;
+  if (
+    (overOdds !== null && overOdds !== undefined && Math.abs(overOdds) > EXTREME_JUICE_THRESHOLD) ||
+    (underOdds !== null && underOdds !== undefined && Math.abs(underOdds) > EXTREME_JUICE_THRESHOLD)
+  ) {
+    return { rejected: true, reason: 'extreme_juice' };
+  }
+
+  // Gate 3: Stale data — snapshot older than 1 hour
+  if (input.snapshotAt !== null && input.snapshotAt !== undefined) {
+    const snapshotMs = Date.parse(input.snapshotAt);
+    if (Number.isFinite(snapshotMs) && nowMs - snapshotMs > CANDIDATE_STALE_THRESHOLD_MS) {
+      return { rejected: true, reason: 'stale_odds_data' };
+    }
+  }
+
+  return { rejected: false };
+}
 
 export interface CandidateBuilderOptions {
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
@@ -41,12 +97,16 @@ export interface CandidateBuilderResult {
   skipped: number;
   duplicatesSkipped: number;
   errors: number;
+  /** Count of candidates rejected by quality gates (extreme juice, stale data). */
+  gateRejected: number;
 }
 
 interface CandidateBuilderDependencies {
   providerOffers: ProviderOfferRepository;
   marketUniverse: IMarketUniverseRepository;
   pickCandidates: IPickCandidateRepository;
+  /** Optional audit log — receives candidate.rejected events for quality gate rejections. */
+  audit?: AuditLogRepository;
 }
 
 const DEFAULT_LOOKBACK_HOURS = 24;
@@ -83,7 +143,7 @@ export class CandidateBuilderService {
           error: err instanceof Error ? err.message : String(err),
         }),
       );
-      return { scanned: 0, createdOrUpdated: 0, skipped: 0, duplicatesSkipped: 0, errors: 1 };
+      return { scanned: 0, createdOrUpdated: 0, skipped: 0, duplicatesSkipped: 0, errors: 1, gateRejected: 0 };
     }
 
     if (openingOffers.length === 0) {
@@ -97,9 +157,10 @@ export class CandidateBuilderService {
           skipped: 0,
           duplicatesSkipped: 0,
           errors: 0,
+          gateRejected: 0,
         }),
       );
-      return { scanned: 0, createdOrUpdated: 0, skipped: 0, duplicatesSkipped: 0, errors: 0 };
+      return { scanned: 0, createdOrUpdated: 0, skipped: 0, duplicatesSkipped: 0, errors: 0, gateRejected: 0 };
     }
 
     // Build an in-memory map of market_universe rows to resolve universe_id.
@@ -128,7 +189,9 @@ export class CandidateBuilderService {
     const candidates: PickCandidateUpsertInput[] = [];
     let skipped = 0;
     let duplicatesSkipped = 0;
+    let gateRejected = 0;
     const errors = 0;
+    const nowMs = now();
 
     for (const offer of openingOffers) {
       const key = [
@@ -143,6 +206,46 @@ export class CandidateBuilderService {
         continue;
       }
       seenOfferKeys.add(key);
+
+      // UTV2-1364: Quality gates — evaluate before candidate creation.
+      const gateResult = evaluateBuilderQualityGates(
+        {
+          overOdds: offer.over_odds,
+          underOdds: offer.under_odds,
+          snapshotAt: offer.snapshot_at,
+        },
+        nowMs,
+      );
+      if (gateResult.rejected) {
+        gateRejected += 1;
+        logger?.warn?.(
+          JSON.stringify({
+            service: 'candidate-builder',
+            event: 'candidate.gate_rejected',
+            reason: gateResult.reason,
+            providerEventId: offer.provider_event_id,
+            providerMarketKey: offer.provider_market_key,
+          }),
+        );
+        // Log to audit_log for traceability.
+        await this.repos.audit?.record({
+          entityType: 'pick_candidates',
+          entityId: null,
+          entityRef: null,
+          action: 'candidate.rejected',
+          actor: 'system:candidate-builder',
+          payload: {
+            reason: gateResult.reason,
+            providerEventId: offer.provider_event_id,
+            providerMarketKey: offer.provider_market_key,
+            providerKey: offer.provider_key,
+            overOdds: offer.over_odds,
+            underOdds: offer.under_odds,
+            snapshotAt: offer.snapshot_at,
+          },
+        });
+        continue;
+      }
 
       const universe = resolveUniverseByOffer(universeRows, universeMap, offer);
       if (!universe) {
@@ -172,6 +275,7 @@ export class CandidateBuilderService {
           skipped,
           duplicatesSkipped,
           errors,
+          gateRejected,
         }),
       );
       return {
@@ -180,6 +284,7 @@ export class CandidateBuilderService {
         skipped,
         duplicatesSkipped,
         errors,
+        gateRejected,
       };
     }
 
@@ -202,6 +307,7 @@ export class CandidateBuilderService {
         skipped,
         duplicatesSkipped,
         errors: errors + 1,
+        gateRejected,
       };
     }
 
@@ -215,6 +321,7 @@ export class CandidateBuilderService {
         skipped,
         duplicatesSkipped,
         errors,
+        gateRejected,
       }),
     );
 
@@ -224,6 +331,7 @@ export class CandidateBuilderService {
       skipped,
       duplicatesSkipped,
       errors,
+      gateRejected,
     };
   }
 }

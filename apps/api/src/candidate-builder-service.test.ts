@@ -9,11 +9,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CandidateBuilderService } from './candidate-builder-service.js';
+import {
+  CandidateBuilderService,
+  evaluateBuilderQualityGates,
+  CANDIDATE_STALE_THRESHOLD_MS,
+  EXTREME_JUICE_THRESHOLD,
+} from './candidate-builder-service.js';
 import {
   InMemoryMarketUniverseRepository,
   InMemoryPickCandidateRepository,
   InMemoryProviderOfferRepository,
+  InMemoryAuditLogRepository,
 } from '@unit-talk/db';
 import type { MarketUniverseUpsertInput, ProviderOfferUpsertInput } from '@unit-talk/db';
 
@@ -143,4 +149,160 @@ test('duplicate prevention: calling build() twice does not create duplicate cand
   assert.equal(afterSecond.length, 1);
   assert.equal(afterSecond[0], afterFirstIds[0]);
   assert.equal(second.errors, 0);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1364: evaluateBuilderQualityGates — pure function unit tests
+// ---------------------------------------------------------------------------
+
+test('evaluateBuilderQualityGates: passes a normal offer', () => {
+  const nowMs = Date.now();
+  const result = evaluateBuilderQualityGates(
+    { overOdds: -110, underOdds: -120, snapshotAt: new Date(nowMs - 1000).toISOString() },
+    nowMs,
+  );
+  assert.equal(result.rejected, false);
+  assert.equal(result.reason, undefined);
+});
+
+test('evaluateBuilderQualityGates: Gate 1 — rejects extreme negative over odds', () => {
+  const nowMs = Date.now();
+  const result = evaluateBuilderQualityGates(
+    { overOdds: -(EXTREME_JUICE_THRESHOLD + 1), underOdds: -110, snapshotAt: new Date().toISOString() },
+    nowMs,
+  );
+  assert.equal(result.rejected, true);
+  assert.equal(result.reason, 'extreme_juice');
+});
+
+test('evaluateBuilderQualityGates: Gate 1 — rejects extreme positive under odds', () => {
+  const nowMs = Date.now();
+  const result = evaluateBuilderQualityGates(
+    { overOdds: -110, underOdds: EXTREME_JUICE_THRESHOLD + 1, snapshotAt: new Date().toISOString() },
+    nowMs,
+  );
+  assert.equal(result.rejected, true);
+  assert.equal(result.reason, 'extreme_juice');
+});
+
+test('evaluateBuilderQualityGates: Gate 1 — accepts odds exactly at threshold', () => {
+  const nowMs = Date.now();
+  const result = evaluateBuilderQualityGates(
+    { overOdds: -EXTREME_JUICE_THRESHOLD, underOdds: EXTREME_JUICE_THRESHOLD, snapshotAt: new Date().toISOString() },
+    nowMs,
+  );
+  assert.equal(result.rejected, false);
+});
+
+test('evaluateBuilderQualityGates: Gate 3 — rejects stale snapshot older than 1 hour', () => {
+  const nowMs = Date.now();
+  const staleSnapshotAt = new Date(nowMs - CANDIDATE_STALE_THRESHOLD_MS - 1).toISOString();
+  const result = evaluateBuilderQualityGates(
+    { overOdds: -110, underOdds: -120, snapshotAt: staleSnapshotAt },
+    nowMs,
+  );
+  assert.equal(result.rejected, true);
+  assert.equal(result.reason, 'stale_odds_data');
+});
+
+test('evaluateBuilderQualityGates: Gate 3 — accepts fresh snapshot just under 1 hour', () => {
+  const nowMs = Date.now();
+  const freshSnapshotAt = new Date(nowMs - CANDIDATE_STALE_THRESHOLD_MS + 1000).toISOString();
+  const result = evaluateBuilderQualityGates(
+    { overOdds: -110, underOdds: -120, snapshotAt: freshSnapshotAt },
+    nowMs,
+  );
+  assert.equal(result.rejected, false);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1364: CandidateBuilderService integration — gates block creation
+// ---------------------------------------------------------------------------
+
+test('Gate 1 integration: extreme juice offer is rejected and logged to audit', async () => {
+  const providerOffers = new InMemoryProviderOfferRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const audit = new InMemoryAuditLogRepository();
+
+  await providerOffers.upsertBatch([
+    makeProviderOffer({ overOdds: -600, underOdds: -110 }), // extreme juice on over
+  ]);
+  await marketUniverse.upsertMarketUniverse([makeUniverseRow()]);
+
+  const fixedNow = new Date('2026-01-01T12:00:00.000Z');
+  const service = new CandidateBuilderService(
+    { providerOffers, marketUniverse, pickCandidates, audit },
+    { now: () => fixedNow.getTime(), lookbackHours: 24 },
+  );
+
+  const result = await service.build();
+  assert.equal(result.gateRejected, 1);
+  assert.equal(result.createdOrUpdated, 0);
+
+  const qualified = await pickCandidates.findByStatus('qualified');
+  assert.equal(qualified.length, 0, 'extreme juice offer must not create a candidate');
+
+  const auditEntries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(auditEntries.length, 1);
+  const entry = auditEntries[0]!;
+  assert.equal(entry.action, 'candidate.rejected');
+  assert.equal((entry.payload as Record<string, unknown>)['reason'], 'extreme_juice');
+});
+
+test('Gate 3 integration: stale snapshot offer is rejected and logged to audit', async () => {
+  const providerOffers = new InMemoryProviderOfferRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const audit = new InMemoryAuditLogRepository();
+
+  const fixedNow = new Date('2026-01-01T12:00:00.000Z');
+  // Snapshot older than 1 hour
+  const staleSnapshotAt = new Date(fixedNow.getTime() - CANDIDATE_STALE_THRESHOLD_MS - 5000).toISOString();
+
+  await providerOffers.upsertBatch([
+    makeProviderOffer({ snapshotAt: staleSnapshotAt }),
+  ]);
+  await marketUniverse.upsertMarketUniverse([makeUniverseRow()]);
+
+  const service = new CandidateBuilderService(
+    { providerOffers, marketUniverse, pickCandidates, audit },
+    { now: () => fixedNow.getTime(), lookbackHours: 24 },
+  );
+
+  const result = await service.build();
+  assert.equal(result.gateRejected, 1);
+  assert.equal(result.createdOrUpdated, 0);
+
+  const auditEntries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(auditEntries.length, 1);
+  const entry = auditEntries[0]!;
+  assert.equal((entry.payload as Record<string, unknown>)['reason'], 'stale_odds_data');
+});
+
+test('happy path: fresh normal offer passes gates and creates a candidate', async () => {
+  const providerOffers = new InMemoryProviderOfferRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const audit = new InMemoryAuditLogRepository();
+
+  const fixedNow = new Date('2026-01-01T12:00:00.000Z');
+  const freshSnapshot = new Date(fixedNow.getTime() - 60_000).toISOString(); // 1 min ago
+
+  await providerOffers.upsertBatch([
+    makeProviderOffer({ overOdds: -110, underOdds: -120, snapshotAt: freshSnapshot }),
+  ]);
+  await marketUniverse.upsertMarketUniverse([makeUniverseRow()]);
+
+  const service = new CandidateBuilderService(
+    { providerOffers, marketUniverse, pickCandidates, audit },
+    { now: () => fixedNow.getTime(), lookbackHours: 24 },
+  );
+
+  const result = await service.build();
+  assert.equal(result.gateRejected, 0);
+  assert.equal(result.createdOrUpdated, 1);
+
+  const auditEntries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(auditEntries.length, 0, 'no rejections for a valid offer');
 });
