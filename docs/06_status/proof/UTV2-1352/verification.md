@@ -12,6 +12,7 @@
 | `pnpm type-check` | PASS | Completed locally with exit 0. |
 | `pnpm test` | PASS | Root aggregate test command completed locally with exit 0. |
 | `pnpm verify` | PASS | Full gate completed locally with exit 0, including `test:db` 7/7 and live T1 proof suite. |
+| `pnpm test:db` | PASS | DB smoke test ran against live Supabase as part of `pnpm verify`. 7 subtests passed, 0 failed, 0 skipped. TAP output below. |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | `Rules matched: (none) - no R-level artifacts required for this diff`. |
 | `pnpm ops:brief` | PASS for command execution | No explicit FAIL state printed; outbox backlog remains reported as queue state. |
 | `gh run list --workflow grading-staleness-check.yml --limit 10 --json databaseId,status,conclusion,createdAt,headBranch,headSha,url,event` | PARTIAL evidence | All visible completed runs were failures; no successful run found. |
@@ -32,6 +33,25 @@ Latest visible grading-staleness workflow sample:
 
 ```json
 {"conclusion":"failure","createdAt":"2026-06-28T01:46:03Z","databaseId":28307969394,"event":"push","headBranch":"main","headSha":"1622807c139cdf7a57821ab125299af776834724","status":"completed","url":"https://github.com/griff843/Unit-Talk-v2/actions/runs/28307969394"}
+```
+
+## pnpm test:db TAP output
+
+```
+TAP version 13
+# Subtest: database smoke tests
+ok 1 - can connect to Supabase
+ok 2 - settlement_records table accessible
+ok 3 - picks table accessible
+ok 4 - system_runs table accessible
+ok 5 - provider_offer_history table accessible
+ok 6 - outbox table accessible
+ok 7 - can read recent records
+1..7
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
 ```
 
 ## Verdict
