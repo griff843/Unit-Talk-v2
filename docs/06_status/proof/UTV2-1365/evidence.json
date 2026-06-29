@@ -1,0 +1,38 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1365",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
+    "deploy_workflow_run_id": "28404945789",
+    "deploy_workflow_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/28404945789",
+    "ci_sentinels": {
+      "verify": "success",
+      "rollback_dry_run": "success",
+      "build_api": "success",
+      "build_worker": "success",
+      "build_ingestor": "success",
+      "build_discord_bot": "success",
+      "canary": "success",
+      "promote": "success",
+      "post_deploy_smoke": "success"
+    }
+  },
+  "deploy": {
+    "pre_deploy_sha": "d313ad95",
+    "post_deploy_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
+    "sha_match": true,
+    "triggered_at": "2026-06-29T21:49:17Z",
+    "completed_at": "2026-06-29T21:58:49Z",
+    "method": "workflow_dispatch",
+    "ref": "main"
+  },
+  "quality_gates_live": {
+    "utv2_1364_candidate_gates": true,
+    "gate_1_extreme_juice": true,
+    "gate_2_kelly_zero": true,
+    "gate_3_stale_data": true,
+    "gate_4_postgame": true,
+    "gate_5_suppress_band": true
+  }
+}
