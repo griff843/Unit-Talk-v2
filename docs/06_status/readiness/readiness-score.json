@@ -1,15 +1,15 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-27T20:11:00Z",
-  "main_sha": "c8eece10eacf3352c1c2ffce4e62c4d5fa2377d7",
-  "deployed_sha": "d313ad95787040463ffb02379e94075a75756de3",
+  "generated_at": "2026-06-29T22:05:00Z",
+  "main_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
+  "deployed_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
   "verdict": "GREEN",
   "dimensions": [
     {
       "id": "deploy_sha_alignment",
       "title": "Production SHA matches main HEAD",
       "status": "pass",
-      "evidence": "Deploy run 28186314440 succeeded on d313ad95 (main HEAD). Deployed SHA matches main.",
+      "evidence": "Deploy run 28404945789 succeeded on 3ea31d87 (main HEAD). All 9 jobs passed including canary and promote. Deployed SHA matches main.",
       "blocking": true
     },
     {
