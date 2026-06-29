@@ -24,22 +24,21 @@ Run date: 2026-06-28
 
 ## pnpm test:db TAP output
 
-`pnpm test:db` ran against live Supabase as part of `pnpm verify` (completed before the unrelated stranded-picks timeout failure). All 7 subtests passed.
+`pnpm test:db` ran against live Supabase in this worktree. 6 of 7 subtests passed; 1 subtest failed due to the `settlement_records.listRecent` statement timeout — the same pre-existing infrastructure issue being investigated by the concurrent timeout investigation lane. No runtime files were changed by this docs-only lane.
 
 ```
 TAP version 13
-# Subtest: database smoke tests
-ok 1 - can connect to Supabase
+# Subtest: settlement records live DB suite
 ok 2 - settlement_records table accessible
 ok 3 - picks table accessible
 ok 4 - system_runs table accessible
 ok 5 - provider_offer_history table accessible
 ok 6 - outbox table accessible
-ok 7 - can read recent records
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
 1..7
 # tests 7
-# pass 7
-# fail 0
+# pass 6
+# fail 1
 # skipped 0
 ```
 
