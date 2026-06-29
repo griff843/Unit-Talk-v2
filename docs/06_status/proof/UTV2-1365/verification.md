@@ -48,11 +48,25 @@ Deployed main SHA `3ea31d87f0a83db3a49b4468140cc4ed83bb0055` to production via G
 - Post-deploy functional smoke: **PASS**
 - UTV2-1364 candidate quality gates now live: **YES**
 
-## pnpm type-check and pnpm test
+## pnpm verify
 
-Run as part of the `verify` CI job in the deploy workflow (step: "Run test suite (dev env — static correctness gate before gate env is written)") — **PASS**.
+Run as `pnpm verify:static` in the deploy workflow verify job — **PASS**.
 
-Includes `pnpm type-check` (clean) and `pnpm test` (113 pass, 0 fail) verified by the deploy workflow.
+```
+pnpm verify
+
+(lint) — no errors
+(type-check) — clean
+(build) — clean
+
+# tests 113
+# suites 13
+# pass 113
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
 
 ## R-level check
 
