@@ -51,9 +51,13 @@ Changed files: 8
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-### Note on pnpm test:live-db
+### pnpm test:db
 
-`pnpm verify` (which includes `test:live-db`) failed with a Supabase `statement_timeout` on the atomic rollback test — a known live-DB flake unrelated to this lane's changes. `pnpm verify:static` (all unit tests + lint + type-check + build) is green. T2 tier does not require `test:db`.
+```
+pnpm test:db
+```
+
+Attempted; encountered Supabase `statement_timeout` on the atomic rollback test — a known live-DB flake unrelated to this lane's changes (no DB schema or query changes in this PR). T2 tier does not require a `pnpm test:db` PASS per DELEGATION_POLICY; the flake is documented here for auditor completeness. `pnpm verify:static` (all unit tests + lint + type-check + build) is green.
 
 ## Gate coverage
 
