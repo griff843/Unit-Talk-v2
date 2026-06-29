@@ -54,11 +54,42 @@ Status: PASS
 
 ## GHA Run
 
-Workflow triggered after PR push: `grading-staleness-check.yml`
+Workflow triggered on branch `codex/utv2-1358-m5-grading-staleness-alert-fix` via `workflow_dispatch`.
 
-GHA run URL: pending — will be populated by post-merge automation.
+**Run URL:** https://github.com/griff843/Unit-Talk-v2/actions/runs/28350361288
 
-Branch CI expected green once PR is pushed and `pnpm exec tsx` resolves correctly on the runner.
+**Result:** Script executed successfully. "workflow file issue" is eliminated.
+
+Step-by-step output:
+- Set up job ✓
+- Run actions/checkout@v4 ✓
+- Run pnpm/action-setup@v4 ✓
+- Run actions/setup-node@v4 ✓
+- Install dependencies ✓ (`pnpm install --frozen-lockfile`)
+- Check grading staleness — script ran, emitted:
+
+```json
+{
+  "level": "WARN",
+  "service": "grading",
+  "check": "staleness",
+  "message": "65 of 98 grading.run(s) in the last 24h completed with 0 picks graded. Last run was 17m ago (status: succeeded). Possible cause: no settled game results, no eligible picks, or upstream blockage.",
+  "ts": "2026-06-29T05:19:01.022Z"
+}
+```
+
+Exit code 1 is the script's **designed behavior** for the WARN condition (per script comment:
+"Exit 1 so GHA step fails and the run is visible in the checks list"). This is the monitoring
+alert functioning as intended — 65/98 grading runs with 0 picks graded is a legitimate
+operational signal that the grading pipeline needs attention.
+
+**Pre-fix behavior:** "This run likely failed because of a workflow file issue" — `tsx` not found,
+no Supabase query, no output.
+
+**Post-fix behavior:** Script runs, connects to Supabase, queries `system_runs`, emits structured
+JSON, exits with operational signal.
+
+The M5 criterion 3 "workflow file issue" is resolved. The workflow now executes end-to-end.
 
 ## Merge SHA
 
