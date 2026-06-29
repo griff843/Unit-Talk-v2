@@ -49,6 +49,27 @@ Verdict: no eligible live smart-form sample with `submittedBy` was present at ob
 
 Non-fatal live proof warnings were observed for devig enrichment statement timeouts during proof setup; the affected tests handled the skipped enrichment path and passed.
 
+## pnpm test:db TAP output
+
+`pnpm test:db` ran against live Supabase as part of `pnpm verify`. All 7 subtests passed.
+
+```
+TAP version 13
+# Subtest: database smoke tests
+ok 1 - can connect to Supabase
+ok 2 - settlement_records table accessible
+ok 3 - picks table accessible
+ok 4 - system_runs table accessible
+ok 5 - provider_offer_history table accessible
+ok 6 - outbox table accessible
+ok 7 - can read recent records
+1..7
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+```
+
 ## R-Level Compliance
 
 Final committed-diff check:
