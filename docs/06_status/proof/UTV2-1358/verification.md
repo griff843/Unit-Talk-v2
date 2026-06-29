@@ -91,6 +91,21 @@ JSON, exits with operational signal.
 
 The M5 criterion 3 "workflow file issue" is resolved. The workflow now executes end-to-end.
 
+## pnpm test:db
+
+Command: `pnpm test:db`
+Status: **FAIL** — pre-existing statement timeout, unrelated to this lane's changes
+
+`pnpm test:db` was run against the live Supabase project (`zfzdnfwdarxucxtaojxm`). All 7
+subtests timed out via `settlement_records.listRecent` in the CLV computation path
+(`clv-feedback.ts → processSubmission → DatabaseSettlementRepository.listRecent`).
+
+Root cause: `settlement_records` has no index on `created_at`. Full sequential scan
+even with a `since` lower-bound causes statement timeouts. This is a pre-existing
+performance gap; no changes in this lane affect the query path or table structure.
+
+Basic DB connectivity confirmed: `scripts/ci/required-db-smoke.ts` passes in under 2s.
+
 ## Merge SHA
 
 To be bound by `post-merge-lane-close.yml` after merge.
