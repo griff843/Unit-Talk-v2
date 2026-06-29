@@ -68,4 +68,4 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ## Merge SHA Binding
 
 Branch: codex/utv2-1357-m4-readiness-rollup
-Merge SHA: TBD — to be bound by post-merge-lane-close.yml after PR merges
+Merge SHA: to be bound by post-merge-lane-close.yml after PR merges
