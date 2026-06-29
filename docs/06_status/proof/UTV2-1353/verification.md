@@ -22,6 +22,27 @@ Run date: 2026-06-28
   - `docs/06_status/proof/UTV2-1353/verification.md`
 - Confirmed changed files are lane metadata and proof artifacts only.
 
+## pnpm test:db TAP output
+
+`pnpm test:db` ran against live Supabase as part of `pnpm verify` (completed before the unrelated stranded-picks timeout failure). All 7 subtests passed.
+
+```
+TAP version 13
+# Subtest: database smoke tests
+ok 1 - can connect to Supabase
+ok 2 - settlement_records table accessible
+ok 3 - picks table accessible
+ok 4 - system_runs table accessible
+ok 5 - provider_offer_history table accessible
+ok 6 - outbox table accessible
+ok 7 - can read recent records
+1..7
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+```
+
 ## Notes
 
 `pnpm verify` first failed earlier in `scripts/codex-receive.test.ts` because a local fixture branch name already existed; a focused rerun of `npx tsx --test scripts/codex-receive.test.ts` passed. The subsequent full `pnpm verify` progressed through lint, type-check, build, root tests, smart-form verification, command verification, `pnpm test:db`, and several live T1 proof files before failing in `apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts`.
