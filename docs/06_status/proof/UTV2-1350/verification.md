@@ -92,3 +92,7 @@ The timeout is intermittent — it triggers under load or when the Supabase quer
 Focused proof test (`t1-proof-utv2-1321-settlement-listrecent.test.ts`) first run: failed after 8.6s with `Failed to list settlements: canceling statement due to statement timeout`.
 
 Root cause: no-`since` lower-bound `ORDER BY created_at DESC LIMIT N` scan over 15,319 rows hits statement timeout. With `since` bound, the index prunes to a narrow window; since_30d queries complete in 136–152ms. Fix plan documented in `docs/06_status/proof/UTV2-1350/diff-summary.md`.
+
+## Merge SHA
+
+merge_sha: 1c1437078c32843f290370630d74742734208182
