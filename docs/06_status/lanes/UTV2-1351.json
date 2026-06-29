@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1351-m4-capper-attribution-live-observation",
   "branch": "codex/utv2-1351-m4-capper-attribution-live-observation",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "807e97e36cd296e855d6b5dde4f1b01c64d05158",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1112",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1351"
@@ -17,14 +17,51 @@
     "docs/06_status/proof/UTV2-1351/diff-summary.md",
     "docs/06_status/proof/UTV2-1351/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-28T23:29:19.532Z",
-  "heartbeat_at": "2026-06-28T23:29:19.532Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-29T04:31:59.424Z",
+  "closed_at": "2026-06-29T04:31:59.424Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1351-m4-capper-attribution-live-observation.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-29T04:29:44.298Z",
+      "verdict": "pass",
+      "merge_sha": "807e97e36cd296e855d6b5dde4f1b01c64d05158",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1112"
+    },
+    {
+      "checked_at": "2026-06-29T04:29:53.332Z",
+      "verdict": "fail",
+      "merge_sha": "807e97e36cd296e855d6b5dde4f1b01c64d05158",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T04:30:12.656Z",
+      "verdict": "fail",
+      "merge_sha": "807e97e36cd296e855d6b5dde4f1b01c64d05158",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T04:31:30.323Z",
+      "verdict": "pass",
+      "merge_sha": "807e97e36cd296e855d6b5dde4f1b01c64d05158",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
