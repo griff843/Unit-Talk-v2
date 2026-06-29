@@ -151,7 +151,8 @@ export async function computeRecapSummary(
   now: Date = new Date(),
 ): Promise<RecapSummary | null> {
   const window = getRecapWindow(period, now);
-  const settlements = await repositories.settlements.listRecent(RECENT_SETTLEMENT_LIMIT);
+  // Pass window.startsAt as the since lower bound to avoid full-table ORDER BY scan (UTV2-1355)
+  const settlements = await repositories.settlements.listRecent(RECENT_SETTLEMENT_LIMIT, window.startsAt);
   const relevantSettlements = settlements.filter((settlement) => {
     if (settlement.status !== 'settled') {
       return false;
