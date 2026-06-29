@@ -282,3 +282,10 @@ The index requirement is tracked as a follow-up infrastructure item.
 - Investigate why `completeRun` does not write `errors` array to `system_runs.details` in production
 - Continue daily M3 monitoring; re-evaluate when 7-day window clears 6/22-6/23 data (approx 2026-06-30)
 - If C3 gap confirmed as deployment issue, schedule a grading-service redeployment
+
+## Merge SHA Binding
+
+Merge SHA: 82f739aa10e51711c5b1491e3fcf658019c92c70
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1113
+
+`pnpm verify` ran on the branch before merge (type-check + test + lint all green).

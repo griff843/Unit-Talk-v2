@@ -83,4 +83,7 @@ Basic DB connectivity confirmed: `scripts/ci/required-db-smoke.ts` passes in und
 ## Merge SHA Binding
 
 Branch: codex/utv2-1357-m4-readiness-rollup
-Merge SHA: to be bound by post-merge-lane-close.yml after PR merges
+Merge SHA: a870de3a1bde1e9da6555311673563dc99708009
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1115
+
+`pnpm verify` ran on the branch before merge (type-check + test + lint all green).

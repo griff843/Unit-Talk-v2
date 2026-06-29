@@ -307,3 +307,8 @@ This lane will be marked Done only after:
 - Deploy confirmed (new deploy SHA post `7e2ec7b5`)
 - Test submission executed
 - DB query confirms `metadata.capper` present on the new pick
+
+## Merge SHA Binding
+
+Merge SHA: d030d9c4cda86a4f35bdb37b4e42900440058e11
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1117

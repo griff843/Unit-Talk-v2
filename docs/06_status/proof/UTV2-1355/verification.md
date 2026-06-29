@@ -89,4 +89,7 @@ Basic DB connectivity confirmed: `scripts/ci/required-db-smoke.ts` passes in und
 
 **T2** — call-site only, no DDL, no migrations.
 
-<!-- merge_sha: to be bound by post-merge-lane-close.yml after PR merges -->
+<!-- merge_sha: 0858922378659fd379f77bf0eca9c4701ac0ab1e -->
+<!-- pr_url: https://github.com/griff843/Unit-Talk-v2/pull/1114 -->
+
+`pnpm verify` ran on the branch before merge (type-check + test + lint all green).

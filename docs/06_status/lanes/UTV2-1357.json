@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1357-m4-readiness-rollup",
   "branch": "codex/utv2-1357-m4-readiness-rollup",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a870de3a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1115",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1357"
@@ -17,14 +17,33 @@
     "docs/06_status/proof/UTV2-1357/diff-summary.md",
     "docs/06_status/proof/UTV2-1357/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-29T05:01:16.817Z",
-  "heartbeat_at": "2026-06-29T05:01:16.817Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-29T13:07:01.180Z",
+  "closed_at": "2026-06-29T13:07:01.180Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1357-m4-readiness-rollup.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-29T13:03:57.816Z",
+      "verdict": "fail",
+      "merge_sha": "a870de3a",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T13:06:28.517Z",
+      "verdict": "pass",
+      "merge_sha": "a870de3a",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

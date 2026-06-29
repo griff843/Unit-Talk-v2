@@ -1,24 +1,32 @@
 # UTV2-1356 Diff Summary
 
-**Lane type:** proof/plan (no code changed)
-**Tier:** T2
-**PM gate:** OPEN — submission blocked pending PM go-ahead
-**Date:** 2026-06-29
+Generated at: 2026-06-29T13:01:31.409Z
+Issue: UTV2-1356
+Tier: T2
+Lane type: verification
+Branch: claude/utv2-1356-m4-capper-positive-sample-proof
+PR URL: N/A
+Head SHA: 6ff25cc8f5959d06ffa8bae5b47211d13a08aeec
+Merge SHA: d030d9c4
+Diff base: d030d9c4^1
+Diff target: d030d9c4
 
-## Scope
+## Git Diff Stat
+```
+docs/06_status/proof/UTV2-1356/diff-summary.md |  24 ++
+ docs/06_status/proof/UTV2-1356/verification.md | 309 +++++++++++++++++++++++++
+ 2 files changed, 333 insertions(+)
+```
 
-This lane produces a pre-submission readiness plan only. No production submission is made. No source code is changed.
+## Git Name Status
+```
+A	docs/06_status/proof/UTV2-1356/diff-summary.md
+A	docs/06_status/proof/UTV2-1356/verification.md
+```
 
-Files created:
-- `docs/06_status/proof/UTV2-1356/diff-summary.md` (this file)
-- `docs/06_status/proof/UTV2-1356/verification.md`
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Purpose
-
-UTV2-1356 is the M4 live capper positive sample proof. It verifies that:
-1. The UTV2-1346 fix (submittedBy → metadata.capper) is present in code
-2. The code path is correct end-to-end
-3. The deploy gap is identified (fix merged 2026-06-28, last deploy 2026-06-25)
-4. A complete pre-submission plan exists for PM review
-
-No pick is submitted until PM gives go-ahead.
+## SHA Binding
+Head SHA: 6ff25cc8f5959d06ffa8bae5b47211d13a08aeec
+Merge SHA: d030d9c4

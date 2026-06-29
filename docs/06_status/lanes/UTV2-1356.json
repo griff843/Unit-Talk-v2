@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1356-m4-capper-positive-sample-proof",
   "branch": "claude/utv2-1356-m4-capper-positive-sample-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "d030d9c4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1117",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1356"
@@ -17,14 +17,42 @@
     "docs/06_status/proof/UTV2-1356/diff-summary.md",
     "docs/06_status/proof/UTV2-1356/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-29T05:01:03.604Z",
-  "heartbeat_at": "2026-06-29T05:01:03.604Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-29T13:06:56.600Z",
+  "closed_at": "2026-06-29T13:06:56.600Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1356-m4-capper-positive-sample-proof.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-29T13:03:52.352Z",
+      "verdict": "fail",
+      "merge_sha": "d030d9c4",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T13:04:25.809Z",
+      "verdict": "fail",
+      "merge_sha": "d030d9c4",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T13:06:24.075Z",
+      "verdict": "pass",
+      "merge_sha": "d030d9c4",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

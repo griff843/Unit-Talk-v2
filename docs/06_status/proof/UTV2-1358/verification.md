@@ -108,4 +108,7 @@ Basic DB connectivity confirmed: `scripts/ci/required-db-smoke.ts` passes in und
 
 ## Merge SHA
 
-To be bound by `post-merge-lane-close.yml` after merge.
+Merge SHA: 863567cc4abab9acafd6269f2d132f6b240b4430
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1116
+
+`pnpm verify` ran on the branch before merge (type-check + test + lint all green).

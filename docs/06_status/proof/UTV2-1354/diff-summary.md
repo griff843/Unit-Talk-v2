@@ -1,28 +1,32 @@
-# UTV2-1354: Diff Summary
+# UTV2-1354 Diff Summary
 
-Lane type: verification (proof-only)
+Generated at: 2026-06-29T13:01:23.177Z
+Issue: UTV2-1354
 Tier: T2
-Branch: `claude/utv2-1354-m3-live-grading-verification`
-Date: 2026-06-29
+Lane type: verification
+Branch: claude/utv2-1354-m3-live-grading-verification
+PR URL: N/A
+Head SHA: dfb6e9ab5060c296db8dc4e65cf5d2cf8da22d8d
+Merge SHA: 82f739aa10e51711c5b1491e3fcf658019c92c70
+Diff base: 82f739aa10e51711c5b1491e3fcf658019c92c70^1
+Diff target: 82f739aa10e51711c5b1491e3fcf658019c92c70
 
-## Scope
+## Git Diff Stat
+```
+docs/06_status/proof/UTV2-1354/diff-summary.md |  28 +++
+ docs/06_status/proof/UTV2-1354/verification.md | 284 +++++++++++++++++++++++++
+ 2 files changed, 312 insertions(+)
+```
 
-This is a proof-only lane. No code was modified. Only proof files are added:
+## Git Name Status
+```
+A	docs/06_status/proof/UTV2-1354/diff-summary.md
+A	docs/06_status/proof/UTV2-1354/verification.md
+```
 
-- `docs/06_status/proof/UTV2-1354/diff-summary.md` (this file)
-- `docs/06_status/proof/UTV2-1354/verification.md`
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Purpose
-
-Live grading verification for M3 terminal criteria, following:
-- UTV2-1350 (settlement_records timeout root cause — DONE)
-- UTV2-1347 (grading error persistence — DONE, M3 PARTIAL)
-
-Live DB queries were now possible because the settlement_records statement timeout is confirmed intermittent under load (not a permanent grading blocker per UTV2-1350).
-
-## Files changed
-
-| File | Change |
-|------|--------|
-| `docs/06_status/proof/UTV2-1354/diff-summary.md` | Created (this file) |
-| `docs/06_status/proof/UTV2-1354/verification.md` | Created (full M3 verification) |
+## SHA Binding
+Head SHA: dfb6e9ab5060c296db8dc4e65cf5d2cf8da22d8d
+Merge SHA: 82f739aa10e51711c5b1491e3fcf658019c92c70

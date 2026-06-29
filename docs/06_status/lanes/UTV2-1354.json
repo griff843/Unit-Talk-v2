@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1354-m3-live-grading-verification",
   "branch": "claude/utv2-1354-m3-live-grading-verification",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "82f739aa10e51711c5b1491e3fcf658019c92c70",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1113",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1354"
@@ -17,14 +17,44 @@
     "docs/06_status/proof/UTV2-1354/diff-summary.md",
     "docs/06_status/proof/UTV2-1354/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-29T04:42:37.074Z",
-  "heartbeat_at": "2026-06-29T04:42:37.074Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-29T13:06:46.745Z",
+  "closed_at": "2026-06-29T13:06:46.745Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1354-m3-live-grading-verification.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-29T13:03:42.869Z",
+      "verdict": "fail",
+      "merge_sha": "82f739aa10e51711c5b1491e3fcf658019c92c70",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T13:04:13.248Z",
+      "verdict": "fail",
+      "merge_sha": "82f739aa10e51711c5b1491e3fcf658019c92c70",
+      "failures": [
+        "P3",
+        "C4",
+        "P13"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-29T13:06:15.068Z",
+      "verdict": "pass",
+      "merge_sha": "82f739aa10e51711c5b1491e3fcf658019c92c70",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

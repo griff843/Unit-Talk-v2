@@ -1,51 +1,34 @@
-# UTV2-1358 Diff Summary — M5 grading-staleness-check.yml fix
+# UTV2-1358 Diff Summary
 
-## Root Cause
+Generated at: 2026-06-29T13:01:31.364Z
+Issue: UTV2-1358
+Tier: T2
+Lane type: hygiene
+Branch: codex/utv2-1358-m5-grading-staleness-alert-fix
+PR URL: N/A
+Head SHA: b1ff7d446b471784facb2104e03fdddd8b5b5c25
+Merge SHA: 863567cc
+Diff base: 863567cc^1
+Diff target: 863567cc
 
-`.github/workflows/grading-staleness-check.yml` used `run: tsx scripts/grading-alert-check.ts`
-directly in the GHA step. After `pnpm install --frozen-lockfile`, `tsx` is installed into
-`node_modules/.bin/` but is **not** on the system PATH in a GitHub Actions runner. GitHub Actions
-reports this class of immediate runner failure as "This run likely failed because of a workflow
-file issue."
-
-This is confirmed by the working pattern used elsewhere:
-- `ops-burn-in-monitor.yml` → `pnpm exec tsx scripts/ops/burn-in-snapshot.ts` ✓
-- `ingestor-staleness-alert.yml` → `pnpm ingestor:alert-check` (named pnpm script) ✓
-- `grading-staleness-check.yml` → `tsx scripts/grading-alert-check.ts` (bare, broken) ✗
-
-## Changes
-
-### `.github/workflows/grading-staleness-check.yml`
-
-Changed step command from:
-```yaml
-run: tsx scripts/grading-alert-check.ts
+## Git Diff Stat
 ```
-to:
-```yaml
-run: pnpm exec tsx scripts/grading-alert-check.ts
+.github/workflows/grading-staleness-check.yml  |   2 +-
+ docs/06_status/proof/UTV2-1358/diff-summary.md |  51 ++++++++++++
+ docs/06_status/proof/UTV2-1358/verification.md | 111 +++++++++++++++++++++++++
+ 3 files changed, 163 insertions(+), 1 deletion(-)
 ```
 
-`pnpm exec` resolves the binary from `node_modules/.bin/` (where tsx lives after `pnpm install`),
-making it available without requiring tsx on the global PATH.
-
-### `package.json`
-
-Added `grading:alert-check` script for consistency with the alert-check naming convention
-(`ingestor:alert-check`, `worker:alert-check`, `disk:alert-check`):
-
-```json
-"grading:alert-check": "tsx scripts/grading-alert-check.ts"
+## Git Name Status
+```
+M	.github/workflows/grading-staleness-check.yml
+A	docs/06_status/proof/UTV2-1358/diff-summary.md
+A	docs/06_status/proof/UTV2-1358/verification.md
 ```
 
-This enables running the check locally via `pnpm grading:alert-check` and also allows the
-workflow to be switched to `pnpm grading:alert-check` in a future cleanup (both patterns work).
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Non-changes
-
-- `scripts/grading-alert-check.ts`: No changes required. `loadEnvironment()` from
-  `@unit-talk/config` reads `process.env` first (before `.env*` files), so GHA secrets injected
-  via `env:` are correctly picked up. The `UNIT_TALK_OPS_ALERT_WEBHOOK_URL` webhook is already
-  gracefully optional — `postDiscordAlert()` returns early if the env var is not set, so missing
-  webhook secret is non-fatal.
-- No new GHA secrets required.
+## SHA Binding
+Head SHA: b1ff7d446b471784facb2104e03fdddd8b5b5c25
+Merge SHA: 863567cc
