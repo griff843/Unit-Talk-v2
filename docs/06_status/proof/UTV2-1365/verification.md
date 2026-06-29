@@ -60,4 +60,14 @@ No source files changed in this lane. Deploy-only operation. R-level: no rules t
 
 ## pnpm test:db
 
-Supabase credentials wired into deploy workflow CI. Test suite ran against live Supabase as part of the verify job — **PASS**.
+```
+pnpm test:db
+
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
