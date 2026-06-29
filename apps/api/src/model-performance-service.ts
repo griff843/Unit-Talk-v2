@@ -172,7 +172,9 @@ export async function getModelPerformanceReport(
   // 2. Load latest settlement for each pick
   // Group by pick id — settlement_records.pick_id FK
   // We load recent settlements (generous limit) and key by pick_id
-  const recentSettlements = await repositories.settlements.listRecent(5000);
+  // Enforce a 30-day lower bound to avoid full-table ORDER BY scan (UTV2-1355)
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const recentSettlements = await repositories.settlements.listRecent(5000, since30d);
 
   // Build a map: pick_id → latest settlement (canonical — corrects_id is null = canonical)
   const settlementMap = new Map<string, (typeof recentSettlements)[0]>();
