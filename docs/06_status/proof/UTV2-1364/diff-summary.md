@@ -2,7 +2,8 @@
 
 **Issue:** UTV2-1364  
 **Tier:** T2  
-**Branch:** `codex/utv2-1364-candidate-quality-gates`
+**Branch:** `codex/utv2-1364-candidate-quality-gates`  
+**Merge SHA:** 16632e9148f5cf30e3c26dfdfc09aff687dc11b0
 
 ## What Changed
 

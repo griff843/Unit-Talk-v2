@@ -3,11 +3,14 @@
 **Issue:** UTV2-1364  
 **Tier:** T2  
 **Branch:** `codex/utv2-1364-candidate-quality-gates`  
-**Verification date:** 2026-06-29
+**Verification date:** 2026-06-29  
+**Merge SHA:** 16632e9148f5cf30e3c26dfdfc09aff687dc11b0
 
 ## Verification
 
 ### pnpm verify:static
+
+Includes `pnpm type-check` (clean) and `pnpm test` (113 pass, 0 fail):
 
 ```
 [sync-check] OK (per-issue): branch "codex/utv2-1364-candidate-quality-gates" <-> .ops/sync/UTV2-1364.yml
