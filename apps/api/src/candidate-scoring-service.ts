@@ -38,7 +38,28 @@ import type {
   ParticipantRepository,
   ParticipantRow,
   SystemRunRepository,
+  AuditLogRepository,
+  EventRepository,
 } from '@unit-talk/db';
+
+// ---------------------------------------------------------------------------
+// Quality gate helpers — UTV2-1364
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute fractional Kelly for a given model probability and American odds.
+ * Returns null when odds are missing/invalid (gate skipped).
+ *
+ * @param modelProb  Model's win-probability estimate for the chosen side (0–1).
+ * @param americanOdds  American-format odds for the chosen side (e.g. -110, +150).
+ */
+function computeFractionalKelly(modelProb: number, americanOdds: number): number | null {
+  if (!Number.isFinite(americanOdds) || americanOdds === 0) return null;
+  // Convert American odds to decimal odds - 1 (the "b" in Kelly formula).
+  const b = americanOdds < 0 ? 100 / (-americanOdds) : americanOdds / 100;
+  // Kelly: (b * p - q) / b  where q = 1 - p
+  return (b * modelProb - (1 - modelProb)) / b;
+}
 import { readRuntimeVersionInfoFromProcessEnv, toRuntimeVersionLogFields } from './runtime-version.js';
 
 export interface ScoringResult {
@@ -57,6 +78,8 @@ export interface ScoringResult {
   championResolved: number;
   noChampionSkipped: number;
   shadowRecorded: number;
+  /** Count of candidates rejected by UTV2-1364 quality gates before scoring completes. */
+  qualityGateRejected: number;
   calibration: {
     scoredCount: number;
     avgModelScore: number;
@@ -115,6 +138,10 @@ export class CandidateScoringService {
       experimentLedger?: ExperimentLedgerRepository;
       participants?: ParticipantRepository;
       runs?: SystemRunRepository;
+      /** Optional audit log — receives candidate.rejected events for quality gate rejections. */
+      audit?: AuditLogRepository;
+      /** Optional events repository — enables the postgame gate (Gate 4). */
+      events?: EventRepository;
     },
   ) {}
 
@@ -204,14 +231,62 @@ export class CandidateScoringService {
     let championResolved = 0;
     let noChampionSkipped = 0;
     let shadowRecorded = 0;
+    let qualityGateRejected = 0;
     const scoredModelScores: number[] = [];
+    const todayIso = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
 
     for (const candidate of candidates) {
       try {
         const universe = universeMap.get(candidate.universe_id);
         if (!universe) { skipped++; continue; }
         if (universe.fair_over_prob === null || universe.fair_under_prob === null) { skipped++; continue; }
-        if (universe.is_stale) { skipped++; continue; }
+
+        // UTV2-1364 Gate 3 (scorer): Stale market data — reject with audit log.
+        if (universe.is_stale) {
+          skipped++;
+          qualityGateRejected++;
+          await this.repos.audit?.record({
+            entityType: 'pick_candidates',
+            entityId: candidate.id,
+            entityRef: candidate.universe_id,
+            action: 'candidate.rejected',
+            actor: 'system:candidate-scoring',
+            payload: { reason: 'stale_odds_data', candidateId: candidate.id, universeId: candidate.universe_id },
+          });
+          continue;
+        }
+
+        // UTV2-1364 Gate 4: Postgame — reject if event has already started.
+        if (universe.event_id && this.repos.events) {
+          const event = await this.repos.events.findById(universe.event_id);
+          if (event && event.event_date < todayIso) {
+            skipped++;
+            qualityGateRejected++;
+            logger?.warn?.(JSON.stringify({
+              service: 'candidate-scoring',
+              event: 'candidate.gate_rejected',
+              reason: 'postgame_candidate',
+              candidateId: candidate.id,
+              eventId: universe.event_id,
+              eventDate: event.event_date,
+            }));
+            await this.repos.audit?.record({
+              entityType: 'pick_candidates',
+              entityId: candidate.id,
+              entityRef: candidate.universe_id,
+              action: 'candidate.rejected',
+              actor: 'system:candidate-scoring',
+              payload: {
+                reason: 'postgame_candidate',
+                candidateId: candidate.id,
+                universeId: candidate.universe_id,
+                eventId: universe.event_id,
+                eventDate: event.event_date,
+              },
+            });
+            continue;
+          }
+        }
 
         const overProb = universe.fair_over_prob ?? 0;
         const underProb = universe.fair_under_prob ?? 0;
@@ -288,6 +363,73 @@ export class CandidateScoringService {
           selectionDecision: 'select',
           selectionScore: model_score * 100,
         });
+
+        // UTV2-1364 Gate 5: SUPPRESS band — reject candidates assigned to the SUPPRESS tier.
+        if (bandResult.band === 'SUPPRESS') {
+          skipped++;
+          qualityGateRejected++;
+          logger?.warn?.(JSON.stringify({
+            service: 'candidate-scoring',
+            event: 'candidate.gate_rejected',
+            reason: 'suppress_band',
+            candidateId: candidate.id,
+            band: bandResult.band,
+          }));
+          await this.repos.audit?.record({
+            entityType: 'pick_candidates',
+            entityId: candidate.id,
+            entityRef: candidate.universe_id,
+            action: 'candidate.rejected',
+            actor: 'system:candidate-scoring',
+            payload: {
+              reason: 'suppress_band',
+              candidateId: candidate.id,
+              universeId: candidate.universe_id,
+              band: bandResult.band,
+              modelScore: model_score,
+            },
+          });
+          continue;
+        }
+
+        // UTV2-1364 Gate 2: Kelly=0 — reject when model score implies no positive edge.
+        // Evaluated before availability adjustment: availability affects position sizing
+        // (model_confidence), not whether the market offers positive expected value.
+        {
+          const isOver = (universe.fair_over_prob ?? 0) >= (universe.fair_under_prob ?? 0);
+          const americanOdds = isOver ? universe.current_over_odds : universe.current_under_odds;
+          const fractionalKelly = americanOdds !== null && americanOdds !== undefined
+            ? computeFractionalKelly(model_score, americanOdds)
+            : null;
+
+          if (fractionalKelly !== null && fractionalKelly <= 0) {
+            skipped++;
+            qualityGateRejected++;
+            logger?.warn?.(JSON.stringify({
+              service: 'candidate-scoring',
+              event: 'candidate.gate_rejected',
+              reason: 'kelly_zero_no_positive_ev',
+              candidateId: candidate.id,
+              fractionalKelly,
+              modelScore: model_score,
+            }));
+            await this.repos.audit?.record({
+              entityType: 'pick_candidates',
+              entityId: candidate.id,
+              entityRef: candidate.universe_id,
+              action: 'candidate.rejected',
+              actor: 'system:candidate-scoring',
+              payload: {
+                reason: 'kelly_zero_no_positive_ev',
+                candidateId: candidate.id,
+                universeId: candidate.universe_id,
+                fractionalKelly,
+                modelScore: model_score,
+              },
+            });
+            continue;
+          }
+        }
 
         let model_confidence = Math.max(0, 1 - uncertainty);
         const availability = await this.evaluateAvailability(universe, logger);
@@ -409,6 +551,7 @@ export class CandidateScoringService {
       disabledOrRetiredRejected, invalidEntityTypeRejected,
       trustAdjusted, championResolved, noChampionSkipped, shadowRecorded,
       availabilityAdjusted, availabilityNoDataSkipped, availabilitySuppressed,
+      qualityGateRejected,
       calibration,
       runtimeVersion: toRuntimeVersionLogFields(scoringRuntimeVersion),
       durationMs: Date.now() - startMs,
@@ -430,6 +573,7 @@ export class CandidateScoringService {
       availabilityNoDataSkipped,
       availabilitySuppressed,
       shadowRecorded,
+      qualityGateRejected,
     });
 
     return {
@@ -448,6 +592,7 @@ export class CandidateScoringService {
       championResolved,
       noChampionSkipped,
       shadowRecorded,
+      qualityGateRejected,
       calibration,
       durationMs: Date.now() - startMs,
     };
@@ -708,6 +853,8 @@ export async function runCandidateScoring(
     experimentLedger?: ExperimentLedgerRepository;
     participants?: ParticipantRepository;
     runs?: SystemRunRepository;
+    audit?: AuditLogRepository;
+    events?: EventRepository;
   },
   options: ScoringOptions = {},
 ): Promise<ScoringResult> {
@@ -860,6 +1007,7 @@ function makeEmptyResult(overrides: Partial<ScoringResult> = {}): ScoringResult 
     championResolved: 0,
     noChampionSkipped: 0,
     shadowRecorded: 0,
+    qualityGateRejected: 0,
     calibration: null,
     durationMs: 0,
     ...overrides,

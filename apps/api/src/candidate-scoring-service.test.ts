@@ -22,8 +22,10 @@ import {
   InMemoryModelRegistryRepository,
   InMemoryParticipantRepository,
   InMemorySystemRunRepository,
+  InMemoryAuditLogRepository,
+  InMemoryEventRepository,
 } from '@unit-talk/db';
-import type { MarketUniverseRow, ParticipantRow, PickCandidateRow } from '@unit-talk/db';
+import type { MarketUniverseRow, ParticipantRow, PickCandidateRow, EventRow } from '@unit-talk/db';
 
 /** Seed a champion model so scoring doesn't skip for missing champion (Phase 7E fail-closed). */
 async function seedChampion(modelRegistry: InMemoryModelRegistryRepository, sport = 'nba', marketFamily = 'player_prop') {
@@ -66,8 +68,10 @@ function makeUniverseRow(overrides: Partial<MarketUniverseRow> = {}): MarketUniv
     closing_line: null,
     closing_over_odds: null,
     closing_under_odds: null,
-    fair_over_prob: 0.56,
-    fair_under_prob: 0.44,
+    // Use 0.6/0.4 so that computeModelBlend output (~0.54) clears both
+    // the SUPPRESS band threshold (edge >= 0.015) and Kelly breakeven (~0.524 at -110).
+    fair_over_prob: 0.6,
+    fair_under_prob: 0.4,
     is_stale: false,
     last_offer_snapshot_at: new Date().toISOString(),
     refreshed_at: new Date().toISOString(),
@@ -179,7 +183,7 @@ test('scores one qualified candidate with valid fair probs', async () => {
   const runs = new InMemorySystemRunRepository();
   await seedChampion(modelRegistry);
 
-  const universeRow = makeUniverseRow({ id: 'universe-1', fair_over_prob: 0.56, fair_under_prob: 0.44, is_stale: false });
+  const universeRow = makeUniverseRow({ id: 'universe-1', fair_over_prob: 0.6, fair_under_prob: 0.4, is_stale: false });
   seedUniverseRows(marketUniverse, [universeRow]);
 
   const candidate = makeCandidate({ id: 'candidate-1', universe_id: 'universe-1', status: 'qualified', model_score: null });
@@ -218,8 +222,8 @@ test('scores rejected candidates only when explicitly included for shadow proof'
   seedUniverseRows(marketUniverse, [
     makeUniverseRow({
       id: 'universe-rejected',
-      fair_over_prob: 0.57,
-      fair_under_prob: 0.43,
+      fair_over_prob: 0.6,
+      fair_under_prob: 0.4,
       is_stale: false,
     }),
   ]);
@@ -784,4 +788,185 @@ test('UTV2-1202: skips candidate when fair_under_prob is set but fair_over_prob 
   const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
   const row = rows.get('universe-partial-prob-under');
   assert.equal(row?.model_score, null, 'model_score must remain null for skipped candidate');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1364: Candidate quality gates — scoring service
+// ---------------------------------------------------------------------------
+
+function makeEventRow(overrides: Partial<EventRow> = {}): EventRow {
+  const now = new Date().toISOString();
+  return {
+    id: 'event-1',
+    sport_id: 'nba',
+    event_name: 'Test NBA Game',
+    event_date: '2020-01-01', // past date — triggers postgame gate
+    status: 'completed',
+    external_id: null,
+    metadata: {},
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+test('UTV2-1364 Gate 3 (scorer): stale universe logs candidate.rejected to audit', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const audit = new InMemoryAuditLogRepository();
+
+  const universeRow = makeUniverseRow({ id: 'universe-stale', is_stale: true });
+  seedUniverseRows(marketUniverse, [universeRow]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ id: 'candidate-stale', universe_id: 'universe-stale' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, audit });
+
+  assert.equal(result.skipped, 1);
+  assert.equal(result.qualityGateRejected, 1);
+
+  const entries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(entries.length, 1);
+  assert.equal((entries[0]!.payload as Record<string, unknown>)['reason'], 'stale_odds_data');
+});
+
+test('UTV2-1364 Gate 4: postgame event rejects candidate with audit log', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const audit = new InMemoryAuditLogRepository();
+  const events = new InMemoryEventRepository([makeEventRow()]);
+
+  // Universe with event_id pointing to a past event
+  const universeRow = makeUniverseRow({
+    id: 'universe-postgame',
+    event_id: 'event-1',
+    is_stale: false,
+    fair_over_prob: 0.6,
+    fair_under_prob: 0.4,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ id: 'candidate-postgame', universe_id: 'universe-postgame' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, audit, events });
+
+  assert.equal(result.skipped, 1);
+  assert.equal(result.qualityGateRejected, 1);
+
+  const entries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(entries.length, 1);
+  assert.equal((entries[0]!.payload as Record<string, unknown>)['reason'], 'postgame_candidate');
+});
+
+test('UTV2-1364 Gate 4: future event date does NOT trigger postgame rejection', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const audit = new InMemoryAuditLogRepository();
+  // Future event date (well past today to avoid flakiness)
+  const events = new InMemoryEventRepository([makeEventRow({ event_date: '2099-12-31' })]);
+  await seedChampion(modelRegistry);
+
+  const universeRow = makeUniverseRow({
+    id: 'universe-future',
+    event_id: 'event-1',
+    is_stale: false,
+    fair_over_prob: 0.6,
+    fair_under_prob: 0.4,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-future' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry, audit, events });
+
+  assert.equal(result.qualityGateRejected, 0, 'future event must not trigger postgame gate');
+  const entries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(entries.length, 0);
+});
+
+test('UTV2-1364 Gate 5: SUPPRESS band rejects candidate with audit log', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const audit = new InMemoryAuditLogRepository();
+  await seedChampion(modelRegistry);
+
+  // fair_over_prob = 0.51 → p_market_devig = 0.51 → model_score ≈ 0.51
+  // edge = 0.01 < 0.015 (C threshold) → SUPPRESS band
+  const universeRow = makeUniverseRow({
+    id: 'universe-suppress',
+    fair_over_prob: 0.51,
+    fair_under_prob: 0.49,
+    is_stale: false,
+    current_over_odds: -110,
+    current_under_odds: -110,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ id: 'candidate-suppress', universe_id: 'universe-suppress' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry, audit });
+
+  assert.equal(result.skipped, 1);
+  assert.equal(result.qualityGateRejected, 1, 'SUPPRESS band must be rejected by Gate 5');
+
+  const entries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(entries.length, 1);
+  assert.equal((entries[0]!.payload as Record<string, unknown>)['reason'], 'suppress_band');
+});
+
+test('UTV2-1364 Gate 2: Kelly<=0 rejects candidate with audit log', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const audit = new InMemoryAuditLogRepository();
+  await seedChampion(modelRegistry);
+
+  // fair_over_prob = 0.575 → p_market_devig = 0.575
+  // model_score = 0.9 * 0.575 = 0.5175 → edge = 0.0175 >= 0.015 → C band (not SUPPRESS)
+  // Kelly at -110 odds: breakeven ≈ 0.524; 0.5175 < 0.524 → Kelly < 0 → Gate 2 fires
+  const universeRow = makeUniverseRow({
+    id: 'universe-kelly-zero',
+    fair_over_prob: 0.575,
+    fair_under_prob: 0.425,
+    is_stale: false,
+    current_over_odds: -110,
+    current_under_odds: -110,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ id: 'candidate-kelly-zero', universe_id: 'universe-kelly-zero' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry, audit });
+
+  assert.equal(result.skipped, 1);
+  assert.equal(result.qualityGateRejected, 1, 'Kelly<=0 must be rejected by Gate 2');
+
+  const entries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(entries.length, 1);
+  assert.equal((entries[0]!.payload as Record<string, unknown>)['reason'], 'kelly_zero_no_positive_ev');
+});
+
+test('UTV2-1364 Gate 2: positive Kelly passes through (no rejection)', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const audit = new InMemoryAuditLogRepository();
+  await seedChampion(modelRegistry);
+
+  // fair_over_prob = 0.6 → p_market_devig = 0.6
+  // model_score = 0.9 * 0.6 = 0.54 → edge = 0.04 → B band (not SUPPRESS)
+  // Kelly at -110: (0.909 * 0.54 - 0.46) / 0.909 ≈ 0.034 > 0 → passes Gate 2
+  const universeRow = makeUniverseRow({
+    id: 'universe-positive-kelly',
+    fair_over_prob: 0.6,
+    fair_under_prob: 0.4,
+    is_stale: false,
+    current_over_odds: -110,
+    current_under_odds: -110,
+  });
+  seedUniverseRows(marketUniverse, [universeRow]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-positive-kelly' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry, audit });
+
+  assert.equal(result.qualityGateRejected, 0, 'positive Kelly must not be rejected');
+  const entries = await audit.listRecentByEntityType('pick_candidates', new Date(0).toISOString(), 'candidate.rejected');
+  assert.equal(entries.length, 0, 'no audit entries for valid candidate');
 });
