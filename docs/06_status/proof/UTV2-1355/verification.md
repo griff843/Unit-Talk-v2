@@ -71,4 +71,4 @@ Result: **PASS**
 
 **T2** — call-site only, no DDL, no migrations.
 
-<!-- merge_sha: TBD -->
+<!-- merge_sha: to be bound by post-merge-lane-close.yml after PR merges -->
