@@ -67,6 +67,24 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 Result: **PASS**
 
+## pnpm test:db
+
+Command: `pnpm test:db`
+Status: **FAIL** — pre-existing statement timeout, unrelated to this lane's call-site fixes
+
+`pnpm test:db` was run against the live Supabase project (`zfzdnfwdarxucxtaojxm`). All 7
+subtests timed out via `settlement_records.listRecent` in the CLV computation path
+(`clv-feedback.ts → processSubmission → DatabaseSettlementRepository.listRecent`).
+
+Root cause: `settlement_records` has no index on `created_at`. The table requires a full
+sequential scan even with a `since` lower-bound. This lane adds `since` bounds at two
+call sites (`model-performance-service.ts`, `recap-service.ts`); the `clv-feedback.ts`
+call at line 45 already passes a 30-day `cutoffIso` but still times out because no index
+exists to make the bounded scan fast. An index on `settlement_records(created_at)` is the
+remaining infrastructure requirement.
+
+Basic DB connectivity confirmed: `scripts/ci/required-db-smoke.ts` passes in under 2s.
+
 ## Tier
 
 **T2** — call-site only, no DDL, no migrations.
