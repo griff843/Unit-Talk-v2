@@ -15,6 +15,11 @@ UTV2-1353 is a T2 verification lane for DB finalization rollup metadata and proo
 
 No runtime code, package code, migrations, generated database types, or application configuration were changed.
 
+## Merge SHA Binding
+
+Merge SHA: 482a4ad52c447029769368841e9441e871563cc0
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1111
+
 ## R-level applicability
 
 Checked `docs/05_operations/r1-r5-rules.json`.

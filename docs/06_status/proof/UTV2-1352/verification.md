@@ -57,3 +57,9 @@ ok 7 - can read recent records
 ## Verdict
 
 PARTIAL - M5 does not meet PASS criteria yet. UTV2-1344 deployed the grading staleness alert workflow, but the terminal criteria require at least one successful GitHub Actions run. Current GitHub Actions evidence showed no successful `grading-staleness-check.yml` run, so criterion 3 remains open.
+
+## Merge SHA Binding
+
+Merge SHA: d211a73ad0270186cc200777a054aef1a7fe941e
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1109
+Merged: 2026-06-28

@@ -80,3 +80,9 @@ Verdict: PASS
 Changed files: 4
 Rules matched: (none) - no R-level artifacts required for this diff
 ```
+
+## Merge SHA Binding
+
+Merge SHA: 807e97e36cd296e855d6b5dde4f1b01c64d05158
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1112
+Merged: 2026-06-28

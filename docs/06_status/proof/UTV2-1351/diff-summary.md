@@ -20,6 +20,11 @@ This proof lane adds the required UTV2-1351 markdown artifacts only:
 
 No runtime, database, contract, domain, worker, smart-form, or generated files were changed by this proof commit.
 
+## Merge SHA Binding
+
+Merge SHA: 807e97e36cd296e855d6b5dde4f1b01c64d05158
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1112
+
 ## Runtime Diff
 
 Runtime diff: none.

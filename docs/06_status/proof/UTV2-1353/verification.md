@@ -48,3 +48,9 @@ ok 7 - can read recent records
 `pnpm verify` first failed earlier in `scripts/codex-receive.test.ts` because a local fixture branch name already existed; a focused rerun of `npx tsx --test scripts/codex-receive.test.ts` passed. The subsequent full `pnpm verify` progressed through lint, type-check, build, root tests, smart-form verification, command verification, `pnpm test:db`, and several live T1 proof files before failing in `apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts`.
 
 The reproduced blocker is outside the proof-only file scope for UTV2-1353. No runtime, repository, DB, or migration files were changed from this lane.
+
+## Merge SHA Binding
+
+Merge SHA: 482a4ad52c447029769368841e9441e871563cc0
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1111
+Merged: 2026-06-28

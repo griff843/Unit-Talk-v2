@@ -34,6 +34,11 @@ A docs/06_status/proof/UTV2-1352/diff-summary.md
 A docs/06_status/proof/UTV2-1352/verification.md
 ```
 
+## Merge SHA Binding
+
+Merge SHA: d211a73ad0270186cc200777a054aef1a7fe941e
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1109
+
 ## Milestone Impact
 
 - Milestone: M5 - DevOps Finalization
