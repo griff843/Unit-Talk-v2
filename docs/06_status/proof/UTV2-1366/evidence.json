@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1366",
+  "tier": "T1",
+  "merge_sha": null,
+  "generated_at": "2026-06-30T02:30:00Z",
+  "verifier": {
+    "identity": "claude/utv2-1366-markclosinglines-fix",
+    "method": "pnpm verify + pnpm test:db + t1-proof test"
+  },
+  "sha_binding": {
+    "verified_source_sha": null,
+    "merge_sha": null,
+    "ci_sentinels": {
+      "verify": "pending-ci",
+      "type_check": "pass-local",
+      "test": "pass-local",
+      "test_db": "pass-local"
+    }
+  },
+  "static_proof": {
+    "description": "Fix markClosingLines in packages/db/src/runtime-repositories.ts — two bugs: wrong source table (ON ONLY index) and wrong ID namespace for provider_offer_current UPDATE.",
+    "files_changed": [
+      "packages/db/src/runtime-repositories.ts",
+      "apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts"
+    ],
+    "bugs_fixed": [
+      "Bug 1: SELECT from provider_offer_history_compact (non-partitioned, indexed by provider_event_id) instead of provider_offer_history (ON ONLY index not inherited by 60+ child partitions)",
+      "Bug 2: UPDATE provider_offer_current using .in('identity_key', ...) instead of .in('id', historyIds) which always produced 0 matches",
+      "Added: UPDATE provider_offer_history_compact.is_closing=true via snapshot_id PK for idempotency"
+    ],
+    "verify_exit_code": 0
+  },
+  "runtime_proof": {
+    "description": "pnpm test:db (7/7 pass) + T1 proof test (3/3 pass) against live Supabase",
+    "test_command": "pnpm test:db && npx tsx --test apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts",
+    "result": "pass",
+    "queries": [
+      {
+        "description": "database-smoke: persists submission and settlement",
+        "result": "pass",
+        "duration_ms": 38696
+      },
+      {
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "pass",
+        "duration_ms": 21880
+      },
+      {
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back",
+        "result": "pass",
+        "duration_ms": 22629
+      },
+      {
+        "description": "UTV2-920: invalid atomic settlement writes no settlement row",
+        "result": "pass",
+        "duration_ms": 22517
+      },
+      {
+        "description": "UTV2-883: no duplicate participants for same external_id and sport",
+        "result": "pass",
+        "duration_ms": 1712
+      },
+      {
+        "description": "UTV2-996: re-settling creates correction, no duplicate base rows",
+        "result": "pass",
+        "duration_ms": 23174
+      },
+      {
+        "description": "UTV2-996: correction chain additive, original row not mutated",
+        "result": "pass",
+        "duration_ms": 21078
+      },
+      {
+        "description": "UTV2-1366: markClosingLines compact source — real event < 20s (idempotent run)",
+        "result": "pass",
+        "duration_ms": 2383
+      },
+      {
+        "description": "UTV2-1366: markClosingLines no-match path < 5s (compact SELECT)",
+        "result": "pass",
+        "duration_ms": 141
+      },
+      {
+        "description": "UTV2-1366: markClosingLines empty events returns 0",
+        "result": "pass",
+        "duration_ms": 1
+      }
+    ],
+    "row_counts": [
+      { "table": "provider_offer_history_compact", "description": "57 rows marked is_closing=true for proof event 4Cl9fxEv9OrurKFGv3Wz", "count": 57, "op": "update" },
+      { "table": "picks", "description": "smoke pick created and cleaned up", "count": 1, "op": "insert+delete" },
+      { "table": "submissions", "description": "smoke submission created and cleaned up", "count": 1, "op": "insert+delete" },
+      { "table": "settlement_records", "description": "smoke settlement created during test", "count": 1, "op": "insert" },
+      { "table": "pick_lifecycle", "description": "lifecycle events: validated+queued+posted+settled", "count": 4, "op": "insert" }
+    ],
+    "test_run_summary": "10 tests / 10 pass / 0 fail / 0 skipped",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "proof_run_at": "2026-06-30T02:15:00Z"
+  }
+}

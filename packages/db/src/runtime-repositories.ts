@@ -5116,10 +5116,15 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     let totalUpdated = 0;
 
     for (const { providerEventId, commenceTime } of recentEvents) {
-      // Fetch pre-commence offers for this event. Limit 5000 rows as a safety cap.
-      const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
+      // Use provider_offer_history_compact instead of provider_offer_history.
+      // provider_offer_history has idx_provider_offer_history_event_snapshot ON ONLY (the
+      // parent partitioned table), so the index is NOT inherited by the ~60 child partitions
+      // and every provider_event_id filter causes a full sequential scan across 1M+ rows.
+      // provider_offer_history_compact is non-partitioned with a leading provider_event_id
+      // index that actually fires, bringing query time from timeout to milliseconds.
+      const { data, error } = await (fromUntyped(this.client, 'provider_offer_history_compact')
         .select(
-          'id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing',
+          'snapshot_id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing, identity_key, idempotency_key',
         )
         .eq('provider_event_id', providerEventId)
         .gte('snapshot_at', windowStart)
@@ -5128,13 +5133,15 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .order('snapshot_at', { ascending: false })
         .limit(5000) as unknown as Promise<{
           data: Array<{
-            id: string;
+            snapshot_id: string;
             provider_key: string;
             provider_market_key: string;
             provider_participant_id: string | null;
             bookmaker_key: string | null;
             snapshot_at: string;
             is_closing: boolean;
+            identity_key: string;
+            idempotency_key: string;
           }> | null;
           error: { message: string } | null;
         }>);
@@ -5149,7 +5156,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       if (rows.length === 0) continue;
 
       // Find the latest snapshot per combination key
-      const latestIdByKey = new Map<string, string>();
+      const latestByKey = new Map<
+        string,
+        { snapshotId: string; idempotencyKey: string; identityKey: string; snapshotAt: string }
+      >();
       for (const row of rows) {
         const participantKey = row.provider_participant_id ?? '';
         const bookmakerKey = options?.includeBookmakerKey
@@ -5158,35 +5168,85 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         const key = options?.includeBookmakerKey
           ? `${row.provider_key}:${row.provider_market_key}:${participantKey}:${bookmakerKey}`
           : `${row.provider_key}:${row.provider_market_key}:${participantKey}`;
-        if (!latestIdByKey.has(key)) {
+        if (!latestByKey.has(key)) {
           // rows are ordered descending — first seen is latest
-          latestIdByKey.set(key, row.id);
+          latestByKey.set(key, {
+            snapshotId: row.snapshot_id,
+            idempotencyKey: row.idempotency_key,
+            identityKey: row.identity_key,
+            snapshotAt: row.snapshot_at,
+          });
         }
       }
 
-      const idsToMark = [...latestIdByKey.values()];
-      if (idsToMark.length === 0) continue;
+      if (latestByKey.size === 0) continue;
 
-      // Batch update in chunks of 100
-      for (let i = 0; i < idsToMark.length; i += 100) {
-        const chunk = idsToMark.slice(i, i + 100);
-        const { error: updateError, count } = await (fromUntyped(this.client, 'provider_offer_history')
+      // Update provider_offer_history_compact via snapshot_id (PK) — fast indexed lookup.
+      // This must happen so subsequent markClosingLines calls skip already-processed rows
+      // (the SELECT filters is_closing=false, so unmarked compact rows get re-scanned every cycle).
+      const allSnapshotIds = [...latestByKey.values()].map((v) => v.snapshotId);
+      for (let i = 0; i < allSnapshotIds.length; i += 100) {
+        const chunk = allSnapshotIds.slice(i, i + 100);
+        const { error: compactUpdateError, count } = await (fromUntyped(this.client, 'provider_offer_history_compact')
           .update({ is_closing: true })
-          .in('id', chunk) as unknown as Promise<{
+          .in('snapshot_id', chunk) as unknown as Promise<{
             data: unknown;
             error: { message: string } | null;
             count?: number | null;
           }>);
 
-        if (updateError) {
+        if (compactUpdateError) {
           throw new Error(
-            `Failed to mark closing lines: ${updateError.message}`,
+            `Failed to mark closing lines in compact: ${compactUpdateError.message}`,
           );
         }
 
+        totalUpdated += count ?? chunk.length;
+      }
+
+      // Group by snapshot_at to enable partition pruning on provider_offer_history UPDATE.
+      // Filtering by snapshot_at (the partition key) before idempotency_key directs each
+      // batch to a single child partition instead of scanning all ~60.
+      const bySnapshot = new Map<string, string[]>();
+      for (const { idempotencyKey, snapshotAt: snapAt } of latestByKey.values()) {
+        if (!bySnapshot.has(snapAt)) bySnapshot.set(snapAt, []);
+        bySnapshot.get(snapAt)!.push(idempotencyKey);
+      }
+
+      // Update provider_offer_history — partition-pruned via snapshot_at + idempotency_key.
+      // Note: the idempotency_key unique index on history is also ON ONLY (not inherited by
+      // child partitions), so within a partition this is still a seq scan. However the scan
+      // is scoped to one partition and is bounded by that partition's size, which for current
+      // operations is a single day of data — well within the 30s statement_timeout.
+      for (const [snapAt, idempotencyKeys] of bySnapshot) {
+        for (let i = 0; i < idempotencyKeys.length; i += 100) {
+          const chunk = idempotencyKeys.slice(i, i + 100);
+          const { error: updateError } = await (fromUntyped(this.client, 'provider_offer_history')
+            .update({ is_closing: true })
+            .eq('snapshot_at', snapAt)
+            .in('idempotency_key', chunk) as unknown as Promise<{
+              data: unknown;
+              error: { message: string } | null;
+            }>);
+
+          if (updateError) {
+            throw new Error(
+              `Failed to mark closing lines: ${updateError.message}`,
+            );
+          }
+        }
+      }
+
+      // Update provider_offer_current — use identity_key (the PK of that table).
+      // The previous implementation used .in('id', historyIds) which always produced
+      // 0 matches because provider_offer_current.id is a different UUID namespace from
+      // provider_offer_history.id. identity_key is the shared namespace between the two.
+      const allIdentityKeys = [...latestByKey.values()].map((v) => v.identityKey);
+      for (let i = 0; i < allIdentityKeys.length; i += 100) {
+        const chunk = allIdentityKeys.slice(i, i + 100);
         const { error: currentUpdateError } = await (fromUntyped(this.client, 'provider_offer_current')
           .update({ is_closing: true })
-          .in('id', chunk) as unknown as Promise<{
+          .in('identity_key', chunk) as unknown as Promise<{
             data: unknown;
             error: { message: string } | null;
           }>);
@@ -5195,8 +5255,6 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
             `Failed to mark closing current offers: ${currentUpdateError.message}`,
           );
         }
-
-        totalUpdated += count ?? chunk.length;
       }
     }
 
