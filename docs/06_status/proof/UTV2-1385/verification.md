@@ -63,3 +63,7 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # todo 0
 # duration_ms 117962.37441
 ```
+
+## Merge SHA
+
+Merged to main: `0ef12822ea88c8db9a2f95dff78bd1df77f170ed`

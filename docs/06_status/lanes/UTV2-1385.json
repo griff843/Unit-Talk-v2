@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1385-promotion-target-check-sync",
   "branch": "codex/utv2-1385-promotion-target-check-sync",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "0ef12822ea88c8db9a2f95dff78bd1df77f170ed",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1125",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ci/check-promotion-target-sync.ts"
@@ -17,14 +17,44 @@
     "docs/06_status/proof/UTV2-1385/diff-summary.md",
     "docs/06_status/proof/UTV2-1385/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-30T08:08:27.770Z",
-  "heartbeat_at": "2026-06-30T08:08:27.770Z",
+  "heartbeat_at": "2026-06-30T09:28:05.411Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1385-promotion-target-check-sync.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T09:27:52.854Z",
+      "verdict": "pass",
+      "merge_sha": "0ef12822ea88c8db9a2f95dff78bd1df77f170ed",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1125"
+    },
+    {
+      "checked_at": "2026-06-30T09:27:56.668Z",
+      "verdict": "fail",
+      "merge_sha": "0ef12822ea88c8db9a2f95dff78bd1df77f170ed",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-30T09:28:05.411Z",
+      "verdict": "fail",
+      "merge_sha": "0ef12822ea88c8db9a2f95dff78bd1df77f170ed",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -14,3 +14,7 @@
 
 - No contracts, domain logic, migrations, DB repository code, worker code, or runtime routing behavior changed.
 - Proof files added under `docs/06_status/proof/UTV2-1385/` because they are explicitly required by the lane packet.
+
+## Merge SHA
+
+Merged to main: `0ef12822ea88c8db9a2f95dff78bd1df77f170ed`
