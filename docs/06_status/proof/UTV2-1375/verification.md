@@ -81,8 +81,13 @@ The `runGateEquivalentChecks` function:
 
 All existing preflight tests continue to pass — the new checks are additive only. The `fastBaselineAllowed` function, `isLaneRegistryPath` function, and `readConfiguredEnvValue` usage are all still present as expected by the test assertions.
 
-### R-level check
-R1–R5 checks: governance lane, no new packages, no DB schema changes, no migration added, no T1 runtime path touched.
+### R-level check — scripts/ci/r-level-check.ts
+
+```
+Verdict: PASS
+Changed files: (ops scripts + proof)
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ## Merge SHA
 
