@@ -1,13 +1,22 @@
 # UTV2-1380 Verification
 
-## Verification
+## Summary
 
-- `npx tsx --test apps/api/src/submission-service.test.ts` — PASS, 73/73.
-- `npx tsx --test apps/api/src/promotion-edge-integration.test.ts` — PASS, 74/74.
-- `rg "@unit-talk/db|@unit-talk/config|apps/" packages/domain/src` — PASS; matches are historical comment references only.
-- `pnpm type-check` — PASS.
-- `pnpm test` — PASS.
-- `pnpm verify` — PASS, including `test:db` 7/7 and live T1 proof suite.
+Wires market-backed Kelly sizing into submission and promotion metadata. `metadata.kellySizing` is now populated at submission time (from market-backed real-edge probability when direct devigging is unavailable) and enriched/persisted at promotion time before readiness, risk, and band scoring. Confidence-delta remains excluded from Kelly sizing and promotion edge contribution. Kelly sizing stays `null` when required inputs (odds, market-backed real-edge probability) are absent.
+
+## Evidence
+
+### Issue-specific tests
+
+- `npx tsx --test apps/api/src/submission-service.test.ts` — PASS, 73/73
+- `npx tsx --test apps/api/src/promotion-edge-integration.test.ts` — PASS, 74/74
+
+Files changed:
+- `apps/api/src/submission-service.ts` — derives Kelly sizing from market-backed real-edge probability when direct provider-offer devigging is unavailable
+- `apps/api/src/promotion-service.ts` — enriches missing `metadata.kellySizing` before score input reads, risk scoring, and band assignment; persists enriched value with promotion metadata
+
+Domain boundary check:
+- `rg "@unit-talk/db|@unit-talk/config|apps/" packages/domain/src` — PASS; matches are historical comment references only
 
 ### pnpm test:db
 
@@ -38,15 +47,15 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # duration_ms 97315.782485
 ```
 
-## Issue-Specific Coverage
+## Verification
 
-- Submission path now writes `metadata.kellySizing` from market-backed real-edge inputs before promotion when direct devigging lookup is unavailable.
-- Promotion path now enriches missing `metadata.kellySizing` before score input reads, risk scoring, and band assignment.
-- Kelly sizing remains `null` when required inputs are unavailable, including missing odds or missing market-backed real-edge probability.
-- Confidence-delta remains excluded from Kelly sizing and promotion edge contribution.
+- `pnpm type-check` — PASS
+- `pnpm test` — PASS
+- `pnpm test:db` — PASS (7/7 live DB smoke tests, TAP above)
+- `pnpm verify` — PASS (includes env:check, lint, type-check, build, test, test:db)
 
 ## R-level compliance — scripts/ci/r-level-check.ts
 
-- Triggered rules from changed paths: `lifecycle-fsm`, `promotion-scoring`.
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS.
-- Advisory only: `r4-fault-report` missing; PM-gated advisory artifact, not required for this T2 diff.
+- Triggered rules from changed paths: `lifecycle-fsm`, `promotion-scoring`
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS
+- Advisory only: `r4-fault-report` missing; PM-gated advisory artifact, not required for this T2 diff
