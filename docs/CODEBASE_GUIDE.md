@@ -2,6 +2,8 @@
 
 Technical reference for the Unit Talk V2 monorepo. This document covers architecture, packages, conventions, and build/run commands as confirmed from actual source files. The execution and governance instructions live in the root `CLAUDE.md`.
 
+> **Starting a new session?** Read `docs/START_HERE.md` first — it provides a 10-minute orientation sequence, skills quick-reference, and common pitfalls before you open any code.
+
 ---
 
 ## What Unit Talk V2 Is
