@@ -1772,6 +1772,7 @@ async function buildExposureSuppressedResult(
 
   const winnerPolicy = policies[policies.length - 1]!;
   const winnerDecision = decisions[decisions.length - 1]!;
+  const band = 'SUPPRESS';
 
   const persisted = await pickRepository.persistPromotionDecision({
     pickId: canonicalPick.id,
@@ -1785,7 +1786,8 @@ async function buildExposureSuppressedResult(
     promotionDecidedAt: decidedAt,
     promotionDecidedBy: actor,
     overrideAction: null,
-    payload: { exposureGateRejection: reason, qualified: false, score: 0 },
+    metadataPatch: { band },
+    payload: { exposureGateRejection: reason, band, qualified: false, score: 0 },
   });
 
   await auditLogRepository.record({
@@ -1817,7 +1819,7 @@ async function buildExposureSuppressedResult(
       promotionDecidedAt: decidedAt,
       promotionDecidedBy: decision.decidedBy,
       overrideAction: null,
-      payload: { exposureGateRejection: reason, qualified: false, score: 0 },
+      payload: { exposureGateRejection: reason, band, qualified: false, score: 0 },
     });
 
     await auditLogRepository.record({

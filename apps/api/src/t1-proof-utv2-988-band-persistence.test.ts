@@ -265,6 +265,96 @@ test('computeDeterministicBand: non-qualified pick gets SUPPRESS band persisted'
   );
 });
 
+// ── Live-DB: UTV2-1381 exposure-gate suppression writes SUPPRESS band ─────────
+
+test('LIVE-DB UTV2-1381: exposure-gate suppressed pick has band=SUPPRESS persisted in picks.metadata', async () => {
+  if (!repositories || !supabase) {
+    console.log('[SKIP] LIVE-DB test skipped — no Supabase credentials');
+    return;
+  }
+
+  const submissionId = randomUUID();
+  const now = new Date().toISOString();
+
+  await repositories.submissions.saveSubmission({
+    id: submissionId,
+    payload: {
+      source: 'api',
+      submittedBy: 'system:t1-proof-utv2-1381',
+      market: 'player_points_ou',
+      selection: 'Over 5.5',
+      line: 5.5,
+      odds: -110,
+      stakeUnits: 1,
+      confidence: 0.50,
+      metadata: { testKind: 't1-proof-utv2-1381' },
+    },
+    receivedAt: now,
+  });
+
+  const testPickId = randomUUID();
+
+  await repositories.picks.savePick(
+    {
+      id: testPickId,
+      submissionId,
+      market: 'player_points_ou',
+      selection: 'Over 5.5',
+      line: 5.5,
+      odds: -110,
+      stakeUnits: 1,
+      confidence: 0.50,
+      source: 'api',
+      submittedBy: 'system:t1-proof-utv2-1381',
+      approvalStatus: 'approved',
+      promotionStatus: 'not_eligible',
+      lifecycleState: 'queued',
+      metadata: {
+        sport: 'NBA',
+        eventName: 'UTV2-1381 Exposure Gate Suppression Test',
+        testKind: 't1-proof-utv2-1381',
+        // Low scores → exposure gate suppresses → band=SUPPRESS must be persisted
+        promotionScores: {
+          edge: 5,
+          trust: 10,
+          readiness: 8,
+          uniqueness: 5,
+          boardFit: 7,
+        },
+        domainAnalysis: {
+          edge: 0.01,
+          edgeSource: 'domain-analysis-v1',
+          edgeMethod: 'domain',
+        },
+      },
+      createdAt: now,
+    },
+    `t1-proof-utv2-1381:${testPickId}`,
+  );
+
+  try {
+    const result = await evaluateAllPoliciesEagerAndPersist(
+      testPickId,
+      'system:t1-proof-utv2-1381',
+      repositories.picks,
+      repositories.audit,
+    );
+
+    // UTV2-1381: exposure-gate suppression path must persist band=SUPPRESS
+    const metadataBand = (result.pickRecord.metadata as Record<string, unknown>)?.['band'];
+    assert.equal(
+      metadataBand,
+      'SUPPRESS',
+      `UTV2-1381: exposure-gate suppressed pick must have band=SUPPRESS persisted, got: ${String(metadataBand)}`,
+    );
+    console.log(`[T1-PROOF UTV2-1381] exposure-gate suppression band = ${String(metadataBand)} ✓`);
+  } finally {
+    await supabase!.from('pick_promotion_history').delete().eq('pick_id', testPickId);
+    await supabase!.from('picks').delete().eq('id', testPickId);
+    await supabase!.from('submissions').delete().eq('id', submissionId);
+  }
+});
+
 // ── Unit: stale metadata.band is ignored — no-stale-reads proof ───────────────
 
 test('computeDeterministicBand: pre-set metadata.band=SUPPRESS is overridden for qualified pick', async () => {
