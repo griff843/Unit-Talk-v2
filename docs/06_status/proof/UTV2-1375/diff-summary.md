@@ -30,3 +30,7 @@ Added markdown table output to `writeOutput` so operators can scan a structured 
 ## Verification
 `pnpm verify:static` passed (all unit tests including `scripts/ops/preflight.test.ts` pass).
 `pnpm test:db` (database smoke) passed against live Supabase.
+
+## Merge SHA
+
+Merged to main: `8cfe5a1deb7a983b861e41e1ff9a80881bc04eb9`

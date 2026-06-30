@@ -83,3 +83,7 @@ All existing preflight tests continue to pass — the new checks are additive on
 
 ### R-level check
 R1–R5 checks: governance lane, no new packages, no DB schema changes, no migration added, no T1 runtime path touched.
+
+## Merge SHA
+
+Merged to main: `8cfe5a1deb7a983b861e41e1ff9a80881bc04eb9`

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1375-preflight-ops-enhancements",
   "branch": "codex/utv2-1375-preflight-ops-enhancements",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "8cfe5a1deb7a983b861e41e1ff9a80881bc04eb9",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1130",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,14 +17,24 @@
     "docs/06_status/proof/UTV2-1375/diff-summary.md",
     "docs/06_status/proof/UTV2-1375/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-06-30T09:34:47.964Z",
-  "heartbeat_at": "2026-06-30T10:06:47.415Z",
+  "heartbeat_at": "2026-06-30T10:33:25.467Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1375-preflight-ops-enhancements.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T10:33:25.467Z",
+      "verdict": "pass",
+      "merge_sha": "8cfe5a1deb7a983b861e41e1ff9a80881bc04eb9",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1130"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
