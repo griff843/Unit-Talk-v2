@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1373-mlb-participant-upsert-timeout",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1134",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/cooperative.ts",
@@ -17,9 +17,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1373/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-06-30T22:58:23.541Z",
-  "heartbeat_at": "2026-06-30T22:58:23.541Z",
+  "heartbeat_at": "2026-06-30T23:46:10.443Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1373-mlb-participant-upsert-timeout.json",
