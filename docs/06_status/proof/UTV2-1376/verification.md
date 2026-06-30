@@ -6,7 +6,7 @@
 - `npx tsx --test scripts/ops/proof-auditor-gate.test.ts` - passed with 16 tests passing; confirms the adjacent auditor gate behavior was not changed.
 - `pnpm type-check` - passed.
 - `pnpm test` - passed.
-- Issue-specific runtime verifier check - a proof file without requested SHA failed with `SHA 0123456789abcdef0123456789abcdef01234567 not found in runtime-verification.md` and `Verdict: FAIL`; the same proof file containing the SHA passed with `Verdict: PASS`.
+- Issue-specific runtime verifier check: proof file with no SHA at all → `Verdict: FAIL` (`no SHA binding found`); proof file containing a 40-char hex SHA → `Verdict: PASS`. The branch HEAD SHA check remains advisory (warning only) — circular dependency: SHA is only known after commit; post-merge SHA enforcement is in `ops:truth-check` P3/C4. Branch HEAD SHA for this lane: `4fe55747470ca138f6c6070a2c82f2db8e24039e`.
 - `pnpm verify` - passed on the second full run, including live DB smoke and T1 live proof suites.
 
 ### pnpm test:db

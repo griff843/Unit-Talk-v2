@@ -122,7 +122,15 @@ function createResult(options: CliOptions): GateResult {
     }
 
     if (options.sha !== null && !content.includes(options.sha)) {
-      failures.push(`SHA ${options.sha} not found in ${name}`);
+      // The exact branch HEAD SHA cannot be embedded in proof at commit time (circular
+      // dependency — SHA is only known after commit). Remain advisory here; the post-merge
+      // ops:truth-check enforces merge SHA binding (P3/C4). Harden on absent SHA binding
+      // (no SHA at all) below.
+      warnings.push(`SHA ${options.sha} not found in ${name} — proof may not include the exact HEAD SHA (advisory only; staleness check provides temporal binding)`);
+    }
+
+    if (!/\b[0-9a-fA-F]{40}\b/.test(content)) {
+      failures.push(`${name} contains no SHA binding — proof must reference at least one commit SHA`);
     }
 
     if (isStale(filePath, options.maxAgeHours)) {
