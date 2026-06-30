@@ -53,6 +53,12 @@ If a status doc says something is green but a live command fails, the live comma
 
 Removed historical product files are intentionally absent from this checkout. Do not cite old filenames such as `program_surfaces.md`, `ROLE_ACCESS_MATRIX.md`, or `command_center_truth_surface_prd.md` as active references.
 
+## Agent Onboarding
+
+| File | Purpose | Owner |
+| ---- | ------- | ----- |
+| `docs/START_HERE.md` | Canonical 10-minute agent onboarding entry point — orientation sequence, skills quick-reference, invariants checklist, common pitfalls | Program Owner |
+
 ## Tier 4 - Operational Docs
 
 | File                                                                                                  | Purpose                                                                                                | Owner         |
