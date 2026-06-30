@@ -24,10 +24,10 @@
     "docs/06_status/proof/UTV2-1387/diff-summary.md",
     "docs/06_status/proof/UTV2-1387/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T09:46:34.648Z",
-  "heartbeat_at": "2026-06-30T14:26:54.477Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T14:37:42.408Z",
+  "closed_at": "2026-06-30T14:37:42.408Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1387-discord-delivery-routing.json",
   "created_by": "codex-cli",
