@@ -16,7 +16,8 @@
     ".github/workflows/proof-gate.yml",
     ".github/workflows/return-review-packet.yml",
     ".github/workflows/runtime-verifier-gate.yml",
-    ".github/workflows/t1-proof-gate.yml"
+    ".github/workflows/t1-proof-gate.yml",
+    "scripts/ops/workflow-hardening.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1378/diff-summary.md",
