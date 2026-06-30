@@ -1,61 +1,44 @@
-# UTV2-1364 Diff Summary — Candidate Quality Gates
+# UTV2-1364 Diff Summary
 
-**Issue:** UTV2-1364  
-**Tier:** T2  
-**Branch:** `codex/utv2-1364-candidate-quality-gates`  
-**Merge SHA:** 16632e9148f5cf30e3c26dfdfc09aff687dc11b0
+Generated at: 2026-06-29T19:53:05.545Z
+Issue: UTV2-1364
+Tier: T2
+Lane type: runtime
+Branch: codex/utv2-1364-candidate-quality-gates
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1118
+Head SHA: 3ea31d87f0a83db3a49b4468140cc4ed83bb0055
+Merge SHA: 16632e9148f5cf30e3c26dfdfc09aff687dc11b0
+Diff base: 16632e9148f5cf30e3c26dfdfc09aff687dc11b0^1
+Diff target: 16632e9148f5cf30e3c26dfdfc09aff687dc11b0
 
-## What Changed
+## Git Diff Stat
+```
+.ops/sync/UTV2-1364.yml                        |  10 ++
+ apps/api/src/candidate-builder-service.test.ts | 164 +++++++++++++++++++-
+ apps/api/src/candidate-builder-service.ts      | 112 +++++++++++++-
+ apps/api/src/candidate-scoring-service.test.ts | 197 ++++++++++++++++++++++++-
+ apps/api/src/candidate-scoring-service.ts      | 150 ++++++++++++++++++-
+ docs/06_status/lanes/UTV2-1364.json            |  39 +++++
+ docs/06_status/proof/UTV2-1364/diff-summary.md |  60 ++++++++
+ docs/06_status/proof/UTV2-1364/verification.md |  78 ++++++++++
+ 8 files changed, 800 insertions(+), 10 deletions(-)
+```
 
-### `apps/api/src/candidate-builder-service.ts`
+## Git Name Status
+```
+A	.ops/sync/UTV2-1364.yml
+M	apps/api/src/candidate-builder-service.test.ts
+M	apps/api/src/candidate-builder-service.ts
+M	apps/api/src/candidate-scoring-service.test.ts
+M	apps/api/src/candidate-scoring-service.ts
+A	docs/06_status/lanes/UTV2-1364.json
+A	docs/06_status/proof/UTV2-1364/diff-summary.md
+A	docs/06_status/proof/UTV2-1364/verification.md
+```
 
-Added 5 exports and integration for Gates 1 and 3 at the builder stage:
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-- `CANDIDATE_STALE_THRESHOLD_MS = 3_600_000` — stale data threshold constant
-- `EXTREME_JUICE_THRESHOLD = 500` — extreme juice threshold constant
-- `BuilderQualityGateInput` interface
-- `BuilderQualityGateResult` interface
-- `evaluateBuilderQualityGates(input, nowMs)` pure function — evaluates Gate 1 (extreme juice) and Gate 3 (stale data) before candidate creation
-- `CandidateBuilderDependencies.audit?: AuditLogRepository` — optional audit repo for rejection events
-- `CandidateBuilderResult.gateRejected` counter
-- Build loop: calls gates before universe resolution; logs `candidate.rejected` to audit on rejection
-
-### `apps/api/src/candidate-builder-service.test.ts`
-
-- Added 6 pure unit tests for `evaluateBuilderQualityGates`
-- Added 3 integration tests covering Gate 1 and Gate 3 in the full service (with audit log verification)
-
-### `apps/api/src/candidate-scoring-service.ts`
-
-Added Gates 2, 3 (with audit), 4, and 5 in the scoring loop:
-
-- `computeFractionalKelly(modelProb, americanOdds)` helper
-- **Gate 5 (SUPPRESS band):** reject before availability check — band=SUPPRESS means edge < C threshold
-- **Gate 2 (Kelly=0):** reject before availability adjustment — uses pre-availability model_score so availability 'adjust' (reduce confidence) doesn't cause false rejections
-- **Gate 3 (stale, with audit):** replaced silent `is_stale` skip with explicit audit log
-- **Gate 4 (postgame):** reject if `event.event_date < today`
-- `ScoringResult.qualityGateRejected` counter
-- `EventRepository` and `AuditLogRepository` added to optional repos
-
-### `apps/api/src/candidate-scoring-service.test.ts`
-
-- Fixed `makeUniverseRow()` default `fair_over_prob: 0.56` → `0.6` (prevents SUPPRESS band firing on all existing tests via `computeModelBlend` formula: `0.9 * p`)
-- Added `makeEventRow()` helper
-- Added 6 quality gate tests: Gate 3 stale (scorer), Gate 4 past/future event, Gate 5 SUPPRESS band, Gate 2 negative/positive Kelly
-
-## Files Changed
-
-- `apps/api/src/candidate-builder-service.ts`
-- `apps/api/src/candidate-builder-service.test.ts`
-- `apps/api/src/candidate-scoring-service.ts`
-- `apps/api/src/candidate-scoring-service.test.ts`
-
-## Gates Implemented vs Spec
-
-| Gate | Description | Implemented | Location |
-|------|-------------|-------------|----------|
-| 1 | Extreme juice (`\|odds\| > 500`) | Yes | builder-service + builder-test |
-| 2 | Kelly=0 (`fractional_kelly <= 0`) | Yes | scoring-service + scoring-test |
-| 3 | Stale data (`snapshot_age_ms > 3_600_000`) | Yes | builder-service (age) + scoring-service (is_stale audit) |
-| 4 | Postgame (`eventStartTime in past`) | Yes | scoring-service + scoring-test |
-| 5 | SUPPRESS band | Yes | scoring-service + scoring-test |
+## SHA Binding
+Head SHA: 3ea31d87f0a83db3a49b4468140cc4ed83bb0055
+Merge SHA: 16632e9148f5cf30e3c26dfdfc09aff687dc11b0

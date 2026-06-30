@@ -1,9 +1,17 @@
 {
-  "schema": "evidence-bundle/v1",
+  "schema_version": 1,
+  "status": "pass",
   "issue_id": "UTV2-1365",
   "tier": "T1",
+  "merge_sha": "2d58e7bf674fba748e4647b57e216901f42a8fc5",
+  "generated_at": "2026-06-29T23:15:00Z",
+  "verifier": {
+    "identity": "claude/utv2-1365-deploy-verify-prod-sha",
+    "method": "deploy-workflow + pnpm test:db"
+  },
   "sha_binding": {
     "verified_source_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
+    "merge_sha": "2d58e7bf674fba748e4647b57e216901f42a8fc5",
     "deploy_workflow_run_id": "28404945789",
     "deploy_workflow_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/28404945789",
     "ci_sentinels": {
@@ -17,6 +25,77 @@
       "promote": "success",
       "post_deploy_smoke": "success"
     }
+  },
+  "static_proof": {
+    "description": "Deploy-only lane — no source file changes. Evidence is the GitHub Actions deploy workflow run.",
+    "deploy_run_id": "28404945789",
+    "deploy_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/28404945789",
+    "source_sha_deployed": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
+    "all_jobs_passed": true,
+    "jobs": [
+      { "name": "verify", "conclusion": "success" },
+      { "name": "rollback-dry-run", "conclusion": "success" },
+      { "name": "build (api)", "conclusion": "success" },
+      { "name": "build (worker)", "conclusion": "success" },
+      { "name": "build (ingestor)", "conclusion": "success" },
+      { "name": "build (discord-bot)", "conclusion": "success" },
+      { "name": "canary", "conclusion": "success" },
+      { "name": "promote", "conclusion": "success" },
+      { "name": "post-deploy-smoke", "conclusion": "success" }
+    ]
+  },
+  "runtime_proof": {
+    "description": "pnpm test:db run against live Supabase post-deploy. 7/7 pass.",
+    "test_command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "result": "pass",
+    "queries": [
+      {
+        "description": "database-smoke: persists submission and settlement",
+        "result": "pass",
+        "duration_ms": 23952
+      },
+      {
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "pass",
+        "duration_ms": 14000
+      },
+      {
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back",
+        "result": "pass",
+        "duration_ms": 8000
+      },
+      {
+        "description": "UTV2-920: invalid atomic settlement writes no settlement row",
+        "result": "pass",
+        "duration_ms": 12000
+      },
+      {
+        "description": "UTV2-883: no duplicate participants for same external_id and sport",
+        "result": "pass",
+        "duration_ms": 900
+      },
+      {
+        "description": "UTV2-996: re-settling creates correction, no duplicate base rows",
+        "result": "pass",
+        "duration_ms": 40578
+      },
+      {
+        "description": "UTV2-996: correction chain is additive, original row not mutated",
+        "result": "pass",
+        "duration_ms": 61215
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "description": "smoke pick created and cleaned up", "count": 1, "op": "insert+delete" },
+      { "table": "submissions", "description": "smoke submission created and cleaned up", "count": 1, "op": "insert+delete" },
+      { "table": "settlement_records", "description": "smoke settlement created during test", "count": 1, "op": "insert" },
+      { "table": "pick_lifecycle", "description": "lifecycle events: validated+queued+posted+settled", "count": 4, "op": "insert" },
+      { "table": "audit_log", "description": "audit rows written during smoke run", "count": 1, "op": "insert" }
+    ],
+    "test_run_summary": "7 tests / 7 pass / 0 fail / 0 skipped / duration_ms 209499",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "proof_run_at": "2026-06-29T23:05:00Z"
   },
   "deploy": {
     "pre_deploy_sha": "d313ad95",
