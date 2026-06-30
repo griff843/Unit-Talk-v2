@@ -54,12 +54,12 @@
       "transitionPickLifecycle queued→posted → picks UPDATE",
       "recordPickSettlement posted→settled → picks UPDATE + settlements INSERT"
     ],
-    "row_counts": {
-      "picks": "observed smoke pick created and transitioned through 5 lifecycle states",
-      "pick_lifecycle_events": "5 events per smoke run (draft/validated/queued/posted/settled)",
-      "outbox": "1 delivery record created at queued transition",
-      "settlements": "1 settlement record at settled transition"
-    },
+    "row_counts": [
+      "picks: 1 smoke pick created per run, transitioned through draft→validated→queued→posted→settled",
+      "pick_lifecycle_events: 5 events per smoke run",
+      "outbox: 1 delivery record at queued transition",
+      "settlements: 1 settlement record at settled transition"
+    ],
     "flake_note": "First test:db run failed 4/7 on UTV2-996 correction chain with statement timeout (Supabase transient degradation, unrelated to this fix). Re-run: 7/7 pass."
   }
 }
