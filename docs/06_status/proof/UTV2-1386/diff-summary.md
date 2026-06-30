@@ -1,19 +1,40 @@
 # UTV2-1386 Diff Summary
 
-## Summary
+Generated at: 2026-06-30T09:09:17.363Z
+Issue: UTV2-1386
+Tier: T2
+Lane type: runtime
+Branch: codex/utv2-1386-syndicate-machine-enabled
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1126
+Head SHA: b57d253fe336bd29cc8b73fa461b8dfbcdb93351
+Merge SHA: 1c2f4e34d4485b6ad9576c2a265a178329cd783b
+Diff base: 1c2f4e34d4485b6ad9576c2a265a178329cd783b^1
+Diff target: 1c2f4e34d4485b6ad9576c2a265a178329cd783b
 
-- `.github/workflows/deploy.yml` now requires the `SYNDICATE_MACHINE_ENABLED` GitHub secret, validates that it is exactly `true`, writes the deployed env value from the secret instead of a hardcoded fallback, and confirms the running API container reports `SYNDICATE_MACHINE_ENABLED=true` after canary and production deploy steps.
-- `apps/api/src/board-scan-service.ts` now exposes `evaluateSyndicateMachineGate()` and emits structured warning/error events when the syndicate machine gate is missing or not true, including a production readiness `red` signal.
+## Git Diff Stat
+```
+.github/workflows/deploy.yml                   | 42 +++++++++++++++++--
+ .ops/sync/UTV2-1386.yml                        | 10 +++++
+ apps/api/src/board-scan-service.ts             | 58 +++++++++++++++++++++++---
+ docs/06_status/lanes/UTV2-1386.json            | 37 ++++++++++++++++
+ docs/06_status/proof/UTV2-1386/diff-summary.md | 19 +++++++++
+ docs/06_status/proof/UTV2-1386/verification.md | 37 ++++++++++++++++
+ 6 files changed, 195 insertions(+), 8 deletions(-)
+```
 
-## Scope
+## Git Name Status
+```
+M	.github/workflows/deploy.yml
+A	.ops/sync/UTV2-1386.yml
+M	apps/api/src/board-scan-service.ts
+A	docs/06_status/lanes/UTV2-1386.json
+A	docs/06_status/proof/UTV2-1386/diff-summary.md
+A	docs/06_status/proof/UTV2-1386/verification.md
+```
 
-- Allowed implementation files touched:
-  - `.github/workflows/deploy.yml`
-  - `apps/api/src/board-scan-service.ts`
-- Required proof files added:
-  - `docs/06_status/proof/UTV2-1386/diff-summary.md`
-  - `docs/06_status/proof/UTV2-1386/verification.md`
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## R-Level
-
-`docs/05_operations/r1-r5-rules.json` has no matching rule for `.github/workflows/deploy.yml` or `apps/api/src/board-scan-service.ts`; no R-level artifacts are required.
+## SHA Binding
+Head SHA: b57d253fe336bd29cc8b73fa461b8dfbcdb93351
+Merge SHA: 1c2f4e34d4485b6ad9576c2a265a178329cd783b

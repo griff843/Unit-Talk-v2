@@ -1,10 +1,14 @@
 # UTV2-1386 Verification
 
+Merge SHA: 1c2f4e34d4485b6ad9576c2a265a178329cd783b
+
 ## Verification
 
 - `pnpm type-check` - PASS
+- `pnpm verify` - PASS
 - `npx tsx --test apps/api/src/board-scan-service.test.ts` - PASS
 - `pnpm test` - PASS
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` - PASS
 - Issue-specific deploy hardening marker probe - PASS
 - Issue-specific `evaluateSyndicateMachineGate()` probe - PASS
 
