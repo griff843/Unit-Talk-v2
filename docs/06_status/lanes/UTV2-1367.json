@@ -22,12 +22,12 @@
     "docs/06_status/proof/UTV2-1367/evidence.json",
     "docs/06_status/proof/UTV2-1367/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T03:44:05.805Z",
-  "heartbeat_at": "2026-06-30T06:48:51.568Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T06:51:23.221Z",
+  "closed_at": "2026-06-30T06:51:23.221Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1367-null-stake-units-constraint-loop.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -62,6 +62,19 @@
         "R2"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-30T06:51:19.699Z",
+      "verdict": "pass",
+      "merge_sha": "412fd1a8f0e65244acd6e058c2f7136095dbb7ab",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1122",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
