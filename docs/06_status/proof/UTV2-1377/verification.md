@@ -17,6 +17,64 @@ Changed files: 6
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
+## pnpm test:db
+
+```text
+> pnpm test:db
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+  ---
+  duration_ms: 18969.728079
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+  ---
+  duration_ms: 19892.877598
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+  ---
+  duration_ms: 18079.608571
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+  ---
+  duration_ms: 17202.66291
+  type: 'test'
+  ...
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+  ---
+  duration_ms: 801.101102
+  type: 'test'
+  ...
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  ---
+  duration_ms: 19276.038095
+  type: 'test'
+  ...
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  ---
+  duration_ms: 19129.194266
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114174.141855
+```
+
 ## pnpm verify Tail
 
 ```text
