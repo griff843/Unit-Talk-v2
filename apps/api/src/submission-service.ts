@@ -206,7 +206,7 @@ export async function processSubmission(
     materialized.pick.selection,
     repositories.providerOffers,
   );
-  const kellySizing = resolveKellySizing(
+  let kellySizing = resolveKellySizing(
     deviggingResult,
     materialized.pick.odds,
     normalizedMarketKey,
@@ -269,6 +269,21 @@ export async function processSubmission(
         domainAnalysis.marketProbability = realEdgeResult.marketProbability;
         domainAnalysis.hasRealEdge = realEdgeResult.hasRealEdge;
         domainAnalysis.realEdgeBookCount = realEdgeResult.bookCount;
+      }
+
+      if (kellySizing === null && realEdgeResult.marketSource !== 'confidence-delta') {
+        const modelProbability = Math.max(
+          0,
+          Math.min(1, realEdgeResult.marketProbability + realEdgeResult.realEdge),
+        );
+        kellySizing = resolveKellySizing(
+          {
+            overFair: modelProbability,
+            providerMarketKey: normalizedMarketKey,
+          },
+          materialized.pick.odds,
+          normalizedMarketKey,
+        );
       }
     } catch (error) {
       // Real edge computation is fail-open, but failures must remain visible to operators.

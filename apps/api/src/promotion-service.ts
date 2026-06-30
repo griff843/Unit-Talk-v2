@@ -18,9 +18,12 @@ import {
 } from '@unit-talk/contracts';
 import {
   applyBandDowngrades,
+  americanToDecimal,
   computeBoardFitScore,
+  computeKellySize,
   computeRiskScore,
   computeUniquenessWithMeta,
+  DEFAULT_BANKROLL_CONFIG,
   evaluatePromotionEligibility,
   generatePickNarrative,
   initialBandAssignment,
@@ -109,14 +112,85 @@ export interface EagerPromotionAllPoliciesResult {
  * - edge score falls back to confidence-delta (DEBT-019, 35% weight)
  * - readiness score falls back to constant 60 (DEBT-020, 20% weight)
  *
- * This enrichment is idempotent (no-op when domainAnalysis already present) and operates
- * only on the in-memory pick — it does not write to the database.
+ * This enrichment is idempotent and operates on the in-memory pick. Promotion persistence
+ * call sites include the returned metadata patch so the scoring inputs remain replayable.
  */
 export function enrichPickAtPromotionTime(pick: CanonicalPick): CanonicalPick {
-  if (pick.metadata['domainAnalysis'] != null) return pick;
-  const analysis = computeSubmissionDomainAnalysis(pick);
-  if (analysis === null) return pick;
-  return { ...pick, metadata: enrichMetadataWithDomainAnalysis(pick.metadata, analysis) };
+  let metadata = pick.metadata;
+  if (metadata['domainAnalysis'] == null) {
+    const analysis = computeSubmissionDomainAnalysis(pick);
+    if (analysis !== null) {
+      metadata = enrichMetadataWithDomainAnalysis(metadata, analysis);
+    }
+  }
+
+  if (metadata['kellySizing'] == null) {
+    const kellySizing = computePromotionKellySizing(pick, metadata);
+    if (kellySizing !== null) {
+      metadata = { ...metadata, kellySizing };
+    }
+  }
+
+  return metadata === pick.metadata ? pick : { ...pick, metadata };
+}
+
+function computePromotionKellySizing(
+  pick: CanonicalPick,
+  metadata: Record<string, unknown>,
+) {
+  if (pick.odds === undefined || pick.odds === null) {
+    return null;
+  }
+
+  const marketProbability =
+    readMetadataNumber(metadata, 'marketProbability') ??
+    readMetadataNumber(readNestedRecord(metadata, 'domainAnalysis') ?? {}, 'marketProbability');
+  const realEdge =
+    readMetadataNumber(metadata, 'realEdge') ??
+    readMetadataNumber(readNestedRecord(metadata, 'domainAnalysis') ?? {}, 'realEdge');
+  const realEdgeSource =
+    readMetadataString(metadata, 'realEdgeSource') ??
+    readMetadataString(readNestedRecord(metadata, 'domainAnalysis') ?? {}, 'realEdgeSource');
+
+  if (
+    marketProbability === undefined ||
+    realEdge === undefined ||
+    realEdgeSource === undefined ||
+    realEdgeSource === 'confidence-delta'
+  ) {
+    return null;
+  }
+
+  const modelProbability = Math.max(0, Math.min(1, marketProbability + realEdge));
+  return computeKellySize(
+    modelProbability,
+    americanToDecimal(pick.odds),
+    DEFAULT_BANKROLL_CONFIG,
+  );
+}
+
+function buildPromotionMetadataPatch(
+  basePick: CanonicalPick,
+  scoringPick: CanonicalPick,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const metadataPatch: Record<string, unknown> = { ...patch };
+
+  if (
+    basePick.metadata['domainAnalysis'] == null &&
+    scoringPick.metadata['domainAnalysis'] != null
+  ) {
+    metadataPatch['domainAnalysis'] = scoringPick.metadata['domainAnalysis'];
+  }
+
+  if (
+    basePick.metadata['kellySizing'] == null &&
+    scoringPick.metadata['kellySizing'] != null
+  ) {
+    metadataPatch['kellySizing'] = scoringPick.metadata['kellySizing'];
+  }
+
+  return metadataPatch;
 }
 
 /**
@@ -143,6 +217,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
   }
 
   const canonicalPick = mapPickRecordToCanonicalPick(pickRecord);
+  // DEBT-019/020: enrich domainAnalysis and kellySizing if missing.
+  const scoringPick = enrichPickAtPromotionTime(canonicalPick);
 
   // UTV2-775: Staleness gate — block promotion when universe data is stale at approval time.
   // Contract: §10 of T2_STALE_DATA_BEHAVIOR_CONTRACT.md
@@ -206,7 +282,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
           promotionDecidedAt: decidedAt,
           promotionDecidedBy: actor,
           overrideAction: null,
-          metadataPatch: { band: 'SUPPRESS' },
+          metadataPatch: buildPromotionMetadataPatch(canonicalPick, scoringPick, { band: 'SUPPRESS' }),
           payload: { staleDataBlock: true, code: 'STALE_DATA_AT_PROMOTION', universeId, band: 'SUPPRESS', qualified: false, score: 0 },
         });
 
@@ -239,20 +315,16 @@ export async function evaluateAllPoliciesEagerAndPersist(
   // Fetch open picks for correlation-aware scoring and exposure gate
   const openPickRecords = await pickRepository.listByLifecycleStates(['validated', 'queued', 'posted'], 300);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
-
   // Exposure gate — blocks before scoring if limits exceeded
   const exposureGateConfig = resolveExposureGateConfig();
   if (canonicalPick.source !== 'smart-form' && exposureGateConfig.enabled) {
-    const exposureRejection = checkExposureGate(canonicalPick, openPicks, exposureGateConfig);
+    const exposureRejection = checkExposureGate(scoringPick, openPicks, exposureGateConfig);
     if (exposureRejection) {
       return buildExposureSuppressedResult(
-        canonicalPick, pickRecord, exposureRejection, actor, pickRepository, auditLogRepository,
+        canonicalPick, scoringPick, pickRecord, exposureRejection, actor, pickRepository, auditLogRepository,
       );
     }
   }
-
-  // DEBT-019/020: enrich domainAnalysis if missing — populates edge + kellyFraction signals.
-  const scoringPick = enrichPickAtPromotionTime(canonicalPick);
 
   const scoreInputs = await readPromotionScoreInputs(
     scoringPick,
@@ -264,6 +336,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
   if (canonicalPick.source === 'smart-form') {
     return buildSmartFormQualifiedResult(
       canonicalPick,
+      scoringPick,
       pickRecord,
       actor,
       pickRepository,
@@ -325,10 +398,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
     ? winnerPolicy.target
     : null;
   const winnerReason = summarizePromotionReason(winnerDecision);
-  const winnerBand = computeDeterministicBand(canonicalPick, scoreInputs, winnerDecision);
+  const winnerBand = computeDeterministicBand(scoringPick, scoreInputs, winnerDecision);
 
   // Compute risk score once for this pick (pure fn, same result for all policies)
-  const riskResult = computeRiskScore(canonicalPick, scoreInputs);
+  const riskResult = computeRiskScore(scoringPick, scoreInputs);
 
   const makeSnapshot = (
     policy: PromotionPolicy,
@@ -403,7 +476,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     promotionDecidedAt: winnerDecision.decidedAt,
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: null,
-    metadataPatch: { band: winnerBand },
+    metadataPatch: buildPromotionMetadataPatch(canonicalPick, scoringPick, { band: winnerBand }),
     payload: {
       band: winnerBand,
       ...winnerSnapshot,
@@ -456,7 +529,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
       const boardState = boardStates[index]!;
       const historyReason = summarizePromotionReason(decision);
       const nonWinnerSnapshot = makeSnapshot(policy, boardState);
-      const historyBand = computeDeterministicBand(canonicalPick, scoreInputs, decision);
+      const historyBand = computeDeterministicBand(scoringPick, scoreInputs, decision);
       const history = await pickRepository.insertPromotionHistoryRow({
         pickId,
         target: policy.target,
@@ -554,6 +627,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
 
 async function buildSmartFormQualifiedResult(
   canonicalPick: CanonicalPick,
+  scoringPick: CanonicalPick,
   pickRecord: PickRecord,
   actor: string,
   pickRepository: PickRepository,
@@ -623,7 +697,7 @@ async function buildSmartFormQualifiedResult(
   );
 
   // Compute risk score once for this pick (pure fn, same result for all policies)
-  const smartFormRiskResult = computeRiskScore(canonicalPick, scoreInputs);
+  const smartFormRiskResult = computeRiskScore(scoringPick, scoreInputs);
 
   const makeSnapshot = (
     policy: PromotionPolicy,
@@ -681,7 +755,7 @@ async function buildSmartFormQualifiedResult(
 
   const winnerDecision = decisions[bestBetsIndex]!;
   const winnerBoardState = boardStates[bestBetsIndex]!;
-  const winnerBand = computeDeterministicBand(canonicalPick, scoreInputs, winnerDecision);
+  const winnerBand = computeDeterministicBand(scoringPick, scoreInputs, winnerDecision);
   const winnerSnapshot = makeSnapshot(bestBetsPolicy, winnerBoardState, {
     forcePromote: true,
     reason: 'smart-form submissions route directly to best-bets',
@@ -700,7 +774,7 @@ async function buildSmartFormQualifiedResult(
     promotionDecidedAt: winnerDecision.decidedAt,
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: 'force_promote',
-    metadataPatch: { band: winnerBand },
+    metadataPatch: buildPromotionMetadataPatch(canonicalPick, scoringPick, { band: winnerBand }),
     payload: {
       band: winnerBand,
       ...winnerSnapshot,
@@ -737,7 +811,7 @@ async function buildSmartFormQualifiedResult(
       const policy = policies[index]!;
       const decision = decisions[index]!;
       const boardState = boardStates[index]!;
-      const historyBand = computeDeterministicBand(canonicalPick, scoreInputs, decision);
+      const historyBand = computeDeterministicBand(scoringPick, scoreInputs, decision);
       const history = await pickRepository.insertPromotionHistoryRow({
         pickId: canonicalPick.id,
         target: policy.target,
@@ -923,8 +997,8 @@ async function persistPromotionDecisionForPick(
   }, policy);
 
   const reason = summarizePromotionReason(decision);
-  const band = computeDeterministicBand(canonicalPick, scoreInputs, decision);
-  const overrideRiskResult = computeRiskScore(canonicalPick, scoreInputs);
+  const band = computeDeterministicBand(scoringPick, scoreInputs, decision);
+  const overrideRiskResult = computeRiskScore(scoringPick, scoreInputs);
   const snapshot: PromotionDecisionSnapshot = {
     band,
     scoringProfile: activeScoringProfile.name,
@@ -994,7 +1068,7 @@ async function persistPromotionDecisionForPick(
     promotionDecidedAt: decision.decidedAt,
     promotionDecidedBy: decision.decidedBy,
     overrideAction: override?.action ?? null,
-    metadataPatch: { band },
+    metadataPatch: buildPromotionMetadataPatch(canonicalPick, scoringPick, { band }),
     payload: {
       ...snapshot,
       explanation: decision.explanation,
@@ -1739,6 +1813,7 @@ export function checkExposureGate(
 
 async function buildExposureSuppressedResult(
   canonicalPick: CanonicalPick,
+  scoringPick: CanonicalPick,
   pickRecord: PickRecord,
   reason: ExposureGateRejectionReason,
   actor: string,
@@ -1786,7 +1861,7 @@ async function buildExposureSuppressedResult(
     promotionDecidedAt: decidedAt,
     promotionDecidedBy: actor,
     overrideAction: null,
-    metadataPatch: { band },
+    metadataPatch: buildPromotionMetadataPatch(canonicalPick, scoringPick, { band }),
     payload: { exposureGateRejection: reason, band, qualified: false, score: 0 },
   });
 
