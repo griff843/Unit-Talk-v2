@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts",
     "docs/06_status/proof/UTV2-1366/evidence.json",
     "docs/06_status/proof/UTV2-1366/verification.md",
     "packages/db/src/runtime-repositories.ts"
