@@ -238,6 +238,7 @@ export async function runCandidatePickScan(
 
     let pickId: string;
     let pickStatus = '';
+    let pickStakeUnits: number | null | undefined;
     try {
       const result = await processSubmission(payload, {
         submissions: repos.submissions,
@@ -249,6 +250,7 @@ export async function runCandidatePickScan(
       });
       pickId = result.pickRecord.id;
       pickStatus = result.pickRecord.status ?? '';
+      pickStakeUnits = result.pickRecord.stake_units;
     } catch (err) {
       errors++;
       logger?.error?.(
@@ -259,6 +261,42 @@ export async function runCandidatePickScan(
           error: err instanceof Error ? err.message : String(err),
         }),
       );
+      continue;
+    }
+
+    // Guard: picks created before picks_stake_units_canonical_check was added may have
+    // stake_units IS NULL. Any lifecycle transition executes UPDATE picks SET status = ...
+    // which causes PostgreSQL to re-evaluate the CHECK constraint on the full row — the
+    // null value triggers a violation, the transaction rolls back, and pick_id is never
+    // linked to the candidate, creating an infinite 60-second retry loop.
+    // Fix: link pick_id now (to stop retries), skip the brake transition, and log for
+    // ops visibility. The affected picks require a DB backfill (PM-gated, UTV2-1367).
+    if (pickStakeUnits == null) {
+      skipped++;
+      logger?.warn?.(
+        JSON.stringify({
+          service: 'candidate-pick-scanner',
+          event: 'candidate_skipped_null_stake_units',
+          candidateId: candidate.id,
+          pickId,
+          pickStatus,
+          reason: 'legacy_pick_stake_units_null',
+        }),
+      );
+      try {
+        await repos.pickCandidates.updatePickIdBatch([{ id: candidate.id, pick_id: pickId }]);
+      } catch (linkErr) {
+        errors++;
+        logger?.error?.(
+          JSON.stringify({
+            service: 'candidate-pick-scanner',
+            event: 'link_pick_id_failed',
+            pickId,
+            candidateId: candidate.id,
+            error: linkErr instanceof Error ? linkErr.message : String(linkErr),
+          }),
+        );
+      }
       continue;
     }
 

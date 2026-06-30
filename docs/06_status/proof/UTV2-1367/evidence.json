@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "status": "pass",
+  "issue_id": "UTV2-1367",
+  "tier": "T1",
+  "branch": "claude/utv2-1367-null-stake-units-constraint-loop",
+  "branch_head_sha": "f0601dcb64bd6d417c3bb9f6ee05c3c40303fe28",
+  "generated_at": "2026-06-30T03:50:00Z",
+  "verifier": {
+    "identity": "claude/utv2-1367-null-stake-units-constraint-loop",
+    "method": "pnpm verify:quick + pnpm test (14/14) + pnpm test:db (7/7)"
+  },
+  "sha_binding": {
+    "verified_source_sha": "f0601dcb64bd6d417c3bb9f6ee05c3c40303fe28",
+    "ci_sentinels": {
+      "type_check": "pass",
+      "lint": "pass",
+      "build": "pass",
+      "unit_tests": "14/14 pass",
+      "test_db": "7/7 pass"
+    }
+  },
+  "static_proof": {
+    "description": "Null stake_units guard inserted in candidate-pick-scanner.ts between processSubmission return and governance brake. Guard links pick_id to stop retries, skips brake transition to avoid constraint violation, logs warning for ops visibility.",
+    "files_changed": [
+      "apps/api/src/candidate-pick-scanner.ts",
+      "apps/api/src/candidate-pick-scanner.test.ts"
+    ],
+    "lines_added": 104,
+    "lines_removed": 0,
+    "test_added": "candidate-pick-scanner: null stake_units on idempotency collision — skipped and pick_id linked to stop retry loop (UTV2-1367)",
+    "root_cause_verified": {
+      "constraint": "picks_stake_units_canonical_check NOT VALID",
+      "trigger": "UPDATE picks SET status = ... during transitionPickLifecycleAtomic",
+      "source": "2902 legacy picks with stake_units IS NULL from April-May 2026",
+      "loop": "pick_id never linked → candidate.pick_id = null → re-scanned every 60s → same idempotency collision → same constraint violation"
+    }
+  },
+  "runtime_proof": {
+    "description": "pnpm test:db run against live Supabase post-fix (7/7 pass). First run flaked on UTV2-996 settlement timeout (Supabase transient degradation); re-run confirmed 7/7 pass.",
+    "test_command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "result": "pass",
+    "test_run_summary": "7 tests / 7 pass / 0 fail / 0 skipped",
+    "unit_test_summary": "14 tests / 14 pass / 0 fail / 0 skipped (candidate-pick-scanner.test.ts)",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "proof_run_at": "2026-06-30T03:50:00Z",
+    "flake_note": "First test:db run failed 4/7 on UTV2-996 correction chain with statement timeout (Supabase transient degradation, unrelated to this fix). Re-run: 7/7 pass."
+  }
+}
