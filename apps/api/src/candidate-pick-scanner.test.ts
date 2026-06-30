@@ -475,3 +475,69 @@ test('candidate-pick-scanner: promoted pick carries a canonical stake_units > 0 
     'pick must stay gated in awaiting_approval (public delivery not triggered)',
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1367: null stake_units infinite retry loop guard
+// ---------------------------------------------------------------------------
+
+test('candidate-pick-scanner: null stake_units on idempotency collision — skipped and pick_id linked to stop retry loop (UTV2-1367)', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
+
+  const universe = makeUniverseRow({ id: 'universe-null-stake-utv2-1367' });
+  const candidate = makeCandidate({
+    id: 'cand-null-stake-utv2-1367',
+    universe_id: 'universe-null-stake-utv2-1367',
+  });
+
+  seedUniverseRows(muRepo, [universe]);
+  seedCandidateRows(pcRepo, [candidate]);
+
+  const scanDeps = {
+    pickCandidates: repos.pickCandidates,
+    marketUniverse: repos.marketUniverse,
+    picks: repos.picks,
+    submissions: repos.submissions,
+    audit: repos.audit,
+    participants: repos.participants,
+    events: repos.events,
+    providerOffers: repos.providerOffers,
+  };
+
+  // First scan creates the pick normally (stake_units = 1 from ensureMeasurableStakeUnits)
+  const firstResult = await runCandidatePickScan(scanDeps);
+  assert.equal(firstResult.submitted, 1, 'first scan must create the pick');
+
+  // Find the created pick and the linked candidate
+  const qualifiedAfterFirst = await repos.pickCandidates.findByStatus('qualified');
+  const linkedCandidate = qualifiedAfterFirst.find((c) => c.id === 'cand-null-stake-utv2-1367');
+  assert.ok(linkedCandidate?.pick_id, 'pick_id must be set after first scan');
+  const pickId = linkedCandidate.pick_id!;
+
+  // Simulate legacy data: null-out stake_units on the existing pick
+  // (mirrors picks created before picks_stake_units_canonical_check was added)
+  const internalPicks = repos.picks as unknown as { picks: Map<string, Record<string, unknown>> };
+  const existingPick = internalPicks.picks.get(pickId)!;
+  internalPicks.picks.set(pickId, { ...existingPick, stake_units: null });
+
+  // Reset candidate's pick_id to null so the scanner re-processes it
+  // (mirrors unlinked candidates whose previous brake attempt rolled back)
+  const internalCandidates = pcRepo as unknown as { rows: Map<string, PickCandidateRow> };
+  const existingCandidate = internalCandidates.rows.get('universe-null-stake-utv2-1367')!;
+  internalCandidates.rows.set('universe-null-stake-utv2-1367', { ...existingCandidate, pick_id: null });
+
+  // Second scan: idempotency collision returns the null-stake-units pick
+  const secondResult = await runCandidatePickScan(scanDeps);
+
+  assert.equal(secondResult.scanned, 1, 'one candidate scanned');
+  assert.equal(secondResult.submitted, 0, 'must not count as submitted (existing null pick)');
+  assert.equal(secondResult.skipped, 1, 'must increment skipped for null stake_units guard');
+  assert.equal(secondResult.errors, 0, 'no errors');
+
+  // pick_id must be linked so the candidate is not retried on the next 60-second scan
+  const qualifiedAfterSecond = await repos.pickCandidates.findByStatus('qualified');
+  const candidateAfterSecond = qualifiedAfterSecond.find((c) => c.id === 'cand-null-stake-utv2-1367');
+  assert.ok(candidateAfterSecond?.pick_id, 'pick_id must be linked after null stake_units guard to stop retry loop');
+  assert.equal(candidateAfterSecond?.pick_id, pickId, 'pick_id must reference the original legacy pick');
+});
