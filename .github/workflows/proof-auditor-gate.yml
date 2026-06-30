@@ -22,13 +22,10 @@
 
 name: Proof Auditor Gate
 
+# DISABLED — consolidated into proof-gate.yml (UTV2-1378)
+# Kept for git history; trigger changed to workflow_dispatch only so it never auto-fires.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, labeled]
-    paths:
-      - 'docs/06_status/proof/**'
-      - 'docs/06_status/*EVIDENCE*'
-      - 'docs/06_status/*PROOF*'
+  workflow_dispatch:
 
 permissions:
   contents: read

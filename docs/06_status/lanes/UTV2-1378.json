@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1378",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1378-ci-workflow-rationalization",
+  "branch": "claude/utv2-1378-ci-workflow-rationalization",
+  "base_branch": "main",
+  "commit_sha": "16afce5fa6703f1d386e7b21829d2fd3ee6e8b89",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1129",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/merge-gate.yml",
+    ".github/workflows/proof-auditor-gate.yml",
+    ".github/workflows/proof-gate.yml",
+    ".github/workflows/return-review-packet.yml",
+    ".github/workflows/runtime-verifier-gate.yml",
+    ".github/workflows/t1-proof-gate.yml",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1378/diff-summary.md",
+    "docs/06_status/proof/UTV2-1378/verification.md"
+  ],
+  "status": "merged",
+  "started_at": "2026-06-30T08:25:34.141Z",
+  "heartbeat_at": "2026-06-30T09:30:12.476Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1378-ci-workflow-rationalization.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T09:30:12.476Z",
+      "verdict": "pass",
+      "merge_sha": "16afce5fa6703f1d386e7b21829d2fd3ee6e8b89",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1129"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1378-ci-workflow-rationalization",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
