@@ -7,22 +7,39 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1388-start-here-docs",
   "branch": "claude/utv2-1388-start-here-docs",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "9ed134b5dbf061b2eb756d7366693cb0429e32f7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1123",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/docs_authority_map.md",
     "docs/CODEBASE_GUIDE.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-30T07:14:15.310Z",
-  "heartbeat_at": "2026-06-30T07:14:15.310Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T07:39:37.784Z",
+  "closed_at": "2026-06-30T07:39:37.784Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1388-start-here-docs.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T07:38:45.256Z",
+      "verdict": "pass",
+      "merge_sha": "9ed134b5dbf061b2eb756d7366693cb0429e32f7",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1123"
+    },
+    {
+      "checked_at": "2026-06-30T07:39:02.349Z",
+      "verdict": "pass",
+      "merge_sha": "9ed134b5dbf061b2eb756d7366693cb0429e32f7",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

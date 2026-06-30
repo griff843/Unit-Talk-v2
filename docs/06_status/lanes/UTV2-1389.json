@@ -7,22 +7,39 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1389-linear-phase-labels",
   "branch": "claude/utv2-1389-linear-phase-labels",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "83040b886a3ead3169648aaa4ee4c0fad071cabd",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1124",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/EXECUTION_MAP.md",
     "docs/governance/LANE_CONCURRENCY_POLICY.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-06-30T07:15:24.569Z",
-  "heartbeat_at": "2026-06-30T07:15:24.569Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T07:41:47.323Z",
+  "closed_at": "2026-06-30T07:41:47.323Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1389-linear-phase-labels.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T07:41:10.459Z",
+      "verdict": "pass",
+      "merge_sha": "83040b886a3ead3169648aaa4ee4c0fad071cabd",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1124"
+    },
+    {
+      "checked_at": "2026-06-30T07:41:35.624Z",
+      "verdict": "pass",
+      "merge_sha": "83040b886a3ead3169648aaa4ee4c0fad071cabd",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
