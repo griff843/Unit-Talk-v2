@@ -12,7 +12,8 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/promotion-service.ts",
-    "apps/api/src/submission-service.ts"
+    "apps/api/src/submission-service.ts",
+    "apps/api/src/t1-proof-utv2-988-band-persistence.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1381/diff-summary.md",
