@@ -289,8 +289,9 @@ test('required pull-request gates are wired to executable blocking jobs', () => 
     ['file-scope-lock-check.yml', 'check', 'File scope lock'],
     ['r-level-compliance-check.yml', 'r-level-compliance-check', 'R-Level Compliance Check'],
     ['return-review-packet.yml', 'return-review-packet', 'Return review packet'],
-    ['proof-auditor-gate.yml', 'proof-auditor-gate', 'Proof Auditor Gate'],
-    ['runtime-verifier-gate.yml', 'runtime-verifier-gate', 'Runtime Verifier Gate'],
+    // proof-auditor and runtime-verifier consolidated into proof-gate.yml (UTV2-1378)
+    ['proof-gate.yml', 'proof-auditor', 'Proof Auditor Gate'],
+    ['proof-gate.yml', 'runtime-verifier', 'Runtime Verifier Gate'],
   ] as const;
 
   for (const [workflowName, jobId, jobName] of requiredGateJobs) {
@@ -324,13 +325,21 @@ test('codex return review extracts issue IDs without sed delimiter traps', () =>
 });
 
 test('proof and runtime gates watch proof, lane, and ops control-plane paths', () => {
-  const proofPaths = stringArrayField(workflowEvent('proof-auditor-gate.yml', 'pull_request'), 'paths');
-  const runtimePaths = stringArrayField(workflowEvent('runtime-verifier-gate.yml', 'pull_request'), 'paths');
+  // proof-gate.yml (UTV2-1378) triggers on all PRs (no path filter); the detect job
+  // checks path changes at runtime and gates downstream jobs. Verify the detect job
+  // step content references the required paths.
+  const workflow = readWorkflowYaml('proof-gate.yml');
+  const pullRequest = objectField(objectField(workflow, 'on'), 'pull_request');
+  assert.ok(pullRequest !== undefined, 'proof-gate.yml must have pull_request trigger');
 
-  assert.ok(proofPaths.includes('docs/06_status/proof/**'), 'proof auditor must watch proof directories');
-  assert.ok(runtimePaths.includes('docs/06_status/proof/**'), 'runtime verifier must watch proof directories');
-  assert.ok(runtimePaths.includes('docs/06_status/lanes/**'), 'runtime verifier must watch lane manifests');
-  assert.ok(runtimePaths.includes('scripts/ops/**'), 'runtime verifier must watch ops control-plane changes');
+  const jobs = objectField(workflow, 'jobs');
+  const detectJob = objectField(jobs, 'detect');
+  assert.ok(Array.isArray(detectJob.steps), 'detect job must have steps');
+
+  const detectScript = JSON.stringify(detectJob.steps);
+  assert.ok(detectScript.includes('docs/06_status/proof'), 'detect job must check proof paths');
+  assert.ok(detectScript.includes('docs/06_status/lanes'), 'detect job must check lane manifest paths');
+  assert.ok(detectScript.includes('scripts/ops'), 'detect job must check ops control-plane paths');
 });
 
 test('CI avoids duplicate verify jobs for codex PR branches', () => {

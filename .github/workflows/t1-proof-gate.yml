@@ -23,9 +23,10 @@
 
 name: T1 Proof Gate
 
+# DISABLED — consolidated into proof-gate.yml (UTV2-1378)
+# Kept for git history; trigger changed to workflow_dispatch only so it never auto-fires.
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  workflow_dispatch:
 
 permissions:
   contents: read
