@@ -185,6 +185,7 @@ async function main(): Promise<number> {
   runDependencyChecks(addCheck);
   const linearState = await runLinearChecks(issueId, tier, env, candidateFiles, refresh, addCheck);
   runRequiredDocChecks(tier, linearState.labels, requireDocs, addCheck);
+  runGateEquivalentChecks(issueId, tier, branch, headSha, addCheck);
   if (tier === 'T1') {
     await runT1Checks(env, addCheck);
   }
@@ -503,6 +504,97 @@ function runDependencyChecks(
     addCheck('PD5', 'fail', 'lockfile conflict markers found in pnpm-lock.yaml');
   } else {
     addCheck('PD5', 'pass', 'no lockfile conflict markers found');
+  }
+}
+
+function runGateEquivalentChecks(
+  issueId: string,
+  tier: LaneTier,
+  branch: string,
+  headSha: string,
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+): void {
+  const verifyQuick = runCommand('pnpm', ['verify:quick']);
+  addCheck(
+    'PX1',
+    verifyQuick.ok ? 'pass' : 'fail',
+    verifyQuick.ok ? 'pnpm verify:quick passed' : verifyQuick.detail,
+  );
+
+  const commits = git(['log', '--format=%s', 'main..HEAD']);
+  const branchDiscipline = runCommand('pnpm', [
+    'ops:branch-discipline',
+    '--',
+    '--branch',
+    branch,
+    '--title',
+    issueId,
+    '--commits',
+    commits.ok ? commits.stdout : '',
+  ]);
+  addCheck(
+    'PX2',
+    branchDiscipline.ok ? 'pass' : 'fail',
+    branchDiscipline.ok
+      ? 'branch and commit issue references are disciplined'
+      : branchDiscipline.detail,
+  );
+
+  const proofDir = path.join(ROOT, 'docs', '06_status', 'proof', issueId);
+  const proofDirRelative = relativeToRoot(proofDir);
+  if (!fs.existsSync(proofDir)) {
+    addCheck('PX3', 'skip', `proof auditor skipped because ${proofDirRelative} does not exist`);
+    addCheck('PX4', 'skip', `runtime verifier skipped because ${proofDirRelative} does not exist`);
+  } else {
+    const proofAuditor = runCommand('pnpm', [
+      'exec',
+      'tsx',
+      'scripts/ops/proof-auditor-gate.ts',
+      '--proof-dir',
+      proofDirRelative,
+      '--sha',
+      headSha,
+      '--require-executed-command',
+      'pnpm test:db',
+      '--json',
+    ]);
+    addCheck(
+      'PX3',
+      proofAuditor.ok ? 'pass' : 'fail',
+      proofAuditor.ok
+        ? `proof auditor gate passed for ${proofDirRelative}`
+        : proofAuditor.detail,
+    );
+
+    const runtimeVerifier = runCommand('pnpm', [
+      'exec',
+      'tsx',
+      'scripts/ops/runtime-verifier-gate.ts',
+      '--proof-dir',
+      proofDirRelative,
+      '--sha',
+      headSha,
+      '--json',
+    ]);
+    addCheck(
+      'PX4',
+      runtimeVerifier.ok ? 'pass' : 'fail',
+      runtimeVerifier.ok
+        ? `runtime verifier gate passed for ${proofDirRelative}`
+        : runtimeVerifier.detail,
+    );
+  }
+
+  if (tier === 'T1') {
+    addCheck(
+      'PX5',
+      fs.existsSync(proofDir) ? 'pass' : 'fail',
+      fs.existsSync(proofDir)
+        ? `T1 expected proof dir exists: ${proofDirRelative}`
+        : `T1 expected proof dir missing: ${proofDirRelative}`,
+    );
+  } else {
+    addCheck('PX5', 'skip', `T1 expected proof dir check skipped for ${tier}`);
   }
 }
 
@@ -838,7 +930,18 @@ function writeOutput(result: PreflightResult, json: boolean): void {
   for (const check of result.checks) {
     console.log(`[${check.status.toUpperCase()}] ${check.id} - ${check.detail}`);
   }
+  console.log('');
+  console.log('Preflight summary');
+  console.log('| Check | Status | Detail |');
+  console.log('| --- | --- | --- |');
+  for (const check of result.checks) {
+    console.log(`| ${check.id} | ${check.status.toUpperCase()} | ${formatTableCell(check.detail)} |`);
+  }
   console.log(`VERDICT: ${result.verdict} (${result.checks.length} checks)`);
+}
+
+function formatTableCell(value: string): string {
+  return value.replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
 }
 
 function readOptionalFile(filePath: string): string {
