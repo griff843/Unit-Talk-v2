@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1366-markclosinglines-fix",
   "branch": "claude/utv2-1366-markclosinglines-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "01bf60e24513e5278d40bc03ad372352f62b4f63",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1120",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts",
@@ -19,14 +19,24 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1366/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-30T01:38:07.789Z",
-  "heartbeat_at": "2026-06-30T01:38:07.789Z",
+  "heartbeat_at": "2026-06-30T02:21:44.230Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1366-markclosinglines-fix.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T02:21:44.230Z",
+      "verdict": "pass",
+      "merge_sha": "01bf60e24513e5278d40bc03ad372352f62b4f63",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1120"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

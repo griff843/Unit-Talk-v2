@@ -2,15 +2,15 @@
   "schema_version": 1,
   "issue_id": "UTV2-1366",
   "tier": "T1",
-  "merge_sha": null,
+  "merge_sha": "01bf60e24513e5278d40bc03ad372352f62b4f63",
   "generated_at": "2026-06-30T02:30:00Z",
   "verifier": {
     "identity": "claude/utv2-1366-markclosinglines-fix",
     "method": "pnpm verify + pnpm test:db + t1-proof test"
   },
   "sha_binding": {
-    "verified_source_sha": null,
-    "merge_sha": null,
+    "verified_source_sha": "01bf60e24513e5278d40bc03ad372352f62b4f63",
+    "merge_sha": "01bf60e24513e5278d40bc03ad372352f62b4f63",
     "ci_sentinels": {
       "verify": "pending-ci",
       "type_check": "pass-local",
