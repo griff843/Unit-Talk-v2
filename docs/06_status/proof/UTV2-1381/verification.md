@@ -78,3 +78,7 @@ Issue-specific proof:
 Coverage note:
 
 - UTV2-1381 changed the exposure-gate suppression path so the persisted band value is written at promotion completion instead of being left absent on that branch.
+
+## Merge SHA
+
+Merged to main: `11357d7df387618c82e8e9b03ccff17a694423c5`

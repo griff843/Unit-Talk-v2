@@ -16,3 +16,7 @@
 - No migrations were added.
 - No generated DB types were edited.
 - No app runtime or cross-package contract files were changed.
+
+## Merge SHA
+
+Merged to main: `10dd8eba933539b21e7a677b080f5db6c218dca8`

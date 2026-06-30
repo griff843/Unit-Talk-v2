@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1377-inmemory-constraint-parity",
   "branch": "codex/utv2-1377-inmemory-constraint-parity",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "10dd8eba933539b21e7a677b080f5db6c218dca8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1128",
   "files_changed": [],
   "file_scope_lock": [
     "packages/db/src/inmemory-constraints.test.ts",
@@ -18,14 +18,35 @@
     "docs/06_status/proof/UTV2-1377/diff-summary.md",
     "docs/06_status/proof/UTV2-1377/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-06-30T08:15:00.653Z",
-  "heartbeat_at": "2026-06-30T08:15:00.653Z",
+  "heartbeat_at": "2026-06-30T09:38:46.907Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1377-inmemory-constraint-parity.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T09:38:36.574Z",
+      "verdict": "pass",
+      "merge_sha": "10dd8eba933539b21e7a677b080f5db6c218dca8",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1128"
+    },
+    {
+      "checked_at": "2026-06-30T09:38:46.907Z",
+      "verdict": "fail",
+      "merge_sha": "10dd8eba933539b21e7a677b080f5db6c218dca8",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

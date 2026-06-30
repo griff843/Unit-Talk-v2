@@ -99,3 +99,7 @@ ok 6 - UTV2-1327 live-DB: enrichPickAtPromotionTime is stable against real pick 
 # todo 0
 # duration_ms 1490.076842
 ```
+
+## Merge SHA
+
+Merged to main: `10dd8eba933539b21e7a677b080f5db6c218dca8`

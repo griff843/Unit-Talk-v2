@@ -14,3 +14,7 @@
 
 - The repository write path already merges `metadataPatch` into `picks.metadata` in both InMemory and Database implementations.
 - This change preserves the existing policy decision behavior; it only makes the exposure-gate suppression path match the other promotion persistence paths.
+
+## Merge SHA
+
+Merged to main: `11357d7df387618c82e8e9b03ccff17a694423c5`
