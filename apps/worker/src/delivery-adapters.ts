@@ -66,6 +66,8 @@ export function createDiscordDeliveryAdapter(options?: {
   dryRun?: boolean;
   botToken?: string;
   targetMap?: Record<string, string>;
+  gameThreadMap?: Record<string, string>;
+  strategyRoomRecipientMap?: Record<string, string>;
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
   /** Abort fetch after this many ms (default 25000). Set 0 to disable. */
@@ -79,20 +81,41 @@ export function createDiscordDeliveryAdapter(options?: {
     readDiscordTargetMap(
       environment?.UNIT_TALK_DISCORD_TARGET_MAP ?? process.env.UNIT_TALK_DISCORD_TARGET_MAP,
     );
+  const gameThreadMap =
+    options?.gameThreadMap ??
+    readDiscordTargetMap(
+      readEnvironmentValue(environment, 'UNIT_TALK_DISCORD_GAME_THREAD_MAP') ??
+        process.env.UNIT_TALK_DISCORD_GAME_THREAD_MAP,
+    );
+  const strategyRoomRecipientMap =
+    options?.strategyRoomRecipientMap ??
+    readDiscordTargetMap(
+      readEnvironmentValue(environment, 'UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP') ??
+        process.env.UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP,
+    );
   const apiBaseUrl = options?.apiBaseUrl ?? 'https://discord.com/api/v10';
   const fetchImpl = options?.fetchImpl ?? fetch;
   const fetchTimeoutMs = options?.fetchTimeoutMs ?? 25000;
 
   return async (outbox: OutboxRecord) => {
-    const resolvedChannelId = safelyResolveDiscordChannelId(outbox.target, targetMap);
-
     if (!dryRun) {
-      const channelId = resolvedChannelId ?? resolveDiscordChannelId(outbox.target, targetMap);
       if (!botToken) {
         throw new Error('DISCORD_BOT_TOKEN is required for live Discord delivery.');
       }
 
+      if (outbox.target !== 'discord:game-threads' && outbox.target !== 'discord:strategy-room') {
+        resolveDiscordChannelId(outbox.target, targetMap);
+      }
+
       try {
+        const route = await resolveDiscordDeliveryRoute(outbox, {
+          targetMap,
+          gameThreadMap,
+          strategyRoomRecipientMap,
+          apiBaseUrl,
+          botToken,
+          fetchImpl,
+        });
         const controller = fetchTimeoutMs > 0 ? new AbortController() : null;
         const fetchTimer = controller
           ? setTimeout(() => controller.abort(), fetchTimeoutMs)
@@ -100,7 +123,7 @@ export function createDiscordDeliveryAdapter(options?: {
 
         let response: Response;
         try {
-          response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
+          response = await fetchImpl(`${apiBaseUrl}/channels/${route.channelId}/messages`, {
             method: 'POST',
             headers: {
               Authorization: `Bot ${botToken}`,
@@ -128,7 +151,7 @@ export function createDiscordDeliveryAdapter(options?: {
               dryRun: false,
               target: outbox.target,
               outboxId: outbox.id,
-              channelId,
+              ...route.payload,
               httpStatus: response.status,
             },
           };
@@ -147,7 +170,7 @@ export function createDiscordDeliveryAdapter(options?: {
             dryRun: false,
             target: outbox.target,
             outboxId: outbox.id,
-            channelId,
+            ...route.payload,
             messageId: body.id,
           },
         };
@@ -162,7 +185,6 @@ export function createDiscordDeliveryAdapter(options?: {
             dryRun: false,
             target: outbox.target,
             outboxId: outbox.id,
-            channelId,
           },
         };
       }
@@ -182,6 +204,148 @@ export function createDiscordDeliveryAdapter(options?: {
       },
     };
   };
+}
+
+interface DiscordRouteResolutionOptions {
+  targetMap: Record<string, string>;
+  gameThreadMap: Record<string, string>;
+  strategyRoomRecipientMap: Record<string, string>;
+  apiBaseUrl: string;
+  botToken: string;
+  fetchImpl: typeof fetch;
+}
+
+interface DiscordDeliveryRoute {
+  channelId: string;
+  payload: Record<string, unknown>;
+}
+
+async function resolveDiscordDeliveryRoute(
+  outbox: OutboxRecord,
+  options: DiscordRouteResolutionOptions,
+): Promise<DiscordDeliveryRoute> {
+  if (outbox.target === 'discord:game-threads') {
+    return resolveDiscordGameThreadRoute(outbox, options);
+  }
+
+  if (outbox.target === 'discord:strategy-room') {
+    return resolveDiscordStrategyRoomRoute(outbox, options);
+  }
+
+  const channelId = resolveDiscordChannelId(outbox.target, options.targetMap);
+  return {
+    channelId,
+    payload: {
+      channelId,
+      route: 'channel',
+    },
+  };
+}
+
+function resolveDiscordGameThreadRoute(
+  outbox: OutboxRecord,
+  options: DiscordRouteResolutionOptions,
+): DiscordDeliveryRoute {
+  const fallbackChannelId = resolveDiscordChannelId(outbox.target, options.targetMap);
+  const eventKey = readOutboxEventKey(outbox);
+  const threadId = eventKey ? options.gameThreadMap[eventKey] : undefined;
+
+  if (!threadId) {
+    logger.warn('Discord game-thread route missing; falling back to channel delivery', {
+      outboxId: outbox.id,
+      target: outbox.target,
+      eventKey,
+      fallbackChannelId,
+    });
+
+    return {
+      channelId: fallbackChannelId,
+      payload: {
+        channelId: fallbackChannelId,
+        route: 'game-thread-fallback',
+        eventKey,
+        fallback: true,
+      },
+    };
+  }
+
+  return {
+    channelId: threadId,
+    payload: {
+      channelId: threadId,
+      parentChannelId: fallbackChannelId,
+      route: 'game-thread',
+      eventKey,
+      fallback: false,
+    },
+  };
+}
+
+async function resolveDiscordStrategyRoomRoute(
+  outbox: OutboxRecord,
+  options: DiscordRouteResolutionOptions,
+): Promise<DiscordDeliveryRoute> {
+  const recipientId = resolveStrategyRoomRecipientId(outbox, options.strategyRoomRecipientMap);
+  const response = await options.fetchImpl(`${options.apiBaseUrl}/users/@me/channels`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bot ${options.botToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      recipient_id: recipientId,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to create Discord DM channel: HTTP ${response.status}: ${errorText}`);
+  }
+
+  const body = (await response.json()) as { id?: unknown };
+  if (typeof body.id !== 'string' || body.id.length === 0) {
+    throw new Error('Discord DM channel response did not include a channel id.');
+  }
+
+  return {
+    channelId: body.id,
+    payload: {
+      channelId: body.id,
+      route: 'strategy-room-dm',
+      recipientId,
+    },
+  };
+}
+
+function resolveStrategyRoomRecipientId(
+  outbox: OutboxRecord,
+  strategyRoomRecipientMap: Record<string, string>,
+) {
+  const payload = isRecord(outbox.payload) ? outbox.payload : {};
+  const metadata = isRecord(payload.metadata) ? payload.metadata : {};
+  const metadataRecipientId =
+    typeof metadata.strategyRoomRecipientId === 'string'
+      ? metadata.strategyRoomRecipientId.trim()
+      : '';
+  const mappedRecipientId = strategyRoomRecipientMap[outbox.target]?.trim() ?? '';
+  const recipientId = metadataRecipientId || mappedRecipientId;
+
+  if (!recipientId) {
+    throw new Error(
+      'No Discord strategy-room recipient mapping found. Set UNIT_TALK_DISCORD_STRATEGY_ROOM_RECIPIENT_MAP or metadata.strategyRoomRecipientId.',
+    );
+  }
+
+  return recipientId;
+}
+
+function readOutboxEventKey(outbox: OutboxRecord) {
+  const payload = isRecord(outbox.payload) ? outbox.payload : {};
+  const metadata = isRecord(payload.metadata) ? payload.metadata : {};
+  const eventId = typeof metadata.eventId === 'string' ? metadata.eventId.trim() : '';
+  const eventName = typeof metadata.eventName === 'string' ? metadata.eventName.trim() : '';
+
+  return eventId || eventName || null;
 }
 
 function loadDeliveryEnvironment() {
@@ -209,6 +373,14 @@ function readDiscordTargetMap(rawValue?: string) {
   }
 }
 
+function readEnvironmentValue(environment: ReturnType<typeof loadDeliveryEnvironment>, key: string) {
+  if (!environment) {
+    return undefined;
+  }
+
+  return (environment as unknown as Record<string, string | undefined>)[key];
+}
+
 function resolveDiscordChannelId(target: string, targetMap: Record<string, string>) {
   const mapped = targetMap[target];
   if (mapped) {
@@ -223,14 +395,6 @@ function resolveDiscordChannelId(target: string, targetMap: Record<string, strin
   throw new Error(
     `No Discord channel mapping found for target "${target}". Set UNIT_TALK_DISCORD_TARGET_MAP or use a discord:<channelId> target.`,
   );
-}
-
-function safelyResolveDiscordChannelId(target: string, targetMap: Record<string, string>) {
-  try {
-    return resolveDiscordChannelId(target, targetMap);
-  } catch {
-    return null;
-  }
 }
 
 function buildDiscordMessagePayload(outbox: OutboxRecord) {
