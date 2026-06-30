@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1367-null-stake-units-constraint-loop",
   "branch": "claude/utv2-1367-null-stake-units-constraint-loop",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "412fd1a8f0e65244acd6e058c2f7136095dbb7ab",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1122",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,48 @@
     "docs/06_status/proof/UTV2-1367/evidence.json",
     "docs/06_status/proof/UTV2-1367/verification.md"
   ],
-  "status": "pr_opened",
+  "status": "merged",
   "started_at": "2026-06-30T03:44:05.805Z",
-  "heartbeat_at": "2026-06-30T03:44:05.805Z",
+  "heartbeat_at": "2026-06-30T06:48:51.568Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1367-null-stake-units-constraint-loop.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-06-30T06:48:38.301Z",
+      "verdict": "pass",
+      "merge_sha": "412fd1a8f0e65244acd6e058c2f7136095dbb7ab",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1122"
+    },
+    {
+      "checked_at": "2026-06-30T06:48:43.568Z",
+      "verdict": "fail",
+      "merge_sha": "412fd1a8f0e65244acd6e058c2f7136095dbb7ab",
+      "failures": [
+        "P3",
+        "C4",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-30T06:48:51.568Z",
+      "verdict": "fail",
+      "merge_sha": "412fd1a8f0e65244acd6e058c2f7136095dbb7ab",
+      "failures": [
+        "P3",
+        "C4",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

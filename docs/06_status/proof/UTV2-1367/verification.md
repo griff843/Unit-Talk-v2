@@ -9,6 +9,7 @@ constraint, and emits a warn-level log for ops visibility.
 
 **Branch:** `claude/utv2-1367-null-stake-units-constraint-loop`
 **Branch HEAD SHA:** `0e5426751cdb826981e92967806899ee17570b27`
+**Merge SHA:** `412fd1a8f0e65244acd6e058c2f7136095dbb7ab`
 **Supabase project:** `zfzdnfwdarxucxtaojxm`
 **Executor:** Claude (claude-sonnet-4-6)
 
