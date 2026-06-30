@@ -105,3 +105,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 - Live DB proof emitted existing enrichment timeout warnings and stranded-pick warnings during unrelated proof files; the relevant tests still passed.
 - No blocked Discord delivery target was activated by this lane. Production activation requires separate governance work per the acceptance criteria.
+
+## Merge SHA
+
+Merged to main: `c4817007e25e3c08e05bd5d5c54369835e9e21c7`

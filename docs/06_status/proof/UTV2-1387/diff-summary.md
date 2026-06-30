@@ -25,3 +25,7 @@
 - This lane did not activate blocked targets in worker runtime target lists or distribution gates.
 - This lane did not update `apps/worker/src/distribution-worker.ts` or risk-register docs because the execution packet narrowed allowed code scope to `apps/worker/src/delivery-adapters.ts` and `apps/worker/src/delivery-adapters.test.ts`, plus the required proof files.
 - The adapter behavior is implemented and tested, but production activation still requires the separate target/governance work listed in the Linear AC.
+
+## Merge SHA
+
+Merged to main: `c4817007e25e3c08e05bd5d5c54369835e9e21c7`
