@@ -18,10 +18,10 @@
     "docs/06_status/proof/UTV2-1377/diff-summary.md",
     "docs/06_status/proof/UTV2-1377/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T08:15:00.653Z",
-  "heartbeat_at": "2026-06-30T09:38:46.907Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T09:49:16.242Z",
+  "closed_at": "2026-06-30T09:49:16.242Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1377-inmemory-constraint-parity.json",
   "created_by": "codex-cli",

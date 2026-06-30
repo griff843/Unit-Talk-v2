@@ -23,10 +23,10 @@
     "docs/06_status/proof/UTV2-1378/diff-summary.md",
     "docs/06_status/proof/UTV2-1378/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T08:25:34.141Z",
-  "heartbeat_at": "2026-06-30T09:30:12.476Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T09:31:13.490Z",
+  "closed_at": "2026-06-30T09:31:13.490Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1378-ci-workflow-rationalization.json",
   "created_by": "claude",
@@ -39,6 +39,36 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1129"
+    },
+    {
+      "checked_at": "2026-06-30T09:30:30.375Z",
+      "verdict": "fail",
+      "merge_sha": "16afce5fa6703f1d386e7b21829d2fd3ee6e8b89",
+      "failures": [
+        "P12",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-06-30T09:30:38.599Z",
+      "verdict": "fail",
+      "merge_sha": "16afce5fa6703f1d386e7b21829d2fd3ee6e8b89",
+      "failures": [
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-06-30T09:30:45.638Z",
+      "verdict": "fail",
+      "merge_sha": "16afce5fa6703f1d386e7b21829d2fd3ee6e8b89",
+      "failures": [
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

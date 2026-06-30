@@ -17,10 +17,10 @@
     "docs/06_status/proof/UTV2-1375/diff-summary.md",
     "docs/06_status/proof/UTV2-1375/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T09:34:47.964Z",
-  "heartbeat_at": "2026-06-30T10:33:25.467Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T10:39:27.534Z",
+  "closed_at": "2026-06-30T10:39:27.534Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1375-preflight-ops-enhancements.json",
   "created_by": "codex-cli",
@@ -33,6 +33,15 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1130"
+    },
+    {
+      "checked_at": "2026-06-30T10:38:49.418Z",
+      "verdict": "fail",
+      "merge_sha": "8cfe5a1deb7a983b861e41e1ff9a80881bc04eb9",
+      "failures": [
+        "P14"
+      ],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],

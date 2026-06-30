@@ -19,10 +19,10 @@
     "docs/06_status/proof/UTV2-1381/diff-summary.md",
     "docs/06_status/proof/UTV2-1381/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T07:56:22.114Z",
-  "heartbeat_at": "2026-06-30T09:38:42.426Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T09:45:53.355Z",
+  "closed_at": "2026-06-30T09:45:53.355Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1381-band-assignment-persistence.json",
   "created_by": "codex-cli",

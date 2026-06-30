@@ -18,10 +18,10 @@
     "docs/06_status/proof/UTV2-1376/diff-summary.md",
     "docs/06_status/proof/UTV2-1376/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T09:34:52.398Z",
-  "heartbeat_at": "2026-06-30T10:40:09.303Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T10:40:27.402Z",
+  "closed_at": "2026-06-30T10:40:27.402Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1376-sha-binding-failure-hardening.json",
   "created_by": "codex-cli",
