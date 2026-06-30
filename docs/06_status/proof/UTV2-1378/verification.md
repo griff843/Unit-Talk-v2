@@ -53,3 +53,14 @@ ok 7 - approved pick reaches done
 ```
 
 pnpm test:db — PASS (7/7) — run 2026-06-30 against live Supabase
+
+## Verification
+
+Branch: claude/utv2-1378-ci-workflow-rationalization
+HEAD SHA: 7691f564aba6ee54418728dd6fc2dfeccceb82d0
+
+All required proof gates satisfied:
+- pnpm verify: PASS
+- R-level compliance: PASS (no artifacts required)
+- pnpm test:db: PASS (7/7)
+- Lane type: governance (no runtime Supabase changes)
