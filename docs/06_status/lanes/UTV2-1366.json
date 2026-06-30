@@ -19,12 +19,12 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1366/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-30T01:38:07.789Z",
-  "heartbeat_at": "2026-06-30T02:21:44.230Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-06-30T02:22:42.724Z",
+  "closed_at": "2026-06-30T02:22:42.724Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1366-markclosinglines-fix.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -35,6 +35,19 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1120"
+    },
+    {
+      "checked_at": "2026-06-30T02:22:39.173Z",
+      "verdict": "pass",
+      "merge_sha": "01bf60e24513e5278d40bc03ad372352f62b4f63",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1120",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
