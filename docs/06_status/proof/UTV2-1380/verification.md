@@ -8,8 +8,32 @@ Wires market-backed Kelly sizing into submission and promotion metadata. `metada
 
 ### Issue-specific tests
 
+- `npx tsx --test apps/api/src/t1-proof-utv2-1380-kelly-sizing-promotion-metadata.test.ts` — PASS, 8/8 (T1 proof assertions + live DB schema check)
 - `npx tsx --test apps/api/src/submission-service.test.ts` — PASS, 73/73
 - `npx tsx --test apps/api/src/promotion-edge-integration.test.ts` — PASS, 74/74
+
+T1 proof TAP (8 assertions, live DB included):
+```
+TAP version 13
+ok 1 - UTV2-1380: enrichPickAtPromotionTime produces kellySizing from market-backed realEdge + marketProbability
+ok 2 - UTV2-1380: kellySizing absent on base pick → enriched scoring pick carries it, so metadataPatch includes it
+ok 3 - UTV2-1380: confidence-delta realEdgeSource → no kellySizing (fail-closed)
+ok 4 - UTV2-1380: missing odds → no kellySizing (fail-closed)
+ok 5 - UTV2-1380: missing marketProbability → no kellySizing (fail-closed)
+ok 6 - UTV2-1380: existing metadata.kellySizing is not overwritten by enrichPickAtPromotionTime
+ok 7 - UTV2-1380: missing realEdge in domainAnalysis → no kellySizing (fail-closed)
+ok 8 - UTV2-1380 live DB: picks.metadata readable; kellySizing shape valid where present
+# [UTV2-1380 live DB] rows=50 picks with kellySizing=5 enrichment-runs=5
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1660.33245
+```
 
 Files changed:
 - `apps/api/src/submission-service.ts` — derives Kelly sizing from market-backed real-edge probability when direct provider-offer devigging is unavailable
