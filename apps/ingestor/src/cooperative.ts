@@ -103,6 +103,69 @@ export async function mapWithConcurrency<T, R>(
 }
 
 /**
+ * Options for withRetry (UTV2-1373).
+ */
+export interface WithRetryOptions {
+  /**
+   * Total attempt count including the initial try. Must be >= 1.
+   * Default: 1 (no retry — pass-through).
+   * PM requirement: 3 = 1 initial + 2 retries.
+   */
+  attempts?: number;
+  /** Base delay before the first retry in ms. Default: 100. */
+  baseDelayMs?: number;
+  /** Maximum delay cap in ms (exponential backoff ceiling). Default: 1500. */
+  maxDelayMs?: number;
+  /**
+   * Return true to allow a retry on this error. Return false to rethrow immediately.
+   * Must be narrowly scoped — only genuine transient errors should return true.
+   */
+  isRetryable: (error: unknown) => boolean;
+  /** Fires after each failed attempt that WILL be retried — use for telemetry, not errors. */
+  onRetry?: (attempt: number, error: unknown, delayMs: number) => void;
+}
+
+/**
+ * Retry a fallible async operation with bounded attempts and capped exponential back-off.
+ *
+ * Fail-closed on two paths:
+ *   1. Non-retryable error: rethrows immediately on the first failure.
+ *   2. Budget exhausted: rethrows the last error after all attempts are used.
+ *
+ * `attempts = 1` is a no-retry pass-through (identical to calling `fn()` directly).
+ * Jitter: up to 30% of the exponential delay is added to reduce thundering-herd.
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  options: WithRetryOptions,
+): Promise<T> {
+  const totalAttempts = Math.max(
+    1,
+    Number.isFinite(options.attempts) ? Math.floor(options.attempts ?? 1) : 1,
+  );
+  const baseDelayMs = options.baseDelayMs ?? 100;
+  const maxDelayMs = options.maxDelayMs ?? 1500;
+
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const isLast = attempt >= totalAttempts;
+      if (isLast || !options.isRetryable(error)) {
+        throw error;
+      }
+      // Exponential backoff: 100ms → 200ms → 400ms …, capped at maxDelayMs, plus jitter
+      const exp = Math.min(maxDelayMs, baseDelayMs * Math.pow(2, attempt - 1));
+      const delayMs = Math.round(Math.min(maxDelayMs, exp + Math.random() * 0.3 * exp));
+      options.onRetry?.(attempt, error, delayMs);
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  // Unreachable — the loop always returns or throws. TypeScript needs a return path.
+  throw new Error('withRetry: unexpected exit');
+}
+
+/**
  * Like {@link mapCooperatively} but flattens one level — for transforms that expand
  * each item into zero or more outputs (e.g. pairing an event into many paired props).
  */
