@@ -7,8 +7,72 @@
 - `pnpm type-check` - passed.
 - `pnpm test` - passed.
 - Issue-specific runtime verifier check - a proof file without requested SHA failed with `SHA 0123456789abcdef0123456789abcdef01234567 not found in runtime-verification.md` and `Verdict: FAIL`; the same proof file containing the SHA passed with `Verdict: PASS`.
-- `pnpm test:db` - initial `pnpm verify` live DB smoke phase hit transient statement timeouts; targeted retry passed all 7 DB smoke tests.
 - `pnpm verify` - passed on the second full run, including live DB smoke and T1 live proof suites.
+
+### pnpm test:db
+
+```
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+  ---
+  duration_ms: 17615.145693
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+  ---
+  duration_ms: 15238.483534
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+  ---
+  duration_ms: 20960.277165
+  type: 'test'
+  ...
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+  ---
+  duration_ms: 22636.037733
+  type: 'test'
+  ...
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+  ---
+  duration_ms: 5182.671592
+  type: 'test'
+  ...
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  ---
+  duration_ms: 20922.123241
+  type: 'test'
+  ...
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  ---
+  duration_ms: 17975.234342
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 106732.611324
+```
+
+## R-level compliance — scripts/ci/r-level-check.ts
+
+```
+Verdict: PASS
+Changed files: 3
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ## Notes
 
