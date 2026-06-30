@@ -53,6 +53,7 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 - `pnpm test` — PASS
 - `pnpm test:db` — PASS (7/7 live DB smoke tests, TAP above)
 - `pnpm verify` — PASS (includes env:check, lint, type-check, build, test, test:db)
+- Branch HEAD SHA: 1649f7065b2266b5eebb5796fd6c71fb6895dc4b
 
 ## R-level compliance — scripts/ci/r-level-check.ts
 
