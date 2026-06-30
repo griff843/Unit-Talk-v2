@@ -172,10 +172,87 @@ import {
   assertSettlementCorrectionReference,
   assertValidPickStatus,
 } from './constraint-guards.js';
+import {
+  approvalStatuses,
+  promotionStatuses,
+  promotionTargets,
+  settlementConfidences,
+  settlementStatuses,
+  writerRoles,
+} from './schema.js';
 export {
   InMemoryMarketFamilyTrustRepository,
   DatabaseMarketFamilyTrustRepository,
 } from './market-family-trust-repository.js';
+
+function assertAllowedValue(
+  constraintName: string,
+  value: string,
+  allowedValues: readonly string[],
+): void {
+  if (!allowedValues.includes(value)) {
+    throw new Error(
+      `Invalid ${constraintName}: ${value}. Expected one of ${allowedValues.join(', ')}`,
+    );
+  }
+}
+
+function assertNullableAllowedValue(
+  constraintName: string,
+  value: string | null | undefined,
+  allowedValues: readonly string[],
+): void {
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  assertAllowedValue(constraintName, value, allowedValues);
+}
+
+function assertValidApprovalStatus(status: string): void {
+  assertAllowedValue('picks.approval_status', status, approvalStatuses);
+}
+
+function assertValidPromotionStatus(status: string): void {
+  assertAllowedValue('picks.promotion_status', status, promotionStatuses);
+}
+
+function assertValidPromotionTarget(target: string | null | undefined): void {
+  assertNullableAllowedValue(
+    'picks.promotion_target',
+    target,
+    promotionTargets,
+  );
+}
+
+function assertValidPromotionHistoryTarget(target: string): void {
+  assertAllowedValue('pick_promotion_history.target', target, promotionTargets);
+}
+
+function assertValidPromotionHistoryStatus(status: string): void {
+  assertAllowedValue(
+    'pick_promotion_history.status',
+    status,
+    promotionStatuses,
+  );
+}
+
+function assertValidWriterRole(writerRole: string): void {
+  assertAllowedValue('pick_lifecycle.writer_role', writerRole, writerRoles);
+}
+
+function assertValidSettlementInput(input: SettlementCreateInput): void {
+  assertAllowedValue(
+    'settlement_records.status',
+    input.status,
+    settlementStatuses,
+  );
+  assertAllowedValue(
+    'settlement_records.confidence',
+    input.confidence,
+    settlementConfidences,
+  );
+}
 
 function providerMarketKeyPriority(providerMarketKey: string): number {
   if (providerMarketKey.includes('-all-game-')) return 0;
@@ -206,6 +283,9 @@ function mapPickToRecord(
   idempotencyKey?: string | null,
 ): PickRecord {
   assertValidPickStatus(pick.lifecycleState, `pick ${pick.id}`);
+  assertValidApprovalStatus(pick.approvalStatus);
+  assertValidPromotionStatus(pick.promotionStatus);
+  assertValidPromotionTarget(pick.promotionTarget);
 
   const foreignKeyCandidates = derivePickForeignKeyCandidates(pick);
   return {
@@ -246,6 +326,7 @@ function mapLifecycleEventToRecord(event: LifecycleEvent): PickLifecycleRecord {
     event.toState,
     `pick_lifecycle.to_state for pick ${event.pickId}`,
   );
+  assertValidWriterRole(event.writerRole);
   if (event.fromState) {
     assertValidPickStatus(
       event.fromState,
@@ -405,6 +486,8 @@ export class InMemoryPickRepository implements PickRepository {
     pickId: string,
     approvalStatus: string,
   ): Promise<PickRecord> {
+    assertValidApprovalStatus(approvalStatus);
+
     const existing = this.picks.get(pickId);
     if (!existing) {
       throw new Error(`Pick not found: ${pickId}`);
@@ -476,6 +559,12 @@ export class InMemoryPickRepository implements PickRepository {
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
+    assertValidApprovalStatus(input.approvalStatus);
+    assertValidPromotionStatus(input.promotionStatus);
+    assertValidPromotionTarget(input.promotionTarget);
+    assertValidPromotionHistoryTarget(input.target);
+    assertValidPromotionHistoryStatus(input.promotionStatus);
+
     const existing = this.picks.get(input.pickId);
     if (!existing) {
       throw new Error(`Pick not found: ${input.pickId}`);
@@ -527,6 +616,9 @@ export class InMemoryPickRepository implements PickRepository {
   async insertPromotionHistoryRow(
     input: PromotionHistoryInsertInput,
   ): Promise<PromotionHistoryRecord> {
+    assertValidPromotionHistoryTarget(input.target);
+    assertValidPromotionHistoryStatus(input.promotionStatus);
+
     const history: PromotionHistoryRecord = {
       id: `${input.pickId}_promotion_${this.promotionHistory.length + 1}`,
       pick_id: input.pickId,
@@ -862,7 +954,10 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     return existing;
   }
 
-  async listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]> {
+  async listForAutoRecovery(
+    maxAttemptCount: number,
+    limit: number,
+  ): Promise<OutboxRecord[]> {
     return this.entries
       .filter(
         (e) =>
@@ -873,8 +968,13 @@ export class InMemoryOutboxRepository implements OutboxRepository {
       .slice(0, limit);
   }
 
-  async resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null> {
-    const existing = this.entries.find((e) => e.id === outboxId && e.status === expectedStatus);
+  async resetForAutoRecovery(
+    outboxId: string,
+    expectedStatus: string,
+  ): Promise<OutboxRecord | null> {
+    const existing = this.entries.find(
+      (e) => e.id === outboxId && e.status === expectedStatus,
+    );
     if (!existing) return null;
     existing.status = 'pending';
     existing.last_error = null;
@@ -1278,6 +1378,8 @@ export class InMemorySettlementRepository implements SettlementRepository {
   private readonly settlements: SettlementRecord[] = [];
 
   async record(input: SettlementCreateInput): Promise<SettlementRecord> {
+    assertValidSettlementInput(input);
+
     const nextSettlementId = `settlement_${this.settlements.length + 1}`;
     assertSettlementCorrectionReference(
       this.settlements,
@@ -1334,11 +1436,8 @@ export class InMemorySettlementRepository implements SettlementRepository {
     if (since !== undefined) {
       results = results.filter((s) => s.created_at >= since);
     }
-    return results
-      .sort(compareSettlementRecordsDescending)
-      .slice(0, limit);
+    return results.sort(compareSettlementRecordsDescending).slice(0, limit);
   }
-
 }
 
 export class InMemoryProviderOfferRepository implements ProviderOfferRepository {
@@ -1410,7 +1509,10 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     input: ProviderOfferMergeInput,
   ): Promise<ProviderOfferMergeResult> {
     const pending = Array.from(this.stagedOffers.values())
-      .filter((offer) => offer.run_id === input.runId && offer.merge_status === 'pending')
+      .filter(
+        (offer) =>
+          offer.run_id === input.runId && offer.merge_status === 'pending',
+      )
       .sort((left, right) => left.created_at.localeCompare(right.created_at));
 
     if (input.identityStrategy !== 'provider_event_market_participant_book') {
@@ -1527,11 +1629,10 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   ): Promise<ProviderOfferRecord[]> {
     return Array.from(this.offers.values())
       .filter((offer) => (offer.snapshot_at ?? '') >= since)
-      .sort(
-        (left, right) =>
-          textSortValue(right.snapshot_at).localeCompare(
-            textSortValue(left.snapshot_at),
-          ),
+      .sort((left, right) =>
+        textSortValue(right.snapshot_at).localeCompare(
+          textSortValue(left.snapshot_at),
+        ),
       )
       .slice(0, limit);
   }
@@ -1561,7 +1662,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             (criteria.bookmakerKey === undefined ||
               offer.bookmaker_key === criteria.bookmakerKey),
         )
-        .sort((left, right) => compareProviderOfferRecordsDescending(left, right))[0] ?? null
+        .sort((left, right) =>
+          compareProviderOfferRecordsDescending(left, right),
+        )[0] ?? null
     );
   }
 
@@ -1584,7 +1687,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             (criteria.bookmakerKey === undefined ||
               offer.bookmaker_key === criteria.bookmakerKey),
         )
-        .sort((left, right) => compareProviderOfferRecordsAscending(left, right))[0] ?? null
+        .sort((left, right) =>
+          compareProviderOfferRecordsAscending(left, right),
+        )[0] ?? null
     );
   }
 
@@ -2066,7 +2171,11 @@ export class InMemorySystemRunRepository implements SystemRunRepository {
     const now = new Date().toISOString();
     let count = 0;
     for (const run of this.runs.values()) {
-      if (run.run_type === input.runType && run.status === 'running' && run.started_at < cutoff) {
+      if (
+        run.run_type === input.runType &&
+        run.status === 'running' &&
+        run.started_at < cutoff
+      ) {
         run.status = 'failed';
         run.finished_at = now;
         count++;
@@ -2318,13 +2427,19 @@ function registrySupportsSource(
 
 function assertValidModelScoreUpdate(update: ModelScoreUpdate): void {
   if (!update.model_registry_id) {
-    throw new Error(`Model score update missing model_registry_id for ${update.id}`);
+    throw new Error(
+      `Model score update missing model_registry_id for ${update.id}`,
+    );
   }
   if (!update.scoring_run_id) {
-    throw new Error(`Model score update missing scoring_run_id for ${update.id}`);
+    throw new Error(
+      `Model score update missing scoring_run_id for ${update.id}`,
+    );
   }
   if (!update.ownership_timestamp) {
-    throw new Error(`Model score update missing ownership_timestamp for ${update.id}`);
+    throw new Error(
+      `Model score update missing ownership_timestamp for ${update.id}`,
+    );
   }
 }
 
@@ -2351,7 +2466,8 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
       calibration_metadata: input.calibrationMetadata ?? null,
       promotion_approved_by: input.promotionApprovedBy ?? null,
       promotion_approved_at: input.promotionApprovedAt ?? null,
-      active_state: input.activeState ?? (input.status === 'champion' ? 'champion' : null),
+      active_state:
+        input.activeState ?? (input.status === 'champion' ? 'champion' : null),
       artifact_sha: input.artifactSha ?? null,
       created_at: now,
       updated_at: now,
@@ -2615,8 +2731,14 @@ export class InMemoryExecutionQualityRepository implements ExecutionQualityRepos
   }
 }
 
-function isStatementTimeoutError(error: { code?: string; message?: string }): boolean {
-  return error.code === '57014' || (error.message ?? '').toLowerCase().includes('statement timeout');
+function isStatementTimeoutError(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  return (
+    error.code === '57014' ||
+    (error.message ?? '').toLowerCase().includes('statement timeout')
+  );
 }
 
 export class DatabaseSubmissionRepository implements SubmissionRepository {
@@ -3084,7 +3206,9 @@ export class DatabasePickRepository implements PickRepository {
   ): Promise<PromotionPersistenceResult> {
     const existingPick = await this.findPickById(input.pickId);
     if (!existingPick) {
-      throw new Error(`Failed to persist promotion state: pick not found (${input.pickId})`);
+      throw new Error(
+        `Failed to persist promotion state: pick not found (${input.pickId})`,
+      );
     }
 
     const mergedMetadata = {
@@ -3763,7 +3887,10 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return data as OutboxRecord;
   }
 
-  async listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]> {
+  async listForAutoRecovery(
+    maxAttemptCount: number,
+    limit: number,
+  ): Promise<OutboxRecord[]> {
     const { data, error } = await this.client
       .from('distribution_outbox')
       .select('*')
@@ -3776,7 +3903,10 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return (data ?? []) as OutboxRecord[];
   }
 
-  async resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null> {
+  async resetForAutoRecovery(
+    outboxId: string,
+    expectedStatus: string,
+  ): Promise<OutboxRecord | null> {
     const { data, error } = await this.client
       .from('distribution_outbox')
       .update({ status: 'pending', last_error: null })
@@ -4395,7 +4525,6 @@ export class DatabaseSettlementRepository implements SettlementRepository {
 
     return data ?? [];
   }
-
 }
 
 export class DatabaseGradeResultRepository implements GradeResultRepository {
@@ -4602,8 +4731,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     // snapshot is no longer miscounted as an update of this snapshot. The upsert below is
     // already idempotent via onConflict: 'snapshot_at,idempotency_key', so this changes only
     // the existence probe, not write semantics.
-    const compositeExistenceKey = (snapshotAt: string, idempotencyKey: string): string =>
-      `${snapshotAt} ${idempotencyKey}`;
+    const compositeExistenceKey = (
+      snapshotAt: string,
+      idempotencyKey: string,
+    ): string => `${snapshotAt} ${idempotencyKey}`;
     const snapshotAts = [...new Set(offers.map((offer) => offer.snapshotAt))];
     const batchExistenceKeys = new Set(
       offers.map((offer) =>
@@ -4643,13 +4774,18 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const deduped = [
       ...new Map(offers.map((o) => [o.idempotencyKey, o])).values(),
     ];
-    const historyRows = deduped.map((offer) => mapProviderOfferInsertToHistoryRow(offer));
+    const historyRows = deduped.map((offer) =>
+      mapProviderOfferInsertToHistoryRow(offer),
+    );
     const currentRows = buildProviderOfferCurrentRows(historyRows);
 
     const UPSERT_CHUNK_SIZE = 500;
     for (let i = 0; i < historyRows.length; i += UPSERT_CHUNK_SIZE) {
       const chunk = historyRows.slice(i, i + UPSERT_CHUNK_SIZE);
-      const { error } = await (fromUntyped(this.client, 'provider_offer_history').upsert(chunk, {
+      const { error } = await (fromUntyped(
+        this.client,
+        'provider_offer_history',
+      ).upsert(chunk, {
         onConflict: 'snapshot_at,idempotency_key',
         ignoreDuplicates: true,
       }) as unknown as Promise<{
@@ -4657,13 +4793,18 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         error: { message: string } | null;
       }>);
       if (error) {
-        throw new Error(`Failed to upsert provider offer history: ${error.message}`);
+        throw new Error(
+          `Failed to upsert provider offer history: ${error.message}`,
+        );
       }
     }
 
     for (let i = 0; i < currentRows.length; i += UPSERT_CHUNK_SIZE) {
       const chunk = currentRows.slice(i, i + UPSERT_CHUNK_SIZE);
-      const { error } = await (fromUntyped(this.client, 'provider_offer_current').upsert(chunk, {
+      const { error } = await (fromUntyped(
+        this.client,
+        'provider_offer_current',
+      ).upsert(chunk, {
         onConflict: 'identity_key',
         ignoreDuplicates: false,
       }) as unknown as Promise<{
@@ -4671,7 +4812,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         error: { message: string } | null;
       }>);
       if (error) {
-        throw new Error(`Failed to upsert provider offer current rows: ${error.message}`);
+        throw new Error(
+          `Failed to upsert provider offer current rows: ${error.message}`,
+        );
       }
     }
 
@@ -4693,27 +4836,53 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       };
     }
 
-    const stageKeys = [...new Set(offers.map((offer) => `${offer.runId}:${offer.idempotencyKey}`))];
+    const stageKeys = [
+      ...new Set(
+        offers.map((offer) => `${offer.runId}:${offer.idempotencyKey}`),
+      ),
+    ];
     const existingKeys = new Set<string>();
     for (let i = 0; i < stageKeys.length; i += 100) {
       const chunk = stageKeys.slice(i, i + 100);
-      const runIds = [...new Set(chunk.map((value) => value.split(':', 1)[0] ?? ''))];
-      const idempotencyKeys = [...new Set(chunk.map((value) => value.slice(value.indexOf(':') + 1)))];
-      const { data, error } = await fromUntyped(this.client, 'provider_offer_staging')
+      const runIds = [
+        ...new Set(chunk.map((value) => value.split(':', 1)[0] ?? '')),
+      ];
+      const idempotencyKeys = [
+        ...new Set(chunk.map((value) => value.slice(value.indexOf(':') + 1))),
+      ];
+      const { data, error } = await fromUntyped(
+        this.client,
+        'provider_offer_staging',
+      )
         .select('run_id,idempotency_key')
         .in('run_id', runIds)
         .in('idempotency_key', idempotencyKeys);
       if (error) {
-        throw new Error(`Failed to load existing staged provider offers: ${error.message}`);
+        throw new Error(
+          `Failed to load existing staged provider offers: ${error.message}`,
+        );
       }
-      for (const row of (data as Array<{ run_id: string; idempotency_key: string }> | null) ?? []) {
+      for (const row of (data as Array<{
+        run_id: string;
+        idempotency_key: string;
+      }> | null) ?? []) {
         existingKeys.add(`${row.run_id}:${row.idempotency_key}`);
       }
     }
 
-    const deduped = [...new Map(offers.map((offer) => [`${offer.runId}:${offer.idempotencyKey}`, offer])).values()];
+    const deduped = [
+      ...new Map(
+        offers.map((offer) => [
+          `${offer.runId}:${offer.idempotencyKey}`,
+          offer,
+        ]),
+      ).values(),
+    ];
     const rows = deduped.map(mapProviderOfferStageInsertToRow);
-    const { error } = await (fromUntyped(this.client, 'provider_offer_staging').upsert(rows, {
+    const { error } = await (fromUntyped(
+      this.client,
+      'provider_offer_staging',
+    ).upsert(rows, {
       onConflict: 'run_id,idempotency_key',
       ignoreDuplicates: true,
     }) as unknown as Promise<{
@@ -4734,19 +4903,26 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   async mergeStagedCycle(
     input: ProviderOfferMergeInput,
   ): Promise<ProviderOfferMergeResult> {
-    const { data, error } = await this.client.rpc('merge_provider_offer_staging_cycle', {
-      p_run_id: input.runId,
-      p_max_rows: input.maxRows,
-      p_identity_strategy: input.identityStrategy,
-    });
+    const { data, error } = await this.client.rpc(
+      'merge_provider_offer_staging_cycle',
+      {
+        p_run_id: input.runId,
+        p_max_rows: input.maxRows,
+        p_identity_strategy: input.identityStrategy,
+      },
+    );
 
     if (error) {
-      throw new Error(`Failed to merge staged provider offers: ${error.message}`);
+      throw new Error(
+        `Failed to merge staged provider offers: ${error.message}`,
+      );
     }
 
-    const row = (Array.isArray(data) ? data[0] : data) as
-      | { processed_count?: number; merged_count?: number; duplicate_count?: number }
-      | null;
+    const row = (Array.isArray(data) ? data[0] : data) as {
+      processed_count?: number;
+      merged_count?: number;
+      duplicate_count?: number;
+    } | null;
 
     return {
       processedCount: row?.processed_count ?? 0,
@@ -4759,16 +4935,21 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     input: ProviderCycleStatusUpsertInput,
   ): Promise<ProviderCycleStatusRow> {
     const row = mapProviderCycleStatusInputToRow(input);
-    const { data, error } = await (fromUntyped(this.client, 'provider_cycle_status')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_cycle_status',
+    )
       .upsert(row, { onConflict: 'run_id' })
       .select('*')
       .single() as unknown as Promise<{
-        data: ProviderCycleStatusRow | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderCycleStatusRow | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
-      throw new Error(`Failed to upsert provider cycle status: ${error.message}`);
+      throw new Error(
+        `Failed to upsert provider cycle status: ${error.message}`,
+      );
     }
 
     if (!data) {
@@ -4779,13 +4960,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async getCycleStatus(runId: string): Promise<ProviderCycleStatusRow | null> {
-    const { data, error } = await (fromUntyped(this.client, 'provider_cycle_status')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_cycle_status',
+    )
       .select('*')
       .eq('run_id', runId)
       .maybeSingle() as unknown as Promise<{
-        data: ProviderCycleStatusRow | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderCycleStatusRow | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(`Failed to load provider cycle status: ${error.message}`);
@@ -4795,29 +4979,37 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listStagedOffers(runId: string): Promise<ProviderOfferStagingRow[]> {
-    const { data, error } = await (fromUntyped(this.client, 'provider_offer_staging')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_offer_staging',
+    )
       .select('*')
       .eq('run_id', runId)
       .order('created_at', { ascending: true }) as unknown as Promise<{
-        data: ProviderOfferStagingRow[] | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferStagingRow[] | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
-      throw new Error(`Failed to list staged provider offers: ${error.message}`);
+      throw new Error(
+        `Failed to list staged provider offers: ${error.message}`,
+      );
     }
 
     return data ?? [];
   }
 
   async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_offer_history',
+    )
       .select('*')
       .eq('provider_key', providerKey)
       .order('snapshot_at', { ascending: false }) as unknown as Promise<{
-        data: ProviderOfferRecord[] | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferRecord[] | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(`Failed to list provider offers: ${error.message}`);
@@ -4860,12 +5052,15 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listAll(): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_offer_history',
+    )
       .select('*')
       .order('snapshot_at', { ascending: false }) as unknown as Promise<{
-        data: ProviderOfferRecord[] | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferRecord[] | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(`Failed to list provider offers: ${error.message}`);
@@ -4878,14 +5073,17 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     since: string,
     limit = 10_000,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_offer_history',
+    )
       .select('*')
       .gte('snapshot_at', since)
       .order('snapshot_at', { ascending: false })
       .limit(limit) as unknown as Promise<{
-        data: ProviderOfferRecord[] | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferRecord[] | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(
@@ -4904,22 +5102,29 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const sinceMs = new Date(since).getTime();
     const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
-    for (let windowEndMs = Date.now(); windowEndMs > sinceMs; windowEndMs -= WINDOW_MS) {
+    for (
+      let windowEndMs = Date.now();
+      windowEndMs > sinceMs;
+      windowEndMs -= WINDOW_MS
+    ) {
       const windowStartMs = Math.max(sinceMs, windowEndMs - WINDOW_MS);
       const windowStartIso = new Date(windowStartMs).toISOString();
       const windowEndIso = new Date(windowEndMs).toISOString();
       let from = 0;
 
       for (;;) {
-        const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
+        const { data, error } = await (fromUntyped(
+          this.client,
+          'provider_offer_history',
+        )
           .select('*')
           .eq('is_closing', true)
           .gte('snapshot_at', windowStartIso)
           .lt('snapshot_at', windowEndIso)
           .range(from, from + PAGE - 1) as unknown as Promise<{
-            data: ProviderOfferRecord[] | null;
-            error: { message: string } | null;
-          }>);
+          data: ProviderOfferRecord[] | null;
+          error: { message: string } | null;
+        }>);
 
         if (error) {
           if (/statement timeout/i.test(error.message)) {
@@ -4939,7 +5144,6 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     return all;
   }
-
 
   async findClosingLine(
     criteria: ClosingLineLookupCriteria,
@@ -4974,9 +5178,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .order('snapshot_at', { ascending: false })
       .limit(1)
       .maybeSingle() as unknown as Promise<{
-        data: ProviderOfferRecord | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferRecord | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(`Failed to find closing line: ${error.message}`);
@@ -5018,9 +5222,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .order('snapshot_at', { ascending: true })
       .limit(1)
       .maybeSingle() as unknown as Promise<{
-        data: ProviderOfferRecord | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferRecord | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(`Failed to find opening line: ${error.message}`);
@@ -5122,7 +5326,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // and every provider_event_id filter causes a full sequential scan across 1M+ rows.
       // provider_offer_history_compact is non-partitioned with a leading provider_event_id
       // index that actually fires, bringing query time from timeout to milliseconds.
-      const { data, error } = await (fromUntyped(this.client, 'provider_offer_history_compact')
+      const { data, error } = await (fromUntyped(
+        this.client,
+        'provider_offer_history_compact',
+      )
         .select(
           'snapshot_id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing, identity_key, idempotency_key',
         )
@@ -5132,19 +5339,19 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .eq('is_closing', false)
         .order('snapshot_at', { ascending: false })
         .limit(5000) as unknown as Promise<{
-          data: Array<{
-            snapshot_id: string;
-            provider_key: string;
-            provider_market_key: string;
-            provider_participant_id: string | null;
-            bookmaker_key: string | null;
-            snapshot_at: string;
-            is_closing: boolean;
-            identity_key: string;
-            idempotency_key: string;
-          }> | null;
-          error: { message: string } | null;
-        }>);
+        data: Array<{
+          snapshot_id: string;
+          provider_key: string;
+          provider_market_key: string;
+          provider_participant_id: string | null;
+          bookmaker_key: string | null;
+          snapshot_at: string;
+          is_closing: boolean;
+          identity_key: string;
+          idempotency_key: string;
+        }> | null;
+        error: { message: string } | null;
+      }>);
 
       if (error) {
         throw new Error(
@@ -5158,7 +5365,12 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // Find the latest snapshot per combination key
       const latestByKey = new Map<
         string,
-        { snapshotId: string; idempotencyKey: string; identityKey: string; snapshotAt: string }
+        {
+          snapshotId: string;
+          idempotencyKey: string;
+          identityKey: string;
+          snapshotAt: string;
+        }
       >();
       for (const row of rows) {
         const participantKey = row.provider_participant_id ?? '';
@@ -5187,13 +5399,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const allSnapshotIds = [...latestByKey.values()].map((v) => v.snapshotId);
       for (let i = 0; i < allSnapshotIds.length; i += 100) {
         const chunk = allSnapshotIds.slice(i, i + 100);
-        const { error: compactUpdateError, count } = await (fromUntyped(this.client, 'provider_offer_history_compact')
+        const { error: compactUpdateError, count } = await (fromUntyped(
+          this.client,
+          'provider_offer_history_compact',
+        )
           .update({ is_closing: true })
           .in('snapshot_id', chunk) as unknown as Promise<{
-            data: unknown;
-            error: { message: string } | null;
-            count?: number | null;
-          }>);
+          data: unknown;
+          error: { message: string } | null;
+          count?: number | null;
+        }>);
 
         if (compactUpdateError) {
           throw new Error(
@@ -5208,7 +5423,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // Filtering by snapshot_at (the partition key) before idempotency_key directs each
       // batch to a single child partition instead of scanning all ~60.
       const bySnapshot = new Map<string, string[]>();
-      for (const { idempotencyKey, snapshotAt: snapAt } of latestByKey.values()) {
+      for (const {
+        idempotencyKey,
+        snapshotAt: snapAt,
+      } of latestByKey.values()) {
         if (!bySnapshot.has(snapAt)) bySnapshot.set(snapAt, []);
         bySnapshot.get(snapAt)!.push(idempotencyKey);
       }
@@ -5221,13 +5439,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       for (const [snapAt, idempotencyKeys] of bySnapshot) {
         for (let i = 0; i < idempotencyKeys.length; i += 100) {
           const chunk = idempotencyKeys.slice(i, i + 100);
-          const { error: updateError } = await (fromUntyped(this.client, 'provider_offer_history')
+          const { error: updateError } = await (fromUntyped(
+            this.client,
+            'provider_offer_history',
+          )
             .update({ is_closing: true })
             .eq('snapshot_at', snapAt)
             .in('idempotency_key', chunk) as unknown as Promise<{
-              data: unknown;
-              error: { message: string } | null;
-            }>);
+            data: unknown;
+            error: { message: string } | null;
+          }>);
 
           if (updateError) {
             throw new Error(
@@ -5241,15 +5462,20 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // The previous implementation used .in('id', historyIds) which always produced
       // 0 matches because provider_offer_current.id is a different UUID namespace from
       // provider_offer_history.id. identity_key is the shared namespace between the two.
-      const allIdentityKeys = [...latestByKey.values()].map((v) => v.identityKey);
+      const allIdentityKeys = [...latestByKey.values()].map(
+        (v) => v.identityKey,
+      );
       for (let i = 0; i < allIdentityKeys.length; i += 100) {
         const chunk = allIdentityKeys.slice(i, i + 100);
-        const { error: currentUpdateError } = await (fromUntyped(this.client, 'provider_offer_current')
+        const { error: currentUpdateError } = await (fromUntyped(
+          this.client,
+          'provider_offer_current',
+        )
           .update({ is_closing: true })
           .in('identity_key', chunk) as unknown as Promise<{
-            data: unknown;
-            error: { message: string } | null;
-          }>);
+          data: unknown;
+          error: { message: string } | null;
+        }>);
         if (currentUpdateError) {
           throw new Error(
             `Failed to mark closing current offers: ${currentUpdateError.message}`,
@@ -5284,7 +5510,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const priority =
         providerMarketKeyPriority(left.provider_market_key) -
         providerMarketKeyPriority(right.provider_market_key);
-      return priority || left.provider_market_key.localeCompare(right.provider_market_key);
+      return (
+        priority ||
+        left.provider_market_key.localeCompare(right.provider_market_key)
+      );
     });
     return rows[0]?.provider_market_key ?? null;
   }
@@ -5352,7 +5581,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     provider: string,
     limit = 500,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
+    const { data, error } = await (fromUntyped(
+      this.client,
+      'provider_offer_history',
+    )
       .select('*')
       .eq('provider_key', provider)
       .eq('is_opening', true)
@@ -5363,9 +5595,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .not('provider_participant_id', 'is', null)
       .order('snapshot_at', { ascending: false })
       .limit(limit) as unknown as Promise<{
-        data: ProviderOfferRecord[] | null;
-        error: { message: string } | null;
-      }>);
+      data: ProviderOfferRecord[] | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(`Failed to list opening offers: ${error.message}`);
@@ -5389,14 +5621,18 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     );
 
     if (error) {
-      throw new Error(`Failed to list opening current offers: ${error.message}`);
+      throw new Error(
+        `Failed to list opening current offers: ${error.message}`,
+      );
     }
 
     return (data ?? []) as ProviderOfferCurrentRow[];
   }
 }
 
-function deriveProviderHealthState(cycle: ProviderCycleStatusRow | undefined): 'healthy' | 'degraded' | 'fail' {
+function deriveProviderHealthState(
+  cycle: ProviderCycleStatusRow | undefined,
+): 'healthy' | 'degraded' | 'fail' {
   if (!cycle) {
     return 'fail';
   }
@@ -7069,7 +7305,8 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
         calibration_metadata: input.calibrationMetadata ?? null,
         promotion_approved_by: input.promotionApprovedBy ?? null,
         promotion_approved_at: input.promotionApprovedAt ?? null,
-        active_state: input.activeState ?? (status === 'champion' ? 'champion' : null),
+        active_state:
+          input.activeState ?? (status === 'champion' ? 'champion' : null),
         artifact_sha: input.artifactSha ?? null,
         updated_at: now,
       })
@@ -7117,7 +7354,9 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
     }
 
     const rows = (data ?? []) as ModelRegistryRecord[];
-    return rows.find((record) => registrySupportsSource(record, sourceType)) ?? null;
+    return (
+      rows.find((record) => registrySupportsSource(record, sourceType)) ?? null
+    );
   }
 
   async listBySport(sport: string): Promise<ModelRegistryRecord[]> {
@@ -7881,7 +8120,9 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     providerParticipantId: string | null;
   }): Promise<MarketUniverseClosingLine | null> {
     let query = fromUntyped(this.client, 'market_universe')
-      .select('closing_line,closing_over_odds,closing_under_odds,provider_key,last_offer_snapshot_at')
+      .select(
+        'closing_line,closing_over_odds,closing_under_odds,provider_key,last_offer_snapshot_at',
+      )
       .eq('provider_event_id', criteria.providerEventId)
       .eq('provider_market_key', criteria.providerMarketKey)
       .not('closing_line', 'is', null)
@@ -7890,11 +8131,17 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     if (criteria.providerParticipantId === null) {
       query = query.is('provider_participant_id', null);
     } else {
-      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+      query = query.eq(
+        'provider_participant_id',
+        criteria.providerParticipantId,
+      );
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`market_universe findClosingLineByProviderKey failed: ${error.message}`);
+    if (error)
+      throw new Error(
+        `market_universe findClosingLineByProviderKey failed: ${error.message}`,
+      );
     const row = (data as MarketUniverseClosingLine[] | null)?.[0] ?? null;
     return row;
   }
@@ -7915,12 +8162,18 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     if (criteria.providerParticipantId == null) {
       query = query.is('provider_participant_id', null);
     } else {
-      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+      query = query.eq(
+        'provider_participant_id',
+        criteria.providerParticipantId,
+      );
     }
 
     const { data, error } = await query;
-    if (error) throw new Error(`market_universe findByProvenance failed: ${error.message}`);
-    return ((data as MarketUniverseRow[] | null)?.[0]) ?? null;
+    if (error)
+      throw new Error(
+        `market_universe findByProvenance failed: ${error.message}`,
+      );
+    return (data as MarketUniverseRow[] | null)?.[0] ?? null;
   }
 }
 
@@ -8126,7 +8379,10 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
 
     if (error) {
       if (isMissingSchemaCacheColumn(error.message, 'sport_key')) {
-        throw new PickCandidatesSchemaCacheDriftError('sport_key', error.message);
+        throw new PickCandidatesSchemaCacheDriftError(
+          'sport_key',
+          error.message,
+        );
       }
       throw new Error(`pick_candidates upsert failed: ${error.message}`);
     }
@@ -8226,7 +8482,10 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
 
 function isMissingSchemaCacheColumn(message: string, column: string): boolean {
   const normalized = message.toLowerCase();
-  return normalized.includes('schema cache') && normalized.includes(`'${column.toLowerCase()}'`);
+  return (
+    normalized.includes('schema cache') &&
+    normalized.includes(`'${column.toLowerCase()}'`)
+  );
 }
 
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
@@ -8331,7 +8590,9 @@ export class InMemoryRawPayloadRepository implements RawPayloadRepository {
 export class InMemoryPickOfferSnapshotRepository implements PickOfferSnapshotRepository {
   private readonly rows: PickOfferSnapshotRow[] = [];
 
-  async insert(input: PickOfferSnapshotInsertInput): Promise<PickOfferSnapshotRow> {
+  async insert(
+    input: PickOfferSnapshotInsertInput,
+  ): Promise<PickOfferSnapshotRow> {
     const row: PickOfferSnapshotRow = {
       id: crypto.randomUUID(),
       pick_id: input.pick_id,
@@ -8356,11 +8617,13 @@ export class InMemoryPickOfferSnapshotRepository implements PickOfferSnapshotRep
   }
 
   async existsForPick(pickId: string, snapshotKind: string): Promise<boolean> {
-    return this.rows.some(r => r.pick_id === pickId && r.snapshot_kind === snapshotKind);
+    return this.rows.some(
+      (r) => r.pick_id === pickId && r.snapshot_kind === snapshotKind,
+    );
   }
 
   async countByKind(snapshotKind: string): Promise<number> {
-    return this.rows.filter(r => r.snapshot_kind === snapshotKind).length;
+    return this.rows.filter((r) => r.snapshot_kind === snapshotKind).length;
   }
 }
 
@@ -8371,7 +8634,9 @@ export class DatabasePickOfferSnapshotRepository implements PickOfferSnapshotRep
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async insert(input: PickOfferSnapshotInsertInput): Promise<PickOfferSnapshotRow> {
+  async insert(
+    input: PickOfferSnapshotInsertInput,
+  ): Promise<PickOfferSnapshotRow> {
     const { data, error } = await this.client
       .from('pick_offer_snapshots')
       .insert({
@@ -8408,7 +8673,9 @@ export class DatabasePickOfferSnapshotRepository implements PickOfferSnapshotRep
       .eq('snapshot_kind', snapshotKind);
 
     if (error) {
-      throw new Error(`Failed to check pick_offer_snapshot existence: ${error.message}`);
+      throw new Error(
+        `Failed to check pick_offer_snapshot existence: ${error.message}`,
+      );
     }
     return (count ?? 0) > 0;
   }
@@ -8482,7 +8749,10 @@ export class InMemoryOddsSnapshotRepository implements OddsSnapshotRepository {
     return record;
   }
 
-  async findLatestByProviderLeague(providerKey: string, league: string): Promise<OddsSnapshotRecord | null> {
+  async findLatestByProviderLeague(
+    providerKey: string,
+    league: string,
+  ): Promise<OddsSnapshotRecord | null> {
     const matches = this.records
       .filter((r) => r.provider_key === providerKey && r.league === league)
       .sort((a, b) => b.snapshot_at.localeCompare(a.snapshot_at));
@@ -8538,7 +8808,10 @@ export class DatabaseOddsSnapshotRepository implements OddsSnapshotRepository {
     return data as OddsSnapshotRecord;
   }
 
-  async findLatestByProviderLeague(providerKey: string, league: string): Promise<OddsSnapshotRecord | null> {
+  async findLatestByProviderLeague(
+    providerKey: string,
+    league: string,
+  ): Promise<OddsSnapshotRecord | null> {
     const { data, error } = await this.client
       .from('odds_snapshots')
       .select('*')
@@ -8549,9 +8822,7 @@ export class DatabaseOddsSnapshotRepository implements OddsSnapshotRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(
-        `odds_snapshots query failed: ${error.message}`,
-      );
+      throw new Error(`odds_snapshots query failed: ${error.message}`);
     }
 
     return data as OddsSnapshotRecord | null;
@@ -8912,7 +9183,10 @@ function buildProviderOfferCurrentRows(
 ) {
   const latestByIdentity = new Map<
     string,
-    ReturnType<typeof mapProviderOfferInsertToHistoryRow> & { identity_key: string; updated_at: string }
+    ReturnType<typeof mapProviderOfferInsertToHistoryRow> & {
+      identity_key: string;
+      updated_at: string;
+    }
   >();
 
   for (const row of rows) {
@@ -9027,16 +9301,21 @@ function mapProviderCycleStatusInputToRecord(
     league: input.league,
     cycle_snapshot_at: input.cycleSnapshotAt,
     stage_status: input.stageStatus,
-    freshness_status: input.freshnessStatus ?? existing?.freshness_status ?? 'unknown',
+    freshness_status:
+      input.freshnessStatus ?? existing?.freshness_status ?? 'unknown',
     proof_status: input.proofStatus ?? existing?.proof_status ?? 'required',
     staged_count: input.stagedCount ?? existing?.staged_count ?? 0,
     merged_count: input.mergedCount ?? existing?.merged_count ?? 0,
     duplicate_count: input.duplicateCount ?? existing?.duplicate_count ?? 0,
-    failure_category: input.failureCategory ?? existing?.failure_category ?? null,
+    failure_category:
+      input.failureCategory ?? existing?.failure_category ?? null,
     failure_scope: input.failureScope ?? existing?.failure_scope ?? null,
-    affected_provider_key: input.affectedProviderKey ?? existing?.affected_provider_key ?? null,
-    affected_sport_key: input.affectedSportKey ?? existing?.affected_sport_key ?? null,
-    affected_market_key: input.affectedMarketKey ?? existing?.affected_market_key ?? null,
+    affected_provider_key:
+      input.affectedProviderKey ?? existing?.affected_provider_key ?? null,
+    affected_sport_key:
+      input.affectedSportKey ?? existing?.affected_sport_key ?? null,
+    affected_market_key:
+      input.affectedMarketKey ?? existing?.affected_market_key ?? null,
     last_error: input.lastError ?? existing?.last_error ?? null,
     metadata: input.metadata ?? existing?.metadata ?? {},
     created_at: existing?.created_at ?? now,
@@ -9383,7 +9662,6 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
   }
 }
 
-
 // ---------------------------------------------------------------------------
 // ExecutionIntentRepository — InMemory implementation (UTV2-1132)
 // ---------------------------------------------------------------------------
@@ -9427,7 +9705,7 @@ export class InMemoryExecutionIntentRepository implements ExecutionIntentReposit
 
   async findByPickId(pickId: string): Promise<ExecutionIntentRow[]> {
     return [...this.store.values()]
-      .filter(r => r.pick_id === pickId)
+      .filter((r) => r.pick_id === pickId)
       .sort((a, b) => a.issued_at_ms - b.issued_at_ms);
   }
 
@@ -9440,8 +9718,10 @@ export class InMemoryExecutionIntentRepository implements ExecutionIntentReposit
     const all = await this.findByPickId(pickId);
     if (all.length === 0) return [];
 
-    const byId = new Map(all.map(r => [r.id, r]));
-    const roots = all.filter(r => r.predecessor_id === null || !byId.has(r.predecessor_id));
+    const byId = new Map(all.map((r) => [r.id, r]));
+    const roots = all.filter(
+      (r) => r.predecessor_id === null || !byId.has(r.predecessor_id),
+    );
     if (roots.length === 0) return all;
 
     const childOf = new Map<string, ExecutionIntentRow>();
@@ -9497,7 +9777,10 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
       .select('*')
       .single();
 
-    if (error) throw new Error(`ExecutionIntentRepository.append failed: ${error.message}`);
+    if (error)
+      throw new Error(
+        `ExecutionIntentRepository.append failed: ${error.message}`,
+      );
     return data as ExecutionIntentRow;
   }
 
@@ -9508,7 +9791,10 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
       .eq('id', id)
       .maybeSingle();
 
-    if (error) throw new Error(`ExecutionIntentRepository.findById failed: ${error.message}`);
+    if (error)
+      throw new Error(
+        `ExecutionIntentRepository.findById failed: ${error.message}`,
+      );
     return (data as ExecutionIntentRow | null) ?? null;
   }
 
@@ -9519,7 +9805,10 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
       .eq('pick_id', pickId)
       .order('issued_at_ms', { ascending: true });
 
-    if (error) throw new Error(`ExecutionIntentRepository.findByPickId failed: ${error.message}`);
+    if (error)
+      throw new Error(
+        `ExecutionIntentRepository.findByPickId failed: ${error.message}`,
+      );
     return (data ?? []) as ExecutionIntentRow[];
   }
 
@@ -9530,7 +9819,10 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
       .eq('idempotency_key', key)
       .maybeSingle();
 
-    if (error) throw new Error(`ExecutionIntentRepository.findByIdempotencyKey failed: ${error.message}`);
+    if (error)
+      throw new Error(
+        `ExecutionIntentRepository.findByIdempotencyKey failed: ${error.message}`,
+      );
     return (data as ExecutionIntentRow | null) ?? null;
   }
 
@@ -9538,8 +9830,10 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
     const all = await this.findByPickId(pickId);
     if (all.length === 0) return [];
 
-    const byId = new Map(all.map(r => [r.id, r]));
-    const roots = all.filter(r => r.predecessor_id === null || !byId.has(r.predecessor_id));
+    const byId = new Map(all.map((r) => [r.id, r]));
+    const roots = all.filter(
+      (r) => r.predecessor_id === null || !byId.has(r.predecessor_id),
+    );
     if (roots.length === 0) return all;
 
     const childOf = new Map<string, ExecutionIntentRow>();
@@ -9567,7 +9861,10 @@ export class DatabaseExecutionIntentRepository implements ExecutionIntentReposit
 // ---------------------------------------------------------------------------
 
 export interface TeamScheduleRepository {
-  getTeamPreviousGameDate(teamId: string, beforeDate: string): Promise<string | null>;
+  getTeamPreviousGameDate(
+    teamId: string,
+    beforeDate: string,
+  ): Promise<string | null>;
 }
 
 export class InMemoryTeamScheduleRepository implements TeamScheduleRepository {
@@ -9577,11 +9874,18 @@ export class InMemoryTeamScheduleRepository implements TeamScheduleRepository {
     participant_ids: string[];
   }> = [];
 
-  seed(event: { event_date: string; status: string; participant_ids: string[] }): void {
+  seed(event: {
+    event_date: string;
+    status: string;
+    participant_ids: string[];
+  }): void {
     this._events.push(event);
   }
 
-  async getTeamPreviousGameDate(teamId: string, beforeDate: string): Promise<string | null> {
+  async getTeamPreviousGameDate(
+    teamId: string,
+    beforeDate: string,
+  ): Promise<string | null> {
     const matching = this._events
       .filter(
         (e) =>
@@ -9601,14 +9905,19 @@ export class DatabaseTeamScheduleRepository implements TeamScheduleRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async getTeamPreviousGameDate(teamId: string, beforeDate: string): Promise<string | null> {
+  async getTeamPreviousGameDate(
+    teamId: string,
+    beforeDate: string,
+  ): Promise<string | null> {
     const { data: links, error: linkError } = await this.client
       .from('event_participants')
       .select('event_id')
       .eq('participant_id', teamId);
 
     if (linkError) {
-      throw new Error(`Failed to find participant events: ${linkError.message}`);
+      throw new Error(
+        `Failed to find participant events: ${linkError.message}`,
+      );
     }
 
     const eventIds = (links ?? []).map((r) => r.event_id);
