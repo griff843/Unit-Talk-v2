@@ -164,6 +164,85 @@ See `docs/05_operations/MODELING_SEQUENCE.md` for the strict modeling execution 
 
 ---
 
+## Wave 7 Execution Plan (UTV2-1373 through UTV2-1389)
+
+*Added: 2026-06-30 under UTV2-1389. Documents the dispatch ordering for the new backlog cohort.*
+
+This wave cohort addresses null `stake_units` constraint violations, routing improvements, docs hygiene, and domain hardening. The dependency graph requires staged execution across four sub-waves.
+
+---
+
+### Wave 7A — Immediate (T3/T2 docs and governance)
+
+*Gate: none. Ready to dispatch now.*
+
+| Issue | Title | Tier | Lane |
+|---|---|---|---|
+| UTV2-1385 | Update Linear issue descriptions and labels for clarity | T3 | Claude |
+| UTV2-1386 | Add missing R-level artifacts for previously closed lanes | T3 | Claude |
+| UTV2-1387 | Governance: clarify PM decision scope for stake_units | T3 | Claude |
+| UTV2-1388 | Docs: update START_HERE.md and docs_authority_map.md | T3 | Claude |
+| UTV2-1389 | Add Linear phase labels and blocking dependencies | T3 | Claude |
+| UTV2-1375 | Hygiene: remove dead stake_units default shim code | T3 | Codex |
+| UTV2-1376 | Hygiene: tighten ESLint rules for null-coalescing on stake fields | T3 | Codex |
+| UTV2-1377 | Verification: run constraint audit across pick lifecycle stages | T2 | Codex |
+| UTV2-1381 | Domain analysis: map all stake_units read/write paths | T2 | Codex |
+
+---
+
+### Wave 7B — After 7A (requires UTV2-1379 domain analysis)
+
+*Gate: UTV2-1379 must be started (PM plan gate) and UTV2-1381 domain analysis complete before dispatching.*
+
+| Issue | Title | Tier | Lane |
+|---|---|---|---|
+| UTV2-1380 | Fix null stake_units constraint violations in ingestor path | T2 | Codex |
+| UTV2-1382 | Fix null stake_units propagation in promotion / grading path | T2 | Codex |
+
+---
+
+### Wave 7C — T1 (needs PM plan gate)
+
+*Gate: PM plan review required before lane-start for each issue.*
+
+| Issue | Title | Tier | Lane |
+|---|---|---|---|
+| UTV2-1373 | T1: stake_units NOT NULL migration — schema enforcement | T1 | Codex |
+| UTV2-1379 | T1: domain contract for stake_units — canonical write path spec | T1 | Claude |
+| UTV2-1384 | T1: settlement correctness proof with stake_units enforced | T1 | Codex |
+
+---
+
+### PM-Gated
+
+*Gate: PM Decision required before any dispatch.*
+
+| Issue | Title | Tier | Blocker |
+|---|---|---|---|
+| UTV2-1383 | Backfill stake_units for historical picks | T2 | PM Decision — data mutation scope, rollback plan |
+
+---
+
+### Blocked until Wave 7B completes
+
+| Issue | Title | Tier | Blocked by |
+|---|---|---|---|
+| UTV2-1374 | Reporting: pick quality metrics with stake_units enforced | T2 | UTV2-1380 + UTV2-1382 must merge first |
+
+---
+
+### Wave 7 sequencing summary
+
+```
+Wave 7A (now) → Wave 7B (after 1381 done + 1379 PM plan) → Wave 7C (T1 PM gate)
+                                                           → 1383 PM Decision (parallel)
+Wave 7B complete → 1374 (reporting) unblocked
+```
+
+No wave may be dispatched until its gate condition is satisfied. Dispatch preflight records dependency blocker state per `docs/governance/LANE_CONCURRENCY_POLICY.md §8`.
+
+---
+
 ## Canonical references
 
 - Modeling sequence: `docs/05_operations/MODELING_SEQUENCE.md`

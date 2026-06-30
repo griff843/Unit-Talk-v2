@@ -186,6 +186,19 @@ No prose enforces these rules. Scripts enforce them. Prose defines the policy th
 
 ---
 
+## 8a. Wave-ordered dispatch
+
+When the execution map defines a wave sequence (e.g., Wave 7A → 7B → 7C), dispatch must respect that order:
+
+- **Later-wave issues must not be started until their gate condition is satisfied**, even if concurrency slots are available.
+- Gate conditions are recorded in `docs/05_operations/EXECUTION_MAP.md` for each wave.
+- `ops:lane-start` enforces dependency blockers via the dispatch preflight artifact (§8). A wave gate manifests as a `dependency_blocker` finding in the preflight output — the lane is refused until the gate clears.
+- Operators must not manually bypass wave gates. If a gate is disputed, escalate to PM.
+
+Wave ordering is advisory in prose but enforced mechanically through dependency blocker checks in the preflight artifact. Prose alone does not enforce ordering.
+
+---
+
 ## 9. Related documents
 
 - `docs/governance/LANE_TAXONOMY.md` — lane type definitions and per-type rules
