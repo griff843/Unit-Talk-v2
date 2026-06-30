@@ -12,7 +12,13 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/delivery-adapters.test.ts",
-    "apps/worker/src/delivery-adapters.ts"
+    "apps/worker/src/delivery-adapters.ts",
+    "apps/worker/src/distribution-worker.ts",
+    "docs/05_operations/discord_routing.md",
+    "docs/05_operations/risk_register.md",
+    "docs/06_status/KNOWN_DEBT.md",
+    "docs/06_status/proof/UTV2-1387/diff-summary.md",
+    "docs/06_status/proof/UTV2-1387/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1387/diff-summary.md",
