@@ -38,6 +38,8 @@ allowed_path_globs:
   - .claude/.state-stamp
   - docs/archive/**
   - CLAUDE.md
+  - docs/START_HERE.md
+  - docs/CODEBASE_GUIDE.md
   - package.json
   - pnpm-lock.yaml
   - pnpm-workspace.yaml
