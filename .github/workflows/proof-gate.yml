@@ -1,0 +1,433 @@
+# Proof Gate (Consolidated)
+#
+# Single workflow replacing three previously separate checks:
+#   - proof-auditor-gate.yml  (structural proof validation)
+#   - runtime-verifier-gate.yml (runtime-sensitive path verification)
+#   - t1-proof-gate.yml  (T1 pre-closure checklist enforcement)
+#
+# Architecture: one detect job → three parallel conditional jobs → (if T1) t1-proof job
+# Each downstream job runs only when its conditions are met; the detect job is cheap (~30s).
+# This replaces three separate workflows that could race and fire redundantly.
+#
+# Linear check sequence enforced via `needs:` — C1 (proof-auditor) and C2 (runtime-verifier)
+# complete before C3 (t1-proof) begins.
+#
+# Spec / rationale: UTV2-1378
+# Replaces: proof-auditor-gate.yml, runtime-verifier-gate.yml, t1-proof-gate.yml
+
+name: Proof Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  # ── Detect ──────────────────────────────────────────────────────────────────
+  detect:
+    name: Detect changes + labels
+    runs-on: ubuntu-latest
+    outputs:
+      proof_changed: ${{ steps.check.outputs.proof_changed }}
+      proof_required: ${{ steps.check.outputs.proof_required }}
+      runtime_changed: ${{ steps.check.outputs.runtime_changed }}
+      is_t1: ${{ steps.check.outputs.is_t1 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check changed paths and labels
+        id: check
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+
+          # Is this a T1 PR?
+          IS_T1=false
+          if echo "$LABELS" | grep -q '"tier:T1"'; then
+            IS_T1=true
+          fi
+          echo "is_t1=$IS_T1" >> "$GITHUB_OUTPUT"
+
+          # Does the PR have proof-required label override?
+          PROOF_REQUIRED=false
+          if echo "$LABELS" | grep -q '"proof-required"'; then
+            PROOF_REQUIRED=true
+          fi
+          echo "proof_required=$PROOF_REQUIRED" >> "$GITHUB_OUTPUT"
+
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD" 2>/dev/null || echo "")
+
+          # Proof paths changed?
+          PROOF_CHANGED=false
+          if echo "$CHANGED" | grep -qE '^docs/06_status/proof/|^docs/06_status/[^/]*(EVIDENCE|PROOF)'; then
+            PROOF_CHANGED=true
+          fi
+          echo "proof_changed=$PROOF_CHANGED" >> "$GITHUB_OUTPUT"
+
+          # Runtime-sensitive paths changed?
+          RUNTIME_CHANGED=false
+          if echo "$CHANGED" | grep -qE \
+            '^docs/06_status/proof/|^docs/06_status/lanes/|^scripts/ops/|^artifacts/|^apps/(api|worker|ingestor)/|^packages/(domain|db)/src/'; then
+            RUNTIME_CHANGED=true
+          fi
+          echo "runtime_changed=$RUNTIME_CHANGED" >> "$GITHUB_OUTPUT"
+
+          echo "T1=$IS_T1 | proof_changed=$PROOF_CHANGED | runtime_changed=$RUNTIME_CHANGED | proof_required=$PROOF_REQUIRED"
+
+  # ── C1: Proof Auditor Gate ───────────────────────────────────────────────────
+  proof-auditor:
+    name: Proof Auditor Gate
+    needs: detect
+    if: |
+      needs.detect.outputs.proof_changed == 'true' ||
+      needs.detect.outputs.proof_required == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Reject verification.log artifacts
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          BAD=$(git diff --diff-filter=ACM --name-only "$BASE" "$HEAD" \
+            | grep '^docs/06_status/proof/.*/verification\.log$' || true)
+          if [ -n "$BAD" ]; then
+            echo "::error title=Proof Artifact Format::Use verification.md, not verification.log"
+            echo "$BAD" | sed 's/^/  - /'
+            exit 1
+          fi
+
+      - name: Run proof auditor gate
+        id: gate
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="$HEAD_SHA"
+          overall_verdict="PASS"
+
+          proof_dirs=$(git diff --diff-filter=ACM --name-only "$BASE" "$HEAD" \
+            | grep '^docs/06_status/proof/' \
+            | xargs -I{} dirname {} | sort -u || true)
+
+          if [ -z "$proof_dirs" ]; then
+            echo "No proof directories changed — trivial pass."
+            exit 0
+          fi
+
+          while IFS= read -r proof_dir; do
+            [ -z "$proof_dir" ] && continue
+            echo "--- Auditing: $proof_dir ---"
+
+            issue_id=$(echo "$proof_dir" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+            manifest="docs/06_status/lanes/${issue_id}.json"
+            proof_kind=""
+            if [ -n "$issue_id" ] && [ -f "$manifest" ]; then
+              proof_kind=$(node -e "try{process.stdout.write((JSON.parse(require('fs').readFileSync('$manifest','utf8')).runtime_proof_kind)||'')}catch{process.stdout.write('')}")
+            fi
+
+            if [ "$proof_kind" = "live-schema-parity" ]; then
+              pnpm exec tsx scripts/ci/assert-live-schema-parity-pass.ts --sha "$HEAD" || overall_verdict="FAIL"
+              pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
+                --proof-dir "$proof_dir" --sha "$HEAD" --json 2>&1 || overall_verdict="FAIL"
+            else
+              result=$(pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
+                --proof-dir "$proof_dir" \
+                --sha "$HEAD" \
+                --require-executed-command "pnpm test:db" \
+                --json 2>&1) || true
+              echo "$result"
+              verdict=$(echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin)['verdict'])" 2>/dev/null || echo "FAIL")
+              [ "$verdict" != "PASS" ] && overall_verdict="FAIL"
+            fi
+          done <<< "$proof_dirs"
+
+          if [ "$overall_verdict" != "PASS" ]; then
+            echo "::error title=Proof Auditor Gate::One or more proof directories failed auditing."
+            exit 1
+          fi
+          echo "C1 PASS: all proof directories valid"
+
+  # ── C2: Runtime Verifier Gate ────────────────────────────────────────────────
+  runtime-verifier:
+    name: Runtime Verifier Gate
+    needs: detect
+    if: needs.detect.outputs.runtime_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Detect issue ID
+        id: issue
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiP '(utv2|uni)-\d+' | head -1 | tr '[:lower:]' '[:upper:]')
+          echo "id=${ISSUE_ID}" >> "$GITHUB_OUTPUT"
+          echo "Branch: $BRANCH  →  Issue: ${ISSUE_ID:-<none>}"
+
+      - name: Run runtime-verifier gate
+        id: gate
+        run: |
+          ISSUE="${{ steps.issue.outputs.id }}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          PROOF_DIR="docs/06_status/proof/${ISSUE}"
+
+          if [ -z "$ISSUE" ]; then
+            echo "No issue ID in branch — skipping."
+            exit 0
+          fi
+
+          if [ ! -d "$PROOF_DIR" ]; then
+            echo "Proof dir not found: $PROOF_DIR — gate not applicable."
+            exit 0
+          fi
+
+          npx tsx scripts/ops/runtime-verifier-gate.ts \
+            --proof-dir "$PROOF_DIR" \
+            --sha "$SHA" \
+            --json | tee gate-result.json
+
+          VERDICT=$(cat gate-result.json | python3 -c "import sys,json; print(json.load(sys.stdin)['verdict'])")
+          if [ "$VERDICT" != "PASS" ]; then
+            echo "::error::Runtime verifier gate FAILED"
+            exit 1
+          fi
+          echo "C2 PASS: runtime verifier passed"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-verifier-gate-${{ github.run_id }}.json
+          path: gate-result.json
+          retention-days: 14
+
+  # ── C3: T1 Proof Gate ────────────────────────────────────────────────────────
+  t1-proof:
+    name: T1 Proof Gate
+    needs: [detect, proof-auditor, runtime-verifier]
+    if: |
+      always() &&
+      needs.detect.outputs.is_t1 == 'true' &&
+      (needs.proof-auditor.result == 'success' || needs.proof-auditor.result == 'skipped') &&
+      (needs.runtime-verifier.result == 'success' || needs.runtime-verifier.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Write CI local env
+        run: |
+          cat <<'EOF' > local.env
+          NODE_ENV=development
+          UNIT_TALK_APP_ENV=ci
+          COMMAND_CENTER_AUTH_TOKEN=ci-command-center-token
+          AUTH_SECRET=ci-auth-secret
+          NEXTAUTH_SECRET=ci-nextauth-secret
+          LINEAR_API_TOKEN=
+          LINEAR_TEAM_ID=
+          NOTION_TOKEN=
+          SLACK_BOT_TOKEN=
+          SLACK_SIGNING_SECRET=
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_BOT_TOKEN=
+          DISCORD_GUILD_ID=
+          DISCORD_ANNOUNCEMENT_CHANNEL_ID=
+          OPENAI_API_KEY=
+          EOF
+
+      - name: Extract issue ID
+        id: extract_issue
+        run: |
+          branch="${{ github.event.pull_request.head.ref }}"
+          issue_id=$(echo "$branch" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          if [ -z "$issue_id" ]; then
+            echo "issue_id=" >> "$GITHUB_OUTPUT"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "issue_id=${issue_id}" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check lane manifest
+        id: manifest
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          manifest_path="docs/06_status/lanes/${issue_id}.json"
+          if [ ! -f "$manifest_path" ]; then
+            echo "::error title=T1 Proof Gate - Missing Lane Manifest::$manifest_path not found"
+            exit 1
+          fi
+          echo "manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
+
+      - name: C1 — pnpm verify proof
+        id: c1
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          verification_log="docs/06_status/proof/${issue_id}/verification.md"
+          if [ ! -f "$verification_log" ]; then
+            echo "::error title=T1 Proof Gate - C1 FAIL::Missing $verification_log"
+            exit 1
+          fi
+          if ! grep -qi 'pnpm verify' "$verification_log"; then
+            echo "::error title=T1 Proof Gate - C1 FAIL::verification.md missing 'pnpm verify'"
+            exit 1
+          fi
+          echo "C1 PASS"
+
+      - name: C2 — live-DB proof execution
+        id: c2
+        if: steps.extract_issue.outputs.skip == 'false'
+        env:
+          CI_REQUIRE_DB_SMOKE: 'true'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          manifest="docs/06_status/lanes/${issue_id}.json"
+          proof_dir="docs/06_status/proof/${issue_id}"
+
+          if [ ! -d "$proof_dir" ]; then
+            echo "::error title=T1 Proof Gate - C2 FAIL::Proof directory missing: $proof_dir"
+            exit 1
+          fi
+
+          proof_kind=""
+          if [ -f "$manifest" ]; then
+            proof_kind=$(node -e "try{process.stdout.write((JSON.parse(require('fs').readFileSync('$manifest','utf8')).runtime_proof_kind)||'')}catch{process.stdout.write('')}")
+          fi
+
+          if [ "$proof_kind" = "live-schema-parity" ]; then
+            pnpm exec tsx scripts/ci/assert-live-schema-parity-pass.ts --sha "${{ github.event.pull_request.head.sha }}"
+            echo "C2 PASS (schema-parity exception)"
+          else
+            pnpm ci:db-smoke
+            echo "C2 PASS: pnpm test:db executed"
+          fi
+
+      - name: C3 — R-level compliance (informational)
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          echo "C3 INFO: enforced by r-level-compliance-check.yml"
+
+      - name: C4 — SHA-bound proof
+        id: c4
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          proof_dir="docs/06_status/proof/${issue_id}"
+          if [ ! -d "$proof_dir" ]; then
+            echo "::error title=T1 Proof Gate - C4 FAIL::Proof directory missing"
+            exit 1
+          fi
+          sha_found=false
+          for f in "$proof_dir"/*; do
+            if [ -f "$f" ] && grep -qE '[0-9a-f]{40}' "$f"; then
+              sha_found=true; break
+            fi
+          done
+          if [ "$sha_found" = "false" ]; then
+            echo "::error title=T1 Proof Gate - C4 FAIL::No 40-char hex SHA in proof files"
+            exit 1
+          fi
+          echo "C4 PASS"
+
+      - name: C5 — Tier label (informational)
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          echo "C5 INFO: tier:T1 label present (required to reach this job)"
+
+      - name: C6 — Expected proof paths
+        id: c6
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          manifest_path="${{ steps.manifest.outputs.manifest_path }}"
+          expected_paths=$(python3 -c "
+          import json
+          with open('$manifest_path') as f:
+              m = json.load(f)
+          for p in m.get('expected_proof_paths', []):
+              print(p)
+          " 2>&1)
+          if [ -z "$expected_paths" ]; then
+            echo "C6 PASS (no expected_proof_paths declared)"
+            exit 0
+          fi
+          missing=""
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            [ ! -f "$path" ] && missing="${missing}  - $path\n"
+          done <<< "$expected_paths"
+          if [ -n "$missing" ]; then
+            echo "::error title=T1 Proof Gate - C6 FAIL::Missing expected proof paths"
+            echo -e "$missing"
+            exit 1
+          fi
+          echo "C6 PASS"
+
+      - name: Gate summary
+        if: steps.extract_issue.outputs.skip == 'false' && always()
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          echo "## T1 Proof Gate — ${issue_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C1 pnpm verify proof | ${{ steps.c1.outcome == 'success' && '✓' || '✗' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C2 live-DB proof | ${{ steps.c2.outcome == 'success' && '✓' || '✗' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C3 R-level (informational) | ℹ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C4 SHA-bound | ${{ steps.c4.outcome == 'success' && '✓' || '✗' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C5 Tier label (informational) | ℹ |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C6 Expected proof paths | ${{ steps.c6.outcome == 'success' && '✓' || '✗' }} |" >> "$GITHUB_STEP_SUMMARY"
