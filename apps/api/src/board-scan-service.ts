@@ -73,9 +73,33 @@ export interface BoardScanOptions {
 // Feature gate helper
 // ---------------------------------------------------------------------------
 
-function isSyndicateMachineEnabled(override?: boolean): boolean {
-  if (override !== undefined) return override;
-  return process.env['SYNDICATE_MACHINE_ENABLED'] === 'true';
+export type SyndicateMachineGateStatus = 'enabled' | 'disabled' | 'missing';
+
+export interface SyndicateMachineGateEvaluation {
+  enabled: boolean;
+  status: SyndicateMachineGateStatus;
+  rawValue: string | null;
+}
+
+export function evaluateSyndicateMachineGate(override?: boolean): SyndicateMachineGateEvaluation {
+  if (override !== undefined) {
+    return {
+      enabled: override,
+      status: override ? 'enabled' : 'disabled',
+      rawValue: String(override),
+    };
+  }
+
+  const rawValue = process.env['SYNDICATE_MACHINE_ENABLED']?.trim() ?? null;
+  if (rawValue === null || rawValue === '') {
+    return { enabled: false, status: 'missing', rawValue };
+  }
+
+  return {
+    enabled: rawValue === 'true',
+    status: rawValue === 'true' ? 'enabled' : 'disabled',
+    rawValue,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -179,14 +203,38 @@ export class BoardScanService {
     const scanRunId = crypto.randomUUID();
     const logger = options.logger;
     const maxRows = options.maxRows ?? 5_000;
+    const gate = evaluateSyndicateMachineGate(options.enabled);
 
     // Feature gate — default off
-    if (!isSyndicateMachineEnabled(options.enabled)) {
+    if (!gate.enabled) {
+      const event = {
+        service: 'board-scan',
+        event: 'syndicate_machine_gate.warning',
+        reason: gate.status === 'missing'
+          ? 'SYNDICATE_MACHINE_ENABLED missing'
+          : 'SYNDICATE_MACHINE_ENABLED is not true',
+        gateStatus: gate.status,
+        rawValue: gate.rawValue,
+        productionReadiness: process.env['UNIT_TALK_APP_ENV'] === 'production' ? 'red' : 'not_applicable',
+        scanRunId,
+      };
+      logger?.warn?.(JSON.stringify(event));
+      if (process.env['UNIT_TALK_APP_ENV'] === 'production') {
+        logger?.error?.(
+          JSON.stringify({
+            ...event,
+            event: 'syndicate_machine_gate.production_red',
+            remediation: 'Set GitHub secret SYNDICATE_MACHINE_ENABLED=true before deploying production.',
+          }),
+        );
+      }
       logger?.info?.(
         JSON.stringify({
           service: 'board-scan',
           event: 'gate.skip',
-          reason: 'SYNDICATE_MACHINE_ENABLED=false',
+          reason: event.reason,
+          gateStatus: gate.status,
+          rawValue: gate.rawValue,
           scanRunId,
         }),
       );
