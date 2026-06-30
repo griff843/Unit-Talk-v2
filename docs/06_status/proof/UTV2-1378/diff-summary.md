@@ -35,3 +35,7 @@ Three separate proof workflow files with different path-based triggers created r
 **Low risk.** This lane only modifies GitHub Actions YAML files and one test file. The actual proof-gate logic is a structural copy of the existing t1-proof-gate.yml, proof-auditor-gate.yml, and runtime-verifier-gate.yml. No source code, domain logic, or schema changes.
 
 The disabled workflows are kept in the repo with `workflow_dispatch:` triggers for historical reference. They can be deleted in a future hygiene lane.
+
+## Merge SHA
+
+Merged to main: `16afce5fa6703f1d386e7b21829d2fd3ee6e8b89`

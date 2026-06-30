@@ -64,3 +64,7 @@ All required proof gates satisfied:
 - R-level compliance: PASS (no artifacts required)
 - pnpm test:db: PASS (7/7)
 - Lane type: governance (no runtime Supabase changes)
+
+## Merge SHA
+
+Merged to main: `16afce5fa6703f1d386e7b21829d2fd3ee6e8b89`
