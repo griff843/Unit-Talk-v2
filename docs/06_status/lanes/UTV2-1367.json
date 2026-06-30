@@ -12,10 +12,15 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/candidate-pick-scanner.test.ts",
-    "apps/api/src/candidate-pick-scanner.ts"
+    "apps/api/src/candidate-pick-scanner.ts",
+    "docs/06_status/lanes/UTV2-1367.json",
+    "docs/06_status/proof/UTV2-1367/evidence.json",
+    "docs/06_status/proof/UTV2-1367/verification.md",
+    ".ops/sync/UTV2-1367.yml"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1367/evidence.json"
+    "docs/06_status/proof/UTV2-1367/evidence.json",
+    "docs/06_status/proof/UTV2-1367/verification.md"
   ],
   "status": "pr_opened",
   "started_at": "2026-06-30T03:44:05.805Z",
