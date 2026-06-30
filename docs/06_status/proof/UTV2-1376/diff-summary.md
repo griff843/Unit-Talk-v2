@@ -14,3 +14,7 @@
 ## Scope
 
 The implementation change is limited to the allowed ops gate script scope. The proof markdown files are included because the lane packet and manifest require them as closeout artifacts.
+
+## Merge SHA
+
+Merged to main: `308470064c61187e3c910e31d89dd5f2d0731bdb`

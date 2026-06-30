@@ -78,3 +78,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 - The live proof suite emitted known stranded-pick warnings from existing live state; the related subtests passed.
 - No `test:db`-requiring source files were changed, but `pnpm verify` includes the live DB proof gate and it completed successfully.
+
+## Merge SHA
+
+Merged to main: `308470064c61187e3c910e31d89dd5f2d0731bdb`
