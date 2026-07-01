@@ -31,7 +31,7 @@ Browser-based bet intake form. Public-facing Next.js app for submitting sports p
 
 **Source:** hardcoded to `'smart-form'`. Body size capped at 64KB.
 
-**Validation:** Zod schema validates market type, selection, odds format. Form does NOT include `confidence` field — Smart Form picks get fallback scoring (deterministic 61.5 total score, blocked by confidence floor gate).
+**Validation:** Zod schema validates market type, selection, odds format. The form requires `capperConviction` (1-10 integer, required field, no default) — `buildSubmissionPayload()` (`lib/form-utils.ts`) maps it to submission `confidence` (capperConviction/10, capped at 0.99 for conviction=10 to avoid an exact-1.0 probability) and records `metadata.confidenceSource: 'capper-conviction'` so downstream code can distinguish this from a market-derived confidence signal. This has been wired since UTV2-255/UTV2-1379 — do not describe the form as lacking a confidence signal.
 
 ## Runtime Behavior
 
@@ -55,7 +55,7 @@ Browser-based bet intake form. Public-facing Next.js app for submitting sports p
 ## What NOT to Do
 
 - Do not add direct database access
-- Do not add confidence field without understanding scoring implications
+- Do not change the capperConviction→confidence mapping without understanding scoring implications (see UTV2-1379 for the conviction=10 capping rationale)
 - Do not bypass API for submissions
 
 

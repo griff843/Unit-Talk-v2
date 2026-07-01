@@ -436,6 +436,17 @@ test('conviction=4 maps to trust=40 and confidence=0.4', () => {
   assert.deepEqual(payload.metadata?.promotionScores, { trust: 40 });
 });
 
+// UTV2-1379: conviction=10 must not produce confidence=1.0 (fails the strict
+// confidence<1 guard downstream and silently skips domainAnalysis entirely).
+test('conviction=10 maps to a capped confidence below 1.0, not exactly 1.0', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ capperConviction: 10 }));
+  assert.equal(payload.confidence, 0.99, 'confidence must be capped at 0.99, not 1.0');
+  assert.ok((payload.confidence as number) < 1, 'confidence must be strictly less than 1');
+  assert.equal(payload.metadata?.capperConviction, 10, 'displayed conviction must remain 10/10, unchanged');
+  assert.equal(payload.metadata?.confidenceSource, 'capper-conviction', 'provenance must be explicit');
+  assert.deepEqual(payload.metadata?.promotionScores, { trust: 100 });
+});
+
 // UTV2-577: unknown stat type must throw rather than return a lossy display string
 test('buildSubmissionPayload throws for unknown player-prop stat type', () => {
   assert.throws(
