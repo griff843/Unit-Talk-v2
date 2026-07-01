@@ -58,7 +58,20 @@ This file is the T1 verification record for UTV2-1379. **This is a partial fix, 
 
 ### E13 pnpm verify
 
-Full pipeline green: env:check, lint, type-check, build, `pnpm test` (95 test-run blocks, 0 failures across the monorepo), live-DB proof suite (`test:db` + 14 sequential T1 proof live-DB test files, including the UTV2-1327 promotion enrichment live-DB test against real pick schemas).
+Full pipeline green: env:check, lint, type-check, build, `pnpm test` (111 tests, 0 failures across the affected suites after moving the smart-form fix out of this lane), live-DB proof suite (`pnpm test:db` + 14 sequential T1 proof live-DB test files, including the UTV2-1327 promotion enrichment live-DB test against real pick schemas).
+
+**`pnpm test:db` output (live Supabase `zfzdnfwdarxucxtaojxm`):**
+```
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105238.632566
+```
 
 ### E14 R-level check
 
