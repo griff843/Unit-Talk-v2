@@ -1,7 +1,7 @@
 ---
 name: runtime-verifier
 description: Verifies runtime truth and CI evidence for a lane before the merge gate opens. Checks CI status on the merge SHA (not branch HEAD), proof readiness from execution-state-v1, pnpm verify status, and for T1 lanes verifies test:db ran against real Supabase. Returns VERIFIED or FAILED. Use before any merge gate or t1-approved label — never rely on branch CI alone.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools:
   - Bash
   - Read

@@ -1,7 +1,7 @@
 ---
 name: lane-governor
 description: Recommends safe next lanes and validates concurrency headroom before any dispatch cycle. Reads docs/governance/LANE_CONCURRENCY_POLICY.md for live limits, then checks execution-state-v1, merge-risk-v1, lane manifests, and forbidden-combination rules. Use before /dispatch or /dispatch-board to confirm the board is safe to add work.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools:
   - Bash
   - Read

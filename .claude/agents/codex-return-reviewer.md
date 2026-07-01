@@ -1,7 +1,7 @@
 ---
 name: codex-return-reviewer
 description: Advisory review aid for Codex-returned PRs. Checks file scope, Tier C path touches, test existence, commit format, tier label, and R-level compliance. Returns APPROVE or REJECT findings for the orchestrator; GitHub checks, Merge Gate, and PM policy remain the blocking authority.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools:
   - Bash
   - Read

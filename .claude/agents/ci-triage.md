@@ -1,7 +1,7 @@
 ---
 name: ci-triage
 description: Diagnoses failing GitHub Actions workflow runs. Reads workflow logs, identifies the failing step and root cause, pattern-matches against known failure types (TypeScript errors, test failures, lint, build, env/secret, R-level, merge conflicts), and returns a specific remediation. Use when a CI run is red and the cause is not immediately obvious from the PR checks list.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools:
   - Bash
   - Read

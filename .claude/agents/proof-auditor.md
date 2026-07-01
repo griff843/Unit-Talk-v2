@@ -1,7 +1,7 @@
 ---
 name: proof-auditor
 description: Advisory proof review aid for proof bundles and R-level evidence. Checks required sections, SHA binding, evidence shape types, R-level compliance, and placeholder text. Returns VALID or INVALID findings for the orchestrator; CI and PM policy remain the blocking authority.
-model: claude-sonnet-4-6
+model: claude-sonnet-5
 tools:
   - Bash
   - Read
