@@ -13,8 +13,8 @@ This file is the T2 verification record for UTV2-1395.
 | Owner | claude/utv2-1395 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1395-smart-form-conviction-cap |
-| Commit SHA(s) | `7f51ac41c87d2fe7340697cf75468a88b302e595` (branch head; merge SHA bound post-merge) |
-| Related PRs | (filled on open) |
+| Commit SHA(s) | `37c1959113ff6319e47c67a770a200944f83a51f` (merge SHA) |
+| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1137 |
 
 ## Scope
 
