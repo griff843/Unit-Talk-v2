@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1394-edge-fallback-report-testrun-fix",
   "branch": "claude/utv2-1394-edge-fallback-report-testrun-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "50217209ab98b2d64459e4701fb83d7cb2a86d47",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1138",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1379/evidence.json",
