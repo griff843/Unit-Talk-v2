@@ -1,0 +1,6 @@
+source,domain-analysis,confidence-delta,no-confidence,no-provider-offer,no-market-key,no-participant-scope,computation-error,unknown-legacy,total
+alert-agent,0,0,14,0,0,0,0,746,760
+board-construction,406,0,0,0,0,0,0,0,406
+model-driven,0,0,13,0,0,0,0,734,747
+smart-form,0,0,4,0,0,0,0,304,308
+system-pick-scanner,1504,0,29,0,0,0,0,1478,3011

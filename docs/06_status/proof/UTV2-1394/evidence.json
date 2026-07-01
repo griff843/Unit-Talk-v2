@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "status": "in_review",
+  "re_scoped_from": "domainAnalysis write/persistence gap investigation",
+  "re_scope_reason": "Live-DB investigation found no active write/persistence bug. The original 87.3%/85%/91% unknown-legacy figures were measurement contamination from pnpm test:db proof fixtures (metadata.testRun) written under real production source values.",
+  "follow_up_issue": "UTV2-1396",
+  "verifier": {
+    "identity": "claude/utv2-1394-edge-fallback-report-testrun-fix"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "full workspace suite green, including 2 new tests in run-edge-fallback-report.test.ts (testRun exclusion in production-only mode, testRun inclusion outside production-only mode)",
+    "r_level_check": "pass — no rules matched (tooling-only diff, no lifecycle-fsm/promotion-scoring/operator-ui paths touched)"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      { "table": "picks", "description": "DB connectivity and write path smoke test" },
+      { "table": "participants", "description": "UTV2-883 no-duplicate participants for same external_id and sport" },
+      { "table": "settlement_records", "description": "UTV2-996 correction chain additive, original row not mutated" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 1, "status": "healthy" },
+      { "table": "participants", "count": 1, "status": "healthy" },
+      { "table": "settlement_records", "count": 1, "status": "healthy" }
+    ],
+    "corrected_fallback_measurement": {
+      "windows": [
+        { "days": 90, "production_only": false, "total": 56224, "domain_analysis_pct": 5.79, "unknown_legacy_pct": 87.17 },
+        { "days": 14, "production_only": true, "total": 5232, "excluded_non_production_source_count": 4053, "excluded_test_fixture_count": 8589, "domain_analysis_pct": 36.51, "unknown_legacy_pct": 62.35 },
+        { "days": 7, "production_only": true, "total": 3140, "excluded_non_production_source_count": 3139, "excluded_test_fixture_count": 6092, "domain_analysis_pct": 24.2, "unknown_legacy_pct": 73.89 }
+      ],
+      "post_deploy_only_spot_check": {
+        "window_start": "2026-07-01T18:16:00.000Z",
+        "by_source": {
+          "system-pick-scanner": { "total": 18, "unknown_legacy": 0 },
+          "alert-agent": { "total": 8, "unknown_legacy": 0 },
+          "model-driven": { "total": 7, "unknown_legacy": 0 },
+          "smart-form": { "total": 2, "unknown_legacy": 0 }
+        }
+      },
+      "conclusion": "No active domainAnalysis write/persistence bug. Remaining unknown-legacy in 7d/14d windows is pre-fix historical data (UTV2-1379 merged 2026-07-01T18:16:00.000Z, after which real-source unknown-legacy is 0%)."
+    }
+  },
+  "sha_binding": {
+    "verified_source_sha": "dd268370287b17b06f10e89d731c9e50a574dd9e",
+    "sha_type": "pre_merge_placeholder",
+    "bound_at": "2026-07-01T20:10:00.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "wfr_v2_validators": "pending"
+    }
+  }
+}

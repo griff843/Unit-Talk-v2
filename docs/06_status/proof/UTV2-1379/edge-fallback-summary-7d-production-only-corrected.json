@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1379",
+  "generated_at": "2026-07-01T20:03:18.717Z",
+  "evaluation_window": {
+    "from": "2026-06-24T20:03:18.717Z",
+    "to": "2026-07-01T20:03:18.717Z",
+    "days": 7
+  },
+  "production_only": true,
+  "excluded_non_production_count": 9231,
+  "excluded_non_production_source_count": 3139,
+  "excluded_test_fixture_count": 6092,
+  "total_picks_analyzed": 3140,
+  "fallback_category_counts": {
+    "domain-analysis": 760,
+    "confidence-delta": 0,
+    "no-confidence": 60,
+    "no-provider-offer": 0,
+    "no-market-key": 0,
+    "no-participant-scope": 0,
+    "computation-error": 0,
+    "unknown-legacy": 2320
+  },
+  "fallback_category_pct": {
+    "domain-analysis": 24.2,
+    "confidence-delta": 0,
+    "no-confidence": 1.91,
+    "no-provider-offer": 0,
+    "no-market-key": 0,
+    "no-participant-scope": 0,
+    "computation-error": 0,
+    "unknown-legacy": 73.89
+  },
+  "domain_analysis_rate_pct": 24.2,
+  "confidence_fallback_rate_pct": 75.8,
+  "by_source": {
+    "alert-agent": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 14,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 532
+    },
+    "board-construction": {
+      "domain-analysis": 121,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 0
+    },
+    "model-driven": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 13,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 521
+    },
+    "smart-form": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 4,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 215
+    },
+    "system-pick-scanner": {
+      "domain-analysis": 639,
+      "confidence-delta": 0,
+      "no-confidence": 29,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 1052
+    }
+  }
+}

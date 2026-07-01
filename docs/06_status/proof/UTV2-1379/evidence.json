@@ -26,7 +26,7 @@
       { "table": "settlement_records", "count": 1, "status": "healthy" }
     ],
     "live_fallback_measurement": {
-      "note": "PRE-DEPLOY baseline — none of this fix is live in production yet",
+      "note": "SUPERSEDED (2026-07-01, UTV2-1394) — the original PRE-DEPLOY windows below were contaminated by pnpm test:db proof fixtures (metadata.testRun) written under real production source values. See corrected_measurement for the fixed figures.",
       "windows": [
         { "days": 90, "production_only": false, "total": 55858, "domain_analysis_pct": 5.82, "unknown_legacy_pct": 87.3 },
         { "days": 14, "production_only": true, "total": 13795, "domain_analysis_pct": 14.92, "unknown_legacy_pct": 85.05 },
@@ -39,6 +39,25 @@
         "board-construction": "0%",
         "system-pick-scanner": "47.6-61.7%"
       }
+    },
+    "corrected_measurement": {
+      "note": "UTV2-1394: run-edge-fallback-report.ts's --production-only filter now also excludes metadata.testRun rows, not just non-production source values. There is no active domainAnalysis write/persistence gap — remaining unknown-legacy in these windows is pre-fix historical data (the UTV2-1379 fix merged 2026-07-01T18:16:00.000Z, so almost all of the 7d/14d windows predates it).",
+      "windows": [
+        { "days": 90, "production_only": false, "total": 56224, "domain_analysis_pct": 5.79, "unknown_legacy_pct": 87.17, "note": "unfiltered — matches original 90d baseline, testRun exclusion only applies in production-only mode" },
+        { "days": 14, "production_only": true, "total": 5232, "excluded_test_fixture_count": 8589, "excluded_non_production_source_count": 4053, "domain_analysis_pct": 36.51, "unknown_legacy_pct": 62.35 },
+        { "days": 7, "production_only": true, "total": 3140, "excluded_test_fixture_count": 6092, "excluded_non_production_source_count": 3139, "domain_analysis_pct": 24.2, "unknown_legacy_pct": 73.89 }
+      ],
+      "post_deploy_only_spot_check": {
+        "note": "Live SQL sample of picks created strictly after the UTV2-1379 merge SHA bind time (2026-07-01T18:16:00.000Z), testRun and non-production sources excluded — confirms the write path is clean once the fix is actually live.",
+        "window_start": "2026-07-01T18:16:00.000Z",
+        "by_source": {
+          "system-pick-scanner": { "total": 18, "unknown_legacy": 0 },
+          "alert-agent": { "total": 8, "unknown_legacy": 0 },
+          "model-driven": { "total": 7, "unknown_legacy": 0 },
+          "smart-form": { "total": 2, "unknown_legacy": 0 }
+        }
+      },
+      "conclusion": "No active domainAnalysis write/persistence bug exists. Remaining unknown-legacy in the 7d/14d corrected windows is fully explained by pre-fix historical data within those windows, not an ongoing gap. UTV2-1394 is scoped down to the measurement-tool fix only; UTV2-1379 can be unblocked."
     }
   },
   "sha_binding": {
