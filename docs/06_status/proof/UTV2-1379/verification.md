@@ -13,8 +13,8 @@ This file is the T1 verification record for UTV2-1379. **This is a partial fix, 
 | Owner | claude/utv2-1379 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1379-domain-analysis-population |
-| Commit SHA(s) | `ecc2acb71811f9afbb284b3b439c3b40e15ac2cf` (branch head; merge SHA bound post-merge) |
-| Related PRs | (filled on open) |
+| Commit SHA(s) | `f2de2430f9d6ea9ae6bbabc1d306df9f0894708d` (merge SHA) |
+| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1136 |
 | Blocking follow-up | UTV2-1394 — no-domainAnalysis write/persistence gap, must land before UTV2-1379 can be considered fully resolved |
 
 ## Scope
