@@ -24,8 +24,10 @@ This file is the T1 verification record for UTV2-1379. **This is a partial fix, 
 - `real-edge-service.ts`'s `computeRealEdge()` now classifies only what it can prove, fails closed on any exception (never propagates uncaught into a silent success), and confidence-delta results always report `hasRealEdge: false` (UTV2-985 hardening)
 - `domain-analysis-service.ts` records `fallbackReason: 'no-confidence'` when odds are valid but confidence is absent
 - `enrichPickAtPromotionTime()` (promotion-service.ts) fixes the UTV2-1327 no-op: now also fires when `domainAnalysis` exists but is confidence-only, attempting bounded market-backed recovery via the same provider-offer path used at submission time. Fails closed — never fabricates edge. Wired into the primary eager evaluation path.
-- `apps/smart-form`: conviction=10 no longer maps to confidence=1.0 (was silently skipping domainAnalysis entirely for max-conviction picks); capped at 0.99 with explicit `confidenceSource` provenance. `CLAUDE.md` corrected — smart-form's `capperConviction` has mapped to submission `confidence` since March 2026 (UTV2-255); a new confidence-input UI was correctly identified as redundant and NOT built.
 - `scripts/edge-fallback-report/`: new read-only measurement tool + tests
+
+**Moved to a separate PR (lane-authority boundary — `apps/smart-form/**` is not in the `runtime` lane's allowed paths):**
+- The conviction=10→confidence=1.0 fix and the `apps/smart-form/CLAUDE.md` correction. Investigation (smart-form's `capperConviction` mapping to `confidence` since March 2026, ruling out the originally-planned confidence-input UI as redundant) still holds and informed this lane's fixes — only the code change itself moved to a `delivery-ui` lane PR.
 
 **Does NOT claim (see UTV2-1394):**
 - Fixing why ~87-91% of picks have **no** `domainAnalysis` metadata at all (`unknown-legacy` category) — this is a separate, larger write/persistence gap discovered while re-measuring, confirmed active/ongoing (not historical) via 7-day and 14-day production-only windows. `smart-form` and `alert-agent` are ~100% unknown-legacy in every window measured; `board-construction` is a clean 0%.
@@ -46,7 +48,7 @@ This file is the T1 verification record for UTV2-1379. **This is a partial fix, 
 | 8 | `enrichPickAtPromotionTime` recovers real edge when provider context now exists | test | PASS |
 | 9 | `enrichPickAtPromotionTime` fails closed + refreshes fallbackReason when still no data | test | PASS |
 | 10 | Recovery does not run without `providerOffers` supplied (bounded, opt-in) | test | PASS |
-| 11 | conviction=10 maps to confidence=0.99, not 1.0; `confidenceSource` set | test | PASS |
+| 11 | (moved — conviction=10 fix now lives in a separate delivery-ui-lane PR) | n/a | n/a |
 | 12 | Existing golden-regression / promotion-edge-integration suites pass with updated (more specific) fallback reason expectations | test | PASS |
 | 13 | pnpm verify green (lint, type-check, build, full test suite, live-DB proof) | repo-truth | PASS |
 | 14 | R-level check PASS (lifecycle-fsm, promotion-scoring, operator-ui matched; R4 fault-report advisory/PM-gated per policy, not blocking) | repo-truth | PASS |

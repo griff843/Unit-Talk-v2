@@ -9,7 +9,7 @@
   "static_proof": {
     "pnpm_verify": "pass",
     "type_check": "pass",
-    "tests": "95 test-run blocks, 0 failures across the monorepo (pnpm test); promotion-edge-integration.test.ts 80/80, domain-analysis-service.test.ts 12/12, golden-regression.test.ts 5/5, t1-proof-utv2-1327 6/6, t1-proof-utv2-1380 98/98, smart-form form-utils.test.ts 29/29, edge-fallback-report.test.ts 5/5",
+    "tests": "111 tests, 0 failures across promotion-edge-integration.test.ts, domain-analysis-service.test.ts, golden-regression.test.ts, t1-proof-utv2-1327, t1-proof-utv2-1380, edge-fallback-report.test.ts (re-run after moving the smart-form conviction=10 fix to a separate PR)",
     "r_level_check": "pass — lifecycle-fsm, promotion-scoring, operator-ui matched; R4 fault-report advisory/PM-gated, not blocking"
   },
   "runtime_proof": {
@@ -42,7 +42,7 @@
     }
   },
   "sha_binding": {
-    "verified_source_sha": "11009e8c4d09f8c8a84e4784e261ed47cb602132",
+    "verified_source_sha": "b8701e96a91f0735c910294f7846263ad281f2cf",
     "sha_type": "branch_head",
     "bound_at": "2026-07-01T16:25:00.000Z",
     "ci_sentinels": {
