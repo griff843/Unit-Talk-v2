@@ -17,7 +17,7 @@ Re-scoped from a suspected write/persistence gap to a measurement-tool contamina
 | Owner | claude/utv2-1394 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1394-edge-fallback-report-testrun-fix |
-| Commit SHA(s) | `538007d899aa03ae1bcda301453d7066e4a069c9` (pre-merge; rebound to the real merge SHA post-merge by post-merge-lane-close.yml) |
+| Commit SHA(s) | `50217209ab98b2d64459e4701fb83d7cb2a86d47` (merge SHA) |
 | Related follow-up | UTV2-1396 — test-fixture-pollutes-production-source-metrics hygiene gap (backlog, not blocking) |
 
 ## Scope
@@ -109,9 +109,10 @@ Zero unknown-legacy across every real production source once the UTV2-1379 fix i
 ## Sign-off
 
 **Verifier:** claude/utv2-1394-edge-fallback-report-testrun-fix — 2026-07-01
-**PM acceptance:** pending
+**PM acceptance:** APPROVED — PM_VERDICT: APPROVED, t1-approved label applied, PR #1138
 **Status:** measurement-tool fix complete; UTV2-1379 unblocked
 
 ## Merge SHA Binding
 
-(Filled post-merge by post-merge-lane-close.yml)
+Merge SHA: `50217209ab98b2d64459e4701fb83d7cb2a86d47`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1138

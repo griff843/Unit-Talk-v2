@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "in_review",
+  "status": "merged",
   "re_scoped_from": "domainAnalysis write/persistence gap investigation",
   "re_scope_reason": "Live-DB investigation found no active write/persistence bug. The original 87.3%/85%/91% unknown-legacy figures were measurement contamination from pnpm test:db proof fixtures (metadata.testRun) written under real production source values.",
   "follow_up_issue": "UTV2-1396",
@@ -45,12 +45,12 @@
     }
   },
   "sha_binding": {
-    "verified_source_sha": "dd268370287b17b06f10e89d731c9e50a574dd9e",
-    "sha_type": "pre_merge_placeholder",
-    "bound_at": "2026-07-01T20:10:00.000Z",
+    "verified_source_sha": "50217209ab98b2d64459e4701fb83d7cb2a86d47",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-01T22:16:47.748Z",
     "ci_sentinels": {
-      "merge_gate": "pending",
-      "wfr_v2_validators": "pending"
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass"
     }
   }
 }
