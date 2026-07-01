@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1379",
+  "generated_at": "2026-07-01T16:20:26.954Z",
+  "evaluation_window": {
+    "from": "2026-06-17T16:20:26.954Z",
+    "to": "2026-07-01T16:20:26.954Z",
+    "days": 14
+  },
+  "production_only": true,
+  "excluded_non_production_count": 3969,
+  "total_picks_analyzed": 13795,
+  "fallback_category_counts": {
+    "domain-analysis": 2058,
+    "confidence-delta": 0,
+    "no-confidence": 5,
+    "no-provider-offer": 0,
+    "no-market-key": 0,
+    "no-participant-scope": 0,
+    "computation-error": 0,
+    "unknown-legacy": 11732
+  },
+  "fallback_category_pct": {
+    "domain-analysis": 14.92,
+    "confidence-delta": 0,
+    "no-confidence": 0.04,
+    "no-provider-offer": 0,
+    "no-market-key": 0,
+    "no-participant-scope": 0,
+    "computation-error": 0,
+    "unknown-legacy": 85.05
+  },
+  "domain_analysis_rate_pct": 14.92,
+  "confidence_fallback_rate_pct": 85.08,
+  "by_source": {
+    "alert-agent": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 1,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 745
+    },
+    "board-construction": {
+      "domain-analysis": 430,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 0
+    },
+    "model-driven": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 1,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 733
+    },
+    "smart-form": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 8777
+    },
+    "system-pick-scanner": {
+      "domain-analysis": 1628,
+      "confidence-delta": 0,
+      "no-confidence": 3,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 1477
+    }
+  }
+}

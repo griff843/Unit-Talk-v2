@@ -236,7 +236,9 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.75,
         hasRealEdge: false,
         realEdgeBookCount: 0,
-        edgeProvenance: { method: 'confidence-delta', providerCoverageState: 'none', fallbackReason: 'no-any-offer' },
+        // UTV2-1379: fallbackReason is now the specific, provable cause (no
+        // offer row found in any tier) rather than the old generic literal.
+        edgeProvenance: { method: 'confidence-delta', providerCoverageState: 'none', fallbackReason: 'no-provider-offer' },
         band: 'SUPPRESS',
         contrarySignal: {
           contrarianism: 'consensus-fade',

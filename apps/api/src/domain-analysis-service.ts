@@ -9,7 +9,7 @@
  * FAIL-OPEN: Returns null if odds are missing or invalid.
  */
 
-import type { CanonicalPick } from '@unit-talk/contracts';
+import type { CanonicalPick, EdgeFallbackReason } from '@unit-talk/contracts';
 import {
   americanToImplied,
   americanToDecimal,
@@ -59,6 +59,14 @@ export interface DomainAnalysis {
   hasRealEdge?: boolean | undefined;
   /** Number of books in consensus */
   realEdgeBookCount?: number | undefined;
+  /**
+   * UTV2-1379: why this pick could not receive market-backed real edge, when
+   * that's provable at submission time. Set to 'no-confidence' when odds are
+   * valid but no capper-provided confidence was submitted — distinguishable
+   * from a market-data-lookup fallback (which is recorded separately in
+   * edgeProvenance.fallbackReason once a real-edge attempt is made).
+   */
+  fallbackReason?: EdgeFallbackReason | undefined;
 }
 
 export const DOMAIN_ANALYSIS_VERSION = 'domain-analysis-v1.0.0';
@@ -118,6 +126,11 @@ export function computeSubmissionDomainAnalysis(
     if (kellyFraction > 0) {
       analysis.kellyFraction = kellyFraction;
     }
+  } else {
+    // UTV2-1379: odds are valid but no usable confidence was submitted.
+    // Classify explicitly rather than leaving this pick indistinguishable
+    // from a market-data-lookup fallback.
+    analysis.fallbackReason = 'no-confidence';
   }
 
   return analysis;

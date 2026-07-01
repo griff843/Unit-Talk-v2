@@ -36,12 +36,14 @@ import type {
   PickRecord,
   PickRepository,
   PromotionHistoryRecord,
+  ProviderOfferRepository,
   SettlementRepository,
 } from '@unit-talk/db';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 import {
   computeSubmissionDomainAnalysis,
   enrichMetadataWithDomainAnalysis,
+  type DomainAnalysis,
 } from './domain-analysis-service.js';
 
 const activeScoringProfile = resolveScoringProfile(process.env['UNIT_TALK_SCORING_PROFILE']);
@@ -105,22 +107,44 @@ export interface EagerPromotionAllPoliciesResult {
 }
 
 /**
- * Enrich a pick's metadata with domainAnalysis if it is missing at promotion time.
+ * Enrich a pick's metadata with domainAnalysis if it is missing at promotion time,
+ * and — UTV2-1379 — attempt bounded market-backed real-edge recovery when
+ * domainAnalysis exists but never received market data (the DEBT-019 fix
+ * shipped in UTV2-1327 was a no-op for this case: it only fires when
+ * domainAnalysis is entirely absent, which is virtually never true by
+ * promotion time, and even then only recomputes confidence-delta).
  *
  * DEBT-019/020: picks submitted before real-edge enrichment was fully wired, or picks
  * where market data was unavailable at submission, may lack domainAnalysis. Without it:
  * - edge score falls back to confidence-delta (DEBT-019, 35% weight)
  * - readiness score falls back to constant 60 (DEBT-020, 20% weight)
  *
+ * Recovery is bounded and fail-closed: it only runs when a `providerOffers`
+ * repository is supplied, requires confidence/odds/market/selection to already
+ * be present on the pick, uses the same provider-offer lookup path as
+ * submission time, and never fabricates market-backed edge on a lookup miss,
+ * timeout, or computation error — it leaves the pick as confidence-delta with
+ * an updated, honest fallback reason instead.
+ *
  * This enrichment is idempotent and operates on the in-memory pick. Promotion persistence
  * call sites include the returned metadata patch so the scoring inputs remain replayable.
  */
-export function enrichPickAtPromotionTime(pick: CanonicalPick): CanonicalPick {
+export async function enrichPickAtPromotionTime(
+  pick: CanonicalPick,
+  providerOffers?: ProviderOfferRepository,
+): Promise<CanonicalPick> {
   let metadata = pick.metadata;
-  if (metadata['domainAnalysis'] == null) {
+  const domainAnalysis = metadata['domainAnalysis'];
+
+  if (domainAnalysis == null) {
     const analysis = computeSubmissionDomainAnalysis(pick);
     if (analysis !== null) {
       metadata = enrichMetadataWithDomainAnalysis(metadata, analysis);
+    }
+  } else if (providerOffers && isRecord(domainAnalysis) && isConfidenceOnlyDomainAnalysis(domainAnalysis)) {
+    const recovered = await tryPromotionTimeRealEdgeRecovery(pick, domainAnalysis, providerOffers);
+    if (recovered) {
+      metadata = { ...metadata, domainAnalysis: recovered };
     }
   }
 
@@ -132,6 +156,81 @@ export function enrichPickAtPromotionTime(pick: CanonicalPick): CanonicalPick {
   }
 
   return metadata === pick.metadata ? pick : { ...pick, metadata };
+}
+
+/**
+ * True when domainAnalysis exists but has no finite market-backed realEdge —
+ * the exact condition that made the UTV2-1327 enrichment a no-op, since it
+ * only checked for domainAnalysis being entirely absent.
+ */
+function isConfidenceOnlyDomainAnalysis(domainAnalysis: Record<string, unknown>): boolean {
+  const realEdge = domainAnalysis['realEdge'];
+  return !(typeof realEdge === 'number' && Number.isFinite(realEdge));
+}
+
+/**
+ * UTV2-1379: bounded promotion-time market-backed edge recovery.
+ *
+ * Uses the same computeRealEdge() path as submission time. No retries, no
+ * external network calls, no fanout beyond the existing fixed 4-book
+ * consensus tier already used at submission. Fails closed on any lookup
+ * miss, timeout, or computation error — returns an updated domainAnalysis
+ * with a refreshed, honest fallbackReason rather than fabricating edge.
+ */
+async function tryPromotionTimeRealEdgeRecovery(
+  pick: CanonicalPick,
+  domainAnalysis: Record<string, unknown>,
+  providerOffers: ProviderOfferRepository,
+): Promise<DomainAnalysis | null> {
+  if (
+    pick.confidence == null ||
+    pick.confidence <= 0 ||
+    pick.confidence >= 1 ||
+    pick.odds == null ||
+    !pick.market ||
+    !pick.selection
+  ) {
+    // Bounded: without confidence/odds/market/selection there is nothing to
+    // recover against. Leave domainAnalysis untouched.
+    return null;
+  }
+
+  let realEdgeResult;
+  try {
+    const { computeRealEdge } = await import('./real-edge-service.js');
+    realEdgeResult = await computeRealEdge({
+      confidence: pick.confidence,
+      marketKey: pick.market,
+      selection: pick.selection,
+      submittedOdds: pick.odds,
+      providerOffers,
+    });
+  } catch {
+    // UTV2-1379: fail closed — do not let an exception escape into a silent
+    // success further up the promotion path. Leave domainAnalysis with a
+    // computation-error fallback reason.
+    return { ...(domainAnalysis as unknown as DomainAnalysis), fallbackReason: 'computation-error' };
+  }
+
+  if (realEdgeResult.marketSource === 'confidence-delta') {
+    // No usable market data found on this attempt either. Refresh the
+    // fallback reason so it reflects the latest, most specific cause.
+    return {
+      ...(domainAnalysis as unknown as DomainAnalysis),
+      fallbackReason: realEdgeResult.provenance.fallbackReason ?? 'no-provider-offer',
+    };
+  }
+
+  // Recovery succeeded: real market-backed edge is now available.
+  return {
+    ...(domainAnalysis as unknown as DomainAnalysis),
+    realEdge: realEdgeResult.realEdge,
+    realEdgeSource: realEdgeResult.marketSource,
+    marketProbability: realEdgeResult.marketProbability,
+    hasRealEdge: realEdgeResult.hasRealEdge,
+    realEdgeBookCount: realEdgeResult.bookCount,
+    fallbackReason: undefined,
+  };
 }
 
 function computePromotionKellySizing(
@@ -210,6 +309,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
   auditLogRepository: AuditLogRepository,
   settlementRepository?: SettlementRepository,
   marketUniverseRepository?: IMarketUniverseRepository,
+  providerOffers?: ProviderOfferRepository,
 ): Promise<EagerPromotionAllPoliciesResult> {
   const pickRecord = await pickRepository.findPickById(pickId);
   if (!pickRecord) {
@@ -218,7 +318,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
 
   const canonicalPick = mapPickRecordToCanonicalPick(pickRecord);
   // DEBT-019/020: enrich domainAnalysis and kellySizing if missing.
-  const scoringPick = enrichPickAtPromotionTime(canonicalPick);
+  // UTV2-1379: also attempts bounded market-backed recovery when providerOffers is supplied.
+  const scoringPick = await enrichPickAtPromotionTime(canonicalPick, providerOffers);
 
   // UTV2-775: Staleness gate — block promotion when universe data is stale at approval time.
   // Contract: §10 of T2_STALE_DATA_BEHAVIOR_CONTRACT.md
@@ -944,6 +1045,10 @@ async function persistPromotionDecisionForPick(
       }
     | undefined,
   settlementRepository?: SettlementRepository,
+  // UTV2-1379: not yet threaded from any caller of this path (run-audit-service.ts
+  // re-promotion flow) — bounded scope for this lane. Recovery only runs on the
+  // primary eager evaluation path (evaluateAllPoliciesEagerAndPersist).
+  providerOffers?: ProviderOfferRepository,
 ): Promise<PromotionEvaluationResult> {
   const pickRecord = await pickRepository.findPickById(pickId);
   if (!pickRecord) {
@@ -962,7 +1067,7 @@ async function persistPromotionDecisionForPick(
   const openPickRecords = await pickRepository.listByLifecycleStates(['validated', 'queued', 'posted'], 300);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
   // DEBT-019/020: enrich domainAnalysis if missing — populates edge + kellyFraction signals.
-  const scoringPick = enrichPickAtPromotionTime(canonicalPick);
+  const scoringPick = await enrichPickAtPromotionTime(canonicalPick, providerOffers);
   const scoreInputs = await readPromotionScoreInputs(
     scoringPick,
     openPicks,
