@@ -13,7 +13,7 @@ This file is the T3 verification record for UTV2-1392.
 | Owner | claude/utv2-1392 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1392-proof-generate-sha-rebind |
-| Commit SHA(s) | (filled post-merge by post-merge-lane-close.yml) |
+| Commit SHA(s) | `b23fd3bd77d00a33589aa0061f4839553bf328d8` (pre-merge; rebound to the real merge SHA post-merge by this very fix) |
 
 ## Scope
 
