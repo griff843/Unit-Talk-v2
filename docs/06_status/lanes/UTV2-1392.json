@@ -17,14 +17,28 @@
     "scripts/ops/proof-generate.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-01T22:41:06.552Z",
-  "heartbeat_at": "2026-07-01T22:41:06.552Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-01T23:19:20.691Z",
+  "closed_at": "2026-07-01T23:19:20.691Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1392-proof-generate-sha-rebind.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-01T23:19:17.860Z",
+      "verdict": "pass",
+      "merge_sha": "6a1c326d02780020e6e9a1fc97b62683d0dcc230",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1139",
+      "repaired_fields": [
+        "status",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
