@@ -7,8 +7,8 @@
   "static_proof": {
     "pnpm_verify": "pass",
     "type_check": "pass",
-    "tests": "pending — populated after implementation",
-    "r_level_check": "pending"
+    "tests": "governance-doc lane, no code paths changed; existing suites pass under pnpm verify",
+    "r_level_check": "pass — no R-level artifacts required for this diff (0 rules matched)"
   },
   "runtime_proof": {
     "pnpm_test_db": "pass",
@@ -25,9 +25,9 @@
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "d18ea8531e5a9a1a11f637f084983c6e14e791ba",
+    "verified_source_sha": "7596ae2f1dedc1f91d2a47dfb0106563fb685ad2",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-01T12:21:00.000Z",
+    "bound_at": "2026-07-01T12:40:00.000Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "wfr_v2_validators": "pending"
