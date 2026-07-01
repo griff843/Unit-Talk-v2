@@ -1,5 +1,7 @@
 # UTV2-1395 Diff Summary
 
+Merge SHA: `37c1959113ff6319e47c67a770a200944f83a51f`
+
 ## Summary
 
 Small follow-on fix split out of the domainAnalysis/confidence-delta fallback investigation, moved to a `delivery-ui` lane because it touches `apps/smart-form/**`.

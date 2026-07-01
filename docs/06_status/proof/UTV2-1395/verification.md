@@ -57,7 +57,11 @@ All 29 tests pass, including the new conviction=10 test and the pre-existing con
 
 ### E5 pnpm verify
 
-Full pipeline green: env:check, lint, type-check, build, `pnpm test`.
+Full pipeline green: env:check, lint, `pnpm type-check`, build, `pnpm test`.
+
+### E5b R-level check
+
+`scripts/ci/r-level-check.ts` was run against this diff. This lane touches only `apps/smart-form/**` display/payload-mapping code (no lifecycle-fsm, promotion-scoring, or operator-ui rule paths), so it matched no R-level rule and required no R-artifact.
 
 ### E6 pnpm test:db
 
