@@ -105,7 +105,7 @@ By-source unknown-legacy rate is stable across the 7d/14d windows: `smart-form` 
 
 Live-DB investigation (not static code review) for UTV2-1394 found that `pnpm test:db` / T1 proof suites write real fixture rows into production `picks`, tagged `metadata.testRun`, under real production `source` values (mostly `smart-form`). `run-edge-fallback-report.ts`'s `--production-only` filter only excluded by `source` string, so every testRun row above was counted as an unenriched real pick. UTV2-1394 fixed the filter to also exclude `metadata.testRun` rows.
 
-Corrected snapshots: `corrected-2026-07-01/edge-fallback-summary-{90d-unfiltered,14d-production-only-corrected,7d-production-only-corrected}.json` (+ matching `-by-source` CSVs).
+Corrected snapshots: `edge-fallback-summary-{90d-unfiltered-corrected,14d-production-only-corrected,7d-production-only-corrected}.json` (+ matching `-by-source` CSVs), in this same directory.
 
 | Window | Total analyzed | Excluded (source) | Excluded (testRun) | domain-analysis | unknown-legacy |
 |---|---|---|---|---|---|

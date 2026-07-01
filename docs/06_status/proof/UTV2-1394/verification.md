@@ -17,7 +17,7 @@ Re-scoped from a suspected write/persistence gap to a measurement-tool contamina
 | Owner | claude/utv2-1394 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1394-edge-fallback-report-testrun-fix |
-| Commit SHA(s) | (filled post-merge by post-merge-lane-close.yml) |
+| Commit SHA(s) | `538007d899aa03ae1bcda301453d7066e4a069c9` (pre-merge; rebound to the real merge SHA post-merge by post-merge-lane-close.yml) |
 | Related follow-up | UTV2-1396 — test-fixture-pollutes-production-source-metrics hygiene gap (backlog, not blocking) |
 
 ## Scope
@@ -79,7 +79,7 @@ Consistent with a measurement-tool-only change touching no lifecycle-fsm/promoti
 
 ### E4 Corrected fallback measurement (live Supabase, testRun excluded)
 
-Snapshots in `docs/06_status/proof/UTV2-1379/corrected-2026-07-01/`.
+Snapshots in `docs/06_status/proof/UTV2-1379/` (files with the `-corrected` suffix).
 
 | Window | Total analyzed | Excluded (source) | Excluded (testRun) | domain-analysis | unknown-legacy |
 |---|---|---|---|---|---|
