@@ -119,6 +119,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Done-gate (`ops:truth-check`) | `docs/05_operations/TRUTH_CHECK_SPEC.md` |
 | Lane manifest schema + lifecycle | `docs/05_operations/LANE_MANIFEST_SPEC.md` |
 | Delegation policy (tiers, reshaping) | `docs/05_operations/DELEGATION_POLICY.md` |
+| Sonnet-5-era operating model (Outcome Contracts, PM gates, runtime validation by tier, cutover) | `docs/05_operations/OPERATING_MODEL_SONNET5.md` |
 | Evidence bundle template | `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
 | Program status | `docs/06_status/PROGRAM_STATUS.md` |

@@ -161,11 +161,13 @@ For each validated target:
 
 **T1 lanes — mandatory planning phase before execution:**
 
-Spawn a planning subagent before touching any code. Use `model: "opus"` (Opus 4.8) for standard T1 work. Escalate to `model: "fable"` when the issue involves novel architecture, constitutional/governance scope, or scope ambiguity that three-brain flagged.
+Spawn a planning subagent before touching any code. Use `model: "sonnet"` (Sonnet 5) for all T1 work — standard and novel/constitutional/governance scope alike. There is no higher planning-model tier: genuinely novel architecture, constitutional scope, or unresolved scope ambiguity is a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+
+The plan this subagent produces is an **Outcome Contract** — a planning artifact only. It does not replace the lane manifest, `file_scope_lock`, `expected_proof_paths`, R-level checks, or PM merge gates. Its "Scope" and proof-relevant sections must generate-or-match the lane manifest's `file_scope_lock`/`expected_proof_paths` at lane-start time. Any divergence discovered later (e.g. the PR touches files outside the declared scope) is itself a Rule 9 escalation trigger — do not silently patch the manifest and continue.
 
 ```typescript
 Agent({
-  model: "opus",   // use "fable" for novel/constitutional/ambiguous-scope T1
+  model: "sonnet",
   description: `T1 planning: ${issue_id}`,
   prompt: `You are planning a T1 lane before implementation begins. Do not write code.
 
@@ -179,38 +181,50 @@ Read these files for context (use Read/Grep — do not edit anything):
 - The specific files named in the issue description
 - Any domain invariant files touched by this change
 
-Return a structured plan with these sections:
-## Scope
-Exact files to create or modify (absolute paths). Flag any Tier C sensitive paths.
-
+Return an Outcome Contract with these sections:
+## Issue
+## Objective
+## Why this matters
+## Success criteria
+## Forbidden actions
+## Likely touched areas
+Exact files to create or modify (absolute paths). Flag any Tier C sensitive paths. This section seeds file_scope_lock.
+## PM gates required
+Check against the full three-brain.md Rule 9 list — do not narrow it. State explicitly which triggers fire, or "none" if genuinely none apply.
+## Required proof
+This section seeds expected_proof_paths.
+## Runtime validation
+Required if runtime/product behavior is affected; state explicitly if N/A for this lane.
+## Stop conditions
+## Recommended executor
 ## Invariants at risk
 Which of the 11 core invariants (CLAUDE.md) this change touches, and how.
+
+Do not ask PM to choose implementation details unless: multiple valid architecture paths exist, the change involves a DB mutation/migration, public/member-facing delivery, settlement/CLV truth risk, governance-brake release, or Tier C implications. For anything else, decide and note the decision in "Implementation approach" below.
 
 ## Implementation approach
 Step-by-step sequence. Smallest safe diff first.
 
 ## Risk flags
-Anything that warrants Griff review beyond the standard T1 gate.
-
-## Fable 5 warranted?
-YES or NO — justify if YES (novel architecture, unresolved scope ambiguity, multi-domain cascade).`
+Anything that warrants Griff review beyond the standard T1 gate.`
 })
 ```
 
-Block on the planning result. If the plan returns `Fable 5 warranted: YES` and you used Opus 4.8, re-spawn the plan with `model: "fable"` before proceeding.
+Block on the planning result.
 
 **Deliver the plan to Linear for async PM review (mandatory for all T1):**
-After the planning subagent returns, immediately post the plan as a Linear comment so Griff can review asynchronously without being in the same session:
+After the planning subagent returns, immediately post the Outcome Contract as a Linear comment so Griff can review asynchronously without being in the same session:
 ```
 mcp__claude_ai_Linear__save_comment({
   issueId: "<issue_id>",
-  body: "## T1 Plan — awaiting PM approval\n\n<paste full planning subagent output here>\n\n---\nPlanning model: opus (or fable)\nStatus: awaiting Griff review before implementation begins."
+  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: sonnet\nStatus: awaiting Griff review before implementation begins."
 })
 ```
 Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
 
 - Execute the work directly in this conversation from the dedicated lane worktree reported by `ops:lane-start`
 - Follow the acceptance criteria from the issue description and the planning subagent's scope + approach
+- Before opening the PR, run local preflight (see `docs/05_operations/OPERATING_MODEL_SONNET5.md`) so CI confirms readiness rather than discovers gaps
 - Run `pnpm verify` after implementation
 
 **T2/T3 Claude lanes:** No planning subagent. Execute directly.
@@ -353,6 +367,10 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 - **Fail closed.** If any prerequisite is unclear, skip the issue and report why.
 - **Commit message must include issue ID.** Format: `feat|fix|chore(scope): UTV2-### description`
 - **PR must include close marker.** Body or title must contain `Closes UTV2-###` for auto-close chain.
+- **CI should confirm, not discover.** Run local preflight before opening a PR — see `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+- **Runtime validation is tier-scoped, not universal.** T1: required when runtime/product behavior is affected. T2: issue-specific/conditional. T3: N/A unless the issue says otherwise.
+- **Outcome Contracts are planning artifacts only.** They never replace the lane manifest, `file_scope_lock`, `expected_proof_paths`, R-level checks, or PM gates.
+- **Governance cutover is forward-only.** The Outcome Contract / preflight / Rule-9-restated model in this file applies only to lanes opened after `UTV2-WORKFLOW-RESET` merged to main — it does not retroactively apply to lanes already open at that time.
 
 ---
 
