@@ -28,14 +28,28 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1394/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-01T19:56:00.495Z",
-  "heartbeat_at": "2026-07-01T19:56:00.495Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-01T22:18:06.964Z",
+  "closed_at": "2026-07-01T22:18:06.964Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1394-edge-fallback-report-testrun-fix.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-01T22:18:01.353Z",
+      "verdict": "pass",
+      "merge_sha": "50217209ab98b2d64459e4701fb83d7cb2a86d47",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1138",
+      "repaired_fields": [
+        "status",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
