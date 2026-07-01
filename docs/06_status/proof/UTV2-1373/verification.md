@@ -15,7 +15,7 @@ See sections below for metadata, assertions, and evidence.
 | Owner | claude/utv2-1373 |
 | Date | 2026-06-30 |
 | Verifier Identity | claude/utv2-1373-mlb-participant-upsert-timeout |
-| Commit SHA(s) | (pre-merge — filled post-merge by post-merge-lane-close.yml) |
+| Commit SHA(s) | `1751386fe664a5522619c3253abb7392495cf393` (branch HEAD; merge SHA bound post-merge) |
 | Related PRs | (PR URL filled on open) |
 
 ## Scope
