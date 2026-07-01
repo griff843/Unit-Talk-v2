@@ -300,16 +300,6 @@ export function buildSubmissionPayload(
   const selection = buildSelectionString(values);
   const trustScore = values.capperConviction * 10;
 
-  // UTV2-1379: capperConviction=10 maps to confidence=1.0 exactly, which fails
-  // the strict confidence<1 guard downstream (domain-analysis-service.ts,
-  // submission-service.ts) and silently skips domainAnalysis entirely for
-  // max-conviction picks. Cap at 0.99 — the capper's displayed conviction
-  // stays 10/10 (capperConviction field, unchanged); only the internal
-  // probability-like confidence value is capped below 1.0. No fake certainty:
-  // 0.99 is still an honest "very high but not absolute" probability, not a
-  // rounding trick.
-  const confidence = values.capperConviction >= 10 ? 0.99 : values.capperConviction / 10;
-
   const manualOverrideFields = context.manualOverrideFields ?? [];
   return {
     source: 'smart-form',
@@ -319,7 +309,7 @@ export function buildSubmissionPayload(
     line: values.line,
     odds: values.odds,
     stakeUnits: values.units,
-    confidence,
+    confidence: values.capperConviction / 10,
     eventName: values.eventName,
     metadata: {
       ticketType: 'single',
@@ -352,10 +342,6 @@ export function buildSubmissionPayload(
           }
         : null,
       capperConviction: values.capperConviction,
-      // UTV2-1379: explicit provenance — this confidence value is a linear
-      // mapping of the capper's self-reported conviction (1-10), not a
-      // market-derived or implicitly-inferred value.
-      confidenceSource: 'capper-conviction',
       promotionScores: {
         trust: trustScore,
       },
