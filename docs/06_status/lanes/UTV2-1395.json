@@ -19,10 +19,10 @@
     "docs/06_status/proof/UTV2-1395/diff-summary.md",
     "docs/06_status/proof/UTV2-1395/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-01T16:56:05.670Z",
-  "heartbeat_at": "2026-07-01T18:36:54.557Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-01T18:40:56.887Z",
+  "closed_at": "2026-07-01T18:40:56.887Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1395-smart-form-conviction-cap.json",
   "created_by": "claude",
@@ -51,6 +51,18 @@
         "P14"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-01T18:40:54.084Z",
+      "verdict": "pass",
+      "merge_sha": "37c1959113ff6319e47c67a770a200944f83a51f",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1137",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
