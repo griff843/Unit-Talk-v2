@@ -294,12 +294,15 @@ export async function processSubmission(
         realEdge: confidenceDelta,
         realEdgeSource: 'confidence-delta',
         marketProbability: americanToImplied(materialized.pick.odds),
-        hasRealEdge: confidenceDelta > 0,
+        // UTV2-985/UTV2-1379: confidence-delta must never report positive edge.
+        hasRealEdge: false,
         realEdgeBookCount: 0,
         edgeProvenance: {
           method: 'confidence-delta',
           providerCoverageState: 'none',
-          fallbackReason: 'not-applicable',
+          // UTV2-1379: computeRealEdge() itself threw or was unreachable — this
+          // is a computation error, distinguishable from a provable no-offer miss.
+          fallbackReason: 'computation-error',
         },
         realEdgeFailure: {
           stage: 'computeRealEdge',
@@ -421,6 +424,8 @@ export async function processSubmission(
       repositories.picks,
       repositories.audit,
       repositories.settlements,
+      undefined,
+      repositories.providerOffers,
     );
   } catch (err) {
     submissionServiceLogger.error('promotion-eval-failed', {

@@ -72,7 +72,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 
 test(
   'UTV2-1380: enrichPickAtPromotionTime produces kellySizing from market-backed realEdge + marketProbability',
-  () => {
+  async () => {
     const pick = makeBasePick(
       {
         domainAnalysis: {
@@ -85,7 +85,7 @@ test(
       -120,
     )
 
-    const enriched = enrichPickAtPromotionTime(pick)
+    const enriched = await enrichPickAtPromotionTime(pick)
 
     assert.ok(
       isRecord(enriched.metadata['kellySizing']),
@@ -114,7 +114,7 @@ test(
 
 test(
   'UTV2-1380: kellySizing absent on base pick → enriched scoring pick carries it, so metadataPatch includes it',
-  () => {
+  async () => {
     const basePick = makeBasePick(
       {
         domainAnalysis: {
@@ -133,7 +133,7 @@ test(
       'base pick must start with no kellySizing',
     )
 
-    const scoringPick = enrichPickAtPromotionTime(basePick)
+    const scoringPick = await enrichPickAtPromotionTime(basePick)
 
     assert.ok(
       isRecord(scoringPick.metadata['kellySizing']),
@@ -152,7 +152,7 @@ test(
 
 test(
   'UTV2-1380: confidence-delta realEdgeSource → no kellySizing (fail-closed)',
-  () => {
+  async () => {
     const pick = makeBasePick(
       {
         domainAnalysis: {
@@ -165,7 +165,7 @@ test(
       -110,
     )
 
-    const enriched = enrichPickAtPromotionTime(pick)
+    const enriched = await enrichPickAtPromotionTime(pick)
 
     assert.equal(
       enriched.metadata['kellySizing'],
@@ -179,7 +179,7 @@ test(
 
 test(
   'UTV2-1380: missing odds → no kellySizing (fail-closed)',
-  () => {
+  async () => {
     const pick = makeBasePick(
       {
         domainAnalysis: {
@@ -192,7 +192,7 @@ test(
       // odds omitted
     )
 
-    const enriched = enrichPickAtPromotionTime(pick)
+    const enriched = await enrichPickAtPromotionTime(pick)
 
     assert.equal(
       enriched.metadata['kellySizing'],
@@ -206,7 +206,7 @@ test(
 
 test(
   'UTV2-1380: missing marketProbability → no kellySizing (fail-closed)',
-  () => {
+  async () => {
     const pick = makeBasePick(
       {
         domainAnalysis: {
@@ -219,7 +219,7 @@ test(
       -120,
     )
 
-    const enriched = enrichPickAtPromotionTime(pick)
+    const enriched = await enrichPickAtPromotionTime(pick)
 
     assert.equal(
       enriched.metadata['kellySizing'],
@@ -233,7 +233,7 @@ test(
 
 test(
   'UTV2-1380: existing metadata.kellySizing is not overwritten by enrichPickAtPromotionTime',
-  () => {
+  async () => {
     const existingKelly = {
       fractional_kelly: 0.04,
       recommended_units: 0.4,
@@ -257,7 +257,7 @@ test(
       -120,
     )
 
-    const enriched = enrichPickAtPromotionTime(pick)
+    const enriched = await enrichPickAtPromotionTime(pick)
 
     assert.deepEqual(
       enriched.metadata['kellySizing'],
@@ -277,7 +277,7 @@ test(
 
 test(
   'UTV2-1380: missing realEdge in domainAnalysis → no kellySizing (fail-closed)',
-  () => {
+  async () => {
     const pick = makeBasePick(
       {
         domainAnalysis: {
@@ -290,7 +290,7 @@ test(
       -120,
     )
 
-    const enriched = enrichPickAtPromotionTime(pick)
+    const enriched = await enrichPickAtPromotionTime(pick)
 
     assert.equal(
       enriched.metadata['kellySizing'],
@@ -371,7 +371,7 @@ test(
         }
 
         // Must not throw on real production pick shapes
-        const enriched = enrichPickAtPromotionTime(fakePick)
+        const enriched = await enrichPickAtPromotionTime(fakePick)
         assert.ok(isRecord(enriched.metadata), 'enrichPickAtPromotionTime must return a metadata record')
         enrichmentRan++
       }

@@ -43,6 +43,16 @@ test('computeSubmissionDomainAnalysis computes implied probability for -115 odds
   assert.equal(result.computedAt, '2026-03-21T12:00:00.000Z');
   assert.equal(result.edge, undefined);
   assert.equal(result.kellyFraction, undefined);
+  // UTV2-1379: odds valid, confidence absent — must be explicitly classified,
+  // not left indistinguishable from a market-data-lookup fallback.
+  assert.equal(result.fallbackReason, 'no-confidence');
+});
+
+test('UTV2-1379: computeSubmissionDomainAnalysis does not set fallbackReason when confidence is present', () => {
+  const pick = makePick({ odds: -115, confidence: 0.6 });
+  const result = computeSubmissionDomainAnalysis(pick);
+  assert.ok(result !== null);
+  assert.equal(result.fallbackReason, undefined, 'fallbackReason is only for the no-confidence case');
 });
 
 test('computeSubmissionDomainAnalysis computes implied probability for +150 odds', () => {

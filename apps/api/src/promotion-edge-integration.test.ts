@@ -1039,7 +1039,144 @@ test('computeRealEdge returns provenance with method and providerCoverageState',
   assert.equal(result.marketSource, 'confidence-delta', 'no offers → confidence-delta');
   assert.equal(result.provenance.method, 'confidence-delta', 'provenance.method must match');
   assert.equal(result.provenance.providerCoverageState, 'none', 'no market data → none');
-  assert.equal(result.provenance.fallbackReason, 'no-any-offer', 'fallbackReason must be set');
+  // UTV2-1379: fallbackReason is now the specific, provable cause (no offer
+  // row found in any tier) rather than the old generic hardcoded literal.
+  assert.equal(result.provenance.fallbackReason, 'no-provider-offer', 'fallbackReason must be set');
+});
+
+// ── UTV2-1379: distinguishable fallback taxonomy ────────────────────────────
+
+test('computeRealEdge: empty marketKey classifies as no-market-key without attempting any tier', async () => {
+  const { computeRealEdge } = await import('./real-edge-service.js');
+  const repos = createInMemoryRepositoryBundle();
+
+  const result = await computeRealEdge({
+    confidence: 0.6,
+    marketKey: '',
+    selection: 'Over',
+    submittedOdds: -110,
+    providerOffers: repos.providerOffers,
+  });
+
+  assert.equal(result.marketSource, 'confidence-delta');
+  assert.equal(result.provenance.fallbackReason, 'no-market-key');
+  assert.equal(result.hasRealEdge, false, 'confidence-delta must never report positive edge (UTV2-985)');
+});
+
+test('computeRealEdge: moneyline with empty selection classifies as no-participant-scope', async () => {
+  const { computeRealEdge } = await import('./real-edge-service.js');
+  const repos = createInMemoryRepositoryBundle();
+
+  const result = await computeRealEdge({
+    confidence: 0.6,
+    marketKey: 'moneyline',
+    selection: '   ',
+    submittedOdds: -110,
+    providerOffers: repos.providerOffers,
+  });
+
+  assert.equal(result.marketSource, 'confidence-delta');
+  assert.equal(result.provenance.fallbackReason, 'no-participant-scope');
+});
+
+test('computeRealEdge: a thrown exception classifies as computation-error, not a silent success', async () => {
+  const { computeRealEdge } = await import('./real-edge-service.js');
+  const throwingProviderOffers = {
+    resolveProviderMarketKey: async () => {
+      throw new Error('simulated DB failure');
+    },
+    findLatestByMarketKey: async () => null,
+  } as unknown as import('@unit-talk/db').ProviderOfferRepository;
+
+  const result = await computeRealEdge({
+    confidence: 0.6,
+    marketKey: 'player-points-ou',
+    selection: 'Over',
+    submittedOdds: -110,
+    providerOffers: throwingProviderOffers,
+  });
+
+  assert.equal(result.marketSource, 'confidence-delta', 'must fail closed to confidence-delta, never crash upward');
+  assert.equal(result.provenance.fallbackReason, 'computation-error');
+  assert.equal(result.hasRealEdge, false);
+});
+
+test('enrichPickAtPromotionTime: bounded recovery upgrades confidence-only domainAnalysis when provider context exists', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const now = new Date().toISOString();
+  await repos.providerOffers.upsertBatch([{
+    providerKey: 'sgo',
+    providerMarketKey: 'player-points-ou',
+    providerEventId: 'test-event-1379',
+    providerParticipantId: null,
+    sportKey: 'NBA',
+    line: null,
+    overOdds: -110,
+    underOdds: -110,
+    devigMode: 'PAIRED' as const,
+    isOpening: false,
+    isClosing: false,
+    snapshotAt: now,
+    idempotencyKey: `sgo:player-points-ou:test-event-1379:${now}`,
+    bookmakerKey: null,
+  }]);
+
+  const pick = {
+    id: 'pick-recovery',
+    market: 'player-points-ou',
+    selection: 'Over',
+    odds: -110,
+    confidence: 0.6,
+    metadata: {
+      // Confidence-only domainAnalysis, exactly the DEBT-019 no-op condition:
+      // present but never received market-backed real edge.
+      domainAnalysis: { edge: 0.1, confidenceDelta: 0.1 },
+    },
+  } as unknown as import('@unit-talk/contracts').CanonicalPick;
+
+  const enriched = await enrichPickAtPromotionTime(pick, repos.providerOffers);
+  const domainAnalysis = enriched.metadata['domainAnalysis'] as Record<string, unknown>;
+  assert.ok(
+    typeof domainAnalysis['realEdge'] === 'number' && Number.isFinite(domainAnalysis['realEdge']),
+    'recovery must populate a finite realEdge when provider context now exists',
+  );
+  assert.notEqual(domainAnalysis['realEdgeSource'], 'confidence-delta', 'recovered edge must be market-backed');
+});
+
+test('enrichPickAtPromotionTime: recovery fails closed and refreshes fallbackReason when still no provider data', async () => {
+  const repos = createInMemoryRepositoryBundle();
+
+  const pick = {
+    id: 'pick-no-recovery',
+    market: 'player-points-ou',
+    selection: 'Over',
+    odds: -110,
+    confidence: 0.6,
+    metadata: {
+      domainAnalysis: { edge: 0.1, confidenceDelta: 0.1 },
+    },
+  } as unknown as import('@unit-talk/contracts').CanonicalPick;
+
+  const enriched = await enrichPickAtPromotionTime(pick, repos.providerOffers);
+  const domainAnalysis = enriched.metadata['domainAnalysis'] as Record<string, unknown>;
+  assert.equal(domainAnalysis['realEdge'], undefined, 'must not fabricate market-backed edge with no provider data');
+  assert.equal(domainAnalysis['fallbackReason'], 'no-provider-offer', 'fallback reason must reflect this attempt');
+});
+
+test('enrichPickAtPromotionTime: recovery does not run without a providerOffers repository (bounded, opt-in)', async () => {
+  const pick = {
+    id: 'pick-no-providerOffers-arg',
+    market: 'player-points-ou',
+    selection: 'Over',
+    odds: -110,
+    confidence: 0.6,
+    metadata: {
+      domainAnalysis: { edge: 0.1, confidenceDelta: 0.1 },
+    },
+  } as unknown as import('@unit-talk/contracts').CanonicalPick;
+
+  const enriched = await enrichPickAtPromotionTime(pick);
+  assert.strictEqual(enriched, pick, 'no providerOffers supplied → no recovery attempt → same pick reference');
 });
 
 // ── Unit tests for readKellyGradientReadiness (UTV2-986 Kelly primary path) ──
@@ -1334,7 +1471,7 @@ test('UTV2-1204: favorable lineMovement raises edge (model blend) but leaves ris
 
 // ── UTV2-1327: enrichPickAtPromotionTime — DEBT-019 / DEBT-020 fix ───────────
 
-test('UTV2-1327: enrichPickAtPromotionTime is a no-op when domainAnalysis is already present', () => {
+test('UTV2-1327: enrichPickAtPromotionTime is a no-op when domainAnalysis is already present', async () => {
   const pick = {
     id: 'test-pick-1',
     odds: -110,
@@ -1347,16 +1484,17 @@ test('UTV2-1327: enrichPickAtPromotionTime is a no-op when domainAnalysis is alr
         decimalOdds: 1.909,
         version: 'domain-analysis-v1.0.0',
         computedAt: '2026-01-01T00:00:00Z',
+        realEdge: 0.05,
       },
     },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const result = enrichPickAtPromotionTime(pick);
+  const result = await enrichPickAtPromotionTime(pick);
   assert.equal(result, pick, 'must return same pick object when domainAnalysis is present');
   assert.deepEqual(result.metadata['domainAnalysis'], pick.metadata['domainAnalysis']);
 });
 
-test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge when missing (DEBT-019)', () => {
+test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge when missing (DEBT-019)', async () => {
   // Before fix: edge score fell back to confidence-delta (92.4% fallback rate in prod)
   const pick = {
     id: 'test-pick-2',
@@ -1365,14 +1503,14 @@ test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge when mi
     metadata: { sport: 'NBA' },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const result = enrichPickAtPromotionTime(pick);
+  const result = await enrichPickAtPromotionTime(pick);
   const domainAnalysis = result.metadata['domainAnalysis'] as Record<string, unknown> | undefined;
   assert.ok(domainAnalysis !== undefined, 'domainAnalysis must be populated after enrichment');
   assert.ok(typeof domainAnalysis['edge'] === 'number', 'edge must be a number after enrichment');
   assert.ok((domainAnalysis['edge'] as number) > 0, 'edge must be positive (confidence > impliedProb at +150)');
 });
 
-test('UTV2-1327: enrichPickAtPromotionTime populates kellyFraction for DEBT-020 readiness fix', () => {
+test('UTV2-1327: enrichPickAtPromotionTime populates kellyFraction for DEBT-020 readiness fix', async () => {
   // Before fix: readKellyGradientReadiness returned constant 60 (94.4% fallback rate in prod)
   const pick = {
     id: 'test-pick-3',
@@ -1381,7 +1519,7 @@ test('UTV2-1327: enrichPickAtPromotionTime populates kellyFraction for DEBT-020 
     metadata: { sport: 'NBA' },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const result = enrichPickAtPromotionTime(pick);
+  const result = await enrichPickAtPromotionTime(pick);
   const domainAnalysis = result.metadata['domainAnalysis'] as Record<string, unknown> | undefined;
   assert.ok(domainAnalysis !== undefined, 'domainAnalysis must be populated');
   assert.ok(typeof domainAnalysis['kellyFraction'] === 'number', 'kellyFraction must be set after enrichment');
@@ -1392,19 +1530,19 @@ test('UTV2-1327: enrichPickAtPromotionTime populates kellyFraction for DEBT-020 
   assert.ok(readinessScore >= 40, `model-driven readiness must be >= 40 (got ${readinessScore})`);
 });
 
-test('UTV2-1327: enrichPickAtPromotionTime is a no-op when odds are absent (null safety)', () => {
+test('UTV2-1327: enrichPickAtPromotionTime is a no-op when odds are absent (null safety)', async () => {
   const pick = {
     id: 'test-pick-4',
     confidence: 0.65,
     metadata: { sport: 'NBA' },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const result = enrichPickAtPromotionTime(pick);
+  const result = await enrichPickAtPromotionTime(pick);
   assert.equal(result, pick, 'must return unchanged pick when odds are absent');
   assert.equal(result.metadata['domainAnalysis'], undefined, 'domainAnalysis must remain absent when odds are missing');
 });
 
-test('UTV2-1327 DEBT-019/020: enrichPickAtPromotionTime wires readiness signal that was null before fix', () => {
+test('UTV2-1327 DEBT-019/020: enrichPickAtPromotionTime wires readiness signal that was null before fix', async () => {
   // BEFORE fix: metadata lacks domainAnalysis → readKellyGradientReadiness returns null → upstream constant 60
   // AFTER fix: enrichPickAtPromotionTime populates domainAnalysis.kellyFraction → gradient formula runs
   // Note: model-computed readiness can be < 60 for marginal-edge picks — that is CORRECT behavior.
@@ -1419,7 +1557,7 @@ test('UTV2-1327 DEBT-019/020: enrichPickAtPromotionTime wires readiness signal t
   const readinessBefore = readKellyGradientReadiness(pick.metadata as Record<string, unknown>);
   assert.equal(readinessBefore, null, 'before enrichment: readKellyGradientReadiness must return null (no domainAnalysis)');
 
-  const enriched = enrichPickAtPromotionTime(pick);
+  const enriched = await enrichPickAtPromotionTime(pick);
   const readinessAfter = readKellyGradientReadiness(enriched.metadata as Record<string, unknown>);
   assert.ok(readinessAfter !== null, 'after enrichment: readKellyGradientReadiness must return a model-driven score (DEBT-020 signal wired)');
   // Gradient formula result: >= 40 (floor) and <= 95 (ceiling), not the arbitrary-constant 60
