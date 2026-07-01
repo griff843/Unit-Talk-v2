@@ -13,7 +13,7 @@ This file is the T2 verification record for UTV2-1395.
 | Owner | claude/utv2-1395 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1395-smart-form-conviction-cap |
-| Commit SHA(s) | (filled at commit) |
+| Commit SHA(s) | `7f51ac41c87d2fe7340697cf75468a88b302e595` (branch head; merge SHA bound post-merge) |
 | Related PRs | (filled on open) |
 
 ## Scope
