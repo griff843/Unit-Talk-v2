@@ -42,7 +42,7 @@
     }
   },
   "sha_binding": {
-    "verified_source_sha": "b8701e96a91f0735c910294f7846263ad281f2cf",
+    "verified_source_sha": "ecc2acb71811f9afbb284b3b439c3b40e15ac2cf",
     "sha_type": "branch_head",
     "bound_at": "2026-07-01T16:25:00.000Z",
     "ci_sentinels": {
