@@ -14,6 +14,7 @@
     "docs/06_status/proof/UTV2-1379/evidence.json",
     "docs/06_status/proof/UTV2-1379/verification.md",
     "docs/06_status/proof/UTV2-1394/diff-summary.md",
+    "docs/06_status/proof/UTV2-1394/evidence.json",
     "docs/06_status/proof/UTV2-1394/verification.md",
     "scripts/edge-fallback-report/run-edge-fallback-report.test.ts",
     "scripts/edge-fallback-report/run-edge-fallback-report.ts"
