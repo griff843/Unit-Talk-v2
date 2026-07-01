@@ -2,7 +2,9 @@
 
 ## Verification
 
-This file is the T1 verification record for UTV2-1379. **This is a partial fix, not a closure.** See "Scope" below and UTV2-1394 for what remains open.
+This file is the T1 verification record for UTV2-1379.
+
+**Update 2026-07-01 (UTV2-1394):** the "does NOT claim" write/persistence gap described below has been resolved — it was measurement contamination, not a real gap. See "Corrected measurement" below. UTV2-1379 is unblocked as of the UTV2-1394 fix landing.
 
 ## Metadata
 
@@ -29,8 +31,10 @@ This file is the T1 verification record for UTV2-1379. **This is a partial fix, 
 **Moved to a separate PR (lane-authority boundary — `apps/smart-form/**` is not in the `runtime` lane's allowed paths):**
 - The conviction=10→confidence=1.0 fix and the `apps/smart-form/CLAUDE.md` correction. Investigation (smart-form's `capperConviction` mapping to `confidence` since March 2026, ruling out the originally-planned confidence-input UI as redundant) still holds and informed this lane's fixes — only the code change itself moved to a `delivery-ui` lane PR.
 
-**Does NOT claim (see UTV2-1394):**
-- Fixing why ~87-91% of picks have **no** `domainAnalysis` metadata at all (`unknown-legacy` category) — this is a separate, larger write/persistence gap discovered while re-measuring, confirmed active/ongoing (not historical) via 7-day and 14-day production-only windows. `smart-form` and `alert-agent` are ~100% unknown-legacy in every window measured; `board-construction` is a clean 0%.
+**Originally believed out of scope, since resolved (see UTV2-1394 / E16 below):**
+- The apparent 87-91% "no domainAnalysis at all" gap turned out to be measurement contamination (test fixtures under real source labels), not a write/persistence bug. See E16 for the corrected measurement and post-deploy-only spot check showing 0% unknown-legacy for real production sources once this fix is live.
+
+**Does NOT claim:**
 - Any DB backfill of historically-affected picks
 - Any change to Kelly sizing or exposure-band logic (out of scope per Outcome Contract)
 
@@ -95,7 +99,25 @@ Three snapshots attached: `edge-fallback-summary-{90d-PRE-DEPLOY-unfiltered,14d-
 | 14d (production-only) | 13,795 | 14.92% | 85.05% |
 | 7d (production-only) | 8,993 | 8.57% | 91.37% |
 
-By-source unknown-legacy rate is stable across the 7d/14d windows: `smart-form` 100%/100%, `alert-agent` ~99.8%/~99.9%, `model-driven` ~99.8%/~99.9%, `board-construction` 0%/0%, `system-pick-scanner` 61.7%/47.6%. This rules out historical-data contamination as the explanation — filed as UTV2-1394, a blocking follow-up.
+By-source unknown-legacy rate is stable across the 7d/14d windows: `smart-form` 100%/100%, `alert-agent` ~99.8%/~99.9%, `model-driven` ~99.8%/~99.9%, `board-construction` 0%/0%, `system-pick-scanner` 61.7%/47.6%. **This measurement was later found to be contaminated — see below.**
+
+### E16 Corrected live fallback distribution (UTV2-1394, 2026-07-01)
+
+Live-DB investigation (not static code review) for UTV2-1394 found that `pnpm test:db` / T1 proof suites write real fixture rows into production `picks`, tagged `metadata.testRun`, under real production `source` values (mostly `smart-form`). `run-edge-fallback-report.ts`'s `--production-only` filter only excluded by `source` string, so every testRun row above was counted as an unenriched real pick. UTV2-1394 fixed the filter to also exclude `metadata.testRun` rows.
+
+Corrected snapshots: `corrected-2026-07-01/edge-fallback-summary-{90d-unfiltered,14d-production-only-corrected,7d-production-only-corrected}.json` (+ matching `-by-source` CSVs).
+
+| Window | Total analyzed | Excluded (source) | Excluded (testRun) | domain-analysis | unknown-legacy |
+|---|---|---|---|---|---|
+| 90d (unfiltered) | 56,224 | 0 | 0 (n/a in unfiltered mode) | 5.79% | 87.17% |
+| 14d (production-only, corrected) | 5,232 | 4,053 | 8,589 | 36.51% | 62.35% |
+| 7d (production-only, corrected) | 3,140 | 3,139 | 6,092 | 24.2% | 73.89% |
+
+The corrected numbers are better but still show substantial unknown-legacy in the 7d/14d windows. Root cause of the *remainder*: the UTV2-1379 fix (this PR) merged at `2026-07-01T18:16:00.000Z` — almost the entire 7d/14d window predates it, and pre-fix `computeSubmissionDomainAnalysis()` did not set `fallbackReason: 'no-confidence'` for no-confidence picks, so those legacy rows correctly fall through to `unknown-legacy` under the classifier (it can only classify what the stored metadata proves).
+
+**Post-deploy-only spot check** (live SQL, picks created strictly after `2026-07-01T18:16:00.000Z`, testRun and non-production sources excluded): `system-pick-scanner` 0/18 unknown-legacy, `alert-agent` 0/8, `model-driven` 0/7, `smart-form` 0/2. **Zero unknown-legacy across every real production source once the fix is actually live.**
+
+**Conclusion:** there is no active domainAnalysis write/persistence bug. UTV2-1394 is re-scoped to the measurement-tool fix (done) plus a follow-up hygiene issue (UTV2-1396, test fixtures polluting production source metrics generally). UTV2-1379 is unblocked.
 
 ## Stop Conditions Encountered
 
@@ -106,7 +128,7 @@ By-source unknown-legacy rate is stable across the 7d/14d windows: `smart-form` 
 
 **Verifier:** claude/utv2-1379-domain-analysis-population — 2026-07-01
 **PM acceptance:** pending
-**Status:** PARTIAL FIX — do not close UTV2-1379 until UTV2-1394 lands
+**Status:** UNBLOCKED 2026-07-01 — UTV2-1394's corrected measurement (E16) confirms no active write/persistence gap remains
 
 ## Merge SHA Binding
 

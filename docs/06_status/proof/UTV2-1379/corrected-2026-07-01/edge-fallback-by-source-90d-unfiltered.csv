@@ -1,0 +1,11 @@
+source,domain-analysis,confidence-delta,no-confidence,no-provider-offer,no-market-key,no-participant-scope,computation-error,unknown-legacy,total
+alert-agent,0,0,14,0,0,0,0,2336,2350
+board-construction,840,233,0,0,0,0,0,1,1074
+human,3,0,0,0,0,0,0,0,3
+manual,0,0,0,0,0,0,0,4,4
+model-driven,0,0,13,0,0,0,0,2316,2329
+non-production:api,11,0,59,0,0,0,0,5357,5427
+non-production:canary-proof,0,0,0,0,0,0,0,2,2
+non-production:t1-proof,0,0,0,0,0,0,0,4615,4615
+smart-form,4,0,4,0,0,0,0,29718,29726
+system-pick-scanner,2395,3609,29,0,0,0,0,4661,10694

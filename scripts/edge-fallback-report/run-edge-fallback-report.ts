@@ -13,6 +13,11 @@
  *
  * Source buckets: raw pick.source value, with api/test/proof/synthetic
  * sources reported separately rather than silently excluded.
+ *
+ * UTV2-1394: `--production-only` also excludes rows tagged `metadata.testRun`
+ * (T1 `pnpm test:db` proof fixtures), since those write under real production
+ * source values (mostly `smart-form`) and are indistinguishable from genuine
+ * submissions by `source` alone.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -112,6 +117,17 @@ function sourceBucket(rawSource: string | null): string {
   return NON_PRODUCTION_SOURCES.has(normalized) ? `non-production:${normalized}` : normalized;
 }
 
+/**
+ * UTV2-1394: T1 `pnpm test:db` proof suites write live fixture picks tagged
+ * `metadata.testRun`, but under real production `source` values (mostly
+ * `smart-form`) — so the source-based exclusion above cannot see them. Without
+ * this check, production-only measurement counts CI fixtures as real
+ * unenriched picks and drastically overstates the unknown-legacy rate.
+ */
+function isTestFixtureRow(row: PickRow): boolean {
+  return Boolean(jsonRecord(row.metadata)['testRun']);
+}
+
 async function fetchPicks(client: UnitTalkSupabaseClient, fromIso: string): Promise<PickRow[]> {
   const rows: PickRow[] = [];
   const pageSize = 1000;
@@ -148,11 +164,15 @@ export async function runEdgeFallbackReport(options: RunOptions = {}): Promise<J
   const allRows =
     options.rows ??
     (await fetchPicks(options.client ?? createDatabaseClient({ useServiceRole: true }), from.toISOString()));
-  const excludedCount = options.productionOnly
-    ? allRows.filter((row) => NON_PRODUCTION_SOURCES.has(row.source?.trim().toLowerCase() || '')).length
+  const isExcludedSource = (row: PickRow): boolean =>
+    NON_PRODUCTION_SOURCES.has(row.source?.trim().toLowerCase() || '');
+  const excludedSourceCount = options.productionOnly ? allRows.filter(isExcludedSource).length : 0;
+  const excludedTestFixtureCount = options.productionOnly
+    ? allRows.filter((row) => !isExcludedSource(row) && isTestFixtureRow(row)).length
     : 0;
+  const excludedCount = excludedSourceCount + excludedTestFixtureCount;
   const rows = options.productionOnly
-    ? allRows.filter((row) => !NON_PRODUCTION_SOURCES.has(row.source?.trim().toLowerCase() || ''))
+    ? allRows.filter((row) => !isExcludedSource(row) && !isTestFixtureRow(row))
     : allRows;
 
   const bySource = new Map<string, Record<FallbackCategory, number>>();
@@ -180,6 +200,8 @@ export async function runEdgeFallbackReport(options: RunOptions = {}): Promise<J
     evaluation_window: { from: from.toISOString(), to: now.toISOString(), days },
     production_only: options.productionOnly ?? false,
     excluded_non_production_count: excludedCount,
+    excluded_non_production_source_count: excludedSourceCount,
+    excluded_test_fixture_count: excludedTestFixtureCount,
     total_picks_analyzed: total,
     fallback_category_counts: totals,
     fallback_category_pct: Object.fromEntries(

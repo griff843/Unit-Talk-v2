@@ -13,6 +13,12 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1379/evidence.json",
     "docs/06_status/proof/UTV2-1379/verification.md",
+    "docs/06_status/proof/UTV2-1379/corrected-2026-07-01/edge-fallback-by-source-14d-production-only-corrected.csv",
+    "docs/06_status/proof/UTV2-1379/corrected-2026-07-01/edge-fallback-by-source-7d-production-only-corrected.csv",
+    "docs/06_status/proof/UTV2-1379/corrected-2026-07-01/edge-fallback-by-source-90d-unfiltered.csv",
+    "docs/06_status/proof/UTV2-1379/corrected-2026-07-01/edge-fallback-summary-14d-production-only-corrected.json",
+    "docs/06_status/proof/UTV2-1379/corrected-2026-07-01/edge-fallback-summary-7d-production-only-corrected.json",
+    "docs/06_status/proof/UTV2-1379/corrected-2026-07-01/edge-fallback-summary-90d-unfiltered.json",
     "docs/06_status/proof/UTV2-1394/diff-summary.md",
     "docs/06_status/proof/UTV2-1394/evidence.json",
     "docs/06_status/proof/UTV2-1394/verification.md",

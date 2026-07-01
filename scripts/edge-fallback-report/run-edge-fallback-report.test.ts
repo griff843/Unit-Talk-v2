@@ -162,6 +162,61 @@ test('UTV2-1379B: productionOnly excludes non-production sources entirely from t
   assert.equal(summary['total_picks_analyzed'], 6, '9 fixture rows minus 3 non-production');
 });
 
+test('UTV2-1394: productionOnly excludes metadata.testRun rows even under a real production source', async () => {
+  const now = new Date('2026-07-01T00:00:00.000Z');
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+
+  const rows = [
+    ...fixtureRows(now.toISOString()),
+    {
+      id: 'pick-test-fixture-smart-form',
+      source: 'smart-form',
+      created_at: now.toISOString(),
+      // T1 pnpm test:db proof fixture: real production source value, but
+      // tagged testRun and never enriched — must not count as a real gap.
+      metadata: { testRun: true },
+    },
+    {
+      id: 'pick-test-fixture-alert-agent',
+      source: 'alert-agent',
+      created_at: now.toISOString(),
+      metadata: { testRun: 'utv2-1136-settlement-corrections' },
+    },
+  ];
+
+  const summary = await runEdgeFallbackReport({
+    now,
+    outDir,
+    productionOnly: true,
+    rows,
+  });
+
+  const bySource = summary['by_source'] as Record<string, unknown>;
+  assert.ok(!('smart-form' in bySource) || (bySource['smart-form'] as Record<string, number>)['unknown-legacy'] !== 2);
+  assert.equal(summary['excluded_test_fixture_count'], 2, 'both testRun-tagged rows excluded regardless of source');
+  assert.equal(summary['excluded_non_production_count'], 5, '3 non-production-source rows + 2 testRun fixture rows');
+  assert.equal(summary['total_picks_analyzed'], 6, '11 total rows minus 5 excluded');
+});
+
+test('UTV2-1394: non-productionOnly runs still include testRun rows (no silent exclusion outside production-only mode)', async () => {
+  const now = new Date('2026-07-01T00:00:00.000Z');
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
+
+  const rows = [
+    {
+      id: 'pick-test-fixture',
+      source: 'smart-form',
+      created_at: now.toISOString(),
+      metadata: { testRun: true },
+    },
+  ];
+
+  const summary = await runEdgeFallbackReport({ now, outDir, rows });
+
+  assert.equal(summary['total_picks_analyzed'], 1, 'testRun exclusion only applies in productionOnly mode');
+  assert.equal(summary['excluded_test_fixture_count'], 0);
+});
+
 test('UTV2-1379: writes required output files', async () => {
   const now = new Date('2026-07-01T00:00:00.000Z');
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'edge-fallback-report-'));
