@@ -46,6 +46,12 @@ export interface ProofGenerateResult {
   stale_paths_replaced: string[];
 }
 
+/** UTV2-1392: SHA rebind result for evidence.json / verification.md (T1/T2 proof bundle files). */
+export interface ShaRebindOutcome {
+  path: string;
+  status: 'updated' | 'unchanged' | 'missing';
+}
+
 export interface ProofGenerateOptions {
   root?: string;
   write?: boolean;
@@ -218,6 +224,150 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
   ].join('\n');
 }
 
+const PRE_MERGE_STATUSES = new Set(['branch_head', 'in_review', 'pre_merge', 'open']);
+const COMMIT_SHA_ROW_LINE_PATTERN = /^\|\s*Commit SHA\(s\)\s*\|/;
+const MERGE_SHA_BINDING_HEADING = '## Merge SHA Binding';
+
+/**
+ * Line-based rewrite (not regex substitution across the whole file) so a greedy `$`-anchored
+ * pattern can't accidentally swallow adjacent blank lines — the exact bug this replaced.
+ */
+function rewriteVerificationMdLines(content: string, mergeSha: string, prUrl: string | null): string {
+  const hasTrailingNewline = content.endsWith('\n');
+  const lines = content.split('\n');
+
+  const rowIndex = lines.findIndex((line) => COMMIT_SHA_ROW_LINE_PATTERN.test(line));
+  if (rowIndex !== -1) {
+    lines[rowIndex] = `| Commit SHA(s) | \`${mergeSha}\` (merge SHA) |`;
+  }
+
+  const headingIndex = lines.findIndex((line) => line.trim() === MERGE_SHA_BINDING_HEADING);
+  if (headingIndex !== -1) {
+    let sectionEnd = lines.length;
+    for (let i = headingIndex + 1; i < lines.length; i += 1) {
+      if (lines[i].startsWith('## ')) {
+        sectionEnd = i;
+        break;
+      }
+    }
+    lines.splice(headingIndex + 1, sectionEnd - (headingIndex + 1), '', `Merge SHA: \`${mergeSha}\``, `PR: ${prUrl ?? 'N/A'}`);
+  }
+
+  const joined = lines.join('\n');
+  return hasTrailingNewline && !joined.endsWith('\n') ? `${joined}\n` : joined;
+}
+
+/**
+ * UTV2-1392: `evidence.json` and `verification.md` are the files T1/T2 lanes actually use
+ * for SHA-binding truth-check (C4/P3) and proof-gate checks — not the generic
+ * diff-summary.md/runtime-verification.md pair above. Without this rebind, every merged
+ * lane needed a manual post-merge SHA edit before `ops:lane-close` could pass.
+ */
+export function rebindEvidenceJsonSha(
+  absolutePath: string,
+  mergeSha: string,
+  generatedAt: string,
+  options: { write?: boolean; relPath?: string } = {},
+): ShaRebindOutcome {
+  const relPath = options.relPath ?? absolutePath;
+  if (!fs.existsSync(absolutePath)) {
+    return { path: relPath, status: 'missing' };
+  }
+
+  const previousContent = fs.readFileSync(absolutePath, 'utf8');
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(previousContent) as Record<string, unknown>;
+  } catch {
+    // Not valid JSON (or not an evidence bundle) — leave untouched rather than corrupt it.
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  const shaBinding = (parsed['sha_binding'] as Record<string, unknown> | undefined) ?? undefined;
+  if (!shaBinding || typeof shaBinding !== 'object') {
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  const wasPreMerge = shaBinding['sha_type'] !== 'merge_sha' || shaBinding['verified_source_sha'] !== mergeSha;
+  if (!wasPreMerge) {
+    // Already bound to this exact merge SHA — leave bound_at alone so re-running
+    // ops:proof-generate doesn't perturb an already-correct file (idempotent).
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  const nextShaBinding = {
+    ...shaBinding,
+    verified_source_sha: mergeSha,
+    sha_type: 'merge_sha',
+    bound_at: generatedAt,
+  };
+  const nextParsed = { ...parsed, sha_binding: nextShaBinding };
+  if (PRE_MERGE_STATUSES.has(String(parsed['status']))) {
+    nextParsed['status'] = 'merged';
+  }
+
+  const nextContent = `${JSON.stringify(nextParsed, null, 2)}\n`;
+  if (nextContent === previousContent) {
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  if (options.write ?? true) {
+    fs.writeFileSync(absolutePath, nextContent, 'utf8');
+  }
+  return { path: relPath, status: 'updated' };
+}
+
+export function rebindVerificationMdSha(
+  absolutePath: string,
+  mergeSha: string,
+  prUrl: string | null,
+  options: { write?: boolean; relPath?: string } = {},
+): ShaRebindOutcome {
+  const relPath = options.relPath ?? absolutePath;
+  if (!fs.existsSync(absolutePath)) {
+    return { path: relPath, status: 'missing' };
+  }
+
+  const previousContent = fs.readFileSync(absolutePath, 'utf8');
+  const nextContent = rewriteVerificationMdLines(previousContent, mergeSha, prUrl);
+
+  if (nextContent === previousContent) {
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  if (options.write ?? true) {
+    fs.writeFileSync(absolutePath, nextContent, 'utf8');
+  }
+  return { path: relPath, status: 'updated' };
+}
+
+/** Rebinds evidence.json + verification.md for an issue if they exist. No-op without a merge SHA. */
+export function rebindMergeSha(
+  root: string,
+  issueId: string,
+  mergeSha: string | null,
+  generatedAt: string,
+  prUrl: string | null,
+  options: { write?: boolean } = {},
+): ShaRebindOutcome[] {
+  if (!mergeSha) {
+    return [];
+  }
+  const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase());
+  const evidenceRelPath = path.posix.join(proofRoot, 'evidence.json');
+  const verificationRelPath = path.posix.join(proofRoot, 'verification.md');
+  return [
+    rebindEvidenceJsonSha(safeRepoPath(root, evidenceRelPath), mergeSha, generatedAt, {
+      ...options,
+      relPath: evidenceRelPath,
+    }),
+    rebindVerificationMdSha(safeRepoPath(root, verificationRelPath), mergeSha, prUrl, {
+      ...options,
+      relPath: verificationRelPath,
+    }),
+  ];
+}
+
 export function generateProofArtifacts(
   input: ProofGenerateInput,
   options: ProofGenerateOptions = {},
@@ -262,6 +412,25 @@ export function generateProofArtifacts(
         stalePathsReplaced.push(proofPath);
       }
     }
+  }
+
+  const rebindOutcomes = rebindMergeSha(
+    root,
+    input.manifest.issue_id,
+    input.gitTruth.merge_sha,
+    input.generatedAt,
+    input.manifest.pr_url,
+    { write: shouldWrite },
+  );
+  for (const outcome of rebindOutcomes) {
+    if (outcome.status === 'updated') {
+      updatedPaths.push(outcome.path);
+      stalePathsReplaced.push(outcome.path);
+    } else if (outcome.status === 'unchanged') {
+      unchangedPaths.push(outcome.path);
+    }
+    // 'missing' outcomes are intentionally not reported — evidence.json/verification.md
+    // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
   }
 
   return {
