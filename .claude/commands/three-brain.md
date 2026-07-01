@@ -32,28 +32,10 @@ Three-brain returns both an executor and a **planning model** for T1 Claude lane
 
 | Condition | Planning model | Rationale |
 |---|---|---|
-| T1, standard bounded scope | `opus` (Opus 4.8) | Multi-file synthesis, domain invariant awareness |
-| T1, Fable 5 trigger checklist matches (see below) | `fable` (Fable 5) | Maximum reasoning ceiling for decisions with cascading consequences |
+| T1, all scopes (standard and novel/constitutional/governance) | `sonnet` (Sonnet 5) | Adaptive thinking + improved agentic bench make Sonnet 5 sufficient for T1 planning across scope types |
 | T2 / T3 Claude | *(none — no planning subagent)* | Bounded work; orchestrator session handles directly |
 
-**Default:** `opus`. Escalate to `fable` only when the checklist below fires. Fable 5 is 2× the cost of Opus 4.8 — do not default to it.
-
-#### Fable 5 trigger checklist (mechanical — first match wins)
-
-Check each item before spawning the planning subagent. If ANY item is true, use `model: "fable"`.
-
-| # | Trigger | Detection |
-|---|---|---|
-| F1 | Touches `packages/domain/src/` | File scope contains this path |
-| F2 | Touches `docs/00_constitution/` | File scope contains this path |
-| F3 | Touches `packages/contracts/src/` | File scope contains this path |
-| F4 | Migration that alters column types or drops columns on existing tables | `supabase/migrations/` + SQL contains `ALTER COLUMN`, `DROP COLUMN`, `ALTER TYPE` |
-| F5 | Crosses 3 or more packages/apps simultaneously | File scope count of distinct top-level dirs ≥ 3 |
-| F6 | `lane_type` is `modeling` or `governance` at T1 | Lane manifest fields |
-| F7 | Three-brain routing notes explicitly flag ambiguous scope | Routing output contains "ambiguous", "unclear boundary", or "two interpretations" |
-| F8 | Issue description contains "architecture", "redesign", or "new system" | Linear description text |
-
-If none of F1–F8 fire, use `model: "opus"`.
+**Default:** `sonnet`. There is no escalation tier above Sonnet 5 for planning — genuinely novel-architecture, constitutional-scope, or ambiguous-boundary T1 work is a Rule 9 Griff-escalation trigger (scope ambiguity / Tier C), not a model-routing decision. Full model policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
 
 ### Codex lane critique model
 

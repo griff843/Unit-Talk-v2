@@ -20,7 +20,7 @@ Every agent in `.claude/agents/` must have YAML frontmatter with these fields. T
 ---
 name: <kebab-case string — must match filename without .md>
 description: <one-paragraph description used for routing decisions>
-model: <valid Claude model ID: claude-sonnet-5 | claude-sonnet-4-6 | claude-opus-4-8 | claude-opus-4-7 | claude-fable-5 | claude-haiku-4-5-20251001>
+model: <valid Claude model ID: claude-sonnet-5 | claude-sonnet-4-6 | claude-opus-4-8 | claude-opus-4-7 | claude-haiku-4-5-20251001>
 tools:
   - <one or more from allowed set>
 ---
@@ -310,7 +310,7 @@ Identified after inventory. These are gaps relative to the current workflow, not
 An agent file is valid if ALL of the following hold:
 
 1. **Filename matches name field:** `{name}.md` must equal the `name` frontmatter value.
-2. **Model is a valid Claude model ID:** must be one of `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-fable-5`, `claude-haiku-4-5-20251001`.
+2. **Model is a valid Claude model ID:** must be one of `claude-sonnet-5`, `claude-sonnet-4-6`, `claude-opus-4-8`, `claude-opus-4-7`, `claude-haiku-4-5-20251001`.
 3. **Tools are from the allowed set:** Bash, Read, Grep, Glob, Edit, Write, Agent, WebFetch, WebSearch. No other tools permitted.
 4. **Governance agents do not include Edit/Write/Agent:** any agent whose body describes APPROVE/REJECT, VALID/INVALID, or report-only authority must not list Edit, Write, or Agent in its tools.
 5. **Body defines authority boundary:** the agent body must identify whether it is enforced by automation or only advisory/manual.
