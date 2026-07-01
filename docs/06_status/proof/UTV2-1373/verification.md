@@ -15,8 +15,8 @@ See sections below for metadata, assertions, and evidence.
 | Owner | claude/utv2-1373 |
 | Date | 2026-06-30 |
 | Verifier Identity | claude/utv2-1373-mlb-participant-upsert-timeout |
-| Commit SHA(s) | `1751386fe664a5522619c3253abb7392495cf393` (branch HEAD; merge SHA bound post-merge) |
-| Related PRs | (PR URL filled on open) |
+| Commit SHA(s) | `b5f712b24c6501698dc273d52bb4185c1d6ad0a8` (merge SHA) |
+| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1134 |
 
 ## Scope
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "pre-merge",
+  "status": "merged",
   "verifier": {
     "identity": "claude/utv2-1373-mlb-participant-upsert-timeout"
   },
@@ -25,11 +25,11 @@
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "9dc33a8b25de5887db731c5b349897ee103285c8",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-01T00:00:00.000Z",
+    "verified_source_sha": "b5f712b24c6501698dc273d52bb4185c1d6ad0a8",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-01T11:57:00.000Z",
     "ci_sentinels": {
-      "merge_gate": "pending",
+      "merge_gate": "pass",
       "wfr_v2_validators": "pass"
     }
   }
