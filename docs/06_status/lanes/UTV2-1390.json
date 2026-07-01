@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1390-workflow-reset-sonnet5-operating-model",
   "branch": "claude/utv2-1390-workflow-reset-sonnet5-operating-model",
   "base_branch": "main",
-  "commit_sha": "de44dfe8",
+  "commit_sha": "eca310c23d69a0e7cbb9a92f8fd8e1b9a9aab36c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1135",
   "files_changed": [
     ".claude/commands/dispatch.md",
@@ -35,14 +35,30 @@
     "docs/06_status/proof/UTV2-1390/evidence.json",
     "docs/06_status/proof/UTV2-1390/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-01T12:42:17.549Z",
-  "heartbeat_at": "2026-07-01T12:42:17.549Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-01T14:23:55.399Z",
+  "closed_at": "2026-07-01T14:23:55.399Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1390-workflow-reset-sonnet5-operating-model.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-01T14:23:51.683Z",
+      "verdict": "pass",
+      "merge_sha": "eca310c23d69a0e7cbb9a92f8fd8e1b9a9aab36c",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1135",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
