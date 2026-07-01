@@ -130,6 +130,7 @@ test('bounded concurrency preserves all entity + event-participant writes with n
   assert.equal(summary.timings?.players, 5);
   assert.equal(summary.timings?.eventParticipants, 5);
   assert.equal(summary.timings?.errors, 0);
+  assert.equal(summary.timings?.transientRetryCount, 0);
 });
 
 test('concurrency cap is honored', async () => {
@@ -178,4 +179,138 @@ test('a failed entity write fails closed (rejects) and does not dispatch all pla
     recorder.participantUpserts.length < 30,
     `expected fail-closed early stop, wrote ${recorder.participantUpserts.length}/30`,
   );
+});
+
+/*
+ * UTV2-1373 — transient statement-timeout retry on participant upserts.
+ * Tests use a call-count-per-player map so the mock can succeed on attempt N.
+ */
+
+interface RetryRecorder extends Recorder {
+  callCountByPlayer: Map<string, number>;
+}
+
+function emptyRetryRecorder(): RetryRecorder {
+  return { ...emptyRecorder(), callCountByPlayer: new Map() };
+}
+
+/**
+ * Extended mock that supports per-player transient failure (fail first N attempts, then succeed)
+ * and permanent failure by player ID.
+ */
+function makeRetryRepositories(
+  recorder: RetryRecorder,
+  hooks: {
+    /** Player IDs that should timeout on first attempt but succeed from attempt 2 onward. */
+    transientFailPlayers?: string[];
+    /** Player ID that always throws a timeout — exhausts budget. */
+    permanentTimeoutPlayer?: string;
+    /** Player ID that throws a non-retryable (non-timeout) error. */
+    nonRetryableFailPlayer?: string;
+  } = {},
+): Pick<IngestorRepositoryBundle, 'events' | 'eventParticipants' | 'participants'> {
+  const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+  const repositories = {
+    events: {
+      async upsertByExternalId(input: { externalId: string }) {
+        recorder.eventUpserts.push(input.externalId);
+        return { id: `event-${input.externalId}` };
+      },
+    },
+    participants: {
+      async upsertByExternalId(input: { externalId: string }) {
+        const count = (recorder.callCountByPlayer.get(input.externalId) ?? 0) + 1;
+        recorder.callCountByPlayer.set(input.externalId, count);
+        await tick();
+        if (hooks.permanentTimeoutPlayer === input.externalId) {
+          throw new Error('canceling statement due to statement timeout');
+        }
+        if (hooks.nonRetryableFailPlayer === input.externalId) {
+          throw new Error('permission denied for table participants');
+        }
+        if (hooks.transientFailPlayers?.includes(input.externalId) && count === 1) {
+          throw new Error('statement timeout');
+        }
+        recorder.participantUpserts.push(input.externalId);
+        return { id: `participant-${input.externalId}` };
+      },
+      async listByType() {
+        return [];
+      },
+    },
+    eventParticipants: {
+      async upsert(input: { eventId: string; participantId: string }) {
+        recorder.eventParticipantLinks.push({
+          eventId: input.eventId,
+          participantId: input.participantId,
+        });
+        return { id: `${input.eventId}:${input.participantId}` };
+      },
+    },
+  };
+  return repositories as unknown as Pick<
+    IngestorRepositoryBundle,
+    'events' | 'eventParticipants' | 'participants'
+  >;
+}
+
+test('transient timeout is retried and cycle completes; transientRetryCount is incremented', async () => {
+  const recorder = emptyRetryRecorder();
+  const events = [makeEvent('e1', ['p1', 'p2', 'p3'])];
+  const summary = await resolveSgoEntities(
+    events,
+    makeRetryRepositories(recorder, { transientFailPlayers: ['p1', 'p3'] }),
+    { concurrency: 1, upsertAttempts: 3 },
+  );
+  // All three players resolved despite two transient failures.
+  assert.deepEqual(recorder.participantUpserts.sort(), ['p1', 'p2', 'p3']);
+  assert.equal(summary.timings?.players, 3);
+  // p1 and p3 each needed 2 attempts → 2 retried calls.
+  assert.equal(recorder.callCountByPlayer.get('p1'), 2, 'p1 should have been called twice');
+  assert.equal(recorder.callCountByPlayer.get('p3'), 2, 'p3 should have been called twice');
+  assert.equal(summary.timings?.transientRetryCount, 2, 'two successful retries recorded');
+  assert.equal(summary.timings?.errors, 0, 'recovered retries must NOT count as errors');
+});
+
+test('budget exhausted on permanent timeout: cycle fails closed', async () => {
+  const recorder = emptyRetryRecorder();
+  const events = [makeEvent('e1', ['p1', 'p2'])];
+  await assert.rejects(
+    resolveSgoEntities(
+      events,
+      makeRetryRepositories(recorder, { permanentTimeoutPlayer: 'p1' }),
+      { concurrency: 1, upsertAttempts: 3 },
+    ),
+    /statement timeout/,
+  );
+  // p1 must have been attempted 3 times (budget exhausted) before fail-closed rejection.
+  assert.equal(recorder.callCountByPlayer.get('p1'), 3, 'all 3 attempts must have fired');
+});
+
+test('non-retryable error is not retried and propagates immediately', async () => {
+  const recorder = emptyRetryRecorder();
+  const events = [makeEvent('e1', ['p1'])];
+  await assert.rejects(
+    resolveSgoEntities(
+      events,
+      makeRetryRepositories(recorder, { nonRetryableFailPlayer: 'p1' }),
+      { concurrency: 1, upsertAttempts: 3 },
+    ),
+    /permission denied/,
+  );
+  assert.equal(recorder.callCountByPlayer.get('p1'), 1, 'non-retryable must not use retry budget');
+});
+
+test('upsertAttempts=1 disables retry (matches today behavior)', async () => {
+  const recorder = emptyRetryRecorder();
+  const events = [makeEvent('e1', ['p1', 'p2'])];
+  await assert.rejects(
+    resolveSgoEntities(
+      events,
+      makeRetryRepositories(recorder, { transientFailPlayers: ['p1'] }),
+      { concurrency: 1, upsertAttempts: 1 },
+    ),
+    /statement timeout/,
+  );
+  assert.equal(recorder.callCountByPlayer.get('p1'), 1, 'no retry when attempts=1');
 });

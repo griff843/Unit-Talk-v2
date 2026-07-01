@@ -4,6 +4,7 @@ import {
   flatMapCooperatively,
   mapCooperatively,
   mapWithConcurrency,
+  withRetry,
   yieldToEventLoop,
 } from './cooperative.js';
 
@@ -144,6 +145,95 @@ test('mapWithConcurrency coerces non-finite/zero concurrency to sequential', asy
     return n;
   });
   assert.equal(maxInFlight, 1);
+});
+
+/*
+ * UTV2-1373 — withRetry: gated retry for transient statement-timeout errors on
+ * participant upserts. 3 total attempts (PM requirement). Fail-closed on budget
+ * exhaustion and on non-retryable errors. Successful retries do NOT count as errors.
+ */
+
+const isTimeout = (e: unknown) =>
+  /statement timeout/i.test((e as Error)?.message ?? '');
+
+test('withRetry succeeds on second attempt when first is retryable', async () => {
+  let calls = 0;
+  const result = await withRetry(
+    async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('statement timeout');
+      return 'ok';
+    },
+    { attempts: 3, baseDelayMs: 0, maxDelayMs: 0, isRetryable: isTimeout },
+  );
+  assert.equal(result, 'ok');
+  assert.equal(calls, 2);
+});
+
+test('withRetry exhausts budget and rethrows last error (fail-closed)', async () => {
+  let calls = 0;
+  await assert.rejects(
+    withRetry(
+      async () => {
+        calls += 1;
+        throw new Error('statement timeout');
+      },
+      { attempts: 3, baseDelayMs: 0, maxDelayMs: 0, isRetryable: isTimeout },
+    ),
+    /statement timeout/,
+  );
+  assert.equal(calls, 3, 'must use all 3 attempts before giving up');
+});
+
+test('withRetry rethrows non-retryable error immediately without using remaining budget', async () => {
+  let calls = 0;
+  await assert.rejects(
+    withRetry(
+      async () => {
+        calls += 1;
+        throw new Error('non-retryable connection error');
+      },
+      { attempts: 3, baseDelayMs: 0, maxDelayMs: 0, isRetryable: isTimeout },
+    ),
+    /non-retryable/,
+  );
+  assert.equal(calls, 1, 'non-retryable error must not use remaining retry budget');
+});
+
+test('withRetry with attempts=1 is a no-retry pass-through', async () => {
+  let calls = 0;
+  await assert.rejects(
+    withRetry(
+      async () => {
+        calls += 1;
+        throw new Error('statement timeout');
+      },
+      { attempts: 1, baseDelayMs: 0, maxDelayMs: 0, isRetryable: isTimeout },
+    ),
+    /statement timeout/,
+  );
+  assert.equal(calls, 1, 'attempts=1 must not retry at all');
+});
+
+test('withRetry fires onRetry callback for each retried attempt (not on success)', async () => {
+  const retries: number[] = [];
+  let calls = 0;
+  const result = await withRetry(
+    async () => {
+      calls += 1;
+      if (calls < 3) throw new Error('statement timeout');
+      return 'done';
+    },
+    {
+      attempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      isRetryable: isTimeout,
+      onRetry: (attempt) => { retries.push(attempt); },
+    },
+  );
+  assert.equal(result, 'done');
+  assert.deepEqual(retries, [1, 2], 'onRetry fires for attempt 1 and 2 (not the final success)');
 });
 
 test('mapWithConcurrency fails closed: throws first error and stops dispatching', async () => {

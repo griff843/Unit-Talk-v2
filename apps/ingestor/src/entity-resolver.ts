@@ -1,5 +1,5 @@
 import type { EventParticipantRole, IngestorRepositoryBundle, ParticipantRow } from '@unit-talk/db';
-import { mapWithConcurrency } from './cooperative.js';
+import { mapWithConcurrency, withRetry } from './cooperative.js';
 import type {
   SGOEventStatus,
   SGOResolvedEvent,
@@ -19,6 +19,28 @@ function toEasternDate(utcIso: string): string {
  * connection / schema-cache / statement-timeout storm.
  */
 export const DEFAULT_ENTITY_RESOLUTION_CONCURRENCY = 8;
+
+/**
+ * Default total attempt count per participant/event-participant upsert call (UTV2-1373).
+ * 3 total = 1 initial attempt + 2 retries, per PM requirement.
+ */
+export const DEFAULT_ENTITY_UPSERT_ATTEMPTS = 3;
+
+/**
+ * Resolve the effective total attempt count for participant upsert operations.
+ * `UNIT_TALK_INGESTOR_ENTITY_UPSERT_RETRIES` sets the total attempt count (not a
+ * separate retry count); `options.upsertAttempts` wins over env. Always >= 1.
+ */
+export function resolveEntityUpsertAttempts(options: ResolveEntityOptions): number {
+  if (typeof options.upsertAttempts === 'number' && Number.isFinite(options.upsertAttempts)) {
+    return Math.max(1, Math.floor(options.upsertAttempts));
+  }
+  const envValue = Number(process.env.UNIT_TALK_INGESTOR_ENTITY_UPSERT_RETRIES);
+  if (Number.isFinite(envValue) && envValue >= 1) {
+    return Math.floor(envValue);
+  }
+  return DEFAULT_ENTITY_UPSERT_ATTEMPTS;
+}
 
 /**
  * Resolve the effective entity-resolution concurrency. Reversible + observable:
@@ -51,6 +73,8 @@ export interface ResolveEntityOptions {
   historical?: boolean;
   /** Bounded per-event player-upsert concurrency. Overrides env. 1 = sequential. */
   concurrency?: number;
+  /** Total per-call attempt count for participant/event-participant upserts. Overrides env. 1 = no retry. */
+  upsertAttempts?: number;
 }
 
 /** Phase timing + counts for the entity-resolution phase (UTV2-1298 observability). */
@@ -66,6 +90,8 @@ export interface EntityResolutionTimings {
   players: number;
   eventParticipants: number;
   errors: number;
+  /** How many upsert calls succeeded only after a transient timeout retry (UTV2-1373). Non-zero is informational, not a failure. */
+  transientRetryCount: number;
 }
 
 export interface EntityResolutionSummary {
@@ -87,6 +113,7 @@ export async function resolveSgoEntities(
   const resolvedParticipantIds = new Set<string>();
   const teamCache = new Map<string, ParticipantRow[]>();
   const concurrency = resolveEntityConcurrency(options);
+  const upsertAttempts = resolveEntityUpsertAttempts(options);
 
   // UTV2-1298 phase timing: aggregate time spent per DB sub-phase. Player sub-phase
   // sums overlap under concurrency (sum > wall-clock), which is intentional — the gap
@@ -101,6 +128,7 @@ export async function resolveSgoEntities(
     players: 0,
     eventParticipants: 0,
     errors: 0,
+    transientRetryCount: 0,
   };
   const startedAt = performance.now();
 
@@ -187,32 +215,52 @@ export async function resolveSgoEntities(
     const players = [...playerMap.values()];
     await mapWithConcurrency(players, concurrency, async (player) => {
       const participantStart = performance.now();
-      const participant = await repositories.participants.upsertByExternalId({
-        externalId: player.playerId,
-        displayName:
-          player.displayName.length > 0
-            ? player.displayName
-            : deriveDisplayNameFromProviderId(player.playerId),
-        participantType: 'player',
-        sport: sportId,
-        league: event.leagueKey ?? null,
-        metadata: {
-          headshot_url: null,
-          position: null,
-          jersey_number: null,
-          team_external_id: player.teamId ?? null,
+      const participant = await withRetry(
+        () =>
+          repositories.participants.upsertByExternalId({
+            externalId: player.playerId,
+            displayName:
+              player.displayName.length > 0
+                ? player.displayName
+                : deriveDisplayNameFromProviderId(player.playerId),
+            participantType: 'player',
+            sport: sportId,
+            league: event.leagueKey ?? null,
+            metadata: {
+              headshot_url: null,
+              position: null,
+              jersey_number: null,
+              team_external_id: player.teamId ?? null,
+            },
+          }),
+        {
+          attempts: upsertAttempts,
+          baseDelayMs: 100,
+          maxDelayMs: 1500,
+          isRetryable: isTransientParticipantUpsertTimeout,
+          onRetry: () => { t.transientRetryCount += 1; },
         },
-      });
+      );
       t.playerUpsertMs += performance.now() - participantStart;
       t.players += 1;
       resolvedParticipantIds.add(participant.id);
 
       const linkStart = performance.now();
-      await repositories.eventParticipants.upsert({
-        eventId: resolvedEvent.id,
-        participantId: participant.id,
-        role: 'competitor',
-      });
+      await withRetry(
+        () =>
+          repositories.eventParticipants.upsert({
+            eventId: resolvedEvent.id,
+            participantId: participant.id,
+            role: 'competitor',
+          }),
+        {
+          attempts: upsertAttempts,
+          baseDelayMs: 100,
+          maxDelayMs: 1500,
+          isRetryable: isTransientParticipantUpsertTimeout,
+          onRetry: () => { t.transientRetryCount += 1; },
+        },
+      );
       t.eventParticipantMs += performance.now() - linkStart;
       t.eventParticipants += 1;
     });
@@ -233,8 +281,17 @@ export async function resolveSgoEntities(
       players: t.players,
       eventParticipants: t.eventParticipants,
       errors: t.errors,
+      transientRetryCount: t.transientRetryCount,
     },
   };
+}
+
+function isTransientParticipantUpsertTimeout(error: unknown): boolean {
+  const msg = (error as Error | null)?.message;
+  if (typeof msg !== 'string') {
+    return false;
+  }
+  return /statement timeout|canceling statement due to statement timeout|57014/i.test(msg);
 }
 
 async function linkResolvedTeam(

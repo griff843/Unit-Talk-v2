@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "status": "pre-merge",
+  "verifier": {
+    "identity": "claude/utv2-1373-mlb-participant-upsert-timeout"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "cooperative.test.ts 16/16 pass (5 new withRetry tests); entity-resolver.test.ts 8/8 pass (4 new retry tests); all other ingestor suites pass; pnpm verify exit 0",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      { "table": "picks", "description": "DB connectivity and write path smoke test" },
+      { "table": "participants", "description": "UTV2-883 no-duplicate participants for same external_id and sport" },
+      { "table": "settlement_records", "description": "UTV2-996 correction chain additive, original row not mutated" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 1, "status": "healthy" },
+      { "table": "participants", "count": 1, "status": "healthy" },
+      { "table": "settlement_records", "count": 1, "status": "healthy" }
+    ]
+  },
+  "sha_binding": {
+    "verified_source_sha": "9dc33a8b25de5887db731c5b349897ee103285c8",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-01T00:00:00.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "wfr_v2_validators": "pass"
+    }
+  }
+}
