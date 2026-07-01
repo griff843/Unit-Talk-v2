@@ -13,7 +13,7 @@ This file is the T3 verification record for UTV2-1392.
 | Owner | claude/utv2-1392 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1392-proof-generate-sha-rebind |
-| Commit SHA(s) | `b23fd3bd77d00a33589aa0061f4839553bf328d8` (pre-merge; rebound to the real merge SHA post-merge by this very fix) |
+| Commit SHA(s) | `6a1c326d02780020e6e9a1fc97b62683d0dcc230` (merge SHA) |
 
 ## Scope
 
@@ -113,4 +113,5 @@ SMOKE TEST PASSED: C4 (SHA binding) passes after proof-generate --merge-sha alon
 
 ## Merge SHA Binding
 
-(Filled post-merge by post-merge-lane-close.yml)
+Merge SHA: `6a1c326d02780020e6e9a1fc97b62683d0dcc230`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1139
