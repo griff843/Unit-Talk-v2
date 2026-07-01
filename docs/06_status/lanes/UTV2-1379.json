@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1379",
-  "lane_type": "data-canonical",
+  "lane_type": "runtime",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1379-domain-analysis-population",
@@ -20,9 +20,6 @@
     "apps/api/src/submission-service.ts",
     "apps/api/src/t1-proof-utv2-1327-promotion-enrichment.test.ts",
     "apps/api/src/t1-proof-utv2-1380-kelly-sizing-promotion-metadata.test.ts",
-    "apps/smart-form/CLAUDE.md",
-    "apps/smart-form/lib/form-utils.ts",
-    "apps/smart-form/test/form-utils.test.ts",
     "package.json",
     "packages/contracts/src/promotion.ts",
     "scripts/edge-fallback-report/run-edge-fallback-report.ts",
