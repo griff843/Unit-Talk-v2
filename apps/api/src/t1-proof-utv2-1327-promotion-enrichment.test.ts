@@ -47,7 +47,7 @@ before(async () => {
 
 // ── Pure logic proofs (gated on skip, no DB needed for correctness) ───────────
 
-test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge for picks with odds (DEBT-019)', { skip }, () => {
+test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge for picks with odds (DEBT-019)', { skip }, async () => {
   const pick = {
     id: 'proof-pick-1',
     odds: -110,
@@ -55,7 +55,7 @@ test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge for pic
     metadata: { sport: 'NBA' },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const enriched = enrichPickAtPromotionTime(pick);
+  const enriched = await enrichPickAtPromotionTime(pick);
   const da = enriched.metadata['domainAnalysis'] as Record<string, unknown> | undefined;
   assert.ok(da !== undefined, 'domainAnalysis must be populated after enrichment (DEBT-019 fix)');
   assert.ok(typeof da['edge'] === 'number', 'edge must be a number after enrichment');
@@ -63,7 +63,7 @@ test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge for pic
   assert.ok(typeof da['decimalOdds'] === 'number', 'decimalOdds must be computed');
 });
 
-test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.kellyFraction (DEBT-020)', { skip }, () => {
+test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.kellyFraction (DEBT-020)', { skip }, async () => {
   const pick = {
     id: 'proof-pick-2',
     odds: 150,
@@ -71,7 +71,7 @@ test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.kellyFractio
     metadata: { sport: 'NBA' },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const enriched = enrichPickAtPromotionTime(pick);
+  const enriched = await enrichPickAtPromotionTime(pick);
   const da = enriched.metadata['domainAnalysis'] as Record<string, unknown> | undefined;
   assert.ok(da !== undefined, 'domainAnalysis must be populated');
   assert.ok(typeof da['kellyFraction'] === 'number', 'kellyFraction must be set after enrichment (DEBT-020 fix)');
@@ -82,17 +82,17 @@ test('UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.kellyFractio
   assert.ok((readiness as number) >= 40 && (readiness as number) <= 95, `gradient must be in [40,95], got ${readiness}`);
 });
 
-test('UTV2-1327: enrichPickAtPromotionTime is idempotent when domainAnalysis already present', { skip }, () => {
+test('UTV2-1327: enrichPickAtPromotionTime is idempotent when domainAnalysis already present', { skip }, async () => {
   const original = {
     id: 'proof-pick-3',
     odds: -110,
     confidence: 0.65,
     metadata: {
-      domainAnalysis: { edge: 0.05, kellyFraction: 0.10, computedAt: '2026-06-01T00:00:00Z' },
+      domainAnalysis: { edge: 0.05, kellyFraction: 0.10, computedAt: '2026-06-01T00:00:00Z', realEdge: 0.05 },
     },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const result = enrichPickAtPromotionTime(original);
+  const result = await enrichPickAtPromotionTime(original);
   assert.equal(result, original, 'must return same object reference when domainAnalysis already present');
   assert.equal(
     (result.metadata['domainAnalysis'] as Record<string, unknown>)['edge'],
@@ -101,14 +101,14 @@ test('UTV2-1327: enrichPickAtPromotionTime is idempotent when domainAnalysis alr
   );
 });
 
-test('UTV2-1327: enrichPickAtPromotionTime returns unchanged pick when odds are absent', { skip }, () => {
+test('UTV2-1327: enrichPickAtPromotionTime returns unchanged pick when odds are absent', { skip }, async () => {
   const pick = {
     id: 'proof-pick-4',
     confidence: 0.65,
     metadata: { sport: 'NBA' },
   } as unknown as import('@unit-talk/contracts').CanonicalPick;
 
-  const result = enrichPickAtPromotionTime(pick);
+  const result = await enrichPickAtPromotionTime(pick);
   assert.equal(result, pick, 'must return unchanged pick when no odds available');
   assert.equal(result.metadata['domainAnalysis'], undefined, 'domainAnalysis must remain absent without odds');
 });
@@ -129,7 +129,7 @@ test('UTV2-1327 live-DB: enrichPickAtPromotionTime is stable against real pick s
   }
 
   for (const pick of recentPicks) {
-    const enriched = enrichPickAtPromotionTime(pick as unknown as import('@unit-talk/contracts').CanonicalPick);
+    const enriched = await enrichPickAtPromotionTime(pick as unknown as import('@unit-talk/contracts').CanonicalPick);
     assert.ok(enriched !== null && enriched !== undefined, `enrichPickAtPromotionTime must not throw for pick ${pick.id}`);
     const hasOdds = pick.odds !== null && pick.odds !== undefined;
     const hadDomainAnalysis = (pick.metadata as Record<string, unknown>)['domainAnalysis'] != null;

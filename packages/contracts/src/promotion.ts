@@ -69,7 +69,15 @@ export type EdgeFallbackReason =
   | 'no-consensus-books'
   | 'no-sgo-offer'
   | 'no-any-offer'
-  | 'not-applicable';
+  | 'not-applicable'
+  /** UTV2-1379: distinguishable fallback reasons. Additive only — classify
+   * only what the code can prove; fall back to 'no-any-offer' when the
+   * specific cause cannot be established with certainty. */
+  | 'no-confidence'
+  | 'no-market-key'
+  | 'no-participant-scope'
+  | 'no-provider-offer'
+  | 'computation-error';
 
 export interface PromotionScoreWeights {
   edge: number;

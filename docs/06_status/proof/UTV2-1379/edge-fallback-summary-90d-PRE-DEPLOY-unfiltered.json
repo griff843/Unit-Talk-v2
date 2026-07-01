@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1379",
+  "generated_at": "2026-07-01T16:12:37.826Z",
+  "evaluation_window": {
+    "from": "2026-04-02T16:12:37.826Z",
+    "to": "2026-07-01T16:12:37.826Z",
+    "days": 90
+  },
+  "total_picks_analyzed": 55858,
+  "fallback_category_counts": {
+    "domain-analysis": 3252,
+    "confidence-delta": 3842,
+    "no-confidence": 0,
+    "no-provider-offer": 0,
+    "no-market-key": 0,
+    "no-participant-scope": 0,
+    "computation-error": 0,
+    "unknown-legacy": 48764
+  },
+  "fallback_category_pct": {
+    "domain-analysis": 5.82,
+    "confidence-delta": 6.88,
+    "no-confidence": 0,
+    "no-provider-offer": 0,
+    "no-market-key": 0,
+    "no-participant-scope": 0,
+    "computation-error": 0,
+    "unknown-legacy": 87.3
+  },
+  "domain_analysis_rate_pct": 5.82,
+  "confidence_fallback_rate_pct": 94.18,
+  "by_source": {
+    "alert-agent": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 2331
+    },
+    "board-construction": {
+      "domain-analysis": 840,
+      "confidence-delta": 233,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 1
+    },
+    "human": {
+      "domain-analysis": 3,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 0
+    },
+    "manual": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 4
+    },
+    "model-driven": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 2311
+    },
+    "non-production:api": {
+      "domain-analysis": 11,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 5338
+    },
+    "non-production:canary-proof": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 2
+    },
+    "smart-form": {
+      "domain-analysis": 4,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 29542
+    },
+    "system-pick-scanner": {
+      "domain-analysis": 2394,
+      "confidence-delta": 3609,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 4652
+    },
+    "t1-proof": {
+      "domain-analysis": 0,
+      "confidence-delta": 0,
+      "no-confidence": 0,
+      "no-provider-offer": 0,
+      "no-market-key": 0,
+      "no-participant-scope": 0,
+      "computation-error": 0,
+      "unknown-legacy": 4583
+    }
+  }
+}

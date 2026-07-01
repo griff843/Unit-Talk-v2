@@ -69,6 +69,16 @@ export interface RealEdgeOptions {
 }
 
 /**
+ * UTV2-1379: raised when a provider-offer row is found but its data cannot be
+ * used (malformed odds, failed devig) or the lookup itself throws. Distinct
+ * from "no offer found" — this signals a data/computation problem, not
+ * absence of market coverage. Caught by computeRealEdge and classified as
+ * 'computation-error', never allowed to propagate into a silent
+ * confidence-delta fallback with the wrong provenance.
+ */
+class RealEdgeComputationError extends Error {}
+
+/**
  * Compute real edge against market consensus.
  *
  * Priority order:
@@ -83,78 +93,109 @@ export async function computeRealEdge(
 ): Promise<RealEdgeResult> {
   const { confidence, marketKey, selection, submittedOdds, providerOffers } = options;
 
-  // Translate canonical market key to SGO provider-native format once. The DB
-  // stores provider-format keys (e.g., 'player-points-game-ou'); canonical keys
-  // (e.g., 'player.points-all-game-ou') miss every row. For InMemory test repos
-  // that store canonical keys, resolveProviderMarketKey returns null and the
-  // canonical key is used as-is (preserving existing test behaviour).
-  const sgoProviderKey = await providerOffers.resolveProviderMarketKey(marketKey, 'sgo');
-  const resolvedKey = sgoProviderKey ?? marketKey;
-
-  // UTV2-985: Track which tiers were attempted and why each failed.
-  // This provenance is persisted in pick metadata for coverage auditing.
-  const tierReasons: EdgeFallbackReason[] = [];
-
-  // Try Pinnacle first (sharpest line)
-  const pinnacleEdge = await tryProviderEdge(
-    confidence, resolvedKey, selection, 'odds-api:pinnacle', providerOffers,
-  );
-  if (pinnacleEdge) {
-    const marketSource = 'pinnacle' as const;
-    const contrarySignal = classifyContrarianism(pinnacleEdge.modelProbability, pinnacleEdge.marketProbability, marketSource);
-    return {
-      ...pinnacleEdge, marketSource, contrarySignal,
-      provenance: { method: 'market-devigged', providerCoverageState: 'pinnacle', fallbackReason: null },
-    };
+  // UTV2-1379: classify only what the code can prove. A missing/empty market
+  // key means no tier lookup is even possible — distinct from "we looked and
+  // found nothing."
+  if (!marketKey || marketKey.trim().length === 0) {
+    return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-market-key');
   }
-  tierReasons.push('no-pinnacle-offer');
 
-  // Try multi-book consensus
-  const consensusEdge = await tryConsensusEdge(
-    confidence, resolvedKey, selection, providerOffers,
-  );
-  if (consensusEdge) {
-    const contrarySignal = classifyContrarianism(consensusEdge.modelProbability, consensusEdge.marketProbability, consensusEdge.marketSource);
-    return {
-      ...consensusEdge, contrarySignal,
-      provenance: { method: 'market-devigged', providerCoverageState: 'consensus', fallbackReason: null },
-    };
+  // Moneyline lookups require a resolvable participant (selection) to scope
+  // the provider-offer query. An empty selection on a moneyline pick means
+  // the required participant scope is unavailable — distinguishable from a
+  // provider-offer miss, which happens after a valid scope is established.
+  if (marketKey === 'moneyline' && resolveSelectionParticipantKey(marketKey, selection) === null) {
+    return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-participant-scope');
   }
-  tierReasons.push('no-consensus-books');
 
-  // Try SGO (existing single provider)
-  const sgoEdge = await tryProviderEdge(
-    confidence, resolvedKey, selection, 'sgo', providerOffers,
-  );
-  if (sgoEdge) {
-    const marketSource = 'sgo' as const;
-    const contrarySignal = classifyContrarianism(sgoEdge.modelProbability, sgoEdge.marketProbability, marketSource);
-    return {
-      ...sgoEdge, marketSource, contrarySignal,
-      provenance: { method: 'market-devigged', providerCoverageState: 'sgo', fallbackReason: null },
-    };
+  try {
+    // Translate canonical market key to SGO provider-native format once. The DB
+    // stores provider-format keys (e.g., 'player-points-game-ou'); canonical keys
+    // (e.g., 'player.points-all-game-ou') miss every row. For InMemory test repos
+    // that store canonical keys, resolveProviderMarketKey returns null and the
+    // canonical key is used as-is (preserving existing test behaviour).
+    const sgoProviderKey = await providerOffers.resolveProviderMarketKey(marketKey, 'sgo');
+    const resolvedKey = sgoProviderKey ?? marketKey;
+
+    // Try Pinnacle first (sharpest line)
+    const pinnacleEdge = await tryProviderEdge(
+      confidence, resolvedKey, selection, 'odds-api:pinnacle', providerOffers,
+    );
+    if (pinnacleEdge) {
+      const marketSource = 'pinnacle' as const;
+      const contrarySignal = classifyContrarianism(pinnacleEdge.modelProbability, pinnacleEdge.marketProbability, marketSource);
+      return {
+        ...pinnacleEdge, marketSource, contrarySignal,
+        provenance: { method: 'market-devigged', providerCoverageState: 'pinnacle', fallbackReason: null },
+      };
+    }
+
+    // Try multi-book consensus
+    const consensusEdge = await tryConsensusEdge(
+      confidence, resolvedKey, selection, providerOffers,
+    );
+    if (consensusEdge) {
+      const contrarySignal = classifyContrarianism(consensusEdge.modelProbability, consensusEdge.marketProbability, consensusEdge.marketSource);
+      return {
+        ...consensusEdge, contrarySignal,
+        provenance: { method: 'market-devigged', providerCoverageState: 'consensus', fallbackReason: null },
+      };
+    }
+
+    // Try SGO (existing single provider)
+    const sgoEdge = await tryProviderEdge(
+      confidence, resolvedKey, selection, 'sgo', providerOffers,
+    );
+    if (sgoEdge) {
+      const marketSource = 'sgo' as const;
+      const contrarySignal = classifyContrarianism(sgoEdge.modelProbability, sgoEdge.marketProbability, marketSource);
+      return {
+        ...sgoEdge, marketSource, contrarySignal,
+        provenance: { method: 'market-devigged', providerCoverageState: 'sgo', fallbackReason: null },
+      };
+    }
+
+    // Root cause UTV2-571: a single fresh non-SGO book used to miss every
+    // market-backed branch because consensus requires two books and provider
+    // lookup only checked Pinnacle/SGO directly. Use that book before falling
+    // back to self-reported confidence delta.
+    const singleBookEdge = await tryProviderEdge(
+      confidence, resolvedKey, selection, undefined, providerOffers,
+    );
+    if (singleBookEdge) {
+      const marketSource = 'single-book' as const;
+      const contrarySignal = classifyContrarianism(singleBookEdge.modelProbability, singleBookEdge.marketProbability, marketSource);
+      return {
+        ...singleBookEdge, marketSource, contrarySignal,
+        provenance: { method: 'market-devigged', providerCoverageState: 'single-book', fallbackReason: null },
+      };
+    }
+  } catch (error) {
+    if (error instanceof RealEdgeComputationError) {
+      return buildConfidenceDeltaFallback(confidence, submittedOdds, 'computation-error');
+    }
+    // Any other unexpected exception (e.g. a repository throw) is a
+    // computation error too — UTV2-1379: fail closed to a labeled fallback
+    // rather than letting the exception propagate into a silent
+    // "success" branch further up the call stack.
+    return buildConfidenceDeltaFallback(confidence, submittedOdds, 'computation-error');
   }
-  tierReasons.push('no-sgo-offer');
 
-  // Root cause UTV2-571: a single fresh non-SGO book used to miss every
-  // market-backed branch because consensus requires two books and provider
-  // lookup only checked Pinnacle/SGO directly. Use that book before falling
-  // back to self-reported confidence delta.
-  const singleBookEdge = await tryProviderEdge(
-    confidence, resolvedKey, selection, undefined, providerOffers,
-  );
-  if (singleBookEdge) {
-    const marketSource = 'single-book' as const;
-    const contrarySignal = classifyContrarianism(singleBookEdge.modelProbability, singleBookEdge.marketProbability, marketSource);
-    return {
-      ...singleBookEdge, marketSource, contrarySignal,
-      provenance: { method: 'market-devigged', providerCoverageState: 'single-book', fallbackReason: null },
-    };
-  }
-  tierReasons.push('no-any-offer');
+  // No tier found usable market data. UTV2-985: this must be explicitly
+  // labeled; it cannot masquerade as market edge.
+  return buildConfidenceDeltaFallback(confidence, submittedOdds, 'no-provider-offer');
+}
 
-  // Fallback: confidence delta (not real edge — no market data available).
-  // PM UTV2-985: this must be explicitly labeled; it cannot masquerade as market edge.
+/**
+ * Fallback: confidence delta (not real edge — no market data available).
+ * PM UTV2-985: must be explicitly labeled. PM UTV2-1379: fallbackReason must
+ * reflect the most specific cause the code can prove.
+ */
+function buildConfidenceDeltaFallback(
+  confidence: number,
+  submittedOdds: number,
+  fallbackReason: EdgeFallbackReason,
+): RealEdgeResult {
   const impliedFromOdds = americanToImplied(submittedOdds);
   const confidenceDelta = roundTo(confidence - impliedFromOdds, 6);
   const contrarySignal = classifyContrarianism(confidence, impliedFromOdds, 'confidence-delta');
@@ -165,12 +206,13 @@ export async function computeRealEdge(
     marketProbability: impliedFromOdds,
     marketSource: 'confidence-delta',
     bookCount: 0,
-    hasRealEdge: confidenceDelta > 0,
+    // UTV2-985: confidence-delta must never contribute positive edge.
+    hasRealEdge: false,
     contrarySignal,
     provenance: {
       method: 'confidence-delta',
       providerCoverageState: 'none',
-      fallbackReason: 'no-any-offer',
+      fallbackReason,
     },
   };
 }
