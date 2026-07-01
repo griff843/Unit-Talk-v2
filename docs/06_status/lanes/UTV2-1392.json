@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1392-proof-generate-sha-rebind",
   "branch": "claude/utv2-1392-proof-generate-sha-rebind",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6a1c326d02780020e6e9a1fc97b62683d0dcc230",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1139",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1392/diff-summary.md",
