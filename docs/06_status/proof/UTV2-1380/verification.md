@@ -84,3 +84,9 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 - Triggered rules from changed paths: `lifecycle-fsm`, `promotion-scoring`
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS
 - Advisory only: `r4-fault-report` missing; PM-gated advisory artifact, not required for this T2 diff
+
+## Merge SHA Binding
+
+- Merge SHA: `16015713be20fcd79b97a9e4a01f90629be241e9`
+- PR: https://github.com/griff843/Unit-Talk-v2/pull/1133
+- Merged: 2026-06-30T22:48:08Z
