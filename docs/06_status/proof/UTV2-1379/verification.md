@@ -4,6 +4,12 @@
 
 Placeholder — real assertions and content populated during implementation, before PR open.
 
+## Metadata
+
+| Field | Value |
+|---|---|
+| Commit SHA(s) | `4c893b0a15237759fc69879ade044b69d7c7b24b` (branch base at preflight time; updated at implementation) |
+
 ## Summary
 
 T1 investigation + fix lane for the domainAnalysis/confidence-delta fallback (92.4% of picks). Root cause already established via read-only investigation (see Linear comment / lane history): smart-form submissions never include confidence, skipping both confidence-delta and real-edge computation at submission time; enrichPickAtPromotionTime() checks domainAnalysis == null which is virtually always false by promotion time, making the DEBT-019 enrichment a no-op.
