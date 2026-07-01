@@ -45,9 +45,9 @@
     }
   },
   "sha_binding": {
-    "verified_source_sha": null,
-    "sha_type": "merge_sha",
-    "bound_at": null,
+    "verified_source_sha": "dd268370287b17b06f10e89d731c9e50a574dd9e",
+    "sha_type": "pre_merge_placeholder",
+    "bound_at": "2026-07-01T20:10:00.000Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "wfr_v2_validators": "pending"
