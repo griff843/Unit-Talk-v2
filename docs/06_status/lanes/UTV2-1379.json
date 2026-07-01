@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1379-domain-analysis-population",
   "branch": "claude/utv2-1379-domain-analysis-population",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "f2de2430f9d6ea9ae6bbabc1d306df9f0894708d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1136",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/domain-analysis-service.ts",
