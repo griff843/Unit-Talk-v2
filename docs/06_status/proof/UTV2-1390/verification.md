@@ -14,8 +14,8 @@ This file is the T1 verification record for UTV2-1390 (Sonnet-5-era operating mo
 | Owner | claude/utv2-1390 |
 | Date | 2026-07-01 |
 | Verifier Identity | claude/utv2-1390-workflow-reset-sonnet5-operating-model |
-| Commit SHA(s) | `7596ae2f1dedc1f91d2a47dfb0106563fb685ad2` (implementation commit, branch head; merge SHA bound post-merge) |
-| Related PRs | (filled on open) |
+| Commit SHA(s) | `eca310c23d69a0e7cbb9a92f8fd8e1b9a9aab36c` (merge SHA) |
+| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1135 |
 
 ## Scope
 

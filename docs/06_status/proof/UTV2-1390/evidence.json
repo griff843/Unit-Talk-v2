@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "pre-merge",
+  "status": "merged",
   "verifier": {
     "identity": "claude/utv2-1390-workflow-reset-sonnet5-operating-model"
   },
@@ -25,12 +25,12 @@
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "7596ae2f1dedc1f91d2a47dfb0106563fb685ad2",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-01T12:40:00.000Z",
+    "verified_source_sha": "eca310c23d69a0e7cbb9a92f8fd8e1b9a9aab36c",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-01T14:23:00.000Z",
     "ci_sentinels": {
-      "merge_gate": "pending",
-      "wfr_v2_validators": "pending"
+      "merge_gate": "pass",
+      "wfr_v2_validators": "pass"
     }
   }
 }
