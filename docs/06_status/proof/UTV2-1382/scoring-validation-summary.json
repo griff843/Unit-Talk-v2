@@ -1,0 +1,303 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1382",
+  "generated_at": "2026-07-02T05:51:47.432Z",
+  "evaluation_window": {
+    "from": "2026-06-02T05:51:47.432Z",
+    "to": "2026-07-02T05:51:47.432Z",
+    "days": 30
+  },
+  "excluded_non_production_source_count": 8062,
+  "excluded_test_fixture_count": 29250,
+  "total_picks_analyzed": 2258,
+  "fixture_saturation_by_source": {
+    "alert-agent": {
+      "total": 1742,
+      "fixture_pct": 100,
+      "clean_count": 0
+    },
+    "board-construction": {
+      "total": 465,
+      "fixture_pct": 0,
+      "clean_count": 465
+    },
+    "model-driven": {
+      "total": 1718,
+      "fixture_pct": 100,
+      "clean_count": 0
+    },
+    "smart-form": {
+      "total": 22320,
+      "fixture_pct": 100,
+      "clean_count": 0
+    },
+    "system-pick-scanner": {
+      "total": 5263,
+      "fixture_pct": 65.93,
+      "clean_count": 1793
+    }
+  },
+  "fully_saturated_sources": [
+    "alert-agent",
+    "model-driven",
+    "smart-form"
+  ],
+  "band_distribution_overall": {
+    "none": 39,
+    "SUPPRESS": 2219
+  },
+  "band_distribution_by_sport": {
+    "MLB|none": 36,
+    "MLB|SUPPRESS": 2074,
+    "NBA|none": 3,
+    "NBA|SUPPRESS": 131,
+    "NHL|SUPPRESS": 14
+  },
+  "band_distribution_by_source": {
+    "board-construction|none": 25,
+    "board-construction|SUPPRESS": 440,
+    "system-pick-scanner|none": 14,
+    "system-pick-scanner|SUPPRESS": 1779
+  },
+  "band_distribution_by_market_family": {
+    "game-line|none": 1,
+    "game-line|SUPPRESS": 56,
+    "unknown|none": 38,
+    "unknown|SUPPRESS": 2163
+  },
+  "edge_source_quality_overall": {
+    "confidence-fallback": 237,
+    "explicit": 465,
+    "market-backed": 1556
+  },
+  "edge_source_quality_overall_pct": {
+    "market-backed": 68.91,
+    "confidence-fallback": 10.5,
+    "explicit": 20.59
+  },
+  "edge_source_quality_by_source": {
+    "board-construction": {
+      "explicit": 465
+    },
+    "system-pick-scanner": {
+      "confidence-fallback": 237,
+      "market-backed": 1556
+    }
+  },
+  "kelly_sizing_distribution": {
+    "count": 1955,
+    "min": 0,
+    "max": 0.078248,
+    "mean": 0.0011,
+    "zero_count": 1865,
+    "zero_pct": 95.4
+  },
+  "kelly_present_count": 1955,
+  "kelly_present_pct": 86.58,
+  "fallback_reason_distribution_overall": {
+    "domain-analysis": 2258
+  },
+  "fallback_reason_distribution_by_source": {
+    "board-construction": {
+      "domain-analysis": 465
+    },
+    "system-pick-scanner": {
+      "domain-analysis": 1793
+    }
+  },
+  "suppress_count": 2228,
+  "suppress_pct": 98.67,
+  "suppress_reject_reason_counts": {
+    "board cap for the slate has been reached": 61,
+    "board cap for the slate has been reached | pick confidence is below the best-bets floor": 70,
+    "compensating-rollback: history insert failure": 2,
+    "exposure-game-limit": 9,
+    "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached": 487,
+    "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | board cap for the sport has been reached | board cap for the game or thesis cluster has been reached": 1,
+    "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor": 258,
+    "pick is outside the posting window | board cap for the slate has been reached": 161,
+    "pick is outside the posting window | board cap for the slate has been reached | pick confidence is below the best-bets floor": 99,
+    "pick is outside the posting window | Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached": 782,
+    "pick is outside the posting window | Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor": 298
+  },
+  "top_promoted_sanity_check": [],
+  "top_rejected_sanity_check": [
+    {
+      "id": "55e26628-76ce-4603-ae5d-8b13beb3a219",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 72.89,
+      "promotion_reason": "pick is outside the posting window | Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "cc05975e-2169-4969-b121-43101f600b05",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 72.43,
+      "promotion_reason": "pick is outside the posting window | Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "bf6e1272-0ed5-4495-bbc9-9d08f1c2e418",
+      "source": "board-construction",
+      "sport": "MLB",
+      "market": "moneyline",
+      "band": "SUPPRESS",
+      "promotion_score": 70.3,
+      "promotion_reason": "pick is outside the posting window | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "76b3ba25-f885-47ea-8687-9684e7d095b1",
+      "source": "board-construction",
+      "sport": "MLB",
+      "market": "moneyline",
+      "band": "SUPPRESS",
+      "promotion_score": 70.07,
+      "promotion_reason": "pick is outside the posting window | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "d252c2ef-99fa-44e3-b163-dd8c7851285e",
+      "source": "board-construction",
+      "sport": "MLB",
+      "market": "moneyline",
+      "band": "SUPPRESS",
+      "promotion_score": 70.07,
+      "promotion_reason": "pick is outside the posting window | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "9885b571-145f-4b30-8834-00c53119495e",
+      "source": "board-construction",
+      "sport": "MLB",
+      "market": "moneyline",
+      "band": "SUPPRESS",
+      "promotion_score": 70.07,
+      "promotion_reason": "pick is outside the posting window | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "45cd64c9-e930-48b9-9f84-97fcd2419d54",
+      "source": "board-construction",
+      "sport": "MLB",
+      "market": "moneyline",
+      "band": "SUPPRESS",
+      "promotion_score": 69.38,
+      "promotion_reason": "pick is outside the posting window | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "6b523e16-ecd8-49dc-b75b-8e4b95ad761c",
+      "source": "board-construction",
+      "sport": "MLB",
+      "market": "moneyline",
+      "band": "SUPPRESS",
+      "promotion_score": 69.14,
+      "promotion_reason": "pick is outside the posting window | board cap for the slate has been reached",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "1166100a-de0d-43c9-a1d5-4fb012c82612",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 66.41,
+      "promotion_reason": "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "a5fba376-2689-4e20-966b-a7314c2176bd",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 66.18,
+      "promotion_reason": "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "0f071253-dbe9-4f5b-b290-b5bad4e304bc",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 65.95,
+      "promotion_reason": "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "914dd6f0-1729-4a75-8250-34ec96a419f3",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 65.95,
+      "promotion_reason": "pick is outside the posting window | Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "b65e3e30-1cd5-49d1-a9fb-c6a8ad29beb6",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 65.95,
+      "promotion_reason": "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "7a317476-fa63-4f3e-ba85-318e2369a1d4",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 65.49,
+      "promotion_reason": "pick is outside the posting window | Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    },
+    {
+      "id": "9c22832d-84af-4123-b1c2-12aa13930445",
+      "source": "system-pick-scanner",
+      "sport": "MLB",
+      "market": "game_total_ou",
+      "band": "SUPPRESS",
+      "promotion_score": 65.26,
+      "promotion_reason": "Kelly fraction is 0 with Kelly data present — no positive EV at offered price (risk-v1) | board cap for the slate has been reached | pick confidence is below the best-bets floor",
+      "fallback_reason": "domain-analysis"
+    }
+  ],
+  "stale_postgame_suppress_leakage": {
+    "stale_promoted_count": 0,
+    "postgame_promoted_count": 0,
+    "suppress_band_but_promoted_count": 0,
+    "total_leakage": 0,
+    "examples": []
+  },
+  "source_by_source_scoring_health": {
+    "board-construction": {
+      "total": 465,
+      "band_coverage_pct": 94.62,
+      "kelly_coverage_pct": 85.38,
+      "domain_analysis_coverage_pct": 100,
+      "suppressed_pct": 95.91
+    },
+    "system-pick-scanner": {
+      "total": 1793,
+      "band_coverage_pct": 99.22,
+      "kelly_coverage_pct": 86.89,
+      "domain_analysis_coverage_pct": 100,
+      "suppressed_pct": 99.39
+    }
+  },
+  "verdict": "PARTIAL",
+  "verdict_reasons": [
+    "sources with 0 clean production picks in this window (100% test/proof fixtures): alert-agent, model-driven, smart-form — cannot be validated"
+  ]
+}
