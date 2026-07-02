@@ -162,6 +162,7 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 - Before any work, run `git fetch origin && git pull --ff-only origin main` to ensure local main matches remote. Stale local state produces false premises.
 - Run `/clear` at major task boundaries.
 - After `/clear`, re-read this file. The `UserPromptSubmit` hook auto-injects system state — invoke `/system-state-loader` only if the hook data appears stale or missing.
+- Standing guardrails (things no agent may do regardless of a directive) live in `docs/05_operations/STANDING_GUARDRAILS.md` and are auto-injected every prompt by the same hook. PM: edit that file instead of re-pasting guardrails in chat.
 - If context degrades, clear immediately.
 - Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
 - PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.

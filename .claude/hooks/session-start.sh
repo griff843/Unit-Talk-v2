@@ -12,7 +12,11 @@
 # Sources (local only — no MCP, no network):
 #   - docs/06_status/lanes/*.json → active lane state
 #   - docs/06_status/PROGRAM_STATUS.md → active milestone
+#   - docs/05_operations/STANDING_GUARDRAILS.md → PM-maintained guardrails
 #   - git log / git status      → recent commits and working tree
+#
+# Standing guardrails are checked and injected every prompt regardless of the
+# staleness window above, so the PM never needs to re-paste them in chat.
 #
 # Always exits 0 — never blocks a user prompt.
 
@@ -24,12 +28,29 @@ STAMP_FILE="$SESSION_STATE_DIR/.state-stamp"
 STATE_FILE="$SESSION_STATE_DIR/SYSTEM_STATE.md"
 MAX_AGE=1800  # 30 minutes
 
+# ── Standing guardrails ──────────────────────────────────────────────────────
+# PM-maintained, dated lines in docs/05_operations/STANDING_GUARDRAILS.md.
+# Checked every prompt (cheap) so guardrails never need re-pasting by hand,
+# independent of the full state-refresh staleness window below.
+GUARDRAILS_FILE="$ROOT/docs/05_operations/STANDING_GUARDRAILS.md"
+GUARDRAILS_OUT=""
+if [ -f "$GUARDRAILS_FILE" ]; then
+  GUARDRAILS_OUT=$(grep -E '^\[[0-9]{4}-[0-9]{2}-[0-9]{2}\]' "$GUARDRAILS_FILE" || true)
+fi
+
 # ── Staleness check ──────────────────────────────────────────────────────────
 if [ -f "$STAMP_FILE" ]; then
   STAMP=$(cat "$STAMP_FILE" 2>/dev/null || echo "0")
   NOW=$(date +%s)
   AGE=$(( NOW - STAMP ))
   if [ "$AGE" -lt "$MAX_AGE" ]; then
+    if [ -n "$GUARDRAILS_OUT" ]; then
+      python3 -c "
+import json, sys
+lines = sys.argv[1].strip().splitlines()
+print(json.dumps({'systemMessage': '[guardrails] ' + ' || '.join(lines)}))
+" "$GUARDRAILS_OUT" 2>/dev/null || true
+    fi
     exit 0
   fi
 fi
@@ -179,6 +200,9 @@ $LANES_OUT
 ## Dispatch Slots
 $SLOT_INFO
 
+## Standing Guardrails
+${GUARDRAILS_OUT:-none recorded}
+
 ## Ghost Lanes
 ${GHOST_WARNING:-none}
 
@@ -200,7 +224,9 @@ date +%s > "$STAMP_FILE"
 
 GHOST_PART=""
 [ -n "$GHOST_WARNING" ] && GHOST_PART=" | $GHOST_WARNING"
-MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE | Full state: .out/ops/session-state/SYSTEM_STATE.md"
+GUARDRAIL_PART=""
+[ -n "$GUARDRAILS_OUT" ] && GUARDRAIL_PART=" | guardrails: $(printf '%s' "$GUARDRAILS_OUT" | tr '\n' ';' | head -c 300)"
+MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE$GUARDRAIL_PART | Full state: .out/ops/session-state/SYSTEM_STATE.md"
 
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "
