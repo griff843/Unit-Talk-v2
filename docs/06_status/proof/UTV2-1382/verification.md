@@ -63,5 +63,9 @@ Issue-specific proof:
 
 ## Merge SHA
 
+Branch head SHA at proof time: `c2aedd0dc2803a560ea3e91719cc2df19f466ff1`.
+
 Pending merge — this lane closes on tier policy (T2: orchestrator merge on
 green, no PM_VERDICT required), per `docs/05_operations/WORKFLOW_SPEC.md`.
+This section will be rebound to the merge SHA automatically by
+`post-merge-lane-close.yml` (`ops:proof-generate --merge-sha`) after merge.
