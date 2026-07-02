@@ -35,6 +35,10 @@ tsx --test apps/api/src/submission-service.test.ts
 
 Environment loads `local.env` > `.env` > `.env.example`, parsed by `@unit-talk/config` (no dotenv). Supabase project ref: `zfzdnfwdarxucxtaojxm`.
 
+Before writing any SQL against Supabase (via MCP `execute_sql` or otherwise), read `packages/db/src/database.types.ts` (or run `mcp list_tables`) for real table/column names — never guess. Regenerate it with `pnpm supabase:types` after a migration; stale types are worse than none.
+
+Never `sleep`-then-poll for CI/merge status — the harness blocks bare sleep chains before a check command. Use a background `Monitor` until-loop or `ScheduleWakeup`, and report results proactively rather than waiting to be asked for a status update. `.github/workflows/track-a-monitor.yml` is the durable replacement for ad hoc session-cron monitoring — extend it rather than hand-rolling a new temporary cron.
+
 ---
 
 ## Truth hierarchy (ranked)
