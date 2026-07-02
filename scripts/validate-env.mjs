@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 const envExamplePath = path.join(root, '.env.example');
@@ -26,10 +27,25 @@ const discouragedSharedSecretKeys = [
   'SLACK_SIGNING_SECRET',
 ];
 
-function parseEnvFile(filePath) {
+const BOM_BYTES = Buffer.from([0xef, 0xbb, 0xbf]);
+
+export function checkForBom(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.length >= 3 && buffer.subarray(0, 3).equals(BOM_BYTES)) {
+    const fileName = path.basename(filePath);
+    throw new Error(
+      `${fileName} has a UTF-8 BOM at byte 0 — re-save the file without a BOM, e.g. ` +
+        `sed -i '1s/^\\xef\\xbb\\xbf//' ${fileName}`,
+    );
+  }
+}
+
+export function parseEnvFile(filePath) {
   if (!fs.existsSync(filePath)) {
     throw new Error(`Missing env file: ${path.basename(filePath)}`);
   }
+
+  checkForBom(filePath);
 
   const raw = fs.readFileSync(filePath, 'utf8');
   const result = new Map();
@@ -53,25 +69,44 @@ function parseEnvFile(filePath) {
   return result;
 }
 
-const sharedEnv = parseEnvFile(envExamplePath);
-parseEnvFile(localEnvPath);
-
-const missingShared = requiredSharedKeys.filter((key) => !sharedEnv.has(key));
-if (missingShared.length > 0) {
-  console.error(`Missing required keys in .env.example: ${missingShared.join(', ')}`);
-  process.exit(1);
+export function checkMissingSharedKeys(sharedEnv) {
+  return requiredSharedKeys.filter((key) => !sharedEnv.has(key));
 }
 
-const leakedSecrets = discouragedSharedSecretKeys.filter((key) => {
-  const value = sharedEnv.get(key);
-  return value && value !== '';
-});
-
-if (leakedSecrets.length > 0) {
-  console.error(
-    `.env.example contains secret-bearing keys that should stay blank: ${leakedSecrets.join(', ')}`,
-  );
-  process.exit(1);
+export function checkLeakedSecrets(sharedEnv) {
+  return discouragedSharedSecretKeys.filter((key) => {
+    const value = sharedEnv.get(key);
+    return value && value !== '';
+  });
 }
 
-console.log('Environment files passed validation.');
+function main() {
+  let sharedEnv;
+  try {
+    sharedEnv = parseEnvFile(envExamplePath);
+    parseEnvFile(localEnvPath);
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
+
+  const missingShared = checkMissingSharedKeys(sharedEnv);
+  if (missingShared.length > 0) {
+    console.error(`Missing required keys in .env.example: ${missingShared.join(', ')}`);
+    process.exit(1);
+  }
+
+  const leakedSecrets = checkLeakedSecrets(sharedEnv);
+  if (leakedSecrets.length > 0) {
+    console.error(
+      `.env.example contains secret-bearing keys that should stay blank: ${leakedSecrets.join(', ')}`,
+    );
+    process.exit(1);
+  }
+
+  console.log('Environment files passed validation.');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}
