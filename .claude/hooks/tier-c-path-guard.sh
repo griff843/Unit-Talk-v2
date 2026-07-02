@@ -134,9 +134,9 @@ PYEOF
     exit 0
   fi
 
-  echo "TIER-C WARNING: $matched"
-  echo "Reason: $reason"
-  echo "Confirm: correct tier classification, PM in session (or standing authorization applies). Hook: tier-c-path-guard."
+  echo "TIER-C WARNING: $matched" >&2
+  echo "Reason: $reason" >&2
+  echo "Confirm: correct tier classification, PM in session (or standing authorization applies). Hook: tier-c-path-guard." >&2
   exit 2
 fi
 

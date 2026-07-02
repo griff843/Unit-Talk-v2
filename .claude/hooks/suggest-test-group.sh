@@ -35,7 +35,7 @@ elif echo "$fp" | grep -qE '^packages/domain/src/(outcomes|market|eval|edge|roll
 fi
 
 if [ -n "$group" ]; then
-  echo "Suggested: pnpm $group"
+  echo "Suggested: pnpm $group" >&2
   exit 2
 fi
 

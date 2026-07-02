@@ -66,9 +66,9 @@ for f in $verification_files; do
 done
 
 if [ "${#failures[@]}" -gt 0 ]; then
-  echo "PROOF VALIDATOR: staged proof bundle has issues:"
+  echo "PROOF VALIDATOR: staged proof bundle has issues:" >&2
   for msg in "${failures[@]}"; do
-    echo "  - $msg"
+    echo "  - $msg" >&2
   done
   exit 2
 fi
