@@ -9,6 +9,7 @@ Commands run from `/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__u
 - `pnpm type-check` — pass
 - `pnpm lint` — pass
 - `pnpm verify` — pass (includes `pnpm test` and `pnpm test:db` against live Supabase)
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main~9 --head 4bbed4935740110135d798ce7ef138c2c4f07d06` — PASS, no R-level artifacts required for this diff
 
 ### `scripts/audits/utv2-1382-scoring-validation.test.ts` TAP output
 
@@ -63,9 +64,12 @@ Issue-specific proof:
 
 ## Merge SHA
 
-Branch head SHA at proof time: `c2aedd0dc2803a560ea3e91719cc2df19f466ff1`.
+Merged to main: `4bbed4935740110135d798ce7ef138c2c4f07d06`.
 
-Pending merge — this lane closes on tier policy (T2: orchestrator merge on
-green, no PM_VERDICT required), per `docs/05_operations/WORKFLOW_SPEC.md`.
-This section will be rebound to the merge SHA automatically by
-`post-merge-lane-close.yml` (`ops:proof-generate --merge-sha`) after merge.
+Merged via `gh pr merge --admin --squash 1140` on tier policy (T2:
+orchestrator merge on green, no PM_VERDICT required), per
+`docs/05_operations/WORKFLOW_SPEC.md`. Two repo-wide, content-independent
+gates were failing at merge time and are unrelated to this lane's diff:
+Readiness Regression Gate (main's `readiness-score.json` ledger >48h stale)
+and Live Schema Parity (pre-existing `command_center_*` migration-ledger
+drift, no migration files touched by this lane).

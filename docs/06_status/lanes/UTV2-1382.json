@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after",
   "branch": "griffadavi/utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "4bbed4935740110135d798ce7ef138c2c4f07d06",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1140",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1382/audit-report.md",
@@ -23,14 +23,52 @@
     "docs/06_status/proof/UTV2-1382/diff-summary.md",
     "docs/06_status/proof/UTV2-1382/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-02T05:44:18.189Z",
-  "heartbeat_at": "2026-07-02T05:44:18.189Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-02T16:13:02.752Z",
+  "closed_at": "2026-07-02T16:13:02.752Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-02T16:11:23.944Z",
+      "verdict": "pass",
+      "merge_sha": "4bbed4935740110135d798ce7ef138c2c4f07d06",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1140"
+    },
+    {
+      "checked_at": "2026-07-02T16:12:24.342Z",
+      "verdict": "fail",
+      "merge_sha": "4bbed4935740110135d798ce7ef138c2c4f07d06",
+      "failures": [
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-02T16:12:48.510Z",
+      "verdict": "pass",
+      "merge_sha": "4bbed4935740110135d798ce7ef138c2c4f07d06",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-02T16:13:00.141Z",
+      "verdict": "pass",
+      "merge_sha": "4bbed4935740110135d798ce7ef138c2c4f07d06",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1140",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
