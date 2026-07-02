@@ -219,6 +219,26 @@ function runCli(): void {
     return;
   }
 
+  const missing: string[] = [];
+  if (!input.issue_id) missing.push('--issue');
+  if (!input.branch) missing.push('--branch');
+  if ((input.operation === 'pr-merge' || input.operation === 'pr-update-branch') && !input.pr) {
+    missing.push('--pr');
+  }
+  if (missing.length > 0) {
+    const examplePr =
+      input.operation === 'pr-merge' || input.operation === 'pr-update-branch' ? ' --pr 456' : '';
+    emitJson({
+      ok: false,
+      code: 'merge_wrapper_invalid_input',
+      message:
+        `Missing required argument(s): ${missing.join(', ')}. ` +
+        `Example: pnpm ops:merge-wrapper ${input.operation} --issue UTV2-123 --branch codex/utv2-123-example${examplePr}`,
+    });
+    process.exitCode = 1;
+    return;
+  }
+
   const result = runExtendedMergeWrapper({
     operation: input.operation as ExtendedMergeWrapperOperation,
     issue_id: input.issue_id,

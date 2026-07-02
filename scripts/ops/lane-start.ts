@@ -277,17 +277,26 @@ function main(): void {
   const fileArgs = flags.get('files') ?? [];
 
   try {
+    const missing: string[] = [];
     if (!tierInput) {
-      throw new Error('Missing required --tier');
+      missing.push('--tier');
     }
     if (!branch) {
-      throw new Error('Missing required --branch');
+      missing.push('--branch');
     }
     if (!laneType) {
-      throw new Error('Missing required --lane-type');
+      missing.push('--lane-type');
     }
     if (fileArgs.length === 0) {
-      throw new Error('Missing required --files (repeatable, at least one required)');
+      missing.push('--files (repeatable, at least one required)');
+    }
+    if (missing.length > 0) {
+      throw new Error(
+        `Missing required argument(s): ${missing.join(', ')}. ` +
+          `Example: pnpm ops:lane-start ${issueId || 'UTV2-123'} --tier T2 --branch codex/utv2-123-example ` +
+          `--lane-type <type> --files path/to/file.ts [--files path/to/other.ts]. ` +
+          `Valid --lane-type values: ${CANONICAL_LANE_TYPES.join(', ')} (or legacy: ${Object.keys(LEGACY_EXECUTOR_MAP).join(', ')}).`,
+      );
     }
 
     // Fail closed on an unsafe lane substrate before reserving a lease or

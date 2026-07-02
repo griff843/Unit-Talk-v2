@@ -188,20 +188,29 @@ function recordMergeCommand(
   flags: Map<string, string[]>,
   json: boolean,
 ): void {
+  const prInput = getFlag(flags, 'pr') ?? getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr-number');
+  const missing: string[] = [];
   if (!issueId) {
-    throw new Error('Missing issue id');
+    missing.push('issue id (positional arg)');
   }
-  if (!manifestExists(issueId.toUpperCase())) {
+  if (!prInput) {
+    missing.push('--pr (GitHub PR URL or number)');
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required argument(s): ${missing.join(', ')}. ` +
+        'Example: pnpm ops:lane-manifest -- record-merge UTV2-123 --pr 456',
+    );
+  }
+
+  // Issue id is required before we can look up the manifest, so this check
+  // stays after the combined missing-args check above but before manifest lookup.
+  if (!manifestExists(issueId!.toUpperCase())) {
     throw new Error(`Manifest not found for ${issueId}`);
   }
 
-  const prInput = getFlag(flags, 'pr') ?? getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr-number');
-  if (!prInput) {
-    throw new Error('Missing --pr (GitHub PR URL or number)');
-  }
-
-  const manifest = readManifest(issueId.toUpperCase());
-  const pr = fetchPullRequestMergeInfo(prInput);
+  const manifest = readManifest(issueId!.toUpperCase());
+  const pr = fetchPullRequestMergeInfo(prInput!);
   const result = applyPrMergeToManifest({
     manifest,
     pr,
