@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1397-evidence-flow-proof-real-production-samples-for-alert-agent",
   "branch": "griffadavi/utv2-1397-evidence-flow-proof-real-production-samples-for-alert-agent",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "10cca5ec5667c46fcdc98a0f1a9b66208f40c9e7",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1141",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,43 @@
     "docs/06_status/proof/UTV2-1397/diff-summary.md",
     "docs/06_status/proof/UTV2-1397/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-02T16:38:14.754Z",
-  "heartbeat_at": "2026-07-02T16:53:38.688Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-02T18:45:28.634Z",
+  "closed_at": "2026-07-02T18:45:28.634Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1397-evidence-flow-proof-real-production-samples-for-alert-agent.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-02T18:44:16.598Z",
+      "verdict": "pass",
+      "merge_sha": "10cca5ec5667c46fcdc98a0f1a9b66208f40c9e7",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1141"
+    },
+    {
+      "checked_at": "2026-07-02T18:44:44.367Z",
+      "verdict": "pass",
+      "merge_sha": "10cca5ec5667c46fcdc98a0f1a9b66208f40c9e7",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-02T18:45:26.001Z",
+      "verdict": "pass",
+      "merge_sha": "10cca5ec5667c46fcdc98a0f1a9b66208f40c9e7",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1141",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

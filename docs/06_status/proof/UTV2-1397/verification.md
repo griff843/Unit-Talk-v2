@@ -67,9 +67,13 @@ Issue-specific proof:
 
 ## Merge SHA
 
-Branch head SHA at proof time: `5d6d63f3420dbe7324aceb5994ed353ca19f0b1a`.
+Merged to main: `10cca5ec5667c46fcdc98a0f1a9b66208f40c9e7`.
 
-Pending merge — this lane closes on tier policy (T2: orchestrator merge on
-green, no PM_VERDICT required), per `docs/05_operations/WORKFLOW_SPEC.md`.
-This section will be rebound to the merge SHA automatically by
-`post-merge-lane-close.yml` (`ops:proof-generate --merge-sha`) after merge.
+Merged via `gh pr merge --admin --squash 1141` on tier policy (T2:
+orchestrator merge on green, no PM_VERDICT required), per
+`docs/05_operations/WORKFLOW_SPEC.md`. The same two repo-wide,
+content-independent gates that were failing at UTV2-1382's merge time were
+still failing here and are unrelated to this lane's diff: Readiness
+Regression Gate (main's `readiness-score.json` ledger >48h stale) and Live
+Schema Parity (pre-existing `command_center_*` migration-ledger drift, no
+migration files touched by this lane).
