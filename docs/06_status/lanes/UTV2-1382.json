@@ -16,7 +16,8 @@
     "docs/06_status/proof/UTV2-1382/diff-summary.md",
     "docs/06_status/proof/UTV2-1382/scoring-validation-summary.json",
     "scripts/audits/utv2-1382-scoring-validation.ts",
-    "scripts/audits/utv2-1382-scoring-validation.test.ts"
+    "scripts/audits/utv2-1382-scoring-validation.test.ts",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1382/diff-summary.md",
