@@ -8,7 +8,7 @@
   "branch": "griffadavi/utv2-1400-source-activationdeprecation-decision-packet-alert-agent",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1142",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1400/decision-packet.md",
@@ -19,9 +19,9 @@
     "docs/06_status/proof/UTV2-1400/diff-summary.md",
     "docs/06_status/proof/UTV2-1400/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-02T22:31:09.820Z",
-  "heartbeat_at": "2026-07-02T22:31:09.820Z",
+  "heartbeat_at": "2026-07-02T22:47:49.067Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1400-source-activationdeprecation-decision-packet-alert-agent.json",
