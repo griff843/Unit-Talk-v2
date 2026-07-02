@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1400-source-activationdeprecation-decision-packet-alert-agent",
   "branch": "griffadavi/utv2-1400-source-activationdeprecation-decision-packet-alert-agent",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d9fac0c5109cda211ca43e72705a0eb90d0723cc",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1142",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,44 @@
     "docs/06_status/proof/UTV2-1400/diff-summary.md",
     "docs/06_status/proof/UTV2-1400/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-02T22:31:09.820Z",
-  "heartbeat_at": "2026-07-02T22:47:49.067Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-02T23:54:06.376Z",
+  "closed_at": "2026-07-02T23:54:06.376Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1400-source-activationdeprecation-decision-packet-alert-agent.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-02T23:53:14.608Z",
+      "verdict": "pass",
+      "merge_sha": "d9fac0c5109cda211ca43e72705a0eb90d0723cc",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1142"
+    },
+    {
+      "checked_at": "2026-07-02T23:53:47.579Z",
+      "verdict": "pass",
+      "merge_sha": "d9fac0c5109cda211ca43e72705a0eb90d0723cc",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-02T23:54:02.690Z",
+      "verdict": "pass",
+      "merge_sha": "d9fac0c5109cda211ca43e72705a0eb90d0723cc",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1142",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

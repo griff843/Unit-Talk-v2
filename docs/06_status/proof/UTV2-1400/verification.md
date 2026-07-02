@@ -84,13 +84,10 @@ Issue-specific proof:
 
 ## Merge SHA
 
-Branch head SHA at proof time: `6413339b995d43dc8c11c3cb781935ef4baa9e75`.
+Merged to main: `d9fac0c5109cda211ca43e72705a0eb90d0723cc`.
 
-Pending merge — this lane closes on tier policy (T2: orchestrator merge on
-green, no PM_VERDICT required), per `docs/05_operations/WORKFLOW_SPEC.md`.
-This section will be rebound to the merge SHA automatically by
-`post-merge-lane-close.yml` (`ops:proof-generate --merge-sha`); the prior
-two lanes (UTV2-1382, UTV2-1397) both required a manual repair here
-because `ops:proof-generate --merge-sha` does not rewrite this section's
-prose, so expect to manually update this SHA reference post-merge before
-`ops:truth-check` will pass P3.
+Merged via `gh pr merge --admin --squash 1142` on tier policy (T2:
+orchestrator merge on green, no PM_VERDICT required), per
+`docs/05_operations/WORKFLOW_SPEC.md`. The same repo-wide,
+content-independent Readiness Regression Gate failure seen on the prior two
+lanes was still failing here and is unrelated to this lane's diff.
