@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1397",
+  "generated_at": "2026-07-02T16:39:46.456Z",
+  "evaluation_window": {
+    "from": "2026-06-02T16:39:46.456Z",
+    "to": "2026-07-02T16:39:46.456Z",
+    "days": 30
+  },
+  "mode": "observe-only",
+  "target_sources": [
+    "alert-agent",
+    "model-driven",
+    "smart-form"
+  ],
+  "by_source": {
+    "alert-agent": {
+      "real_sample_count": 0,
+      "excluded_fixture_count": 1745,
+      "domain_analysis_present_pct": 0,
+      "edge_source_quality": {},
+      "fallback_reason": {},
+      "promotion_status": {},
+      "delivery_status": null,
+      "verdict": "INSUFFICIENT_DATA"
+    },
+    "model-driven": {
+      "real_sample_count": 0,
+      "excluded_fixture_count": 1721,
+      "domain_analysis_present_pct": 0,
+      "edge_source_quality": {},
+      "fallback_reason": {},
+      "promotion_status": {},
+      "delivery_status": null,
+      "verdict": "INSUFFICIENT_DATA"
+    },
+    "smart-form": {
+      "real_sample_count": 0,
+      "excluded_fixture_count": 22349,
+      "domain_analysis_present_pct": 0,
+      "edge_source_quality": {},
+      "fallback_reason": {},
+      "promotion_status": {},
+      "delivery_status": null,
+      "verdict": "INSUFFICIENT_DATA"
+    }
+  },
+  "insufficient_data_sources": [
+    "alert-agent",
+    "model-driven",
+    "smart-form"
+  ],
+  "overall_verdict": "INSUFFICIENT_DATA"
+}
