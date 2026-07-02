@@ -27,6 +27,7 @@ pnpm supabase:types    # regenerate database.types.ts after a migration
 pnpm ops:brief         # current system state: lanes, Linear queue, runtime status
 pnpm ops:digest        # daily dispatch digest — surfaces executable candidates
 pnpm ops:truth-check   # done-gate for a lane (pass UTV2-### as argument)
+pnpm ops:lane-closeout # orchestrates record-merge -> truth-check -> lane-close -> tier-label in order (pass --issue UTV2-### [--pr <url-or-number>] [--dry-run])
 pnpm ops:scope-suggest # auto-suggest file scope before ops:lane-start (pass --issue UTV2-###)
 
 # Run a single test file
@@ -94,6 +95,8 @@ Before starting: preflight token valid, tier label set, file scope declared, no 
 5. For T1: `pnpm test:db` green + evidence bundle generated and validated
 6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
 7. `ops:truth-check` runs and exits 0
+
+`pnpm ops:lane-closeout --issue <ID> [--pr <url-or-number>]` is the recommended single entry point for the steps that follow merge: it runs record-merge (skipping it if already recorded), `ops:truth-check`, `ops:lane-close`, and tier-label application in the correct order and fails closed on the first step that fails — instead of four manual CLI invocations run by hand in a specific order. It does **not** replace steps 1–4 above: `pnpm verify` and confirming CI is green on the merge SHA remain manual preconditions that must be done before running it. Use `--dry-run` to preview what it would do (including whether record-merge would be skipped) without mutating anything. The manual step-by-step sequence above remains the documented fallback for cases `ops:lane-closeout` cannot handle (e.g. repairing a drifted manifest, which stays on `ops:lane-close --repair-merged`).
 
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
