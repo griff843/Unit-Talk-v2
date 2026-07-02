@@ -67,7 +67,7 @@ Issue-specific proof:
 
 ## Merge SHA
 
-Branch head SHA at proof time: `c9a63d5992e5249463ad38e990cf79e5e924d330`.
+Branch head SHA at proof time: `5d6d63f3420dbe7324aceb5994ed353ca19f0b1a`.
 
 Pending merge — this lane closes on tier policy (T2: orchestrator merge on
 green, no PM_VERDICT required), per `docs/05_operations/WORKFLOW_SPEC.md`.
