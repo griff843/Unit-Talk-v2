@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1382",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after",
+  "branch": "griffadavi/utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1382/audit-report.md,docs/06_status/proof/UTV2-1382/verification.md,docs/06_status/proof/UTV2-1382/diff-summary.md,scripts/audits/utv2-1382-scoring-validation.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1382/diff-summary.md",
+    "docs/06_status/proof/UTV2-1382/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-02T05:44:18.189Z",
+  "heartbeat_at": "2026-07-02T05:44:18.189Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1382-scoring-validation-audit-verify-scores-are-meaningful-after",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
