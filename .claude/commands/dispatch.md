@@ -238,7 +238,6 @@ Do not begin implementation until Griff approves — either in-session or via a 
 If `pnpm verify` fails, fix and re-run. If R-level flags missing artifacts, generate them in **Batch B**:
 
 **Batch B — run in parallel only if needed (artifacts flagged by R-level):**
-- `r2-determinism`: `tsx scripts/live-data-lab-runner.ts` (skip if file not found)
 - `r3-shadow-report`: `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (skip if file not found)
 - `qa-experience-report`: `pnpm qa:experience --regression --mode fast` (skip if file not found)
 
@@ -273,7 +272,6 @@ Paste the PASS output into PR body under `## R-level compliance`.
 If `pnpm verify` fails, fix and re-run. If R-level flags missing artifacts, generate them in **Batch B**:
 
 **Batch B — run in parallel only if needed (artifacts flagged by R-level):**
-- `r2-determinism`: `tsx scripts/live-data-lab-runner.ts` (skip if file not found)
 - `r3-shadow-report`: `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (skip if file not found)
 - `qa-experience-report`: `pnpm qa:experience --regression --mode fast` (skip if file not found)
 
