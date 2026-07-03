@@ -32,10 +32,10 @@
     "docs/06_status/proof/UTV2-1401/diff-summary.md",
     "docs/06_status/proof/UTV2-1401/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-03T01:52:01.580Z",
-  "heartbeat_at": "2026-07-03T02:41:38.762Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-03T02:59:04.889Z",
+  "closed_at": "2026-07-03T02:59:04.889Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1401-ops-harness-hardening-batch.json",
   "created_by": "claude",
@@ -113,6 +113,18 @@
         "P14"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-03T02:59:02.378Z",
+      "verdict": "pass",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1143",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
