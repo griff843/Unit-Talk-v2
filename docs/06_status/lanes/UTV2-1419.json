@@ -7,21 +7,43 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/chore__utv2-1419-constitution-gap-audit-doc",
   "branch": "chore/utv2-1419-constitution-gap-audit-doc",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "7e65ebc318d8aa22b51e60884672101bedbe127e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1144",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/gap-map/constitution-gap-audit-2026-07-03.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-03T14:42:03.394Z",
-  "heartbeat_at": "2026-07-03T14:42:03.394Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-03T15:08:01.882Z",
+  "closed_at": "2026-07-03T15:08:01.882Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/chore/utv2-1419-constitution-gap-audit-doc.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-03T15:07:48.649Z",
+      "verdict": "pass",
+      "merge_sha": "7e65ebc318d8aa22b51e60884672101bedbe127e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1144"
+    },
+    {
+      "checked_at": "2026-07-03T15:07:59.201Z",
+      "verdict": "pass",
+      "merge_sha": "7e65ebc318d8aa22b51e60884672101bedbe127e",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1144",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
