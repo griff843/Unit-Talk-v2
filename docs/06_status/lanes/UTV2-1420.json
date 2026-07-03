@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/chore__utv2-1420-staleness-sweep",
   "branch": "chore/utv2-1420-staleness-sweep",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "304c95db0bec7087f34ef4f483803c91b22c213d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1145",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/commands/dispatch.md",
@@ -17,14 +17,36 @@
     "docs/05_operations/lane-manager.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-03T15:50:15.043Z",
-  "heartbeat_at": "2026-07-03T15:50:15.043Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-03T16:03:09.678Z",
+  "closed_at": "2026-07-03T16:03:09.678Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/chore/utv2-1420-staleness-sweep.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-03T16:02:54.317Z",
+      "verdict": "pass",
+      "merge_sha": "304c95db0bec7087f34ef4f483803c91b22c213d",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1145"
+    },
+    {
+      "checked_at": "2026-07-03T16:03:06.814Z",
+      "verdict": "pass",
+      "merge_sha": "304c95db0bec7087f34ef4f483803c91b22c213d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1145",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
