@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1419",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T3",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/chore__utv2-1419-constitution-gap-audit-doc",
@@ -11,7 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/constitution-gap-audit-2026-07-03.md"
+    "docs/06_status/gap-map/constitution-gap-audit-2026-07-03.md"
   ],
   "expected_proof_paths": [],
   "status": "started",
