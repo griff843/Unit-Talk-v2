@@ -32,8 +32,8 @@ if echo "$command" | grep -qi 'DELETE\s+FROM'; then
 fi
 
 if [ -n "$matched" ]; then
-  echo "SAFETY WARNING: Destructive pattern detected — $matched"
-  echo "Confirm this is intentional before proceeding. Hook: bash-safety-guard."
+  echo "SAFETY WARNING: Destructive pattern detected — $matched" >&2
+  echo "Confirm this is intentional before proceeding. Hook: bash-safety-guard." >&2
   exit 2
 fi
 

@@ -65,6 +65,52 @@ function failRunner(calls: string[][]): CommandRunner {
   };
 }
 
+const STASH_PUSH_ARGS = [
+  'stash',
+  'push',
+  '--include-untracked',
+  '--message',
+  'ops-merge-wrapper:main-sync:autostash',
+  '--',
+  '.ops/sync',
+  'docs/06_status/lanes',
+];
+const STASH_PUSH_CALL = ['git', ...STASH_PUSH_ARGS];
+const STASH_POP_CALL = ['git', 'stash', 'pop'];
+
+/**
+ * main-sync (and the git-merge-main/git-rebase-main operations that bridge
+ * through it) now wraps its git command with an autostash push/pop of
+ * lane-state paths (UTV2-1247-adjacent fix). Tests that need to fail a
+ * SPECIFIC step (the pull/merge/rebase itself, not the stash bookkeeping)
+ * must match on command content rather than call index, since the stash
+ * push is always call 0.
+ */
+function stashAwareRunner(
+  calls: string[][],
+  mainCommandOutcome: (callIndexOfMainCommand: number) => {
+    status: number;
+    stdout: string;
+    stderr: string;
+  },
+): CommandRunner {
+  let mainCommandCallCount = 0;
+  return (command, args) => {
+    calls.push([command, ...args]);
+    if (args[0] === 'stash') {
+      return { status: 0, stdout: Buffer.from('ok'), stderr: Buffer.from(''), error: undefined };
+    }
+    const outcome = mainCommandOutcome(mainCommandCallCount);
+    mainCommandCallCount++;
+    return {
+      status: outcome.status,
+      stdout: Buffer.from(outcome.stdout),
+      stderr: Buffer.from(outcome.stderr),
+      error: undefined,
+    };
+  };
+}
+
 const BASE = {
   issue_id: 'UTV2-1061',
   branch: 'codex/utv2-1061-merge-mutex-wrapper',
@@ -170,34 +216,37 @@ test('main-sync succeeds on fast-forward without rebase', () => {
       { lockPath, deferredDir, runner: okRunner(calls) },
     );
     assert.strictEqual(result.ok, true);
-    assert.deepStrictEqual(calls, [['git', 'pull', '--ff-only', 'origin', 'main']]);
+    assert.deepStrictEqual(calls, [
+      STASH_PUSH_CALL,
+      ['git', 'pull', '--ff-only', 'origin', 'main'],
+      STASH_POP_CALL,
+    ]);
   });
 });
 
 test('main-sync falls back to rebase on not-possible-to-fast-forward error', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const calls: string[][] = [];
-    let callIndex = 0;
-    const divergedRunner: CommandRunner = (command, args) => {
-      calls.push([command, ...args]);
-      // First call (ff-only pull) signals divergence; second call (rebase) succeeds.
-      const isDivergence = callIndex === 0;
-      callIndex++;
-      return {
-        status: isDivergence ? 128 : 0,
-        stdout: Buffer.from(''),
-        stderr: Buffer.from(isDivergence ? 'fatal: Not possible to fast-forward, aborting.' : ''),
-        error: undefined,
-      };
-    };
+    // Main command 0 is the ff-only pull (fails with a divergence error);
+    // main command 1 is the rebase fallback (succeeds). Stash push/pop calls
+    // are not "main commands" and always succeed via stashAwareRunner.
+    const divergedRunner = stashAwareRunner(calls, (mainCallIndex) =>
+      mainCallIndex === 0
+        ? { status: 128, stdout: '', stderr: 'fatal: Not possible to fast-forward, aborting.' }
+        : { status: 0, stdout: '', stderr: '' },
+    );
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'main-sync' },
       { lockPath, deferredDir, runner: divergedRunner },
     );
     assert.strictEqual(result.ok, true, 'should succeed after rebase fallback');
     assert.deepStrictEqual(calls, [
+      STASH_PUSH_CALL,
       ['git', 'pull', '--ff-only', 'origin', 'main'],
+      STASH_POP_CALL,
+      STASH_PUSH_CALL,
       ['git', 'rebase', 'origin/main'],
+      STASH_POP_CALL,
     ]);
   });
 });
@@ -205,23 +254,22 @@ test('main-sync falls back to rebase on not-possible-to-fast-forward error', () 
 test('main-sync does not fall back to rebase on non-divergence error', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const calls: string[][] = [];
-    const networkErrorRunner: CommandRunner = (command, args) => {
-      calls.push([command, ...args]);
-      return {
-        status: 128,
-        stdout: Buffer.from(''),
-        stderr: Buffer.from('fatal: unable to access remote'),
-        error: undefined,
-      };
-    };
+    const networkErrorRunner = stashAwareRunner(calls, () => ({
+      status: 128,
+      stdout: '',
+      stderr: 'fatal: unable to access remote',
+    }));
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'main-sync' },
       { lockPath, deferredDir, runner: networkErrorRunner },
     );
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
-    assert.deepStrictEqual(calls, [['git', 'pull', '--ff-only', 'origin', 'main']],
-      'should not attempt rebase on non-divergence failure');
+    assert.deepStrictEqual(
+      calls,
+      [STASH_PUSH_CALL, ['git', 'pull', '--ff-only', 'origin', 'main'], STASH_POP_CALL],
+      'should not attempt rebase on non-divergence failure, but must still restore the autostash',
+    );
   });
 });
 
@@ -320,13 +368,17 @@ test('git-merge-main releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main' },
-      { lockPath, deferredDir, runner: failRunner(calls) },
+      { lockPath, deferredDir, runner: stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })) },
     );
     const lock = readMergeLock(lockPath);
 
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
-    assert.deepStrictEqual(calls, [['git', 'merge', '--ff-only', 'origin/main']]);
+    assert.deepStrictEqual(calls, [
+      STASH_PUSH_CALL,
+      ['git', 'merge', '--ff-only', 'origin/main'],
+      STASH_POP_CALL,
+    ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
 });
@@ -337,13 +389,17 @@ test('git-rebase-main releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-rebase-main' },
-      { lockPath, deferredDir, runner: failRunner(calls) },
+      { lockPath, deferredDir, runner: stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })) },
     );
     const lock = readMergeLock(lockPath);
 
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
-    assert.deepStrictEqual(calls, [['git', 'rebase', 'origin/main']]);
+    assert.deepStrictEqual(calls, [
+      STASH_PUSH_CALL,
+      ['git', 'rebase', 'origin/main'],
+      STASH_POP_CALL,
+    ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
 });
@@ -426,7 +482,11 @@ test('git-merge-main completes successfully and releases the lock', () => {
 
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.code, 'merge_wrapper_completed');
-    assert.deepStrictEqual(calls, [['git', 'merge', '--ff-only', 'origin/main']]);
+    assert.deepStrictEqual(calls, [
+      STASH_PUSH_CALL,
+      ['git', 'merge', '--ff-only', 'origin/main'],
+      STASH_POP_CALL,
+    ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
 });
@@ -443,7 +503,11 @@ test('git-rebase-main completes successfully and releases the lock', () => {
 
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.code, 'merge_wrapper_completed');
-    assert.deepStrictEqual(calls, [['git', 'rebase', 'origin/main']]);
+    assert.deepStrictEqual(calls, [
+      STASH_PUSH_CALL,
+      ['git', 'rebase', 'origin/main'],
+      STASH_POP_CALL,
+    ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
 });

@@ -20,17 +20,17 @@ fp="${file_path//\\//}"
 
 # --- Check 1: generated artifact under src/ ---
 if echo "$fp" | grep -qE '/src/.*\.(js|d\.ts|js\.map)$'; then
-  echo "WARNING: Generated artifact written under src/: $fp"
-  echo "Files matching *.js / *.d.ts / *.js.map under src/ should not be committed."
-  echo "Delete if unintentional, or verify this is expected (e.g. a deliberate JS file, not tsc output)."
+  echo "WARNING: Generated artifact written under src/: $fp" >&2
+  echo "Files matching *.js / *.d.ts / *.js.map under src/ should not be committed." >&2
+  echo "Delete if unintentional, or verify this is expected (e.g. a deliberate JS file, not tsc output)." >&2
   exit 2
 fi
 
 # --- Check 2: PROGRAM_STATUS.md edited — remind to sync Linear ---
 if echo "$fp" | grep -q "PROGRAM_STATUS.md"; then
-  echo "REMINDER: PROGRAM_STATUS.md was updated."
-  echo "Verify that Linear issue statuses reflect the current program state."
-  echo "  pnpm linear:issues   — check queue state"
+  echo "REMINDER: PROGRAM_STATUS.md was updated." >&2
+  echo "Verify that Linear issue statuses reflect the current program state." >&2
+  echo "  pnpm linear:issues   — check queue state" >&2
   exit 2
 fi
 

@@ -131,16 +131,29 @@ export function runExtendedMergeWrapper(
 
   // We need to override the actual command built by runMergeWrapper.
   // Inject a custom runner that intercepts the git pull and instead
-  // runs the correct operation.
+  // runs the correct operation. `runMergeWrapper` may invoke the runner
+  // more than once for a 'main-sync'-bridged operation (autostash push,
+  // the main command, autostash pop) — only the call matching the literal
+  // main-sync pull command should be substituted; stash push/pop calls
+  // must pass through to the real runner untouched, or every stash
+  // invocation would incorrectly re-run the merge/rebase command instead.
   const cmd = buildExtendedCommand(input.operation, input);
+  const mainSyncPullCommand = buildMergeCommand({ ...bridgedInput, operation: 'main-sync' });
   const originalRunner = options.runner;
+  const realRunner =
+    originalRunner ??
+    ((c: string, a: string[], o: { cwd: string }) =>
+      spawnSync(c, a, { cwd: o.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>);
 
-  const interceptingRunner: CommandRunner = (_command, _args, runOptions) => {
-    const runner =
-      originalRunner ??
-      ((c: string, a: string[], o: { cwd: string }) =>
-        spawnSync(c, a, { cwd: o.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>);
-    return runner(cmd.command, cmd.args, runOptions);
+  const interceptingRunner: CommandRunner = (command, args, runOptions) => {
+    const isMainSyncPullCall =
+      command === mainSyncPullCommand.command &&
+      args.length === mainSyncPullCommand.args.length &&
+      args.every((arg, i) => arg === mainSyncPullCommand.args[i]);
+    if (!isMainSyncPullCall) {
+      return realRunner(command, args, runOptions);
+    }
+    return realRunner(cmd.command, cmd.args, runOptions);
   };
 
   return runMergeWrapper(bridgedInput, { ...options, runner: interceptingRunner });
@@ -214,6 +227,26 @@ function runCli(): void {
       ok: false,
       code: 'merge_wrapper_invalid_input',
       message: `Unknown operation: ${input.operation}\nValid operations: ${[...VALID_OPS].join(', ')}\nBlocked raw commands (must use this wrapper): ${BLOCKED_RAW_COMMANDS.join(', ')}`,
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  const missing: string[] = [];
+  if (!input.issue_id) missing.push('--issue');
+  if (!input.branch) missing.push('--branch');
+  if ((input.operation === 'pr-merge' || input.operation === 'pr-update-branch') && !input.pr) {
+    missing.push('--pr');
+  }
+  if (missing.length > 0) {
+    const examplePr =
+      input.operation === 'pr-merge' || input.operation === 'pr-update-branch' ? ' --pr 456' : '';
+    emitJson({
+      ok: false,
+      code: 'merge_wrapper_invalid_input',
+      message:
+        `Missing required argument(s): ${missing.join(', ')}. ` +
+        `Example: pnpm ops:merge-wrapper ${input.operation} --issue UTV2-123 --branch codex/utv2-123-example${examplePr}`,
     });
     process.exitCode = 1;
     return;

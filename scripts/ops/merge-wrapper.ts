@@ -77,6 +77,7 @@ export type MergeWrapperResult =
       deferred_record_path?: string;
       stdout?: string;
       stderr?: string;
+      main_sync_stash?: MainSyncStashState;
     }
   | {
       ok: false;
@@ -85,7 +86,9 @@ export type MergeWrapperResult =
         | 'merge_wrapper_lock_failed'
         | 'merge_wrapper_command_failed'
         | 'merge_wrapper_release_failed'
-        | 'merge_wrapper_invalid_input';
+        | 'merge_wrapper_invalid_input'
+        | 'merge_wrapper_stash_failed'
+        | 'merge_wrapper_stash_pop_conflict';
       issue_id?: string;
       operation?: MergeWrapperOperation;
       command?: string[];
@@ -94,9 +97,108 @@ export type MergeWrapperResult =
       stdout?: string;
       stderr?: string;
       message: string;
+      main_sync_stash?: MainSyncStashState;
     };
 
 export const DEFERRED_MERGE_DIR = path.join(ROOT, '.ops', 'deferred-merges');
+
+// `main-sync` runs `git pull --ff-only origin main` directly in the main
+// checkout. Lane-start and the shared manifest writers also write untracked
+// lane-state files into that SAME checkout (see scripts/ops/lane-start.ts
+// writeSyncFile -> .ops/sync/<ISSUE>.yml, and scripts/ops/shared.ts
+// writeManifest -> docs/06_status/lanes/<ISSUE>.json). When origin/main picks
+// up a committed version of one of those paths (e.g. another lane's manifest
+// merged to main), `git pull --ff-only` refuses because it would clobber the
+// local untracked file. We scope an autostash to exactly those two path
+// prefixes before the pull, and restore it afterward regardless of pull
+// outcome, so main-sync never has to choose between failing the pull and
+// silently discarding lane-state data.
+export const MAIN_SYNC_STASH_PATHS = ['.ops/sync', 'docs/06_status/lanes'];
+export const MAIN_SYNC_STASH_MESSAGE = 'ops-merge-wrapper:main-sync:autostash';
+
+export interface MainSyncStashState {
+  attempted: boolean;
+  stashed: boolean;
+  popped: boolean;
+}
+
+interface StashPushOutcome {
+  ok: boolean;
+  stashed: boolean;
+  stdout: string;
+  stderr: string;
+  message?: string;
+}
+
+interface StashPopOutcome {
+  ok: boolean;
+  conflict: boolean;
+  stdout: string;
+  stderr: string;
+  message?: string;
+}
+
+function stashMainSyncPaths(runner: CommandRunner, cwd: string): StashPushOutcome {
+  const run = runner(
+    'git',
+    [
+      'stash',
+      'push',
+      '--include-untracked',
+      '--message',
+      MAIN_SYNC_STASH_MESSAGE,
+      '--',
+      ...MAIN_SYNC_STASH_PATHS,
+    ],
+    { cwd },
+  );
+  const stdout = bufferToText(run.stdout);
+  const stderr = bufferToText(run.stderr);
+
+  if (run.error || run.status !== 0) {
+    return {
+      ok: false,
+      stashed: false,
+      stdout,
+      stderr,
+      message:
+        run.error?.message ??
+        `git stash push for main-sync exited with status ${run.status}: ${stderr || stdout}`,
+    };
+  }
+
+  // `git stash push` prints "No local changes to save" (and creates no stash
+  // entry) when the given pathspec has nothing untracked/dirty to stash.
+  // Treat that as a no-op rather than as "something was stashed".
+  const noop = /no local changes to save/i.test(stdout) || /no local changes to save/i.test(stderr);
+  return { ok: true, stashed: !noop, stdout, stderr };
+}
+
+function popMainSyncStash(runner: CommandRunner, cwd: string): StashPopOutcome {
+  const run = runner('git', ['stash', 'pop'], { cwd });
+  const stdout = bufferToText(run.stdout);
+  const stderr = bufferToText(run.stderr);
+
+  if (run.error || run.status !== 0) {
+    return {
+      ok: false,
+      conflict: true,
+      stdout,
+      stderr,
+      message:
+        `git stash pop failed after main-sync pull, so the autostashed lane-state ` +
+        `files (${MAIN_SYNC_STASH_PATHS.join(', ')}) are still stashed and were NOT restored. ` +
+        `This usually means the pulled commit now tracks a path that was stashed. ` +
+        `Resolve manually: run 'git stash list' to find the ` +
+        `"${MAIN_SYNC_STASH_MESSAGE}" entry, inspect the conflict, and run 'git stash pop' ` +
+        `(or 'git checkout --theirs'/'git stash drop' as appropriate) by hand. ` +
+        `Do not discard the stash without confirming no lane-state data is lost. ` +
+        `Underlying error: ${run.error?.message ?? (stderr || stdout || `exit ${run.status}`)}`,
+    };
+  }
+
+  return { ok: true, conflict: false, stdout, stderr };
+}
 
 export function buildMergeCommand(input: MergeWrapperInput): MergeCommand {
   switch (input.operation) {
@@ -201,13 +303,79 @@ export function runMergeWrapper(
   }
 
   const runner = options.runner ?? defaultRunner;
+
+  // main-sync runs its pull directly in the main checkout, which is the same
+  // checkout lane-start/shared writers drop untracked lane-state files into.
+  // Autostash exactly those two path prefixes around the pull so a pull that
+  // would otherwise be blocked by "untracked files would be overwritten" can
+  // proceed, then restore them unconditionally afterward.
+  let mainSyncStash: MainSyncStashState | undefined;
+  if (input.operation === 'main-sync') {
+    const stashPush = stashMainSyncPaths(runner, cwd);
+    if (!stashPush.ok) {
+      const release = releaseMergeLock(
+        { issue_id: issueId, branch: input.branch },
+        { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+      );
+      return {
+        ok: false,
+        code: 'merge_wrapper_stash_failed',
+        issue_id: issueId,
+        operation: input.operation,
+        command: commandVector,
+        lock,
+        release,
+        stdout: stashPush.stdout,
+        stderr: stashPush.stderr,
+        message:
+          stashPush.message ??
+          'Failed to stash lane-state paths (.ops/sync, docs/06_status/lanes) before main-sync pull.',
+        main_sync_stash: { attempted: true, stashed: false, popped: false },
+      };
+    }
+    mainSyncStash = { attempted: true, stashed: stashPush.stashed, popped: false };
+  }
+
   const run = runner(command.command, command.args, { cwd });
   const stdout = bufferToText(run.stdout);
   const stderr = bufferToText(run.stderr);
+
+  // Restore the autostash regardless of whether the pull succeeded, so a
+  // failed pull never leaves lane-state files stuck in the stash.
+  let stashPopFailure: string | undefined;
+  if (mainSyncStash?.stashed) {
+    const stashPop = popMainSyncStash(runner, cwd);
+    if (stashPop.ok) {
+      mainSyncStash.popped = true;
+    } else {
+      stashPopFailure = stashPop.message;
+    }
+  }
+
   const release = releaseMergeLock(
     { issue_id: issueId, branch: input.branch },
     { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
   );
+
+  // A stash-pop conflict means lane-state data is sitting in the stash and
+  // may now collide with what was just pulled. Surface it as a hard failure
+  // instead of letting the pull's own success/failure mask it, and never
+  // drop the stash entry ourselves.
+  if (stashPopFailure) {
+    return {
+      ok: false,
+      code: 'merge_wrapper_stash_pop_conflict',
+      issue_id: issueId,
+      operation: input.operation,
+      command: commandVector,
+      lock,
+      release,
+      stdout,
+      stderr,
+      message: stashPopFailure,
+      main_sync_stash: mainSyncStash,
+    };
+  }
 
   if (!release.ok) {
     return {
@@ -221,6 +389,7 @@ export function runMergeWrapper(
       stdout,
       stderr,
       message: release.message,
+      main_sync_stash: mainSyncStash,
     };
   }
 
@@ -236,6 +405,7 @@ export function runMergeWrapper(
       stdout,
       stderr,
       message: run.error?.message ?? `Command exited with status ${run.status}`,
+      main_sync_stash: mainSyncStash,
     };
   }
 
@@ -262,6 +432,7 @@ export function runMergeWrapper(
       deferred_record_path: relativeToRoot(recordPath),
       stdout,
       stderr,
+      main_sync_stash: mainSyncStash,
     };
   }
 
@@ -275,6 +446,7 @@ export function runMergeWrapper(
     release,
     stdout,
     stderr,
+    main_sync_stash: mainSyncStash,
   };
 }
 

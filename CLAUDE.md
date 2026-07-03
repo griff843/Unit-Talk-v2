@@ -35,6 +35,10 @@ tsx --test apps/api/src/submission-service.test.ts
 
 Environment loads `local.env` > `.env` > `.env.example`, parsed by `@unit-talk/config` (no dotenv). Supabase project ref: `zfzdnfwdarxucxtaojxm`.
 
+Before writing any SQL against Supabase (via MCP `execute_sql` or otherwise), read `packages/db/src/database.types.ts` (or run `mcp list_tables`) for real table/column names — never guess. Regenerate it with `pnpm supabase:types` after a migration; stale types are worse than none.
+
+Never `sleep`-then-poll for CI/merge status — the harness blocks bare sleep chains before a check command. Use a background `Monitor` until-loop or `ScheduleWakeup`, and report results proactively rather than waiting to be asked for a status update. `.github/workflows/track-a-monitor.yml` is the durable replacement for ad hoc session-cron monitoring — extend it rather than hand-rolling a new temporary cron.
+
 ---
 
 ## Truth hierarchy (ranked)
@@ -90,6 +94,8 @@ Before starting: preflight token valid, tier label set, file scope declared, no 
 5. For T1: `pnpm test:db` green + evidence bundle generated and validated
 6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
 7. `ops:truth-check` runs and exits 0
+
+`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
 
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
@@ -162,6 +168,7 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 - Before any work, run `git fetch origin && git pull --ff-only origin main` to ensure local main matches remote. Stale local state produces false premises.
 - Run `/clear` at major task boundaries.
 - After `/clear`, re-read this file. The `UserPromptSubmit` hook auto-injects system state — invoke `/system-state-loader` only if the hook data appears stale or missing.
+- Standing guardrails (things no agent may do regardless of a directive) live in `docs/05_operations/STANDING_GUARDRAILS.md` and are auto-injected every prompt by the same hook. PM: edit that file instead of re-pasting guardrails in chat.
 - If context degrades, clear immediately.
 - Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
 - PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.
