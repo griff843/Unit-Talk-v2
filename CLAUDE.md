@@ -95,6 +95,8 @@ Before starting: preflight token valid, tier label set, file scope declared, no 
 6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
 7. `ops:truth-check` runs and exits 0
 
+`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
+
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
 
