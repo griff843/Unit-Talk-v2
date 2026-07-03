@@ -64,10 +64,17 @@ Issue-specific proof:
 - Autostash fix: `59972fe779b432c5104084fc4047f2f311be890e`.
 - Hook stderr routing fix: `0d7e83d460ccc7cf4c7de4644024a1c4d189ce96`.
 
+## Post-merge verification (from main checkout, post fast-forward)
+
+- `npx tsx scripts/ci/r-level-check.ts --base main~11 --head 7ece7115e2595e100c21ad2647e7604cc5ee79d4` — `Verdict: PASS`, `Rules matched: (none) — no R-level artifacts required for this diff`
+- `pnpm verify` (env:check + lint + type-check + build + test) — pass, run from the main checkout at merge SHA `7ece7115e2595e100c21ad2647e7604cc5ee79d4`
+
 ## Merge SHA
 
-_To be filled in by `ops:lane-close --repair-merged` after merge (per the updated `CLAUDE.md` guidance this lane itself adds)._
+Merged to main: `7ece7115e2595e100c21ad2647e7604cc5ee79d4`.
 
-Anticipated at merge time: two repo-wide, content-independent gates may still be red and unrelated to this lane's diff, consistent with the precedent set by UTV2-1382's `verification.md`:
-- **Readiness Regression Gate** — main's `readiness-score.json` ledger is stale (>48h threshold as of this lane); not a required branch-protection status check, and not something a T2 tooling/harness PR should regenerate out-of-scope.
-- **Live Schema Parity** — pre-existing migration-ledger drift unrelated to this lane (no migration files touched).
+Merged via `gh pr merge --admin --squash 1143` on tier policy (T2: orchestrator merge on green PM-verdict approval, `pm-verdict/v1 APPROVED` posted per Merge Gate's sanctioned executor path — `gh pr review --approve` was attempted first but rejected by GitHub as self-review since the executor and PR author share one GitHub identity). Two repo-wide, content-independent gates were failing at merge time and are unrelated to this lane's diff, consistent with the precedent set by UTV2-1382's `verification.md`:
+- **Readiness Regression Gate** — main's `readiness-score.json` ledger is stale (>48h threshold); not a required branch-protection status check, and not something a T2 tooling/harness PR should regenerate out-of-scope.
+- **Live Schema Parity** — pre-existing `command_center_game_threads` migration-ledger drift (`triggers missing_in_expected public.command_center_game_threads.command_center_game_threads_set_updated_at`); no migration files touched by this lane.
+
+Also observed live during closeout: the main checkout's `git pull --ff-only origin main` (invoked directly, since the *currently-running* `ops:merge-wrapper` code on disk predates this PR's own autostash fix — the fix only takes effect after this very pull lands it) hit exactly the untracked-file collision this lane's fix targets (`.ops/sync/UTV2-1401.yml`, `docs/06_status/lanes/UTV2-1401.json`). Worked around manually this one time with the same stash/pull/pop sequence the fix automates; confirmed no data loss (stashed content was strictly stale, superseded by the merged version) before dropping the stash.

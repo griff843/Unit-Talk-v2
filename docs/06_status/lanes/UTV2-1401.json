@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1401-ops-harness-hardening-batch",
   "branch": "griffadavi/utv2-1401-ops-harness-hardening-batch",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1143",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/hooks/artifact-drift-check.sh",
@@ -32,14 +32,89 @@
     "docs/06_status/proof/UTV2-1401/diff-summary.md",
     "docs/06_status/proof/UTV2-1401/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-03T01:52:01.580Z",
-  "heartbeat_at": "2026-07-03T01:52:01.580Z",
+  "heartbeat_at": "2026-07-03T02:41:38.762Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1401-ops-harness-hardening-batch.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-03T02:41:15.312Z",
+      "verdict": "pass",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1143",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-03T02:41:15.320Z",
+      "verdict": "fail",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-03T02:41:28.501Z",
+      "verdict": "pass",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1143",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-03T02:41:28.507Z",
+      "verdict": "fail",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-03T02:41:38.756Z",
+      "verdict": "pass",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1143",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-03T02:41:38.762Z",
+      "verdict": "fail",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
