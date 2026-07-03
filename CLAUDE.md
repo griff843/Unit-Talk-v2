@@ -146,7 +146,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
 | `/loop-dispatch` | continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked |
 | `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
-| `/three-brain` | executor routing decision for any issue (Claude / Codex / Gemini / QA / Griff) |
+| `/three-brain` | executor routing decision for any issue (Claude / Codex CLI / Codex Cloud / Explore / QA / Griff) |
 | `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
 | `/lane-management` | starting, progressing, blocking, closing any lane |
 | `/verification` | before any merge claim or `ops:truth-check` call |

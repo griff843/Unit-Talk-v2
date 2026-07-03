@@ -223,7 +223,7 @@ When the orchestrator dispatches work to a Codex CLI lane (via `pnpm ops:codex-e
 **Specifically:**
 - A Codex lane running a Tier A task may open a PR that the orchestrator merges on green without PM touchpoint
 - A Codex lane running a Tier B task reports back with a "ready for review" PR; the orchestrator verifies, then requests PM merge approval
-- A Codex lane is never authorized to run Tier C work — Tier C is Claude Code (Opus) only, because the planning + merge touchpoints require direct PM dialogue
+- A Codex lane is never authorized to run Tier C work — Tier C is Claude Code only, because the planning + merge touchpoints require direct PM dialogue. Per the Sonnet-5-era operating model (`OPERATING_MODEL_SONNET5.md`), Tier C/T1 planning defaults to Sonnet 5; Opus is reserved for adversarial critique review, not routine Tier C execution.
 
 **When dispatching:** include the tier classification explicitly in the packet's rules section so the lane knows what to report back.
 
