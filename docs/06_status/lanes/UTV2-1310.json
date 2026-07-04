@@ -21,10 +21,10 @@
     "docs/06_status/proof/UTV2-1310/diff-summary.md",
     "docs/06_status/proof/UTV2-1310/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-06-25T08:07:43.454Z",
-  "heartbeat_at": "2026-06-25T08:46:36.147Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-04T12:56:28.639Z",
+  "closed_at": "2026-07-04T12:56:28.639Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1310-g-const-15-canonical-gap-map.json",
   "created_by": "claude",
@@ -71,6 +71,18 @@
       "merge_sha": "eed18a7328cd106c303c352be9cbb4bd08dd9f2c",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-04T12:56:25.880Z",
+      "verdict": "pass",
+      "merge_sha": "eed18a7328cd106c303c352be9cbb4bd08dd9f2c",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1072",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],

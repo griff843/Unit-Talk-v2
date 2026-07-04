@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1463",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1463-closeout-concurrency-hardening",
+  "branch": "codex/utv2-1463-closeout-concurrency-hardening",
+  "base_branch": "main",
+  "commit_sha": "b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1149",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/post-merge-lane-close.yml",
+    "docs/06_status/proof/UTV2-1463/diff-summary.md",
+    "docs/06_status/proof/UTV2-1463/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1463/diff-summary.md",
+    "docs/06_status/proof/UTV2-1463/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-04T14:06:36.156Z",
+  "heartbeat_at": "2026-07-04T21:22:17.714Z",
+  "closed_at": "2026-07-04T21:22:17.714Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1463-closeout-concurrency-hardening.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-04T21:21:25.224Z",
+      "verdict": "pass",
+      "merge_sha": "b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1149"
+    },
+    {
+      "checked_at": "2026-07-04T21:21:27.245Z",
+      "verdict": "fail",
+      "merge_sha": "b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-04T21:21:39.189Z",
+      "verdict": "fail",
+      "merge_sha": "b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1463-closeout-concurrency-hardening",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
