@@ -44,6 +44,7 @@ async function main(): Promise<void> {
     buildLinearSection(issueId),
     buildGitHubSection(),
     buildPipelineSection(),
+    buildProductTruthSection(),
     buildProofSection(issueId, pickIds),
   ];
   sections.push(buildCloseoutSection(issueId, pickIds, sections));
@@ -234,6 +235,50 @@ function buildPipelineSection(): SectionResult {
     name: 'Pipeline',
     ok: true,
     lines: extractPipelineHighlights(result.stdout),
+  };
+}
+
+function buildProductTruthSection(): SectionResult {
+  if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+    return {
+      name: 'Product Truth',
+      ok: false,
+      lines: ['skipped: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not available in current env'],
+    };
+  }
+
+  const result = runPnpm(['ops:product-truth-scoreboard', '--', '--json']);
+  const body = [result.stdout, result.stderr].filter(Boolean).join('\n');
+  const payload = extractJsonObject(body);
+  if (!payload) {
+    return failureSection('Product Truth', result);
+  }
+
+  const parsed = JSON.parse(payload) as {
+    windowDays: number;
+    settledPicksMeasured: number;
+    settledPicksExcludedFixture: number;
+    clvCoveragePct: number;
+    edgeSourceQuality: { explicitPct: number; marketBackedPct: number; confidenceFallbackPct: number };
+    kellySizingPopulatedPct: number;
+    marketBackedSettledCount: number;
+    developing: { threshold: number; remaining: number; met: boolean };
+    strong: { threshold: number; remaining: number; met: boolean };
+  };
+
+  const lines = [
+    `settled (${parsed.windowDays}d, non-fixture): ${parsed.settledPicksMeasured} (${parsed.settledPicksExcludedFixture} fixture rows excluded)`,
+    `CLV coverage: ${parsed.clvCoveragePct}%`,
+    `edge source: ${parsed.edgeSourceQuality.explicitPct}% explicit, ${parsed.edgeSourceQuality.marketBackedPct}% market-backed, ${parsed.edgeSourceQuality.confidenceFallbackPct}% confidence-fallback`,
+    `kelly sizing populated: ${parsed.kellySizingPopulatedPct}%`,
+    `DEVELOPING: ${parsed.marketBackedSettledCount}/${parsed.developing.threshold}${parsed.developing.met ? ' (MET)' : ` (${parsed.developing.remaining} to go)`}`,
+    `STRONG: ${parsed.marketBackedSettledCount}/${parsed.strong.threshold}${parsed.strong.met ? ' (MET)' : ` (${parsed.strong.remaining} to go)`}`,
+  ];
+
+  return {
+    name: 'Product Truth',
+    ok: result.ok,
+    lines,
   };
 }
 
