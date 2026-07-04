@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { packageTouchingLaneRequiresSingleton } from './lane-execution.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { ACTIVE_LOCK_STATUSES, readConfiguredEnvValue, resolveLaneExecutor } from './shared.js';
 import { linearQuery } from './linear-client.js';
@@ -815,14 +814,6 @@ export function evaluateCandidates(
 
     if (hasForbiddenCombination(laneType, plannedLaneTypes, forbiddenCombinations)) {
       report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'FORBIDDEN_COMBINATION', ranking));
-      continue;
-    }
-
-    if (
-      packageTouchingLaneRequiresSingleton(fileScope, candidate.isolated_install_verified === true) &&
-      activeLanes.length > 0
-    ) {
-      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'ISOLATED_INSTALL_REQUIRED', ranking));
       continue;
     }
 
