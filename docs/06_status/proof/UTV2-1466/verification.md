@@ -3,9 +3,9 @@
 Issue: UTV2-1466
 Tier: T2
 Branch: codex/utv2-1466-shared-pnpm-store-isolated-install-relax
-MERGE_SHA: 408959cbbceebe7752128380b5697c6f9b0f99c9
+MERGE_SHA: 8af54b2679b0f78fc233a51524bb3e2248e2271c
 
-The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Squash-merge SHA on main (implementation commit 408959cb merged via PR #1153).
 
 ## ASSERTIONS:
 

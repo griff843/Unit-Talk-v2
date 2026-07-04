@@ -17,3 +17,5 @@
 - No runtime application code changed.
 - No DB schema, migrations, generated DB types, or Tier C runtime paths changed.
 - Proof docs were added because the execution packet explicitly required `docs/06_status/proof/UTV2-1466/diff-summary.md` and `docs/06_status/proof/UTV2-1466/verification.md`.
+
+Merge SHA: 8af54b2679b0f78fc233a51524bb3e2248e2271c
