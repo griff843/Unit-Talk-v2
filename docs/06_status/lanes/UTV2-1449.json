@@ -19,10 +19,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1449/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-03T22:39:10.753Z",
-  "heartbeat_at": "2026-07-04T20:38:51.447Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-04T20:40:35.103Z",
+  "closed_at": "2026-07-04T20:40:35.103Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1449-product-truth-scoreboard.json",
   "created_by": "claude",
@@ -58,6 +58,18 @@
         "C6"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-04T20:40:31.241Z",
+      "verdict": "pass",
+      "merge_sha": "bcc11bb1f7ce3f4e36dccbc9b26e83827406f36b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1148",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
