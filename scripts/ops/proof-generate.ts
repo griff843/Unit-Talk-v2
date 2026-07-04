@@ -14,7 +14,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 
-type ProofArtifactName = 'diff-summary.md' | 'runtime-verification.md';
+type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
 export interface ProofGitTruth {
   head_sha: string | null;
@@ -64,14 +64,14 @@ export interface ProofManifestOverrides {
 
 type GitRunner = (args: string[], cwd?: string) => { ok: boolean; stdout: string; stderr: string };
 
-const STANDARD_PROOF_FILES: ProofArtifactName[] = ['diff-summary.md', 'runtime-verification.md'];
+const STANDARD_PROOF_FILES: ProofArtifactName[] = ['diff-summary.md', 'verification.md'];
 const DEFAULT_VERIFICATION_COMMANDS = ['pnpm type-check', 'pnpm test'];
 
 export function standardProofPaths(issueId: string): Record<ProofArtifactName, string> {
   const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase());
   return {
     'diff-summary.md': path.posix.join(proofRoot, 'diff-summary.md'),
-    'runtime-verification.md': path.posix.join(proofRoot, 'runtime-verification.md'),
+    'verification.md': path.posix.join(proofRoot, 'verification.md'),
   };
 }
 
@@ -257,10 +257,16 @@ function rewriteVerificationMdLines(content: string, mergeSha: string, prUrl: st
   return hasTrailingNewline && !joined.endsWith('\n') ? `${joined}\n` : joined;
 }
 
+function hasVerificationShaBindingMarkers(content: string): boolean {
+  return content
+    .split('\n')
+    .some((line) => COMMIT_SHA_ROW_LINE_PATTERN.test(line) || line.trim() === MERGE_SHA_BINDING_HEADING);
+}
+
 /**
  * UTV2-1392: `evidence.json` and `verification.md` are the files T1/T2 lanes actually use
  * for SHA-binding truth-check (C4/P3) and proof-gate checks — not the generic
- * diff-summary.md/runtime-verification.md pair above. Without this rebind, every merged
+ * generated diff-summary.md/verification.md pair above. Without this rebind, every merged
  * lane needed a manual post-merge SHA edit before `ops:lane-close` could pass.
  */
 export function rebindEvidenceJsonSha(
@@ -376,13 +382,18 @@ export function generateProofArtifacts(
   const shouldWrite = options.write ?? true;
   const contentByFile: Record<ProofArtifactName, string> = {
     'diff-summary.md': buildDiffSummary(input),
-    'runtime-verification.md': buildRuntimeVerification(input),
+    'verification.md': buildRuntimeVerification(input),
   };
   const paths = standardProofPaths(input.manifest.issue_id);
   const generatedPaths: string[] = [];
   const updatedPaths: string[] = [];
   const unchangedPaths: string[] = [];
   const stalePathsReplaced: string[] = [];
+  const pushUnique = (paths: string[], proofPath: string): void => {
+    if (!paths.includes(proofPath)) {
+      paths.push(proofPath);
+    }
+  };
   const requiredShas = [input.gitTruth.head_sha, input.gitTruth.merge_sha].filter(isPresent);
 
   for (const proofFile of STANDARD_PROOF_FILES) {
@@ -394,8 +405,12 @@ export function generateProofArtifacts(
     const stale = previousContent !== null &&
       requiredShas.some((sha) => !previousContent.includes(sha));
 
+    if (proofFile === 'verification.md' && previousContent !== null && hasVerificationShaBindingMarkers(previousContent)) {
+      continue;
+    }
+
     if (previousContent === nextContent) {
-      unchangedPaths.push(proofPath);
+      pushUnique(unchangedPaths, proofPath);
       continue;
     }
 
@@ -405,11 +420,11 @@ export function generateProofArtifacts(
     }
 
     if (!exists) {
-      generatedPaths.push(proofPath);
+      pushUnique(generatedPaths, proofPath);
     } else {
-      updatedPaths.push(proofPath);
+      pushUnique(updatedPaths, proofPath);
       if (stale) {
-        stalePathsReplaced.push(proofPath);
+        pushUnique(stalePathsReplaced, proofPath);
       }
     }
   }
@@ -424,10 +439,10 @@ export function generateProofArtifacts(
   );
   for (const outcome of rebindOutcomes) {
     if (outcome.status === 'updated') {
-      updatedPaths.push(outcome.path);
-      stalePathsReplaced.push(outcome.path);
+      pushUnique(updatedPaths, outcome.path);
+      pushUnique(stalePathsReplaced, outcome.path);
     } else if (outcome.status === 'unchanged') {
-      unchangedPaths.push(outcome.path);
+      pushUnique(unchangedPaths, outcome.path);
     }
     // 'missing' outcomes are intentionally not reported — evidence.json/verification.md
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
