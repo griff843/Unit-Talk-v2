@@ -201,11 +201,10 @@ function buildSyncYml(issueId: string): string {
   ].join('\n');
 }
 
-function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
+export function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
   const stateRoot = path.join(cwd, '.out', 'pnpm-state');
   const dirs = {
     home: path.join(stateRoot, 'home'),
-    store: path.join(stateRoot, 'store'),
     cache: path.join(stateRoot, 'cache'),
     state: path.join(stateRoot, 'state'),
     corepack: path.join(stateRoot, 'corepack'),
@@ -220,10 +219,8 @@ function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
     PNPM_HOME: dirs.home,
     COREPACK_HOME: dirs.corepack,
     NPM_CONFIG_CACHE: dirs.cache,
-    NPM_CONFIG_STORE_DIR: dirs.store,
     NPM_CONFIG_STATE_DIR: dirs.state,
     npm_config_cache: dirs.cache,
-    npm_config_store_dir: dirs.store,
     npm_config_state_dir: dirs.state,
   };
 }

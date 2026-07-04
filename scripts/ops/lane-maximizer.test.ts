@@ -9,6 +9,7 @@ import {
   evaluateCandidates,
   parseQueueCandidates,
 } from './lane-maximizer.js';
+import { buildPnpmStateEnv } from './lane-start.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LANE_DIR = path.join(ROOT, 'docs', '06_status', 'lanes');
@@ -272,15 +273,21 @@ test('tier C path is risky with TIER_C_PATH', () => {
   assert.deepStrictEqual(report.risky[0]?.reason_codes, ['TIER_C_PATH']);
 });
 
-test('package-touching lane is blocked from parallel dispatch until isolated install is verified', () => {
+test('package-touching lane may be recommended while an unrelated lane is active', () => {
   const activeLanes = [makeManifest('UTV2-96808A', { file_scope_lock: ['scripts/ops/active.ts'] })];
   const report = evaluateCandidates(
-    [makeCandidate('UTV2-96808P', { file_scope: ['packages/config/src/env.ts'] })],
+    [
+      makeCandidate('UTV2-96808P', {
+        lane_type: 'hygiene',
+        file_scope: ['packages/config/src/env.ts'],
+      }),
+    ],
     activeLanes,
     { maxClaude: 1, maxCodex: 2 },
   );
 
-  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['ISOLATED_INSTALL_REQUIRED']);
+  assert.deepStrictEqual(report.blocked, []);
+  assert.deepStrictEqual(report.risky[0]?.reason_codes, ['TIER_C_PATH']);
 });
 
 test('package-touching lane may run in parallel after isolated install is proven green', () => {
@@ -297,6 +304,23 @@ test('package-touching lane may run in parallel after isolated install is proven
   );
 
   assert.deepStrictEqual(report.risky[0]?.reason_codes, ['TIER_C_PATH']);
+});
+
+test('lane-start pnpm env isolates state without overriding the shared pnpm store', () => {
+  withTempFile('', (filePath) => {
+    const laneCwd = path.dirname(filePath);
+    const env = buildPnpmStateEnv(laneCwd);
+
+    assert.equal(env.NPM_CONFIG_STORE_DIR, process.env.NPM_CONFIG_STORE_DIR);
+    assert.equal(env.npm_config_store_dir, process.env.npm_config_store_dir);
+    assert.match(env.PNPM_HOME ?? '', /\.out\/pnpm-state\/home$/);
+    assert.match(env.NPM_CONFIG_CACHE ?? '', /\.out\/pnpm-state\/cache$/);
+    assert.match(env.NPM_CONFIG_STATE_DIR ?? '', /\.out\/pnpm-state\/state$/);
+    assert.ok(fs.existsSync(env.PNPM_HOME ?? ''));
+    assert.ok(fs.existsSync(env.COREPACK_HOME ?? ''));
+    assert.ok(fs.existsSync(env.NPM_CONFIG_CACHE ?? ''));
+    assert.ok(fs.existsSync(env.NPM_CONFIG_STATE_DIR ?? ''));
+  });
 });
 
 test('claude dispatch limit hit blocks with DISPATCH_LIMIT_CLAUDE', () => {
