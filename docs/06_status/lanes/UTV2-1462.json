@@ -11,7 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/ci.yml"
+    ".github/workflows/ci.yml",
+    "docs/06_status/proof/UTV2-1462/diff-summary.md",
+    "docs/06_status/proof/UTV2-1462/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1462/diff-summary.md",
