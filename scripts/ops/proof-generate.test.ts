@@ -37,7 +37,7 @@ function manifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
     file_scope_lock: ['scripts/ops/proof-generate.ts', 'scripts/ops/proof-generate.test.ts'],
     expected_proof_paths: [
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
-      'docs/06_status/proof/UTV2-1170/runtime-verification.md',
+      'docs/06_status/proof/UTV2-1170/verification.md',
     ],
     status: 'merged',
     started_at: '2026-05-25T00:00:00.000Z',
@@ -75,10 +75,10 @@ function input(overrides: Partial<LaneManifest> = {}) {
   };
 }
 
-test('standard proof paths target diff summary and runtime verification docs', () => {
+test('standard proof paths target diff summary and verification docs', () => {
   assert.deepStrictEqual(standardProofPaths('utv2-1170'), {
     'diff-summary.md': 'docs/06_status/proof/UTV2-1170/diff-summary.md',
-    'runtime-verification.md': 'docs/06_status/proof/UTV2-1170/runtime-verification.md',
+    'verification.md': 'docs/06_status/proof/UTV2-1170/verification.md',
   });
 });
 
@@ -87,27 +87,27 @@ test('generated artifacts include manifest metadata, git truth, and SHA bindings
   try {
     const result = generateProofArtifacts(input(), { root });
     const diffPath = path.join(root, 'docs/06_status/proof/UTV2-1170/diff-summary.md');
-    const runtimePath = path.join(root, 'docs/06_status/proof/UTV2-1170/runtime-verification.md');
+    const verificationPath = path.join(root, 'docs/06_status/proof/UTV2-1170/verification.md');
 
     assert.deepStrictEqual(result.generated_paths, [
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
-      'docs/06_status/proof/UTV2-1170/runtime-verification.md',
+      'docs/06_status/proof/UTV2-1170/verification.md',
     ]);
     assert.strictEqual(result.head_sha, HEAD_SHA);
     assert.strictEqual(result.merge_sha, MERGE_SHA);
     assert.strictEqual(fs.existsSync(diffPath), true);
-    assert.strictEqual(fs.existsSync(runtimePath), true);
+    assert.strictEqual(fs.existsSync(verificationPath), true);
 
     const diffContent = fs.readFileSync(diffPath, 'utf8');
-    const runtimeContent = fs.readFileSync(runtimePath, 'utf8');
+    const verificationContent = fs.readFileSync(verificationPath, 'utf8');
     assert.match(diffContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
     assert.match(diffContent, new RegExp(`Merge SHA: ${MERGE_SHA}`));
     assert.match(diffContent, /A\tscripts\/ops\/proof-generate\.ts/);
-    assert.match(runtimeContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
-    assert.match(runtimeContent, new RegExp(`Merge SHA: ${MERGE_SHA}`));
-    assert.match(runtimeContent, /^## Verification/m);
-    assert.match(runtimeContent, /`pnpm type-check`/);
-    assert.match(runtimeContent, /`pnpm test`/);
+    assert.match(verificationContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
+    assert.match(verificationContent, new RegExp(`Merge SHA: ${MERGE_SHA}`));
+    assert.match(verificationContent, /^## Verification/m);
+    assert.match(verificationContent, /`pnpm type-check`/);
+    assert.match(verificationContent, /`pnpm test`/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -119,21 +119,21 @@ test('existing artifacts are updated when they are missing current SHA bindings'
     const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
     fs.mkdirSync(proofDir, { recursive: true });
     fs.writeFileSync(path.join(proofDir, 'diff-summary.md'), 'Merge SHA: stale\n', 'utf8');
-    fs.writeFileSync(path.join(proofDir, 'runtime-verification.md'), 'Head SHA: stale\n', 'utf8');
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), 'Head SHA: stale\n', 'utf8');
 
     const result = generateProofArtifacts(input(), { root });
 
     assert.deepStrictEqual(result.generated_paths, []);
     assert.deepStrictEqual(result.updated_paths, [
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
-      'docs/06_status/proof/UTV2-1170/runtime-verification.md',
+      'docs/06_status/proof/UTV2-1170/verification.md',
     ]);
     assert.deepStrictEqual(result.stale_paths_replaced, [
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
-      'docs/06_status/proof/UTV2-1170/runtime-verification.md',
+      'docs/06_status/proof/UTV2-1170/verification.md',
     ]);
     assert.match(
-      fs.readFileSync(path.join(proofDir, 'runtime-verification.md'), 'utf8'),
+      fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'),
       new RegExp(`Merge SHA: ${MERGE_SHA}`),
     );
   } finally {
@@ -152,7 +152,7 @@ test('unchanged artifacts are not rewritten', () => {
     assert.deepStrictEqual(second.updated_paths, []);
     assert.deepStrictEqual(second.unchanged_paths, [
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
-      'docs/06_status/proof/UTV2-1170/runtime-verification.md',
+      'docs/06_status/proof/UTV2-1170/verification.md',
     ]);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -166,12 +166,12 @@ test('pre-merge artifacts bind head SHA and use N/A for merge SHA', () => {
   };
 
   const diffContent = buildDiffSummary(preMergeInput);
-  const runtimeContent = buildRuntimeVerification(preMergeInput);
+  const verificationContent = buildRuntimeVerification(preMergeInput);
 
   assert.match(diffContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
   assert.match(diffContent, /Merge SHA: N\/A/);
-  assert.match(runtimeContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
-  assert.match(runtimeContent, /Merge SHA: N\/A/);
+  assert.match(verificationContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
+  assert.match(verificationContent, /Merge SHA: N\/A/);
 });
 
 test('manifest overrides bind proof artifacts to the current branch and PR', () => {
