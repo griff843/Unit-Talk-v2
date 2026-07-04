@@ -15,6 +15,15 @@ The SHA above is the implementation commit; post-merge closeout rebinds proof to
 - [x] `scripts/ops/lane-finalize.test.ts` updated: 10/10 pass
 - [x] `pnpm type-check` and root `pnpm test` pass; r-level-check matches no rules
 
+## Verification
+
+Executed 2026-07-04 from the lane worktree; raw output in EVIDENCE below.
+
+- `pnpm exec tsx --test scripts/ops/lane-finalize.test.ts` — PASS (10/10)
+- `pnpm type-check` — PASS
+- `pnpm test` — PASS
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (no rules matched)
+
 ## EVIDENCE:
 
 Commands run 2026-07-04 from the lane worktree.
