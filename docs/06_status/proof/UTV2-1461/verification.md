@@ -3,9 +3,9 @@
 Issue: UTV2-1461
 Tier: T2
 Branch: claude/utv2-1461-merge-queue-decision-packet
-MERGE_SHA: 8455c424d9f0e8e9c7ee0ba2f0d08f13fd6f4ea4
+MERGE_SHA: 57452722868109bc00833825a32f2bd880bc57ba
 
-The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Squash-merge SHA on main (implementation commits 8455c424..5bb51d58 merged via PR #1152).
 
 ## ASSERTIONS:
 

@@ -19,3 +19,5 @@ Branch: claude/utv2-1461-merge-queue-decision-packet
 ## R-Level
 
 `scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS — docs-only diff matches no R1–R5 runtime rules.
+
+Merge SHA: 57452722868109bc00833825a32f2bd880bc57ba
