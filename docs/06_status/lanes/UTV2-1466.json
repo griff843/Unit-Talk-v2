@@ -14,7 +14,9 @@
     "scripts/ops/lane-execution.ts",
     "scripts/ops/lane-maximizer.test.ts",
     "scripts/ops/lane-maximizer.ts",
-    "scripts/ops/lane-start.ts"
+    "scripts/ops/lane-start.ts",
+    "docs/06_status/proof/UTV2-1466/diff-summary.md",
+    "docs/06_status/proof/UTV2-1466/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1466/diff-summary.md",
