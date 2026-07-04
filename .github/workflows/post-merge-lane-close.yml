@@ -58,6 +58,7 @@ jobs:
   lane-close:
     name: Auto-close merged lane
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     # Never re-trigger on bot housekeeping commits — prevents infinite push loops.
     if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'
 
@@ -248,6 +249,36 @@ jobs:
 
           echo "::notice title=post-merge-lane-close::Posted blocking comment on PR #${PR_NUMBER}"
 
+      - name: Release closeout merge mutex on lane closeout failure
+        # ops:lane-close releases the merge mutex on success. If it fails after
+        # acquiring the lock, release only the same issue/branch lock here so a
+        # failed closeout cannot wedge the shared post-merge queue.
+        if: >-
+          steps.lane_close.outcome == 'failure' &&
+          steps.extract.outputs.issue_id != '' &&
+          steps.manifest.outputs.exists == 'true'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          manifest_branch=$(jq -r '.branch // empty' "$MANIFEST_PATH")
+          if [ -z "$manifest_branch" ]; then
+            echo "::warning title=post-merge-lane-close::Cannot release merge mutex: manifest branch missing."
+            exit 0
+          fi
+
+          release_output=$(pnpm ops:merge-lock release --issue "$ISSUE_ID" --branch "$manifest_branch" 2>&1) || release_code=$?
+          release_code=${release_code:-0}
+
+          echo "$release_output"
+          if [ "$release_code" = "0" ]; then
+            echo "::notice title=post-merge-lane-close::Released merge mutex for $ISSUE_ID on $manifest_branch after failed closeout."
+          else
+            echo "::warning title=post-merge-lane-close::Merge mutex release skipped or failed for $ISSUE_ID on $manifest_branch (exit $release_code)."
+          fi
+
       - name: Fail on lane closeout failure
         # Re-raise the failure after the PR comment has been posted.
         # Keeps the workflow status red so CI reflects the gate outcome.
@@ -278,7 +309,23 @@ jobs:
             echo "::notice title=post-merge-lane-close::No changes to commit (already up to date)."
           else
             git commit -m "chore(lanes): close $ISSUE_ID — lane closed, sync file removed"
-            git push
+
+            # main can advance between checkout and push (another PR merges
+            # mid-closeout). Rebase the bookkeeping commit and retry instead
+            # of failing the closeout and stranding a ghost lane.
+            pushed=false
+            for attempt in 1 2 3; do
+              if git push; then
+                pushed=true
+                break
+              fi
+              echo "::warning title=post-merge-lane-close::Push attempt $attempt rejected (main advanced). Rebasing and retrying."
+              git pull --rebase origin main
+            done
+            if [ "$pushed" != "true" ]; then
+              echo "::error title=post-merge-lane-close::Bookkeeping push failed after 3 attempts."
+              exit 1
+            fi
             echo "::notice title=post-merge-lane-close::Lane $ISSUE_ID closed and manifest committed."
           fi
 
