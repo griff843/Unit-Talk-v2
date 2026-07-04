@@ -75,6 +75,7 @@
     "ops:merge-ready": "tsx scripts/ops/merge-ready.ts",
     "ops:queue-grooming": "tsx scripts/ops/queue-grooming.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
+    "ops:product-truth-scoreboard": "tsx scripts/product-truth-scoreboard.ts",
     "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
     "ops:ci-doctor": "tsx scripts/ops/ci-doctor.ts",
     "ops:clean-scripts": "tsx scripts/ops/clean-scripts.ts",

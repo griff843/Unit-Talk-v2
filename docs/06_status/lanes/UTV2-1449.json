@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1449",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1449-product-truth-scoreboard",
+  "branch": "claude/utv2-1449-product-truth-scoreboard",
+  "base_branch": "main",
+  "commit_sha": "bcc11bb1f7ce3f4e36dccbc9b26e83827406f36b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1148",
+  "files_changed": [],
+  "file_scope_lock": [
+    "package.json",
+    "scripts/ops-brief.ts",
+    "scripts/product-truth-scoreboard.test.ts",
+    "scripts/product-truth-scoreboard.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1449/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-03T22:39:10.753Z",
+  "heartbeat_at": "2026-07-04T20:40:35.103Z",
+  "closed_at": "2026-07-04T20:40:35.103Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1449-product-truth-scoreboard.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-04T20:38:41.089Z",
+      "verdict": "pass",
+      "merge_sha": "bcc11bb1f7ce3f4e36dccbc9b26e83827406f36b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1148",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-04T20:38:41.102Z",
+      "verdict": "fail",
+      "merge_sha": "bcc11bb1f7ce3f4e36dccbc9b26e83827406f36b",
+      "failures": [
+        "C6"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-04T20:38:51.447Z",
+      "verdict": "fail",
+      "merge_sha": "bcc11bb1f7ce3f4e36dccbc9b26e83827406f36b",
+      "failures": [
+        "C6"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-04T20:40:31.241Z",
+      "verdict": "pass",
+      "merge_sha": "bcc11bb1f7ce3f4e36dccbc9b26e83827406f36b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1148",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1449-product-truth-scoreboard",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
