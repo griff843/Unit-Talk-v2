@@ -12,7 +12,9 @@
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-finalize.test.ts",
-    "scripts/ops/lane-finalize.ts"
+    "scripts/ops/lane-finalize.ts",
+    "docs/06_status/proof/UTV2-1421/diff-summary.md",
+    "docs/06_status/proof/UTV2-1421/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1421/diff-summary.md",
