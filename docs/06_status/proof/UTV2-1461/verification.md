@@ -21,6 +21,7 @@ Executed 2026-07-04 from the lane worktree; raw output in EVIDENCE below.
 
 - `pnpm type-check` — PASS
 - `pnpm test:db` — PASS (7/7 against live Supabase)
+- `pnpm verify` (branch CI) — PASS via the required `verify` context on PR #1152 head `5bb51d58` (identical tree to squash merge `57452722`); all four required contexts green at merge
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (no rules matched)
 - GitHub API availability probes — executed live, transcribed in the packet §1
 
