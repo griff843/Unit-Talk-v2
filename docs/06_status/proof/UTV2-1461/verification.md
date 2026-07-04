@@ -20,6 +20,7 @@ The SHA above is the implementation commit; post-merge closeout rebinds proof to
 Executed 2026-07-04 from the lane worktree; raw output in EVIDENCE below.
 
 - `pnpm type-check` — PASS
+- `pnpm test:db` — PASS (7/7 against live Supabase)
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (no rules matched)
 - GitHub API availability probes — executed live, transcribed in the packet §1
 
@@ -27,6 +28,12 @@ Executed 2026-07-04 from the lane worktree; raw output in EVIDENCE below.
 
 ```text
 pnpm type-check → PASS (tsc -b tsconfig.json, zero errors)
+
+pnpm test:db (live Supabase, project zfzdnfwdarxucxtaojxm)
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
 
 npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 → Verdict: PASS; Changed files: 3; no R1-R5 rules matched
