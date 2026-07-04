@@ -11,7 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/UTV2-1461-merge-queue-decision-packet.md"
+    "docs/06_status/UTV2-1461-merge-queue-decision-packet.md",
+    "docs/06_status/proof/UTV2-1461/diff-summary.md",
+    "docs/06_status/proof/UTV2-1461/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1461/diff-summary.md",
