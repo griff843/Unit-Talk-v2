@@ -165,13 +165,11 @@ test('generate_proof args contain no --merge-sha when mergeSha is not provided',
   );
 });
 
-test('non-required step (apply_tier_label) is skipped on failure without aborting finalize', () => {
-  const calls: string[] = [];
+test('tier label application failure aborts lane finalize', () => {
   const result = runLaneFinalizePlan(
     buildLaneFinalizePlan({ manifest: manifest({ tier: 'T2' }), pr: '456' }),
     {
       runner: ((command, args) => {
-        calls.push(`${command} ${args[0] ?? ''}`);
         // Simulate apply_tier_label failing (gh pr edit)
         if (command === 'gh' && args.includes('edit')) return { status: 1, stdout: '', stderr: 'auth error' };
         return { status: 0, stdout: '', stderr: '' };
@@ -181,8 +179,14 @@ test('non-required step (apply_tier_label) is skipped on failure without abortin
 
   const tierStep = result.steps.find((s) => s.id === 'apply_tier_label');
   assert.ok(tierStep, 'apply_tier_label step must exist');
-  assert.equal(tierStep.status, 'skipped', 'apply_tier_label must be skipped on failure, not abort');
-  assert.equal(result.ok, true, 'finalize must succeed even when non-required step fails');
+  assert.equal(tierStep.status, 'failed', 'apply_tier_label must fail closed when GitHub labeling fails');
+  assert.equal(result.ok, false, 'finalize must fail when the authoritative tier label cannot be applied');
+  assert.equal(result.code, 'lane_finalize_failed');
+  assert.deepEqual(
+    result.steps.map((step) => step.id),
+    ['record_merge', 'apply_tier_label'],
+    'finalize must stop before proof generation when tier labeling fails',
+  );
 });
 
 test('resolveLaneFinalizeInput falls back to manifest PR URL', () => {
