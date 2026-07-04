@@ -11,7 +11,10 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts"
+    "apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts",
+    "docs/06_status/proof/UTV2-1459/diff-summary.md",
+    "docs/06_status/proof/UTV2-1459/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1459/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1459/diff-summary.md",
