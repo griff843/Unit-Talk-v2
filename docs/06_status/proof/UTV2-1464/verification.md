@@ -4,9 +4,9 @@ Issue: UTV2-1464
 Tier: T2
 Lane type: verification
 Branch: codex/utv2-1464-proof-generate-merge-sha-rebind
-MERGE_SHA: 67e0134525fa9e81fdddf88b6f11b0b9662c7d22
+MERGE_SHA: 994ed267d95c48fde488f5941d4989f092dc59ae
 
-The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Squash-merge SHA on main (implementation commit 67e01345 merged via PR #1150).
 
 ## ASSERTIONS:
 

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1464-proof-generate-merge-sha-rebind",
   "branch": "codex/utv2-1464-proof-generate-merge-sha-rebind",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1150",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1464/diff-summary.md",
@@ -20,14 +20,64 @@
     "docs/06_status/proof/UTV2-1464/diff-summary.md",
     "docs/06_status/proof/UTV2-1464/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-04T14:06:58.931Z",
-  "heartbeat_at": "2026-07-04T14:06:58.931Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-04T21:46:44.387Z",
+  "closed_at": "2026-07-04T21:46:44.387Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1464-proof-generate-merge-sha-rebind.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-04T21:45:17.268Z",
+      "verdict": "pass",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1150"
+    },
+    {
+      "checked_at": "2026-07-04T21:45:18.707Z",
+      "verdict": "fail",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-04T21:45:28.382Z",
+      "verdict": "fail",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-04T21:46:00.667Z",
+      "verdict": "fail",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "failures": [
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-04T21:46:12.527Z",
+      "verdict": "fail",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "failures": [
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
