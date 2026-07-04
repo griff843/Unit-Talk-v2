@@ -3,9 +3,9 @@
 Issue: UTV2-1421
 Tier: T2
 Branch: codex/utv2-1421-lane-finalize-tier-label-fail-closed
-MERGE_SHA: 513202a043c82913ab2ae74cc0f82fc020dc33a0
+MERGE_SHA: 47ac98fde9a2871b014223d12446e09a3f00af5b
 
-The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Squash-merge SHA on main (implementation commit 513202a0 merged via PR #1151).
 
 ## ASSERTIONS:
 

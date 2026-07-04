@@ -13,3 +13,5 @@
 ## Scope
 
 No runtime, migration, domain, contract, DB repository, worker, or delivery files were changed.
+
+Merge SHA: 47ac98fde9a2871b014223d12446e09a3f00af5b
