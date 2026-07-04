@@ -1,22 +1,38 @@
 # UTV2-1463 Diff Summary
 
+Generated at: 2026-07-04T21:21:58.299Z
 Issue: UTV2-1463
 Tier: T2
+Lane type: governance
 Branch: codex/utv2-1463-closeout-concurrency-hardening
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1149
+Head SHA: d2150e5d612ab0fac7f68466ef6e388607596bc8
+Merge SHA: b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf
+Diff base: b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf^1
+Diff target: b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf
 
-## Summary
+## Git Diff Stat
+```
+.github/workflows/post-merge-lane-close.yml    | 49 +++++++++++++++++++++++++-
+ .ops/sync/UTV2-1463.yml                        | 10 ++++++
+ docs/06_status/lanes/UTV2-1463.json            | 38 ++++++++++++++++++++
+ docs/06_status/proof/UTV2-1463/diff-summary.md | 22 ++++++++++++
+ docs/06_status/proof/UTV2-1463/verification.md | 40 +++++++++++++++++++++
+ 5 files changed, 158 insertions(+), 1 deletion(-)
+```
 
-- Hardened `.github/workflows/post-merge-lane-close.yml` with a 30 minute job timeout so a hung post-merge closeout cannot hold the shared `merge-closeout-mutex` indefinitely.
-- Added failure-only merge mutex cleanup after `ops:lane-close --repair-merged` fails. The cleanup reads the lane manifest branch and calls `pnpm ops:merge-lock release --issue "$ISSUE_ID" --branch "$manifest_branch"` without `--force`, so it only releases the same issue/branch lock and does not mask the failing closeout.
-- Kept the existing red failure path intact: the workflow still posts the failure comment when a PR is known, then re-raises the lane-close exit code.
-- Added a rebase-and-retry loop (3 attempts) around the bookkeeping `git push`. When another PR merges mid-closeout, main advances and the bare push was rejected non-fast-forward, failing the closeout and stranding the lane in `merged` state — the primary observed cause of manual SHA-repair commits.
+## Git Name Status
+```
+M	.github/workflows/post-merge-lane-close.yml
+A	.ops/sync/UTV2-1463.yml
+A	docs/06_status/lanes/UTV2-1463.json
+A	docs/06_status/proof/UTV2-1463/diff-summary.md
+A	docs/06_status/proof/UTV2-1463/verification.md
+```
 
-## Files Changed
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-- `.github/workflows/post-merge-lane-close.yml` — bounded the closeout job runtime and added scoped merge-mutex release on failed lane closeout.
-- `docs/06_status/proof/UTV2-1463/diff-summary.md` — this proof summary.
-- `docs/06_status/proof/UTV2-1463/verification.md` — verification log and blocker detail.
-
-## R-Level
-
-`docs/05_operations/r1-r5-rules.json` was checked. The changed workflow/proof paths do not match any R1-R5 runtime rule, so no R-level artifacts are required.
+## SHA Binding
+Head SHA: d2150e5d612ab0fac7f68466ef6e388607596bc8
+Merge SHA: b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf

@@ -3,9 +3,9 @@
 Issue: UTV2-1463
 Tier: T2
 Branch: codex/utv2-1463-closeout-concurrency-hardening
-MERGE_SHA: 79a063c665508388cf2888fafa3bcffda4949b2b
+MERGE_SHA: b68c2c5568320a5ae3efcc06e007bd90e1d8fbbf
 
-The SHA above is the implementation commit; the post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Squash-merge SHA on main (implementation commits 79a063c6, d2150e5d merged via PR #1149).
 
 ## ASSERTIONS:
 
