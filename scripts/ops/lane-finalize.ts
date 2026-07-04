@@ -67,13 +67,12 @@ export function buildLaneFinalizePlan(input: {
       args: ['ops:lane-manifest', 'record-merge', issueId, '--pr', input.pr, '--json'],
       required: true,
     });
-    // Apply tier label to PR — non-blocking so a missing label doesn't stall closeout
     if (input.manifest.tier) {
       steps.push({
         id: 'apply_tier_label',
         command: 'gh',
         args: ['pr', 'edit', normalizePrUrl(input.pr), '--add-label', `tier:${input.manifest.tier}`],
-        required: false,
+        required: true,
       });
     }
     // Explicit --merge-sha ensures the proof reflects the actual merge commit,
