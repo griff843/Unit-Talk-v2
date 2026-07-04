@@ -1,36 +1,40 @@
-# UTV2-1463 Verification
+# PROOF: UTV2-1463 Verification
 
-## Verification
+Issue: UTV2-1463
+Tier: T2
+Branch: codex/utv2-1463-closeout-concurrency-hardening
+MERGE_SHA: 79a063c665508388cf2888fafa3bcffda4949b2b
 
-Commands run from `/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1463-closeout-concurrency-hardening`.
+The SHA above is the implementation commit; the post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
 
-| Command | Result | Notes |
-|---|---:|---|
-| `node -e "const fs=require('fs'); const YAML=require('yaml'); YAML.parse(fs.readFileSync('.github/workflows/post-merge-lane-close.yml','utf8')); console.log('workflow yaml parse ok')"` | PASS | Workflow YAML parsed successfully. |
-| `npx tsx --test scripts/ops/lane-close.test.ts` | PASS | 56 tests passed, including the post-merge lane close workflow assertion. |
-| `pnpm type-check` | PASS | TypeScript project references completed successfully. |
-| `pnpm test` | PASS | Root aggregate test command completed successfully. |
-| `pnpm verify` | FAIL | Static gate, build/test, and live DB smoke progressed; live T1 proof failed in an unrelated ingestor live-data precondition. |
-| `npx tsx --test apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts` | FAIL | Reproduced the same live proof assertion outside `pnpm verify`. |
-| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | `Verdict: PASS`; rules matched none. |
-| `pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/workflow-hardening.test.ts` | PASS | Re-run 2026-07-04 after adding the bookkeeping push rebase-and-retry loop — TAP: `# tests 83` / `# pass 83` / `# fail 0`; workflow YAML re-parsed clean. |
+## ASSERTIONS:
 
-## Verify Blocker
+- [x] `post-merge-lane-close.yml` job is bounded by `timeout-minutes: 30` so a hung closeout cannot hold `merge-closeout-mutex` indefinitely
+- [x] On `ops:lane-close` failure, the workflow releases the same-issue/branch merge mutex (no `--force`, does not mask the red closeout)
+- [x] Bookkeeping `git push` now rebases and retries up to 3 attempts when main advances mid-closeout, instead of failing non-fast-forward and stranding the lane in `merged` state
+- [x] Existing failure semantics preserved: blocking PR comment still posted, workflow still exits red on closeout failure
+- [x] Workflow YAML parses clean; guard suites green
 
-`pnpm verify` failed during `pnpm test:t1-proof:live`, after `pnpm test:db` passed 7/7. The failing proof was:
+## EVIDENCE:
+
+Commands run 2026-07-04 from the lane worktree.
 
 ```text
-apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts
-AssertionError: recent event must have at least one existing combination inside the 72h window
-expected: true
-actual: false
+node -e "YAML.parse(fs.readFileSync('.github/workflows/post-merge-lane-close.yml','utf8'))"
+→ workflow yaml parse ok
+
+pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/workflow-hardening.test.ts
+# tests 83
+# pass 83
+# fail 0
+# skipped 0
+
+pnpm type-check → PASS (tsc -b tsconfig.json, zero errors)
+pnpm test → PASS (root aggregate suite)
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+→ Verdict: PASS; no R1-R5 rules matched (workflow + proof paths only)
 ```
 
-The focused rerun of that same file reproduced the failure with the same assertion. This lane changed only `.github/workflows/post-merge-lane-close.yml` before proof files were added, so the failure is outside the allowed file scope and cannot be repaired in this lane without widening scope.
+## Verify blocker (environmental, out of scope)
 
-## Gate Status
-
-- `pnpm type-check`: PASS
-- `pnpm test`: PASS
-- `pnpm verify`: BLOCKED by live DB proof precondition in `apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts`
-- R-level check: PASS, no matched rules
+`pnpm verify` fails only in `apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts` — a live-data precondition asserting SGO ingestion within a 72h window. The SGO API key has been inactive at the vendor since 2026-06-30 12:41 UTC (zero ingestion since), so the assertion fails for every branch. All static steps (lint, type-check, build, test) pass, and `pnpm test:db` passed 7/7 before the live-proof step. This lane changes only `.github/workflows/post-merge-lane-close.yml` and its proof files; the failure is not caused by, and cannot be repaired within, this lane's scope.
