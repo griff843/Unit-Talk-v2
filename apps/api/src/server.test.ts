@@ -22,23 +22,31 @@ import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 import { checkZombiePickHealth } from './routes/health.js';
 
 // Requeue/routing-preview tests assert delivery-target routing directly. This
-// depends on two ambient env vars read by distribution-service.ts at enqueue
-// time: UNIT_TALK_APP_ENV === 'local' redirects all non-canary targets to
-// discord:canary, and UNIT_TALK_DISTRIBUTION_TARGETS (when present) restricts
-// which targets are considered worker-covered. Sourcing the repo's local.env
-// sets both, which breaks the target-specific assertions below — not a flake,
-// a real ambient-env dependency. Neutralize both for this file so results
-// don't depend on the caller's shell env. (See the identical fix + rationale
-// in submission-service.test.ts.)
+// depends on three ambient env vars read by distribution-service.ts (via
+// promotion.ts's resolveTargetRegistry) at enqueue time: UNIT_TALK_APP_ENV ===
+// 'local' redirects all non-canary targets to discord:canary,
+// UNIT_TALK_DISTRIBUTION_TARGETS (when present) restricts which targets are
+// considered worker-covered, and UNIT_TALK_ENABLED_TARGETS (when present)
+// restricts which promotion targets the registry considers enabled at all.
+// Sourcing the repo's local.env sets these, which breaks the target-specific
+// assertions below — not a flake, a real ambient-env dependency. Neutralize
+// all three for this file so results don't depend on the caller's shell env.
+// (See the identical fix + rationale in submission-service.test.ts.)
 const previousFileAppEnv = process.env.UNIT_TALK_APP_ENV;
 const hadFileDistributionTargets = Object.prototype.hasOwnProperty.call(
   process.env,
   'UNIT_TALK_DISTRIBUTION_TARGETS',
 );
 const previousFileDistributionTargets = process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+const hadFileEnabledTargets = Object.prototype.hasOwnProperty.call(
+  process.env,
+  'UNIT_TALK_ENABLED_TARGETS',
+);
+const previousFileEnabledTargets = process.env.UNIT_TALK_ENABLED_TARGETS;
 before(() => {
   process.env.UNIT_TALK_APP_ENV = 'test';
   delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+  delete process.env.UNIT_TALK_ENABLED_TARGETS;
 });
 after(() => {
   if (previousFileAppEnv === undefined) {
@@ -50,6 +58,11 @@ after(() => {
     process.env.UNIT_TALK_DISTRIBUTION_TARGETS = previousFileDistributionTargets;
   } else {
     delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+  }
+  if (hadFileEnabledTargets) {
+    process.env.UNIT_TALK_ENABLED_TARGETS = previousFileEnabledTargets;
+  } else {
+    delete process.env.UNIT_TALK_ENABLED_TARGETS;
   }
 });
 
