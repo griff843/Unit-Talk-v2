@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1473",
+  "tier": "T1",
+  "executor": "claude",
+  "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
+  "verified_at": "2026-07-05T20:22:47Z",
+  "status": "merged",
+  "sha_binding": {
+    "verified_source_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-05T20:22:47Z",
+    "ci_sentinels": {
+      "merge_gate": "pass",
+      "executor_result_validation": "pass",
+      "t1_proof_gate": "pass",
+      "verify": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1473-preflight-pb2-flake"
+  },
+  "static_proof": {
+    "pnpm_verify": "PASS (except pre-existing SGO-outage precondition in apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts, unrelated to this lane)",
+    "pnpm_test": "PASS, 3 consecutive clean runs with local.env sourced",
+    "type_check": "PASS",
+    "branch_sha": "8710e29e0a618221fa08d31ac01cb3a58064a187",
+    "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967"
+  },
+  "runtime_proof": {
+    "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",
+    "run_at": "2026-07-05T20:19:00Z",
+    "command": "pnpm test:db",
+    "test_count": 7,
+    "test_pass": 7,
+    "test_fail": 0,
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+      "UTV2-996: correction chain is additive — original settlement row is not mutated",
+      "picks: SELECT count(*)",
+      "pick_lifecycle: SELECT count(*)",
+      "distribution_outbox: SELECT count(*)",
+      "settlement_records: SELECT count(*)"
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 59859 },
+      { "table": "pick_lifecycle", "count": 89713 },
+      { "table": "distribution_outbox", "count": 4058 },
+      { "table": "settlement_records", "count": 18792 }
+    ],
+    "row_counts_sampled_at": "2026-07-05T20:22:47Z",
+    "row_counts_project_ref": "zfzdnfwdarxucxtaojxm",
+    "note": "This lane changes only test-file isolation (no runtime/production code paths). test:db runs the existing live-DB smoke suite unmodified to prove the fix didn't alter runtime behavior; row counts are a live-environment snapshot, not lane-specific deltas."
+  }
+}

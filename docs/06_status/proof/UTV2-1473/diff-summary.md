@@ -1,8 +1,53 @@
 # UTV2-1473 Diff Summary
 
+Generated at: 2026-07-05T20:12:22.781Z
 Issue: UTV2-1473
 Tier: T1
+Lane type: runtime
 Branch: claude/utv2-1473-preflight-pb2-flake
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1155
+Head SHA: c8b6bc17a815736de8b13cbd399421ac6d1c2967
+Merge SHA: c8b6bc17a815736de8b13cbd399421ac6d1c2967
+Diff base: c8b6bc17a815736de8b13cbd399421ac6d1c2967^1
+Diff target: c8b6bc17a815736de8b13cbd399421ac6d1c2967
+
+## Git Diff Stat
+```
+.ops/sync/UTV2-1473.yml                        | 12 ++++
+ apps/api/src/qa-seed.test.ts                   | 33 ++++++++-
+ apps/api/src/server.test.ts                    | 47 +++++++++++-
+ apps/api/src/submission-service.test.ts        | 54 +++++++++++++-
+ apps/worker/src/worker-runtime.test.ts         | 13 ++++
+ docs/06_status/lanes/UTV2-1473.json            | 41 +++++++++++
+ docs/06_status/proof/UTV2-1473/diff-summary.md | 27 +++++++
+ docs/06_status/proof/UTV2-1473/verification.md | 99 ++++++++++++++++++++++++++
+ packages/config/src/env.test.ts                | 53 +++++++++++++-
+ 9 files changed, 375 insertions(+), 4 deletions(-)
+```
+
+## Git Name Status
+```
+A	.ops/sync/UTV2-1473.yml
+M	apps/api/src/qa-seed.test.ts
+M	apps/api/src/server.test.ts
+M	apps/api/src/submission-service.test.ts
+M	apps/worker/src/worker-runtime.test.ts
+A	docs/06_status/lanes/UTV2-1473.json
+A	docs/06_status/proof/UTV2-1473/diff-summary.md
+A	docs/06_status/proof/UTV2-1473/verification.md
+M	packages/config/src/env.test.ts
+```
+
+## Manifest Files Changed
+- apps/api/src/qa-seed.test.ts
+- apps/api/src/server.test.ts
+- apps/api/src/submission-service.test.ts
+- apps/worker/src/worker-runtime.test.ts
+- packages/config/src/env.test.ts
+
+## SHA Binding
+Head SHA: c8b6bc17a815736de8b13cbd399421ac6d1c2967
+Merge SHA: c8b6bc17a815736de8b13cbd399421ac6d1c2967
 
 ## Summary
 
@@ -10,17 +55,9 @@ Root-caused and fixed the PB2 (`pnpm test`) failures under `pnpm ops:preflight .
 
 Fixed by adding file-scoped save/delete/restore of the specific ambient env keys each file's assertions depend on, matching the established isolation pattern already used elsewhere in the codebase. No production/runtime code changed — test files only.
 
-## Files Changed
-
-- `apps/api/src/submission-service.test.ts` — isolate `UNIT_TALK_APP_ENV` / `UNIT_TALK_DISTRIBUTION_TARGETS` / `UNIT_TALK_ENABLED_TARGETS`
-- `apps/api/src/server.test.ts` — same, for requeue + routing-preview route tests
-- `apps/api/src/qa-seed.test.ts` — same, for sandbox seed-pick enqueue test
-- `apps/worker/src/worker-runtime.test.ts` — extend an existing fixture test's save/restore list with `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`
-- `packages/config/src/env.test.ts` — isolate every env key its 4 fixture-based tests assert on, including `SGO_API_KEYS`
-
 ## PM revision (round 2)
 
-PM_VERDICT: CHANGES_REQUIRED flagged two remaining ambient-env gaps: `UNIT_TALK_ENABLED_TARGETS` (read by `resolveTargetRegistry` in `packages/contracts/src/promotion.ts`, gates whether a promotion target is considered enabled at all) was not isolated in `submission-service.test.ts` / `server.test.ts`, and `SGO_API_KEYS` (read directly by `collectConfiguredSgoApiKeys` in `packages/config/src/env.ts`, distinct from the already-isolated singular `SGO_API_KEY`) was not isolated in `env.test.ts`. Both added; all three files re-verified (126/126 local subset, 3x clean full `pnpm test`, PB2 preflight pass).
+PM_VERDICT: CHANGES_REQUIRED flagged two remaining ambient-env gaps: `UNIT_TALK_ENABLED_TARGETS` (read by `resolveTargetRegistry` in `packages/contracts/src/promotion.ts`, gates whether a promotion target is considered enabled at all) was not isolated in `submission-service.test.ts` / `server.test.ts`, and `SGO_API_KEYS` (read directly by `collectConfiguredSgoApiKeys` in `packages/config/src/env.ts`, distinct from the already-isolated singular `SGO_API_KEY`) was not isolated in `env.test.ts`. Both added; all three files re-verified (126/126 local subset, 3x clean full `pnpm test`, PB2 preflight pass). PM_VERDICT: APPROVED followed; merged via squash to main (PR #1155).
 
 ## R-Level
 

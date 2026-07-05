@@ -3,18 +3,19 @@
 Issue: UTV2-1473
 Tier: T1
 Branch: claude/utv2-1473-preflight-pb2-flake
-MERGE_SHA: c0d5a6082d4917916e5c2c3ec324988bbd6d968f
+Head SHA: c8b6bc17a815736de8b13cbd399421ac6d1c2967
+MERGE_SHA: c8b6bc17a815736de8b13cbd399421ac6d1c2967
 
-The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Rebound to the squash-merge SHA post-merge (implementation commit was `c0d5a6082d4917916e5c2c3ec324988bbd6d968f` on the source branch, then `8710e29e0a618221fa08d31ac01cb3a58064a187` after the round-2 PM-requested fix; both are superseded by the merge SHA above).
 
 ## ASSERTIONS:
 
-- [x] Root cause identified with evidence, not speculation: five test files read `process.env` directly for distribution-target routing (`resolveDeliveryTarget`, `readConfiguredWorkerTargets`) and Supabase-backed persistence-mode selection (`hasDatabaseEnvironment`) without isolating themselves from the ambient shell environment
+- [x] Root cause identified with evidence, not speculation: five test files read `process.env` directly for distribution-target routing (`resolveDeliveryTarget`, `readConfiguredWorkerTargets`, `resolveTargetRegistry`) and Supabase-backed persistence-mode selection (`hasDatabaseEnvironment`) without isolating themselves from the ambient shell environment
 - [x] Reproduced deterministically by toggling exactly one variable (whether `local.env` was sourced before the test command) — not a flake
-- [x] Fixed by isolating the specific ambient env keys each file's assertions depend on (`UNIT_TALK_APP_ENV`, `UNIT_TALK_DISTRIBUTION_TARGETS`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the full set of keys `packages/config/src/env.test.ts` exercises), matching the save/delete/restore pattern already established in `distribution-service.test.ts`
-- [x] `pnpm ops:preflight` for the queued T1 lane's branch passes PB2 with the fix in place, with `local.env` sourced (the exact failure condition)
+- [x] Fixed by isolating the specific ambient env keys each file's assertions depend on (`UNIT_TALK_APP_ENV`, `UNIT_TALK_DISTRIBUTION_TARGETS`, `UNIT_TALK_ENABLED_TARGETS`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SGO_API_KEYS`, and the full set of keys `packages/config/src/env.test.ts` exercises), matching the save/delete/restore pattern already established in `distribution-service.test.ts`
+- [x] `pnpm ops:preflight` for this branch passes PB2 with the fix in place, with `local.env` sourced (the exact failure condition)
 - [x] `pnpm test` passes cleanly (exit 0) 3 consecutive times with `local.env` sourced
-- [x] The queued T1 lane this issue blocks is unblocked (blocking relationship removed once this closes)
+- [x] The T1 lane this issue blocked (UTV2-1384) is unblocked (blocking relationship removed once this closes)
 
 ## Verification
 
@@ -23,7 +24,7 @@ Executed 2026-07-05 from the lane worktree; raw output in EVIDENCE below.
 - `pnpm type-check` — PASS
 - `pnpm test:db` — PASS (7/7 against live Supabase)
 - `pnpm test` (full aggregate, `local.env` sourced) — PASS, 3 consecutive runs, exit 0 each time
-- `pnpm ops:preflight` for the queued lane's branch — PB2 PASS
+- `pnpm ops:preflight` for this branch — PB2 PASS
 - `pnpm verify` — fails only in the pre-existing SGO-outage live-data precondition (environmental, out of scope — detail below); all static steps pass
 
 ## EVIDENCE:
@@ -42,11 +43,9 @@ run 1: exit=0
 run 2: exit=0
 run 3: exit=0
 
-pnpm ops:preflight for the queued lane's branch
+pnpm ops:preflight for this branch
 | PB1 | PASS | pnpm type-check passed |
 | PB2 | PASS | pnpm test passed |
-(only PX5 fails: T1 expected proof dir missing — a pre-lane-start chicken-and-egg
- for the queued lane's not-yet-started lane, unrelated to PB2 / this issue)
 
 pnpm verify
 not ok 1 - findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)
@@ -74,7 +73,7 @@ PM_VERDICT: CHANGES_REQUIRED (round 1) identified two remaining ambient-env gaps
 
 - [x] `UNIT_TALK_ENABLED_TARGETS` isolated in `submission-service.test.ts` and `server.test.ts` (gates `resolveTargetRegistry`'s enabled-target check, separate code path from the worker-coverage check `UNIT_TALK_DISTRIBUTION_TARGETS` already covered)
 - [x] `SGO_API_KEYS` isolated in `packages/config/src/env.test.ts` (read directly via `process.env.SGO_API_KEYS` in `collectConfiguredSgoApiKeys`, not covered by the already-isolated singular `SGO_API_KEY` / `SGO_API_KEY_FALLBACK`)
-- [x] Re-verified with `local.env` sourced: targeted subset (`submission-service.test.ts` + `server.test.ts` + `env.test.ts`) 126/126 pass; full `pnpm test` 3 consecutive clean runs (exit 0 each); `pnpm type-check` clean; `pnpm ops:preflight UTV2-1473 --tier T1 --branch claude/utv2-1473-preflight-pb2-flake` — PB2 PASS
+- [x] Re-verified with `local.env` sourced: targeted subset (`submission-service.test.ts` + `server.test.ts` + `env.test.ts`) 126/126 pass; full `pnpm test` 3 consecutive clean runs (exit 0 each); `pnpm type-check` clean; `pnpm ops:preflight` — PB2 PASS
 
 ```text
 targeted subset (local.env sourced): 126/126 pass, 0 fail
@@ -86,13 +85,12 @@ run 3: exit=0, 0 "not ok" lines
 
 pnpm type-check → PASS, zero errors
 
-pnpm ops:preflight UTV2-1473 --tier T1 --branch claude/utv2-1473-preflight-pb2-flake
+pnpm ops:preflight (PB-scope)
 | PB1 | PASS | pnpm type-check passed |
 | PB2 | PASS | pnpm test passed |
-(PG2/PL3/PL5 fails in this run are expected: working tree had the
- not-yet-committed fix, and the lane manifest is already status=started —
- unrelated to PB2 / this issue)
 ```
+
+PM_VERDICT: APPROVED posted 2026-07-05; `t1-approved` label applied; merged via squash to main at `c8b6bc17a815736de8b13cbd399421ac6d1c2967` (PR #1155).
 
 ## Why this was not caught until now
 

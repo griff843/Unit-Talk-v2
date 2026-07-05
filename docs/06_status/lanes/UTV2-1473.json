@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "claude/utv2-1473-preflight-pb2-flake",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
   "files_changed": [
     "apps/api/src/qa-seed.test.ts",
@@ -23,19 +23,121 @@
     "apps/worker/src/worker-runtime.test.ts",
     "packages/config/src/env.test.ts",
     "docs/06_status/proof/UTV2-1473/diff-summary.md",
-    "docs/06_status/proof/UTV2-1473/verification.md"
+    "docs/06_status/proof/UTV2-1473/verification.md",
+    "docs/06_status/proof/UTV2-1473/evidence.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1473/diff-summary.md",
-    "docs/06_status/proof/UTV2-1473/verification.md"
+    "docs/06_status/proof/UTV2-1473/verification.md",
+    "docs/06_status/proof/UTV2-1473/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-05T14:59:57.327Z",
-  "heartbeat_at": "2026-07-05T15:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-05T20:23:18.316Z",
+  "closed_at": "2026-07-05T20:23:18.316Z",
   "blocked_by": [],
-  "preflight_token": null,
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-05T20:11:47.954Z",
+      "verdict": "pass",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-05T20:11:47.960Z",
+      "verdict": "fail",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-05T20:11:57.245Z",
+      "verdict": "pass",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-05T20:11:57.251Z",
+      "verdict": "fail",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-05T20:12:07.643Z",
+      "verdict": "pass",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-05T20:12:07.649Z",
+      "verdict": "fail",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-05T20:23:15.822Z",
+      "verdict": "pass",
+      "merge_sha": "c8b6bc17a815736de8b13cbd399421ac6d1c2967",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": []
 }
