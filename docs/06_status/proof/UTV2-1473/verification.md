@@ -1,0 +1,63 @@
+# PROOF: UTV2-1473 Verification
+
+Issue: UTV2-1473
+Tier: T1
+Branch: claude/utv2-1473-preflight-pb2-flake
+MERGE_SHA: c0d5a6082d4917916e5c2c3ec324988bbd6d968f
+
+The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+
+## ASSERTIONS:
+
+- [x] Root cause identified with evidence, not speculation: five test files read `process.env` directly for distribution-target routing (`resolveDeliveryTarget`, `readConfiguredWorkerTargets`) and Supabase-backed persistence-mode selection (`hasDatabaseEnvironment`) without isolating themselves from the ambient shell environment
+- [x] Reproduced deterministically by toggling exactly one variable (whether `local.env` was sourced before the test command) — not a flake
+- [x] Fixed by isolating the specific ambient env keys each file's assertions depend on (`UNIT_TALK_APP_ENV`, `UNIT_TALK_DISTRIBUTION_TARGETS`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the full set of keys `packages/config/src/env.test.ts` exercises), matching the save/delete/restore pattern already established in `distribution-service.test.ts`
+- [x] `pnpm ops:preflight UTV2-1384 --branch claude/utv2-1384-dual-participant-audit --tier T1` PB2 passes with the fix in place, with `local.env` sourced (the exact failure condition)
+- [x] `pnpm test` passes cleanly (exit 0) 3 consecutive times with `local.env` sourced
+- [x] UTV2-1384 unblocked (blocking relationship removed once this closes)
+
+## Verification
+
+Executed 2026-07-05 from the lane worktree; raw output in EVIDENCE below.
+
+- `pnpm type-check` — PASS
+- `pnpm test:db` — PASS (7/7 against live Supabase)
+- `pnpm test` (full aggregate, `local.env` sourced) — PASS, 3 consecutive runs, exit 0 each time
+- `pnpm ops:preflight UTV2-1384 --branch claude/utv2-1384-dual-participant-audit --tier T1` — PB2 PASS
+
+## EVIDENCE:
+
+```text
+pnpm type-check → PASS (tsc -b tsconfig.json, zero errors)
+
+pnpm test:db (live Supabase, project zfzdnfwdarxucxtaojxm)
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+
+pnpm test (local.env sourced) — 3 consecutive runs:
+run 1: exit=0
+run 2: exit=0
+run 3: exit=0
+
+pnpm ops:preflight UTV2-1384 --branch claude/utv2-1384-dual-participant-audit --tier T1
+| PB1 | PASS | pnpm type-check passed |
+| PB2 | PASS | pnpm test passed |
+(only PX5 fails: T1 expected proof dir missing — a pre-lane-start chicken-and-egg
+ for UTV2-1384's own not-yet-started lane, unrelated to PB2 / this issue)
+```
+
+## Root-cause detail (per file)
+
+| File | Ambient var(s) that leaked in | Effect |
+|---|---|---|
+| `apps/api/src/submission-service.test.ts` | `UNIT_TALK_APP_ENV=local` (redirects all non-canary delivery to `discord:canary`); `UNIT_TALK_DISTRIBUTION_TARGETS=discord:canary` (restricts worker-target coverage, throws `DistributionTargetMismatchError` once the canary redirect no longer masks it) | 9 tests asserting best-bets/trader-insights outbox rows failed |
+| `apps/api/src/server.test.ts` | same two vars | 3 tests (requeue x2, routing-preview) failed |
+| `apps/api/src/qa-seed.test.ts` | same two vars | 1 test (seed-pick enqueue) failed |
+| `apps/worker/src/worker-runtime.test.ts` | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` present in ambient env flips `persistenceMode` to `'database'` even inside the test's own fixture-dir chdir, since `hasDatabaseEnvironment()` reads live `process.env`, not the fixture's file-scoped values | 1 test failed |
+| `packages/config/src/env.test.ts` | `loadEnvironment(rootDir)` merges file-parsed fixture values with already-present `process.env` entries, process.env taking precedence, for every key the file's 4 fixture tests assert on (SGO keys, staging mode, target vars, ingestor DB/archive vars) | 4 tests failed |
+
+## Why this was not caught until now
+
+These files were written and pass individually (`tsx --test <file>` or `pnpm test:<subset>`) whenever the developer's shell has NOT sourced `local.env`. CI runners never source `local.env` (no such file exists there), so this was invisible in CI. It only manifests when a developer/agent runs the full `pnpm test` suite (or `pnpm ops:preflight`, which internally requires `local.env`-sourced credentials for its own T1 Supabase health check) with `local.env` present in the shell — exactly the condition every T1 preflight invocation requires.
