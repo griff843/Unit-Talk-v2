@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+    # Closeout bookkeeping pushes (lane manifests, proof bundles, sync files)
+    # are metadata-only and cannot break the build; skipping them stops each
+    # lane closeout from invalidating every open PR a second time.
+    # Fail-closed: a push touching ANY path outside this list runs full verify.
+    # PR-triggered runs (the required "verify" context) are unaffected.
+    paths-ignore:
+      - 'docs/06_status/lanes/**'
+      - 'docs/06_status/proof/**'
+      - '.ops/sync/**'
   pull_request:
 
 concurrency:
