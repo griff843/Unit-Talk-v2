@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1459-t1-proof-freshness-skip",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1147",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts",
