@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1462-ci-bookkeeping-path-filter",
   "branch": "claude/utv2-1462-ci-bookkeeping-path-filter",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a9569689bf50b38bd6c2e38411336a181d24087e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1154",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
@@ -19,14 +19,24 @@
     "docs/06_status/proof/UTV2-1462/diff-summary.md",
     "docs/06_status/proof/UTV2-1462/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-04T22:21:34.381Z",
-  "heartbeat_at": "2026-07-04T22:21:34.381Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-05T04:18:53.659Z",
+  "closed_at": "2026-07-05T04:18:53.659Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1462-ci-bookkeeping-path-filter.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-05T04:18:36.775Z",
+      "verdict": "pass",
+      "merge_sha": "a9569689bf50b38bd6c2e38411336a181d24087e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1154"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
