@@ -4,10 +4,41 @@ import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 
 import { createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
+
+// This file asserts sandbox outbox enqueue/target behavior, which depends on two
+// ambient env vars read by distribution-service.ts at enqueue time:
+// UNIT_TALK_APP_ENV === 'local' redirects all non-canary targets to discord:canary,
+// and UNIT_TALK_DISTRIBUTION_TARGETS (when present) restricts which targets are
+// considered worker-covered. Sourcing the repo's local.env sets both, breaking the
+// target-specific assertions below — not a flake, a real ambient-env dependency.
+// Neutralize both for this file. (See the identical fix + rationale in
+// submission-service.test.ts / server.test.ts.)
+const previousFileAppEnv = process.env.UNIT_TALK_APP_ENV;
+const hadFileDistributionTargets = Object.prototype.hasOwnProperty.call(
+  process.env,
+  'UNIT_TALK_DISTRIBUTION_TARGETS',
+);
+const previousFileDistributionTargets = process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+before(() => {
+  process.env.UNIT_TALK_APP_ENV = 'test';
+  delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+});
+after(() => {
+  if (previousFileAppEnv === undefined) {
+    delete process.env.UNIT_TALK_APP_ENV;
+  } else {
+    process.env.UNIT_TALK_APP_ENV = previousFileAppEnv;
+  }
+  if (hadFileDistributionTargets) {
+    process.env.UNIT_TALK_DISTRIBUTION_TARGETS = previousFileDistributionTargets;
+  } else {
+    delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+  }
+});
 
 function makeQaMapFile(): { dir: string; mapPath: string; channelId: string } {
   const dir = mkdtempSync(path.join(tmpdir(), 'utv2-828-qa-map-'));

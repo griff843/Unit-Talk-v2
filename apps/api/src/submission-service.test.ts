@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateSubmissionPayload } from '@unit-talk/contracts';
 import type { CanonicalPick, SubmissionPayload } from '@unit-talk/contracts';
@@ -25,6 +25,44 @@ import {
 } from './submission-service.js';
 import { recordPickSettlement } from './settlement-service.js';
 import type { SubmitPickControllerResult } from './controllers/submit-pick-controller.js';
+
+// This file's tests assert delivery-target routing directly (discord:best-bets,
+// discord:trader-insights, etc.), which depends on two ambient env vars read by
+// distribution-service.ts at enqueue time:
+//   - UNIT_TALK_APP_ENV === 'local' redirects ALL non-canary targets to
+//     discord:canary (resolveDeliveryTarget) — an intentional local-dev safety net.
+//   - UNIT_TALK_DISTRIBUTION_TARGETS, when present, restricts which targets the
+//     "worker" is considered to cover (readConfiguredWorkerTargets); a mismatch
+//     throws DistributionTargetMismatchError.
+// Sourcing the repo's local.env sets UNIT_TALK_APP_ENV=local and
+// UNIT_TALK_DISTRIBUTION_TARGETS=discord:canary, which silently reroutes (or, once
+// only one of the two is neutralized, outright rejects) every non-canary enqueue in
+// this file — not a flake, a real ambient-env dependency. Neutralize both for the
+// whole file so results don't depend on the caller's shell env; the one test that
+// specifically exercises the local-mode redirect manages its own temporary override
+// (see "handleSubmitPick in local env keeps promotion target...").
+const previousFileAppEnv = process.env.UNIT_TALK_APP_ENV;
+const hadFileDistributionTargets = Object.prototype.hasOwnProperty.call(
+  process.env,
+  'UNIT_TALK_DISTRIBUTION_TARGETS',
+);
+const previousFileDistributionTargets = process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+before(() => {
+  process.env.UNIT_TALK_APP_ENV = 'test';
+  delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+});
+after(() => {
+  if (previousFileAppEnv === undefined) {
+    delete process.env.UNIT_TALK_APP_ENV;
+  } else {
+    process.env.UNIT_TALK_APP_ENV = previousFileAppEnv;
+  }
+  if (hadFileDistributionTargets) {
+    process.env.UNIT_TALK_DISTRIBUTION_TARGETS = previousFileDistributionTargets;
+  } else {
+    delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+  }
+});
 
 // ─── Enqueue-gap fix tests ────────────────────────────────────────────────────
 
