@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1473",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "claude/utv2-1473-preflight-pb2-flake",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1155",
+  "files_changed": [
+    "apps/api/src/qa-seed.test.ts",
+    "apps/api/src/server.test.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/worker/src/worker-runtime.test.ts",
+    "packages/config/src/env.test.ts"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/qa-seed.test.ts",
+    "apps/api/src/server.test.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/worker/src/worker-runtime.test.ts",
+    "packages/config/src/env.test.ts",
+    "docs/06_status/proof/UTV2-1473/diff-summary.md",
+    "docs/06_status/proof/UTV2-1473/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1473/diff-summary.md",
+    "docs/06_status/proof/UTV2-1473/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-05T14:59:57.327Z",
+  "heartbeat_at": "2026-07-05T15:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
