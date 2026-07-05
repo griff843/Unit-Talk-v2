@@ -23,6 +23,7 @@ Executed 2026-07-04 from the lane worktree; raw output in EVIDENCE below.
 - `npx tsx --test scripts/ops/lane-execution.test.ts` — PASS (12/12)
 - `pnpm type-check` — PASS
 - `pnpm test` — PASS
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (ops-script diff, no rules matched)
 - Warm-store install timing in a fresh worktree — 12.5 s
 
 ## EVIDENCE:
