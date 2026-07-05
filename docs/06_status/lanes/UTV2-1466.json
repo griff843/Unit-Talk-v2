@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1466-shared-pnpm-store-isolated-install-relax",
   "branch": "codex/utv2-1466-shared-pnpm-store-isolated-install-relax",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "8af54b2679b0f78fc233a51524bb3e2248e2271c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1153",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-execution.ts",
@@ -22,14 +22,49 @@
     "docs/06_status/proof/UTV2-1466/diff-summary.md",
     "docs/06_status/proof/UTV2-1466/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-04T21:14:59.237Z",
-  "heartbeat_at": "2026-07-04T21:14:59.237Z",
+  "heartbeat_at": "2026-07-05T03:46:49.402Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1466-shared-pnpm-store-isolated-install-relax.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-04T22:30:09.713Z",
+      "verdict": "pass",
+      "merge_sha": "8af54b2679b0f78fc233a51524bb3e2248e2271c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1153"
+    },
+    {
+      "checked_at": "2026-07-04T22:30:12.182Z",
+      "verdict": "fail",
+      "merge_sha": "8af54b2679b0f78fc233a51524bb3e2248e2271c",
+      "failures": [
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-04T22:30:23.815Z",
+      "verdict": "fail",
+      "merge_sha": "8af54b2679b0f78fc233a51524bb3e2248e2271c",
+      "failures": [
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-05T03:46:49.402Z",
+      "verdict": "pass",
+      "merge_sha": "8af54b2679b0f78fc233a51524bb3e2248e2271c",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
