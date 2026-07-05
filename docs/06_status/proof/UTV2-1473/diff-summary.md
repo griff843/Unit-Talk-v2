@@ -6,7 +6,7 @@ Branch: claude/utv2-1473-preflight-pb2-flake
 
 ## Summary
 
-Root-caused and fixed the PB2 (`pnpm test`) failures under `pnpm ops:preflight ... --tier T1` that were blocking UTV2-1384's dispatch. Not a flake: five test files silently depend on the caller's ambient shell environment (specifically, whichever `local.env`-sourced values happen to be exported) for delivery-target routing and Supabase persistence-mode decisions, without isolating themselves the way sibling test files in the same codebase already do (`distribution-service.test.ts`). Sourcing `local.env` — which T1 preflight's own PT1 Supabase health check requires — silently changes their outcomes.
+Root-caused and fixed the PB2 (`pnpm test`) failures under `pnpm ops:preflight ... --tier T1` that were blocking a queued T1 lane's dispatch. Not a flake: five test files silently depend on the caller's ambient shell environment (specifically, whichever `local.env`-sourced values happen to be exported) for delivery-target routing and Supabase persistence-mode decisions, without isolating themselves the way sibling test files in the same codebase already do (`distribution-service.test.ts`). Sourcing `local.env` — which T1 preflight's own PT1 Supabase health check requires — silently changes their outcomes.
 
 Fixed by adding file-scoped save/delete/restore of the specific ambient env keys each file's assertions depend on, matching the established isolation pattern already used elsewhere in the codebase. No production/runtime code changed — test files only.
 

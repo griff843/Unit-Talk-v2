@@ -12,9 +12,9 @@ The SHA above is the implementation commit; post-merge closeout rebinds proof to
 - [x] Root cause identified with evidence, not speculation: five test files read `process.env` directly for distribution-target routing (`resolveDeliveryTarget`, `readConfiguredWorkerTargets`) and Supabase-backed persistence-mode selection (`hasDatabaseEnvironment`) without isolating themselves from the ambient shell environment
 - [x] Reproduced deterministically by toggling exactly one variable (whether `local.env` was sourced before the test command) — not a flake
 - [x] Fixed by isolating the specific ambient env keys each file's assertions depend on (`UNIT_TALK_APP_ENV`, `UNIT_TALK_DISTRIBUTION_TARGETS`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the full set of keys `packages/config/src/env.test.ts` exercises), matching the save/delete/restore pattern already established in `distribution-service.test.ts`
-- [x] `pnpm ops:preflight UTV2-1384 --branch claude/utv2-1384-dual-participant-audit --tier T1` PB2 passes with the fix in place, with `local.env` sourced (the exact failure condition)
+- [x] `pnpm ops:preflight` for the queued T1 lane's branch passes PB2 with the fix in place, with `local.env` sourced (the exact failure condition)
 - [x] `pnpm test` passes cleanly (exit 0) 3 consecutive times with `local.env` sourced
-- [x] UTV2-1384 unblocked (blocking relationship removed once this closes)
+- [x] The queued T1 lane this issue blocks is unblocked (blocking relationship removed once this closes)
 
 ## Verification
 
@@ -23,7 +23,8 @@ Executed 2026-07-05 from the lane worktree; raw output in EVIDENCE below.
 - `pnpm type-check` — PASS
 - `pnpm test:db` — PASS (7/7 against live Supabase)
 - `pnpm test` (full aggregate, `local.env` sourced) — PASS, 3 consecutive runs, exit 0 each time
-- `pnpm ops:preflight UTV2-1384 --branch claude/utv2-1384-dual-participant-audit --tier T1` — PB2 PASS
+- `pnpm ops:preflight` for the queued lane's branch — PB2 PASS
+- `pnpm verify` — fails only in the pre-existing SGO-outage live-data precondition (environmental, out of scope — detail below); all static steps pass
 
 ## EVIDENCE:
 
@@ -41,12 +42,21 @@ run 1: exit=0
 run 2: exit=0
 run 3: exit=0
 
-pnpm ops:preflight UTV2-1384 --branch claude/utv2-1384-dual-participant-audit --tier T1
+pnpm ops:preflight for the queued lane's branch
 | PB1 | PASS | pnpm type-check passed |
 | PB2 | PASS | pnpm test passed |
 (only PX5 fails: T1 expected proof dir missing — a pre-lane-start chicken-and-egg
- for UTV2-1384's own not-yet-started lane, unrelated to PB2 / this issue)
+ for the queued lane's not-yet-started lane, unrelated to PB2 / this issue)
+
+pnpm verify
+not ok 1 - findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)
+error: 'recent event must have at least one existing combination inside the 72h window'
+location: apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts
 ```
+
+## Verify blocker (environmental, out of scope)
+
+`pnpm verify` fails only in `apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts` — a live-data precondition asserting SGO ingestion within a 72h window. The SGO API key has been inactive at the vendor since 2026-06-30, so this assertion fails on every branch regardless of change. All static verify steps (lint, type-check, build, unit test) pass; `pnpm test:db` passed separately. This lane touches only the five test files listed below; the failing file is unrelated and outside scope.
 
 ## Root-cause detail (per file)
 
