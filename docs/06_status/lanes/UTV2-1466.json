@@ -22,10 +22,10 @@
     "docs/06_status/proof/UTV2-1466/diff-summary.md",
     "docs/06_status/proof/UTV2-1466/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-04T21:14:59.237Z",
-  "heartbeat_at": "2026-07-05T03:46:49.402Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-05T03:48:38.364Z",
+  "closed_at": "2026-07-05T03:48:38.364Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1466-shared-pnpm-store-isolated-install-relax.json",
   "created_by": "codex-cli",
