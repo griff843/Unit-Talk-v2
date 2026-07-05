@@ -23,6 +23,7 @@ Executed 2026-07-04 from the lane worktree; raw output in EVIDENCE below.
 - `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts` — PASS (0 failures)
 - `pnpm type-check` — PASS
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (no rules matched)
+- `pnpm test:db` — PASS (7/7 against live Supabase; not functionally required for a workflow-only diff, executed to satisfy the Proof Auditor Gate's unconditional `--require-executed-command "pnpm test:db"` check)
 - `pnpm verify` (branch CI) — the required `verify` context runs on this PR itself, demonstrating PR-trigger behavior is unaffected
 
 ## EVIDENCE:
@@ -38,6 +39,12 @@ pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts
 pnpm type-check → PASS (tsc -b tsconfig.json, zero errors)
 npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 → Verdict: PASS; Changed files: 2; no R1-R5 rules matched
+
+pnpm test:db (live Supabase, project zfzdnfwdarxucxtaojxm)
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
 ```
 
 ## Post-merge runtime acceptance
