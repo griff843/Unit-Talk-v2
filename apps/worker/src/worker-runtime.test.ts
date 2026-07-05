@@ -2205,6 +2205,15 @@ test('createWorkerRuntimeDependencies reads worker settings from local.env', () 
     UNIT_TALK_WORKER_MAX_CYCLES: process.env.UNIT_TALK_WORKER_MAX_CYCLES,
     UNIT_TALK_WORKER_DRY_RUN: process.env.UNIT_TALK_WORKER_DRY_RUN,
     UNIT_TALK_WORKER_AUTORUN: process.env.UNIT_TALK_WORKER_AUTORUN,
+    // This test asserts persistenceMode === 'in_memory' from a fixture dir with no
+    // Supabase creds. hasDatabaseEnvironment() reads SUPABASE_URL/SERVICE_ROLE_KEY
+    // from ambient process.env directly (not file-scoped to the chdir'd fixture
+    // dir), so a real local.env sourced in the shell (as ops:preflight's T1 checks
+    // require) leaks real creds in and flips persistenceMode to 'database' — not a
+    // flake, a real ambient-env dependency matching the same class of issue fixed
+    // in submission-service.test.ts / server.test.ts / qa-seed.test.ts.
+    SUPABASE_URL: process.env.SUPABASE_URL,
+    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
   };
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-worker-runtime-'));
 
@@ -2246,6 +2255,8 @@ test('createWorkerRuntimeDependencies reads worker settings from local.env', () 
     delete process.env.UNIT_TALK_WORKER_MAX_CYCLES;
     delete process.env.UNIT_TALK_WORKER_DRY_RUN;
     delete process.env.UNIT_TALK_WORKER_AUTORUN;
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     const runtime = createWorkerRuntimeDependencies();
 
@@ -2265,6 +2276,8 @@ test('createWorkerRuntimeDependencies reads worker settings from local.env', () 
     process.env.UNIT_TALK_WORKER_MAX_CYCLES = originalEnv.UNIT_TALK_WORKER_MAX_CYCLES;
     process.env.UNIT_TALK_WORKER_DRY_RUN = originalEnv.UNIT_TALK_WORKER_DRY_RUN;
     process.env.UNIT_TALK_WORKER_AUTORUN = originalEnv.UNIT_TALK_WORKER_AUTORUN;
+    process.env.SUPABASE_URL = originalEnv.SUPABASE_URL;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = originalEnv.SUPABASE_SERVICE_ROLE_KEY;
     process.chdir(originalCwd);
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

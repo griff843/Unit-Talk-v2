@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import {
   RuntimeConfigError,
   assertProductionRuntimeConfig,
@@ -10,6 +10,57 @@ import {
   loadEnvironment,
   type AppEnv,
 } from './env.js';
+
+// `loadEnvironment(rootDir)` merges file-parsed values with already-present
+// process.env entries, with process.env taking precedence. These tests write
+// fixture .env.example/.env/local.env files to a temp rootDir and assert on
+// the merged result — but if the REAL repo's local.env is sourced in the
+// caller's shell (as ops:preflight's T1 checks require), the real values leak
+// through ambient process.env and override the fixtures, breaking the
+// assertions below. Not a flake — a real ambient-env dependency, same class
+// as the fix in submission-service.test.ts / server.test.ts / qa-seed.test.ts
+// / worker-runtime.test.ts. Snapshot and clear every var this file's fixtures
+// exercise so results don't depend on the caller's shell env.
+const ISOLATED_ENV_KEYS = [
+  'SGO_API_KEY',
+  'SGO_API_KEY_FALLBACK',
+  'SGO_API_KEYS',
+  'UNIT_TALK_DISTRIBUTION_TARGETS',
+  'UNIT_TALK_ENABLED_TARGETS',
+  'UNIT_TALK_ROLLOUT_CONFIG',
+  'UNIT_TALK_INGESTOR_DB_LOCK_TIMEOUT_MS',
+  'UNIT_TALK_INGESTOR_DB_MAX_BATCH_SIZE',
+  'UNIT_TALK_INGESTOR_DB_MERGE_CHUNK_SIZE',
+  'UNIT_TALK_INGESTOR_DB_RETRY_BACKOFF_MS',
+  'UNIT_TALK_INGESTOR_DB_RETRY_MAX_ATTEMPTS',
+  'UNIT_TALK_INGESTOR_DB_STATEMENT_TIMEOUT_MS',
+  'UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS',
+  'UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET',
+  'UNIT_TALK_INGESTOR_PEAK_POLL_MS',
+  'UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET',
+  'UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK',
+  'UNIT_TALK_INGESTOR_SCHEDULING_ENABLED',
+  'UNIT_TALK_PROVIDER_OFFER_STAGING_MODE',
+  'UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_DIR',
+  'UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_MODE',
+] as const;
+const previousIsolatedEnv: Record<string, string | undefined> = {};
+before(() => {
+  for (const key of ISOLATED_ENV_KEYS) {
+    previousIsolatedEnv[key] = process.env[key];
+    delete process.env[key];
+  }
+});
+after(() => {
+  for (const key of ISOLATED_ENV_KEYS) {
+    const value = previousIsolatedEnv[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+});
 
 test('loadEnvironment preserves both configured SGO API keys in priority order', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-env-'));
