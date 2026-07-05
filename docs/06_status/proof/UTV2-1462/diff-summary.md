@@ -20,3 +20,5 @@ Branch: claude/utv2-1462-ci-bookkeeping-path-filter
 ## R-Level
 
 `scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS — workflow-only diff matches no R1–R5 runtime rules.
+
+Merge SHA: a9569689bf50b38bd6c2e38411336a181d24087e

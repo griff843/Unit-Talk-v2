@@ -3,9 +3,9 @@
 Issue: UTV2-1462
 Tier: T2
 Branch: claude/utv2-1462-ci-bookkeeping-path-filter
-MERGE_SHA: e75608f46957a6c4974de2fb0c482472f8e511be
+MERGE_SHA: a9569689bf50b38bd6c2e38411336a181d24087e
 
-The SHA above is the implementation commit; post-merge closeout rebinds proof to the squash-merge SHA via `ops:proof-generate --merge-sha`.
+Squash-merge SHA on main (implementation commit e75608f4 merged via PR #1154).
 
 ## ASSERTIONS:
 
