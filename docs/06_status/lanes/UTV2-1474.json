@@ -13,7 +13,8 @@
   "file_scope_lock": [
     "scripts/ops/lane-maximizer.test.ts",
     "scripts/ops/lane-maximizer.ts",
-    "scripts/ops/scope-suggest.ts"
+    "scripts/ops/scope-suggest.ts",
+    "scripts/ops/scope-suggest.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1474/diff-summary.md",
