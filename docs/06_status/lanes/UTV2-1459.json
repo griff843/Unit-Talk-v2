@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1459-t1-proof-freshness-skip",
   "branch": "claude/utv2-1459-t1-proof-freshness-skip",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1147",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,44 @@
     "docs/06_status/proof/UTV2-1459/diff-summary.md",
     "docs/06_status/proof/UTV2-1459/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-03T23:21:05.637Z",
-  "heartbeat_at": "2026-07-03T23:21:05.637Z",
+  "heartbeat_at": "2026-07-06T18:00:01.907Z",
   "closed_at": null,
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1459-t1-proof-freshness-skip.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-06T18:00:01.900Z",
+      "verdict": "pass",
+      "merge_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1147",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-06T18:00:01.907Z",
+      "verdict": "fail",
+      "merge_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
+      "failures": [
+        "G3",
+        "P3",
+        "P4",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

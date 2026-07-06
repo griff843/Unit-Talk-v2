@@ -23,7 +23,12 @@ Test-only change. `apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts` m
 ## Merge SHA Binding
 
 Head SHA: `bef7044e8e6e6308056270cc45c5e3c72744731c`
-Merge SHA: N/A (pre-merge; bound post-merge by `post-merge-lane-close.yml` via `ops:proof-generate --merge-sha`)
+Merge SHA: `5206e6e1d87787271f512d1b01009c71ad752628` (PR #1147, squash-merged 2026-07-06T17:59:45Z)
+
+## Post-merge verify and R-level evidence
+
+- `pnpm verify` — PASS on merge SHA `5206e6e1d87787271f512d1b01009c71ad752628`. `apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts`: 3 pass + 1 skip (explicit stale-data reason), 0 fail — confirms the fix's intended effect on the actual merged code.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS. Verdict: PASS, changed files vs merged main: 0, no R-level artifacts required for this diff.
 
 ## Live DB Verification
 

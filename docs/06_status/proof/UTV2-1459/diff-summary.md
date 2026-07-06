@@ -5,9 +5,9 @@ Issue: UTV2-1459
 Tier: T2
 Lane type: hygiene
 Branch: claude/utv2-1459-t1-proof-freshness-skip
-PR URL: N/A
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1147
 Head SHA: bef7044e8e6e6308056270cc45c5e3c72744731c
-Merge SHA: N/A
+Merge SHA: 5206e6e1d87787271f512d1b01009c71ad752628
 Diff base: ec8de7ee55f3197f1cf51e523bbc24583c4b294c
 Diff target: bef7044e8e6e6308056270cc45c5e3c72744731c
 
@@ -31,4 +31,4 @@ A	docs/06_status/lanes/UTV2-1459.json
 
 ## SHA Binding
 Head SHA: bef7044e8e6e6308056270cc45c5e3c72744731c
-Merge SHA: N/A
+Merge SHA: 5206e6e1d87787271f512d1b01009c71ad752628
