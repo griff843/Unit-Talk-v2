@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1474-fix-dead-cli-entrypoint",
   "branch": "codex/utv2-1474-fix-dead-cli-entrypoint",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "6c726428f921a35be3ba8f80906b187c53ddd9d4",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1158",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,55 @@
     "docs/06_status/proof/UTV2-1474/diff-summary.md",
     "docs/06_status/proof/UTV2-1474/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-06T19:02:18.447Z",
-  "heartbeat_at": "2026-07-06T19:02:18.447Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-06T21:45:21.816Z",
+  "closed_at": "2026-07-06T21:45:21.816Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1474-fix-dead-cli-entrypoint.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-06T21:44:17.319Z",
+      "verdict": "pass",
+      "merge_sha": "6c726428f921a35be3ba8f80906b187c53ddd9d4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1158",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-06T21:44:17.323Z",
+      "verdict": "fail",
+      "merge_sha": "6c726428f921a35be3ba8f80906b187c53ddd9d4",
+      "failures": [
+        "G3",
+        "P3",
+        "P4",
+        "C4",
+        "C5"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-06T21:44:48.529Z",
+      "verdict": "fail",
+      "merge_sha": "6c726428f921a35be3ba8f80906b187c53ddd9d4",
+      "failures": [
+        "P3",
+        "P4",
+        "C4",
+        "C5"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
