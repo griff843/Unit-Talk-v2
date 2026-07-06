@@ -11,6 +11,15 @@ function shaMatches(a: string | null | undefined, b: string | null | undefined):
   const [longer, shorter] = a.length >= b.length ? [a, b] : [b, a];
   return shorter.length >= 7 && /^[0-9a-f]+$/i.test(shorter) && longer.toLowerCase().startsWith(shorter.toLowerCase());
 }
+
+// UTV2-1475: This workspace's PM-review state is named "In PM Review", not the
+// generic "In Review" this check used to reference (a state that does not exist
+// in this workspace). L3 accepts that state plus the terminal "Done" state only.
+const L3_PERMITTED_LINEAR_STATES = new Set(['In PM Review', 'Done']);
+
+export function isLinearStatePermittedForL3(stateName: string | null | undefined): boolean {
+  return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
+}
 import { loadEnvironment } from '@unit-talk/config';
 import {
   type CheckResult,
@@ -447,8 +456,8 @@ export async function runTruthCheck(
     }
 
     const stateName = linearIssue.state?.name ?? '';
-    if (stateName !== 'In Review' && stateName !== 'Done') {
-      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not In Review or Done`);
+    if (!isLinearStatePermittedForL3(stateName)) {
+      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not In PM Review or Done`);
     } else {
       addCheck('L3', 'pass', `Linear state ${stateName} is permitted`);
     }
