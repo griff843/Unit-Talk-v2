@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1476-readiness-ledger-refresh",
   "branch": "claude/utv2-1476-readiness-ledger-refresh",
   "base_branch": "main",
-  "commit_sha": "ebab53b517d6803669990670826581d5a8729dce",
+  "commit_sha": "d7b8429f34872191bdb79a1eaaa548d5c50d0701",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1157",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,43 @@
     "docs/06_status/proof/UTV2-1476/diff-summary.md",
     "docs/06_status/proof/UTV2-1476/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-06T02:56:29.831Z",
-  "heartbeat_at": "2026-07-06T02:56:29.831Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-06T18:48:10.607Z",
+  "closed_at": "2026-07-06T18:48:10.607Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1476-readiness-ledger-refresh.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-06T18:37:11.083Z",
+      "verdict": "pass",
+      "merge_sha": "d7b8429f34872191bdb79a1eaaa548d5c50d0701",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1157",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-06T18:37:11.103Z",
+      "verdict": "fail",
+      "merge_sha": "d7b8429f34872191bdb79a1eaaa548d5c50d0701",
+      "failures": [
+        "G3",
+        "P3",
+        "P4",
+        "C4",
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
