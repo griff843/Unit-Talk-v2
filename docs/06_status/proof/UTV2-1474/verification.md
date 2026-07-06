@@ -2,13 +2,18 @@
 
 ## Verification
 
-Commit SHA: `a2c2fa344a35a9a23921a97326db9c2cd1f3be29`
+Commit SHA: `80047afa1317feeffcd1e1146e64e0c0b5f36916` (post-review fix included)
 
-- `npx tsx --test scripts/ops/lane-maximizer.test.ts` - PASS
+- `npx tsx --test scripts/ops/lane-maximizer.test.ts` - PASS (27/27, includes both new regression tests)
 - `pnpm ops:scope-suggest --description "Fix dead CLI entrypoint for lane dispatch ops tooling" --json` - PASS
 - `pnpm type-check` - PASS
 - `pnpm test` - PASS
 - `pnpm verify` - PASS
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` - PASS, 6 changed files, no R-level artifacts required
+
+### Post-review fix (Claude, pre-merge diff review)
+
+Codex's original commit fixed the CLI entrypoint but did not fix `extractFileScopeFromText` in `scripts/ops/lane-maximizer.ts` — one of the five acceptance criteria in the issue. Patched directly: the function now tolerates a blank line between a `## File Scope` heading and its first bullet (only before any bullet has been collected; a blank line still ends the block once bullets have started). Added a regression test (`queue intake parses file scope with a blank line after the heading`) proving `parseQueueCandidates` extracts the scope correctly in that exact shape. Re-ran `pnpm verify` (full suite green — one unrelated live-DB test, `t1-proof-utv2-1018-stranded-picks`, flaked on a transient Supabase `fetch failed` in the combined run and was confirmed passing 4/4 standalone) and the R-level check (PASS) after the fix.
 
 ### pnpm test:db Evidence
 

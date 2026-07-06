@@ -185,6 +185,12 @@ function extractFileScopeFromText(text: string | null | undefined): string[] {
     }
 
     if (inScopeBlock && line.length === 0) {
+      // Tolerate a blank line between the heading and its bullet list — Linear's
+      // markdown normalization always inserts one after a `#`-prefixed heading.
+      // Once bullets have started, a blank line still ends the block.
+      if (scopes.length === 0) {
+        continue;
+      }
       break;
     }
 
