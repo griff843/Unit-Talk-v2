@@ -14,7 +14,7 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { emitJson, getFlag, parseArgs, ROOT } from './shared.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -221,7 +221,7 @@ function main(argv = process.argv.slice(2)): number {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === fileURLToPath(new URL(import.meta.url))) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     process.exitCode = main();
   } catch (err) {

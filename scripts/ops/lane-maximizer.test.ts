@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
@@ -195,6 +196,33 @@ test('queue intake parses ready issues into dispatchable candidates', () => {
       'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
     );
   });
+});
+
+test('scope-suggest CLI entrypoint runs when invoked through tsx', () => {
+  const tsxCli = path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const result = spawnSync(
+    process.execPath,
+    [
+      tsxCli,
+      path.join(ROOT, 'scripts', 'ops', 'scope-suggest.ts'),
+      '--description',
+      'Fix dead CLI entrypoint for lane dispatch ops tooling',
+      '--json',
+    ],
+    { cwd: ROOT, encoding: 'utf8' },
+  );
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.notEqual(result.stdout.trim(), '');
+
+  const parsed = JSON.parse(result.stdout) as {
+    source: string;
+    keyword_paths: string[];
+    suggested_files: string[];
+  };
+  assert.equal(parsed.source, 'cli');
+  assert.deepStrictEqual(parsed.keyword_paths, ['scripts/ops/']);
+  assert.deepStrictEqual(parsed.suggested_files, ['scripts/ops/']);
 });
 
 test('candidate whose blocked_by is not done is blocked with BLOCKED_DEP', () => {
