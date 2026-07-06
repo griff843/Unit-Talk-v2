@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1459/diff-summary.md",
     "docs/06_status/proof/UTV2-1459/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-03T23:21:05.637Z",
-  "heartbeat_at": "2026-07-06T18:00:01.907Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-06T18:12:07.414Z",
+  "closed_at": "2026-07-06T18:12:07.414Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -54,6 +54,24 @@
         "C4",
         "P13",
         "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-06T18:10:53.281Z",
+      "verdict": "fail",
+      "merge_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
+      "failures": [
+        "G3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-06T18:11:06.060Z",
+      "verdict": "fail",
+      "merge_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
+      "failures": [
+        "G3"
       ],
       "runner": "ops:lane-close"
     }
