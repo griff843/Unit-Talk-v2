@@ -3,6 +3,7 @@
 ## Verification
 
 Commit SHA: `80047afa1317feeffcd1e1146e64e0c0b5f36916` (post-review fix included)
+Merge SHA: `6c726428f921a35be3ba8f80906b187c53ddd9d4` (PR #1158, squash-merged 2026-07-06T21:34:11Z)
 
 - `npx tsx --test scripts/ops/lane-maximizer.test.ts` - PASS (27/27, includes both new regression tests)
 - `pnpm ops:scope-suggest --description "Fix dead CLI entrypoint for lane dispatch ops tooling" --json` - PASS
@@ -33,6 +34,11 @@ Codex's original commit fixed the CLI entrypoint but did not fix `extractFileSco
 # todo 0
 # duration_ms 121362.791663
 ```
+
+### Post-merge verify and R-level evidence
+
+- `pnpm verify` — PASS on merge SHA `6c726428f921a35be3ba8f80906b187c53ddd9d4`. Full suite green.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS. Verdict: PASS, changed files vs merged main: 0, no R-level artifacts required.
 
 ## Notes
 
