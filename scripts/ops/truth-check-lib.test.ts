@@ -10,6 +10,7 @@ import {
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
+  isLinearStatePermittedForL3,
   parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
 } from './truth-check-lib.js';
@@ -845,4 +846,27 @@ test('G3: SHA absent from all of main history → reachable=false, firstParent=f
   const result = checkCommitReachableFromMain(sha, stub);
   assert.strictEqual(result.reachable, false);
   assert.strictEqual(result.firstParent, false);
+});
+
+test('L3: accepts the actual workspace PM-review state "In PM Review"', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('In PM Review'), true);
+});
+
+test('L3: accepts "Done"', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('Done'), true);
+});
+
+test('L3: rejects the stale "In Review" state that does not exist in this workspace', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('In Review'), false);
+});
+
+test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abandoned)', () => {
+  for (const state of ['Backlog', 'Blocked', 'Cancelled', 'Abandoned', 'Todo', 'In Progress']) {
+    assert.strictEqual(isLinearStatePermittedForL3(state), false, `expected ${state} to fail closed`);
+  }
+});
+
+test('L3: rejects empty/unknown state', () => {
+  assert.strictEqual(isLinearStatePermittedForL3(''), false);
+  assert.strictEqual(isLinearStatePermittedForL3(undefined), false);
 });

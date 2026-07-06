@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1475",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "claude/utv2-1475-fix-l3-linear-state-check",
+  "base_branch": "main",
+  "commit_sha": "d29ba27c58a54fd9ebd1cec0e168b547750aca1d",
+  "pr_url": null,
+  "files_changed": [
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/truth-check-lib.test.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "docs/06_status/proof/UTV2-1475/diff-summary.md",
+    "docs/06_status/proof/UTV2-1475/verification.md",
+    "docs/06_status/lanes/UTV2-1475.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1475/diff-summary.md",
+    "docs/06_status/proof/UTV2-1475/verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-07-06T01:05:21.558Z",
+  "heartbeat_at": "2026-07-06T01:09:07.067Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "root_checkout",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "verified",
+    "setup_command": "pnpm install --force",
+    "main_checkout_control_only": false
+  }
+}
