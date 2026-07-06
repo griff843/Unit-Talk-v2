@@ -1,29 +1,29 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-06-29T22:05:00Z",
-  "main_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
-  "deployed_sha": "3ea31d87f0a83db3a49b4468140cc4ed83bb0055",
-  "verdict": "GREEN",
+  "generated_at": "2026-07-06T18:00:00Z",
+  "main_sha": "5fe69db977d8ff214474d41270c5ec160876f542",
+  "deployed_sha": "8deccaceda9f4af3b5efb17ecf23b5151315ed5d",
+  "verdict": "RED",
   "dimensions": [
     {
       "id": "deploy_sha_alignment",
       "title": "Production SHA matches main HEAD",
-      "status": "pass",
-      "evidence": "Deploy run 28404945789 succeeded on 3ea31d87 (main HEAD). All 9 jobs passed including canary and promote. Deployed SHA matches main.",
+      "status": "fail",
+      "evidence": "Last successful deploy run 28415953590 (2026-06-30T02:22:31Z) shipped 8deccace, which is now 6+ days and dozens of commits behind main HEAD 5fe69db9. No deploy has run since. Production is running stale code.",
       "blocking": true
     },
     {
       "id": "ingestor_health",
       "title": "Ingestor ran successfully within 30 minutes",
-      "status": "pass",
-      "evidence": "Clean ingestor.cycle at 2026-06-25T17:01:48Z (3s duration, succeeded) — first post-deploy cycle after UTV2-1315 markClosingLines partition-pruning fix. Pre-fix cycles timed out at 90-200s scanning 60+ partitions; post-fix cycle completes in 3s. Confirmed via system_runs query.",
+      "status": "fail",
+      "evidence": "BLOCKED_EXTERNAL (UTV2-1477): last ingestor.cycle system_runs row 2026-06-30T12:55:01Z. Root cause is an SGO provider-side account-probe rejection (known SGO outage per PM), not a code defect or invalid credential — resolveActiveSgoApiKey resolves once at boot and a failed probe (timeout or provider outage) disables ingestion for the container's lifetime until SGO recovers and the process restarts (tracked: UTV2-1478). provider_offer_history latest row 2026-06-30T12:45:12Z, consistent with the same external block.",
       "blocking": true
     },
     {
       "id": "worker_outbox_health",
       "title": "No stuck outbox rows older than 30 minutes",
       "status": "pass",
-      "evidence": "594 pending >30min — ALL bucket:governance_hold (attempt_count=0; 351 discord:canary, 243 discord:best-bets). True stuck rows (bucket:retryable + bucket:stale_unknown): 0. True delivery failures (bucket:true_failure): 0. Governance holds do not count as stuck rows per QUEUE_READINESS_SEMANTICS.md (UTV2-1320).",
+      "evidence": "1111 pending — ALL bucket:governance_hold (attempt_count=0; 632 discord:canary, 479 discord:best-bets). worker.heartbeat system_runs rows confirm the worker process is alive and cycling normally (611 heartbeats in the trailing hour as of 2026-07-06T14:37Z) — it is healthy-idle, not wedged; it simply has zero claimable rows for its own configured target (tracked for target-scope clarification: UTV2-1479). True stuck rows (bucket:retryable + bucket:stale_unknown): 0. True delivery failures (bucket:true_failure): 0. Governance holds do not count as stuck rows per QUEUE_READINESS_SEMANTICS.md (UTV2-1320).",
       "blocking": true
     },
     {
@@ -37,21 +37,21 @@
       "id": "db_tripwires",
       "title": "No CRITICAL DB tripwires active",
       "status": "pass",
-      "evidence": "G-CONST-12 closed (db-health-tripwire CI guard), G-CONST-13 closed (production SHA aligned). G-CONST-11 PM-deferred (retention execution). No remaining critical open tripwires.",
+      "evidence": "G-CONST-12 closed (db-health-tripwire CI guard), G-CONST-13 closed (production SHA aligned). G-CONST-11 PM-deferred (retention execution). No remaining critical open tripwires. Not re-audited this cycle — carried forward from last confirmed state; no new tripwire activity observed during the UTV2-1477 investigation.",
       "blocking": true
     },
     {
       "id": "pnpm_verify",
       "title": "CI verify green on main HEAD",
       "status": "pass",
-      "evidence": "CI verify green on PR #1076 merge SHA 321638ab. All checks pass including Lane Authority, Proof Auditor Gate, Runtime Verifier Gate, verify.",
+      "evidence": "CI verify green on merge SHA acb6324c (PR #1156, UTV2-1475, run 28763081159, 2026-07-06T02:01:24Z) — the most recent merge to main at ledger-refresh time. All required checks pass.",
       "blocking": false
     },
     {
       "id": "proof_coverage",
       "title": "T1 lane proofs contain merge SHA binding",
       "status": "pass",
-      "evidence": "8 SHA-bound proof bundles on main: UTV2-1311, UTV2-1312, UTV2-1313, UTV2-1314, UTV2-1315 (plus earlier lanes). All SHA-tied to merge commits.",
+      "evidence": "SHA-bound proof bundles present on main for UTV2-1311 through UTV2-1315, UTV2-1473, UTV2-1475 (plus earlier lanes). All SHA-tied to merge commits.",
       "blocking": false
     },
     {
@@ -62,8 +62,11 @@
       "blocking": false
     }
   ],
-  "blockers": [],
-  "open_gap_count": 1,
+  "blockers": [
+    "deploy_sha_alignment",
+    "ingestor_health"
+  ],
+  "open_gap_count": 3,
   "queue_semantics_version": "1.0",
   "queue_semantics_doc": "docs/05_operations/QUEUE_READINESS_SEMANTICS.md"
 }

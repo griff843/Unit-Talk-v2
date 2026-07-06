@@ -1,0 +1,61 @@
+name: Readiness Ledger Staleness Alert
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  readiness-staleness-alert:
+    name: Readiness ledger staleness alert
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check readiness-score.json staleness and alert
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          SCORE_FILE="docs/06_status/readiness/readiness-score.json"
+          ALERT_TITLE="Readiness ledger is stale — refresh docs/06_status/readiness/readiness-score.json"
+
+          if [ ! -f "$SCORE_FILE" ]; then
+            echo "::error::$SCORE_FILE not found — readiness ledger missing"
+            exit 1
+          fi
+
+          GENERATED_AT=$(jq -r '.generated_at' "$SCORE_FILE")
+          GENERATED_EPOCH=$(date -d "$GENERATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${GENERATED_AT%.*}" +%s 2>/dev/null || echo 0)
+          NOW_EPOCH=$(date +%s)
+          AGE_HOURS=$(( (NOW_EPOCH - GENERATED_EPOCH) / 3600 ))
+          echo "Ledger age: ${AGE_HOURS}h (generated_at=$GENERATED_AT)"
+
+          # Warn well before the 48h hard gate (readiness-regression-gate.yml) bites on the next PR.
+          WARN_THRESHOLD_HOURS=36
+
+          EXISTING_ISSUE=$(gh issue list --search "in:title \"$ALERT_TITLE\"" --state open --json number --jq '.[0].number' || true)
+
+          if [ "$AGE_HOURS" -ge "$WARN_THRESHOLD_HOURS" ]; then
+            BODY=$(printf 'The readiness ledger (`%s`) is %sh stale (warn threshold: %sh; hard merge-gate threshold: 48h in `readiness-regression-gate.yml`).\n\nLast refreshed: `%s`\n\nRefresh the ledger with current live evidence before the 48h threshold blocks the next PR. See UTV2-1476 for the refresh process and dimension format.' "$SCORE_FILE" "$AGE_HOURS" "$WARN_THRESHOLD_HOURS" "$GENERATED_AT")
+            if [ -n "$EXISTING_ISSUE" ]; then
+              echo "Updating existing staleness issue #$EXISTING_ISSUE"
+              gh issue comment "$EXISTING_ISSUE" --body "$BODY"
+            else
+              echo "Opening new staleness issue"
+              gh issue create --title "$ALERT_TITLE" --body "$BODY"
+            fi
+          else
+            echo "Ledger is fresh (${AGE_HOURS}h < ${WARN_THRESHOLD_HOURS}h threshold)."
+            if [ -n "$EXISTING_ISSUE" ]; then
+              echo "Closing resolved staleness issue #$EXISTING_ISSUE"
+              gh issue close "$EXISTING_ISSUE" --comment "Ledger refreshed (generated_at=$GENERATED_AT, ${AGE_HOURS}h old) — closing stale alert."
+            fi
+          fi
