@@ -1,5 +1,7 @@
 # UTV2-1474 Diff Summary
 
+Merge SHA: `6c726428f921a35be3ba8f80906b187c53ddd9d4` (PR #1158, squash-merged 2026-07-06T21:34:11Z)
+
 ## Summary
 
 Fixed the dead `scope-suggest` CLI entrypoint. The prior guard compared `import.meta.url` to a filesystem path, so `pnpm ops:scope-suggest` exited without invoking `main()`.
