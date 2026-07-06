@@ -3,7 +3,8 @@
 Issue: UTV2-1475
 Tier: T2
 Branch: claude/utv2-1475-fix-l3-linear-state-check
-Head SHA: d29ba27c58a54fd9ebd1cec0e168b547750aca1d
+Head SHA: 16e38dd9de45165ff4ac8954a11dec20db95f987
+MERGE_SHA: acb6324ccab878997736dd3bca0c8a722c5c8ec4
 
 ## Files changed
 

@@ -3,7 +3,8 @@
 Issue: UTV2-1475
 Tier: T2
 Branch: claude/utv2-1475-fix-l3-linear-state-check
-Head SHA: d29ba27c58a54fd9ebd1cec0e168b547750aca1d
+Head SHA: 16e38dd9de45165ff4ac8954a11dec20db95f987
+MERGE_SHA: acb6324ccab878997736dd3bca0c8a722c5c8ec4
 
 ## ASSERTIONS:
 
@@ -22,6 +23,8 @@ Head SHA: d29ba27c58a54fd9ebd1cec0e168b547750aca1d
 - `pnpm test:ops` — PASS (745/745)
 - `pnpm type-check` — PASS (`tsc -b tsconfig.json`, zero errors)
 - `pnpm test:db` — PASS (7/7 against live Supabase; not functionally required for a workflow-only diff, executed to satisfy the Proof Auditor Gate's unconditional `--require-executed-command "pnpm test:db"` check)
+- `pnpm verify` — fails only in the pre-existing SGO-outage live-data precondition (`apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts`, tracked separately as UTV2-1459, environmental and out of scope); all static verify steps (lint, type-check, build, unit test) pass
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS (0 changed files vs merged main, no R-level artifacts required)
 
 ## EVIDENCE:
 
@@ -62,6 +65,17 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # pass 7
 # fail 0
 # skipped 0
+
+pnpm verify
+not ok 1 - findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)
+error: 'recent event must have at least one existing combination inside the 72h window'
+location: apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts
+(pre-existing, unrelated to this diff — SGO API key inactive since 2026-06-30, tracked as UTV2-1459)
+
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 0
+Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ## Post-merge follow-up (per lane instructions, not part of this PR's scope)

@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2",
   "branch": "claude/utv2-1475-fix-l3-linear-state-check",
   "base_branch": "main",
-  "commit_sha": "d29ba27c58a54fd9ebd1cec0e168b547750aca1d",
-  "pr_url": null,
+  "commit_sha": "acb6324ccab878997736dd3bca0c8a722c5c8ec4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1156",
   "files_changed": [
     "scripts/ops/truth-check-lib.ts",
     "scripts/ops/truth-check-lib.test.ts"
@@ -24,17 +24,63 @@
     "docs/06_status/proof/UTV2-1475/diff-summary.md",
     "docs/06_status/proof/UTV2-1475/verification.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-07-06T01:05:21.558Z",
-  "heartbeat_at": "2026-07-06T01:09:07.067Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-06T02:21:45.112Z",
+  "closed_at": "2026-07-06T02:21:45.112Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-06T02:10:10.531Z",
+      "verdict": "pass",
+      "merge_sha": "acb6324ccab878997736dd3bca0c8a722c5c8ec4",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1156"
+    },
+    {
+      "checked_at": "2026-07-06T02:10:16.272Z",
+      "verdict": "fail",
+      "merge_sha": "acb6324ccab878997736dd3bca0c8a722c5c8ec4",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-06T02:10:30.120Z",
+      "verdict": "fail",
+      "merge_sha": "acb6324ccab878997736dd3bca0c8a722c5c8ec4",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-06T02:10:44.888Z",
+      "verdict": "fail",
+      "merge_sha": "acb6324ccab878997736dd3bca0c8a722c5c8ec4",
+      "failures": [
+        "P3",
+        "C4",
+        "P13",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
-    "mode": "root_checkout",
+    "mode": "main-control",
     "cwd": "/home/griff843/code/Unit-Talk-v2",
     "package_install": "verified",
     "setup_command": "pnpm install --force",
