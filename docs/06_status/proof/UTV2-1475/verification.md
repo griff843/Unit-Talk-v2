@@ -21,6 +21,7 @@ Head SHA: d29ba27c58a54fd9ebd1cec0e168b547750aca1d
 - `pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts` — PASS (49/49, including 5 new L3 regression tests)
 - `pnpm test:ops` — PASS (745/745)
 - `pnpm type-check` — PASS (`tsc -b tsconfig.json`, zero errors)
+- `pnpm test:db` — PASS (7/7 against live Supabase; not functionally required for a workflow-only diff, executed to satisfy the Proof Auditor Gate's unconditional `--require-executed-command "pnpm test:db"` check)
 
 ## EVIDENCE:
 
@@ -47,6 +48,20 @@ pnpm test:ops
 pnpm type-check
 > pnpm exec tsc -b tsconfig.json
 (zero errors, exit 0)
+
+pnpm test:db (live Supabase, project zfzdnfwdarxucxtaojxm)
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
 ```
 
 ## Post-merge follow-up (per lane instructions, not part of this PR's scope)
