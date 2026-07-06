@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "docs/06_status/audits/participant-system-audit.md",
     "docs/06_status/proof/UTV2-1384/diff-summary.md",
     "docs/06_status/proof/UTV2-1384/verification.md"
   ],
