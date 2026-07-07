@@ -1,5 +1,7 @@
 # UTV2-1369 Diff Summary
 
+Merge SHA: `35e0f595bb3a07ebb86afc538359f38f9b6f3c53` (PR #1161, squash-merged 2026-07-07T02:46:37Z)
+
 ## Summary
 
 Read-only Supabase usage/cost audit (docs-only lane, no source edits). The Codex execution pass produced only proof scaffolding without the actual audit deliverable; the audit itself (`docs/06_status/audits/supabase-usage-cost-truth-audit.md`) was completed directly against live Supabase (read-only `SELECT` queries + Performance Advisor) before this lane closed.

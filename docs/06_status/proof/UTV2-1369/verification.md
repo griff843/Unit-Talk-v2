@@ -1,5 +1,12 @@
 # UTV2-1369 Verification
 
+Merge SHA: `35e0f595bb3a07ebb86afc538359f38f9b6f3c53` (PR #1161, squash-merged 2026-07-07T02:46:37Z)
+
+## Post-merge verify and R-level evidence
+
+- `pnpm verify` — PASS on merge SHA `35e0f595bb3a07ebb86afc538359f38f9b6f3c53`. Full suite green.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS. Changed files vs merged main: 0, no R-level artifacts required.
+
 ## Verification
 
 Required commands for this T2 lane:
