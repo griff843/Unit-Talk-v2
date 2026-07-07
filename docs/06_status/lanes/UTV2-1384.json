@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1384",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1384-dual-participant-audit",
@@ -13,7 +13,9 @@
   "file_scope_lock": [
     "docs/06_status/audits/participant-system-audit.md",
     "docs/06_status/proof/UTV2-1384/diff-summary.md",
-    "docs/06_status/proof/UTV2-1384/verification.md"
+    "docs/06_status/proof/UTV2-1384/verification.md",
+    "docs/06_status/proof/UTV2-1384/evidence.json",
+    ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1384/evidence.json"
