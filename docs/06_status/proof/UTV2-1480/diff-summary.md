@@ -1,5 +1,7 @@
 # UTV2-1480 Diff Summary
 
+Merge SHA: `6c223c4b6de83ea0a67f41baa109f294409f426d` (PR #1160, squash-merged 2026-07-07T03:17:46Z)
+
 ## Summary
 
 UTV2-1480 fixes workflow configuration drift in the live database operations workflows.
