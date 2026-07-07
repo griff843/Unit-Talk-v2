@@ -41,3 +41,19 @@ ok 6 - UTV2-1327 live-DB: enrichPickAtPromotionTime is stable against real pick 
 ```
 
 Live DB note: `test:t1-proof:live` included one skipped bounded-dedup window-content assertion because the most recent `provider_offer_history` row was older than the 72h lookback window; the test classifies this as stale provider data, not a code regression. The command exited 0.
+
+## Post-review fix (Claude, pre-merge diff review)
+
+Codex's execution pass fixed CW5 (invalid `uses:` refs — confirmed genuinely resolved, `.github/actions/supabase-pooler-url/action.yml` exists) but did not resolve 3 of 4 CW6 findings: it left `db-health-tripwire.yml`'s `LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}` untouched (referencing a secret that was never configured — every other workflow in the repo uses `LINEAR_API_TOKEN`), did not touch `deploy.yml` at all (dismissed as "no edit required"), and did not update `docs/05_operations/REQUIRED_SECRETS.md` — the actual file `ci-doctor.ts`'s CW6 check reads to determine "declared" secrets.
+
+Fixed directly:
+- `db-health-tripwire.yml`: `LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}` → `${{ secrets.LINEAR_API_TOKEN }}` (root-cause fix — the tripwire's Linear-alert feature was silently no-op'ing on every run).
+- `docs/05_operations/REQUIRED_SECRETS.md`: added `SUPABASE_DB_POOLER_URL` and `SYNDICATE_MACHINE_ENABLED` entries (the actual missing declarations), updated `SUPABASE_DB_URL`'s `used_by` list.
+
+Re-ran the CW6 check logic locally (parse inventory, diff against every `secrets.NAME` reference across all workflow files): confirmed all 4 originally-reported findings resolved. Found one pre-existing, out-of-scope gap (`SYNC_BOT_TOKEN` in `post-merge-lane-close.yml`, not one of this issue's 4 declared files) — left untouched, noted as a follow-up finding.
+
+Re-ran `pnpm verify` (full suite green) and the R-level check (PASS, 7 changed files, no artifacts required) after these fixes.
+
+### CS5 triage (required before any other change per acceptance criteria)
+
+Manually inspected every matching line across the 4 in-scope workflow files. All references are proper `${{ secrets.X }}` interpolation or legitimate shell-variable reuse (e.g. re-passing an already-injected secret's value to a remote command, or referencing the secret's *name* in an error message). Confirmed false positive — no plaintext secret value found. Not escalated.
