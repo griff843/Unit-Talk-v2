@@ -492,6 +492,10 @@ function parseBlockedByFromText(text: string | null | undefined): string[] {
   return [...blockedLine[1].matchAll(/(?:UTV2|UNI)-\d+/g)].map((match) => match[0]);
 }
 
+export function isBlockingLinearRelationType(type: string): boolean {
+  return type === 'blocks' || type === 'blocked_by';
+}
+
 export function parseQueueCandidates(queuePath: string): CandidateLane[] {
   if (!fs.existsSync(queuePath)) {
     return [];
@@ -626,7 +630,7 @@ async function fetchLinearCandidates(argv: string[]): Promise<CandidateLane[]> {
       return [];
     }
     const blockedBy = issue.relations.nodes
-      .filter((relation) => relation.type === 'blocks' || relation.type === 'blocked_by' || relation.type === 'related')
+      .filter((relation) => isBlockingLinearRelationType(relation.type))
       .map((relation) => relation.relatedIssue?.identifier)
       .filter((identifier): identifier is string => Boolean(identifier));
     const fileScope = extractFileScopeFromText(issue.description);
