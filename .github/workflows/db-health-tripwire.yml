@@ -23,22 +23,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Select live DB connection URL (prefer pooler)
+        uses: ./.github/actions/supabase-pooler-url
+        with:
+          pooler-url: ${{ secrets.SUPABASE_DB_POOLER_URL }}
+          direct-url: ${{ secrets.SUPABASE_DB_URL }}
+          out-env: SUPABASE_DB_URL
 
       - name: Run DB health checks
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          LINEAR_API_KEY: ${{ secrets.LINEAR_API_TOKEN }}
           SYSTEM_RUNS_SIZE_THRESHOLD_MB: ${{ env.SYSTEM_RUNS_SIZE_THRESHOLD_MB }}
           RAW_PAYLOADS_SIZE_THRESHOLD_MB: ${{ env.RAW_PAYLOADS_SIZE_THRESHOLD_MB }}
           ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB: ${{ env.ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB }}

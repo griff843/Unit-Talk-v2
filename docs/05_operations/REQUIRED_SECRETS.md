@@ -293,8 +293,24 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/live-schema-parity.yml"],
-      "purpose": "Direct Supabase database URL for live schema parity checks."
+      "used_by": [".github/workflows/live-schema-parity.yml", ".github/workflows/db-health-tripwire.yml"],
+      "purpose": "Direct Supabase database URL for live schema parity checks and as a fallback DB connection for db-health-tripwire when the pooler URL is not configured."
+    },
+    {
+      "name": "SUPABASE_DB_POOLER_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/live-schema-parity.yml", ".github/workflows/schema-baseline-dump.yml", ".github/workflows/db-health-tripwire.yml"],
+      "purpose": "Preferred pooled Supabase database connection URL for live schema parity checks, CI baseline schema dumps, and DB health checks. Falls back to SUPABASE_DB_URL via the shared ./.github/actions/supabase-pooler-url composite action when unset."
+    },
+    {
+      "name": "SYNDICATE_MACHINE_ENABLED",
+      "required": true,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Readiness flag gating canary and production deploys; deploy.yml fails closed if this is not exactly 'true'."
     },
     {
       "name": "UNIT_TALK_STAGING_DEPLOY_HOST",
