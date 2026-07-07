@@ -61,4 +61,8 @@ export { Breadcrumb } from './Breadcrumb';
 export { Button } from './Button';
 export { Card } from './Card';
 export { StatusBadge } from './StatusBadge';
+export { SeverityBadge, SEVERITY_ORDER } from './SeverityBadge';
+export type { Severity } from './SeverityBadge';
+export { InternalLabelBadge, UncertifiedBanner } from './InternalLabelBadge';
+export type { InternalLabel } from './InternalLabelBadge';
 export { Table, TableHead, TableBody, Th, Td } from './Table';
