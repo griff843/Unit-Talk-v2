@@ -2,23 +2,24 @@
 
 ## Summary
 
-UTV2-1372 is a governance/proof lane for the Supabase egress query diet scope. This branch contains lane bookkeeping only:
+Read-only Supabase egress and query-diet audit (docs-only lane, no source edits). The Codex execution pass produced only proof/lane bookkeeping without the actual audit deliverable; the audit itself (`docs/06_status/audits/supabase-egress-query-diet-audit.md`) was completed directly (static code search + Performance Advisor cross-reference) before this lane closed.
 
-- `.ops/sync/UTV2-1372.yml` — registers UTV2-1372 sync metadata for the lane.
-- `docs/06_status/lanes/UTV2-1372.json` — records the governance lane manifest, file-scope lock, worktree path, expected proof paths, and T2 tier.
-- `docs/06_status/proof/UTV2-1372/diff-summary.md` — this proof summary.
+## Headline finding
+
+90 `select('*')` call sites across `packages/db/src` and the app runtimes, concentrated in `packages/db/src/runtime-repositories.ts` (178 total `.select(` calls, only 41 pair with `.limit(`, only 4 use `.range()`). 46 test files execute live Supabase queries on every `pnpm verify` run (every PR/push), a recurring CI-driven cost independent of production traffic. Cross-references UTV2-1369's storage findings (`provider_offers_legacy_quarantine`, `provider_offer_history`) as the highest-value targets for a follow-up per-call-site query audit.
+
+## Files Changed
+
+- `docs/06_status/audits/supabase-egress-query-diet-audit.md` (new) — the audit deliverable.
+- `docs/06_status/proof/UTV2-1372/diff-summary.md` — this file.
 - `docs/06_status/proof/UTV2-1372/verification.md` — command evidence and verification notes.
+- `.ops/sync/UTV2-1372.yml`, `docs/06_status/lanes/UTV2-1372.json` — lane bookkeeping (orchestration-generated).
 
-No runtime code, schema, migrations, contracts, domain logic, repositories, API services, worker code, or generated database types were changed by this lane.
+No runtime code, schema, migrations, contracts, domain logic, repositories, API services, worker code, or generated database types were changed by this lane — read-only audit only, per issue acceptance criteria.
 
 ## Scope Notes
 
-The execution packet for closeout allowed only:
-
-- `docs/06_status/proof/UTV2-1372/diff-summary.md`
-- `docs/06_status/proof/UTV2-1372/verification.md`
-
-Pre-existing branch commits already contained lane manifest and sync metadata before this closeout pass. Those files were not edited during proof closeout.
+No query rewrite or optimization implementation performed in this lane; follow-up lanes are listed in the audit doc.
 
 ## Verification
 

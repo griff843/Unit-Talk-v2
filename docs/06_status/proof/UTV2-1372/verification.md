@@ -83,3 +83,7 @@ This lane is proof/governance only. Issue-specific verification consisted of:
 ### Known Live-DB Note
 
 During the successful `pnpm verify` rerun, `t1-proof-utv2-1018-stranded-picks` reported the known stranded-row warning from live Supabase and still passed. No stranded rows were mutated by this lane.
+
+### Audit deliverable added post-Codex-execution (Claude, pre-merge review)
+
+The initial Codex pass produced only proof/lane bookkeeping without the audit document required by the issue's acceptance criteria. Completed `docs/06_status/audits/supabase-egress-query-diet-audit.md` directly via static code search (`grep` for `select('*')`, `.limit(`, `.range(`, live-DB test file usage) cross-referenced against the Supabase Performance Advisor — no queries executed against production data beyond what UTV2-1369's audit already captured (read-only row counts/sizes). Findings: 90 `select('*')` sites (concentrated in `runtime-repositories.ts`), 41/178 select calls paired with `.limit(` at the file level, 46 test files hitting live Supabase on every CI run.
