@@ -22,14 +22,14 @@
   ],
   "status": "done",
   "started_at": "2026-07-06T23:53:43.647Z",
-  "heartbeat_at": "2026-07-07T01:16:21.779Z",
-  "closed_at": "2026-07-07T01:16:21.779Z",
+  "heartbeat_at": "2026-07-07T01:28:26.431Z",
+  "closed_at": "2026-07-07T01:28:26.431Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
-      "checked_at": "2026-07-07T01:16:19.458Z",
+      "checked_at": "2026-07-07T01:26:47.093Z",
       "verdict": "pass",
       "merge_sha": "86b1dac67824bfddddb8697ef24ee44a680e446b",
       "failures": [],
@@ -42,6 +42,13 @@
         "preflight_token",
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-07T01:28:26.400Z",
+      "verdict": "pass",
+      "merge_sha": "86b1dac67824bfddddb8697ef24ee44a680e446b",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
