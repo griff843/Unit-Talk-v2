@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1372",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1372-supabase-egress-query-diet",
+  "branch": "codex/utv2-1372-supabase-egress-query-diet",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1372/diff-summary.md",
+    "docs/06_status/proof/UTV2-1372/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1372/diff-summary.md",
+    "docs/06_status/proof/UTV2-1372/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-07T01:58:24.400Z",
+  "heartbeat_at": "2026-07-07T01:58:24.400Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1372-supabase-egress-query-diet.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1372-supabase-egress-query-diet",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
