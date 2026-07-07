@@ -35,6 +35,7 @@ Required commands for this T2 lane:
 - Confirmed proof files are markdown files and this file contains the required `## Verification` header.
 - Confirmed `pnpm verify` live DB proof passed; one provider-offer lookback assertion was skipped because live provider data is stale, and the suite still exited 0.
 - Confirmed no R-level runtime rules matched the final branch diff.
+- **Audit deliverable added post-Codex-execution** (Claude, pre-merge review): the initial Codex pass produced only proof scaffolding without the audit document required by the issue's acceptance criteria. Completed `docs/06_status/audits/supabase-usage-cost-truth-audit.md` directly using read-only `SELECT` queries against live Postgres system catalogs (`pg_class`/`pg_namespace`) and the Supabase Performance Advisor (project `zfzdnfwdarxucxtaojxm`) — no write/mutation queries were run. Findings: 18 GB total DB size, `provider_offers_legacy_quarantine` at 6.5 GB (36%), ~903 MB/day measured growth rate on `provider_offer_history`, 153 unused indexes, 137 unindexed foreign keys.
 
 ## SHA Binding
 
