@@ -2,30 +2,16 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-const NAV_LINKS = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/burn-in', label: 'Burn-In' },
-  { href: '/pipeline', label: 'Pipeline' },
-  { href: '/picks-list', label: 'Picks' },
-  { href: '/review', label: 'Review' },
-  { href: '/held', label: 'Held' },
-  { href: '/exceptions', label: 'Exceptions' },
-  { href: '/performance', label: 'Performance' },
-  { href: '/intelligence', label: 'Intelligence' },
-  { href: '/decisions', label: 'Decisions' },
-  { href: '/interventions', label: 'Audit' },
-];
+import { getPrimaryCommandCenterRoutes, isCommandCenterRouteActive } from '@/lib/command-center-nav';
 
 export function NavLinks() {
   const pathname = usePathname();
+  const navLinks = getPrimaryCommandCenterRoutes();
 
   return (
     <nav className="flex gap-1">
-      {NAV_LINKS.map((link) => {
-        const isActive = link.href === '/'
-          ? pathname === '/'
-          : pathname.startsWith(link.href);
+      {navLinks.map((link) => {
+        const isActive = isCommandCenterRouteActive(link, pathname);
 
         return (
           <Link
@@ -37,7 +23,7 @@ export function NavLinks() {
                 : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
             }`}
           >
-            {link.label}
+            {link.shortLabel}
           </Link>
         );
       })}

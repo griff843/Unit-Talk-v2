@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue_id": "UTV2-1488",
   "lane_type": "delivery-ui",
-  "executor": "codex-cli",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1488-cc-legacy-nav-research-fix",
   "branch": "codex/utv2-1488-cc-legacy-nav-research-fix",

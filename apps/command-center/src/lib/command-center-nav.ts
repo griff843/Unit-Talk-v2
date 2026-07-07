@@ -166,11 +166,13 @@ export function getPrimaryCommandCenterRoutes() {
   return COMMAND_CENTER_ROUTES.filter((route) => route.nav);
 }
 
+export function isCommandCenterRouteActive(route: CommandCenterRoute, pathname: string) {
+  const patterns = route.match ?? [route.href];
+  return patterns.some((pattern) => pathname === pattern || pathname.startsWith(`${pattern}/`));
+}
+
 export function getRouteMeta(pathname: string) {
-  const match = COMMAND_CENTER_ROUTES.find((route) => {
-    const patterns = route.match ?? [route.href];
-    return patterns.some((pattern) => pathname === pattern || pathname.startsWith(`${pattern}/`));
-  });
+  const match = COMMAND_CENTER_ROUTES.find((route) => isCommandCenterRouteActive(route, pathname));
 
   return match ?? COMMAND_CENTER_ROUTES[0]!;
 }
