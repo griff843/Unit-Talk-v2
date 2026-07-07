@@ -1,5 +1,7 @@
 # UTV2-1372 Verification
 
+Head SHA: `6c86a95b777d3b978fd30011602673b2320b3e47`
+
 ## Verification
 
 Run date: 2026-07-07
