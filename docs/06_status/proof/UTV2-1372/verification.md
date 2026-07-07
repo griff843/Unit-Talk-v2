@@ -1,6 +1,12 @@
 # UTV2-1372 Verification
 
 Head SHA: `6c86a95b777d3b978fd30011602673b2320b3e47`
+Merge SHA: `18d637cbaa01ad6ce571d1c25d6326579591466f` (PR #1162, squash-merged 2026-07-07T03:17:23Z)
+
+## Post-merge verify and R-level evidence
+
+- `pnpm verify` — PASS on merge SHA `18d637cbaa01ad6ce571d1c25d6326579591466f`. Full suite green.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS, no R-level artifacts required.
 
 ## Verification
 
