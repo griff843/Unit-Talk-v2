@@ -7,7 +7,7 @@ name: Schema Baseline Dump
 # This is the CI-side generator for the Live Schema Parity replay root (UTV2-1274,
 # "Option B" baseline/squash). Local Docker / pg_dump are unavailable on the operator
 # workstation, and the Supabase CLI's local .env parse trips on a stray BOM — so the
-# baseline must be produced in CI, where Docker + SUPABASE_DB_URL are available.
+# baseline must be produced in CI, where Docker + SUPABASE_DB_POOLER_URL are available.
 #
 # Guardrails honoured here:
 #   - READ-ONLY against live. pg_dump never mutates; no DDL/DML is issued to live.

@@ -51,9 +51,10 @@ jobs:
           #   - explicit opt-in flag CI_REQUIRE_SCHEMA_PARITY truthy, OR
           #   - the ref is protected, OR
           #   - the ref is main.
-          # On feature-branch PRs (none of the above) a missing secret is a LOUD skip,
-          # not a failure. Once the flag is set (after provisioning the SUPABASE_DB_URL
-          # secret) a missing/unreachable DB is treated as a FAILURE, never a silent skip.
+          # On feature-branch PRs (none of the above) missing DB secrets are a LOUD skip,
+          # not a failure. Once the flag is set (after provisioning the preferred
+          # SUPABASE_DB_POOLER_URL secret or fallback SUPABASE_DB_URL secret) a
+          # missing/unreachable DB is treated as a FAILURE, never a silent skip.
           required=false
           case "$CI_REQUIRE_SCHEMA_PARITY" in
             1|true|TRUE|yes|YES) required=true ;;
@@ -89,7 +90,7 @@ jobs:
     steps:
       - name: Fail closed — parity required but DB unconfigured
         run: |
-          echo "::error title=Live schema parity unverified::Parity is REQUIRED on this ref but SUPABASE_DB_URL is not configured. Per fail-closed doctrine (D-CONST-4/D-CONST-7) a silent skip is treated as FAILURE. Provision the SUPABASE_DB_URL secret to verify live schema parity."
+          echo "::error title=Live schema parity unverified::Parity is REQUIRED on this ref but neither SUPABASE_DB_POOLER_URL nor SUPABASE_DB_URL is configured. Per fail-closed doctrine (D-CONST-4/D-CONST-7) a silent skip is treated as FAILURE. Provision the SUPABASE_DB_POOLER_URL secret to verify live schema parity."
           exit 1
 
   schema-parity:
