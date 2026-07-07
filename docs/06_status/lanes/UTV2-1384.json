@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1384-dual-participant-audit",
   "branch": "claude/utv2-1384-dual-participant-audit",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "86b1dac67824bfddddb8697ef24ee44a680e446b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1159",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,30 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1384/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-06T23:53:43.647Z",
-  "heartbeat_at": "2026-07-06T23:53:43.647Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-07T01:16:21.779Z",
+  "closed_at": "2026-07-07T01:16:21.779Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1384-dual-participant-audit.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-07T01:16:19.458Z",
+      "verdict": "pass",
+      "merge_sha": "86b1dac67824bfddddb8697ef24ee44a680e446b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1159",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

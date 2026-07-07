@@ -14,30 +14,86 @@
     "pnpm_test_db": "pass",
     "supabase_project": "zfzdnfwdarxucxtaojxm",
     "queries": [
-      { "table": "leagues", "description": "read-only row count for audit decision packet" },
-      { "table": "teams", "description": "read-only row count for audit decision packet" },
-      { "table": "players", "description": "read-only row count for audit decision packet" },
-      { "table": "player_team_assignments", "description": "read-only row count for audit decision packet" },
-      { "table": "provider_entity_aliases", "description": "read-only row count + entity_kind/team_id/player_id breakdown for audit decision packet" },
-      { "table": "participants", "description": "read-only row count for audit decision packet" },
-      { "table": "participant_memberships", "description": "read-only row count for audit decision packet" },
-      { "table": "picks", "description": "read-only row count, total and player_id-populated subset, for audit decision packet" }
+      {
+        "table": "leagues",
+        "description": "read-only row count for audit decision packet"
+      },
+      {
+        "table": "teams",
+        "description": "read-only row count for audit decision packet"
+      },
+      {
+        "table": "players",
+        "description": "read-only row count for audit decision packet"
+      },
+      {
+        "table": "player_team_assignments",
+        "description": "read-only row count for audit decision packet"
+      },
+      {
+        "table": "provider_entity_aliases",
+        "description": "read-only row count + entity_kind/team_id/player_id breakdown for audit decision packet"
+      },
+      {
+        "table": "participants",
+        "description": "read-only row count for audit decision packet"
+      },
+      {
+        "table": "participant_memberships",
+        "description": "read-only row count for audit decision packet"
+      },
+      {
+        "table": "picks",
+        "description": "read-only row count, total and player_id-populated subset, for audit decision packet"
+      }
     ],
     "row_counts": [
-      { "table": "leagues", "count": 9, "status": "populated_reference_data" },
-      { "table": "teams", "count": 0, "status": "empty" },
-      { "table": "players", "count": 12, "status": "proof_test_artifact_only" },
-      { "table": "player_team_assignments", "count": 0, "status": "empty" },
-      { "table": "provider_entity_aliases", "count": 840, "status": "populated_but_unlinked" },
-      { "table": "participants", "count": 1647, "status": "healthy_live_data" },
-      { "table": "participant_memberships", "count": 0, "status": "empty" },
-      { "table": "picks", "count": 60747, "status": "healthy_live_data" }
+      {
+        "table": "leagues",
+        "count": 9,
+        "status": "populated_reference_data"
+      },
+      {
+        "table": "teams",
+        "count": 0,
+        "status": "empty"
+      },
+      {
+        "table": "players",
+        "count": 12,
+        "status": "proof_test_artifact_only"
+      },
+      {
+        "table": "player_team_assignments",
+        "count": 0,
+        "status": "empty"
+      },
+      {
+        "table": "provider_entity_aliases",
+        "count": 840,
+        "status": "populated_but_unlinked"
+      },
+      {
+        "table": "participants",
+        "count": 1647,
+        "status": "healthy_live_data"
+      },
+      {
+        "table": "participant_memberships",
+        "count": 0,
+        "status": "empty"
+      },
+      {
+        "table": "picks",
+        "count": 60747,
+        "status": "healthy_live_data"
+      }
     ]
   },
   "sha_binding": {
-    "verified_source_sha": "c69eb44a9ca6746bfaa59fad4666ad203722f778",
-    "sha_type": "branch_head_at_audit_time",
-    "bound_at": "2026-07-07T00:15:00.000Z",
+    "verified_source_sha": "86b1dac67824bfddddb8697ef24ee44a680e446b",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-07T01:16:18.312Z",
     "ci_sentinels": {
       "merge_gate": "pending"
     }

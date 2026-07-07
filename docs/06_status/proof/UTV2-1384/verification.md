@@ -1,33 +1,22 @@
-# UTV2-1384 Verification
+# UTV2-1384 Runtime Verification
 
-Head SHA (at preflight time): `c8068a822308e6770317677e7f315aaaa7ca0812`
-
-## Summary
-
-Audit-only T1 lane. Baseline live-DB access confirmed before starting the audit (this lane reads live schema/table state via Supabase MCP as part of the audit itself). The audit deliverable and its own internal verification (source citations for every claim) will be appended here once the audit document is complete.
+Generated at: 2026-07-07T01:16:18.312Z
+Issue: UTV2-1384
+Tier: T1
+Lane type: governance
+Branch: claude/utv2-1384-dual-participant-audit
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1159
+Head SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
+Merge SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
+result: not_run
 
 ## Verification
+- [ ] `pnpm type-check`: not run by proof-generate
+- [ ] `pnpm test`: not run by proof-generate
 
-- [x] `pnpm test:db` — baseline live Supabase access confirmed (project `zfzdnfwdarxucxtaojxm`)
-- [x] Audit document (`docs/06_status/audits/participant-system-audit.md`) complete with full read/write/join map for both participant systems, evidence-backed with file:line citations
-- [x] Decision packet (Option A / Option B) with risk, effort, migration scope, rollback plan for each — no default recommendation, PM decision explicitly requested
-- [x] `pnpm type-check` — pass (part of `pnpm verify`); no source changes made
-- [x] `pnpm test` — pass (part of `pnpm verify`); no source changes made
-- [x] `pnpm verify` — exit 0 (full suite green)
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS, no R-level artifacts required
-- [x] Live read-only row-count queries against Supabase (project `zfzdnfwdarxucxtaojxm`) confirming: `leagues`=9, `teams`=0, `players`=12, `player_team_assignments`=0, `provider_entity_aliases`=840 (0 with team_id/player_id populated), `participants`=1647, `participant_memberships`=0, `picks`=60747 (12 with `player_id` set)
+## Runtime Verification
+- Generated foundation artifact. Replace or append command output when runtime proof is executed.
 
-## Evidence
-
-```text
-pnpm test:db
-1..7
-# tests 7
-# suites 0
-# pass 7
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 124181.011971
-```
+## SHA Binding
+Head SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
+Merge SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b

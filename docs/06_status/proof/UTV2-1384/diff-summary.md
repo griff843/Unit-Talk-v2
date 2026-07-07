@@ -1,19 +1,42 @@
 # UTV2-1384 Diff Summary
 
-## Summary
+Generated at: 2026-07-07T01:16:18.312Z
+Issue: UTV2-1384
+Tier: T1
+Lane type: governance
+Branch: claude/utv2-1384-dual-participant-audit
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1159
+Head SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
+Merge SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
+Diff base: 86b1dac67824bfddddb8697ef24ee44a680e446b^1
+Diff target: 86b1dac67824bfddddb8697ef24ee44a680e446b
 
-Audit-only, read-only lane (DEBT-001): mapping every read/write/join across the old participant system (`participants`, `participant_memberships`) and the new system (`leagues`, `teams`, `players`, `player_team_assignments`), identifying silent correctness risks, and producing a PM decision packet with two remediation options. No source code is modified under this lane — the only output artifact is `docs/06_status/audits/participant-system-audit.md`.
+## Git Diff Stat
+```
+.lane/lanes/governance.yml                        |   3 +
+ .ops/sync/UTV2-1384.yml                           |  10 ++
+ docs/06_status/audits/participant-system-audit.md | 126 ++++++++++++++++++++++
+ docs/06_status/lanes/UTV2-1384.json               |  39 +++++++
+ docs/06_status/proof/UTV2-1384/diff-summary.md    |   5 +
+ docs/06_status/proof/UTV2-1384/evidence.json      |  45 ++++++++
+ docs/06_status/proof/UTV2-1384/verification.md    |  11 +-
+ 7 files changed, 235 insertions(+), 4 deletions(-)
+```
 
-## Files Changed
+## Git Name Status
+```
+M	.lane/lanes/governance.yml
+A	.ops/sync/UTV2-1384.yml
+A	docs/06_status/audits/participant-system-audit.md
+A	docs/06_status/lanes/UTV2-1384.json
+M	docs/06_status/proof/UTV2-1384/diff-summary.md
+A	docs/06_status/proof/UTV2-1384/evidence.json
+M	docs/06_status/proof/UTV2-1384/verification.md
+```
 
-- `docs/06_status/audits/participant-system-audit.md` (new) — the audit + decision packet.
-- `docs/06_status/proof/UTV2-1384/evidence.json` (new) — T1 evidence bundle.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Headline Finding
-
-The "new" canonical participant system (`teams`, `player_team_assignments`: 0 rows each; `players`: 12 rows, all from a schema round-trip proof test) is dormant scaffolding, not a live parallel system — grading/CLV/settlement exclusively and correctly use the old system today, with a consistent fail-closed (grading) / fail-open-to-null (CLV, settlement) pattern on ambiguous participant matches. Full findings and the decision packet are in the audit doc.
-
-## Scope Notes
-
-- No runtime, domain, contract, DB schema, or migration paths were changed — this lane produces an audit document only, per the issue's explicit note ("audit-only; read-only inspection of existing tables/queries allowed, no source edits under this lane").
-- Migration implementation (if a PM decision selects Option B) is explicitly a separate, future T1 lane requiring its own PM approval.
+## SHA Binding
+Head SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
+Merge SHA: 86b1dac67824bfddddb8697ef24ee44a680e446b
