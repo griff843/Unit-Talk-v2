@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue_id": "UTV2-1490",
   "lane_type": "governance",
-  "executor": "codex-cli",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1490-stop-hook-path-repair",
   "branch": "codex/utv2-1490-stop-hook-path-repair",

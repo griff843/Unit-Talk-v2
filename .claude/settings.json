@@ -87,7 +87,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx tsx scripts/agent-notify/agent-stop-hook.ts"
+            "command": "bash -lc 'ROOT=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; cd \"$ROOT\" && npx tsx scripts/agent-notify/agent-stop-hook.ts'"
           }
         ]
       },
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/session-summary.sh"
+            "command": "bash -lc 'ROOT=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; cd \"$ROOT\" && bash .claude/hooks/session-summary.sh'"
           }
         ]
       },
@@ -103,7 +103,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/untracked-scripts-check.sh"
+            "command": "bash -lc 'ROOT=\"${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}\"; cd \"$ROOT\" && bash .claude/hooks/untracked-scripts-check.sh'"
           }
         ]
       }
