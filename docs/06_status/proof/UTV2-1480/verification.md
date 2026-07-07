@@ -5,6 +5,12 @@
 Commands run from `/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1480-fix-workflow-config-drift`:
 
 Commit SHA binding: `841eae77b25f5a7e29b63a7a9c4556d696e79c93`
+Merge SHA: `6c223c4b6de83ea0a67f41baa109f294409f426d` (PR #1160, squash-merged 2026-07-07T03:17:46Z)
+
+## Post-merge verify and R-level evidence
+
+- `pnpm verify` — PASS on merge SHA `6c223c4b6de83ea0a67f41baa109f294409f426d`. Full suite green.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS, no R-level artifacts required.
 
 | Command | Result | Notes |
 | --- | --- | --- |

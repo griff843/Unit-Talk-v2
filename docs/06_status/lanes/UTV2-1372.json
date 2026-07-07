@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1372-supabase-egress-query-diet",
   "branch": "codex/utv2-1372-supabase-egress-query-diet",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "18d637cbaa01ad6ce571d1c25d6326579591466f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1162",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/audits/supabase-egress-query-diet-audit.md",
@@ -19,14 +19,66 @@
     "docs/06_status/proof/UTV2-1372/diff-summary.md",
     "docs/06_status/proof/UTV2-1372/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-07T01:58:24.400Z",
-  "heartbeat_at": "2026-07-07T01:58:24.400Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-07T03:33:14.358Z",
+  "closed_at": "2026-07-07T03:33:14.358Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1372-supabase-egress-query-diet.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-07T03:29:34.520Z",
+      "verdict": "pass",
+      "merge_sha": "18d637cbaa01ad6ce571d1c25d6326579591466f",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1162",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-07T03:29:34.526Z",
+      "verdict": "fail",
+      "merge_sha": "18d637cbaa01ad6ce571d1c25d6326579591466f",
+      "failures": [
+        "G3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-07T03:30:26.580Z",
+      "verdict": "fail",
+      "merge_sha": "18d637cbaa01ad6ce571d1c25d6326579591466f",
+      "failures": [
+        "G3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-07T03:30:41.080Z",
+      "verdict": "fail",
+      "merge_sha": "18d637cbaa01ad6ce571d1c25d6326579591466f",
+      "failures": [
+        "G3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-07T03:30:49.382Z",
+      "verdict": "fail",
+      "merge_sha": "18d637cbaa01ad6ce571d1c25d6326579591466f",
+      "failures": [
+        "G3"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

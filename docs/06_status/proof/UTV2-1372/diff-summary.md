@@ -1,5 +1,7 @@
 # UTV2-1372 Diff Summary
 
+Merge SHA: `18d637cbaa01ad6ce571d1c25d6326579591466f` (PR #1162, squash-merged 2026-07-07T03:17:23Z)
+
 ## Summary
 
 Read-only Supabase egress and query-diet audit (docs-only lane, no source edits). The Codex execution pass produced only proof/lane bookkeeping without the actual audit deliverable; the audit itself (`docs/06_status/audits/supabase-egress-query-diet-audit.md`) was completed directly (static code search + Performance Advisor cross-reference) before this lane closed.
