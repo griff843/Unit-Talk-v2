@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1384-dual-participant-audit",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1159",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/audits/participant-system-audit.md",
