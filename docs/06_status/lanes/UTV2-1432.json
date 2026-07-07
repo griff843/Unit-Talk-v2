@@ -11,7 +11,8 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/05_operations/STANDING_GUARDRAILS.md"
+    "docs/05_operations/STANDING_GUARDRAILS.md",
+    "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md"
   ],
   "expected_proof_paths": [],
   "status": "started",
