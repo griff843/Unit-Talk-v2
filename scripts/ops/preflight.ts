@@ -540,62 +540,20 @@ function runGateEquivalentChecks(
       : branchDiscipline.detail,
   );
 
-  const proofDir = path.join(ROOT, 'docs', '06_status', 'proof', issueId);
-  const proofDirRelative = relativeToRoot(proofDir);
-  if (!fs.existsSync(proofDir)) {
-    addCheck('PX3', 'skip', `proof auditor skipped because ${proofDirRelative} does not exist`);
-    addCheck('PX4', 'skip', `runtime verifier skipped because ${proofDirRelative} does not exist`);
-  } else {
-    const proofAuditor = runCommand('pnpm', [
-      'exec',
-      'tsx',
-      'scripts/ops/proof-auditor-gate.ts',
-      '--proof-dir',
-      proofDirRelative,
-      '--sha',
-      headSha,
-      '--require-executed-command',
-      'pnpm test:db',
-      '--json',
-    ]);
-    addCheck(
-      'PX3',
-      proofAuditor.ok ? 'pass' : 'fail',
-      proofAuditor.ok
-        ? `proof auditor gate passed for ${proofDirRelative}`
-        : proofAuditor.detail,
-    );
-
-    const runtimeVerifier = runCommand('pnpm', [
-      'exec',
-      'tsx',
-      'scripts/ops/runtime-verifier-gate.ts',
-      '--proof-dir',
-      proofDirRelative,
-      '--sha',
-      headSha,
-      '--json',
-    ]);
-    addCheck(
-      'PX4',
-      runtimeVerifier.ok ? 'pass' : 'fail',
-      runtimeVerifier.ok
-        ? `runtime verifier gate passed for ${proofDirRelative}`
-        : runtimeVerifier.detail,
-    );
-  }
-
-  if (tier === 'T1') {
-    addCheck(
-      'PX5',
-      fs.existsSync(proofDir) ? 'pass' : 'fail',
-      fs.existsSync(proofDir)
-        ? `T1 expected proof dir exists: ${proofDirRelative}`
-        : `T1 expected proof dir missing: ${proofDirRelative}`,
-    );
-  } else {
-    addCheck('PX5', 'skip', `T1 expected proof dir check skipped for ${tier}`);
-  }
+  // PX3 (proof-auditor-gate), PX4 (runtime-verifier-gate), and PX5 (T1 proof
+  // dir existence) were removed here (UTV2-1492). Proof/runtime evidence
+  // content validation belongs exclusively to later lifecycle phases —
+  // proof-gate.yml (CI on pull_request, after a real diff exists) and
+  // truth-check-lib.ts's runTruthCheck (invoked by ops:lane-close, gated
+  // behind manifest.status ∈ {merged, done}). Preflight runs before a lane
+  // or implementation exists, so it must never require implementation
+  // evidence — see docs/05_operations/EXECUTION_TRUTH_MODEL.md's lifecycle
+  // invariant: "every gate belongs to exactly one lifecycle phase."
+  // Declared-proof-path validation for T1 (formerly PX5) now happens in
+  // lane-start.ts immediately after manifest creation, where a manifest
+  // (and therefore expected_proof_paths) actually exists to validate.
+  void tier;
+  void headSha;
 }
 
 async function runLinearChecks(
