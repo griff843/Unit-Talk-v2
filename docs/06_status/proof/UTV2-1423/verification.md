@@ -1,13 +1,13 @@
 # UTV2-1423 Runtime Verification
 
-Generated at: 2026-07-08T01:51:15.623Z
+Generated at: 2026-07-08T12:38:50.987Z
 Issue: UTV2-1423
 Tier: T1
 Lane type: governance
 Branch: claude/utv2-1423-canonical-merge-authority
-PR URL: N/A
-Head SHA: c003a5529962a1aeb77f38d926f6b22170fa1710
-Merge SHA: N/A
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1169
+Head SHA: 8311eafbd8d6f6389928d1149f99ed5b0d27b389
+Merge SHA: ae203a4e16b0a1cc4828e744410b4b15cb43f9cf
 result: pass
 
 ## Verification
@@ -34,5 +34,9 @@ result: pass
 Docs-only change — no runtime behavior modified. `pnpm test:db` executed to satisfy T1 tier policy; results above.
 
 ## SHA Binding
-Head SHA: c003a5529962a1aeb77f38d926f6b22170fa1710
-Merge SHA: N/A
+Head SHA: 8311eafbd8d6f6389928d1149f99ed5b0d27b389
+Merge SHA: ae203a4e16b0a1cc4828e744410b4b15cb43f9cf
+
+## R-Level Compliance
+`npx tsx scripts/ci/r-level-check.ts --base f1002b63881f9c7ba96d64429d5996b98c8de8ae --head ae203a4e16b0a1cc4828e744410b4b15cb43f9cf`
+Verdict: PASS — Changed files: 11 — Rules matched: (none), no R-level artifacts required for this diff.

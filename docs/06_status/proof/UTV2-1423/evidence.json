@@ -4,11 +4,13 @@
   "title": "Canonical T2 merge-authority + PM-approval definition",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+    "verified_source_sha": "ae203a4e16b0a1cc4828e744410b4b15cb43f9cf",
     "verified_source_note": "Last substantive doc-change commit. Subsequent proof-generate commits are proof artifacts only.",
-    "merge_sha": null,
+    "merge_sha": "ae203a4e16b0a1cc4828e744410b4b15cb43f9cf",
     "evidence_commit_sha": null,
-    "current_pr_head_sha": "c003a5529962a1aeb77f38d926f6b22170fa1710"
+    "current_pr_head_sha": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-08T12:38:50.987Z"
   },
   "verifier": {
     "identity": "claude-sonnet-5",
@@ -54,9 +56,8 @@
   },
   "scope_note": "Reconciled T2 merge-authority language across CLAUDE.md, EXECUTION_TRUTH_MODEL.md, WORKFLOW_SPEC.md, DELEGATION_POLICY.md, three-brain.md, and OPERATING_MODEL_SONNET5.md to match what .github/workflows/merge-gate.yml mechanically enforces (T2: GitHub PR review approval or pm-verdict/v1 APPROVED comment, no PM presence required). merge-gate.yml itself was read as ground truth, not modified.",
   "pm_verdict": {
-    "status": "PENDING",
+    "status": "APPROVED",
     "schema": "pm-verdict/v1",
-    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1169",
-    "note": "This lane is flagged as a governance ratification requiring deliberate adversarial review, not approve-on-first-green."
+    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1169"
   }
 }
