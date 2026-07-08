@@ -488,9 +488,35 @@ function main(): void {
       now,
       requireExistingPreflightToken: true,
     });
+
+    // UTV2-1492: declared-proof-path validation for T1 (formerly preflight's
+    // PX5) lives here, not in preflight.ts. A manifest exists at this point,
+    // so expected_proof_paths can actually be checked — preflight runs
+    // before any manifest exists and must never require implementation
+    // evidence. This does not require any *content* in the proof dir (that
+    // remains proof-gate.yml's and truth-check-lib.ts's job); it only
+    // guards against a T1 lane somehow declaring zero expected proof paths.
+    if (tier === 'T1' && manifest.expected_proof_paths.length === 0) {
+      throw new Error(
+        `T1 lane ${issueId} has no expected_proof_paths declared — a T1 lane must declare at least one proof path before it can start`,
+      );
+    }
+
     manifest.execution_location = setup.execution_location;
     writeManifest(manifest);
     writeSyncFile(issueId, buildSyncYml(issueId));
+
+    // The empty proof directory (UTV2-1492) is scaffolded directly inside
+    // the lane worktree below, alongside the manifest/sync mirror — not in
+    // the main checkout, which must stay clean/control-plane-only (PG2).
+    // Operators/executors no longer need to hand-create
+    // docs/06_status/proof/<issue>/ before preflight — doing so used to be
+    // the only way to satisfy preflight's now-removed PX5 check, and it was
+    // exactly what tripped PX3/PX4's content validation before any
+    // implementation existed. Real proof content is populated during
+    // implementation and validated later by proof-gate.yml (CI on PR) and
+    // truth-check-lib.ts (ops:lane-close) — this scaffold is empty on
+    // purpose.
 
     // Mirror manifest and sync file into the worktree and commit so the lane
     // branch carries its own metadata without requiring a manual copy from main.
@@ -503,12 +529,19 @@ function main(): void {
       path.join(ROOT, '.ops', 'sync', `${issueId}.yml`),
       path.join(worktreeSyncDir, `${issueId}.yml`)
     );
+    const worktreeProofDir = path.join(worktreePath, 'docs', '06_status', 'proof', issueId);
+    fs.mkdirSync(worktreeProofDir, { recursive: true });
+    const worktreeProofGitkeep = path.join(worktreeProofDir, '.gitkeep');
+    if (!fs.existsSync(worktreeProofGitkeep)) {
+      fs.writeFileSync(worktreeProofGitkeep, '', 'utf8');
+    }
     spawnSync(
       'git',
       [
         'add',
         `docs/06_status/lanes/${issueId}.json`,
         `.ops/sync/${issueId}.yml`,
+        `docs/06_status/proof/${issueId}/.gitkeep`,
       ],
       { cwd: worktreePath, stdio: 'inherit' }
     );
