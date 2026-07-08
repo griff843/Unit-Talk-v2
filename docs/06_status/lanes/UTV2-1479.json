@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1479/diff-summary.md",
     "docs/06_status/proof/UTV2-1479/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-08T12:52:48.120Z",
-  "heartbeat_at": "2026-07-08T13:33:32.817Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-08T13:34:40.792Z",
+  "closed_at": "2026-07-08T13:34:40.792Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1479-worker-healthy-idle-observability.json",
   "created_by": "claude",
@@ -36,6 +36,60 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1170"
+    },
+    {
+      "checked_at": "2026-07-08T13:34:01.932Z",
+      "verdict": "pass",
+      "merge_sha": "19a30cbf8e776563508c1ea138bff92adf98b4b7",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1170",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-08T13:34:01.938Z",
+      "verdict": "fail",
+      "merge_sha": "19a30cbf8e776563508c1ea138bff92adf98b4b7",
+      "failures": [
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-08T13:34:13.903Z",
+      "verdict": "pass",
+      "merge_sha": "19a30cbf8e776563508c1ea138bff92adf98b4b7",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1170",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-08T13:34:13.908Z",
+      "verdict": "fail",
+      "merge_sha": "19a30cbf8e776563508c1ea138bff92adf98b4b7",
+      "failures": [
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-08T13:34:38.220Z",
+      "verdict": "pass",
+      "merge_sha": "19a30cbf8e776563508c1ea138bff92adf98b4b7",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1170",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],

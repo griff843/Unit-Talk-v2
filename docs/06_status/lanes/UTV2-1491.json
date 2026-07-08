@@ -16,10 +16,10 @@
   "expected_proof_paths": [],
   "status": "done",
   "started_at": "2026-07-08T13:04:05.798Z",
-  "heartbeat_at": "2026-07-08T13:38:01.032Z",
-  "closed_at": "2026-07-08T13:38:01.032Z",
+  "heartbeat_at": "2026-07-08T13:37:26.375Z",
+  "closed_at": "2026-07-08T13:37:26.375Z",
   "blocked_by": [],
-  "preflight_token": "dispatch-auto",
+  "preflight_token": ".out/ops/preflight/codex/utv2-1491-worktree-ownership-session-protocol.json",
   "created_by": "codex-cli",
   "truth_check_history": [
     {
@@ -32,7 +32,7 @@
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1171"
     },
     {
-      "checked_at": "2026-07-08T13:37:57.543Z",
+      "checked_at": "2026-07-08T13:37:23.847Z",
       "verdict": "pass",
       "merge_sha": "348a0446115c271d39c59cbfd101f916c28c41ab",
       "failures": [],
@@ -40,7 +40,6 @@
       "source": "github_pr_merge_commit_repair",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1171",
       "repaired_fields": [
-        "preflight_token",
         "truth_check_history"
       ]
     }
