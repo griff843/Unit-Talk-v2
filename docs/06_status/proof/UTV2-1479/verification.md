@@ -13,9 +13,21 @@ Branch-head SHA (pre-merge, sha_type: branch_head): `fd951bf281fceccf0ed6838fa92
 
 ## Runtime Verification
 
-T2, issue-specific: no runtime/product behavior change (log-line + doc addition only), so no
-live-DB runtime proof was required or executed beyond the standard `pnpm verify` test suite,
-which already exercises live-DB-backed worker tests.
+T2, issue-specific: no runtime/product behavior change (log-line + doc addition only). Ran
+`pnpm test:db` against live Supabase anyway to satisfy the mechanical Proof Auditor Gate
+requirement:
+
+```text
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108582.467481
+```
 
 ## Scope
 
