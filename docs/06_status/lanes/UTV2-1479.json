@@ -12,7 +12,8 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/runner.ts",
-    "docs/05_operations/QUEUE_READINESS_SEMANTICS.md"
+    "docs/05_operations/QUEUE_READINESS_SEMANTICS.md",
+    ".lane/lanes/runtime.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1479/diff-summary.md",
