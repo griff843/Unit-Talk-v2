@@ -8,6 +8,7 @@ import {
   type CandidateLane,
   type LaneManifest,
   evaluateCandidates,
+  isBlockingLinearRelationType,
   parseQueueCandidates,
 } from './lane-maximizer.js';
 import { buildPnpmStateEnv } from './lane-start.js';
@@ -282,6 +283,12 @@ test('candidate whose blocked_by is done is not blocked on BLOCKED_DEP', () => {
     assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-96803']);
     assert.strictEqual(report.blocked.length, 0);
   });
+});
+
+test('generic Linear related links are not treated as blocking dependencies', () => {
+  assert.equal(isBlockingLinearRelationType('related'), false);
+  assert.equal(isBlockingLinearRelationType('blocked_by'), true);
+  assert.equal(isBlockingLinearRelationType('blocks'), true);
 });
 
 test('file scope overlap with active lane is blocked with OVERLAP', () => {
