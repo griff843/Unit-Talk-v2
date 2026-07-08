@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1491",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1491-worktree-ownership-session-protocol",
+  "branch": "codex/utv2-1491-worktree-ownership-session-protocol",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/MULTI_AGENT_WORKTREE_PROTOCOL.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-07-08T13:04:05.798Z",
+  "heartbeat_at": "2026-07-08T13:04:05.798Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1491-worktree-ownership-session-protocol.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1491-worktree-ownership-session-protocol",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
