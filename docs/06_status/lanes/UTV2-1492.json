@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1492-preflight-proof-lifecycle",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1175",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-start.ts",
@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1492/diff-summary.md",
     "docs/06_status/proof/UTV2-1492/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-08T17:56:09.947Z",
-  "heartbeat_at": "2026-07-08T17:56:09.947Z",
+  "heartbeat_at": "2026-07-08T18:14:13.677Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1492-preflight-proof-lifecycle.json",
