@@ -1,8 +1,16 @@
 # Mechanical Tier Classifier — Spec
 
-Status: DRAFT — awaiting PM approval. Lane UTV2-1494 (spec only; implementation is a separate follow-up Codex lane per the issue).
+Status: PM-APPROVED (spec). Lane UTV2-1494 (spec + regression-test definitions only; classifier implementation is a separate follow-up Codex lane per the issue).
 
 This document is the Outcome Contract for UTV2-1494, posted verbatim to the Linear issue as a comment. It defines the path/diff-based mechanical tier classifier that will let CI derive a minimum required tier from a PR's actual diff, so a self-declared/manifest tier can never be the sole gate on required review.
+
+## PM decisions (locked)
+
+The following three decisions were made by PM on review of the initial spec draft and are binding on the follow-up implementation lane:
+
+1. **Derivation formula is exactly `derived_tier = max(declared_tier, mechanical_minimum(diff))`** — as specced below, no changes.
+2. **Reuse `scripts/ops/merge-risk.ts`'s existing `TIER_C_EXACT_PATHS` / `TIER_C_PATH_PREFIXES` constants.** The implementation lane must **not** fork a second tier-sensitive path list. If those constants need new entries to cover a category in the rule table below, the implementation lane extends `merge-risk.ts`'s existing constants in place rather than duplicating them into a new module.
+3. **Rollout is advisory-first.** The first implementation PR must produce a baseline/sweep report (run against current open lanes and recent merge history) showing what the classifier *would* flag, without making it a blocking required check. A hard-blocking merge-gate requirement is a **separate follow-up change requiring its own PM approval** — it must not ship as part of the first implementation PR.
 
 ---
 
@@ -85,7 +93,7 @@ Claude (Sonnet 5), for this spec lane — per `/three-brain` executor-selection 
 - **No self-declared downgrade may reduce required review** — the core invariant this whole lane exists to eventually enforce. The spec must make the monotonic-max property unambiguous so the follow-up implementation cannot accidentally implement `derived_tier = declared_tier` with escalation as an optional add-on (which would reintroduce the exact loophole).
 - **T1/T2/T3 semantics stability** — existing lanes, docs, and tooling (`preflight.ts`, `truth-check.ts`, `r-level-check.ts`, `DELEGATION_POLICY.md`) all assume today's tier meanings. The spec must not silently redefine what T1/T2/T3 *mean*, only add a mechanical floor for what tier a diff must be treated as.
 - **Tier C path list single-sourcing** — `merge-risk.ts` already owns `TIER_C_EXACT_PATHS`/`TIER_C_PATH_PREFIXES` for cross-lane conflict detection (UTV2-1451's domain). If the follow-up implementation defines a second, slightly different list for tier escalation, the two mechanisms will drift and re-open exactly the class of loophole both issues exist to close.
-- **Merge-gate backward compatibility** — `merge-gate.yml`'s current tier resolution (`authoritativeTier` from manifest only) is a hard dependency for every currently in-flight lane. The spec must describe how a mechanical minimum-tier check is introduced without breaking lanes that opened PRs before the classifier existed (e.g. should it be advisory-first, or immediately blocking — this is a PM decision the spec should surface explicitly, not resolve unilaterally).
+- **Merge-gate backward compatibility** — `merge-gate.yml`'s current tier resolution (`authoritativeTier` from manifest only) is a hard dependency for every currently in-flight lane. PM has resolved this: rollout is advisory-first (Phase 1, non-blocking annotation + sweep report), with any hard-blocking cutover (Phase 2) requiring a separate, later PM approval.
 
 ## Implementation approach
 
@@ -108,7 +116,7 @@ Each rule maps a path pattern to a **minimum tier floor**. A diff's mechanical m
 | Env / config | `.env*`, `local.env`, `packages/config/**` | T1 | Configuration surface is PM-only per `DELEGATION_POLICY.md` "always-escalate" list |
 | Everything else (docs/06_status, .claude/**, scripts/ci helper scripts, test-only files) | (no match) | No floor — declared tier stands | Bounded, low-risk, or already covered by other gates (proof-coverage-guard, R-level check) |
 
-Note: this table should be implemented as a **shared constant module** (e.g. exported from `scripts/ops/merge-risk.ts` or a new `scripts/ops/tier-paths.ts` imported by both `merge-risk.ts` and the new `tier-classifier.ts`) so UTV2-1451's Tier C path guard and this tier-escalation classifier read from one source of truth. Divergence between "what Tier C path guard blocks" and "what tier classifier escalates" is the single largest risk identified in this spec (see Risk flags).
+**PM-locked decision:** this table is implemented by **reusing `scripts/ops/merge-risk.ts`'s existing `TIER_C_EXACT_PATHS` / `TIER_C_PATH_PREFIXES` constants directly** — the implementation lane extends those constants in place if a category above isn't yet covered; it does **not** create a second, parallel path list (e.g. no new `scripts/ops/tier-paths.ts` fork). UTV2-1451's Tier C path guard and this tier-escalation classifier must read from one source of truth. Divergence between "what Tier C path guard blocks" and "what tier classifier escalates" was the single largest risk identified in the initial draft of this spec and is the reason PM locked this decision (see Risk flags).
 
 ### 2. Derivation algorithm
 
@@ -123,18 +131,27 @@ derived_tier = max(declared_tier, mechanical_minimum)   // tier ordering: T1 > T
 
 Declared tier is **not** downgraded by the classifier either — if a lane declares T1 but only touches T3-eligible paths, `derived_tier` stays T1 (`max(T1, T3) = T1`). The classifier is a floor-raiser in both directions of the `max()`, not a re-classifier. Manifest/Linear-declared tier remains the authority for anything the mechanical table doesn't reach.
 
-### 3. Merge-gate integration point
+### 3. Merge-gate integration point — advisory-first rollout (PM-locked)
 
-In `.github/workflows/merge-gate.yml`, insert the derivation as a step immediately after the existing "resolve authoritative tier from lane manifest" block and before the T3 auto-pass branch:
+**Phase 1 (this implementation lane, advisory-only — not built in this spec lane, but scoped here for the follow-up):**
 
 1. Compute `touched_paths` via `git diff --name-only ${baseSha}...${headSha}` (same mechanism `r-level-check.ts` already uses).
-2. Run the shared rule table against `touched_paths` to get `mechanical_minimum`.
+2. Run the shared rule table (`merge-risk.ts`'s existing `TIER_C_*` constants) against `touched_paths` to get `mechanical_minimum`.
 3. Compute `derived_tier = max(authoritativeTier, mechanical_minimum)`.
-4. Replace all subsequent uses of `tier = authoritativeTier` with `tier = derived_tier`.
-5. If `derived_tier !== authoritativeTier` (i.e. mechanical escalation occurred), emit a check-run annotation stating which path(s) triggered escalation and require the label/verdict artifacts for the **escalated** tier, not the declared one — e.g. a PR labeled `tier:T3` that touches `packages/domain/src/**` must now satisfy T1's `t1-approved` + `pm-verdict/v1` requirements before merging, and the workflow should auto-correct/replace the stale `tier:T3` label the same way it already auto-applies a missing tier label today.
-6. This is a **required check**; if `derived_tier` requirements are unmet, the gate fails (same failure path as today's existing tier-validation failure handling).
+4. **Do not** replace `authoritativeTier` with `derived_tier` in any blocking check yet. Instead: emit a non-blocking check-run annotation / PR comment whenever `derived_tier !== authoritativeTier`, stating which path(s) triggered escalation and what the required artifacts *would* be under the escalated tier.
+5. Produce a **baseline/sweep report** — run the classifier against currently open lane PRs and recent merge history (e.g. last N merged PRs) and publish the findings (counts of what would have been flagged, by category) so PM can evaluate blast radius before any blocking behavior ships. This report is a required deliverable of the first implementation PR, per PM's advisory-first rollout decision.
+6. This phase ships as a **non-required, informational check** — it must not fail CI or block merges.
+
+**Phase 2 (separate follow-up, requires its own PM approval — explicitly out of scope for the first implementation PR):**
+
+1. Replace all subsequent uses of `tier = authoritativeTier` with `tier = derived_tier` in the blocking tier-branch logic.
+2. If `derived_tier !== authoritativeTier` (i.e. mechanical escalation occurred), require the label/verdict artifacts for the **escalated** tier, not the declared one — e.g. a PR labeled `tier:T3` that touches `packages/domain/src/**` must now satisfy T1's `t1-approved` + `pm-verdict/v1` requirements before merging, and the workflow should auto-correct/replace the stale `tier:T3` label the same way it already auto-applies a missing tier label today.
+3. This becomes a **required check**; if `derived_tier` requirements are unmet, the gate fails (same failure path as today's existing tier-validation failure handling).
+4. PM must explicitly approve the cutover from Phase 1 (advisory) to Phase 2 (blocking) based on the baseline/sweep report's findings — this is not an automatic follow-on.
 
 ### 4. Concrete regression test cases (for the future test file)
+
+All cases below assert the pure `derived_tier` computation and the shared-constant sourcing. Cases 13–14 additionally assert the Phase 1 advisory-only behavior (annotate, never fail CI) per PM's advisory-first rollout decision.
 
 1. PR touching only `docs/06_status/lanes/*.json` stays at declared tier (no escalation) — asserts the "everything else" default doesn't over-trigger.
 2. PR touching `supabase/migrations/0123_add_column.sql` is forced to at least T1 regardless of a declared `tier:T3` label.
@@ -148,6 +165,8 @@ In `.github/workflows/merge-gate.yml`, insert the derivation as a step immediate
 10. PR touching `.github/workflows/merge-gate.yml` itself is forced to at least T1 (dispatch/orchestration category) — this is the classifier protecting its own enforcement mechanism from being weakened without T1 review.
 11. PR touching a path not in any rule (e.g. `apps/command-center/src/Widget.tsx`) computes `mechanical_minimum = T3` and leaves `derived_tier` exactly equal to `declared_tier`.
 12. Declared tier missing/invalid (no manifest, as already handled by existing merge-gate logic) — classifier does not mask this pre-existing hard failure; it only applies once `declared_tier` is resolved.
+13. **(Shared-constants regression)** The classifier's rule table for the Tier C / migrations / runtime / scoring / contracts categories is sourced from `merge-risk.ts`'s exported `TIER_C_EXACT_PATHS`/`TIER_C_PATH_PREFIXES` (imported, not re-declared) — a test asserts the classifier module has no locally-duplicated copy of those path lists, so the two mechanisms cannot silently diverge.
+14. **(Advisory-first regression)** In Phase 1, a PR whose `derived_tier` would exceed `declared_tier` produces a non-blocking annotation/comment and the check-run conclusion is `neutral`/`success` (not `failure`) — the gate does not fail CI, and no `t1-approved`/`pm-verdict/v1` requirement is enforced, until the Phase 2 cutover is explicitly PM-approved.
 
 ### 5. T1/T2/T3 semantics preservation
 
@@ -158,7 +177,7 @@ This classifier changes **no** existing definition of what T1, T2, or T3 *mean* 
 - **Overly broad globs risk grinding velocity to a halt.** `packages/domain/src/**` and `apps/worker/**` are broad prefixes; if a T3-eligible doc fix or test-only change happens to live under one of these directories, it would be force-escalated to T1 unnecessarily. The follow-up lane should consider file-extension/kind exclusions (e.g. `*.test.ts` under a T1 prefix might still warrant T1 review since tests can hide behavior changes — this is a judgment call for PM, flagged here rather than resolved).
 - **Overly narrow globs recreate the loophole.** If the rule table omits a real runtime-risk path (e.g. a new `apps/api/src/*-service.ts` file that isn't yet enumerated, or a new package under `packages/` doing scoring work), that path silently gets no mechanical floor and the declared tier is trusted again — exactly the failure mode this issue exists to close. The table must be treated as a living document requiring updates whenever new runtime/domain paths are introduced, and ideally validated by a meta-test that fails if `packages/domain/src/**` or `apps/worker/**` gain new top-level subdirectories not covered by the shared constant.
 - **Duplication/drift risk with UTV2-1451's Tier C path guard.** `scripts/ops/merge-risk.ts` already defines `TIER_C_EXACT_PATHS`/`TIER_C_PATH_PREFIXES` for a different purpose (cross-lane file-scope conflict detection). If the tier-classifier implementation (Codex, follow-up lane) defines its own separate list instead of importing/sharing this one, the two "what counts as sensitive" definitions will diverge over time, silently reopening gaps in one mechanism while the other is updated. This spec recommends a single shared constant module; the follow-up lane's plan approval should explicitly confirm this sharing is implemented, not just described.
-- **Backward compatibility for in-flight lanes.** Multiple lanes likely have open PRs with `declared_tier` already set and possibly already reviewed. If `merge-gate.yml`'s new derivation logic goes live mid-flight, previously-approved-as-T3 PRs that touch e.g. `packages/domain/src/**` would suddenly need `t1-approved` + PM verdict artifacts they never obtained, blocking merges that were otherwise ready. The follow-up implementation lane should decide (with PM) whether to (a) ship as advisory/warning-only for N days before making it a hard-blocking required check, or (b) hard-block immediately with a documented one-time PM sweep to re-approve any currently-open PRs that get escalated. This decision belongs to PM at plan-approval time for the implementation lane, not to this spec.
+- **Backward compatibility for in-flight lanes — RESOLVED by PM.** PM has locked the rollout as advisory-first: the first implementation PR ships a non-blocking annotation + baseline/sweep report only, with no hard-blocking behavior. The Phase 2 cutover to a blocking required check is a separate change requiring its own PM approval, informed by the sweep report's findings on current in-flight lanes. No in-flight PR is at risk of a surprise merge block from this lane or its immediate follow-up.
 - **Governance doc category is self-referential.** Escalating changes to `docs/05_operations/*_POLICY.md`/`*_SPEC.md` to T1 means this very classifier's own spec and its own future code changes will need T1 treatment going forward — this is intentional (prevents the classifier from being weakened by a low-tier PR) but should be called out explicitly so it isn't perceived as an oversight later.
 
 ### Critical files for implementation
