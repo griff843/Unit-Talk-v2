@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1490",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1490-stop-hook-path-repair",
+  "branch": "codex/utv2-1490-stop-hook-path-repair",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/hooks/session-summary.sh",
+    ".claude/hooks/untracked-scripts-check.sh",
+    ".claude/settings.json",
+    "scripts/agent-notify/agent-stop-hook.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-07-07T14:43:15.820Z",
+  "heartbeat_at": "2026-07-07T14:43:15.820Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1490-stop-hook-path-repair.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1490-stop-hook-path-repair",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

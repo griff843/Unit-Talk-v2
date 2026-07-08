@@ -1,5 +1,14 @@
 import { spawnSync } from 'node:child_process';
 
+function repoRoot(): string {
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+
+  return result.status === 0 && result.stdout.trim() ? result.stdout.trim() : process.cwd();
+}
+
 function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
     let input = '';
@@ -34,9 +43,11 @@ function eventForStopReason(stopReason: string): 'complete' | 'fail' {
 }
 
 function notifyCommand(stopReason: string): { command: string; args: string[] } {
+  const root = repoRoot();
+  const notifyScript = `${root}/scripts/agent-notify/notify.ts`;
   const args = [
     'tsx',
-    'scripts/agent-notify/notify.ts',
+    notifyScript,
     `--event=${eventForStopReason(stopReason)}`,
     '--agent=claude',
     `--detail=${stopReason}`,
@@ -51,7 +62,7 @@ readStdin()
   .then((input) => {
     const stopReason = readStopReason(input);
     const command = notifyCommand(stopReason);
-    const child = spawnSync(command.command, command.args, { stdio: 'inherit' });
+    const child = spawnSync(command.command, command.args, { cwd: repoRoot(), stdio: 'inherit' });
 
     if (child.error) {
       process.stderr.write(`agent-stop-hook: notification skipped: ${child.error.message}\n`);
