@@ -24,7 +24,7 @@ The three authorization tiers in this policy map onto — but do not replace —
 | Sprint tier | Default authorization tier | Notes |
 |---|---|---|
 | T3 (pure-computation, docs, test coverage, no-behavior refactors) | **Tier A** if file scope is in Tier A allow-list; otherwise **Tier B** | T3 + Tier A = merge on green |
-| T2 (service wrappers, cross-package integration, bounded refactors) | **Tier B** by default | T2 clear-scope (Codex lane): Claude diff-review is sole merge gate, no PM_VERDICT required. T2 with migrations/contracts: Claude-executed, no PM_VERDICT required. |
+| T2 (service wrappers, cross-package integration, bounded refactors) | **Tier B** by default | Merge authority per `merge-gate.yml`: orchestrator diff-review + `gh pr review --approve` (no PM_VERDICT or PM presence required) satisfies the gate — for any executor, not Codex-lane-only. A `pm-verdict/v1` APPROVED comment is the alternate path. |
 | T1 (migrations, routing, settlement, lifecycle, shared contracts) | **Tier C** always | Plan approval and merge approval required |
 
 Tier label overrides file-scope eligibility. A T1 Linear issue is Tier C even if it happens to touch only `scripts/**` — because T1 classification signals PM has flagged runtime risk.
@@ -75,7 +75,7 @@ The orchestrator may plan, dispatch, review, merge, and update Linear state with
 
 ### Tier B — Review-before-merge
 
-The orchestrator may plan, dispatch, write code, run verification, and open the PR autonomously. But **merge requires explicit PM approval** in the current chat session. PM reads the PR description and either says "approve PR #NNN for merge" or reshapes the work.
+The orchestrator may plan, dispatch, write code, run verification, and open the PR autonomously. Merge authority is defined mechanically by `.github/workflows/merge-gate.yml` (ratified 2026-05-18, UTV2-979), **not** by PM approval in the current chat session — a chat message never satisfies the merge gate. In practice: the orchestrator diff-reviews, applies `gh pr review --approve`, and merges on green CI, provided the PR touches no Tier C sensitive paths (see sensitive-path matrix). PM may instead post a `pm-verdict/v1` APPROVED comment as the alternate artifact when explicit sign-off is wanted; either satisfies the gate.
 
 **Eligible work:**
 - T2 runtime changes with explicit allowed-file lists and bounded file scope
@@ -231,7 +231,7 @@ When the orchestrator dispatches work to a Codex CLI lane (via `pnpm ops:codex-e
 
 The PM may grant standing authorizations that persist across sessions by documenting them here. Current standing authorizations:
 
-- **T2 clear-scope Codex lane merges:** Orchestrator may merge PRs that satisfy ALL of the following without a PM_VERDICT comment or PM in-session: (1) PR carries `lane:codex` label, (2) PR carries `tier:T2` label, (3) PR touches no Tier C sensitive paths (see sensitive-path matrix), (4) CI is green on the merge SHA, (5) orchestrator diff review finds no out-of-scope files and no Tier C path touches. Orchestrator applies `gh pr review --approve` then merges. Granted 2026-05-14.
+- **T2 merges (any executor):** superseded 2026-05-18 (UTV2-979) — this is no longer a scoped carve-out for Codex lanes only. `merge-gate.yml` mechanically accepts a GitHub PR review approval as sufficient for any T2 PR, so the orchestrator's standard practice is: (1) PR touches no Tier C sensitive paths (see sensitive-path matrix), (2) CI is green on the merge SHA, (3) diff review finds no out-of-scope files and no Tier C path touches, (4) orchestrator applies `gh pr review --approve` then merges. A `pm-verdict/v1` APPROVED comment is the alternate path when explicit PM sign-off is wanted. Originally granted 2026-05-14 as a Codex-lane-only exception; generalized here to match what the merge gate actually enforces for every T2 PR.
 
 - **Session housekeeping files:** Orchestrator may commit `docs/06_status/SYSTEM_STATE.md` and `.claude/.state-stamp` as session housekeeping without a lane, tier label, or proof. These are auto-generated operational files, not deliverables. Granted 2026-05-14.
 

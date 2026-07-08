@@ -84,7 +84,7 @@ Done requires everything above **plus**:
 - Issue must pass through **In Proof** before Done (skipping In Proof is a workflow violation)
 - Evidence bundle exists at `docs/06_status/proof/UTV2-###/evidence.json`, tied to merge SHA
 - T1: runtime proof against live Supabase; static proof alone is insufficient
-- Linear state = Done only after PM sets `t1-approved` label (T1) or orchestrator on green (T2/T3)
+- Linear state = Done only after Merge Authority is satisfied per tier (canonical definition + artifacts: `CLAUDE.md` "Verification expectations", mechanically enforced by `.github/workflows/merge-gate.yml`) — T1 requires `t1-approved` label + `pm-verdict/v1` APPROVED comment; T2 requires a GitHub PR review approval or `pm-verdict/v1` APPROVED comment; T3 merges on green CI alone
 
 ---
 
