@@ -14,8 +14,8 @@ result: pass
 
 | Command | Result | Notes |
 | --- | --- | --- |
-| `pnpm verify:quick` | PASS | sync-check, system-alignment-check, automation-coverage-check, env:check, lint, type-check all green. |
-| `pnpm verify` | PASS | env:check + lint + type-check + build + test, full pipeline. |
+| `pnpm verify:quick` | PASS | sync-check, system-alignment-check, automation-coverage-check, env:check, lint, `pnpm type-check` all green. |
+| `pnpm verify` | PASS | env:check + lint + `pnpm type-check` + build + `pnpm test`, full pipeline. |
 | `tsx --test apps/worker/src/worker-runtime.test.ts` | PASS | 63/63, including new `runWorkerCycles logs a worker.heartbeat event to stdout` test. |
 | R-level check | PASS | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — Verdict PASS, `lifecycle-fsm` matched, only PM-gated advisory R4 artifact missing. |
 | `pnpm test:db` | PASS | 7/7 against live Supabase (run to satisfy Proof Auditor Gate mechanical requirement). |
