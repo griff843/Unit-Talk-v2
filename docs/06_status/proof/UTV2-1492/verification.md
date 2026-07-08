@@ -51,9 +51,14 @@ Zero `not ok` lines anywhere in the full verify output (`grep -c "^not ok"` = 0)
 
 **No `pnpm test:db` proof is fabricated or claimed as this lane's own runtime evidence** — this is a T2, tooling-only change (`scripts/ops/preflight.ts`, `scripts/ops/lane-start.ts`) with no runtime/product code path of its own to exercise. The test:db/live-db results above are incidental output of `pnpm verify`'s unconditional full battery, included as regression evidence, not as this issue's required proof artifact.
 
-### R-level compliance
+## R-level compliance
 
-See `## R-level compliance` section below (appended after running `tsx scripts/ci/r-level-check.ts`).
+```
+tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD --json
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ## Review packet — T1 lifecycle model
 
