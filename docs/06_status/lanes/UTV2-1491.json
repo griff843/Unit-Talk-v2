@@ -7,21 +7,31 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1491-worktree-ownership-session-protocol",
   "branch": "codex/utv2-1491-worktree-ownership-session-protocol",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "348a0446115c271d39c59cbfd101f916c28c41ab",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1171",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/MULTI_AGENT_WORKTREE_PROTOCOL.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-08T13:04:05.798Z",
-  "heartbeat_at": "2026-07-08T13:04:05.798Z",
+  "heartbeat_at": "2026-07-08T13:36:55.275Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1491-worktree-ownership-session-protocol.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-08T13:36:55.275Z",
+      "verdict": "pass",
+      "merge_sha": "348a0446115c271d39c59cbfd101f916c28c41ab",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1171"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
