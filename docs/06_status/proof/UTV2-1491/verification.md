@@ -22,4 +22,17 @@ Branch-head SHA (pre-merge, sha_type: branch_head): `b8eddf761dcd064b1eca13c3760
 
 ## Runtime Verification
 
-N/A — docs-only, no runtime/product behavior affected.
+N/A — docs-only, no runtime/product behavior affected. Ran `pnpm test:db` against live
+Supabase anyway to satisfy the mechanical Proof Auditor Gate requirement:
+
+```text
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 103685.68472
+```
