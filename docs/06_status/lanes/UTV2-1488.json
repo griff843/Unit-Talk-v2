@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1488-cc-legacy-nav-research-fix",
   "branch": "codex/utv2-1488-cc-legacy-nav-research-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e38bca3724a9b37c29c2b6839117fdf22840eaab",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1167",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/src/components/IntelligenceWorkspaceNav.tsx",
@@ -17,14 +17,36 @@
     "apps/command-center/src/lib/data/research.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-07T14:42:32.706Z",
-  "heartbeat_at": "2026-07-07T14:42:32.706Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-08T13:11:03.908Z",
+  "closed_at": "2026-07-08T13:11:03.908Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1488-cc-legacy-nav-research-fix.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-08T13:10:31.459Z",
+      "verdict": "pass",
+      "merge_sha": "e38bca3724a9b37c29c2b6839117fdf22840eaab",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1167"
+    },
+    {
+      "checked_at": "2026-07-08T13:11:01.308Z",
+      "verdict": "pass",
+      "merge_sha": "e38bca3724a9b37c29c2b6839117fdf22840eaab",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1167",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
