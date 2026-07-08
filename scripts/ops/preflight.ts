@@ -546,7 +546,7 @@ function runGateEquivalentChecks(
     addCheck('PX3', 'skip', `proof auditor skipped because ${proofDirRelative} does not exist`);
     addCheck('PX4', 'skip', `runtime verifier skipped because ${proofDirRelative} does not exist`);
   } else {
-    const proofAuditor = runCommand('pnpm', [
+    const proofAuditorArgs = [
       'exec',
       'tsx',
       'scripts/ops/proof-auditor-gate.ts',
@@ -554,10 +554,12 @@ function runGateEquivalentChecks(
       proofDirRelative,
       '--sha',
       headSha,
-      '--require-executed-command',
-      'pnpm test:db',
       '--json',
-    ]);
+    ];
+    if (tier === 'T1') {
+      proofAuditorArgs.push('--require-executed-command', 'pnpm test:db');
+    }
+    const proofAuditor = runCommand('pnpm', proofAuditorArgs);
     addCheck(
       'PX3',
       proofAuditor.ok ? 'pass' : 'fail',

@@ -185,7 +185,11 @@ function writeSyncFile(issueId: string, content: string): void {
   fs.writeFileSync(path.join(syncDir, `${issueId}.yml`), content, 'utf8');
 }
 
-function buildSyncYml(issueId: string): string {
+function buildSyncYml(issueId: string, proofPaths: string[] = []): string {
+  const proofLines =
+    proofPaths.length > 0
+      ? ['  proofs:', ...proofPaths.map((proofPath) => `    - ${proofPath}`)]
+      : ['  proofs: []'];
   return [
     'version: 1',
     'approval:',
@@ -196,7 +200,7 @@ function buildSyncYml(issueId: string): string {
     `    - ${issueId}`,
     '  findings: []',
     '  controls: []',
-    '  proofs: []',
+    ...proofLines,
     '',
   ].join('\n');
 }
@@ -490,7 +494,7 @@ function main(): void {
     });
     manifest.execution_location = setup.execution_location;
     writeManifest(manifest);
-    writeSyncFile(issueId, buildSyncYml(issueId));
+    writeSyncFile(issueId, buildSyncYml(issueId, manifest.expected_proof_paths));
 
     // Mirror manifest and sync file into the worktree and commit so the lane
     // branch carries its own metadata without requiring a manual copy from main.
