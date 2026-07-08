@@ -16,7 +16,10 @@
     "docs/05_operations/DELEGATION_POLICY.md",
     "docs/05_operations/EXECUTION_TRUTH_MODEL.md",
     "docs/05_operations/OPERATING_MODEL_SONNET5.md",
-    "docs/05_operations/WORKFLOW_SPEC.md"
+    "docs/05_operations/WORKFLOW_SPEC.md",
+    "docs/06_status/proof/UTV2-1423/diff-summary.md",
+    "docs/06_status/proof/UTV2-1423/verification.md",
+    "docs/06_status/proof/UTV2-1423/evidence.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1423/evidence.json"
