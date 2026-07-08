@@ -52,6 +52,11 @@
       "UTV2-883: no duplicate participants for the same external_id and sport",
       "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
       "UTV2-996: correction chain is additive — original settlement row is not mutated"
+    ],
+    "row_counts": [
+      { "table": "pick_candidates", "count": 76002, "note": "monitored table, read-only count against live Supabase" },
+      { "table": "distribution_outbox", "count": 4251, "note": "monitored table, read-only count against live Supabase" },
+      { "table": "pick_lifecycle", "count": 93877, "note": "monitored table, read-only count against live Supabase" }
     ]
   },
   "scope_note": "Reconciled T2 merge-authority language across CLAUDE.md, EXECUTION_TRUTH_MODEL.md, WORKFLOW_SPEC.md, DELEGATION_POLICY.md, three-brain.md, and OPERATING_MODEL_SONNET5.md to match what .github/workflows/merge-gate.yml mechanically enforces (T2: GitHub PR review approval or pm-verdict/v1 APPROVED comment, no PM presence required). merge-gate.yml itself was read as ground truth, not modified.",
