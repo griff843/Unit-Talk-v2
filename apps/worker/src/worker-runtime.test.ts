@@ -2195,6 +2195,44 @@ test('runWorkerCycles writes a worker.heartbeat system_run per cycle', async () 
   assert.ok(heartbeatRuns[0]?.finished_at != null, 'heartbeat run must have a finished_at timestamp');
 });
 
+test('runWorkerCycles logs a worker.heartbeat event to stdout alongside the system_run write (UTV2-1479)', async () => {
+  const { repositories } = createWorkerTestRepositories([
+    createOutboxRecord('discord:hb-log-target'),
+  ]);
+
+  const originalLog = console.log;
+  const logged: string[] = [];
+  console.log = (message: unknown) => {
+    logged.push(String(message));
+  };
+
+  try {
+    await runWorkerCycles({
+      repositories,
+      workerId: 'worker-hb-log',
+      targets: ['discord:hb-log-target'],
+      deliver: createStubDeliveryAdapter(),
+      maxCycles: 1,
+      persistenceMode: 'in_memory',
+      workerHeartbeatIntervalMs: 30000,
+    });
+  } finally {
+    console.log = originalLog;
+  }
+
+  const heartbeatLogs = logged
+    .map((line) => {
+      try {
+        return JSON.parse(line) as { event?: string };
+      } catch {
+        return null;
+      }
+    })
+    .filter((parsed): parsed is { event?: string } => parsed !== null && parsed.event === 'worker.heartbeat');
+
+  assert.equal(heartbeatLogs.length, 1, 'exactly one worker.heartbeat log line must be emitted per cycle');
+});
+
 test('createWorkerRuntimeDependencies reads worker settings from local.env', () => {
   const originalCwd = process.cwd();
   const originalEnv = {

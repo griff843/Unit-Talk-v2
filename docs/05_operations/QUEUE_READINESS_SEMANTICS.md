@@ -130,6 +130,16 @@ All 1,540 currently-held rows (594 pending + 946 dead-letter) are Phase 7A brake
 
 ---
 
+## Worker Liveness Signal (`worker.heartbeat`, not `distribution.process`)
+
+`distribution.process` `system_runs` rows are written only when the worker actually claims and processes an outbox row. **Their absence is not a liveness signal** — a worker configured for a target with zero eligible rows correctly produces zero `distribution.process` rows every cycle, indefinitely. This is expected, correct idle behavior, not a hang.
+
+The only reliable liveness signal is the `worker.heartbeat` `system_runs` row, written once per cycle in `apps/worker/src/runner.ts` regardless of whether any work was claimed. As of UTV2-1479, each heartbeat write is also mirrored to stdout (`console.log({event: 'worker.heartbeat', ...})`) so liveness is visible in `docker logs` without a live DB query — previously the write had no accompanying log line, making a fully healthy idle worker indistinguishable from a wedged one in host logs alone.
+
+Before concluding a worker is wedged from `distribution.process` silence, check `worker.heartbeat` rows first — see UTV2-1479 classification for the incident this corrects (worker was healthy-idle due to a target-configuration gap, not DB-timeout-blocked as originally assumed during UTV2-1477).
+
+---
+
 ## What This Document Does Not Authorize
 
 - No queue mutation (no UPDATE, DELETE, or INSERT on outbox rows)
