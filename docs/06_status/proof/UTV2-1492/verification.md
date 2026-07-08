@@ -101,3 +101,9 @@ Planning
 **What did NOT change (per explicit AC and PM guardrails):** `proof-gate.yml`, `truth-check-lib.ts`, `lane-close.ts`, `merge-gate.yml`. All real proof/runtime-evidence enforcement remains exactly where it already correctly lived. This fix removes a duplicated, mis-timed copy of that enforcement — it does not weaken the original.
 
 **Constitutional invariant this restores:** *Planning must never require implementation evidence.* A fresh T1 lane can now reach a passing preflight token and a started lane with zero pre-existing repo state beyond a valid Linear issue — verified directly: `pnpm ops:preflight UTV2-1492 --tier T2 ...` and the equivalent T1 path both reach PASS/lane-started without any proof directory existing beforehand.
+
+## Merge SHA binding
+
+Head SHA: 225018bceb28105bbe8580ace4266bd6ac2cf0ba
+Merge SHA: 21ad35f905af6fdd8ffa88a8de7e8b7bd24eed97
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1176

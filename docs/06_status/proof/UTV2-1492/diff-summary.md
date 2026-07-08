@@ -19,3 +19,8 @@ Changed files (scope exactly matches the declared `file_scope_lock`):
 ## Verification
 
 Verification is recorded in `docs/06_status/proof/UTV2-1492/verification.md`, including a review packet explaining the new T1 lifecycle.
+
+## Merge SHA binding
+
+Head SHA: 225018bceb28105bbe8580ace4266bd6ac2cf0ba
+Merge SHA: 21ad35f905af6fdd8ffa88a8de7e8b7bd24eed97
