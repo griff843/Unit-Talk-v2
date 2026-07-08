@@ -145,6 +145,19 @@ export async function runWorkerCycles(
           details: { cycle, targets: options.targets },
         });
         heartbeatRunId = hb.id;
+        // Log alongside the system_runs write so liveness is visible in `docker logs`
+        // without a DB query. Without this, a healthy-idle worker and a wedged one
+        // look identical in host logs — only `worker.heartbeat` rows distinguish them,
+        // and those require a live query to check. `distribution.process` rows are
+        // NOT a liveness signal: their absence just means nothing was claimable this
+        // cycle, which is expected/correct behavior, not a hang. See UTV2-1479.
+        console.log(JSON.stringify({
+          event: 'worker.heartbeat',
+          workerId: options.workerId,
+          cycle,
+          targets: options.targets,
+          runId: hb.id,
+        }));
       } catch {
         // Non-fatal — heartbeat write is best-effort
       }
