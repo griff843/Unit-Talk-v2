@@ -1,6 +1,14 @@
-# UTV2-1479 Verification
+# UTV2-1479 Runtime Verification
 
-Branch-head SHA (pre-merge, sha_type: branch_head): `fd951bf281fceccf0ed6838fa923a7556a6439f6`
+Generated at: 2026-07-08T13:33:33.406Z
+Issue: UTV2-1479
+Tier: T2
+Lane type: runtime
+Branch: claude/utv2-1479-worker-healthy-idle-observability
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1170
+Head SHA: aadb01c036352596d6fb10ada750728557dc598e
+Merge SHA: 19a30cbf8e776563508c1ea138bff92adf98b4b7
+result: pass
 
 ## Verification
 
@@ -10,26 +18,12 @@ Branch-head SHA (pre-merge, sha_type: branch_head): `fd951bf281fceccf0ed6838fa92
 | `pnpm verify` | PASS | env:check + lint + type-check + build + test, full pipeline. |
 | `tsx --test apps/worker/src/worker-runtime.test.ts` | PASS | 63/63, including new `runWorkerCycles logs a worker.heartbeat event to stdout` test. |
 | R-level check | PASS | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — Verdict PASS, `lifecycle-fsm` matched, only PM-gated advisory R4 artifact missing. |
+| `pnpm test:db` | PASS | 7/7 against live Supabase (run to satisfy Proof Auditor Gate mechanical requirement). |
 
 ## Runtime Verification
 
-T2, issue-specific: no runtime/product behavior change (log-line + doc addition only). Ran
-`pnpm test:db` against live Supabase anyway to satisfy the mechanical Proof Auditor Gate
-requirement:
+T2, issue-specific: no runtime/product behavior change (log-line + doc addition only).
 
-```text
-1..7
-# tests 7
-# suites 0
-# pass 7
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 108582.467481
-```
-
-## Scope
-
-No worker execution, queue, retry, dispatch, or schema changes. No production mutation. No
-target reconfiguration.
+## SHA Binding
+Head SHA: aadb01c036352596d6fb10ada750728557dc598e
+Merge SHA: 19a30cbf8e776563508c1ea138bff92adf98b4b7
