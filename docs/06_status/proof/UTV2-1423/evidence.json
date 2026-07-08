@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1423",
+  "title": "Canonical T2 merge-authority + PM-approval definition",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+    "verified_source_note": "Last substantive doc-change commit. Subsequent proof-generate commits are proof artifacts only.",
+    "merge_sha": null,
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": "c003a5529962a1aeb77f38d926f6b22170fa1710"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-5",
+    "role": "orchestrator"
+  },
+  "static_proof": {
+    "pnpm_verify_quick": {
+      "status": "PASS",
+      "steps": {
+        "sync_check": "PASS",
+        "system_alignment_check": "PASS",
+        "automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS"
+      }
+    },
+    "pnpm_verify_parallel": {
+      "status": "PASS",
+      "note": "lint + type-check in parallel, then build + test, all green"
+    },
+    "r_level": {
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifacts_required": "none",
+      "note": "Docs-only diff; no source, migration, or workflow YAML changed"
+    }
+  },
+  "runtime_proof": {
+    "note": "Docs-only governance lane. test:db run per governance runtime-validation policy (OPERATING_MODEL_SONNET5.md §5) to satisfy T1 tier policy, not because runtime behavior changed.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+      "UTV2-996: correction chain is additive — original settlement row is not mutated"
+    ]
+  },
+  "scope_note": "Reconciled T2 merge-authority language across CLAUDE.md, EXECUTION_TRUTH_MODEL.md, WORKFLOW_SPEC.md, DELEGATION_POLICY.md, three-brain.md, and OPERATING_MODEL_SONNET5.md to match what .github/workflows/merge-gate.yml mechanically enforces (T2: GitHub PR review approval or pm-verdict/v1 APPROVED comment, no PM presence required). merge-gate.yml itself was read as ground truth, not modified.",
+  "pm_verdict": {
+    "status": "PENDING",
+    "schema": "pm-verdict/v1",
+    "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1169",
+    "note": "This lane is flagged as a governance ratification requiring deliberate adversarial review, not approve-on-first-green."
+  }
+}

@@ -213,7 +213,8 @@ Stop and request PM presence when any of the following apply:
 **Mandatory merge gates (Delegation Policy):**
 - T1 plan stage — before any implementation (Tier C)
 - T1 merge — after implementation, before merge (Tier C)
-- T2 merge — explicit PM approval required in current session (Tier B)
+
+T2 merge is **not** a Rule 9 stop condition: per `merge-gate.yml` (ratified 2026-05-18, UTV2-979) and Delegation Policy's Tier B model, the orchestrator diff-reviews and self-approves via `gh pr review --approve` — no PM presence or PM_VERDICT required, for any executor. Escalate a T2 merge only if one of the always-escalate conditions below also applies.
 
 **Always-escalate conditions (Delegation Policy — any one triggers):**
 - Security or privacy posture change (auth, RBAC, PII, audit retention, secrets)

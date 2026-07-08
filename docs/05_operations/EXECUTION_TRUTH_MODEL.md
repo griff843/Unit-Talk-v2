@@ -98,9 +98,11 @@ Every Linear issue carries exactly one machine-readable tier label. Tier determi
 
 | Tier | Scope | Required Verification | Required Proof | Merge Authority |
 |---|---|---|---|---|
-| **T1** | migrations, shared contracts, runtime routing, scoring/promotion/lifecycle, governance | `type-check` + `test` + `test:db` + tier-specific runtime proof | Evidence bundle v1 (static + runtime), SHA-tied, validated by `evidence:validate` | PM label `t1-approved` required on PR |
-| **T2** | isolated logic/refactor, service-internal changes, non-shared route changes | `type-check` + `test` + issue-specific verification | Diff summary + verification log in manifest | Orchestrator merges on green after diff review |
-| **T3** | docs, isolated UI, typos, config-only, comment fixes | `type-check` + `test` | Green CI | Orchestrator merges on green |
+| **T1** | migrations, shared contracts, runtime routing, scoring/promotion/lifecycle, governance | `type-check` + `test` + `test:db` + tier-specific runtime proof | Evidence bundle v1 (static + runtime), SHA-tied, validated by `evidence:validate` | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
+| **T2** | isolated logic/refactor, service-internal changes, non-shared route changes | `type-check` + `test` + issue-specific verification | Diff summary + verification log in manifest | GitHub PR review approval (orchestrator's own `gh pr review --approve` after diff review qualifies) **or** `pm-verdict/v1` APPROVED comment |
+| **T3** | docs, isolated UI, typos, config-only, comment fixes | `type-check` + `test` | Green CI | Green CI + valid executor result — no PM verdict |
+
+Merge Authority above is defined once, mechanically, by `.github/workflows/merge-gate.yml` (T2 path ratified 2026-05-18 under UTV2-979) — this table mirrors that workflow; if they diverge, the workflow wins. This applies uniformly across executors (Claude or Codex), not as a Codex-only or Claude-only carve-out.
 
 **Tier laws:**
 - Missing tier label → issue is not Ready, cannot be lane-started.

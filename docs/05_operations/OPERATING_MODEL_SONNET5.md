@@ -53,25 +53,9 @@ This rule exists because it was violated in practice: UTV2-1373's lane manifest 
 
 ## 3. PM gates — Rule 9 is authoritative, not narrowed
 
-`three-brain.md` Rule 9 is the complete and unmodified list of always-escalate conditions. This document does not redefine, narrow, or supersede it. For reference, the full list (verbatim intent, see `three-brain.md` for the canonical text):
+`three-brain.md` Rule 9 is the single, canonical, and unmodified list of always-escalate conditions. This document does not redefine, narrow, restate, or supersede it — see `three-brain.md` Rule 9 for the current list. (A prior version of this section duplicated the full list here; that copy has drifted out of sync before — e.g. it named "T2 merge (explicit PM approval)" as a mandatory gate after `merge-gate.yml` had already made orchestrator self-approval sufficient for T2. Restating it created a second source that could silently diverge from the one that's actually enforced. Read `three-brain.md` directly instead of trusting a copy.)
 
-- Mandatory merge gates: T1 plan stage (before implementation), T1 merge (before merge), T2 merge (explicit PM approval)
-- Security or privacy posture change (auth, RBAC, PII, audit retention, secrets)
-- Third-party integration (new API key, webhook, outbound destination, OAuth provider)
-- Live DB row mutation outside the normal write path (backfill, correction, cleanup)
-- DB migration / backfill
-- Discord channel activation or new delivery target
-- Member-visible behavior change (Discord, smart-form, bot commands)
-- Financial or compliance logic (settlement, CLV, grading corrections, promotion thresholds)
-- Dependency bump / lockfile change
-- Environment variable addition, removal, or default change
-- Source-of-truth conflict (Linear state vs repo truth vs lane manifest)
-- Scope ambiguity (two interpretations equally defensible, choice affects behavior)
-- Tier C / contracts / domain package / migrations (see `three-brain.md` Rule 2 path list)
-- Settlement / CLV / ROI truth risk
-- Governance-brake release
-- Public delivery
-- File-scope divergence from the declared lane contract (§2 above)
+Note on merge authority specifically: T1 plan stage and T1 merge remain mandatory Rule 9 stop conditions. T2 merge is **not** — per `merge-gate.yml` (ratified 2026-05-18, UTV2-979) and Delegation Policy's Tier B model, the orchestrator diff-reviews and self-approves via `gh pr review --approve`; no PM presence or PM_VERDICT is mechanically required, for any executor.
 
 **Do not ask PM to choose implementation details** unless one of the following applies: multiple valid architecture paths exist, the change involves a DB mutation/migration, public/member-facing delivery, settlement/CLV truth risk, governance-brake release, or Tier C implications. This narrows *routine implementation-detail* questions only — it does not narrow the Rule 9 escalation list above, which governs when to stop and involve PM regardless of implementation detail.
 
