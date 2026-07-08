@@ -8,17 +8,19 @@
   "branch": "claude/utv2-1494-mechanical-tier-classification",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178",
+  "files_changed": [
+    "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md"
+  ],
   "file_scope_lock": [
     "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1494/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-08T22:31:10.373Z",
-  "heartbeat_at": "2026-07-08T22:31:10.373Z",
+  "heartbeat_at": "2026-07-08T23:35:02.237Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1494-mechanical-tier-classification.json",
