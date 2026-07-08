@@ -391,13 +391,13 @@ export async function getResearchPlayers(params: {
 
     let query = client
       .from('participants')
-      .select('id, display_name, participant_type, sport_id');
+      .select('id, display_name, participant_type, sport');
 
     if (params.type) {
       query = query.eq('participant_type', params.type);
     }
     if (params.sport) {
-      query = query.ilike('sport_id', `%${params.sport}%`);
+      query = query.ilike('sport', `%${params.sport}%`);
     }
     if (params.q) {
       query = query.ilike('display_name', `%${params.q}%`);
@@ -415,7 +415,7 @@ export async function getResearchPlayers(params: {
       id: String(row['id'] ?? ''),
       displayName: typeof row['display_name'] === 'string' ? row['display_name'] : null,
       participantType: typeof row['participant_type'] === 'string' ? row['participant_type'] : null,
-      sport: typeof row['sport_id'] === 'string' ? row['sport_id'] : null,
+      sport: typeof row['sport'] === 'string' ? row['sport'] : null,
     }));
 
     return { participants, total: participants.length };
