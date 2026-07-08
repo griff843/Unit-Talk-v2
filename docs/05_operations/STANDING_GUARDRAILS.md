@@ -12,4 +12,4 @@ Example (indented on purpose so it is NOT picked up as a live guardrail):
 
     [2026-07-02] No CLV/ROI/edge claims outside DEBT-018 scope — band assignment not yet persisted (UTV2-906).
 
-_No active guardrails recorded. PM: populate this file with anything an agent must not do that isn't already enforced mechanically (CI, hooks, lane manifest rules)._
+[2026-07-07] No direct-main bypass for ordinary execution — all planned work must land through a tier-labeled PR unless the emergency exception in DIRECT_MAIN_BYPASS_POLICY.md is recorded first (UTV2-1432).

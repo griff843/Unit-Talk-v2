@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1432",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1432-direct-main-bypass-policy",
+  "branch": "codex/utv2-1432-direct-main-bypass-policy",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/STANDING_GUARDRAILS.md",
+    "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-07-07T14:46:01.501Z",
+  "heartbeat_at": "2026-07-07T14:46:01.501Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1432-direct-main-bypass-policy.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1432-direct-main-bypass-policy",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
