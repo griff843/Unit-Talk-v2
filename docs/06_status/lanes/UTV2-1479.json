@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/runner.ts",
+    "apps/worker/src/worker-runtime.test.ts",
     "docs/05_operations/QUEUE_READINESS_SEMANTICS.md",
     ".lane/lanes/runtime.yml"
   ],
