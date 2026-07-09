@@ -121,3 +121,54 @@ None. No temptation arose to edit `merge-gate.yml`, `CODEOWNERS`, or branch prot
 Head SHA: b2418fd75ba6f00fb5feae2b8401cf26f1f2c205
 Merge SHA: (populated post-merge by `ops:proof-generate --merge-sha`)
 PR URL: (populated below once opened)
+
+---
+
+# PROOF: UTV2-1493
+
+MERGE_SHA: b2418fd75ba6f00fb5feae2b8401cf26f1f2c205
+
+Reference note: `MERGE_SHA` above references this branch's protocol-doc implementation commit (an ancestor of the current PR head), not this proof commit itself, to avoid the SHA-preimage circular dependency — consistent with how `executor-result-validator.yml` resolves proof `MERGE_SHA` fields pre-merge.
+
+ASSERTIONS:
+
+- [x] `docs/05_operations/BREAK_GLASS_PROTOCOL.md` defines when break-glass may be used (§1), who may invoke it (§2), required evidence (§3), and the emergency-only permitted-actions procedure (§4/§4a)
+- [x] The protocol requires mandatory post-hoc PM review within a fixed 48-hour window (§5) with no bypass path
+- [x] The protocol requires an incident declaration artifact before any action (§3)
+- [x] The protocol is fail-closed: missing evidence, ambiguity, or a missed review window all resolve to "do not act" (§6)
+- [x] The protocol does not create a normal-lane bypass, does not expand production deploy authority, and does not touch `merge-gate.yml`/`CODEOWNERS`/branch protection (§9)
+- [x] The protocol presents multiple invocation models explicitly as a PM decision (§8) rather than picking one unilaterally
+- [x] `pnpm verify` passes with zero failures on this branch
+- [x] `pnpm test:db` passes against live Supabase (`zfzdnfwdarxucxtaojxm`), 7/7 tests
+- [x] `r-level-check` PASS with no additional artifacts required for this diff
+
+EVIDENCE:
+
+`pnpm verify` full-pipeline tail (env:check/lint/type-check/build/test, zero failures):
+
+```
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 536.768165
+TAP version 13
+```
+
+`pnpm test:db` live-DB proof (last section, against real Supabase, not in-memory repos):
+
+```
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 118439.269101
+```
