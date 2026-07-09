@@ -34,3 +34,8 @@ Results:
 
 - `pnpm verify`: passed, including `pnpm test:db` and `test:t1-proof:live`.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: passed; changed files: 8; rules matched: none.
+
+## Post-review fixes (2026-07-09)
+
+- `pr-review-packet` CI flagged `scripts/ops/tier-classifier.test.ts` as missing from `package.json`'s `test:ops` script list, meaning the 14 regression tests never executed under `pnpm test`. Fixed by adding the entry alongside the other `scripts/ops/*.test.ts` files; re-ran `npx tsx --test scripts/ops/tier-classifier.test.ts` (14/14 pass) and the full `pnpm test:ops` (764/764 pass, confirmed the new subtests appear in the run). `file_scope_lock` extended to include `package.json`.
+- Added the baseline/sweep report required by spec section 3 step 5 (see `sweep-report.md`), and extended `file_scope_lock`/`expected_proof_paths` to include it.

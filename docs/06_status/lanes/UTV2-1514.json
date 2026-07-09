@@ -14,11 +14,13 @@
     "package.json",
     "scripts/ops/merge-risk.ts",
     "scripts/ops/tier-classifier.test.ts",
-    "scripts/ops/tier-classifier.ts"
+    "scripts/ops/tier-classifier.ts",
+    "docs/06_status/proof/UTV2-1514/sweep-report.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1514/diff-summary.md",
-    "docs/06_status/proof/UTV2-1514/verification.md"
+    "docs/06_status/proof/UTV2-1514/verification.md",
+    "docs/06_status/proof/UTV2-1514/sweep-report.md"
   ],
   "status": "started",
   "started_at": "2026-07-09T05:37:58.096Z",

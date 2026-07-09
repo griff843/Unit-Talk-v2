@@ -8,11 +8,13 @@
 
 ## Diff Scope
 
+- `package.json` (wire `scripts/ops/tier-classifier.test.ts` into the `test:ops` script list)
 - `scripts/ops/merge-risk.ts`
 - `scripts/ops/tier-classifier.ts`
 - `scripts/ops/tier-classifier.test.ts`
 - `docs/06_status/proof/UTV2-1514/diff-summary.md`
 - `docs/06_status/proof/UTV2-1514/verification.md`
+- `docs/06_status/proof/UTV2-1514/sweep-report.md`
 
 ## Advisory Classifier Dry Run
 
@@ -30,3 +32,7 @@ Result:
 - `advisory.conclusion`: `neutral`
 - Escalating matches: `scripts/ops/merge-risk.ts`, `scripts/ops/tier-classifier.ts`
 - Test-only file `scripts/ops/tier-classifier.test.ts` did not trigger the orchestration implementation pattern.
+
+## Baseline / Sweep Report (spec section 3, step 5)
+
+Per PM decision, `docs/06_status/proof/UTV2-1514/sweep-report.md` runs the classifier against the 20 most recent *done* lane manifests (UTV2-1449 through UTV2-1494, a mix of T1/T2/T3) as advisory evidence for the Phase 2 (blocking) go/no-go decision. Summary: 9/20 lanes (45%) would have been escalated, all T2 → T1, concentrated in `.github/workflows/*.yml` and `scripts/ops/lane-*.ts`/`merge-*.ts` paths. No T1 lane was escalated further and no T3 lane crossed into escalation in this sample — the no-downgrade invariant held throughout. See the full report for the per-lane table and interpretation.
