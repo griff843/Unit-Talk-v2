@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "verifier": {
+    "identity": "claude/utv2-1494-mechanical-tier-classification"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "full pnpm verify test suite green (all workspace unit tests via node:test/tsx --test)",
+    "r_level_check": "pass",
+    "test_run_logs": "pnpm verify green on commit 40175a6f; scripts/ci/r-level-check.ts --base origin/main --head HEAD verdict PASS, 4 changed files, no R-level artifacts required (docs-only diff, no rule in r1-r5-rules.json matched)"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "live row-count read against zfzdnfwdarxucxtaojxm to confirm Supabase connectivity and monitored-table health for this T1 lane; this docs-only spec lane touches no runtime/DB code path, so this is an environment-health proof rather than a feature-behavior proof",
+        "row_count": 63850
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 63850,
+        "status": "healthy"
+      }
+    ],
+    "note": "pnpm test:db (apps/api/src/database-smoke.test.ts) run green: 7/7 pass, 0 fail. This lane's diff is docs-only (docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md); no runtime, DB, or CI-behavior code was changed. This runtime_proof section demonstrates the T1 mandatory live-DB check passed against the real Supabase project, not that the spec content itself has a runtime surface — see Scope in the evidence bundle narrative."
+  },
+  "sha_binding": {
+    "verified_source_sha": "40175a6f1694218daa56492af4705c19589a0215",
+    "sha_type": "branch_head_pending_merge",
+    "bound_at": "2026-07-09T00:10:55Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "wfr_v2_validators": "pending"
+    }
+  }
+}

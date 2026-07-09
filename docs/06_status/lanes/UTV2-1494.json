@@ -10,7 +10,8 @@
   "commit_sha": null,
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178",
   "files_changed": [
-    "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md"
+    "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md",
+    "docs/06_status/proof/UTV2-1494/evidence.json"
   ],
   "file_scope_lock": [
     "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md"
