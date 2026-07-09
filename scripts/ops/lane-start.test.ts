@@ -50,3 +50,46 @@ test('lane-start validates T3 docs-only fast path without creating lane state', 
   assert.match(source, /normalized\.startsWith\('docs\/06_status\/'\)/, 'docs-only fast path should allow status docs');
   assert.match(source, /worktree, manifest, lease, sync, and proof scaffolding/, 'docs-only fast path should skip lane ceremony explicitly');
 });
+
+// UTV2-1454 Codex-review finding: a preflight token stays usable after
+// generation, so another lane can lock a docs/status file between preflight
+// and this command running. The fast path must recheck activeManifestOverlap
+// against *current* manifest state immediately before returning success --
+// it must not rely solely on the earlier preflight PL6 result.
+test('lane-start rechecks file-scope overlap inside the docs-only fast path before returning success', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const blockStart = source.indexOf('if (docsOnlyFastPath) {');
+  assert.notStrictEqual(blockStart, -1, 'expected an `if (docsOnlyFastPath)` block in lane-start.ts');
+  const successIndex = source.indexOf("code: 'docs_only_fast_path',", blockStart);
+  assert.notStrictEqual(successIndex, -1, 'expected the docs_only_fast_path success emit inside the fast-path block');
+  const fastPathBlock = source.slice(blockStart, successIndex);
+
+  const overlapCallIndex = fastPathBlock.indexOf('activeManifestOverlap(issueId, normalizedFiles)');
+  assert.notStrictEqual(
+    overlapCallIndex,
+    -1,
+    'the docs-only fast path must call activeManifestOverlap on current manifest state before emitting success -- ' +
+      'trusting the preflight token alone allows a concurrent lane to lock the same file after preflight ran',
+  );
+
+  const preflightCallIndex = fastPathBlock.indexOf('validatePreflightToken(issueId, branch, currentHead)');
+  assert.notStrictEqual(preflightCallIndex, -1, 'expected the preflight token recheck inside the fast-path block');
+  assert.ok(
+    overlapCallIndex > preflightCallIndex,
+    'the overlap recheck must happen after preflight validation and before the success response, ' +
+      'not be skipped in favor of the earlier preflight-time PL6 result',
+  );
+
+  assert.match(
+    fastPathBlock,
+    /code: 'file_scope_conflict'/,
+    'an overlap detected during the fast-path recheck must fail closed with file_scope_conflict, ' +
+      'the same code the normal lane-start path uses -- not silently emit docs_only_fast_path success',
+  );
+  assert.match(
+    fastPathBlock,
+    /ok: false,\s*\n\s*code: 'file_scope_conflict'/,
+    'the fast-path overlap conflict response must be ok:false',
+  );
+});

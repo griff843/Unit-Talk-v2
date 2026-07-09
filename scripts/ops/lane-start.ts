@@ -350,6 +350,26 @@ function main(): void {
 
       const currentHead = currentHeadSha();
       const preflight = validatePreflightToken(issueId, branch, currentHead);
+
+      // Do not trust the preflight token's PL6 overlap result alone: a
+      // preflight token remains usable after generation, so another lane can
+      // lock one of these same docs/status files in the window between
+      // preflight and this lane-start invocation. Recheck overlap against
+      // current manifest state immediately before emitting success so a
+      // fast-path lane can never silently coexist with a conflicting active
+      // lane on the same file.
+      const overlap = activeManifestOverlap(issueId, normalizedFiles);
+      if (overlap) {
+        emitJson({
+          ok: false,
+          code: 'file_scope_conflict',
+          message: `Requested file scope overlaps with active lane ${overlap.issue_id}`,
+          conflicting_issue_id: overlap.issue_id,
+          overlapping_files: overlap.overlapping_files,
+        });
+        process.exit(1);
+      }
+
       emitJson({
         ok: true,
         code: 'docs_only_fast_path',

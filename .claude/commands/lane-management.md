@@ -30,10 +30,10 @@ Ready → Started → In Progress → In Review → Merged → Done
 
 **T3 docs-only fast path:** T3 issues whose complete file set is limited to `docs/06_status/**` or `.claude/commands/*.md` may bypass worktree, manifest, lease, sync, and truth-check closeout ceremony after the scripts validate the boundary:
 ```bash
-pnpm ops:preflight UTV2-### --tier T3 --branch <branch> --docs-only-fast-path --files <path>...
-pnpm ops:lane-start UTV2-### --tier T3 --branch <branch> --docs-only-fast-path --files <path>...
+pnpm ops:preflight UTV2-### --tier T3 --branch <branch> --docs-only-fast-path --files <path1> [--files <path2> ...]
+pnpm ops:lane-start UTV2-### --tier T3 --branch <branch> --docs-only-fast-path --files <path1> [--files <path2> ...]
 ```
-The second command must return `code: "docs_only_fast_path"`. Any non-docs path, missing file list, or non-T3 tier fails closed and requires the normal lane lifecycle.
+`--files` must be repeated once per path (`--files a --files b`), never space-separated after a single `--files` — the parser only consumes the next token as each flag's value, so additional space-separated paths are silently dropped as ignored positionals and would let an undetected non-docs path through. The second command must return `code: "docs_only_fast_path"`. Any non-docs path, missing file list, or non-T3 tier fails closed and requires the normal lane lifecycle.
 
 ---
 
