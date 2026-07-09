@@ -63,3 +63,57 @@ Verdict: PASS
 Changed files: 14
 Rules matched: (none) - no R-level artifacts required for this diff
 ```
+
+---
+
+# PROOF: UTV2-1454
+
+MERGE_SHA: db8ead8deb48bbd3de8473adaf59a02c61e6c8e3
+
+## ASSERTIONS:
+
+- [x] T3 fast-path class defined: diffs touching ONLY docs/status paths (`docs/06_status/**` or `.claude/commands/*.md`) skip worktree isolation, manifest/lease/sync creation, and truth-check closeout, while CI (verify, branch discipline, lane authority, merge gate) + tier label remain required
+- [x] Fail-closed boundary: any non-docs path, missing `--files`, or non-T3 tier mechanically disqualifies the fast path (`validateDocsOnlyFastPath` / `isDocsOnlyFastPathFile` in `preflight.ts` and `lane-start.ts`) — not an executor self-declaration
+- [x] Fast-path lane-start rechecks `activeManifestOverlap` against current manifest state immediately before returning success, instead of trusting only the earlier preflight PL6 result (fixes a lock-race window where a preflight token remains usable after generation)
+- [x] All `--files` fast-path doc examples use repeated flags (`--files a --files b`), not space-separated paths after a single `--files`, since `parseArgs` only consumes the next token as a flag's value
+- [x] `pnpm test:db` passes against live Supabase (project `zfzdnfwdarxucxtaojxm`) on this branch
+
+## EVIDENCE:
+
+```text
+npx tsx --test scripts/ops/lane-start.test.ts scripts/ops/preflight.test.ts
+# tests 18
+# pass 18
+# fail 0
+# skipped 0
+```
+
+```text
+pnpm test:db
+> @unit-talk/v2@0.1.0 test:db
+> tsx --test apps/api/src/database-smoke.test.ts
+
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
