@@ -2,6 +2,8 @@
 
 ## Verification
 
+Commit under verification: `514f19d2a00567dbba98357214c869da63dc8288`.
+
 Commands run:
 
 ```bash
@@ -10,6 +12,7 @@ npx tsx --test scripts/ops/tier-classifier.test.ts scripts/ops/merge-risk.test.t
 pnpm type-check
 pnpm test
 npx tsx scripts/ops/tier-classifier.ts --declared-tier T2 --files scripts/ops/merge-risk.ts,scripts/ops/tier-classifier.ts,scripts/ops/tier-classifier.test.ts
+pnpm test:db
 pnpm verify
 npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 ```
@@ -21,5 +24,13 @@ Results:
 - `pnpm type-check`: passed.
 - `pnpm test`: passed.
 - Classifier dry run: advisory-only neutral escalation from declared `T2` to derived `T1` for the governance implementation files.
-- `pnpm verify`: passed, including `test:db` and `test:t1-proof:live`.
+- `pnpm test:db`: passed.
+
+```text
+# pass 7
+# fail 0
+# skipped 0
+```
+
+- `pnpm verify`: passed, including `pnpm test:db` and `test:t1-proof:live`.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: passed; changed files: 8; rules matched: none.
