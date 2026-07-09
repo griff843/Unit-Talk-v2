@@ -1,15 +1,11 @@
 name: File Scope Lock Check
 
-# Validates that PR changed files do not overlap with active lane manifests'
-# file_scope_lock arrays. Prevents concurrent edits to the same files across
-# parallel lanes.
+# Enforces lane file-scope locks for pull requests.
 #
-# This is a CI-time enforcement of the advisory lock that ops:lane-start
-# checks at lane creation. Without this, Codex or Claude can push commits
-# touching files locked by another active lane.
-#
-# Only active lanes are checked (status: started, in_progress, in_review,
-# blocked, reopened). Done/merged lanes are ignored.
+# The repo-owned guard checks two things:
+# - this PR's changed files stay inside its own lane manifest file_scope_lock
+#   or expected_proof_paths;
+# - this PR's changed files do not overlap another active lane's file_scope_lock.
 
 on:
   pull_request:
@@ -30,106 +26,93 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check file scope overlaps
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Collect changed files
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
 
-            const MANIFEST_DIR = 'docs/06_status/lanes';
-            const ACTIVE_STATUSES = new Set([
-              'started', 'in_progress', 'in_review', 'blocked', 'reopened'
-            ]);
-
-            // 1. Get PR changed files
-            const { data: files } = await github.rest.pulls.listFiles({
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
-              per_page: 300
+              per_page: 100
             });
-            const changedFiles = files.map(f => f.filename);
 
-            // 2. Get PR branch name to identify its own lane
-            const prBranch = context.payload.pull_request.head.ref;
+            fs.mkdirSync('.out', { recursive: true });
+            fs.writeFileSync(
+              '.out/file-scope-changed-files.txt',
+              files.map((file) => file.filename).join('\n') + '\n',
+              'utf8'
+            );
 
-            // 3. Read all active lane manifests
-            const manifests = [];
-            if (fs.existsSync(MANIFEST_DIR)) {
-              for (const file of fs.readdirSync(MANIFEST_DIR)) {
-                if (!file.endsWith('.json')) continue;
-                try {
-                  const content = fs.readFileSync(
-                    path.join(MANIFEST_DIR, file), 'utf8'
-                  );
-                  const manifest = JSON.parse(content);
-                  if (ACTIVE_STATUSES.has(manifest.status)) {
-                    manifests.push(manifest);
-                  }
-                } catch {
-                  // Skip malformed manifests
-                }
-              }
-            }
+      - name: Check file scope locks
+        id: file_scope_guard
+        env:
+          FILE_SCOPE_PR_BRANCH: ${{ github.head_ref }}
+        run: |
+          pnpm exec tsx scripts/ci/file-scope-guard.ts \
+            --changed-files-file .out/file-scope-changed-files.txt \
+            --output-json .out/file-scope-result.json
 
-            // 4. Check for overlaps (skip this PR's own lane)
-            const conflicts = [];
-            for (const manifest of manifests) {
-              // Don't flag a PR against its own lane
-              if (manifest.branch === prBranch) continue;
+      - name: Comment on file scope failure
+        if: failure() && steps.file_scope_guard.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
 
-              const locks = manifest.file_scope_lock || [];
-              if (locks.length === 0) continue;
-
-              for (const changed of changedFiles) {
-                for (const lock of locks) {
-                  // Exact match or prefix match (directory lock)
-                  const normalized = lock.replace(/\\/g, '/');
-                  if (changed === normalized ||
-                      changed.startsWith(normalized + '/') ||
-                      normalized.endsWith('/**') &&
-                        changed.startsWith(normalized.slice(0, -3))) {
-                    conflicts.push({
-                      file: changed,
-                      locked_by: manifest.issue_id,
-                      lane_branch: manifest.branch,
-                      lock_pattern: lock
-                    });
-                  }
-                }
-              }
-            }
-
-            // 5. Report
-            if (conflicts.length === 0) {
-              core.info('No file scope lock conflicts detected.');
-              return;
-            }
-
+            const result = JSON.parse(fs.readFileSync('.out/file-scope-result.json', 'utf8'));
             const lines = [
               '**FILE SCOPE LOCK CONFLICT**',
               '',
-              'This PR modifies files locked by active lanes:',
+              `Branch: \`${result.pr_branch}\``,
+              result.own_manifest_issue
+                ? `Lane: **${result.own_manifest_issue}**`
+                : 'Lane: **not found**',
               '',
-              ...conflicts.map(c =>
-                `- \`${c.file}\` locked by **${c.locked_by}** (branch: \`${c.lane_branch}\`, lock: \`${c.lock_pattern}\`)`
-              ),
-              '',
-              'Resolve by: waiting for the other lane to merge, or coordinating scope with the lane owner.'
             ];
 
-            try {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
-                body: lines.join('\n')
-              });
-            } catch (commentErr) {
-              core.warning(`Could not post conflict comment: ${commentErr.message}`);
+            if (result.errors.length > 0) {
+              lines.push('Errors:', ...result.errors.map((error) => `- ${error}`), '');
             }
 
-            core.setFailed(
-              `File scope conflict: ${conflicts.length} file(s) overlap with active lane locks.`
-            );
+            if (result.outside_scope.length > 0) {
+              lines.push('This PR modifies files outside its lane scope:', '');
+              for (const violation of result.outside_scope) {
+                lines.push(`- \`${violation.file}\` is not declared by **${violation.issue_id}**`);
+              }
+              lines.push('');
+            }
+
+            if (result.conflicts.length > 0) {
+              lines.push('This PR modifies files locked by active lanes:', '');
+              for (const conflict of result.conflicts) {
+                lines.push(
+                  `- \`${conflict.file}\` locked by **${conflict.locked_by}** ` +
+                  `(branch: \`${conflict.lane_branch}\`, lock: \`${conflict.lock_pattern}\`)`
+                );
+              }
+              lines.push('');
+            }
+
+            lines.push('Resolve by narrowing the diff, waiting for the other lane to merge, or coordinating scope with the lane owner.');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: lines.join('\n')
+            });
