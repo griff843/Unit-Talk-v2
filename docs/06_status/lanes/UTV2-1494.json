@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1494-mechanical-tier-classification",
   "branch": "claude/utv2-1494-mechanical-tier-classification",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "778e251cb1f1c83fde924346ad35c776143a5a54",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178",
   "files_changed": [
     "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md",
@@ -21,14 +21,24 @@
     "docs/06_status/proof/UTV2-1494/evidence.json",
     "docs/06_status/proof/UTV2-1494/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-07-08T22:31:10.373Z",
-  "heartbeat_at": "2026-07-08T23:35:02.237Z",
+  "heartbeat_at": "2026-07-09T05:00:20.701Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1494-mechanical-tier-classification.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-09T05:00:20.701Z",
+      "verdict": "pass",
+      "merge_sha": "778e251cb1f1c83fde924346ad35c776143a5a54",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
