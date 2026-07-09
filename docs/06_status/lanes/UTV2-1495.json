@@ -11,7 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/file-scope-lock-check.yml"
+    ".github/workflows/file-scope-lock-check.yml",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ci/file-scope-guard.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1495/diff-summary.md",
