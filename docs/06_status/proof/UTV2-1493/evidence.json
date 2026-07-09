@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "verifier": {
+    "identity": "claude/utv2-1493-break-glass-merge-pm-continuity"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "type_check": "pass",
+    "tests": "full pnpm test node:test aggregate across the repo, zero failures (see docs/06_status/proof/UTV2-1493/verification.md)",
+    "r_level_check": "pass"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "apps/api/src/database-smoke.test.ts inserts and deletes a real pick row to verify live write-path health as part of pnpm test:db",
+        "row_count": 1
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "apps/api/src/database-smoke.test.ts counts pick_lifecycle rows (head count) as part of the pnpm test:db smoke suite",
+        "row_count": 0
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 1,
+        "status": "healthy"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 0,
+        "status": "healthy"
+      }
+    ]
+  },
+  "sha_binding": {
+    "verified_source_sha": "553b75fc7915a6971cd86c708a0dbd8fc2476e73",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-08T23:45:00Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "wfr_v2_validators": "pass"
+    }
+  },
+  "note": "This is a governance/docs-only T1 lane (UTV2-1493 adds docs/05_operations/BREAK_GLASS_PROTOCOL.md). pnpm test:db results above are the repo's standard live-DB smoke suite (apps/api/src/database-smoke.test.ts), run as this lane's required T1 runtime proof per tier policy; UTV2-1493 itself has no runtime code path of its own. sha_binding.sha_type is branch_head pre-merge and will be rebound to merge_sha by ops:proof-generate --merge-sha per the standard post-merge-lane-close.yml flow."
+}
