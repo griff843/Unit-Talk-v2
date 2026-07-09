@@ -11,13 +11,15 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178",
   "files_changed": [
     "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md",
-    "docs/06_status/proof/UTV2-1494/evidence.json"
+    "docs/06_status/proof/UTV2-1494/evidence.json",
+    "docs/06_status/proof/UTV2-1494/verification.md"
   ],
   "file_scope_lock": [
     "docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1494/evidence.json"
+    "docs/06_status/proof/UTV2-1494/evidence.json",
+    "docs/06_status/proof/UTV2-1494/verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-07-08T22:31:10.373Z",
