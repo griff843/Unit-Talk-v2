@@ -18,10 +18,10 @@
     "docs/06_status/proof/UTV2-1493/verification.md",
     "docs/06_status/proof/UTV2-1493/diff-summary.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-08T22:24:15.521Z",
-  "heartbeat_at": "2026-07-09T00:42:34.808Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-09T00:42:57.525Z",
+  "closed_at": "2026-07-09T00:42:57.525Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1493-break-glass-merge-pm-continuity.json",
   "created_by": "claude",
@@ -34,6 +34,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1177"
+    },
+    {
+      "checked_at": "2026-07-09T00:42:48.162Z",
+      "verdict": "pass",
+      "merge_sha": "d21601d606729f5872e3f2b256f7b1de1c1f8d85",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
