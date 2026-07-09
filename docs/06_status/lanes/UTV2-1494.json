@@ -21,22 +21,28 @@
     "docs/06_status/proof/UTV2-1494/evidence.json",
     "docs/06_status/proof/UTV2-1494/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-08T22:31:10.373Z",
-  "heartbeat_at": "2026-07-09T05:00:20.701Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-09T05:00:30.688Z",
+  "closed_at": "2026-07-09T05:00:30.688Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1494-mechanical-tier-classification.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
-      "checked_at": "2026-07-09T05:00:20.701Z",
+      "checked_at": "2026-07-09T05:00:24.765Z",
       "verdict": "pass",
       "merge_sha": "778e251cb1f1c83fde924346ad35c776143a5a54",
       "failures": [],
-      "runner": "manual",
-      "source": "github_pr_merge_commit",
-      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178"
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1178",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],

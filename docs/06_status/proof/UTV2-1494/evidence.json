@@ -32,7 +32,7 @@
   "sha_binding": {
     "verified_source_sha": "778e251cb1f1c83fde924346ad35c776143a5a54",
     "sha_type": "merge_sha",
-    "bound_at": "2026-07-09T05:00:25.290Z",
+    "bound_at": "2026-07-09T05:00:21.152Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "wfr_v2_validators": "pending"
