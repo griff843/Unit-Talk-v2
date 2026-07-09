@@ -82,12 +82,14 @@ async function main(): Promise<number> {
   const dryRun = bools.has('dry-run');
   const refresh = bools.has('refresh');
   const fast = bools.has('fast');
+  const docsOnlyFastPath = bools.has('docs-only-fast-path') || flags.has('docs-only-fast-path');
   const waiverReason = getFlag(flags, 'waiver-reason');
   const requestedSkips = [...new Set(getFlags(flags, 'skip'))];
   const requireDocs = getFlags(flags, 'require-doc').map((docPath) =>
     normalizeRepoRelativePath(docPath),
   );
   const candidateFiles = getFlags(flags, 'files');
+  const normalizedCandidateFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
   const tokenPath = preflightTokenPathForBranch(branch);
   const resultPath = preflightResultPathForBranch(branch);
   const runAt = new Date().toISOString();
@@ -183,7 +185,8 @@ async function main(): Promise<number> {
   const env = runEnvCheck(envFilePath, tier, addCheck);
   runRepoChecks(issueId, branch, addCheck);
   runDependencyChecks(addCheck);
-  const linearState = await runLinearChecks(issueId, tier, env, candidateFiles, refresh, addCheck);
+  validateDocsOnlyFastPath(tier, docsOnlyFastPath, normalizedCandidateFiles, addCheck);
+  const linearState = await runLinearChecks(issueId, tier, env, normalizedCandidateFiles, refresh, addCheck);
   runRequiredDocChecks(tier, linearState.labels, requireDocs, addCheck);
   runGateEquivalentChecks(issueId, tier, branch, headSha, addCheck);
   if (tier === 'T1') {
@@ -193,6 +196,7 @@ async function main(): Promise<number> {
   const baseline = await runBaselineChecks(
     tier,
     fast,
+    docsOnlyFastPath,
     headSha,
     readPreflightBaselineCache(),
     linearState.labels,
@@ -715,6 +719,7 @@ async function runT1Checks(
 async function runBaselineChecks(
   tier: LaneTier,
   fast: boolean,
+  docsOnlyFastPath: boolean,
   headSha: string,
   cache: PreflightBaselineCache | null,
   linearLabels: string[],
@@ -722,6 +727,12 @@ async function runBaselineChecks(
 ): Promise<{ cacheHit: boolean; updatedCache: PreflightBaselineCache | null }> {
   let updatedCache: PreflightBaselineCache | null = null;
   let cacheHit = false;
+
+  if (docsOnlyFastPath && tier === 'T3') {
+    addCheck('PB1', 'skip', 'PB1 skipped via T3 docs-only fast path; CI/pnpm verify remains required before PR');
+    addCheck('PB2', 'skip', 'PB2 skipped via T3 docs-only fast path; CI/pnpm verify remains required before PR');
+    return { cacheHit, updatedCache };
+  }
 
   if (fast && fastBaselineAllowed(tier, linearLabels)) {
     if (cache?.head_sha === headSha && cache.type_check_passed_at && cache.tests_passed_at) {
@@ -964,6 +975,48 @@ function fastBaselineAllowed(tier: LaneTier, linearLabels: string[]): boolean {
   const normalizedLabels = linearLabels.map((label) => label.toLowerCase().replace(/^area:/, '').replace(/^kind:/, '').replace(/^lane:/, ''));
   return normalizedLabels.some((label) =>
     ['governance', 'tooling', 'hygiene', 'verification', 'delivery-ui', 'delivery/ui', 'proof'].includes(label),
+  );
+}
+
+function validateDocsOnlyFastPath(
+  tier: LaneTier,
+  docsOnlyFastPath: boolean,
+  candidateFiles: string[],
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+): void {
+  if (!docsOnlyFastPath) {
+    addCheck('PF1', 'skip', 'T3 docs-only fast path not requested');
+    return;
+  }
+
+  if (tier !== 'T3') {
+    addCheck('PF1', 'fail', '--docs-only-fast-path is restricted to T3 lanes');
+    return;
+  }
+
+  if (candidateFiles.length === 0) {
+    addCheck('PF1', 'fail', '--docs-only-fast-path requires at least one --files path');
+    return;
+  }
+
+  const nonDocsFiles = candidateFiles.filter((filePath) => !isDocsOnlyFastPathFile(filePath));
+  if (nonDocsFiles.length > 0) {
+    addCheck(
+      'PF1',
+      'fail',
+      `--docs-only-fast-path allows only docs/status paths; rejected: ${nonDocsFiles.join(', ')}`,
+    );
+    return;
+  }
+
+  addCheck('PF1', 'pass', 'T3 docs-only fast path scope is limited to docs/status paths');
+}
+
+function isDocsOnlyFastPathFile(repoRelativePath: string): boolean {
+  const normalized = normalizeRepoRelativePath(repoRelativePath);
+  return (
+    normalized.startsWith('docs/06_status/') ||
+    (normalized.startsWith('.claude/commands/') && normalized.endsWith('.md'))
   );
 }
 

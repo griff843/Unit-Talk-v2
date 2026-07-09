@@ -37,6 +37,18 @@ test('preflight fast path allows T2 safe-class baseline reuse', () => {
   assert.match(source, /tooling/, 'T2 tooling lanes should be fast-baseline eligible');
 });
 
+test('preflight supports a fail-closed T3 docs-only fast path', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  assert.match(source, /docs-only-fast-path/, 'preflight should expose an explicit docs-only fast-path flag');
+  assert.match(source, /validateDocsOnlyFastPath/, 'preflight should validate docs-only fast-path eligibility centrally');
+  assert.match(source, /tier !== 'T3'/, 'docs-only fast path must be restricted to T3 lanes');
+  assert.match(source, /isDocsOnlyFastPathFile/, 'docs-only fast path must mechanically check file scope');
+  assert.match(source, /normalized\.startsWith\('docs\/06_status\/'\)/, 'docs-only fast path should allow status docs');
+  assert.match(source, /normalized\.startsWith\('\.claude\/commands\/'\)/, 'docs-only fast path should allow command docs');
+  assert.match(source, /PB1 skipped via T3 docs-only fast path/, 'docs-only fast path should skip preflight type-check baseline');
+  assert.match(source, /PB2 skipped via T3 docs-only fast path/, 'docs-only fast path should skip preflight test baseline');
+});
+
 test('preflight treats lane registry dirt as control-plane safe', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
   assert.match(source, /isLaneRegistryPath/, 'preflight should classify lane registry paths');

@@ -10,6 +10,8 @@ Use `pnpm ops:merge-wrapper` for PR merge, PR branch refresh, and post-merge `ma
 
 Parallel lane execution must use dedicated git worktrees. The main checkout is a control/merge checkout only; do not execute lane implementation by branch-switching the main checkout. `/dispatch` must start each lane through `pnpm ops:lane-start`, and `ops:lane-start` owns worktree creation/resume, branch checkout, manifest creation, file-scope lease reservation, and cwd verification.
 
+**Exception — T3 docs-only fast path:** if and only if the issue is T3 and every candidate file is a docs/status path (`docs/06_status/**` or `.claude/commands/*.md`), dispatch may skip worktree isolation, manifest/lease/sync creation, and truth-check closeout. This is a fail-closed exception, not an executor judgment call: run `pnpm ops:preflight <issue> --tier T3 --branch <branch> --docs-only-fast-path --files <path>...`, then `pnpm ops:lane-start <issue> --tier T3 --branch <branch> --docs-only-fast-path --files <path>...` as the mechanical no-op validator. Any non-docs path disqualifies the fast path and the normal lane system applies.
+
 Expected layout:
 
 ```text
@@ -125,6 +127,11 @@ For each validated target:
    pnpm ops:lane-start UTV2-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
    ```
    `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification. Treat the `cwd`/`worktree_path` it reports as the only valid execution directory for that lane.
+   For the T3 docs-only fast path only, replace lane creation with:
+   ```bash
+   pnpm ops:lane-start UTV2-{number} --tier T3 --branch {branch} --docs-only-fast-path --files {file_scope[0]} --files {file_scope[1]}
+   ```
+   A successful `code: "docs_only_fast_path"` response means lane-start intentionally created no worktree, manifest, lease, sync file, or proof scaffold. Continue on a normal PR branch and rely on CI, branch discipline, lane authority, merge gate, tier label, and Linear auto-close.
 4. Update Linear issue state to "In Claude" or "In Codex" via MCP
 5. Confirm `ops:lane-start` created the lane manifest and per-issue sync file, then commit both to the branch:
    ```bash

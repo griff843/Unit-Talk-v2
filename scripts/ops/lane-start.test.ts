@@ -40,3 +40,13 @@ test('lane-start does not scaffold the proof directory in the main checkout', ()
     'the main checkout must stay clean/control-plane-only; proof scaffolding belongs to the worktree only',
   );
 });
+
+test('lane-start validates T3 docs-only fast path without creating lane state', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /docs-only-fast-path/, 'lane-start should expose an explicit docs-only fast-path flag');
+  assert.match(source, /code: 'docs_only_fast_path'/, 'valid docs-only fast path should emit a distinct no-op result');
+  assert.match(source, /tier !== 'T3'/, 'docs-only fast path must be restricted to T3 lanes');
+  assert.match(source, /validatePreflightToken\(issueId, branch, currentHead\)/, 'docs-only fast path should still require current preflight');
+  assert.match(source, /normalized\.startsWith\('docs\/06_status\/'\)/, 'docs-only fast path should allow status docs');
+  assert.match(source, /worktree, manifest, lease, sync, and proof scaffolding/, 'docs-only fast path should skip lane ceremony explicitly');
+});
