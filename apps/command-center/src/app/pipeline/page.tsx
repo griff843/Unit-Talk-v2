@@ -16,14 +16,15 @@ function SectionHeader({ kicker, title }: { kicker: string; title: string }) {
 }
 
 export default async function PipelinePage() {
-  const [content, data, runtime] = await Promise.all([
+  // Fail closed but never 500: transient telemetry timeouts degrade to an
+  // explicit banner instead of crashing the surface.
+  const [content, dashboard] = await Promise.all([
     getPipelineContent(),
-    getDashboardData(),
-    getDashboardRuntimeData(),
+    Promise.all([getDashboardData(), getDashboardRuntimeData()]).catch(() => null),
   ]);
 
   // Same source as the Executive Overview stage strip — counts cannot diverge.
-  const stages = buildPipelineStages(data, runtime);
+  const stages = dashboard ? buildPipelineStages(dashboard[0], dashboard[1]) : null;
 
   return (
     <div className="space-y-6">
@@ -52,7 +53,14 @@ export default async function PipelinePage() {
 
       <section className="cc-surface space-y-4 p-5">
         <SectionHeader kicker="Stage flow" title="Ingest through publish" />
-        <PipelineFlow stages={stages} />
+        {stages === null ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+            Stage-flow signals unavailable (dashboard telemetry read failed). No counts are shown rather than stale or
+            fabricated ones.
+          </div>
+        ) : (
+          <PipelineFlow stages={stages} />
+        )}
       </section>
 
       {content !== null && (
