@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1517",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1517-ci-dispatch-watchdog",
+  "branch": "claude/utv2-1517-ci-dispatch-watchdog",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/KNOWN_DEBT.md",
+    "scripts/ops/ci-dispatch-watchdog.ts",
+    "scripts/ops/ci-dispatch-watchdog.test.ts",
+    ".github/workflows/ci-dispatch-watchdog.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1517/diff-summary.md",
+    "docs/06_status/proof/UTV2-1517/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-10T15:57:44.160Z",
+  "heartbeat_at": "2026-07-10T15:57:44.160Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1517-ci-dispatch-watchdog.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1517-ci-dispatch-watchdog",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "approved_by": "griff843 (PM directive, this session)",
+    "reason": "file-scope-guard.ts trusts the first commit that introduced this manifest (69e755f4, file_scope_lock=[docs/06_status/KNOWN_DEBT.md] only) rather than the later commit that added the new implementation files to file_scope_lock, per its immutable-baseline design. This head-tip override declares the same three files (scripts/ops/ci-dispatch-watchdog.ts, its test, and the new workflow file) that were legitimately created during this lane's own implementation -- not scope widening beyond the issue's own work.",
+    "evidence": "https://github.com/griff843/Unit-Talk-v2/pull/1187 -- diff is scoped entirely to this issue's own new files plus a KNOWN_DEBT.md entry"
+  }
+}

@@ -91,5 +91,11 @@
     "reason": "PM-authorized manifest backfill for a historical/pre-existing PR where a fresh preflight PASS is structurally unobtainable without touching the PR branch (stale-branch PG5, old-ID PX2/commit-history references, hardcoded-allowlist PL3 mismatch, legacy PX1 sync-file drift). See notes field and .out/ops/preflight/claude/utv2-1512-command-center-workbench.json for full detail.",
     "by": "pm",
     "at": "2026-07-09T05:15:00.000Z"
+  },
+  "parked": {
+    "reason": "Parked during OS v1 stabilization. Product work remains paused until OS v1 Lock. This is not a product verdict.",
+    "by": "pm",
+    "at": "2026-07-10T17:40:00.000Z",
+    "mechanism": "Manifest relocated from docs/06_status/lanes/ to docs/06_status/lanes/parked/ (no schema-supported 'abandoned'/'parked' status value exists as of this writing) so it drops out of readAllManifestPaths()'s non-recursive scan and no longer counts toward the Claude executor slot cap. Lifecycle status field left as-is (in_review) since it is not actually done or merged. The associated open PR and branch remain untouched for later product reuse. No lease existed to release. Landed via a governed PR after an initial direct-main push of this same change was reverted for policy compliance."
   }
 }
