@@ -58,7 +58,68 @@ jobs:
               'utf8'
             );
 
+      - name: Collect authorized scope-override comments (UTV2-1521)
+        # A PR comment cannot be forged by the PR's own diff -- GitHub, not the
+        # PR's commits, attests to who posted it. Only comments authored by an
+        # authorized human (same set merge-gate.yml uses) are ever written
+        # here; the guard script (scripts/ci/file-scope-guard.ts) never talks
+        # to the GitHub API itself and trusts only this pre-validated file.
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Authorized PM reviewers — must match .github/CODEOWNERS and
+            // merge-gate.yml's AUTHORIZED_REVIEWERS.
+            const AUTHORIZED_REVIEWERS = new Set(['griff843']);
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              per_page: 100
+            });
+
+            const overrides = [];
+            for (const c of comments) {
+              if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') continue;
+
+              const body = (c.body || '').replace(/\\r\\n/g, '\n');
+              const lines = body.split(/\r?\n/).map((l) => l.trim());
+              if (lines[0] !== 'SCOPE_OVERRIDE: APPROVED' || lines[1] !== 'schema: scope-override/v1') continue;
+
+              const fields = {};
+              const pathsIndex = lines.findIndex((l) => l === 'Paths:');
+              for (const line of lines.slice(2, pathsIndex === -1 ? lines.length : pathsIndex)) {
+                const match = line.match(/^([A-Za-z-]+):\s*(.+)$/);
+                if (match) fields[match[1]] = match[2].trim();
+              }
+              const paths = pathsIndex === -1
+                ? []
+                : lines.slice(pathsIndex + 1)
+                    .filter((l) => l.startsWith('- '))
+                    .map((l) => l.slice(2).trim())
+                    .filter(Boolean);
+
+              const issueMatch = (fields['Issue'] || '').match(/^UTV2-\d+$/);
+              const prMatch = (fields['PR'] || '').match(/^#(\d+)$/);
+              if (!issueMatch || !prMatch || !fields['Head-SHA'] || paths.length === 0) continue;
+
+              overrides.push({
+                issue_id: issueMatch[0],
+                pr_number: Number.parseInt(prMatch[1], 10),
+                head_sha: fields['Head-SHA'],
+                paths,
+                authorized_by: c.user.login,
+                reason: fields['Reason'] || '',
+              });
+            }
+
+            fs.mkdirSync('.out', { recursive: true });
+            fs.writeFileSync('.out/scope-overrides.json', JSON.stringify(overrides, null, 2), 'utf8');
+
       - name: Resolve trusted guard script
+        id: resolve_guard
         # The PR under evaluation cannot be trusted to supply the code that
         # evaluates it — a diff could touch an out-of-scope file *and* modify
         # this guard script (or its own lane manifest) in the same commit set
@@ -66,6 +127,12 @@ jobs:
         # and execute that instead of the PR's own copy. Manifest content is
         # resolved the same way inside the script via --manifest-source git
         # (see resolveTrustedManifests in scripts/ci/file-scope-guard.ts).
+        #
+        # The trusted copy may predate --override-file/--pr-number/--head-sha
+        # (UTV2-1521) — true for every PR until UTV2-1521 itself merges to
+        # main. Detect support in the trusted copy itself (not the PR's own,
+        # since that would reopen the exact self-attestation gap this step
+        # closes) and only pass the new flags when it understands them.
         run: |
           mkdir -p .out
           if git show "origin/main:scripts/ci/file-scope-guard.ts" > .out/trusted-file-scope-guard.ts 2>/dev/null; then
@@ -75,17 +142,33 @@ jobs:
             cp scripts/ci/file-scope-guard.ts .out/trusted-file-scope-guard.ts
           fi
 
+          if grep -q -- '--override-file' .out/trusted-file-scope-guard.ts; then
+            echo "supports_override=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Trusted guard script predates external scope-override support (UTV2-1521) — running without it. Expected only until UTV2-1521 merges to main."
+            echo "supports_override=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Check file scope locks
         id: file_scope_guard
         env:
           FILE_SCOPE_PR_BRANCH: ${{ github.head_ref }}
         run: |
-          pnpm exec tsx .out/trusted-file-scope-guard.ts \
-            --changed-files-file .out/file-scope-changed-files.txt \
-            --output-json .out/file-scope-result.json \
-            --base origin/main \
-            --head HEAD \
+          ARGS=(
+            --changed-files-file .out/file-scope-changed-files.txt
+            --output-json .out/file-scope-result.json
+            --base origin/main
+            --head HEAD
             --manifest-source git
+          )
+          if [ "${{ steps.resolve_guard.outputs.supports_override }}" = "true" ]; then
+            ARGS+=(
+              --override-file .out/scope-overrides.json
+              --pr-number ${{ github.event.pull_request.number }}
+              --head-sha ${{ github.event.pull_request.head.sha }}
+            )
+          fi
+          pnpm exec tsx .out/trusted-file-scope-guard.ts "${ARGS[@]}"
 
       - name: Comment on file scope failure
         if: failure() && steps.file_scope_guard.outcome == 'failure'

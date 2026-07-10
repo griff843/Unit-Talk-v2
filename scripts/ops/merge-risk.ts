@@ -65,6 +65,12 @@ export const TIER_C_EXACT_PATHS: ReadonlySet<string> = new Set([
   'apps/api/src/settlement-service.ts',
   'apps/api/src/auth.ts',
   'scripts/ops/orchestration-reconciler.ts',
+  // The file-scope guard itself (UTV2-1521): a PR that could freely edit its
+  // own scope-enforcement logic could trivially bypass every other Tier C
+  // protection on this list. Self-protecting, matching the precedent set for
+  // proof-coverage-guard.yml's sensitive-path list.
+  'scripts/ci/file-scope-guard.ts',
+  'scripts/ci/file-scope-guard.test.ts',
 ]);
 export const TIER_C_PATH_PREFIXES: readonly string[] = [
   'supabase/migrations/',

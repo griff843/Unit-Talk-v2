@@ -120,7 +120,7 @@ As of 2026-04-11 (UTV2-531 initial backfill). Sorted by impact, then area.
 | DEBT-020 | runtime | `pick.metadata.kellySizing` not populated before promotion evaluation. `readKellyGradientReadiness()` returns null 94.4% of the time. 20% of promotion score is constant fallback (60). Kelly computation exists in `packages/domain/src/risk/` but result not wired to pick metadata. | High | UTV2-901 | `docs/06_status/proof/PROMOTION_SCORE_AUDIT_20260511.md` §3 Readiness | open |
 | DEBT-021 | runtime | `computeBoardFitScore()` returns value of 10 for 74.9% of picks — not the 75 fallback but the computed output. Root cause: `classifyCoefficient()` assigned 0.4 to any same-sport game-line pair; with 15+ open NBA picks the correlation floor was always hit. Fixed in `packages/domain/src/portfolio/correlation.ts` — coefficient reduced to 0.1 for same-sport game-line/player-prop (different games are nearly independent). | High | UTV2-902 | `docs/06_status/proof/PROMOTION_SCORE_AUDIT_20260511.md` §5 BoardFit | closed |
 
-Current max ID: `DEBT-022`. Next insertion uses `DEBT-023`.
+Current max ID: `DEBT-023`. Next insertion uses `DEBT-024`.
 
 ## Closed Debt (audit trail)
 
@@ -130,6 +130,7 @@ Rows move here when resolved. Never deleted. Sorted newest-first.
 |---|---|---|---|---|
 | ID | Title | Closed | Linear | Closing PR | Resolution note |
 |---|---|---|---|---|---|
+| DEBT-023 | file-scope-guard.ts scope_override self-certification loophole | 2026-07-10 | UTV2-1521 | this issue | `resolveTrustedManifests()`'s manifest-embedded `scope_override` field was trusted based only on non-empty `approved_by`/`reason`/`evidence` strings inside the same JSON file the PR's own diff controls -- any PR could self-grant scope widening. Fixed: scope widening now requires an externally-authored PR comment (`scope-override/v1`, see `docs/05_operations/schemas/scope-override-v1.md`) authenticated the same way `merge-gate.yml` authenticates `pm-verdict/v1`, bound to issue/PR/head-SHA so it never carries forward or leaks to another lane. Regression + 5 new authorization tests added. |
 | DEBT-013 | Smart-form period market types missing | 2026-05-11 | UTV2-882 | PR #624 (SHA a4172df5) | Period/half/quarter/inning market types wired into `apps/smart-form/lib/form-schema.ts` MARKET_TYPE_IDS. Validated 2026-05-11. |
 | DEBT-005 | cross-app alert-agent imports from apps/api | 2026-05-11 | UTV2-540, UTV2-880 | n/a (already resolved in codebase) | `apps/alert-agent/src/main.ts` now imports only from `@unit-talk/alert-runtime`, `@unit-talk/config`, and `@unit-talk/db`. Alert detection logic was extracted to `@unit-talk/alert-runtime` package. Verified 2026-05-11 — no cross-app imports present. |
 | DEBT-021 | boardFit floor bug (UTV2-902) | 2026-05-11 | UTV2-902 | PR #622 | Root cause: `classifyCoefficient()` in `correlation.ts` assigned 0.4 per same-sport game-line pair — floor hit at 15 picks. Fixed: coefficient reduced to 0.1. Regression test added. Full boardFit range now usable. |
