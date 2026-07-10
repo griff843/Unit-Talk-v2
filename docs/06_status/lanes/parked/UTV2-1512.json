@@ -95,7 +95,7 @@
   "parked": {
     "reason": "Parked during OS v1 stabilization. Product work remains paused until OS v1 Lock. This is not a product verdict.",
     "by": "pm",
-    "at": "2026-07-10T15:34:00.000Z",
-    "mechanism": "Manifest relocated from docs/06_status/lanes/ to docs/06_status/lanes/parked/ (no schema-supported 'abandoned'/'parked' status value exists as of this writing) so it drops out of readAllManifestPaths()'s non-recursive scan and no longer counts toward the Claude executor slot cap. Lifecycle status field left as-is (in_review) since it is not actually done or merged. PR #1173 and branch claude/utv2-1512-command-center-workbench remain untouched for later product reuse. No lease existed to release (ops:lease report showed none active for this issue)."
+    "at": "2026-07-10T17:40:00.000Z",
+    "mechanism": "Manifest relocated from docs/06_status/lanes/ to docs/06_status/lanes/parked/ (no schema-supported 'abandoned'/'parked' status value exists as of this writing) so it drops out of readAllManifestPaths()'s non-recursive scan and no longer counts toward the Claude executor slot cap. Lifecycle status field left as-is (in_review) since it is not actually done or merged. The associated open PR and branch remain untouched for later product reuse. No lease existed to release. Landed via a governed PR after an initial direct-main push of this same change was reverted for policy compliance."
   }
 }
