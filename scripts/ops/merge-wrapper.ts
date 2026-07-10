@@ -511,7 +511,7 @@ function defaultRunner(
   });
 }
 
-function bufferToText(value: Buffer | string | null | undefined): string {
+export function bufferToText(value: Buffer | string | null | undefined): string {
   if (!value) return '';
   return Buffer.isBuffer(value) ? value.toString('utf8').trim() : value.trim();
 }

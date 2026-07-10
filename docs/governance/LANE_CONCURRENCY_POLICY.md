@@ -199,6 +199,29 @@ Wave ordering is advisory in prose but enforced mechanically through dependency 
 
 ---
 
+## 8b. Merge-mutex batching (`merge-train`, UTV2-1467)
+
+**Issued under:** UTV2-1467 (Design B of the merge-queue decision packet, `docs/05_operations/UTV2-1461-merge-queue-decision-packet.md`)
+**Effective:** 2026-07-09
+
+The merge mutex (`.ops/merge-lock.json`, enforced by `scripts/ops/merge-mutex.ts`) has historically been acquired and released once per individual merge/branch-refresh operation (`pnpm ops:merge-wrapper pr-merge`, `pr-update-branch`, `main-sync`, etc. — see §8's enforcement table). `pnpm ops:merge-wrapper merge-train --candidates-file <path.json>` (`scripts/ops/ops-merge-wrapper.ts`) changes this for a *batch* of already-green, already-gate-approved PRs: the mutex is acquired **once for the whole batch**, held for the duration of a serial, no-idle-gap drain across all candidates, and released exactly once at the end — including on partial failure or an unexpected exception, so the mutex never sticks.
+
+This is a change to *how long a single serialized hold covers*, not to `merge_serialized_max` itself:
+
+| Config value | Before merge-train | With merge-train |
+|---|---|---|
+| `merge_serialized_max` | `1` | `1` (unchanged) |
+| Mutex acquired | once per PR | once per **batch** of PRs |
+| Required-context re-validation | once per PR, per invalidation cycle | once per PR, per invalidation cycle (unchanged — see `docs/05_operations/WORKFLOW_SPEC.md` "Merge mechanics") |
+
+`scripts/ops/merge-mutex.ts`'s `requireSupportedMergeSerialization()` still hard-fails any `merge_serialized_max` other than `1` — merge-train does not touch or relax that guard. A train holding the mutex for an extended drain is still exactly one serialized merge actor at a time; it is simply one actor doing more work per hold.
+
+**Do not conflate mutex scope with lane-active state.** The lanes whose PRs are queued into a train have already completed their own lifecycle (implementation, verification, PM gates) before being handed to `merge-train` — the mutex hold during a train is a merge-sequencing concern, not a lane-concurrency-limit concern under §1/§10 above. A train in progress does not count against, or interact with, the Claude/Codex executor lane caps.
+
+Full protocol, CLI usage, and rollback: `docs/05_operations/WORKFLOW_SPEC.md`, "Merge mechanics" section.
+
+---
+
 ## 9. Related documents
 
 - `docs/governance/LANE_TAXONOMY.md` — lane type definitions and per-type rules
