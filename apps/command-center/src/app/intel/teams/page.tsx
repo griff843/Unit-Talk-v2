@@ -108,7 +108,7 @@ export default async function TeamsPage({
             id="team"
             name="team"
             defaultValue={team}
-            className="w-72 rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200"
+            className="cc-select w-72"
           >
             <option value="">— select a team —</option>
             {teams.map((t) => (

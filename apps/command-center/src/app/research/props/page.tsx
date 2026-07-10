@@ -98,7 +98,7 @@ export default async function PropExplorerPage({
             id="po-sport"
             name="sport"
             defaultValue={sport ?? ''}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-select"
           >
             {SPORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -114,7 +114,7 @@ export default async function PropExplorerPage({
             id="po-bookmaker"
             name="bookmaker"
             defaultValue={bookmaker ?? ''}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-select"
           >
             {BOOKMAKER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -157,7 +157,7 @@ export default async function PropExplorerPage({
             name="since"
             type="date"
             defaultValue={since?.slice(0, 10) ?? ''}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-input text-xs"
           />
         </div>
 

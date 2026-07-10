@@ -68,7 +68,7 @@ export default async function MatchupCardPage({
             id="matchup-sport"
             name="sport"
             defaultValue={sport}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-select"
           >
             {SPORT_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -87,7 +87,7 @@ export default async function MatchupCardPage({
             name="date"
             type="date"
             defaultValue={date}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-input text-xs"
           />
         </div>
 

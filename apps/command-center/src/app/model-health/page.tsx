@@ -167,7 +167,7 @@ export default async function ModelHealthPage({
                         id={`action-${snapshot.id}`}
                         name="action"
                         defaultValue="acknowledge"
-                        className="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-xs text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="cc-select"
                       >
                         {DECISION_ACTIONS.map((action) => (
                           <option key={action} value={action}>{action}</option>

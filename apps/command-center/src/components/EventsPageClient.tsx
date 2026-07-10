@@ -51,7 +51,7 @@ export function EventsPageClient({ initialEvents }: EventsPageClientProps) {
             <select
               value={selectedEventType ?? ''}
               onChange={(e) => setSelectedEventType(e.target.value || null)}
-              className="w-full rounded bg-white/[0.06] px-3 py-2 text-sm text-gray-100"
+              className="cc-select w-full"
             >
               <option value="">All Events</option>
               {eventTypes.map(type => (

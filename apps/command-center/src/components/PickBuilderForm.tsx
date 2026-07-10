@@ -14,8 +14,7 @@ import {
 } from '@/lib/pick-builder-model';
 import { submitBuiltPick, type SubmitPickResult } from '@/app/actions/execution';
 
-const inputClass =
-  'w-full rounded-lg border border-[var(--cc-border-subtle,#334155)] bg-white/[0.03] px-3 py-2 text-sm text-[var(--cc-text-primary,#e2e8f0)] outline-none transition-colors focus:border-[var(--cc-accent,#38bdf8)]';
+const inputClass = 'cc-input w-full';
 
 function Field({
   label,
@@ -119,7 +118,7 @@ export function PickBuilderForm() {
             <input className={inputClass} value={input.confidence} onChange={set('confidence')} placeholder="0.72" inputMode="decimal" />
           </Field>
           <Field label="Tier Destination" error={readiness.fieldErrors['tierDestination']}>
-            <select className={inputClass} value={input.tierDestination} onChange={set('tierDestination')}>
+            <select className={`cc-select w-full`} value={input.tierDestination} onChange={set('tierDestination')}>
               <option value="">Select tier…</option>
               {TIER_DESTINATIONS.map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -127,7 +126,7 @@ export function PickBuilderForm() {
             </select>
           </Field>
           <Field label="Risk Rating" error={readiness.fieldErrors['riskRating']}>
-            <select className={inputClass} value={input.riskRating} onChange={set('riskRating')}>
+            <select className={`cc-select w-full`} value={input.riskRating} onChange={set('riskRating')}>
               <option value="">Select risk…</option>
               {RISK_RATINGS.map((r) => (
                 <option key={r} value={r}>{r}</option>
@@ -135,7 +134,7 @@ export function PickBuilderForm() {
             </select>
           </Field>
           <Field label="Dispatch Target">
-            <select className={inputClass} value={input.dispatchTarget} onChange={set('dispatchTarget')}>
+            <select className={`cc-select w-full`} value={input.dispatchTarget} onChange={set('dispatchTarget')}>
               <option value="">Select target…</option>
               {DISPATCH_TARGETS.map((t) => (
                 <option key={t} value={t}>{t}</option>

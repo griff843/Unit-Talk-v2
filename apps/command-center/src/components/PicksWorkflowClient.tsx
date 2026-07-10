@@ -466,7 +466,7 @@ export function PicksWorkflowClient({ initialPicks }: { initialPicks: OperatorPi
               <select
                 value={filters.status}
                 onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value as PicksWorkflowFilters['status'] }))}
-                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
+                className="cc-select"
               >
                 <option value="all">All statuses</option>
                 <option value="Pending">Pending</option>
@@ -485,14 +485,14 @@ export function PicksWorkflowClient({ initialPicks }: { initialPicks: OperatorPi
                 type="date"
                 value={filters.dateFrom}
                 onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
-                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
+                className="cc-select"
               />
 
               <input
                 type="date"
                 value={filters.dateTo}
                 onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))}
-                className="rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-200"
+                className="cc-select"
               />
             </div>
           </div>

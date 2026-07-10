@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 
-const inputClass = 'rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+const inputClass = 'cc-input text-xs';
 
 interface QueueFiltersProps {
   basePath: string;
