@@ -55,19 +55,32 @@ interface SharedModule {
 }
 
 const STALE_HEARTBEAT_MS = 72 * 60 * 60 * 1000;
-const TIER_C_EXACT_PATHS = new Set([
+export const TIER_C_EXACT_PATHS: ReadonlySet<string> = new Set([
   'packages/db/src/lifecycle.ts',
   'packages/db/src/repositories.ts',
   'packages/db/src/runtime-repositories.ts',
   'packages/db/src/database.types.ts',
   'apps/api/src/distribution-service.ts',
+  'apps/api/src/submission-service.ts',
+  'apps/api/src/settlement-service.ts',
   'apps/api/src/auth.ts',
+  'scripts/ops/orchestration-reconciler.ts',
 ]);
-const TIER_C_PATH_PREFIXES = [
+export const TIER_C_PATH_PREFIXES: readonly string[] = [
   'supabase/migrations/',
   'packages/contracts/src/',
   'packages/domain/src/',
   'apps/worker/',
+  '.github/workflows/',
+  'docs/00_constitution/',
+  'packages/config/',
+];
+export const TIER_C_PATH_PATTERNS: readonly RegExp[] = [
+  /^apps\/api\/src\/[^/]+-service\.ts$/u,
+  /^scripts\/ops\/(?:lane|merge|tier)-[^/]+(?<!\.test)\.ts$/u,
+  /^docs\/05_operations\/[^/]+_(?:POLICY|SPEC)\.md$/u,
+  /^\.env(?:\..*)?$/u,
+  /^local\.env$/u,
 ];
 
 function manifestStatus(manifest: LaneManifest): string {
@@ -90,10 +103,17 @@ function blockedByIds(lane: LaneManifest): string[] {
   return Array.isArray(lane.blocked_by) ? lane.blocked_by : [];
 }
 
-function touchesTierC(lane: LaneManifest): boolean {
-  return laneFiles(lane).some((filePath) =>
-    TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
+export function isTierCPath(filePath: string): boolean {
+  const normalized = filePath.replaceAll('\\', '/').replace(/^\.\//u, '');
+  return (
+    TIER_C_EXACT_PATHS.has(normalized) ||
+    TIER_C_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix)) ||
+    TIER_C_PATH_PATTERNS.some((pattern) => pattern.test(normalized))
   );
+}
+
+function touchesTierC(lane: LaneManifest): boolean {
+  return laneFiles(lane).some((filePath) => isTierCPath(filePath));
 }
 
 function overlappingPaths(leftPaths: string[], rightPaths: string[]): string[] {
@@ -317,12 +337,8 @@ export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[]
     for (let otherIndex = index + 1; otherIndex < activeTierCLanes.length; otherIndex += 1) {
       const left = activeTierCLanes[index];
       const right = activeTierCLanes[otherIndex];
-      const leftTierC = laneFiles(left).filter((filePath) =>
-        TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
-      );
-      const rightTierC = laneFiles(right).filter((filePath) =>
-        TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
-      );
+      const leftTierC = laneFiles(left).filter((filePath) => isTierCPath(filePath));
+      const rightTierC = laneFiles(right).filter((filePath) => isTierCPath(filePath));
 
       conditions.push({
         code: 'TIER_C_CONFLICT',
