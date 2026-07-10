@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1495",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-ab717f5226675bdb0/.out/worktrees/codex__utv2-1495-hard-file-scope-lock-enforcement",
+  "branch": "codex/utv2-1495-hard-file-scope-lock-enforcement",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/file-scope-lock-check.yml",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ci/file-scope-guard.test.ts",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1495/diff-summary.md",
+    "docs/06_status/proof/UTV2-1495/verification.md",
+    "docs/06_status/proof/UTV2-1495/.gitkeep"
+  ],
+  "scope_override": {
+    "approved_by": "PM (dispatch orchestrator, review round on PR #1182)",
+    "reason": "Two corrections landed after lane-start's original declaration: (1) lane-start's --files flag captured only the last value passed (a pre-existing CLI arg-parsing bug in scripts/ops/shared.ts parseArgs), so the manifest committed by lane-start declared only .github/workflows/file-scope-lock-check.yml and silently dropped scripts/ci/file-scope-guard.ts and scripts/ci/file-scope-guard.test.ts; corrected before Codex began implementation (commit 06c1160f / pushed as b4c86d8e). (2) The PM review round on PR #1182 required registering scripts/ci/file-scope-guard.test.ts in package.json's test:ops list (a Codex P2 finding), a one-line addition to package.json that needs to be in-scope too. Both corrections match what this lane was actually dispatched to build; neither introduces unrelated production code.",
+    "evidence": "docs/06_status/proof/UTV2-1495/verification.md#manifest-scope-correction"
+  },
+  "status": "started",
+  "started_at": "2026-07-08T23:36:13.296Z",
+  "heartbeat_at": "2026-07-08T23:36:13.296Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1495-hard-file-scope-lock-enforcement.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-ab717f5226675bdb0/.out/worktrees/codex__utv2-1495-hard-file-scope-lock-enforcement",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
