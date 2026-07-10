@@ -173,6 +173,48 @@ body {
   outline-offset: 2px;
 }
 
+/* Token-styled form controls — replaces stock-browser selects/inputs. */
+.cc-input,
+.cc-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--cc-border-strong);
+  border-radius: var(--cc-radius-md);
+  background-color: color-mix(in srgb, var(--cc-bg-surface-elevated) 92%, transparent);
+  color: var(--cc-text-primary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+}
+
+.cc-select {
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236f819f' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+}
+
+.cc-input::placeholder {
+  color: var(--cc-text-muted);
+}
+
+.cc-input:hover,
+.cc-select:hover {
+  border-color: color-mix(in srgb, var(--cc-accent) 40%, var(--cc-border-strong));
+}
+
+.cc-input:focus-visible,
+.cc-select:focus-visible {
+  outline: 2px solid var(--cc-accent);
+  outline-offset: 1px;
+}
+
+/* Dark-native pickers for native date/time inputs that remain. */
+.cc-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
 .skip-link:focus {
   background-color: var(--cc-accent);
   color: white;

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LiveEventFeed, PipelineFlow, StatCard } from '@/components/ui';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal, OperationalException, PickRow } from '@/lib/types';
 import { buildAlertLog, type AlertLogEntry } from '@/lib/alert-log-model';
+import { buildPipelineStages } from '@/lib/pipeline-stages';
 
 type OverviewDashboardClientProps = {
   data: DashboardData;
@@ -58,13 +59,6 @@ function apiHealthLabel(signals: LifecycleSignal[]) {
   return { label: 'Healthy', tone: 'text-emerald-300' };
 }
 
-function pipelineStatus(signal: LifecycleSignal | undefined): 'healthy' | 'idle' | 'error' {
-  if (!signal) return 'idle';
-  if (signal.status === 'BROKEN') return 'error';
-  if (signal.status === 'DEGRADED') return 'idle';
-  return 'healthy';
-}
-
 function deriveTier(pick: PickRow): FeedRow['tier'] {
   const score = pick.score ?? 0;
   if (score >= 90) return 'S';
@@ -109,20 +103,6 @@ function buildFeedRows(picks: PickRow[]): FeedRow[] {
       submittedAt: pick.submittedAt,
       status: pick.lifecycleStatus,
     }));
-}
-
-function buildPipelineStages(data: DashboardData, runtime: DashboardRuntimeData) {
-  const signalByName = new Map<LifecycleSignal['signal'], LifecycleSignal>(
-    data.signals.map((signal) => [signal.signal, signal]),
-  );
-
-  return [
-    { name: 'Ingest', count: runtime.providerSummary.active, status: pipelineStatus(signalByName.get('submission')) },
-    { name: 'Normalize', count: data.picks.filter((pick) => pick.lifecycleStatus === 'validated').length, status: pipelineStatus(signalByName.get('scoring')) },
-    { name: 'Grade', count: runtime.grading.runCount, status: pipelineStatus(signalByName.get('stats_propagation')) },
-    { name: 'Promote', count: data.picks.filter((pick) => pick.promotionStatus === 'qualified').length, status: pipelineStatus(signalByName.get('promotion')) },
-    { name: 'Publish', count: runtime.outbox.sent + runtime.receipts.sent, status: pipelineStatus(signalByName.get('discord_delivery')) },
-  ];
 }
 
 function PicksTicker({ picks }: { picks: FeedRow[] }) {

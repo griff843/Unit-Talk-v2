@@ -1,81 +1,101 @@
 import React from 'react';
-import { PipelineFlow, StatCard, TopBar } from '@/components/ui';
+import { PipelineFlow, StatCard } from '@/components/ui';
 import { getPipelineContent } from '@/lib/command-center-data';
-import { getRouteMeta } from '@/lib/command-center-nav';
+import { getDashboardData, getDashboardRuntimeData } from '@/lib/data';
+import { buildPipelineStages } from '@/lib/pipeline-stages';
+
+function SectionHeader({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">{kicker}</div>
+      <h2 className="mt-1 text-sm font-semibold uppercase tracking-[0.12em] text-[var(--cc-text-primary)]">{title}</h2>
+    </div>
+  );
+}
 
 export default async function PipelinePage() {
-  const meta = getRouteMeta('/pipeline');
-  const content = await getPipelineContent();
+  const [content, data, runtime] = await Promise.all([
+    getPipelineContent(),
+    getDashboardData(),
+    getDashboardRuntimeData(),
+  ]);
+
+  // Same source as the Executive Overview stage strip — counts cannot diverge.
+  const stages = buildPipelineStages(data, runtime);
 
   return (
     <div className="space-y-6">
-      <TopBar
-        eyebrow={meta.eyebrow}
-        title={meta.label}
-        description={meta.description}
-        liveLabel={meta.liveLabel}
-        liveValue={content.metrics[0]?.value ?? 0}
-        chips={[
-          { label: 'pressure', value: `${content.metrics[1]?.value ?? 0} errors` },
-          { label: 'throughput', value: `${content.metrics[0]?.delta ?? 'n/a'}` },
-        ]}
-      />
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {content.metrics.map((metric) => (
-          <StatCard key={metric.label} label={metric.label} value={metric.value} delta={metric.delta} unit={metric.unit} liveUpdate />
-        ))}
+      <div className="space-y-1">
+        <h1 className="text-lg font-bold text-gray-100">Today&apos;s Action</h1>
+        <p className="text-sm text-gray-500">
+          Live pipeline posture — stage flow, backlog pressure, and promotion staging from current runtime telemetry.
+        </p>
       </div>
 
-      <section className="cc-panel space-y-4">
-        <div>
-          <div className="cc-kicker">Stage flow</div>
-          <h2 className="mt-2 font-[family:var(--font-display)] text-3xl text-[var(--cc-text-primary)]">Current lane posture</h2>
+      {content === null ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <div className="font-semibold">Pipeline telemetry unavailable</div>
+          <p className="mt-1 text-xs opacity-85">
+            The pipeline-health snapshot could not be read. Stage flow below still reflects live dashboard signals; backlog
+            and promotion detail will return when the snapshot source recovers.
+          </p>
         </div>
-        <PipelineFlow stages={content.pipeline.map((s) => ({
-          name: s.label,
-          count: parseInt(s.metric, 10) || 0,
-          status: (s.status === 'warning' || s.status === 'unknown' ? 'idle' : s.status) as 'healthy' | 'idle' | 'error',
-        }))} />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {content.metrics.map((metric) => (
+            <StatCard key={metric.label} label={metric.label} value={metric.value} delta={metric.delta} unit={metric.unit} liveUpdate />
+          ))}
+        </div>
+      )}
+
+      <section className="cc-surface space-y-4 p-5">
+        <SectionHeader kicker="Stage flow" title="Ingest through publish" />
+        <PipelineFlow stages={stages} />
       </section>
 
-      <div className="cc-grid-12">
-        <section className="cc-panel lg:col-span-6">
-          <div className="cc-kicker">Backlog pressure</div>
-          <h2 className="mt-2 font-[family:var(--font-display)] text-3xl text-[var(--cc-text-primary)]">Queues to watch</h2>
-          <div className="mt-5 space-y-3">
-            {content.backlog.map((row) => (
-              <article key={row.label} className="rounded-[1.4rem] border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="font-medium text-[var(--cc-text-primary)]">{row.label}</div>
-                    <div className="mt-1 text-sm text-[var(--cc-text-secondary)]">{row.detail}</div>
+      {content !== null && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="cc-surface p-5">
+            <SectionHeader kicker="Backlog pressure" title="Queues to watch" />
+            <div className="mt-5 space-y-3">
+              {content.backlog.length === 0 && (
+                <p className="text-sm text-gray-500">No backlog buckets tracked right now.</p>
+              )}
+              {content.backlog.map((row) => (
+                <article key={row.label} className="rounded-2xl border border-gray-800 bg-white/[0.02] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="font-medium text-[var(--cc-text-primary)]">{row.label}</div>
+                      <div className="mt-1 text-sm text-[var(--cc-text-secondary)]">{row.detail}</div>
+                    </div>
+                    <div className="font-mono text-2xl font-semibold text-[var(--cc-text-primary)]">{row.count}</div>
                   </div>
-                  <div className="font-[family:var(--font-display)] text-3xl text-[var(--cc-text-primary)]">{row.count}</div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
+                </article>
+              ))}
+            </div>
+          </section>
 
-        <section className="cc-panel lg:col-span-6">
-          <div className="cc-kicker">Promotion lanes</div>
-          <h2 className="mt-2 font-[family:var(--font-display)] text-3xl text-[var(--cc-text-primary)]">Release staging</h2>
-          <div className="mt-5 space-y-3">
-            {content.promotion.map((row) => (
-              <article key={row.label} className="rounded-[1.4rem] border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <div className="font-medium text-[var(--cc-text-primary)]">{row.label}</div>
-                    <div className="mt-1 text-sm text-[var(--cc-text-secondary)]">{row.detail}</div>
+          <section className="cc-surface p-5">
+            <SectionHeader kicker="Promotion lanes" title="Release staging" />
+            <div className="mt-5 space-y-3">
+              {content.promotion.length === 0 && (
+                <p className="text-sm text-gray-500">No promotion lanes active.</p>
+              )}
+              {content.promotion.map((row) => (
+                <article key={row.label} className="rounded-2xl border border-gray-800 bg-white/[0.02] p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <div className="font-medium text-[var(--cc-text-primary)]">{row.label}</div>
+                      <div className="mt-1 text-sm text-[var(--cc-text-secondary)]">{row.detail}</div>
+                    </div>
+                    <div className="font-mono text-2xl font-semibold text-[var(--cc-text-primary)]">{row.count}</div>
                   </div>
-                  <div className="font-[family:var(--font-display)] text-3xl text-[var(--cc-text-primary)]">{row.count}</div>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
