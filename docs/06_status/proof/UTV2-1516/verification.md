@@ -6,16 +6,16 @@ Commands run:
 
 - `pnpm type-check` — PASS
 - `pnpm test` — PASS
-- `pnpm test:db` — PASS
+- `pnpm ops:lane-maximizer -- --json` — PASS; output includes `dispatch_plan.lane_saturation_forecast.full_verify_throttle` with `max_concurrent: 1`, `active: 0`, `available_slots: 1`
+- Stale slot check — PASS; a temporary 7-hour orphaned `.out/ops/preflight/full-verify-semaphore/slot-0` directory was ignored by `lane-maximizer` and then removed
+- `pnpm verify` — PASS; includes `pnpm test:db` and `pnpm test:t1-proof:live`
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS
 
 ```text
-# pass 7
-# fail 0
-# skipped 0
+Verdict: PASS
+Changed files: 12
+Rules matched: (none) — no R-level artifacts required for this diff
 ```
-- `pnpm ops:lane-maximizer -- --json` — PASS; output includes `dispatch_plan.lane_saturation_forecast.full_verify_throttle` with `max_concurrent: 1`, `active: 0`, `available_slots: 1`
-- Stale slot check — PASS; a 7-hour orphaned `.out/ops/preflight/full-verify-semaphore/slot-0` directory is ignored by `lane-maximizer`
-- `pnpm verify` — PASS
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; no R-level rules matched
 
-Verification SHA: `6bff9e5c85edac4f27f1d4d600ce67df6c55d3bc`
+Verification SHA: `3df7614ddfc378141e9f3a495aabcf052bae44ec`
+Verified at: `2026-07-10T20:13:04Z`
