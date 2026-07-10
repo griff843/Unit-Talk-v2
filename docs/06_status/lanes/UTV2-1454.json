@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1454-t3-fast-path-docs-only-lanes",
   "branch": "codex/utv2-1454-t3-fast-path-docs-only-lanes",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ee7ae08c401fc29fb8318021c6a01451790b102e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1181",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/commands/dispatch.md",
@@ -22,14 +22,24 @@
     "docs/06_status/proof/UTV2-1454/diff-summary.md",
     "docs/06_status/proof/UTV2-1454/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-09T05:07:50.428Z",
-  "heartbeat_at": "2026-07-09T05:07:50.428Z",
+  "heartbeat_at": "2026-07-10T13:12:20.547Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1454-t3-fast-path-docs-only-lanes.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-10T13:12:20.547Z",
+      "verdict": "pass",
+      "merge_sha": "ee7ae08c401fc29fb8318021c6a01451790b102e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1181"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

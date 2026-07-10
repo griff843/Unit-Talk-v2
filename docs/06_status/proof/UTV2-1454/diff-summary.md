@@ -1,23 +1,50 @@
 # UTV2-1454 Diff Summary
 
-Date: 2026-07-09
+Generated at: 2026-07-10T13:12:22.524Z
+Issue: UTV2-1454
+Tier: T2
+Lane type: governance
+Branch: codex/utv2-1454-t3-fast-path-docs-only-lanes
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1181
+Head SHA: 2ebb1befb3bb06a734e1fb112fab827536a3b5e4
+Merge SHA: ee7ae08c401fc29fb8318021c6a01451790b102e
+Diff base: ee7ae08c401fc29fb8318021c6a01451790b102e^1
+Diff target: ee7ae08c401fc29fb8318021c6a01451790b102e
 
-## Summary
+## Git Diff Stat
+```
+.claude/commands/dispatch.md                   |   7 ++
+ .claude/commands/lane-management.md            |   9 ++
+ .ops/sync/UTV2-1454.yml                        |  10 +++
+ docs/06_status/lanes/UTV2-1454.json            |  41 +++++++++
+ docs/06_status/proof/UTV2-1454/.gitkeep        |   0
+ docs/06_status/proof/UTV2-1454/diff-summary.md |  23 +++++
+ docs/06_status/proof/UTV2-1454/verification.md | 119 +++++++++++++++++++++++++
+ scripts/ops/lane-start.test.ts                 |  53 +++++++++++
+ scripts/ops/lane-start.ts                      |  69 +++++++++++++-
+ scripts/ops/preflight.test.ts                  |  12 +++
+ scripts/ops/preflight.ts                       |  55 +++++++++++-
+ 11 files changed, 395 insertions(+), 3 deletions(-)
+```
 
-- Added an explicit `--docs-only-fast-path` path to `scripts/ops/preflight.ts` that is fail-closed to T3 lanes and limited to `docs/06_status/**` plus `.claude/commands/*.md`.
-- Added the matching `scripts/ops/lane-start.ts` validator path that skips worktree, manifest, lease, sync, and proof scaffolding only after tier, scope, branch, and preflight-token checks pass.
-- Updated dispatch and lane-management command docs so future T3 docs/status-only lanes can use the fast path without bypassing CI, branch discipline, lane authority, merge gates, tier labels, or Linear auto-close.
-- Added source-level regression coverage in `scripts/ops/preflight.test.ts` and `scripts/ops/lane-start.test.ts`.
+## Git Name Status
+```
+M	.claude/commands/dispatch.md
+M	.claude/commands/lane-management.md
+A	.ops/sync/UTV2-1454.yml
+A	docs/06_status/lanes/UTV2-1454.json
+A	docs/06_status/proof/UTV2-1454/.gitkeep
+A	docs/06_status/proof/UTV2-1454/diff-summary.md
+A	docs/06_status/proof/UTV2-1454/verification.md
+M	scripts/ops/lane-start.test.ts
+M	scripts/ops/lane-start.ts
+M	scripts/ops/preflight.test.ts
+M	scripts/ops/preflight.ts
+```
 
-## Files Changed
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-- `.claude/commands/dispatch.md` documents the T3 docs-only fast path and the replacement preflight/lane-start commands.
-- `.claude/commands/lane-management.md` documents the same exception in lane management terms and keeps it fail-closed.
-- `scripts/ops/preflight.ts` adds fast-path flag parsing, path validation, and PB1/PB2 ceremony skips for valid T3 docs-only work.
-- `scripts/ops/preflight.test.ts` covers the preflight source contract for the new flag, T3 restriction, allowed paths, and skip messaging.
-- `scripts/ops/lane-start.ts` adds the fast-path lane-start validator and returns before creating lane substrate when validated.
-- `scripts/ops/lane-start.test.ts` covers the lane-start source contract for T3 restriction, token validation, allowed paths, and skipped ceremony.
-
-## Notes
-
-- This implementation keeps the current UTV2-1454 lane as a normal T2 implementation lane. The new fast path is only available to future T3 docs/status-only lanes that explicitly pass `--docs-only-fast-path`.
+## SHA Binding
+Head SHA: 2ebb1befb3bb06a734e1fb112fab827536a3b5e4
+Merge SHA: ee7ae08c401fc29fb8318021c6a01451790b102e
