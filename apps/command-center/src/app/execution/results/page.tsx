@@ -49,8 +49,7 @@ export default async function ResultsTrackingPage() {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHead>
-                    <tr>
-                      <Th>Pick</Th>
+                    <Th>Pick</Th>
                       <Th>Status</Th>
                       <Th>Posted At</Th>
                       <Th>Result</Th>
@@ -58,7 +57,6 @@ export default async function ResultsTrackingPage() {
                       <Th>Corrections</Th>
                       <Th>Delivery Evidence</Th>
                       <Th>Audit</Th>
-                    </tr>
                   </TableHead>
                   <TableBody>
                     {data.picks.map((pick) => {

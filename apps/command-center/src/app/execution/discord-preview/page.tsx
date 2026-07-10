@@ -52,13 +52,11 @@ export default async function DiscordPreviewPage({
               <div className="overflow-x-auto">
                 <Table>
                   <TableHead>
-                    <tr>
-                      <Th>Pick</Th>
+                    <Th>Pick</Th>
                       <Th>Status</Th>
                       <Th>Market / Selection</Th>
                       <Th>Created</Th>
                       <Th>Preview</Th>
-                    </tr>
                   </TableHead>
                   <TableBody>
                     {picks.map((p) => (

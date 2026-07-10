@@ -107,8 +107,6 @@ const PICK_SELECT = [
   'posted_at',
   'settled_at',
   'settlement_result',
-  'event_name',
-  'event_start_time',
   'sport_display_name',
   'metadata',
 ].join(', ');
@@ -122,8 +120,12 @@ function mapPick(row: JsonObject): ExecutionPickRow {
     selection: asString(row['selection']),
     line: asNumberOrNull(row['line']),
     odds: asNumberOrNull(row['odds']),
-    eventName: asStringOrNull(row['event_name']),
-    eventStartTime: asStringOrNull(row['event_start_time']),
+    eventName:
+      asStringOrNull(asRecord(row['metadata'])['eventName']) ??
+      asStringOrNull(asRecord(row['metadata'])['event_name']),
+    eventStartTime:
+      asStringOrNull(asRecord(row['metadata'])['eventStartTime']) ??
+      asStringOrNull(asRecord(row['metadata'])['eventTime']),
     sportDisplayName: asStringOrNull(row['sport_display_name']),
     createdAt: asString(row['created_at']),
     postedAt: asStringOrNull(row['posted_at']),

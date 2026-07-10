@@ -206,6 +206,21 @@ function asBooleanOrNull(v: unknown): boolean | null {
   return typeof v === 'boolean' ? v : null;
 }
 
+/**
+ * picks_current_state has no event_name/event_start_time columns — event
+ * context lives in picks.metadata. Fail-closed: null when absent.
+ */
+function eventFieldsFromRow(row: JsonObject): { eventName: string | null; eventStartTime: string | null } {
+  const metadata = asRecord(row['metadata']);
+  return {
+    eventName: asStringOrNull(metadata['eventName']) ?? asStringOrNull(metadata['event_name']),
+    eventStartTime:
+      asStringOrNull(metadata['eventStartTime']) ??
+      asStringOrNull(metadata['eventTime']) ??
+      asStringOrNull(metadata['event_start_time']),
+  };
+}
+
 function asRecord(v: unknown): JsonObject {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as JsonObject) : {};
 }
@@ -252,8 +267,6 @@ const QUEUE_SELECT = [
   'review_decided_at',
   'posted_at',
   'settled_at',
-  'event_name',
-  'event_start_time',
 ].join(', ');
 
 // ── Map a raw picks_current_state row to ReviewPick ───────────────────────────
@@ -278,8 +291,7 @@ function mapReviewPick(row: JsonObject): ReviewPick {
     approval_status: asString(row['approval_status']),
     governanceQueueState,
     metadata,
-    eventName: asStringOrNull(row['event_name']),
-    eventStartTime: asStringOrNull(row['event_start_time']),
+    ...eventFieldsFromRow(row),
     sportDisplayName: asStringOrNull(row['sport_display_name']),
     capperDisplayName: asStringOrNull(row['capper_display_name']),
     marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
@@ -305,7 +317,7 @@ export async function getReviewQueue(
     // Base query: awaiting_approval lifecycle OR pending approval_status
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'exact' })
+      .select(QUEUE_SELECT, { count: 'estimated' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
     // Exclude held picks (review_decision = 'hold')
@@ -353,7 +365,7 @@ export async function getHeldQueue(
     // Base query: awaiting_approval OR pending, filtered to ONLY held (review_decision = 'hold')
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'exact' })
+      .select(QUEUE_SELECT, { count: 'estimated' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending')
       .eq('review_decision', 'hold');
 
@@ -413,8 +425,7 @@ export async function getHeldQueue(
           approval_status: asString(row['approval_status']),
           governanceQueueState,
           metadata,
-          eventName: asStringOrNull(row['event_name']),
-          eventStartTime: asStringOrNull(row['event_start_time']),
+          ...eventFieldsFromRow(row),
           sportDisplayName: asStringOrNull(row['sport_display_name']),
           capperDisplayName: asStringOrNull(row['capper_display_name']),
           marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
@@ -460,15 +471,13 @@ export async function searchPicks(
       'market_type_display_name',
       'settlement_result',
       'review_decision',
-      'event_name',
-      'event_start_time',
       'promotion_target',
       'promotion_status',
     ].join(', ');
 
     let query = client
       .from('picks_current_state')
-      .select(selectCols, { count: 'exact' });
+      .select(selectCols, { count: 'estimated' });
 
     // Full-text / substring search on market + selection + source
     const q = params['q']?.trim();
@@ -518,8 +527,8 @@ export async function searchPicks(
       .filter((row) => !isFixtureLikePick(row))
       .map((row) => ({
         ...row,
-        matchup: asStringOrNull(row['event_name']),
-        eventStartTime: asStringOrNull(row['event_start_time']),
+        matchup: eventFieldsFromRow(row).eventName,
+        eventStartTime: eventFieldsFromRow(row).eventStartTime,
         sport: asStringOrNull(row['sport_display_name']),
         submitter: asStringOrNull(row['capper_display_name']),
       }));
@@ -562,8 +571,6 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         'review_decision',
         'posted_at',
         'settled_at',
-        'event_name',
-        'event_start_time',
       ].join(', '))
       .eq('id', pickId)
       .single();
@@ -654,12 +661,10 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
     // Resolve matchup from event_name or metadata
     const matchup =
-      asStringOrNull(pickRow['event_name']) ??
-      asStringOrNull(metadata['eventName']);
+      asStringOrNull(metadata['eventName']) ?? asStringOrNull(metadata['event_name']);
 
     // Resolve eventStartTime from view or metadata
     const eventStartTime =
-      asStringOrNull(pickRow['event_start_time']) ??
       asStringOrNull(metadata['eventStartTime']) ??
       asStringOrNull(metadata['eventTime']);
 
