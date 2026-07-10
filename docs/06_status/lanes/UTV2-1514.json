@@ -23,10 +23,10 @@
     "docs/06_status/proof/UTV2-1514/verification.md",
     "docs/06_status/proof/UTV2-1514/sweep-report.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-09T05:37:58.096Z",
-  "heartbeat_at": "2026-07-10T13:02:11.301Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-10T13:02:26.955Z",
+  "closed_at": "2026-07-10T13:02:26.955Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1514-mechanical-tier-classifier-implementation.json",
   "created_by": "codex-cli",
