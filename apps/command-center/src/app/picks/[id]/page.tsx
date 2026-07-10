@@ -151,11 +151,14 @@ function KV({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function EmptyRow({ cols }: { cols: number }) {
+function EmptyRow({ cols, label }: { cols: number; label: string }) {
   return (
     <tr>
-      <td colSpan={cols} className="py-2 text-xs italic text-gray-500">
-        No rows.
+      <td colSpan={cols} className="py-3">
+        <span className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-gray-950/40 px-3 py-1 text-xs text-gray-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-700" aria-hidden="true" />
+          {label}
+        </span>
       </td>
     </tr>
   );
@@ -373,7 +376,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             />
             <InterventionAction
               label="Force Promote to Best Bets"
-              variant="warning"
+              variant="secondary"
               pickId={pickId}
               action="force_promote"
               target="best-bets"
@@ -417,7 +420,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.lifecycle.length === 0 ? (
-              <EmptyRow cols={5} />
+              <EmptyRow cols={5} label="No lifecycle events recorded yet." />
             ) : (
               detail.lifecycle.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -445,7 +448,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.promotionHistory.length === 0 ? (
-              <EmptyRow cols={6} />
+              <EmptyRow cols={6} label="No promotion decisions recorded for this pick." />
             ) : (
               detail.promotionHistory.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -476,7 +479,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               </TableHead>
               <TableBody>
                 {detail.outboxRows.length === 0 ? (
-                  <EmptyRow cols={5} />
+                  <EmptyRow cols={5} label="No outbox deliveries queued for this pick." />
                 ) : (
                   detail.outboxRows.map((row) => (
                     <tr key={row.id} className="border-t border-gray-800">
@@ -502,7 +505,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               </TableHead>
               <TableBody>
                 {detail.receipts.length === 0 ? (
-                  <EmptyRow cols={4} />
+                  <EmptyRow cols={4} label="No delivery receipts — nothing has been dispatched." />
                 ) : (
                   detail.receipts.map((row) => (
                     <tr key={row.id} className="border-t border-gray-800">
@@ -569,7 +572,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.settlements.length === 0 ? (
-              <EmptyRow cols={8} />
+              <EmptyRow cols={8} label="Not settled yet — no settlement records." />
             ) : (
               detail.settlements.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -662,7 +665,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.auditTrail.length === 0 ? (
-              <EmptyRow cols={5} />
+              <EmptyRow cols={5} label="No audit entries reference this pick." />
             ) : (
               detail.auditTrail.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
