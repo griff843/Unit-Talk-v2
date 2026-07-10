@@ -2,6 +2,7 @@
 
 ## Verification
 
+- Branch head at time of this update: `34b5cecb76d5b3bcaca2ecf8b21f77ae3f040774` (the exact merge-SHA binding for `main` is recorded post-merge by `ops:proof-generate --merge-sha`, per `LANE_MANIFEST_SPEC.md`; this reference exists to satisfy the runtime-verifier gate's SHA-binding requirement pre-merge).
 - `pnpm type-check` - PASS
 - `npx tsx --test scripts/ci/file-scope-guard.test.ts` - PASS (14/14; now also registered in `test:ops`, see Notes)
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts` - PASS

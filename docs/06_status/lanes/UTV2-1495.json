@@ -18,7 +18,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1495/diff-summary.md",
-    "docs/06_status/proof/UTV2-1495/verification.md"
+    "docs/06_status/proof/UTV2-1495/verification.md",
+    "docs/06_status/proof/UTV2-1495/.gitkeep"
   ],
   "scope_override": {
     "approved_by": "PM (dispatch orchestrator, review round on PR #1182)",
