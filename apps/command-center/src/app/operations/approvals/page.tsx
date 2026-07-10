@@ -139,6 +139,8 @@ export default async function ApprovalsPage() {
   }
 
   const countFor = (label: ApprovalLabel) => rows?.filter((row) => row.label === label).length ?? 0;
+  const uniformLabel =
+    rows && rows.length > 1 && rows.every((row) => row.label === rows[0]!.label) ? rows[0]!.label : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -168,8 +170,14 @@ export default async function ApprovalsPage() {
           </div>
 
           <div className="cc-surface p-5">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+            <h2 className="mb-3 flex items-center gap-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
               Approval Queue ({rows.length})
+              {uniformLabel !== null && (
+                <>
+                  <InternalLabelBadge label={uniformLabel} />
+                  <span className="text-[10px] font-normal normal-case tracking-normal cc-text-muted">applies to every row</span>
+                </>
+              )}
             </h2>
             {rows.length === 0 ? (
               <EmptyState
@@ -180,7 +188,7 @@ export default async function ApprovalsPage() {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHead>
-                    <Th>Label</Th>
+                    {uniformLabel === null && <Th>Label</Th>}
                     <Th>Pick</Th>
                     <Th>Market / Selection</Th>
                     <Th>Sport</Th>
@@ -195,7 +203,7 @@ export default async function ApprovalsPage() {
                   <TableBody>
                     {rows.map((row) => (
                       <tr key={row.id} className="border-b border-gray-800/60">
-                        <Td><InternalLabelBadge label={row.label} /></Td>
+                        {uniformLabel === null && <Td><InternalLabelBadge label={row.label} /></Td>}
                         <Td>
                           <Link href={row.href} className="font-mono text-xs text-blue-400 hover:underline">
                             {row.id.slice(0, 8)}…

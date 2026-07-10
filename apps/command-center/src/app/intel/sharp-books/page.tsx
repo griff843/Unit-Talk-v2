@@ -126,6 +126,8 @@ export default async function SharpBooksPage({
     fetchError = err instanceof Error ? err.message : 'Unknown error loading sharp comparison.';
   }
 
+  const allStale = rows.length > 1 && rows.every((r) => isStaleOdds(r.snapshotAt));
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -214,7 +216,7 @@ export default async function SharpBooksPage({
                     <Td>
                       {formatTimestamp(r.snapshotAt)}{' '}
                       <span className="text-gray-500">({formatRelativeTime(r.snapshotAt)})</span>
-                      {isStaleOdds(r.snapshotAt) ? (
+                      {!allStale && isStaleOdds(r.snapshotAt) ? (
                         <span className="ml-1">
                           <InternalLabelBadge label="Stale Odds" />
                         </span>

@@ -150,6 +150,8 @@ export default async function LineMovementPage({
 
   const movers = rows.filter((r) => r.lineMove !== null && r.lineMove !== 0).slice(0, 5);
 
+  const allStale = rows.length > 1 && rows.every((r) => isStaleOdds(r.lastSnapshotAt));
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -270,7 +272,7 @@ export default async function LineMovementPage({
                     <Td>
                       {formatTimestamp(r.lastSnapshotAt)}{' '}
                       <span className="text-gray-500">({formatRelativeTime(r.lastSnapshotAt)})</span>
-                      {isStaleOdds(r.lastSnapshotAt) ? (
+                      {!allStale && isStaleOdds(r.lastSnapshotAt) ? (
                         <span className="ml-1">
                           <InternalLabelBadge label="Stale Odds" />
                         </span>
