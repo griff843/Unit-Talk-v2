@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1519",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": ".",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "branch": "claude/utv2-1519-revert-direct-main-park-bypass",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1185",
+  "files_changed": [
+    "docs/06_status/lanes/UTV2-1512.json",
+    "docs/06_status/lanes/UTV2-1513.json"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/lanes/UTV2-1512.json",
+    "docs/06_status/lanes/UTV2-1513.json",
+    "docs/06_status/lanes/UTV2-1519.json"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-07-10T17:07:59.353Z",
+  "heartbeat_at": "2026-07-10T17:07:59.353Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1519-revert-direct-main-park-bypass.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "Docs-only-fast-path was attempted first (per dispatch.md) but CI's file-scope-lock-check.yml and tier-label-check.yml both hard-require a lane manifest to exist regardless of the fast-path exemption, so this manifest was added after the fact -- same pattern as the UTV2-1512/1513 backfill precedent. This is itself a gap in the T3 fast-path implementation (CI enforcement not matching dispatch.md's documented behavior) worth a follow-up issue, out of scope for this correction."
+}
