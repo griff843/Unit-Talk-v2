@@ -221,6 +221,19 @@ function eventFieldsFromRow(row: JsonObject): { eventName: string | null; eventS
   };
 }
 
+/**
+ * Await a PostgREST query, retrying once on a transient statement timeout
+ * (57014). Still fail-closed: a second timeout surfaces as the error.
+ */
+async function awaitWithTimeoutRetry(build: () => any): Promise<{ data: unknown; count: number | null; error: { code?: string } | null }> {
+  const first = await build();
+  if (first.error && String(first.error.code) === '57014') {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    return build();
+  }
+  return first;
+}
+
 function asRecord(v: unknown): JsonObject {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as JsonObject) : {};
 }
@@ -329,7 +342,7 @@ export async function getReviewQueue(
       .order(sort, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await query;
+    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
     if (error) {
       console.error('getReviewQueue error:', error);
@@ -375,7 +388,7 @@ export async function getHeldQueue(
       .order(sort, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await query;
+    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
     if (error) {
       console.error('getHeldQueue error:', error);
@@ -513,7 +526,7 @@ export async function searchPicks(
       .order(sortCol, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await query;
+    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
     if (error) {
       console.error('searchPicks error:', error);

@@ -7,10 +7,19 @@ import { fetchRuntimeTruth } from '@/lib/server-api';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
 
 export default async function ApiHealthPage() {
+  // Fail closed but never 500: a transient telemetry-store timeout degrades
+  // to an explicit banner rather than crashing the whole surface.
+  const failures: string[] = [];
+  const degrade = <T,>(promise: Promise<T>, label: string, fallback: T): Promise<T> =>
+    promise.catch((error: unknown) => {
+      failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+      return fallback;
+    });
+
   const [providerHealth, snapshot, latencySamples, runtimeTruthState] = await Promise.all([
-    getProviderHealth(),
-    getSnapshotData(),
-    getProviderCycleLatencySamples(),
+    degrade(getProviderHealth(), 'provider health', null),
+    degrade(getSnapshotData(), 'snapshot', null),
+    degrade(getProviderCycleLatencySamples(), 'cycle latency', []),
     fetchRuntimeTruth()
       .then((runtimeTruth) => ({ runtimeTruth, error: null as string | null }))
       .catch((error: unknown) => ({
@@ -33,6 +42,17 @@ export default async function ApiHealthPage() {
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={30_000} className="lg:min-w-[360px]" />
       </div>
+
+      {failures.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <div className="font-semibold">Telemetry partially unavailable</div>
+          <ul className="mt-1 list-disc pl-5 text-xs opacity-85">
+            {failures.map((failure) => (
+              <li key={failure}>{failure}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {cards.map((card) => (
