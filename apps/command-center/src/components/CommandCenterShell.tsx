@@ -1,9 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CommandPalette } from '@/components/CommandPalette';
 import { TopBar } from '@/components/TopBar';
 import { SidebarHealthStatus, SidebarNavGroup, SidebarNavItem, WorkspaceSidebar } from '@/components/WorkspaceSidebar';
+import type { CommandEntry } from '@/lib/command-palette-model';
 
 type CommandCenterShellProps = {
   children: React.ReactNode;
@@ -21,7 +23,7 @@ const dot = icon(<circle cx="12" cy="12" r="4" />);
 
 const NAV_GROUPS: SidebarNavGroup[] = [
   {
-    label: 'Overview',
+    label: 'Desk',
     items: [
       { href: '/', label: 'Executive Overview', icon: icon(<path d="M3 12h18M3 6h18M3 18h18" />), match: ['/'] },
       { href: '/fire-board', label: 'Fire Board', icon: icon(<path d="M12 2c1 4-4 5-4 10a4 4 0 0 0 8 0c0-2-1-3-1-5 3 2 5 4 5 7a8 8 0 1 1-16 0c0-6 7-8 8-12Z" />), match: ['/fire-board'] },
@@ -31,12 +33,17 @@ const NAV_GROUPS: SidebarNavGroup[] = [
   {
     label: 'Operations',
     items: [
-      { href: '/api-health', label: 'System Health', icon: icon(<path d="M3 12h4l3-9 4 18 3-9h4" />), match: ['/api-health', '/burn-in', '/model-health', '/runtime-dashboard', '/ops', '/agents'] },
       { href: '/operations/outbox', label: 'Dispatch / Outbox', icon: icon(<><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" /></>), match: ['/operations/outbox'] },
       { href: '/operations/approvals', label: 'Approvals', icon: icon(<><path d="M20 6 9 17l-5-5" /></>), match: ['/operations/approvals', '/held', '/decisions'] },
-      { href: '/operations/governance', label: 'Governance', icon: icon(<><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>), match: ['/operations/governance'] },
       { href: '/operations/discord', label: 'Discord Control', icon: icon(<><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><path d="M8 17c2.5 1.3 5.5 1.3 8 0" /><path d="M19 5c-1.5-1-3.5-1.5-5-1.5h-4C8.5 3.5 6.5 4 5 5 3 8 2.5 12 3 16c1.7 1.3 3.5 2 5 2l1-2" /><path d="M15 16l1 2c1.5 0 3.3-.7 5-2 .5-4 0-8-2-11" /></>), match: ['/operations/discord'] },
       { href: '/operations/results', label: 'Results Ops', icon: icon(<><path d="M3 3v18h18" /><path d="M7 14l4-4 3 3 5-6" /></>), match: ['/operations/results', '/exceptions', '/interventions'] },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { href: '/api-health', label: 'System Health', icon: icon(<path d="M3 12h4l3-9 4 18 3-9h4" />), match: ['/api-health', '/burn-in', '/model-health', '/runtime-dashboard', '/ops', '/agents'] },
+      { href: '/operations/governance', label: 'Governance / Lanes', icon: icon(<><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>), match: ['/operations/governance'] },
     ],
   },
   {
@@ -70,6 +77,10 @@ const NAV_GROUPS: SidebarNavGroup[] = [
 ];
 
 const ALL_NAV_ITEMS: SidebarNavItem[] = NAV_GROUPS.flatMap((group) => group.items);
+
+const COMMAND_ENTRIES: CommandEntry[] = NAV_GROUPS.flatMap((group) =>
+  group.items.map((item) => ({ href: item.href, label: item.label, group: group.label })),
+);
 
 function titleize(value: string) {
   return value
@@ -126,7 +137,19 @@ function resolveChrome(pathname: string) {
 export function CommandCenterShell({ children }: CommandCenterShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const chrome = resolveChrome(pathname);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((current) => !current);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <>
@@ -138,9 +161,10 @@ export function CommandCenterShell({ children }: CommandCenterShellProps) {
         onToggle={() => setCollapsed((current) => !current)}
       />
       <main id="main-content" className="flex-1 min-w-0 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
-        <TopBar title={chrome.title} breadcrumb={chrome.breadcrumb} />
+        <TopBar title={chrome.title} breadcrumb={chrome.breadcrumb} onOpenPalette={() => setPaletteOpen(true)} />
         {children}
       </main>
+      <CommandPalette entries={COMMAND_ENTRIES} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </>
   );
 }
