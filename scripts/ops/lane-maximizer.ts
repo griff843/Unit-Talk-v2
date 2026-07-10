@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { ACTIVE_LOCK_STATUSES, readConfiguredEnvValue, resolveLaneExecutor } from './shared.js';
 import { linearQuery } from './linear-client.js';
+import {
+  FULL_VERIFY_THROTTLE_DIR,
+  FULL_VERIFY_THROTTLE_STALE_MS,
+  configuredFullVerifyConcurrency,
+} from './preflight.js';
 
 export interface LaneManifest {
   schema_version: number;
@@ -115,10 +120,6 @@ export interface MaximizationReport {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LANE_DIR = path.join(ROOT, 'docs', '06_status', 'lanes');
-const FULL_VERIFY_THROTTLE_ENV = 'UNIT_TALK_FULL_VERIFY_CONCURRENCY';
-const FULL_VERIFY_THROTTLE_DEFAULT = 1;
-const FULL_VERIFY_THROTTLE_STALE_MS = 6 * 60 * 60 * 1000;
-const FULL_VERIFY_THROTTLE_DIR = path.join(ROOT, '.out', 'ops', 'preflight', 'full-verify-semaphore');
 
 const REASON_MESSAGES: Record<string, string> = {
   OVERLAP: 'Candidate file scope overlaps an active lane lock.',
@@ -314,11 +315,6 @@ function activeForbiddenCombinations(
   forbiddenCombinations: [string, string][],
 ): string[][] {
   return forbiddenCombinations.filter(([left, right]) => activeTypes.includes(left) && activeTypes.includes(right));
-}
-
-function configuredFullVerifyConcurrency(): number {
-  const raw = Number.parseInt(process.env[FULL_VERIFY_THROTTLE_ENV] ?? '', 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : FULL_VERIFY_THROTTLE_DEFAULT;
 }
 
 function readThrottleOwner(slotPath: string): { acquired_at?: string } | null {

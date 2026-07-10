@@ -12,8 +12,8 @@ import {
   type PreflightWaiver,
   EVIDENCE_BUNDLE_SCHEMA_PATH,
   LANE_MANIFEST_SCHEMA_PATH,
-  PREFLIGHT_DIR,
   PREFLIGHT_BASELINE_CACHE_PATH,
+  PREFLIGHT_DIR,
   ROOT,
   TRUTH_CHECK_RESULT_SCHEMA_PATH,
   branchExists,
@@ -49,12 +49,6 @@ type LinearIssueRecord = {
   labels?: { nodes: Array<{ name: string }> } | null;
 };
 
-const FULL_VERIFY_THROTTLE_ENV = 'UNIT_TALK_FULL_VERIFY_CONCURRENCY';
-const FULL_VERIFY_THROTTLE_DEFAULT = 1;
-const FULL_VERIFY_THROTTLE_STALE_MS = 6 * 60 * 60 * 1000;
-const FULL_VERIFY_THROTTLE_WAIT_MS = 5_000;
-const FULL_VERIFY_THROTTLE_DIR = path.join(PREFLIGHT_DIR, 'full-verify-semaphore');
-
 // PE3 (GITHUB_TOKEN) is waivable across all tiers: the token is only needed at
 // PR-creation time (ops:lane-link-pr), not during the coding/doc work itself.
 // Teams using SSH-based gh auth or PAT-less local environments can waive PE3.
@@ -63,6 +57,91 @@ const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
   T2: new Set(['PE3', 'PL4']),
   T3: new Set(['PE3', 'PB2', 'PG3', 'PL4', 'PR7']),
 };
+
+// UTV2-1516: throttle concurrent `pnpm type-check && pnpm test` runs during
+// full verify so WSL2 hosts with limited RAM don't get pushed into swap by
+// several lanes running a full baseline at once.
+const FULL_VERIFY_THROTTLE_ENV = 'UNIT_TALK_FULL_VERIFY_CONCURRENCY';
+const FULL_VERIFY_THROTTLE_DEFAULT = 1;
+export const FULL_VERIFY_THROTTLE_STALE_MS = 6 * 60 * 60 * 1000;
+const FULL_VERIFY_THROTTLE_WAIT_MS = 5_000;
+export const FULL_VERIFY_THROTTLE_DIR = path.join(PREFLIGHT_DIR, 'full-verify-semaphore');
+
+export function configuredFullVerifyConcurrency(): number {
+  const raw = Number.parseInt(process.env[FULL_VERIFY_THROTTLE_ENV] ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : FULL_VERIFY_THROTTLE_DEFAULT;
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function readThrottleOwner(slotPath: string): { pid?: number; acquired_at?: string } | null {
+  const ownerPath = path.join(slotPath, 'owner.json');
+  if (!fs.existsSync(ownerPath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { pid?: number; acquired_at?: string };
+  } catch {
+    return null;
+  }
+}
+
+function releaseStaleThrottleSlot(slotPath: string, staleMs: number): void {
+  const owner = readThrottleOwner(slotPath);
+  const parsed = owner?.acquired_at ? Date.parse(owner.acquired_at) : NaN;
+  const acquiredAt = Number.isFinite(parsed)
+    ? parsed
+    : fs.existsSync(slotPath)
+      ? fs.statSync(slotPath).mtimeMs
+      : NaN;
+  // An epoch-zero (or otherwise falsy-but-valid) timestamp must still count as
+  // known age -- only a genuinely unparseable/missing timestamp skips reclaim.
+  if (!Number.isFinite(acquiredAt) || Date.now() - acquiredAt <= staleMs) {
+    return;
+  }
+  fs.rmSync(slotPath, { recursive: true, force: true });
+}
+
+export function acquireFullVerifyThrottle(
+  dir: string = FULL_VERIFY_THROTTLE_DIR,
+  maxConcurrent: number = configuredFullVerifyConcurrency(),
+  staleMs: number = FULL_VERIFY_THROTTLE_STALE_MS,
+): { slot: number; slotPath: string; maxConcurrent: number } {
+  fs.mkdirSync(dir, { recursive: true });
+
+  for (;;) {
+    for (let slot = 0; slot < maxConcurrent; slot += 1) {
+      const slotPath = path.join(dir, `slot-${slot}`);
+      releaseStaleThrottleSlot(slotPath, staleMs);
+      try {
+        fs.mkdirSync(slotPath);
+        fs.writeFileSync(
+          path.join(slotPath, 'owner.json'),
+          `${JSON.stringify({
+            pid: process.pid,
+            acquired_at: new Date().toISOString(),
+            cwd: ROOT,
+            command: 'pnpm type-check && pnpm test',
+          }, null, 2)}\n`,
+          'utf8',
+        );
+        return { slot, slotPath, maxConcurrent };
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== 'EEXIST') {
+          throw error;
+        }
+      }
+    }
+    sleepSync(FULL_VERIFY_THROTTLE_WAIT_MS);
+  }
+}
+
+export function releaseFullVerifyThrottle(throttle: { slotPath: string }): void {
+  fs.rmSync(throttle.slotPath, { recursive: true, force: true });
+}
 
 async function main(): Promise<number> {
   const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
@@ -274,14 +353,20 @@ function minimalFailureResult(
   };
 }
 
-void main()
-  .then((exitCode) => {
-    process.exitCode = exitCode;
-  })
-  .catch((error) => {
-    process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
-    process.exitCode = 3;
-  });
+// UTV2-1516: guarded so this module is safe to import (e.g. from unit tests
+// that exercise the throttle functions below) without re-running a full,
+// real preflight check as an import side effect. Matches the same pattern
+// scripts/ci/file-scope-guard.ts already uses for the same reason.
+if (import.meta.url === `file://${process.argv[1]}`) {
+  void main()
+    .then((exitCode) => {
+      process.exitCode = exitCode;
+    })
+    .catch((error) => {
+      process.stderr.write(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+      process.exitCode = 3;
+    });
+}
 
 function runEnvCheck(
   envFilePath: string,
@@ -791,75 +876,6 @@ async function runBaselineChecks(
   return { cacheHit, updatedCache };
 }
 
-function configuredFullVerifyConcurrency(): number {
-  const raw = Number.parseInt(process.env[FULL_VERIFY_THROTTLE_ENV] ?? '', 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : FULL_VERIFY_THROTTLE_DEFAULT;
-}
-
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function readThrottleOwner(slotPath: string): { pid?: number; acquired_at?: string } | null {
-  const ownerPath = path.join(slotPath, 'owner.json');
-  if (!fs.existsSync(ownerPath)) {
-    return null;
-  }
-  try {
-    return JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { pid?: number; acquired_at?: string };
-  } catch {
-    return null;
-  }
-}
-
-function releaseStaleThrottleSlot(slotPath: string): void {
-  const owner = readThrottleOwner(slotPath);
-  const acquiredAt = owner?.acquired_at
-    ? Date.parse(owner.acquired_at)
-    : fs.existsSync(slotPath)
-      ? fs.statSync(slotPath).mtimeMs
-      : 0;
-  if (!acquiredAt || Date.now() - acquiredAt <= FULL_VERIFY_THROTTLE_STALE_MS) {
-    return;
-  }
-  fs.rmSync(slotPath, { recursive: true, force: true });
-}
-
-function acquireFullVerifyThrottle(): { slot: number; slotPath: string; maxConcurrent: number } {
-  const maxConcurrent = configuredFullVerifyConcurrency();
-  fs.mkdirSync(FULL_VERIFY_THROTTLE_DIR, { recursive: true });
-
-  for (;;) {
-    for (let slot = 0; slot < maxConcurrent; slot += 1) {
-      const slotPath = path.join(FULL_VERIFY_THROTTLE_DIR, `slot-${slot}`);
-      releaseStaleThrottleSlot(slotPath);
-      try {
-        fs.mkdirSync(slotPath);
-        fs.writeFileSync(
-          path.join(slotPath, 'owner.json'),
-          `${JSON.stringify({
-            pid: process.pid,
-            acquired_at: new Date().toISOString(),
-            cwd: ROOT,
-            command: 'pnpm type-check && pnpm test',
-          }, null, 2)}\n`,
-          'utf8',
-        );
-        return { slot, slotPath, maxConcurrent };
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code !== 'EEXIST') {
-          throw error;
-        }
-      }
-    }
-    sleepSync(FULL_VERIFY_THROTTLE_WAIT_MS);
-  }
-}
-
-function releaseFullVerifyThrottle(throttle: { slotPath: string }): void {
-  fs.rmSync(throttle.slotPath, { recursive: true, force: true });
-}
 
 function applyWaivers(
   tier: LaneTier,
