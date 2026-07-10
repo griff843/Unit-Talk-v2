@@ -35,5 +35,10 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "approved_by": "griff843 (PM directive, this session)",
+    "reason": "file-scope-guard.ts trusts the first commit that introduced this manifest (69e755f4, file_scope_lock=[docs/06_status/KNOWN_DEBT.md] only) rather than the later commit that added the new implementation files to file_scope_lock, per its immutable-baseline design. This head-tip override declares the same three files (scripts/ops/ci-dispatch-watchdog.ts, its test, and the new workflow file) that were legitimately created during this lane's own implementation -- not scope widening beyond the issue's own work.",
+    "evidence": "https://github.com/griff843/Unit-Talk-v2/pull/1187 -- diff is scoped entirely to this issue's own new files plus a KNOWN_DEBT.md entry"
   }
 }
