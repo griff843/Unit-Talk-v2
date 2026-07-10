@@ -1,5 +1,7 @@
 # UTV2-1514 Baseline / Sweep Report
 
+MERGE_SHA: 3df47df9240a4608e82fd8defde6896885ae9338
+
 Advisory evidence only, per `MECHANICAL_TIER_CLASSIFIER_SPEC.md` section 3 ("Merge-gate integration point"), step 5:
 > Produce a baseline/sweep report — run the classifier against currently open lane PRs and recent merge history ... so PM can evaluate blast radius before any blocking behavior ships.
 

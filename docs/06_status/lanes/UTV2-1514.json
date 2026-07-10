@@ -25,7 +25,7 @@
   ],
   "status": "merged",
   "started_at": "2026-07-09T05:37:58.096Z",
-  "heartbeat_at": "2026-07-10T12:59:37.986Z",
+  "heartbeat_at": "2026-07-10T13:02:11.301Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1514-mechanical-tier-classifier-implementation.json",
@@ -39,6 +39,33 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1179"
+    },
+    {
+      "checked_at": "2026-07-10T13:00:55.337Z",
+      "verdict": "fail",
+      "merge_sha": "3df47df9240a4608e82fd8defde6896885ae9338",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-10T13:01:26.865Z",
+      "verdict": "fail",
+      "merge_sha": "3df47df9240a4608e82fd8defde6896885ae9338",
+      "failures": [
+        "P13",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-10T13:02:11.301Z",
+      "verdict": "pass",
+      "merge_sha": "3df47df9240a4608e82fd8defde6896885ae9338",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
