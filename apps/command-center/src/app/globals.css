@@ -27,6 +27,29 @@
   --cc-warning: #f59e0b;
   --cc-radius-md: 0.5rem;
   --cc-radius-lg: 0.75rem;
+
+  /*
+   * Neutral scale as RGB triplets — the single token source for Tailwind's
+   * gray/slate scales (see tailwind.config.ts). Dark-first: low steps are
+   * light ink, high steps are deep surfaces. Light theme flips these below.
+   */
+  --cc-n-50: 247 250 255;
+  --cc-n-100: 231 237 248; /* text-primary */
+  --cc-n-200: 205 215 233;
+  --cc-n-300: 182 195 218;
+  --cc-n-400: 151 167 195; /* text-secondary */
+  --cc-n-500: 111 129 159; /* text-muted */
+  --cc-n-600: 70 88 122;
+  --cc-n-700: 45 60 86;    /* border-strong */
+  --cc-n-800: 31 43 64;    /* border-subtle */
+  --cc-n-900: 11 17 27;    /* surface */
+  --cc-n-950: 5 7 13;      /* canvas */
+  --cc-rgb-elevated: 19 27 42;
+  --cc-rgb-hover: 26 36 54;
+  --cc-rgb-accent: 61 139 255;
+  --cc-rgb-success: 34 197 94;
+  --cc-rgb-danger: 239 68 68;
+  --cc-rgb-warning: 245 158 11;
 }
 
 [data-theme='light'] {
@@ -40,11 +63,31 @@
   --cc-text-primary: #0f172a;
   --cc-text-secondary: #334155;
   --cc-text-muted: #64748b;
+
+  --cc-n-50: 15 23 42;
+  --cc-n-100: 15 23 42;
+  --cc-n-200: 30 41 59;
+  --cc-n-300: 51 65 85;
+  --cc-n-400: 51 65 85;
+  --cc-n-500: 100 116 139;
+  --cc-n-600: 148 163 184;
+  --cc-n-700: 174 191 215;
+  --cc-n-800: 207 219 236;
+  --cc-n-900: 255 255 255;
+  --cc-n-950: 237 243 251;
+  --cc-rgb-elevated: 246 249 252;
+  --cc-rgb-hover: 232 238 248;
 }
 
 html,
 body {
   min-height: 100%;
+}
+
+/* Trading-desk numerics: aligned digits everywhere numbers stack vertically. */
+table,
+.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 body {
