@@ -18,7 +18,11 @@
     "scripts/ops/merge-wrapper.ts",
     "scripts/ops/merge-wrapper.test.ts",
     "scripts/ops/ops-merge-wrapper.ts",
-    "scripts/ops/ops-merge-wrapper.test.ts"
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    "docs/06_status/proof/UTV2-1467/evidence.json",
+    "docs/06_status/proof/UTV2-1467/verification.md",
+    "docs/06_status/proof/UTV2-1467/diff-summary.md",
+    "docs/06_status/proof/UTV2-1467/.gitkeep"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1467/evidence.json",
