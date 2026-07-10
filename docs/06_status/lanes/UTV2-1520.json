@@ -11,7 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/proof/UTV2-1493/verification.md"
+    "docs/06_status/incidents/DRYRUN-20260710-01.md"
   ],
   "expected_proof_paths": [],
   "status": "started",
@@ -29,5 +29,10 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "approved_by": "griff843 (PM directive, this session)",
+    "reason": "file-scope-guard.ts trusts the first commit that introduced this manifest (file_scope_lock declared a placeholder existing-file path at lane-start time, since the real dry-run artifact did not exist yet) rather than this later commit that corrected file_scope_lock to the actual new file created. Not scope widening -- the diff is exactly one new file under docs/06_status/incidents/.",
+    "evidence": "Lane manifest history in this same file; this issue's own PR diff"
   }
 }
