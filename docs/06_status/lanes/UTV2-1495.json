@@ -13,12 +13,18 @@
   "file_scope_lock": [
     ".github/workflows/file-scope-lock-check.yml",
     "scripts/ci/file-scope-guard.ts",
-    "scripts/ci/file-scope-guard.test.ts"
+    "scripts/ci/file-scope-guard.test.ts",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1495/diff-summary.md",
     "docs/06_status/proof/UTV2-1495/verification.md"
   ],
+  "scope_override": {
+    "approved_by": "PM (dispatch orchestrator, review round on PR #1182)",
+    "reason": "Two corrections landed after lane-start's original declaration: (1) lane-start's --files flag captured only the last value passed (a pre-existing CLI arg-parsing bug in scripts/ops/shared.ts parseArgs), so the manifest committed by lane-start declared only .github/workflows/file-scope-lock-check.yml and silently dropped scripts/ci/file-scope-guard.ts and scripts/ci/file-scope-guard.test.ts; corrected before Codex began implementation (commit 06c1160f / pushed as b4c86d8e). (2) The PM review round on PR #1182 required registering scripts/ci/file-scope-guard.test.ts in package.json's test:ops list (a Codex P2 finding), a one-line addition to package.json that needs to be in-scope too. Both corrections match what this lane was actually dispatched to build; neither introduces unrelated production code.",
+    "evidence": "docs/06_status/proof/UTV2-1495/verification.md#manifest-scope-correction"
+  },
   "status": "started",
   "started_at": "2026-07-08T23:36:13.296Z",
   "heartbeat_at": "2026-07-08T23:36:13.296Z",

@@ -58,14 +58,34 @@ jobs:
               'utf8'
             );
 
+      - name: Resolve trusted guard script
+        # The PR under evaluation cannot be trusted to supply the code that
+        # evaluates it — a diff could touch an out-of-scope file *and* modify
+        # this guard script (or its own lane manifest) in the same commit set
+        # to make the check pass. Extract the base branch's copy of the guard
+        # and execute that instead of the PR's own copy. Manifest content is
+        # resolved the same way inside the script via --manifest-source git
+        # (see resolveTrustedManifests in scripts/ci/file-scope-guard.ts).
+        run: |
+          mkdir -p .out
+          if git show "origin/main:scripts/ci/file-scope-guard.ts" > .out/trusted-file-scope-guard.ts 2>/dev/null; then
+            echo "Using base-branch (origin/main) copy of file-scope-guard.ts"
+          else
+            echo "::warning::Base branch has no scripts/ci/file-scope-guard.ts yet — falling back to this PR's own copy. Expected only for the PR that introduces the guard; every later PR is evaluated against main's copy once this merges."
+            cp scripts/ci/file-scope-guard.ts .out/trusted-file-scope-guard.ts
+          fi
+
       - name: Check file scope locks
         id: file_scope_guard
         env:
           FILE_SCOPE_PR_BRANCH: ${{ github.head_ref }}
         run: |
-          pnpm exec tsx scripts/ci/file-scope-guard.ts \
+          pnpm exec tsx .out/trusted-file-scope-guard.ts \
             --changed-files-file .out/file-scope-changed-files.txt \
-            --output-json .out/file-scope-result.json
+            --output-json .out/file-scope-result.json \
+            --base origin/main \
+            --head HEAD \
+            --manifest-source git
 
       - name: Comment on file scope failure
         if: failure() && steps.file_scope_guard.outcome == 'failure'
