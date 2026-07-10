@@ -3,6 +3,8 @@ import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, Empt
 import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 
+export const metadata = { title: 'Results Ops — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: number }) {

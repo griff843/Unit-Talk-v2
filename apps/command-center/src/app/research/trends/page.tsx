@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Trend Explorer — Unit Talk Command Center' };
+
 export default function TrendFiltersPage() {
   return (
     <div className="flex flex-col gap-4">

@@ -10,6 +10,8 @@ import {
 } from '@/components/ui';
 import type { BoostEntry } from '@/lib/boost-contract';
 
+export const metadata = { title: 'Boost Analyzer — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 // TODO(data-contract): no boost/promo data source exists. See

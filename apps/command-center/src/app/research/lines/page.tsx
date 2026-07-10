@@ -1,6 +1,8 @@
 import { Card, EmptyState } from '@/components/ui';
 import { getResearchLines } from '@/lib/data';
 
+export const metadata = { title: 'Odds Board — Unit Talk Command Center' };
+
 interface LineShopperBook {
   bookmakerKey: string;
   line: number | null;

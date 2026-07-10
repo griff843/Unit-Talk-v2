@@ -2,6 +2,8 @@ import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
 import { getResearchPlayers } from '@/lib/data';
 
+export const metadata = { title: 'Player Research — Unit Talk Command Center' };
+
 export default async function PlayerCardPage({
   searchParams: searchParamsPromise,
 }: {

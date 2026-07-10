@@ -9,6 +9,8 @@ import {
 } from '@/components/ui';
 import type { InjuryReport } from '@/lib/injury-contract';
 
+export const metadata = { title: 'Injury Monitor — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 // TODO(data-contract): no injury data source is connected. See

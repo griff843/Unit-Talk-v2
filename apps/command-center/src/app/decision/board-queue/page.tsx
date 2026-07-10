@@ -2,6 +2,8 @@ import { getBoardQueue } from '@/lib/data';
 import type { BoardQueueData } from '@/lib/data';
 import { BoardQueueTable } from '@/components/BoardQueueTable';
 
+export const metadata = { title: 'Board Queue — Unit Talk Command Center' };
+
 export default async function BoardQueuePage() {
   let queue: BoardQueueData;
   try {

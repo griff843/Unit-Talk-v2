@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Card, EmptyState, InternalLabelBadge, StatCard, Table, TableHead, TableBody, Th, Td } from '@/components/ui';
 import { getResultsTracking } from '@/lib/data/execution';
 
+export const metadata = { title: 'Results Tracking — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 export default async function ResultsTrackingPage() {

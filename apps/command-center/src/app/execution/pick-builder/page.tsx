@@ -1,5 +1,7 @@
 import { PickBuilderForm } from '@/components/PickBuilderForm';
 
+export const metadata = { title: 'Pick Builder — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 export default function PickBuilderPage() {

@@ -3,6 +3,8 @@ import type { BoardStateData } from '@/lib/types';
 import { ScoreBreakdownBar } from '@/components/ScoreBreakdownBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+export const metadata = { title: 'Scores — Unit Talk Command Center' };
+
 export default async function ScoreBreakdownPage() {
   const boardResult = await getBoardState();
   const board = (boardResult.ok ? boardResult.data : null) as BoardStateData;
@@ -30,8 +32,8 @@ export default async function ScoreBreakdownPage() {
         />
       ) : (
         <div className="space-y-3">
-          {sorted.map((breakdown) => (
-            <ScoreBreakdownBar key={breakdown.pickId} breakdown={breakdown} />
+          {sorted.map((breakdown, index) => (
+            <ScoreBreakdownBar key={`${breakdown.pickId}-${index}`} breakdown={breakdown} />
           ))}
         </div>
       )}

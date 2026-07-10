@@ -3,6 +3,8 @@ import { InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, Se
 import { getDiscordOpsSnapshot, type DiscordOpsSnapshot } from '@/lib/data/discord-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 
+export const metadata = { title: 'Discord Control — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 function ShellSection({ title, detail }: { title: string; detail: string }) {

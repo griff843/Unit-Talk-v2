@@ -2,6 +2,8 @@ import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
 import { getInterventionAudit, type InterventionAuditRow } from '@/lib/data';
 
+export const metadata = { title: 'Interventions — Unit Talk Command Center' };
+
 const ACTION_COLORS: Record<string, string> = {
   'delivery.retry': 'text-blue-400',
   'promotion.rerun': 'text-blue-400',

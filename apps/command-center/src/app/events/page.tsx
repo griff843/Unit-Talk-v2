@@ -3,6 +3,8 @@ import { EventStream, StatCard, TopBar } from '@/components/ui';
 import { getEventsContent } from '@/lib/command-center-data';
 import { getRouteMeta } from '@/lib/command-center-nav';
 
+export const metadata = { title: 'Events — Unit Talk Command Center' };
+
 export default async function EventsPage() {
   const meta = getRouteMeta('/events');
   const content = await getEventsContent();

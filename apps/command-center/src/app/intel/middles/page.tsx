@@ -13,6 +13,8 @@ import { formatRelativeTime } from '@/lib/data/research';
 import { americanToDecimal, middleWindow } from '@/lib/odds-math';
 import { formatAmerican, formatTimestamp, formatUnits } from '@/lib/intel-format';
 
+export const metadata = { title: 'Middle Finder — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 const STAKE_PER_LEG = 500; // units — display notional only (1000u total)

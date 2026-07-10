@@ -19,6 +19,8 @@ import { formatRelativeTime } from '@/lib/data/research';
 import { consensusFairProbability, devigTwoWay, impliedProbability } from '@/lib/odds-math';
 import { formatAmerican, formatProb, formatTimestamp } from '@/lib/intel-format';
 
+export const metadata = { title: 'Sharp Book Compare — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 /** Book keys treated as sharp when present in the live data, in priority order. */

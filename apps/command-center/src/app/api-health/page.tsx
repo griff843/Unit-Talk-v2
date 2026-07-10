@@ -6,6 +6,8 @@ import { buildApiHealthPageData } from '@/lib/command-center-page-data';
 import { fetchRuntimeTruth } from '@/lib/server-api';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
 
+export const metadata = { title: 'System Health — Unit Talk Command Center' };
+
 export default async function ApiHealthPage() {
   // Fail closed but never 500: a transient telemetry-store timeout degrades
   // to an explicit banner rather than crashing the whole surface.

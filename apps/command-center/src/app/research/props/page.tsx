@@ -2,6 +2,8 @@ import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
 import { getPropOffers, getMarketUniverseStalenessByMarketKey, formatRelativeTime } from '@/lib/data';
 
+export const metadata = { title: 'Props Explorer — Unit Talk Command Center' };
+
 function formatOdds(odds: number | null): string {
   if (odds === null) return '—';
   return odds > 0 ? `+${odds}` : String(odds);

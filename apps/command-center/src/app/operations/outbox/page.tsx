@@ -4,6 +4,8 @@ import type { InternalLabel } from '@/components/ui';
 import { getOutboxOverview, OUTBOX_STATUSES, type OutboxOverview } from '@/lib/data/outbox';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 
+export const metadata = { title: 'Dispatch / Outbox — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 const STATUS_LABEL: Record<string, InternalLabel> = {

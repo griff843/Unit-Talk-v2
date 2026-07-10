@@ -3,6 +3,8 @@ import { getDashboardData, getDashboardRuntimeData } from '@/lib/data';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
 
+export const metadata = { title: 'Executive Overview — Unit Talk Command Center' };
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 const BROKEN_SIGNALS: LifecycleSignal[] = [

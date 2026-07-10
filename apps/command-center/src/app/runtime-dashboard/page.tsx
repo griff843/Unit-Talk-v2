@@ -3,6 +3,8 @@ import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { Card } from '@/components/ui';
 import { fetchRuntimeTruth, fetchRuntimeHealth } from '@/lib/server-api';
 
+export const metadata = { title: 'Runtime Dashboard — Unit Talk Command Center' };
+
 export default async function RuntimeDashboardPage() {
   const [runtimeTruthState, runtimeHealthState] = await Promise.all([
     fetchRuntimeTruth()

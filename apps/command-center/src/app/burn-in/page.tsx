@@ -9,6 +9,8 @@ import {
 import type { IntelligenceCoverage, ProviderCycleHealthSummary, ProviderHealth } from '@/lib/types';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 
+export const metadata = { title: 'Burn In — Unit Talk Command Center' };
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 type RowStatus = 'pass' | 'fail' | 'warn' | 'manual';

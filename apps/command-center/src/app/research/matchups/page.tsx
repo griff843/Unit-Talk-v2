@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { getResearchMatchups } from '@/lib/data';
 import type { ResearchMatchup } from '@/lib/data';
 
+export const metadata = { title: 'Matchups — Unit Talk Command Center' };
+
 const SPORT_OPTIONS = [
   { value: 'nba', label: 'NBA' },
   { value: 'mlb', label: 'MLB' },

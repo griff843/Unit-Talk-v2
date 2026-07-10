@@ -8,6 +8,8 @@ import { Suspense } from 'react';
 
 import { getHeldQueue } from '@/lib/data';
 
+export const metadata = { title: 'Held — Unit Talk Command Center' };
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {

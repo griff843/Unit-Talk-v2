@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/Card';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { getExceptionQueues } from '@/lib/data';
 
+export const metadata = { title: 'Exceptions — Unit Talk Command Center' };
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 interface ExceptionQueues {

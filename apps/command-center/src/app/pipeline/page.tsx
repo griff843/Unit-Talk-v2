@@ -4,6 +4,8 @@ import { getPipelineContent } from '@/lib/command-center-data';
 import { getDashboardData, getDashboardRuntimeData } from '@/lib/data';
 import { buildPipelineStages } from '@/lib/pipeline-stages';
 
+export const metadata = { title: "Today's Action — Unit Talk Command Center" };
+
 function SectionHeader({ kicker, title }: { kicker: string; title: string }) {
   return (
     <div>

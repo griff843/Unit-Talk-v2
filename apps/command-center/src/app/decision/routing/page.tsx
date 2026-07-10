@@ -1,6 +1,8 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getRoutingPreview } from '@/lib/data';
 
+export const metadata = { title: 'Routing — Unit Talk Command Center' };
+
 interface RoutingPreviewPageProps {
   searchParams?: Promise<{
     pickId?: string;

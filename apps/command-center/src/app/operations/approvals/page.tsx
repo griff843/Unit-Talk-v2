@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import { getReviewQueue, getHeldQueue } from '@/lib/data/queues';
 import { getAwaitingApprovalPicks } from '@/lib/data/approvals-ops';
+
+export const metadata = { title: 'Approvals — Unit Talk Command Center' };
 import {
   classifyApproval,
   compareApprovalLabels,

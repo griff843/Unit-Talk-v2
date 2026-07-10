@@ -1,6 +1,8 @@
 import { Card, EmptyState, MetricsCard } from '@/components/ui';
 import { getIntelligenceData } from '@/lib/data';
 
+export const metadata = { title: 'Calibration — Unit Talk Command Center' };
+
 function formatPercent(value: number | null) {
   return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(1)}%`;
 }

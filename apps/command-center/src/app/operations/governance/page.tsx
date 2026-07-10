@@ -1,6 +1,8 @@
 import { InternalLabelBadge, Table, TableHead, Th, TableBody, EmptyState } from '@/components/ui';
 import { LANE_BOARD_COLUMNS } from '@/lib/governance-contract';
 
+export const metadata = { title: 'Governance / Lanes — Unit Talk Command Center' };
+
 // Governance / lane board — UI SHELL.
 // Lane manifests live in repo files (docs/06_status/lanes/*.json) and lane
 // workflow state lives in Linear; neither is reachable from this app's

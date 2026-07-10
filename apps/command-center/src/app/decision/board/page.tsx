@@ -4,6 +4,8 @@ import { BoardCapacityGauge } from '@/components/BoardCapacityGauge';
 import { ConflictCard } from '@/components/ConflictCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+export const metadata = { title: 'Board — Unit Talk Command Center' };
+
 export default async function BoardSaturationPage() {
   const boardResult = await getBoardState();
   const board = (boardResult.ok ? boardResult.data : null) as BoardStateData;

@@ -3,6 +3,8 @@ import Link from 'next/link';
 
 import { getPerformanceData } from '@/lib/data';
 
+export const metadata = { title: 'Hit Rate — Unit Talk Command Center' };
+
 interface Stats {
   total: number;
   settled: number;

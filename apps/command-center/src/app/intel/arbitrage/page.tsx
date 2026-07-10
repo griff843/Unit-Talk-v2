@@ -13,6 +13,8 @@ import { formatRelativeTime } from '@/lib/data/research';
 import { americanToDecimal, arbPercent, arbStakeSplit } from '@/lib/odds-math';
 import { formatAmerican, formatPercent, formatTimestamp, formatUnits } from '@/lib/intel-format';
 
+export const metadata = { title: 'Arbitrage Finder — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 const NOTIONAL_BANKROLL = 1000; // units — display notional only

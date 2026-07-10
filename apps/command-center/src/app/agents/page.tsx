@@ -3,6 +3,8 @@ import { AgentCard, StatCard, TopBar } from '@/components/ui';
 import { getAgentsContent } from '@/lib/command-center-data';
 import { getRouteMeta } from '@/lib/command-center-nav';
 
+export const metadata = { title: 'Agents — Unit Talk Command Center' };
+
 export default async function AgentsPage() {
   const meta = getRouteMeta('/agents');
   const content = await getAgentsContent();

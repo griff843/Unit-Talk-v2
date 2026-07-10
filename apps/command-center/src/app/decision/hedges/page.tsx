@@ -1,3 +1,5 @@
+
+export const metadata = { title: 'Hedges — Unit Talk Command Center' };
 export default function HedgeOverlaysPage() {
   return (
     <div className="space-y-4">

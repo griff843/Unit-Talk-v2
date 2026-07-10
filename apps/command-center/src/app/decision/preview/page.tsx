@@ -1,6 +1,8 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getPromotionPreview } from '@/lib/data';
 
+export const metadata = { title: 'Preview — Unit Talk Command Center' };
+
 interface PromotionPreviewPageProps {
   searchParams?: Promise<{
     pickId?: string;

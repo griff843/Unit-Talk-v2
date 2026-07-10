@@ -1,5 +1,7 @@
 import { getPerformanceData } from '@/lib/data';
 
+export const metadata = { title: 'Roi — Unit Talk Command Center' };
+
 interface Stats {
   total: number;
   settled: number;

@@ -4,6 +4,8 @@ import { getExceptionQueues } from '@/lib/data/picks';
 import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';
 import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
 import { fetchRuntimeHealth } from '@/lib/server-api';
+
+export const metadata = { title: 'Fire Board — Unit Talk Command Center' };
 import {
   buildFireBoard,
   countBySeverity,

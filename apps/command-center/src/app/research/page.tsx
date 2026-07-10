@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Research — Unit Talk Command Center' };
+
 interface ResearchModule {
   name: string;
   href: string;

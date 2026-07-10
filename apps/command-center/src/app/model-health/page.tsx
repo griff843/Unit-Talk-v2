@@ -1,5 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+
+export const metadata = { title: 'Model Health — Unit Talk Command Center' };
 import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,

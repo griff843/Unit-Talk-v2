@@ -5,6 +5,8 @@ import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { Suspense } from 'react';
 import { getReviewQueue } from '@/lib/data';
 
+export const metadata = { title: 'Review Queue — Unit Talk Command Center' };
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {

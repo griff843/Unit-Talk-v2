@@ -17,6 +17,8 @@ import {
 import { formatRelativeTime } from '@/lib/data/research';
 import { formatAmerican, formatTimestamp } from '@/lib/intel-format';
 
+export const metadata = { title: 'Line Movement — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 interface MovementRow {

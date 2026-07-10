@@ -2,6 +2,8 @@ import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
 import { getReviewHistory } from '@/lib/data';
 
+export const metadata = { title: 'Decisions — Unit Talk Command Center' };
+
 interface ReviewRow {
   id: string;
   pickId: string;

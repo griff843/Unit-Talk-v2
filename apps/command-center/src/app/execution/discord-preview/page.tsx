@@ -3,6 +3,8 @@ import { Card, EmptyState, InternalLabelBadge, Table, TableHead, TableBody, Th, 
 import { DiscordEmbedPreview } from '@/components/DiscordEmbedPreview';
 import { getExecutionPick, listPreviewablePicks } from '@/lib/data/execution';
 
+export const metadata = { title: 'Discord Preview — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 export default async function DiscordPreviewPage({

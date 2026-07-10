@@ -14,6 +14,8 @@ import { formatRelativeTime } from '@/lib/data/research';
 import { americanToDecimal, consensusFairProbability, evPercent, impliedProbability } from '@/lib/odds-math';
 import { formatAmerican, formatPercent, formatProb, formatTimestamp } from '@/lib/intel-format';
 
+export const metadata = { title: 'EV Feed — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 interface EvRow {

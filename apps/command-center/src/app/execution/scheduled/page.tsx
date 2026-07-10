@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { Card, EmptyState, InternalLabelBadge, Table, TableHead, TableBody, Th, Td } from '@/components/ui';
 import { getScheduledDispatch, type OutboxDispatchRow } from '@/lib/data/execution';
 
+export const metadata = { title: 'Scheduled Dispatch — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 function DispatchTable({ rows, showNextAttempt }: { rows: OutboxDispatchRow[]; showNextAttempt: boolean }) {

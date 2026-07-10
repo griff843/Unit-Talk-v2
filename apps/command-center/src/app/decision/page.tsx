@@ -1,5 +1,7 @@
 import Link from 'next/link';
 
+export const metadata = { title: 'Decision — Unit Talk Command Center' };
+
 interface DecisionModule {
   name: string;
   href: string;

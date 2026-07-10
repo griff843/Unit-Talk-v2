@@ -495,7 +495,13 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
 // getLeaderboard
 // ─────────────────────────────────────────────────────────────
 
-export async function getLeaderboard(days: number): Promise<LeaderboardRow[]> {
+export interface LeaderboardResult {
+  rows: LeaderboardRow[];
+  /** Non-null when a query failed — the page must surface this, not render an empty board. */
+  error: string | null;
+}
+
+export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
   try {
     const client: Client = getDataClient();
     const cutoff = daysAgoIso(days);
@@ -509,28 +515,34 @@ export async function getLeaderboard(days: number): Promise<LeaderboardRow[]> {
 
     if (settlementResult.error) {
       console.error('[analytics] getLeaderboard settlement query error:', settlementResult.error);
-      return [];
+      return { rows: [], error: `settlement query failed: ${asString(settlementResult.error.message) ?? 'unknown'}` };
     }
 
     const settlementRows = (settlementResult.data ?? []) as Row[];
     const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
 
-    if (pickIds.length === 0) return [];
+    if (pickIds.length === 0) return { rows: [], error: null };
 
-    const picksResult = await client
-      .from('picks')
-      .select('id, source, metadata')
-      .in('id', pickIds);
-
-    if (picksResult.error) {
-      console.error('[analytics] getLeaderboard picks query error:', picksResult.error);
-      return [];
-    }
-
+    // Chunk the id list — an unbounded .in() blows the PostgREST URL length
+    // once the settled-pick set grows past a few hundred ids.
     const picksMap = new Map<string, Row>();
-    for (const row of (picksResult.data ?? []) as Row[]) {
-      const id = asString(row['id']);
-      if (id) picksMap.set(id, row);
+    const CHUNK = 100;
+    for (let i = 0; i < pickIds.length; i += CHUNK) {
+      const chunk = pickIds.slice(i, i + CHUNK);
+      const picksResult = await client
+        .from('picks')
+        .select('id, source, metadata')
+        .in('id', chunk);
+
+      if (picksResult.error) {
+        console.error('[analytics] getLeaderboard picks query error:', picksResult.error);
+        return { rows: [], error: `picks query failed: ${asString(picksResult.error.message) ?? 'unknown'}` };
+      }
+
+      for (const row of (picksResult.data ?? []) as Row[]) {
+        const id = asString(row['id']);
+        if (id) picksMap.set(id, row);
+      }
     }
 
     // Group by capper name
@@ -569,10 +581,10 @@ export async function getLeaderboard(days: number): Promise<LeaderboardRow[]> {
 
     // Sort by ROI descending
     result.sort((a, b) => b.roiPct - a.roiPct);
-    return result;
+    return { rows: result, error: null };
   } catch (err) {
     console.error('[analytics] getLeaderboard error:', err);
-    return [];
+    return { rows: [], error: err instanceof Error ? err.message : String(err) };
   }
 }
 

@@ -13,6 +13,8 @@ import { getCurrentOfferGroups, isStaleOdds, type IntelOfferGroup } from '@/lib/
 import { getDataClient } from '@/lib/data/client';
 import { formatAmerican, formatTimestamp } from '@/lib/intel-format';
 
+export const metadata = { title: 'Team Research — Unit Talk Command Center' };
+
 export const dynamic = 'force-dynamic';
 
 interface TeamEvent {
