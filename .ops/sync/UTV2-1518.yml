@@ -7,4 +7,6 @@ entities:
     - UTV2-1518
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-1518/diff-summary.md
+    - docs/06_status/proof/UTV2-1518/verification.md

@@ -223,6 +223,7 @@ export function resolveTrustedManifests(
   source: GitManifestSource,
   base: string,
   head: string,
+  prBranch = '',
 ): LaneManifest[] {
   const basePaths = new Set(source.listPathsAtRef(base));
   const headPaths = new Set(source.listPathsAtRef(head));
@@ -247,15 +248,19 @@ export function resolveTrustedManifests(
       continue;
     }
 
-    // Documented override path: if the PR's own (head) tip declares a
-    // well-formed scope_override on this manifest, trust the head content
-    // instead of the base/first-commit baseline. A missing or malformed
-    // override never grants an exception — the baseline wins by default.
+    // Documented override path: if this PR's own lane manifest declares a
+    // well-formed scope_override at the head tip, trust that head content
+    // instead of the base/first-commit baseline. Overrides on other lane
+    // manifests are ignored so a PR cannot rewrite another lane's lock state.
     const headRaw = source.readFileAtRef(head, filePath);
     if (headRaw) {
       try {
         const headManifest = JSON.parse(headRaw) as LaneManifest;
-        if (isWellFormedScopeOverride(headManifest.scope_override)) {
+        if (
+          prBranch.length > 0 &&
+          headManifest.branch === prBranch &&
+          isWellFormedScopeOverride(headManifest.scope_override)
+        ) {
           manifests.push(headManifest);
           continue;
         }
@@ -307,7 +312,7 @@ function createGitManifestSource(root: string, manifestDir: string): GitManifest
 
 function loadManifests(root: string, args: ParsedArgs): LaneManifest[] {
   if (args.manifestSource === 'git') {
-    return resolveTrustedManifests(createGitManifestSource(root, args.manifestDir), args.base, args.head);
+    return resolveTrustedManifests(createGitManifestSource(root, args.manifestDir), args.base, args.head, args.branch);
   }
   return readManifests(root, args.manifestDir);
 }

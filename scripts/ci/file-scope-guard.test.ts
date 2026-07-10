@@ -328,7 +328,7 @@ test('trusted resolution: malformed JSON at the resolved ref is skipped, not thr
   assert.deepEqual(manifests, []);
 });
 
-test('trusted resolution: a well-formed scope_override on the head manifest is honored', () => {
+test('trusted resolution: a well-formed scope_override on the PR branch manifest is honored', () => {
   const source = fakeGitSource({
     refs: {
       base: {
@@ -355,7 +355,7 @@ test('trusted resolution: a well-formed scope_override on the head manifest is h
     },
   });
 
-  const manifests = resolveTrustedManifests(source, 'base', 'head');
+  const manifests = resolveTrustedManifests(source, 'base', 'head', 'claude/utv2-1496-overlap');
   assert.deepEqual(manifests, [
     {
       issue_id: 'UTV2-1496',
@@ -367,6 +367,44 @@ test('trusted resolution: a well-formed scope_override on the head manifest is h
         reason: 'legitimate scope correction, documented with evidence',
         evidence: 'https://linear.app/unit-talk-v2/issue/UTV2-1496#comment-123',
       },
+    },
+  ]);
+});
+
+test('trusted resolution: a well-formed scope_override on another lane manifest is ignored', () => {
+  const source = fakeGitSource({
+    refs: {
+      base: {
+        'docs/06_status/lanes/UTV2-1496.json': JSON.stringify({
+          issue_id: 'UTV2-1496',
+          branch: 'claude/utv2-1496-overlap',
+          status: 'in_progress',
+          file_scope_lock: ['apps/api/src/routes/foo.ts'],
+        }),
+      },
+      head: {
+        'docs/06_status/lanes/UTV2-1496.json': JSON.stringify({
+          issue_id: 'UTV2-1496',
+          branch: 'claude/utv2-1496-overlap',
+          status: 'in_progress',
+          file_scope_lock: ['apps/api/src/routes/foo.ts', 'apps/api/src/index.ts'],
+          scope_override: {
+            approved_by: 'PM',
+            reason: 'legitimate scope correction, documented with evidence',
+            evidence: 'https://linear.app/unit-talk-v2/issue/UTV2-1496#comment-123',
+          },
+        }),
+      },
+    },
+  });
+
+  const manifests = resolveTrustedManifests(source, 'base', 'head', 'codex/utv2-1495-hard-file-scope-lock-enforcement');
+  assert.deepEqual(manifests, [
+    {
+      issue_id: 'UTV2-1496',
+      branch: 'claude/utv2-1496-overlap',
+      status: 'in_progress',
+      file_scope_lock: ['apps/api/src/routes/foo.ts'],
     },
   ]);
 });
@@ -398,7 +436,7 @@ test('trusted resolution: a malformed scope_override (missing evidence) is never
     },
   });
 
-  const manifests = resolveTrustedManifests(source, 'base', 'head');
+  const manifests = resolveTrustedManifests(source, 'base', 'head', 'claude/utv2-1496-overlap');
   assert.deepEqual(manifests, [
     {
       issue_id: 'UTV2-1496',
