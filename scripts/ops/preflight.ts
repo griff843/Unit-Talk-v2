@@ -12,6 +12,7 @@ import {
   type PreflightWaiver,
   EVIDENCE_BUNDLE_SCHEMA_PATH,
   LANE_MANIFEST_SCHEMA_PATH,
+  PREFLIGHT_DIR,
   PREFLIGHT_BASELINE_CACHE_PATH,
   ROOT,
   TRUTH_CHECK_RESULT_SCHEMA_PATH,
@@ -47,6 +48,12 @@ type LinearIssueRecord = {
   state?: { name: string } | null;
   labels?: { nodes: Array<{ name: string }> } | null;
 };
+
+const FULL_VERIFY_THROTTLE_ENV = 'UNIT_TALK_FULL_VERIFY_CONCURRENCY';
+const FULL_VERIFY_THROTTLE_DEFAULT = 1;
+const FULL_VERIFY_THROTTLE_STALE_MS = 6 * 60 * 60 * 1000;
+const FULL_VERIFY_THROTTLE_WAIT_MS = 5_000;
+const FULL_VERIFY_THROTTLE_DIR = path.join(PREFLIGHT_DIR, 'full-verify-semaphore');
 
 // PE3 (GITHUB_TOKEN) is waivable across all tiers: the token is only needed at
 // PR-creation time (ops:lane-link-pr), not during the coding/doc work itself.
@@ -746,18 +753,33 @@ async function runBaselineChecks(
     return { cacheHit, updatedCache };
   }
 
-  const typeCheck = runCommand('pnpm', ['type-check']);
-  addCheck('PB1', typeCheck.ok ? 'pass' : 'fail', typeCheck.ok ? 'pnpm type-check passed' : typeCheck.detail);
-  if (typeCheck.ok) {
-    updatedCache = {
-      ...(cache ?? {}),
-      head_sha: headSha,
-      type_check_passed_at: new Date().toISOString(),
-    };
-  }
+  const throttle = acquireFullVerifyThrottle();
+  const throttleDetail = `full-verify throttle slot ${throttle.slot + 1}/${throttle.maxConcurrent}`;
+  let testRun: ReturnType<typeof runCommand> = {
+    ok: false,
+    stdout: '',
+    detail: 'pnpm test did not run because preflight baseline failed before test execution',
+  };
+  try {
+    const typeCheck = runCommand('pnpm', ['type-check']);
+    addCheck('PB1', typeCheck.ok ? 'pass' : 'fail', typeCheck.ok ? 'pnpm type-check passed' : typeCheck.detail);
+    if (typeCheck.ok) {
+      updatedCache = {
+        ...(cache ?? {}),
+        head_sha: headSha,
+        type_check_passed_at: new Date().toISOString(),
+      };
+    }
 
-  const testRun = runCommand('pnpm', ['test']);
-  addCheck('PB2', testRun.ok ? 'pass' : 'fail', testRun.ok ? 'pnpm test passed' : testRun.detail);
+    testRun = runCommand('pnpm', ['test']);
+  } finally {
+    releaseFullVerifyThrottle(throttle);
+  }
+  addCheck(
+    'PB2',
+    testRun.ok ? 'pass' : 'fail',
+    testRun.ok ? `pnpm test passed after ${throttleDetail}` : testRun.detail,
+  );
   if (testRun.ok) {
     updatedCache = {
       ...(updatedCache ?? cache ?? {}),
@@ -767,6 +789,76 @@ async function runBaselineChecks(
   }
 
   return { cacheHit, updatedCache };
+}
+
+function configuredFullVerifyConcurrency(): number {
+  const raw = Number.parseInt(process.env[FULL_VERIFY_THROTTLE_ENV] ?? '', 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : FULL_VERIFY_THROTTLE_DEFAULT;
+}
+
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function readThrottleOwner(slotPath: string): { pid?: number; acquired_at?: string } | null {
+  const ownerPath = path.join(slotPath, 'owner.json');
+  if (!fs.existsSync(ownerPath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { pid?: number; acquired_at?: string };
+  } catch {
+    return null;
+  }
+}
+
+function releaseStaleThrottleSlot(slotPath: string): void {
+  const owner = readThrottleOwner(slotPath);
+  const acquiredAt = owner?.acquired_at
+    ? Date.parse(owner.acquired_at)
+    : fs.existsSync(slotPath)
+      ? fs.statSync(slotPath).mtimeMs
+      : 0;
+  if (!acquiredAt || Date.now() - acquiredAt <= FULL_VERIFY_THROTTLE_STALE_MS) {
+    return;
+  }
+  fs.rmSync(slotPath, { recursive: true, force: true });
+}
+
+function acquireFullVerifyThrottle(): { slot: number; slotPath: string; maxConcurrent: number } {
+  const maxConcurrent = configuredFullVerifyConcurrency();
+  fs.mkdirSync(FULL_VERIFY_THROTTLE_DIR, { recursive: true });
+
+  for (;;) {
+    for (let slot = 0; slot < maxConcurrent; slot += 1) {
+      const slotPath = path.join(FULL_VERIFY_THROTTLE_DIR, `slot-${slot}`);
+      releaseStaleThrottleSlot(slotPath);
+      try {
+        fs.mkdirSync(slotPath);
+        fs.writeFileSync(
+          path.join(slotPath, 'owner.json'),
+          `${JSON.stringify({
+            pid: process.pid,
+            acquired_at: new Date().toISOString(),
+            cwd: ROOT,
+            command: 'pnpm type-check && pnpm test',
+          }, null, 2)}\n`,
+          'utf8',
+        );
+        return { slot, slotPath, maxConcurrent };
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== 'EEXIST') {
+          throw error;
+        }
+      }
+    }
+    sleepSync(FULL_VERIFY_THROTTLE_WAIT_MS);
+  }
+}
+
+function releaseFullVerifyThrottle(throttle: { slotPath: string }): void {
+  fs.rmSync(throttle.slotPath, { recursive: true, force: true });
 }
 
 function applyWaivers(
