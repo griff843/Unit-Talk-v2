@@ -101,6 +101,35 @@ Any issue in a shared lane must have an explicit owner named for the current ste
 
 ---
 
+## Merge mechanics
+
+**Status:** Ratified under UTV2-1467 (2026-07-09), implementing Design B of the merge-queue decision packet (`docs/05_operations/UTV2-1461-merge-queue-decision-packet.md`, UTV2-1461).
+
+### Why this exists
+
+Branch protection on `main` is `strict: true` with four required contexts (`verify`, `Executor Result Validation`, `Merge Gate`, `P0 Protocol`) and no merge queue. Every merge invalidates every other open PR's up-to-date status, forcing a full `update-branch → CI → re-post executor-result` cycle per PR. Measured cost: N green PRs cost roughly **2N–3N CI cycles** under serial, operator-driven draining. Native GitHub merge queue (Design A) is **not available** on this repository — it is an organization-scoped-only GitHub feature, confirmed via a live ruleset probe (`gh api` returned HTTP 422 for a `merge_queue` rule) — and adopting it requires a separate, PM-gated org-transfer decision. This section documents Design B instead: a batched-merge protocol that needs **no branch-protection or required-workflow changes**.
+
+### merge-train
+
+`pnpm ops:merge-wrapper merge-train --candidates-file <path.json> [--method squash] [--ttl-minutes 60] [--timeout-minutes 15] [--poll-seconds 15] [--dry-run]` drains a batch of already-green, already-gate-approved PRs serially and immediately:
+
+1. **Collect** — the caller (orchestrator session or `/dispatch-board`) supplies a pre-ordered JSON array of `{ issue_id, branch, pr }` candidates. `merge-train` has no lane-type awareness; ordering (e.g. workflow/infra lanes first, then by age) is the caller's responsibility.
+2. **Freeze** — the merge mutex (`.ops/merge-lock.json`) is acquired **once for the whole batch**, not once per PR. `merge_serialized_max` in `docs/governance/CONCURRENCY_CONFIG.json` stays exactly `1` — the train does not raise the serialization ceiling, it changes how long a single serialized hold covers.
+3. **Drain serially, immediately** — for each candidate in order: `pr-update-branch` → wait for CI to settle on the new head (polls `gh pr view --json statusCheckRollup` against the four required contexts) → re-post the `EXECUTOR_RESULT` comment against the new head SHA (mechanical: the diff hasn't changed, only the base merge commit moved) → merge. No idle gap between candidates — that gap is exactly what let unrelated `main` advances restart other PRs' cycles under the old serial flow.
+4. **Batch closeout** — after a successful drain, run the existing single-issue post-merge closeout once per merged candidate, back-to-back. This is *N sequential single-issue closeouts*, not a new batch-aware closeout workflow — `post-merge-lane-close.yml` accepting multiple issue IDs on one `workflow_dispatch` is an explicitly separate, deferred follow-up.
+
+**Required-context enforcement is unchanged.** `ci.yml`, `merge-gate.yml`, `executor-result-validator.yml`, and `p0-protocol.yml` are untouched by this design — each candidate's `pr-update-branch` step produces the same `synchronize` event GitHub has always required a real CI run for; merge-train only changes the *cadence* at which those cycles happen between merges, not what gets validated or when.
+
+**Degrades safely.** If a candidate fails (update-branch conflict, CI failure/timeout, or merge failure), the drain stops: already-merged candidates stay merged (nothing to undo), untouched candidates are left exactly as they were (individually mergeable), and the mutex is released unconditionally — including on an unexpected exception from an injected dependency. Per-PR merging continues to work unchanged at any point; there is no state to unwind.
+
+**Invariant note:** the merge mutex being held for the duration of a train is a *different* mechanism from lane manifest state (`docs/06_status/lanes/*.json`, Truth hierarchy rank 3). A train holding the mutex does not make the underlying lanes "active" in the concurrency-policy sense (`docs/governance/LANE_CONCURRENCY_POLICY.md` §1) — those lanes already completed their own lifecycle before being queued into a train. Do not conflate "mutex held" with "lane active."
+
+### Rollback
+
+Stop invoking `merge-train`; per-PR merging via `pnpm ops:merge-wrapper pr-merge`/`pr-update-branch` continues to work exactly as before, with no state to unwind. There is no schema or config change to revert.
+
+---
+
 ## Invariants
 
 1. An issue in Ready for Codex or In Codex must have zero unresolved blockers.

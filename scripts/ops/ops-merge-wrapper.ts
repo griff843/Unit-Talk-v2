@@ -20,20 +20,36 @@
  * Usage:
  *   pnpm ops:merge-wrapper <operation> --issue UTV2-### --branch <branch> [--pr <pr>] [--method squash|merge|rebase] [--auto] [--dry-run]
  *   pnpm ops:merge-wrapper guard       --issue UTV2-### --branch <branch>       # assert lock is held by this issue
+ *
+ * merge-train (UTV2-1467, Design B — batched-merge protocol):
+ *   pnpm ops:merge-wrapper merge-train --candidates-file <path.json> [--method squash]
+ *     [--ttl-minutes 60] [--timeout-minutes 15] [--poll-seconds 15] [--dry-run]
+ *
+ *   <path.json> is a JSON array of `{ "issue_id": "UTV2-###", "branch": "...", "pr": "123" }`,
+ *   already ordered by the caller (this wrapper has no lane-type awareness).
+ *   Drains the batch serially and immediately under a single mutex hold —
+ *   see docs/05_operations/UTV2-1461-merge-queue-decision-packet.md §3 and
+ *   docs/05_operations/WORKFLOW_SPEC.md's "Merge mechanics" section.
  */
 
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 import {
   type MergeWrapperInput,
   type MergeWrapperResult,
   type MergeWrapperOperation,
+  type MergeMethod,
   type CommandRunner,
   buildMergeCommand,
+  bufferToText,
   runMergeWrapper,
 } from './merge-wrapper.js';
 import {
+  acquireMergeLock,
+  defaultMergeLockOwner,
+  releaseMergeLock,
   requireMergeLockHeld,
   type MergeLockResult,
 } from './merge-mutex.js';
@@ -42,6 +58,7 @@ import {
   emitJson,
   getFlag,
   parseArgs,
+  requireIssueId,
 } from './shared.js';
 
 export type ExtendedMergeWrapperOperation =
@@ -171,6 +188,650 @@ export function guardMergeLockHeld(
   return requireMergeLockHeld(input, options);
 }
 
+// ---------------------------------------------------------------------------
+// merge-train (UTV2-1467) — Design B batched-merge protocol
+// ---------------------------------------------------------------------------
+//
+// Drains a batch of already-green, already-gate-approved PRs serially and
+// immediately: the merge mutex is acquired ONCE for the whole batch (not
+// once per PR, as runMergeWrapper/runExtendedMergeWrapper do above), each
+// PR is update-branched against main, its CI is waited out, its
+// EXECUTOR_RESULT comment is re-posted against the new head SHA, and it is
+// merged — before moving to the next PR with no idle gap. This is exactly
+// Design B from docs/05_operations/UTV2-1461-merge-queue-decision-packet.md
+// §3, PM-approved for UTV2-1467 on 2026-07-09.
+//
+// Native GitHub merge queue (Design A) is confirmed unavailable on this
+// user-owned repo (a live ruleset probe returned HTTP 422 — merge queue is
+// org-scoped only). This file does not touch branch protection, rulesets,
+// or required-workflow triggers (ci.yml / merge-gate.yml /
+// executor-result-validator.yml / p0-protocol.yml are untouched by design):
+// every required context is still re-validated by GitHub itself on each
+// per-PR `synchronize` event exactly as it is today. merge-train only
+// changes the *cadence* at which those cycles happen between merges.
+//
+// Ordering: candidates are drained in the order given by the caller. This
+// file has no lane-type awareness (see the decision packet's own
+// observation that the orchestrator, not the wrapper, holds lane-type
+// metadata) — callers wanting "workflow/infra lanes first, then by age"
+// must pre-sort the candidates array before invoking merge-train.
+
+export interface MergeTrainCandidate {
+  issue_id: string;
+  branch: string;
+  pr: string;
+}
+
+export type MergeTrainEntryStatus =
+  | 'merged'
+  | 'planned'
+  | 'update_branch_failed'
+  | 'ci_failed'
+  | 'ci_timeout'
+  | 'merge_failed'
+  | 'skipped_after_failure'
+  | 'unexpected_error';
+
+export interface MergeTrainEntryResult {
+  issue_id: string;
+  branch: string;
+  pr: string;
+  status: MergeTrainEntryStatus;
+  detail: string;
+  merge_sha: string | null;
+  duration_ms: number;
+}
+
+export interface MergeTrainInput {
+  candidates: MergeTrainCandidate[];
+  cwd?: string;
+  merge_method?: MergeMethod;
+  ttl_minutes?: number;
+  dry_run?: boolean;
+  timeout_minutes?: number;
+  poll_seconds?: number;
+}
+
+export type MergeTrainResult =
+  | {
+      ok: true;
+      code: 'merge_train_completed' | 'merge_train_dry_run';
+      entries: MergeTrainEntryResult[];
+      lock: MergeLockResult;
+      release: MergeLockResult;
+      started_at: string;
+      completed_at: string;
+      duration_ms: number;
+    }
+  | {
+      ok: false;
+      code:
+        | 'merge_train_invalid_input'
+        | 'merge_train_lock_held'
+        | 'merge_train_lock_failed'
+        | 'merge_train_partial_failure';
+      entries?: MergeTrainEntryResult[];
+      lock?: MergeLockResult;
+      release?: MergeLockResult;
+      message: string;
+      started_at?: string;
+      completed_at?: string;
+      duration_ms?: number;
+    };
+
+export type CheckWaitStatus = 'success' | 'failure' | 'timeout';
+
+export interface StatusCheckEntry {
+  name?: string | null;
+  conclusion?: string | null;
+  status?: string | null;
+}
+
+/** The four required contexts on `main` today (branch protection). */
+export const MERGE_TRAIN_REQUIRED_CONTEXTS: readonly string[] = [
+  'verify',
+  'Executor Result Validation',
+  'Merge Gate',
+  'P0 Protocol',
+];
+
+// The decision packet observed ~9min CI cycles; default timeout leaves
+// headroom above that without hanging forever on a wedged check.
+const MERGE_TRAIN_DEFAULT_TIMEOUT_MINUTES = 15;
+const MERGE_TRAIN_DEFAULT_POLL_SECONDS = 15;
+
+/**
+ * Pure evaluator for a PR's statusCheckRollup (same field pr-block-diagnostic.ts
+ * and execution-state.ts already read via `gh pr view --json statusCheckRollup`)
+ * against the required-context list. Side-effect-free and exported so
+ * merge-train's decision logic is testable without faking real GitHub
+ * responses through the network layer.
+ */
+export function evaluateStatusCheckRollup(
+  rollup: StatusCheckEntry[],
+  requiredContexts: readonly string[] = MERGE_TRAIN_REQUIRED_CONTEXTS,
+): { status: 'success' | 'failure' | 'pending'; detail: string } {
+  const byName = new Map<string, StatusCheckEntry>();
+  for (const entry of rollup) {
+    if (entry.name) byName.set(entry.name, entry);
+  }
+
+  const missing = requiredContexts.filter((name) => !byName.has(name));
+  if (missing.length > 0) {
+    return { status: 'pending', detail: `waiting on contexts to appear: ${missing.join(', ')}` };
+  }
+
+  const passingConclusions = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
+  const failed = requiredContexts.filter((name) => {
+    const entry = byName.get(name);
+    return Boolean(entry?.conclusion) && !passingConclusions.has((entry?.conclusion ?? '').toUpperCase());
+  });
+  if (failed.length > 0) {
+    return { status: 'failure', detail: `required context(s) failed: ${failed.join(', ')}` };
+  }
+
+  const pending = requiredContexts.filter((name) => !byName.get(name)?.conclusion);
+  if (pending.length > 0) {
+    return { status: 'pending', detail: `waiting on: ${pending.join(', ')}` };
+  }
+
+  return { status: 'success', detail: 'all required contexts green' };
+}
+
+export type WaitForChecksFn = (
+  input: { pr: string; cwd: string; requiredContexts?: readonly string[] },
+  options: { runner: CommandRunner; timeoutMs: number; pollIntervalMs: number },
+) => Promise<{ status: CheckWaitStatus; detail: string }>;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+/**
+ * Default CI-wait: polls `gh pr view --json statusCheckRollup` until all
+ * MERGE_TRAIN_REQUIRED_CONTEXTS settle green, one fails, or the timeout
+ * elapses. Real GitHub round-trips only happen through the injected
+ * `runner` — tests supply a synchronous fake runner and a tiny
+ * pollIntervalMs so no test ever waits on a real network call or a real
+ * multi-minute CI cycle.
+ */
+export const defaultWaitForChecks: WaitForChecksFn = async (input, options) => {
+  const deadline = Date.now() + options.timeoutMs;
+  const requiredContexts = input.requiredContexts ?? MERGE_TRAIN_REQUIRED_CONTEXTS;
+
+  for (;;) {
+    const run = options.runner('gh', ['pr', 'view', input.pr, '--json', 'statusCheckRollup'], {
+      cwd: input.cwd,
+    });
+    if (run.error || run.status !== 0) {
+      return {
+        status: 'failure',
+        detail: `gh pr view --json statusCheckRollup failed: ${bufferToText(run.stderr) || bufferToText(run.stdout) || `exit ${run.status}`}`,
+      };
+    }
+
+    let rollup: StatusCheckEntry[] = [];
+    try {
+      const parsed = JSON.parse(bufferToText(run.stdout)) as { statusCheckRollup?: StatusCheckEntry[] };
+      rollup = Array.isArray(parsed.statusCheckRollup) ? parsed.statusCheckRollup : [];
+    } catch (error) {
+      return {
+        status: 'failure',
+        detail: `could not parse statusCheckRollup: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
+    const evaluation = evaluateStatusCheckRollup(rollup, requiredContexts);
+    if (evaluation.status === 'success' || evaluation.status === 'failure') {
+      return { status: evaluation.status, detail: evaluation.detail };
+    }
+
+    if (Date.now() >= deadline) {
+      return { status: 'timeout', detail: `timed out waiting for required contexts: ${evaluation.detail}` };
+    }
+
+    await sleep(options.pollIntervalMs);
+  }
+};
+
+interface ExecutorResultComment {
+  body: string;
+}
+
+/**
+ * Mirrors executor-result-validator.yml's `parseResult()`: a comment is a
+ * valid executor-result marker only if (after trimming and stripping
+ * markdown bold / `---` fences) it contains both the literal
+ * `EXECUTOR_RESULT: READY_FOR_REVIEW` line and the `schema: executor-result/v1`
+ * line. Exported so this parsing logic is unit-testable against the exact
+ * strings the workflow itself matches on.
+ */
+export function isExecutorResultComment(body: string): boolean {
+  const lines = body
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^\*\*(.+?)\*\*\s*/, '$1 ').replace(/^---$/, ''));
+  return (
+    lines.some((line) => line === 'EXECUTOR_RESULT: READY_FOR_REVIEW') &&
+    lines.some((line) => line === 'schema: executor-result/v1')
+  );
+}
+
+/**
+ * Builds the re-posted executor-result comment body for a PR whose head
+ * moved (update-branch). Head SHA is the only field that changes — this is
+ * the "mechanical" re-post the decision packet describes (§3 step 3);
+ * Issue/Lane/Branch/PR/Proof Artifact are carried over verbatim so the
+ * validator's other field checks still pass unchanged.
+ */
+export function buildRepostedExecutorResultBody(originalBody: string, newHeadSha: string): string {
+  const lines = originalBody.split(/\r?\n/);
+  // Matches "Head SHA: x", "**Head SHA**: x" (bold wraps only the label), and
+  // "**Head SHA:** x" (bold wraps the label AND the colon — the format the
+  // validator's own normalization (`replace(/^\*\*(.+?)\*\*\s*/, '$1 ')`)
+  // explicitly accepts). The trailing `\*{0,2}` handles the closing `**`
+  // landing after the colon instead of before it.
+  const headShaLineIndex = lines.findIndex((line) =>
+    /^\s*\*{0,2}head sha\*{0,2}:\*{0,2}\s*/i.test(line),
+  );
+  const newLine = `Head SHA: ${newHeadSha}`;
+  if (headShaLineIndex === -1) {
+    return [...lines, newLine].join('\n');
+  }
+  const next = [...lines];
+  next[headShaLineIndex] = newLine;
+  return next.join('\n');
+}
+
+export type RepostExecutorResultFn = (
+  input: { pr: string; cwd: string; newHeadSha: string },
+  options: { runner: CommandRunner },
+) => { ok: boolean; detail: string };
+
+/**
+ * Default executor-result re-post: reads the PR's comments, finds the most
+ * recent valid EXECUTOR_RESULT comment (same "most recent wins" rule the
+ * validator itself uses), rewrites its Head SHA line, and posts it as a
+ * NEW comment (the validator always reads the latest one — there is no
+ * need to edit the original in place).
+ */
+export const defaultRepostExecutorResult: RepostExecutorResultFn = (input, options) => {
+  const commentsRun = options.runner('gh', ['pr', 'view', input.pr, '--json', 'comments'], {
+    cwd: input.cwd,
+  });
+  if (commentsRun.error || commentsRun.status !== 0) {
+    return {
+      ok: false,
+      detail: `gh pr view --json comments failed: ${bufferToText(commentsRun.stderr) || `exit ${commentsRun.status}`}`,
+    };
+  }
+
+  let comments: ExecutorResultComment[] = [];
+  try {
+    const parsed = JSON.parse(bufferToText(commentsRun.stdout)) as { comments?: ExecutorResultComment[] };
+    comments = Array.isArray(parsed.comments) ? parsed.comments : [];
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `could not parse PR comments: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const matches = comments.filter((comment) => isExecutorResultComment(comment.body ?? ''));
+  const latest = matches.at(-1);
+  if (!latest) {
+    return { ok: false, detail: 'no existing EXECUTOR_RESULT comment found to re-post' };
+  }
+
+  const newBody = buildRepostedExecutorResultBody(latest.body, input.newHeadSha);
+  const postRun = options.runner('gh', ['pr', 'comment', input.pr, '--body', newBody], { cwd: input.cwd });
+  if (postRun.error || postRun.status !== 0) {
+    return {
+      ok: false,
+      detail: `gh pr comment failed: ${bufferToText(postRun.stderr) || `exit ${postRun.status}`}`,
+    };
+  }
+
+  return { ok: true, detail: `re-posted executor-result comment with Head SHA ${input.newHeadSha}` };
+};
+
+function defaultCommandRunner(
+  command: string,
+  args: string[],
+  options: { cwd: string },
+): ReturnType<CommandRunner> {
+  return spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' });
+}
+
+interface MergeTrainEntryDeps {
+  runner: CommandRunner;
+  waitForChecks: WaitForChecksFn;
+  repostExecutorResult: RepostExecutorResultFn;
+  clock: () => number;
+}
+
+async function runMergeTrainEntry(
+  candidate: MergeTrainCandidate,
+  input: { cwd?: string; merge_method?: MergeMethod },
+  timing: { timeoutMs: number; pollIntervalMs: number },
+  deps: MergeTrainEntryDeps,
+): Promise<MergeTrainEntryResult> {
+  const cwd = path.resolve(input.cwd ?? ROOT);
+  const start = deps.clock();
+  const base = { issue_id: candidate.issue_id, branch: candidate.branch, pr: candidate.pr };
+
+  const updateBranchCommand = buildMergeCommand({
+    operation: 'pr-update-branch',
+    issue_id: candidate.issue_id,
+    branch: candidate.branch,
+    pr: candidate.pr,
+  });
+  const updateRun = deps.runner(updateBranchCommand.command, updateBranchCommand.args, { cwd });
+  if (updateRun.error || updateRun.status !== 0) {
+    return {
+      ...base,
+      status: 'update_branch_failed',
+      detail: `pr-update-branch failed: ${bufferToText(updateRun.stderr) || bufferToText(updateRun.stdout) || `exit ${updateRun.status}`}`,
+      merge_sha: null,
+      duration_ms: deps.clock() - start,
+    };
+  }
+
+  // Re-post the executor-result comment against the new head SHA BEFORE
+  // waiting on checks — not after. `pr-update-branch` produces a real
+  // `synchronize` event, which re-runs Executor Result Validation
+  // immediately; if the stale (pre-update) comment is still the most
+  // recent one at that point, the validator fails it outright (HEAD SHA
+  // mismatch) and `waitForChecks` below would then see Executor Result
+  // Validation as a hard failure for every candidate whose update-branch
+  // actually moved the head, never reaching a state that could turn
+  // green. Reposting first — mechanical per the decision packet, since
+  // the diff hasn't changed, only the base merge commit moved — gives the
+  // validator a fresh, correctly-SHA-bound comment to re-evaluate during
+  // the same wait below.
+  let repostDetail = 'skipped: could not resolve new head SHA';
+  const headShaRun = deps.runner('gh', ['pr', 'view', candidate.pr, '--json', 'headRefOid'], { cwd });
+  if (!headShaRun.error && headShaRun.status === 0) {
+    try {
+      const parsed = JSON.parse(bufferToText(headShaRun.stdout)) as { headRefOid?: string };
+      if (parsed.headRefOid) {
+        repostDetail = deps.repostExecutorResult(
+          { pr: candidate.pr, cwd, newHeadSha: parsed.headRefOid },
+          { runner: deps.runner },
+        ).detail;
+      }
+    } catch (error) {
+      repostDetail = `could not parse headRefOid: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  // If the repost itself failed (e.g. no prior EXECUTOR_RESULT comment
+  // found to rewrite), we still proceed to wait: GitHub's own
+  // required-context enforcement is the authority, and a stale/missing
+  // executor-result comment will simply fail Executor Result Validation
+  // on its own, surfacing below as a ci_failed entry rather than being
+  // silently papered over here.
+  const wait = await deps.waitForChecks(
+    { pr: candidate.pr, cwd },
+    { runner: deps.runner, timeoutMs: timing.timeoutMs, pollIntervalMs: timing.pollIntervalMs },
+  );
+  if (wait.status === 'timeout') {
+    return {
+      ...base,
+      status: 'ci_timeout',
+      detail: `${wait.detail} (${repostDetail})`,
+      merge_sha: null,
+      duration_ms: deps.clock() - start,
+    };
+  }
+  if (wait.status === 'failure') {
+    return {
+      ...base,
+      status: 'ci_failed',
+      detail: `${wait.detail} (${repostDetail})`,
+      merge_sha: null,
+      duration_ms: deps.clock() - start,
+    };
+  }
+
+  const mergeCommand = buildMergeCommand({
+    operation: 'pr-merge',
+    issue_id: candidate.issue_id,
+    branch: candidate.branch,
+    pr: candidate.pr,
+    merge_method: input.merge_method ?? 'squash',
+  });
+  const mergeRun = deps.runner(mergeCommand.command, mergeCommand.args, { cwd });
+  if (mergeRun.error || mergeRun.status !== 0) {
+    return {
+      ...base,
+      status: 'merge_failed',
+      detail: `pr-merge failed (${repostDetail}): ${bufferToText(mergeRun.stderr) || bufferToText(mergeRun.stdout) || `exit ${mergeRun.status}`}`,
+      merge_sha: null,
+      duration_ms: deps.clock() - start,
+    };
+  }
+
+  const shaRun = deps.runner(
+    'gh',
+    ['pr', 'view', candidate.pr, '--json', 'mergeCommit', '--jq', '.mergeCommit.oid'],
+    { cwd },
+  );
+  const mergeSha = !shaRun.error && shaRun.status === 0 ? bufferToText(shaRun.stdout) || null : null;
+
+  return {
+    ...base,
+    status: 'merged',
+    detail: `merged (${repostDetail})`,
+    merge_sha: mergeSha,
+    duration_ms: deps.clock() - start,
+  };
+}
+
+function validateMergeTrainInput(input: MergeTrainInput): string[] {
+  const errors: string[] = [];
+  if (!Array.isArray(input.candidates) || input.candidates.length === 0) {
+    errors.push('candidates must be a non-empty array');
+    return errors;
+  }
+  input.candidates.forEach((candidate, index) => {
+    if (!candidate || typeof candidate !== 'object') {
+      errors.push(`candidates[${index}] must be an object`);
+      return;
+    }
+    try {
+      requireIssueId(candidate.issue_id ?? '');
+    } catch {
+      errors.push(`candidates[${index}].issue_id is invalid: "${candidate.issue_id}"`);
+    }
+    if (!candidate.branch) errors.push(`candidates[${index}].branch is required`);
+    if (!candidate.pr) errors.push(`candidates[${index}].pr is required`);
+  });
+  if (input.merge_method && !['merge', 'squash', 'rebase'].includes(input.merge_method)) {
+    errors.push(`Invalid merge method: ${input.merge_method}`);
+  }
+  return errors;
+}
+
+export interface MergeTrainDeps {
+  runner?: CommandRunner;
+  waitForChecks?: WaitForChecksFn;
+  repostExecutorResult?: RepostExecutorResultFn;
+  lockPath?: string;
+  now?: Date;
+  clock?: () => number;
+}
+
+/**
+ * Runs the merge-train protocol: acquire the merge mutex ONCE for the
+ * whole batch, drain candidates serially and immediately (update-branch →
+ * wait for CI → re-post executor-result → merge, per candidate, with no
+ * idle gap), and release the mutex exactly once at the end — regardless
+ * of whether the drain succeeded, failed partway, or an entry threw
+ * unexpectedly. A candidate failure stops the drain; already-merged
+ * candidates stay merged (there is nothing to undo) and untouched
+ * candidates are left exactly as they were (individually mergeable),
+ * matching the decision packet's "degrades gracefully" claim.
+ */
+export async function runMergeTrain(
+  input: MergeTrainInput,
+  deps: MergeTrainDeps = {},
+): Promise<MergeTrainResult> {
+  const errors = validateMergeTrainInput(input);
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      code: 'merge_train_invalid_input',
+      message: errors.join('; '),
+    };
+  }
+
+  const runner = deps.runner ?? defaultCommandRunner;
+  const waitForChecks = deps.waitForChecks ?? defaultWaitForChecks;
+  const repostExecutorResult = deps.repostExecutorResult ?? defaultRepostExecutorResult;
+  const clock = deps.clock ?? Date.now;
+  const now = deps.now ?? new Date();
+  const cwd = path.resolve(input.cwd ?? ROOT);
+  const primary = input.candidates[0] as MergeTrainCandidate;
+  const issueIds = input.candidates.map((candidate) => candidate.issue_id);
+  const startedAt = now.toISOString();
+  const startClock = clock();
+
+  const lock = acquireMergeLock(
+    {
+      issue_id: primary.issue_id,
+      branch: primary.branch,
+      pr: primary.pr,
+      cwd,
+      reason: `merge-train:${issueIds.join(',')}`,
+      owner: defaultMergeLockOwner(),
+      ttl_ms: (input.ttl_minutes ?? 60) * 60 * 1000,
+    },
+    { lockPath: deps.lockPath, now },
+  );
+
+  if (!lock.ok) {
+    return {
+      ok: false,
+      code: lock.code === 'merge_lock_held' ? 'merge_train_lock_held' : 'merge_train_lock_failed',
+      message: lock.message,
+      lock,
+    };
+  }
+
+  if (input.dry_run) {
+    const release = releaseMergeLock(
+      { issue_id: primary.issue_id, branch: primary.branch },
+      { lockPath: deps.lockPath, now },
+    );
+    return {
+      ok: true,
+      code: 'merge_train_dry_run',
+      entries: input.candidates.map((candidate) => ({
+        issue_id: candidate.issue_id,
+        branch: candidate.branch,
+        pr: candidate.pr,
+        status: 'planned',
+        detail: 'dry-run: no commands executed',
+        merge_sha: null,
+        duration_ms: 0,
+      })),
+      lock,
+      release,
+      started_at: startedAt,
+      completed_at: new Date(now.getTime() + 1).toISOString(),
+      duration_ms: 0,
+    };
+  }
+
+  const timing = {
+    timeoutMs: (input.timeout_minutes ?? MERGE_TRAIN_DEFAULT_TIMEOUT_MINUTES) * 60 * 1000,
+    pollIntervalMs: (input.poll_seconds ?? MERGE_TRAIN_DEFAULT_POLL_SECONDS) * 1000,
+  };
+
+  const entries: MergeTrainEntryResult[] = [];
+  let failed = false;
+
+  for (const candidate of input.candidates) {
+    if (failed) {
+      entries.push({
+        issue_id: candidate.issue_id,
+        branch: candidate.branch,
+        pr: candidate.pr,
+        status: 'skipped_after_failure',
+        detail: 'train stopped after an earlier candidate failed',
+        merge_sha: null,
+        duration_ms: 0,
+      });
+      continue;
+    }
+
+    // Never let a misbehaving injected dependency (or an unexpected bug)
+    // throw out of the drain loop — that would skip the unconditional
+    // mutex release below. Any thrown error becomes a structured failure
+    // entry instead, exactly like a normal command failure.
+    let entry: MergeTrainEntryResult;
+    try {
+      entry = await runMergeTrainEntry(
+        candidate,
+        { cwd: input.cwd, merge_method: input.merge_method },
+        timing,
+        { runner, waitForChecks, repostExecutorResult, clock },
+      );
+    } catch (error) {
+      entry = {
+        issue_id: candidate.issue_id,
+        branch: candidate.branch,
+        pr: candidate.pr,
+        status: 'unexpected_error',
+        detail: error instanceof Error ? error.message : String(error),
+        merge_sha: null,
+        duration_ms: 0,
+      };
+    }
+
+    entries.push(entry);
+    if (entry.status !== 'merged') {
+      failed = true;
+    }
+  }
+
+  const release = releaseMergeLock(
+    { issue_id: primary.issue_id, branch: primary.branch },
+    { lockPath: deps.lockPath, now: new Date(now.getTime() + 1) },
+  );
+
+  const completedAt = new Date().toISOString();
+  const durationMs = clock() - startClock;
+
+  if (failed) {
+    const failure = entries.find((entry) => entry.status !== 'merged' && entry.status !== 'skipped_after_failure');
+    return {
+      ok: false,
+      code: 'merge_train_partial_failure',
+      entries,
+      lock,
+      release,
+      message: `merge-train stopped after a candidate failed: ${failure?.issue_id ?? 'unknown'} (${failure?.status ?? 'unknown'}): ${failure?.detail ?? 'unknown failure'}`,
+      started_at: startedAt,
+      completed_at: completedAt,
+      duration_ms: durationMs,
+    };
+  }
+
+  return {
+    ok: true,
+    code: 'merge_train_completed',
+    entries,
+    lock,
+    release,
+    started_at: startedAt,
+    completed_at: completedAt,
+    duration_ms: durationMs,
+  };
+}
+
 function cliInput(argv: string[]): {
   operation: ExtendedMergeWrapperOperation | 'guard';
   issue_id: string;
@@ -200,7 +861,83 @@ function cliInput(argv: string[]): {
   };
 }
 
-function runCli(): void {
+/**
+ * Parses `--candidates-file <path.json>` plus the merge-train-specific
+ * flags. A separate parser from `cliInput()` above because merge-train's
+ * input shape (a batch) doesn't fit the single issue/branch/pr shape the
+ * other operations share.
+ */
+function mergeTrainCliInput(argv: string[]): {
+  candidatesFile: string | undefined;
+  cwd: string;
+  merge_method: MergeMethod;
+  ttl_minutes?: number;
+  timeout_minutes?: number;
+  poll_seconds?: number;
+  dry_run: boolean;
+} {
+  const { flags, bools } = parseArgs(argv);
+  return {
+    candidatesFile: getFlag(flags, 'candidates-file'),
+    cwd: getFlag(flags, 'cwd') ?? ROOT,
+    merge_method: (getFlag(flags, 'method') ?? 'squash') as MergeMethod,
+    ttl_minutes: getFlag(flags, 'ttl-minutes')
+      ? Number.parseInt(getFlag(flags, 'ttl-minutes') ?? '', 10)
+      : undefined,
+    timeout_minutes: getFlag(flags, 'timeout-minutes')
+      ? Number.parseInt(getFlag(flags, 'timeout-minutes') ?? '', 10)
+      : undefined,
+    poll_seconds: getFlag(flags, 'poll-seconds')
+      ? Number.parseInt(getFlag(flags, 'poll-seconds') ?? '', 10)
+      : undefined,
+    dry_run: bools.has('dry-run'),
+  };
+}
+
+async function runMergeTrainCli(argv: string[]): Promise<MergeTrainResult> {
+  const parsed = mergeTrainCliInput(argv);
+  if (!parsed.candidatesFile) {
+    return {
+      ok: false,
+      code: 'merge_train_invalid_input',
+      message:
+        'Missing required --candidates-file <path.json>. File must contain a JSON array of ' +
+        '{ "issue_id": "UTV2-###", "branch": "...", "pr": "123" }, pre-ordered by the caller.',
+    };
+  }
+
+  let candidates: MergeTrainCandidate[];
+  try {
+    const resolved = path.resolve(ROOT, parsed.candidatesFile);
+    candidates = JSON.parse(fs.readFileSync(resolved, 'utf8')) as MergeTrainCandidate[];
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'merge_train_invalid_input',
+      message: `Could not read/parse --candidates-file "${parsed.candidatesFile}": ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  return runMergeTrain({
+    candidates,
+    cwd: parsed.cwd,
+    merge_method: parsed.merge_method,
+    ttl_minutes: parsed.ttl_minutes,
+    timeout_minutes: parsed.timeout_minutes,
+    poll_seconds: parsed.poll_seconds,
+    dry_run: parsed.dry_run,
+  });
+}
+
+async function runCli(): Promise<void> {
+  const { positionals: topLevelPositionals } = parseArgs(process.argv.slice(2));
+  if (topLevelPositionals[0] === 'merge-train') {
+    const result = await runMergeTrainCli(process.argv.slice(2));
+    emitJson(result);
+    process.exitCode = result.ok ? 0 : 1;
+    return;
+  }
+
   const input = cliInput(process.argv.slice(2));
 
   if (input.operation === 'guard') {
@@ -226,7 +963,7 @@ function runCli(): void {
     emitJson({
       ok: false,
       code: 'merge_wrapper_invalid_input',
-      message: `Unknown operation: ${input.operation}\nValid operations: ${[...VALID_OPS].join(', ')}\nBlocked raw commands (must use this wrapper): ${BLOCKED_RAW_COMMANDS.join(', ')}`,
+      message: `Unknown operation: ${input.operation}\nValid operations: ${[...VALID_OPS].join(', ')}, merge-train (batch — see --candidates-file)\nBlocked raw commands (must use this wrapper): ${BLOCKED_RAW_COMMANDS.join(', ')}`,
     });
     process.exitCode = 1;
     return;
@@ -310,5 +1047,12 @@ function runPostMergeHooks(pr: string, cwd: string): Record<string, unknown> {
 
 const argv1 = process.argv[1] ?? '';
 if (argv1 && import.meta.url === pathToFileURL(path.resolve(argv1)).href) {
-  runCli();
+  void runCli().catch((error) => {
+    emitJson({
+      ok: false,
+      code: 'merge_wrapper_cli_failed',
+      message: error instanceof Error ? (error.stack ?? error.message) : String(error),
+    });
+    process.exitCode = 1;
+  });
 }
