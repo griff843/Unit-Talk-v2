@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1520",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1520-break-glass-dry-run",
+  "branch": "claude/utv2-1520-break-glass-dry-run",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/incidents/DRYRUN-20260710-01.md",
+    ".lane/lanes/governance.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-07-10T18:19:59.951Z",
+  "heartbeat_at": "2026-07-10T18:19:59.951Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1520-break-glass-dry-run.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1520-break-glass-dry-run",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "approved_by": "griff843 (PM directive, this session)",
+    "reason": "file-scope-guard.ts trusts the first commit that introduced this manifest (file_scope_lock declared a placeholder existing-file path at lane-start time, since the real dry-run artifact did not exist yet) rather than this later commit that corrected file_scope_lock to the actual new file created, plus .lane/lanes/governance.yml (added docs/06_status/incidents/** to the governance lane's allowed paths, since lane-check.ts had no path entry for it). Not scope widening -- both files are directly required to land this issue's own diff.",
+    "evidence": "Lane manifest history in this same file; this issue's own PR diff"
+  }
+}
