@@ -14,7 +14,7 @@
   },
   "branch": "claude/utv2-1519-repark-stale-product-lanes",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "9051594c79178d886db1d1d7e2fb3c5c41793804",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1186",
   "files_changed": [
     "docs/06_status/lanes/parked/UTV2-1512.json",
@@ -26,12 +26,12 @@
     "docs/06_status/lanes/UTV2-1519.json"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-10T17:07:59.353Z",
-  "heartbeat_at": "2026-07-10T17:45:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-10T18:01:15.943Z",
+  "closed_at": "2026-07-10T18:01:15.943Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1519-revert-direct-main-park-bypass.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -49,6 +49,21 @@
         "truth_check_history"
       ],
       "note": "This truth-check verified only step 1 (the revert PR). post-merge-lane-close.yml auto-closed the issue prematurely because PR #1185's body included a 'Closes UTV2-1519' marker before step 2 had landed -- an authoring mistake in this lane's own PR bodies, not a tooling bug. Reopened; see reopen_history."
+    },
+    {
+      "checked_at": "2026-07-10T18:01:12.921Z",
+      "verdict": "pass",
+      "merge_sha": "9051594c79178d886db1d1d7e2fb3c5c41793804",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1186",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [

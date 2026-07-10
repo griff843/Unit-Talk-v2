@@ -1,13 +1,13 @@
 # UTV2-1519 Runtime Verification
 
-Generated at: 2026-07-10T17:35:33.637Z
+Generated at: 2026-07-10T18:01:11.738Z
 Issue: UTV2-1519
 Tier: T3
 Lane type: governance
-Branch: claude/utv2-1519-revert-direct-main-park-bypass
-PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1185
-Head SHA: 67104523d9be6da032581b594e699e37cd7792ee
-Merge SHA: 67104523d9be6da032581b594e699e37cd7792ee
+Branch: claude/utv2-1519-repark-stale-product-lanes
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1186
+Head SHA: 9051594c79178d886db1d1d7e2fb3c5c41793804
+Merge SHA: 9051594c79178d886db1d1d7e2fb3c5c41793804
 result: not_run
 
 ## Verification
@@ -18,5 +18,5 @@ result: not_run
 - Generated foundation artifact. Replace or append command output when runtime proof is executed.
 
 ## SHA Binding
-Head SHA: 67104523d9be6da032581b594e699e37cd7792ee
-Merge SHA: 67104523d9be6da032581b594e699e37cd7792ee
+Head SHA: 9051594c79178d886db1d1d7e2fb3c5c41793804
+Merge SHA: 9051594c79178d886db1d1d7e2fb3c5c41793804
