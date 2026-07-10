@@ -1,0 +1,60 @@
+name: CI Dispatch Watchdog
+
+# Detects PRs whose latest commit received zero GitHub Actions runs after a
+# threshold -- GitHub can silently fail to dispatch pull_request-triggered
+# workflows with no error signal (UTV2-1517, observed 2026-07-10 for 10+
+# hours on PR #1182). Best-effort re-dispatches Merge Gate and posts a
+# Linear alert; see scripts/ops/ci-dispatch-watchdog.ts for full detail on
+# why the other three required checks cannot be auto-remediated safely.
+#
+# Read-only against the repo other than the Merge Gate re-dispatch call and
+# a Linear comment; never merges, never pushes, never mutates a PR branch.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+jobs:
+  watchdog:
+    name: CI dispatch watchdog
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run CI dispatch watchdog
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          pnpm exec tsx scripts/ops/ci-dispatch-watchdog.ts --output-json artifacts/ci-dispatch-watchdog.json
+
+      - name: Upload watchdog snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-dispatch-watchdog-snapshot
+          path: artifacts/ci-dispatch-watchdog.json
+          retention-days: 14
