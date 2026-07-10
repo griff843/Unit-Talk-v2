@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LiveEventFeed, PipelineFlow, StatCard } from '@/components/ui';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal, OperationalException, PickRow } from '@/lib/types';
+import { buildAlertLog, type AlertLogEntry } from '@/lib/alert-log-model';
 
 type OverviewDashboardClientProps = {
   data: DashboardData;
@@ -16,14 +17,6 @@ type FeedRow = {
   market: string;
   submittedAt: string;
   status: string;
-};
-
-type AlertEvent = {
-  id: string;
-  title: string;
-  detail: string;
-  timestamp: string;
-  tone: 'info' | 'medium' | 'warning' | 'error';
 };
 
 const TIER_CLASSES: Record<FeedRow['tier'], string> = {
@@ -101,17 +94,6 @@ function alertSeverity(exception: OperationalException) {
   if (exception.category === 'delivery') return 'high' as const;
   if (exception.category === 'settlement') return 'medium' as const;
   return 'low' as const;
-}
-
-function deriveAlertEvent(exception: OperationalException): AlertEvent {
-  const severity = alertSeverity(exception);
-  return {
-    id: exception.id,
-    title: exception.title,
-    detail: exception.detail,
-    timestamp: severity.toUpperCase(),
-    tone: severity === 'critical' ? 'error' : severity === 'high' ? 'warning' : severity === 'medium' ? 'medium' : 'info',
-  };
 }
 
 function buildFeedRows(picks: PickRow[]): FeedRow[] {
@@ -196,20 +178,20 @@ function PicksTicker({ picks }: { picks: FeedRow[] }) {
   );
 }
 
-function AlertLog({ events }: { events: AlertEvent[] }) {
-  const [unreadIds, setUnreadIds] = useState<string[]>(() => events.map((event) => event.id));
-  const visibleEvents = events.filter((event) => unreadIds.includes(event.id));
+function AlertLog({ events }: { events: AlertLogEntry[] }) {
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const visibleEvents = events.filter((event) => !readIds.includes(event.id));
 
   return (
     <section className="cc-surface flex h-full flex-col overflow-hidden">
       <header className="flex items-center justify-between border-b border-[var(--cc-border-subtle)] px-5 py-4">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Alert Log</h2>
-          <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">Chronological operator alerts with severity coloring.</p>
+          <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">Critical first; identical alerts collapsed.</p>
         </div>
         <button
           type="button"
-          onClick={() => setUnreadIds([])}
+          onClick={() => setReadIds(events.map((event) => event.id))}
           className="rounded-full border border-[var(--cc-border-strong)] bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-[var(--cc-text-secondary)] transition-colors hover:bg-white/[0.08] hover:text-[var(--cc-text-primary)]"
         >
           Mark all read
@@ -222,22 +204,26 @@ function AlertLog({ events }: { events: AlertEvent[] }) {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {visibleEvents.map((event) => {
-              const severity = event.tone === 'error' ? 'critical' : event.tone === 'warning' ? 'high' : event.tone === 'medium' ? 'medium' : 'low';
-              return (
-                <article key={event.id} className={`rounded-[22px] border px-4 py-4 ${ALERT_TONE_CLASSES[severity]}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold">{event.title}</p>
-                      <p className="mt-1 text-sm opacity-90">{event.detail}</p>
-                    </div>
-                    <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]">
-                      {severity}
-                    </span>
+            {visibleEvents.map((event) => (
+              <article key={event.id} className={`rounded-[22px] border px-4 py-4 ${ALERT_TONE_CLASSES[event.severity]}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {event.title}
+                      {event.count > 1 && (
+                        <span className="ml-2 rounded-full border border-white/15 bg-white/[0.06] px-2 py-0.5 font-mono text-[11px] font-medium">
+                          ×{event.count}
+                        </span>
+                      )}
+                    </p>
+                    <p className="mt-1 text-sm opacity-90">{event.detail}</p>
                   </div>
-                </article>
-              );
-            })}
+                  <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]">
+                    {event.severity}
+                  </span>
+                </div>
+              </article>
+            ))}
           </div>
         )}
       </div>
@@ -255,17 +241,14 @@ export function OverviewDashboardClient({ data, runtime }: OverviewDashboardClie
   const feedRows = useMemo(() => buildFeedRows(data.picks), [data.picks]);
   const alertEvents = useMemo(
     () =>
-      data.exceptions.length > 0
-        ? data.exceptions.map(deriveAlertEvent)
-        : [
-            {
-              id: 'health-ok',
-              title: 'No active exceptions',
-              detail: 'Runtime health is stable across the current operator-visible flow.',
-              timestamp: 'LOW',
-              tone: 'info' as const,
-            },
-          ],
+      buildAlertLog(
+        data.exceptions.map((exception) => ({
+          id: exception.id,
+          title: exception.title,
+          detail: exception.detail,
+          severity: alertSeverity(exception),
+        })),
+      ),
     [data.exceptions],
   );
   const eventFeed = useMemo(
