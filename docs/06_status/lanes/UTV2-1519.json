@@ -28,19 +28,36 @@
   "expected_proof_paths": [],
   "status": "in_review",
   "started_at": "2026-07-10T17:07:59.353Z",
-  "heartbeat_at": "2026-07-10T17:40:00.000Z",
+  "heartbeat_at": "2026-07-10T17:45:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1519-revert-direct-main-park-bypass.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-10T17:35:35.032Z",
+      "verdict": "pass",
+      "merge_sha": "67104523d9be6da032581b594e699e37cd7792ee",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1185",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ],
+      "note": "This truth-check verified only step 1 (the revert PR). post-merge-lane-close.yml auto-closed the issue prematurely because PR #1185's body included a 'Closes UTV2-1519' marker before step 2 had landed -- an authoring mistake in this lane's own PR bodies, not a tooling bug. Reopened; see reopen_history."
+    }
+  ],
   "reopen_history": [
     {
-      "reopened_at": "2026-07-10T17:34:00.000Z",
-      "reason": "Step 1 (revert PR #1185) merged; this lane continues as step 2 (re-land the same relocation via a fresh branch/PR) under the same issue.",
+      "reopened_at": "2026-07-10T17:40:00.000Z",
+      "reason": "Step 1 (revert PR #1185) merged and its 'Closes UTV2-1519' marker auto-closed the issue prematurely -- this issue's acceptance criteria require both step 1 (revert) and step 2 (re-land via governed PR), and step 2 had not yet landed. Reopened to continue as step 2 under the same issue.",
       "previous_branch": "claude/utv2-1519-revert-direct-main-park-bypass",
       "previous_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1185"
     }
   ],
-  "notes": "Docs-only-fast-path was attempted first for step 1 (per dispatch.md) but CI's file-scope-lock-check.yml and tier-label-check.yml both hard-require a lane manifest to exist regardless of the fast-path exemption, so a manifest was added after the fact -- same pattern as the UTV2-1512/1513 backfill precedent. This is itself a gap in the T3 fast-path implementation (CI enforcement not matching dispatch.md's documented behavior) worth a follow-up issue, out of scope for this correction. Step 2 (this PR) reuses the manifest directly rather than re-running preflight/lane-start, since PL5 would correctly refuse a second lane-start while this issue's lane is still active."
+  "notes": "Docs-only-fast-path was attempted first for step 1 (per dispatch.md) but CI's file-scope-lock-check.yml and tier-label-check.yml both hard-require a lane manifest to exist regardless of the fast-path exemption, so a manifest was added after the fact -- same pattern as the UTV2-1512/1513 backfill precedent. This is itself a gap in the T3 fast-path implementation (CI enforcement not matching dispatch.md's documented behavior) worth a follow-up issue, out of scope for this correction. Step 2 (this PR, #1186) reuses the manifest directly rather than re-running preflight/lane-start, since PL5 would correctly refuse a second lane-start while this issue's lane is still active. Step 1's PR body mistakenly included a 'Closes UTV2-1519' marker, causing a premature auto-close between the two steps -- corrected via reopen_history above; step 2's PR body correctly carries the actual closing marker."
 }
