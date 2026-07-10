@@ -179,6 +179,14 @@ function isSingletonPath(filePath: string): boolean {
   );
 }
 
+function isDocsOnlyFastPathFile(filePath: string): boolean {
+  const normalized = filePath.replaceAll('\\', '/').replace(/^\.\//, '');
+  return (
+    normalized.startsWith('docs/06_status/') ||
+    (normalized.startsWith('.claude/commands/') && normalized.endsWith('.md'))
+  );
+}
+
 function writeSyncFile(issueId: string, content: string): void {
   const syncDir = path.join(ROOT, '.ops', 'sync');
   fs.mkdirSync(syncDir, { recursive: true });
@@ -272,6 +280,7 @@ function main(): void {
   const branch = flags.get('branch')?.at(-1);
   const laneType = flags.get('lane-type')?.at(-1);
   const fileArgs = flags.get('files') ?? [];
+  const docsOnlyFastPath = bools.has('docs-only-fast-path') || flags.has('docs-only-fast-path');
 
   try {
     const missing: string[] = [];
@@ -281,7 +290,7 @@ function main(): void {
     if (!branch) {
       missing.push('--branch');
     }
-    if (!laneType) {
+    if (!laneType && !docsOnlyFastPath) {
       missing.push('--lane-type');
     }
     if (fileArgs.length === 0) {
@@ -317,6 +326,63 @@ function main(): void {
 
     const tier = validateTier(tierInput);
     validateBranchName(branch);
+    const normalizedFiles = normalizeFileScope(fileArgs);
+
+    if (docsOnlyFastPath) {
+      const nonDocsFiles = normalizedFiles.filter((filePath) => !isDocsOnlyFastPathFile(filePath));
+      if (tier !== 'T3') {
+        emitJson({
+          ok: false,
+          code: 'docs_only_fast_path_invalid_tier',
+          message: '--docs-only-fast-path is restricted to T3 lanes.',
+        });
+        process.exit(1);
+      }
+      if (nonDocsFiles.length > 0) {
+        emitJson({
+          ok: false,
+          code: 'docs_only_fast_path_scope_violation',
+          message: `--docs-only-fast-path allows only docs/status paths; rejected: ${nonDocsFiles.join(', ')}`,
+          rejected_files: nonDocsFiles,
+        });
+        process.exit(1);
+      }
+
+      const currentHead = currentHeadSha();
+      const preflight = validatePreflightToken(issueId, branch, currentHead);
+
+      // Do not trust the preflight token's PL6 overlap result alone: a
+      // preflight token remains usable after generation, so another lane can
+      // lock one of these same docs/status files in the window between
+      // preflight and this lane-start invocation. Recheck overlap against
+      // current manifest state immediately before emitting success so a
+      // fast-path lane can never silently coexist with a conflicting active
+      // lane on the same file.
+      const overlap = activeManifestOverlap(issueId, normalizedFiles);
+      if (overlap) {
+        emitJson({
+          ok: false,
+          code: 'file_scope_conflict',
+          message: `Requested file scope overlaps with active lane ${overlap.issue_id}`,
+          conflicting_issue_id: overlap.issue_id,
+          overlapping_files: overlap.overlapping_files,
+        });
+        process.exit(1);
+      }
+
+      emitJson({
+        ok: true,
+        code: 'docs_only_fast_path',
+        issue_id: issueId,
+        tier,
+        branch,
+        file_scope: normalizedFiles,
+        preflight_token: preflight.tokenRelativePath,
+        message:
+          'T3 docs-only fast path validated; lane-start intentionally skipped worktree, manifest, lease, sync, and proof scaffolding.',
+      });
+      return;
+    }
 
     let canonicalLaneType: CanonicalLaneType;
     let executor: LaneExecutor;
@@ -333,7 +399,6 @@ function main(): void {
         `Invalid --lane-type: ${laneType}. Use a canonical type (${CANONICAL_LANE_TYPES.join(', ')}) with optional --executor (claude|codex-cli|codex-cloud).`,
       );
     }
-    const normalizedFiles = normalizeFileScope(fileArgs);
     const singletonPaths = normalizedFiles.filter(isSingletonPath);
     const singletonApproved = flags.has('singleton-approved') || bools.has('singleton-approved');
     if (singletonPaths.length > 0 && !singletonApproved) {
