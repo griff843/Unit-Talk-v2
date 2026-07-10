@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1454",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1454-t3-fast-path-docs-only-lanes",
+  "branch": "codex/utv2-1454-t3-fast-path-docs-only-lanes",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch.md",
+    ".claude/commands/lane-management.md",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/preflight.test.ts",
+    "scripts/ops/preflight.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1454/diff-summary.md",
+    "docs/06_status/proof/UTV2-1454/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-09T05:07:50.428Z",
+  "heartbeat_at": "2026-07-09T05:07:50.428Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1454-t3-fast-path-docs-only-lanes.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1454-t3-fast-path-docs-only-lanes",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
