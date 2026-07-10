@@ -104,22 +104,14 @@ function resolveActiveRoute(pathname: string) {
   return best?.href ?? '/';
 }
 
-function resolveHealthStatus(pathname: string): SidebarHealthStatus {
-  if (pathname.startsWith('/exceptions') || pathname.startsWith('/held') || pathname.startsWith('/fire-board')) {
-    return 'warning';
-  }
-  if (pathname.startsWith('/burn-in')) {
-    return 'critical';
-  }
-  return 'healthy';
-}
-
 function resolveChrome(pathname: string) {
   const segments = pathname === '/' ? [] : pathname.split('/').filter(Boolean);
   const activeRoute = resolveActiveRoute(pathname);
   const activeItem = ALL_NAV_ITEMS.find((item) => item.href === activeRoute) ?? ALL_NAV_ITEMS[0];
   const activeGroup = NAV_GROUPS.find((group) => group.items.some((item) => item.href === activeRoute));
-  const leaf = segments.length > 0 ? titleize(segments[segments.length - 1]!) : activeItem.label;
+  const lastSegment = segments.length > 0 ? segments[segments.length - 1]! : '';
+  const looksLikeId = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(lastSegment) || /^\d+$/.test(lastSegment);
+  const leaf = segments.length === 0 ? activeItem.label : looksLikeId ? `${activeItem.label} · ${lastSegment.slice(0, 8)}` : titleize(lastSegment);
 
   return {
     activeRoute,
@@ -130,8 +122,49 @@ function resolveChrome(pathname: string) {
       ...(leaf !== activeItem.label ? [leaf] : []),
     ],
     title: leaf,
-    healthStatus: resolveHealthStatus(pathname),
   };
+}
+
+/**
+ * Poll the app's own /api/health (derived from the same lifecycle signals as
+ * the Executive Overview KPI) so the sidebar pill reflects runtime truth.
+ */
+function useGlobalHealth(): { status: SidebarHealthStatus; label: string } {
+  const [health, setHealth] = useState<{ status: SidebarHealthStatus; label: string }>({
+    status: 'warning',
+    label: 'checking…',
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await fetch('/api/health', { cache: 'no-store' });
+        const body = (await response.json()) as { status?: string };
+        if (cancelled) return;
+        const status = body.status ?? 'unknown';
+        setHealth(
+          status === 'healthy'
+            ? { status: 'healthy', label: 'healthy' }
+            : status === 'degraded'
+              ? { status: 'warning', label: 'degraded' }
+              : status === 'down'
+                ? { status: 'critical', label: 'down' }
+                : { status: 'warning', label: 'unknown' },
+        );
+      } catch {
+        if (!cancelled) setHealth({ status: 'warning', label: 'unknown' });
+      }
+    };
+    void load();
+    const id = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  return health;
 }
 
 export function CommandCenterShell({ children }: CommandCenterShellProps) {
@@ -139,6 +172,7 @@ export function CommandCenterShell({ children }: CommandCenterShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const chrome = resolveChrome(pathname);
+  const health = useGlobalHealth();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -156,7 +190,8 @@ export function CommandCenterShell({ children }: CommandCenterShellProps) {
       <WorkspaceSidebar
         navGroups={NAV_GROUPS}
         activeRoute={chrome.activeRoute}
-        healthStatus={chrome.healthStatus}
+        healthStatus={health.status}
+        healthLabel={health.label}
         collapsed={collapsed}
         onToggle={() => setCollapsed((current) => !current)}
       />

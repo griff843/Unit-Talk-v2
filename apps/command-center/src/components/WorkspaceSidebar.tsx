@@ -21,6 +21,7 @@ type WorkspaceSidebarProps = {
   navGroups: SidebarNavGroup[];
   activeRoute: string;
   healthStatus: SidebarHealthStatus;
+  healthLabel?: string;
   collapsed: boolean;
   onToggle: () => void;
 };
@@ -92,6 +93,7 @@ export function WorkspaceSidebar({
   navGroups,
   activeRoute,
   healthStatus,
+  healthLabel,
   collapsed,
   onToggle,
 }: WorkspaceSidebarProps) {
@@ -126,7 +128,7 @@ export function WorkspaceSidebar({
         {!collapsed && (
           <div className="ml-3 min-w-0">
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Global Health</div>
-            <div className="text-sm text-[var(--cc-text-primary)]">{healthStatus}</div>
+            <div className="text-sm text-[var(--cc-text-primary)]">{healthLabel ?? healthStatus}</div>
           </div>
         )}
       </div>
