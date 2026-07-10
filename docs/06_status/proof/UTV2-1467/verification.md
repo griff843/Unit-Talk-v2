@@ -4,9 +4,35 @@ Issue: UTV2-1467
 Tier: T1
 Lane type: governance
 Branch: claude/utv2-1467-merge-queue
-MERGE_SHA: 632ec5a6f63cd86f193a7dabc2f91dabbf02d8b5
+MERGE_SHA: c93391b504193a0c968f458e9c8246a44a7f8f71
 
-Implementation commit on this branch (ancestor of the PR's current head — this proof file itself lands in a later commit on top of it, avoiding the SHA self-reference circularity). PR not yet merged in this session (PM standing constraint: no merge); `MERGE_SHA` here is the implementation-commit convention documented in `docs/06_status/proof/UTV2-1466/verification.md` and accepted by `executor-result-validator.yml`'s ancestor-or-equal check.
+Implementation commit on this branch (ancestor of the PR's current head — this proof file itself lands in a later commit on top of it, avoiding the SHA self-reference circularity). PR not yet merged in this session (PM standing constraint: no merge); `MERGE_SHA` here is the implementation-commit convention accepted by `executor-result-validator.yml`'s ancestor-or-equal check (same pattern used by prior governance lanes' proof files).
+
+## Verification
+
+`pnpm test:db` (`apps/api/src/database-smoke.test.ts`) executed fresh against the live Supabase project (`zfzdnfwdarxucxtaojxm`) for this proof update. Literal TAP output:
+
+```text
+TAP version 13
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 105046.225374
+```
+
+This lane's diff touches no product runtime, pick pipeline, or Supabase write path — this run is the T1-mandatory live-DB environment-health check, not a feature-behavior proof.
 
 ASSERTIONS:
 
@@ -25,7 +51,7 @@ ASSERTIONS:
 EVIDENCE:
 
 ```text
-pnpm verify (this commit, 632ec5a6f63cd86f193a7dabc2f91dabbf02d8b5) — exit 0
+pnpm verify (implementation commit c93391b504193a0c968f458e9c8246a44a7f8f71) — exit 0
   ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check: pass
   env:check: pass
   lint (eslint . --cache): pass, zero findings
@@ -97,9 +123,9 @@ exit code: 0
 
 ## Scope note
 
-This lane's diff (`scripts/ops/merge-wrapper.ts`, `scripts/ops/ops-merge-wrapper.ts` and their test files, `docs/05_operations/WORKFLOW_SPEC.md`, `docs/governance/LANE_CONCURRENCY_POLICY.md`) touches no product runtime, pick pipeline, or Supabase write path. `pnpm test:db` above is an environment-health proof (live-DB connectivity and monitored-table behavior), not a feature-behavior proof — same pattern as prior docs/ops-only T1 governance lanes (e.g. UTV2-1494). Acceptance criterion 3's timing proof is a controlled/simulated comparison rather than a live 3-PR GitHub board, explicitly authorized by PM's implementation directive for this exact reason (no merge authority this session; a live board would itself cost the ~9-minute-per-cycle wall-clock the decision packet measured).
+This lane's diff (`scripts/ops/merge-wrapper.ts`, `scripts/ops/ops-merge-wrapper.ts` and their test files, `docs/05_operations/WORKFLOW_SPEC.md`, `docs/governance/LANE_CONCURRENCY_POLICY.md`) touches no product runtime, pick pipeline, or Supabase write path. `pnpm test:db` above is an environment-health proof (live-DB connectivity and monitored-table behavior), not a feature-behavior proof — the same pattern used by prior docs/ops-only T1 governance lanes. Acceptance criterion 3's timing proof is a controlled/simulated comparison rather than a live 3-PR GitHub board, explicitly authorized by PM's implementation directive for this exact reason (no merge authority this session; a live board would itself cost the ~9-minute-per-cycle wall-clock the decision packet measured).
 
 ## SHA Binding
 
-Head SHA (at last push before this proof update): 632ec5a6f63cd86f193a7dabc2f91dabbf02d8b5
+Head SHA (implementation commit, ancestor of PR head): c93391b504193a0c968f458e9c8246a44a7f8f71
 Merge SHA: not yet available — this lane is not merged in this session. Rebinds automatically via `ops:proof-generate --merge-sha` in the standard post-merge lane-close flow.
