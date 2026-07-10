@@ -30,6 +30,11 @@
     "docs/06_status/proof/UTV2-1467/diff-summary.md",
     "docs/06_status/proof/UTV2-1467/.gitkeep"
   ],
+  "scope_override": {
+    "approved_by": "PM (dispatch orchestrator, review round on PR #1180)",
+    "reason": "This manifest was created before UTV2-1495's hard file-scope guard merged to main. That guard's trust boundary locks a newly-introduced manifest to the content of the commit that first added it, so the lane's own docs/06_status/proof/UTV2-1467/** proof paths (already required by expected_proof_paths since lane-start) were not recognized as declared scope once the branch synced with main post-UTV2-1495. This override widens file_scope_lock to include only the lane's own pre-existing proof-directory paths that were always part of its required deliverables, matching what UTV2-1495 itself established as the documented override precedent (see its own manifest, docs/06_status/lanes/UTV2-1495.json). No unrelated production code is introduced.",
+    "evidence": "docs/06_status/proof/UTV2-1467/verification.md"
+  },
   "status": "started",
   "started_at": "2026-07-09T05:09:30.397Z",
   "heartbeat_at": "2026-07-09T12:58:51.611Z",

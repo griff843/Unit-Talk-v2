@@ -129,3 +129,7 @@ This lane's diff (`scripts/ops/merge-wrapper.ts`, `scripts/ops/ops-merge-wrapper
 
 Head SHA (implementation commit, ancestor of PR head): c93391b504193a0c968f458e9c8246a44a7f8f71
 Merge SHA: not yet available — this lane is not merged in this session. Rebinds automatically via `ops:proof-generate --merge-sha` in the standard post-merge lane-close flow.
+
+## Manifest scope correction
+
+This manifest's `file_scope_lock` was created before UTV2-1495's hard file-scope guard (`scripts/ci/file-scope-guard.ts`) merged to main. That guard's trust boundary locks a newly-introduced lane manifest to the content of the commit that first added it, so this lane's own `docs/06_status/proof/UTV2-1467/**` paths — already required by `expected_proof_paths` since `ops:lane-start` created this manifest — were not recognized as declared scope once the branch synced with main post-UTV2-1495 merge. The manifest's `scope_override` block (added commit-after-commit `82823a50` → this commit) widens `file_scope_lock` to include only this lane's own pre-existing proof-directory paths, which were always part of its required deliverables and introduce no unrelated production code. PM-authorized per the same documented-override precedent UTV2-1495 itself established. Filed as a systemic follow-up: [UTV2-1518](https://linear.app/unit-talk-v2/issue/UTV2-1518) (the guard should auto-exempt a lane's own proof directory rather than requiring this override on every future lane).
