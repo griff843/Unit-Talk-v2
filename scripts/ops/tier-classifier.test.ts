@@ -3,6 +3,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  buildAdvisoryCheckRunOutput,
   classifyDerivedTier,
   classifyMechanicalMinimum,
   maxTier,
@@ -156,4 +157,36 @@ test('maxTier preserves monotonic tier ordering', () => {
   assert.equal(maxTier('T3', 'T1'), 'T1');
   assert.equal(maxTier('T2', 'T3'), 'T2');
   assert.equal(maxTier('T1', 'T3'), 'T1');
+});
+
+test('buildAdvisoryCheckRunOutput never returns a failure conclusion on escalation', () => {
+  const classification = classifyDerivedTier({
+    declaredTier: 'T2',
+    changedFiles: ['scripts/ops/lane-start.ts'],
+  });
+
+  const output = buildAdvisoryCheckRunOutput(classification);
+
+  assert.equal(classification.escalated, true);
+  assert.notEqual(output.conclusion, 'failure');
+  assert.equal(output.conclusion, 'neutral');
+  assert.match(output.title, /declared T2/);
+  assert.match(output.title, /T1/);
+  assert.match(output.summary, /Escalating path\(s\)/);
+  assert.match(output.summary, /`scripts\/ops\/lane-start\.ts`/);
+  assert.match(output.summary, /Advisory only/);
+});
+
+test('buildAdvisoryCheckRunOutput reports success conclusion when there is no escalation', () => {
+  const classification = classifyDerivedTier({
+    declaredTier: 'T2',
+    changedFiles: ['apps/command-center/src/Widget.tsx'],
+  });
+
+  const output = buildAdvisoryCheckRunOutput(classification);
+
+  assert.equal(classification.escalated, false);
+  assert.equal(output.conclusion, 'success');
+  assert.match(output.title, /matches declared T2/);
+  assert.match(output.summary, /No mechanical escalation/);
 });

@@ -15,7 +15,8 @@
     "scripts/ops/merge-risk.ts",
     "scripts/ops/tier-classifier.test.ts",
     "scripts/ops/tier-classifier.ts",
-    "docs/06_status/proof/UTV2-1514/sweep-report.md"
+    "docs/06_status/proof/UTV2-1514/sweep-report.md",
+    ".github/workflows/tier-classifier-advisory.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1514/diff-summary.md",

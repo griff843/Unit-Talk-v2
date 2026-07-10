@@ -116,6 +116,56 @@ export function classifyDerivedTier(input: {
   };
 }
 
+export interface AdvisoryCheckRunOutput {
+  title: string;
+  summary: string;
+  conclusion: 'success' | 'neutral';
+}
+
+/**
+ * Pure formatter: turns a TierClassification into the title/summary/conclusion
+ * fields for a GitHub check-run. Never returns conclusion 'failure' -- Phase 1
+ * (this lane) is advisory-only, so the classifier's own output must never be
+ * capable of driving a red/blocking check regardless of what it computes.
+ */
+export function buildAdvisoryCheckRunOutput(classification: TierClassification): AdvisoryCheckRunOutput {
+  const { declared_tier, derived_tier, mechanical_minimum, escalated, matches } = classification;
+
+  const title = escalated
+    ? `Advisory: declared ${declared_tier} -> mechanical floor ${derived_tier}`
+    : `Advisory: derived tier matches declared ${declared_tier}`;
+
+  const lines: string[] = [
+    `**Declared tier:** ${declared_tier}`,
+    `**Mechanical minimum:** ${mechanical_minimum}`,
+    `**Derived tier:** ${derived_tier}`,
+    '',
+  ];
+
+  if (escalated) {
+    lines.push(
+      `This diff would be treated as **${derived_tier}** under the mechanical tier classifier ` +
+        `(see \`docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md\`), even though it is declared **${declared_tier}**.`,
+      '',
+      'Escalating path(s):',
+      ...matches.map((match) => `- \`${match.path}\` (${match.rule_id})`),
+    );
+  } else {
+    lines.push('No mechanical escalation -- derived tier matches the declared tier.');
+  }
+
+  lines.push(
+    '',
+    '_Advisory only -- this check never blocks merge. Phase 2 (a blocking cutover) requires separate PM approval per the spec._',
+  );
+
+  return {
+    title,
+    summary: lines.join('\n'),
+    conclusion: classification.advisory.conclusion,
+  };
+}
+
 function runCommand(command: string, args: string[], cwd: string): string {
   const result = spawnSync(command, args, {
     cwd,
@@ -170,10 +220,15 @@ async function main(): Promise<void> {
   const explicitFiles = parseList(parseValue(rawArgs, '--files'));
   const changedFiles = explicitFiles.length > 0 ? explicitFiles : diffFiles(ROOT, base, head);
 
-  emitJson(classifyDerivedTier({
+  const classification = classifyDerivedTier({
     declaredTier: parseLaneTier(declaredTierValue),
     changedFiles,
-  }));
+  });
+
+  emitJson({
+    ...classification,
+    check_run: buildAdvisoryCheckRunOutput(classification),
+  });
 }
 
 const isDirectRun = process.argv[1] != null
