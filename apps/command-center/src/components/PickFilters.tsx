@@ -23,7 +23,7 @@ export function PickFilters() {
       const v = String(val).trim();
       if (v) params.set(key, v);
     }
-    router.push(`/picks-list?${params.toString()}`);
+    router.push(`/picks?${params.toString()}`);
   }, [router]);
 
   return (
@@ -121,7 +121,7 @@ export function PickFilters() {
 
       <div className="flex gap-2">
         <Button type="submit" variant="primary" size="sm">Search</Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => router.push('/picks-list')}>Clear</Button>
+        <Button type="button" variant="secondary" size="sm" onClick={() => router.push('/picks')}>Clear</Button>
       </div>
     </form>
   );

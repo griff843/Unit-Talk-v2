@@ -40,10 +40,8 @@ test('api health route renders provider matrix', async () => {
   assert.match(html, /Provider matrix/);
 });
 
-test('agents route renders execution network', async () => {
-  const html = renderToStaticMarkup(await AgentsPage());
-  assert.match(html, /Agents/);
-  assert.match(html, /Execution network/);
+test('agents route redirects to system health', () => {
+  assert.throws(() => AgentsPage(), /NEXT_REDIRECT/);
 });
 
 test('intelligence route renders model economics', async () => {
@@ -52,8 +50,6 @@ test('intelligence route renders model economics', async () => {
   assert.match(html, /Model economics at a glance/);
 });
 
-test('ops route renders control room surfaces', async () => {
-  const html = renderToStaticMarkup(await OpsPage());
-  assert.match(html, /Ops/);
-  assert.match(html, /Recent operator interventions/);
+test('ops route redirects to system health', () => {
+  assert.throws(() => OpsPage(), /NEXT_REDIRECT/);
 });

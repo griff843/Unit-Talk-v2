@@ -27,7 +27,8 @@ const NAV_GROUPS: SidebarNavGroup[] = [
     items: [
       { href: '/', label: 'Executive Overview', icon: icon(<path d="M3 12h18M3 6h18M3 18h18" />), match: ['/'] },
       { href: '/fire-board', label: 'Fire Board', icon: icon(<path d="M12 2c1 4-4 5-4 10a4 4 0 0 0 8 0c0-2-1-3-1-5 3 2 5 4 5 7a8 8 0 1 1-16 0c0-6 7-8 8-12Z" />), match: ['/fire-board'] },
-      { href: '/pipeline', label: "Today's Action", icon: icon(<><path d="M4 7h16" /><path d="M7 12h10" /><path d="M10 17h4" /></>), match: ['/pipeline', '/picks', '/picks-list', '/events'] },
+      { href: '/pipeline', label: "Today's Action", icon: icon(<><path d="M4 7h16" /><path d="M7 12h10" /><path d="M10 17h4" /></>), match: ['/pipeline'] },
+      { href: '/picks', label: 'Picks Explorer', icon: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /><path d="M9 4v16" /></>), match: ['/picks', '/picks-list'] },
     ],
   },
   {
@@ -37,12 +38,14 @@ const NAV_GROUPS: SidebarNavGroup[] = [
       { href: '/operations/approvals', label: 'Approvals', icon: icon(<><path d="M20 6 9 17l-5-5" /></>), match: ['/operations/approvals', '/held', '/decisions'] },
       { href: '/operations/discord', label: 'Discord Control', icon: icon(<><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><path d="M8 17c2.5 1.3 5.5 1.3 8 0" /><path d="M19 5c-1.5-1-3.5-1.5-5-1.5h-4C8.5 3.5 6.5 4 5 5 3 8 2.5 12 3 16c1.7 1.3 3.5 2 5 2l1-2" /><path d="M15 16l1 2c1.5 0 3.3-.7 5-2 .5-4 0-8-2-11" /></>), match: ['/operations/discord'] },
       { href: '/operations/results', label: 'Results Ops', icon: icon(<><path d="M3 3v18h18" /><path d="M7 14l4-4 3 3 5-6" /></>), match: ['/operations/results', '/exceptions', '/interventions'] },
+      { href: '/events', label: 'Events Feed', icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M12 8v4l2.5 2.5" /></>), match: ['/events'] },
     ],
   },
   {
     label: 'System',
     items: [
-      { href: '/api-health', label: 'System Health', icon: icon(<path d="M3 12h4l3-9 4 18 3-9h4" />), match: ['/api-health', '/burn-in', '/model-health', '/runtime-dashboard', '/ops', '/agents'] },
+      { href: '/api-health', label: 'System Health', icon: icon(<path d="M3 12h4l3-9 4 18 3-9h4" />), match: ['/api-health', '/burn-in', '/runtime-dashboard', '/ops', '/agents'] },
+      { href: '/model-health', label: 'Model Health', icon: icon(<><path d="M12 3v3" /><path d="M12 18v3" /><circle cx="12" cy="12" r="6" /><path d="M9 12h6" /></>), match: ['/model-health'] },
       { href: '/operations/governance', label: 'Governance / Lanes', icon: icon(<><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>), match: ['/operations/governance'] },
     ],
   },
@@ -60,7 +63,8 @@ const NAV_GROUPS: SidebarNavGroup[] = [
       { href: '/research/players', label: 'Player Research', icon: dot, match: ['/research/players'] },
       { href: '/intel/teams', label: 'Team Research', icon: dot, match: ['/intel/teams', '/research/matchups'] },
       { href: '/intel/injuries', label: 'Injury Monitor', icon: dot, match: ['/intel/injuries'] },
-      { href: '/research/trends', label: 'Trend Explorer', icon: dot, match: ['/research/trends', '/research/hit-rate', '/intelligence', '/performance', '/research'] },
+      { href: '/research/trends', label: 'Trend Explorer', icon: dot, match: ['/research/trends', '/research/hit-rate', '/research'] },
+      { href: '/performance', label: 'Performance', icon: dot, match: ['/performance', '/intelligence'] },
       { href: '/intel/alerts', label: 'Alert Builder', icon: dot, match: ['/intel/alerts'] },
     ],
   },
@@ -68,7 +72,8 @@ const NAV_GROUPS: SidebarNavGroup[] = [
     label: 'Execution',
     items: [
       { href: '/execution/pick-builder', label: 'Pick Builder', icon: icon(<><path d="M12 5v14" /><path d="M5 12h14" /></>), match: ['/execution/pick-builder'] },
-      { href: '/review', label: 'Review Queue', icon: icon(<><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>), match: ['/review', '/decision'] },
+      { href: '/review', label: 'Review Queue', icon: icon(<><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>), match: ['/review', '/decisions'] },
+      { href: '/decision', label: 'Decision Cockpit', icon: icon(<><circle cx="12" cy="12" r="3" /><path d="M12 2v4" /><path d="M12 18v4" /><path d="M2 12h4" /><path d="M18 12h4" /></>), match: ['/decision'] },
       { href: '/execution/discord-preview', label: 'Discord Preview', icon: icon(<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 15h6" /><path d="M7 11h10" /></>), match: ['/execution/discord-preview'] },
       { href: '/execution/scheduled', label: 'Scheduled Dispatch', icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></>), match: ['/execution/scheduled'] },
       { href: '/execution/results', label: 'Results Tracking', icon: icon(<><path d="M9 11l3 3 8-8" /><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11" /></>), match: ['/execution/results'] },

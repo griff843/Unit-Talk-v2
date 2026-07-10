@@ -274,7 +274,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
       <Breadcrumb
         items={[
           { label: 'Dashboard', href: '/' },
-          { label: 'Picks', href: '/picks-list' },
+          { label: 'Picks', href: '/picks' },
           { label: `${pick.id.slice(0, 12)}...` },
         ]}
       />
