@@ -21,7 +21,10 @@
     "scripts/ops/ops-merge-wrapper.test.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1467/evidence.json"
+    "docs/06_status/proof/UTV2-1467/evidence.json",
+    "docs/06_status/proof/UTV2-1467/verification.md",
+    "docs/06_status/proof/UTV2-1467/diff-summary.md",
+    "docs/06_status/proof/UTV2-1467/.gitkeep"
   ],
   "status": "started",
   "started_at": "2026-07-09T05:09:30.397Z",
