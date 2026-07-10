@@ -52,9 +52,9 @@
     }
   },
   "sha_binding": {
-    "verified_source_sha": "1cc1ebfc12abaa4ed5e78fa72f5f37af212628ac",
-    "sha_type": "head_sha",
-    "bound_at": "2026-07-09T06:15:15.891Z",
+    "verified_source_sha": "ddf0e90198f7702089a0c155c01bf069f7b0541a",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-10T14:54:28.735Z",
     "note": "merge_sha not yet available — this lane is not merged in this session (PM standing constraint: no merge). Rebinds to merge_sha automatically via ops:proof-generate --merge-sha in the standard post-merge lane-close flow.",
     "ci_sentinels": {
       "merge_gate": "pending (PR not yet opened at proof-generation time)",
