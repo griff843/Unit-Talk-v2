@@ -24,10 +24,11 @@ function readRefreshIntervalMs(searchParams?: Record<string, string | string[] |
 }
 
 export default async function DashboardPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   let data: DashboardData;
   let runtime: DashboardRuntimeData;
   try {

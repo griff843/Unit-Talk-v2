@@ -2,12 +2,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { getPromotionPreview } from '@/lib/data';
 
 interface PromotionPreviewPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     pickId?: string;
-  };
+  }>;
 }
 
-export default async function PromotionPreviewPage({ searchParams }: PromotionPreviewPageProps) {
+export default async function PromotionPreviewPage({ searchParams: searchParamsPromise }: PromotionPreviewPageProps) {
+  const searchParams = await searchParamsPromise;
   const pickId = searchParams?.pickId?.trim() ?? '';
   const preview = pickId ? await loadPromotionPreview(pickId) : null;
 

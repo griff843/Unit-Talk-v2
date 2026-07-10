@@ -43,10 +43,11 @@ function FilterPill({ href, active, children }: { href: string; active: boolean;
 }
 
 export default async function OutboxOpsPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const status = readParam(searchParams, 'status');
   const target = readParam(searchParams, 'target');
   const nowMs = Date.now();

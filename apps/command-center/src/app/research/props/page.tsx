@@ -41,10 +41,11 @@ const SPORT_OPTIONS = [
 ];
 
 export default async function PropExplorerPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
   const market = typeof searchParams['market'] === 'string' ? searchParams['market'] : undefined;
   const bookmaker = typeof searchParams['bookmaker'] === 'string' ? searchParams['bookmaker'] : undefined;

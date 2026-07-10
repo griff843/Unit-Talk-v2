@@ -6,10 +6,11 @@ import { getExecutionPick, listPreviewablePicks } from '@/lib/data/execution';
 export const dynamic = 'force-dynamic';
 
 export default async function DiscordPreviewPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const pickId = typeof searchParams['pickId'] === 'string' ? searchParams['pickId'] : null;
   const observedAt = new Date().toISOString();
 

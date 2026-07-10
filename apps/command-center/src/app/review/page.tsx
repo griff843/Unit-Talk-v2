@@ -17,10 +17,11 @@ function readRefreshIntervalMs(searchParams?: Record<string, string | string[] |
 }
 
 export default async function ReviewQueuePage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const params: Record<string, string> = {};
   for (const [key, val] of Object.entries(searchParams)) {
     if (typeof val === 'string' && val.trim()) params[key] = val.trim();

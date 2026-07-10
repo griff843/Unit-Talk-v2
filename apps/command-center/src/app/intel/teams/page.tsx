@@ -48,10 +48,11 @@ async function getTeamEvents(teamName: string): Promise<TeamEvent[] | null> {
 }
 
 export default async function TeamsPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const team = typeof searchParams['team'] === 'string' ? searchParams['team'] : '';
 
   let teams: Array<{ id: string; displayName: string | null; sport: string | null }> = [];

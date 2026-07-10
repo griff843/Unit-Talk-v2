@@ -97,10 +97,11 @@ function computeGapRows(groups: IntelOfferGroup[], sharpBook: string | null): Ga
 }
 
 export default async function SharpBooksPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
 
   let rows: GapRow[] = [];

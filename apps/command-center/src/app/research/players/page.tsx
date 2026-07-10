@@ -3,10 +3,11 @@ import Link from 'next/link';
 import { getResearchPlayers } from '@/lib/data';
 
 export default async function PlayerCardPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const tab = searchParams['tab'] === 'team' ? 'team' : 'player';
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
   const q = typeof searchParams['q'] === 'string' ? searchParams['q'] : undefined;

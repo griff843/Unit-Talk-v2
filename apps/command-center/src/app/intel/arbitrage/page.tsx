@@ -80,10 +80,11 @@ function computeArbRows(groups: IntelOfferGroup[]): ArbRow[] {
 }
 
 export default async function ArbitragePage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
 
   let rows: ArbRow[] = [];

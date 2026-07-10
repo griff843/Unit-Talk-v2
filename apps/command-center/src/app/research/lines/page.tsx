@@ -80,10 +80,11 @@ function formatSnapshot(iso: string): string {
 }
 
 export default async function LineShopperPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const participant =
     typeof searchParams['participant'] === 'string' ? searchParams['participant'] : '';
   const market =

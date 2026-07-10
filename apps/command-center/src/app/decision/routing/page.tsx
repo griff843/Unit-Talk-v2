@@ -2,12 +2,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { getRoutingPreview } from '@/lib/data';
 
 interface RoutingPreviewPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     pickId?: string;
-  };
+  }>;
 }
 
-export default async function RoutingPreviewPage({ searchParams }: RoutingPreviewPageProps) {
+export default async function RoutingPreviewPage({ searchParams: searchParamsPromise }: RoutingPreviewPageProps) {
+  const searchParams = await searchParamsPromise;
   const pickId = searchParams?.pickId?.trim() ?? '';
   const preview = pickId ? await loadRoutingPreview(pickId) : null;
 

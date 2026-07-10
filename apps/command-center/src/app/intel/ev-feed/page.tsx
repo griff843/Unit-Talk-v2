@@ -86,10 +86,11 @@ function computeEvRows(groups: IntelOfferGroup[]): EvRow[] {
 }
 
 export default async function EvFeedPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const thresholdRaw = typeof searchParams['threshold'] === 'string' ? searchParams['threshold'] : '0';
   const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0;
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;

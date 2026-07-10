@@ -32,10 +32,11 @@ function matchupLabel(event: ResearchMatchup): string {
 }
 
 export default async function MatchupCardPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : 'nba';
   const date = typeof searchParams['date'] === 'string' ? searchParams['date'] : defaultDateValue();
   const q = typeof searchParams['q'] === 'string' ? searchParams['q'] : undefined;

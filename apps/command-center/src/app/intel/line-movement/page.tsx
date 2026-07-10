@@ -85,10 +85,11 @@ function buildMovementFromHistory(rows: HistoryOfferRow[], eventNames: Map<strin
 }
 
 export default async function LineMovementPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const market = typeof searchParams['market'] === 'string' ? searchParams['market'] : undefined;
   const eventId = typeof searchParams['event'] === 'string' ? searchParams['event'] : undefined;
 

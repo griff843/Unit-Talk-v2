@@ -82,10 +82,11 @@ async function submitModelHealthDecision(formData: FormData) {
 }
 
 export default async function ModelHealthPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const result = await fetchModelHealthAlerts();
   const error = typeof searchParams?.error === 'string' ? searchParams.error : null;
   const decision = typeof searchParams?.decision === 'string' ? searchParams.decision : null;

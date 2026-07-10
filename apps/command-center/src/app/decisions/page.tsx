@@ -34,10 +34,11 @@ const OUTCOME_COLORS: Record<string, string> = {
 };
 
 export default async function DecisionsPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const filterDecision = typeof searchParams['decision'] === 'string' ? searchParams['decision'] : undefined;
   const { reviews, total } = await getReviewHistory(filterDecision);
 

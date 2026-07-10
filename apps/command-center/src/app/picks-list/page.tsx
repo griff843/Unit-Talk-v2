@@ -83,10 +83,11 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
 }
 
 export default async function PicksListPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const params: Record<string, string> = {};
   for (const [key, value] of Object.entries(searchParams)) {
     if (typeof value === 'string' && value.trim()) {

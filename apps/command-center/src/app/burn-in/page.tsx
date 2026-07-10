@@ -187,10 +187,11 @@ const SECTION8_ROWS: Array<{ component: string; verdict: string; note: string }>
 ];
 
 export default async function BurnInPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const intervalMs = readRefreshIntervalMs(searchParams);
   const [snapshotResult, todayCoverageResult, weeklyCoverageResult, providerHealthResult, exceptionQueuesResult] = await Promise.all([
     getSnapshotData(),

@@ -209,10 +209,11 @@ function DeliveryQueueCard({
 }
 
 export default async function ExceptionsPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const data = await fetchExceptionQueues();
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();

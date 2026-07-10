@@ -9,10 +9,10 @@ import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { getPickDetail } from '@/lib/data';
+import { notFound } from 'next/navigation';
 
 interface PickDetailPageProps {
-  params: { id: string };
-  searchParams: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
 }
 
 interface LifecycleRow {
@@ -236,29 +236,17 @@ function renderClvSummary(settlement: SettlementRow | undefined) {
   return settlement.hasClv ? 'present' : 'missing';
 }
 
+export async function generateMetadata({ params }: PickDetailPageProps) {
+  const { id } = await params;
+  return { title: `Pick ${id.slice(0, 8)} — Unit Talk Command Center` };
+}
+
 export default async function PickDetailPage({ params }: PickDetailPageProps) {
-  const pickId = params.id;
+  const { id: pickId } = await params;
   const detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
 
   if (detail == null) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Breadcrumb
-          items={[
-            { label: 'Dashboard', href: '/' },
-            { label: 'Picks', href: '/picks-list' },
-            { label: `${pickId.slice(0, 8)}...` },
-          ]}
-        />
-        <div>
-          <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
-          <p className="mt-1 font-mono text-sm text-gray-400">{pickId}</p>
-        </div>
-        <div className="text-sm text-red-400">
-          Pick not found or database unavailable: {pickId}
-        </div>
-      </div>
-    );
+    notFound();
   }
 
   const { pick } = detail;
