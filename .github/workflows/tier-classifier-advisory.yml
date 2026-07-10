@@ -1,0 +1,115 @@
+# Tier Classifier (advisory)
+#
+# Phase 1 of the mechanical tier classifier (docs/05_operations/MECHANICAL_TIER_CLASSIFIER_SPEC.md).
+# Runs scripts/ops/tier-classifier.ts against every PR's diff and posts a
+# separate, non-required informational check-run surfacing the derived tier
+# and any mechanical escalation. This workflow never touches merge-gate.yml's
+# tier-consumption logic (authoritativeTier) and is never added to branch
+# protection's required_status_checks -- it is advisory evidence only, per
+# the spec's advisory-first rollout decision. A Phase 2 blocking cutover is a
+# separate, future PM-approved change.
+#
+# This job always completes successfully regardless of what the classifier
+# finds -- escalation is surfaced via the posted check-run's own (neutral)
+# conclusion and summary text, never by failing this workflow.
+
+name: Tier Classifier (advisory)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  tier-classifier-advisory:
+    name: Tier Classifier (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tier classifier
+        id: classify
+        run: |
+          set -e
+
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          TITLE="${{ github.event.pull_request.title }}"
+          ISSUE="$(echo "$BRANCH" | sed -nE 's#.*(utv2|UTV2)-([0-9]+).*#UTV2-\2#p')"
+          if [ -z "$ISSUE" ]; then
+            ISSUE="$(echo "$TITLE" | sed -nE 's/.*(UTV2|utv2)-([0-9]+).*/UTV2-\2/p')"
+          fi
+
+          DECLARED_TIER=""
+          if [ -n "$ISSUE" ] && [ -f "docs/06_status/lanes/${ISSUE}.json" ]; then
+            DECLARED_TIER="$(jq -r '.tier // empty' "docs/06_status/lanes/${ISSUE}.json")"
+          fi
+          if [ -z "$DECLARED_TIER" ] || [ "$DECLARED_TIER" = "null" ]; then
+            DECLARED_TIER="$(echo '${{ toJson(github.event.pull_request.labels) }}' \
+              | jq -r '[.[] | .name | select(test("^tier:T[123]$"))][0] // empty' \
+              | sed 's/^tier://')"
+          fi
+
+          if [ -z "$DECLARED_TIER" ]; then
+            echo "No declared tier resolvable from lane manifest or PR labels -- skipping advisory classification."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Declared tier resolved: $DECLARED_TIER (issue: ${ISSUE:-unknown})"
+
+          npx tsx scripts/ops/tier-classifier.ts \
+            --declared-tier "$DECLARED_TIER" \
+            --base "origin/${{ github.event.pull_request.base.ref }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            > /tmp/tier-classification.json
+
+          cat /tmp/tier-classification.json
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Post advisory check run
+        if: steps.classify.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('/tmp/tier-classification.json', 'utf8'));
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const headSha = context.payload.pull_request.head.sha;
+
+            // check_run.conclusion is computed by the pure, unit-tested
+            // buildAdvisoryCheckRunOutput() function in tier-classifier.ts --
+            // it is always 'success' or 'neutral', never 'failure'.
+            await github.rest.checks.create({
+              owner, repo,
+              name: 'Tier Classifier (advisory)',
+              head_sha: headSha,
+              status: 'completed',
+              conclusion: result.check_run.conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: result.check_run.title,
+                summary: result.check_run.summary,
+              },
+            });
