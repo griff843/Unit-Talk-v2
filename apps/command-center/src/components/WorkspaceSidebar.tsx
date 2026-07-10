@@ -10,10 +10,15 @@ export type SidebarNavItem = {
   unreadCount?: number;
 };
 
+export type SidebarNavGroup = {
+  label: string;
+  items: SidebarNavItem[];
+};
+
 export type SidebarHealthStatus = 'healthy' | 'warning' | 'critical';
 
 type WorkspaceSidebarProps = {
-  navItems: SidebarNavItem[];
+  navGroups: SidebarNavGroup[];
   activeRoute: string;
   healthStatus: SidebarHealthStatus;
   collapsed: boolean;
@@ -84,7 +89,7 @@ function OperatorBadge({ collapsed }: { collapsed: boolean }) {
 }
 
 export function WorkspaceSidebar({
-  navItems,
+  navGroups,
   activeRoute,
   healthStatus,
   collapsed,
@@ -126,16 +131,23 @@ export function WorkspaceSidebar({
         )}
       </div>
 
-      <nav className="flex-1 px-2 pb-4" aria-label="Primary">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
+      <nav className="flex-1 overflow-y-auto px-2 pb-4" aria-label="Primary">
+        {navGroups.map((group) => (
+        <div key={group.label} className="mb-2">
+          {!collapsed && (
+            <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--cc-text-muted)]">
+              {group.label}
+            </div>
+          )}
+        <ul className="space-y-0.5">
+          {group.items.map((item) => {
             const isActive = activeRoute === item.href;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   className={cx(
-                    'group relative flex items-center rounded-2xl px-3 py-3 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-out)]',
+                    'group relative flex items-center rounded-2xl px-3 py-2 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-out)]',
                     collapsed && 'justify-center px-0',
                     isActive
                       ? 'bg-[color-mix(in_srgb,var(--cc-accent)_14%,transparent)] text-[var(--cc-text-primary)]'
@@ -161,6 +173,8 @@ export function WorkspaceSidebar({
             );
           })}
         </ul>
+        </div>
+        ))}
       </nav>
 
       <OperatorBadge collapsed={collapsed} />
