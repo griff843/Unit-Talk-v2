@@ -12,8 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/**",
-    "docs/06_status/proof/UTV2-1522/diff-summary.md",
-    "docs/06_status/proof/UTV2-1522/verification.md"
+    "docs/06_status/proof/UTV2-1522/**"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1522/diff-summary.md",
