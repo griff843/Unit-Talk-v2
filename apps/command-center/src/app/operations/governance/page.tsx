@@ -15,7 +15,7 @@ export default function GovernancePage() {
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
         <div className="flex items-center gap-2">
-          <h1 className="text-lg font-bold text-gray-100">Governance / Lane Board</h1>
+          <h1 className="text-lg font-bold text-gray-100">Governance / Lanes</h1>
           <InternalLabelBadge label="Data Missing" />
         </div>
         <p className="text-sm cc-text-muted">

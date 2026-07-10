@@ -112,6 +112,7 @@ function resolveChrome(pathname: string) {
   const lastSegment = segments.length > 0 ? segments[segments.length - 1]! : '';
   const looksLikeId = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(lastSegment) || /^\d+$/.test(lastSegment);
   const leaf = segments.length === 0 ? activeItem.label : looksLikeId ? `${activeItem.label} · ${lastSegment.slice(0, 8)}` : titleize(lastSegment);
+  const sameName = (a: string, b: string) => a.replace(/[^a-z0-9]/gi, '').toLowerCase() === b.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
   return {
     activeRoute,
@@ -119,9 +120,9 @@ function resolveChrome(pathname: string) {
       'Command Center',
       ...(activeGroup ? [activeGroup.label] : []),
       activeItem.label,
-      ...(leaf !== activeItem.label ? [leaf] : []),
+      ...(sameName(leaf, activeItem.label) ? [] : [leaf]),
     ],
-    title: leaf,
+    title: sameName(leaf, activeItem.label) ? activeItem.label : leaf,
   };
 }
 

@@ -106,7 +106,7 @@ export default async function ArbitragePage({
     <div className="flex flex-col gap-6">
       <div>
         <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Cross-Book Arbitrage Scan</h1>
+        <h1 className="mt-1 text-xl font-bold text-white">Arbitrage Finder</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Two-way markets where best over (book A) + best under (book B) at the same line imply
           combined probability &lt; 1. Internal research surface only. Scan capped at 500 most-recent

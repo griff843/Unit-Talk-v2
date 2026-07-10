@@ -121,7 +121,7 @@ export default async function MiddlesPage({
     <div className="flex flex-col gap-6">
       <div>
         <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Middles Scanner</h1>
+        <h1 className="mt-1 text-xl font-bold text-white">Middle Finder</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Same market, different lines across books: over the lower line + under the higher line.
           Risk/payout shown for equal 500u stakes per leg. Scan capped at 500 most-recent offer rows.
