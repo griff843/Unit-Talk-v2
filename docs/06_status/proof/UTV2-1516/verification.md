@@ -50,5 +50,17 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 
 Supabase project: `zfzdnfwdarxucxtaojxm`. Pure CI-tooling change (throttle helper in `scripts/ops/preflight.ts`); no DB writes attributable to this lane's own change set.
 
+## Follow-up fix verification (proof-generate P13/P14 self-inconsistency)
+
+Commands run for the `scripts/ops/proof-generate.ts` fix:
+
+- `pnpm type-check` — PASS, 0 errors
+- `pnpm lint` — PASS
+- `npx tsx --test scripts/ops/proof-generate.test.ts` — PASS, 21/21 (includes the new regression test asserting the generated template satisfies `pnpm verify`/`r-level-check.ts` mentions)
+- `pnpm test` — PASS, all suites, 0 failures
+- `pnpm verify` — components run standalone as listed above; no full sequential run needed for a scripts-only change
+
+Manual reproduction of the bug before the fix: `pnpm ops:proof-generate UTV2-1516 --merge-sha 21eff733cb7098ef838be59def6a74eee5e92ca1` regenerated `verification.md` with a `## Verification` section listing only `pnpm type-check`/`pnpm test` — no `pnpm verify` or `r-level-check.ts` mention anywhere in the file, reproducing the exact `post-merge-lane-close.yml` P13/P14 failures seen live on this issue (2026-07-11, two consecutive automated closeout runs). After the fix, the same command's output includes both required phrases.
+
 Verification SHA: `0131652fdb6c1d97cbb252b9bf990d541d5573ed`
 Verified at: `2026-07-11T13:05:00.000Z`
