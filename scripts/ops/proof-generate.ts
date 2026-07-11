@@ -65,7 +65,12 @@ export interface ProofManifestOverrides {
 type GitRunner = (args: string[], cwd?: string) => { ok: boolean; stdout: string; stderr: string };
 
 const STANDARD_PROOF_FILES: ProofArtifactName[] = ['diff-summary.md', 'verification.md'];
-const DEFAULT_VERIFICATION_COMMANDS = ['pnpm type-check', 'pnpm test'];
+const DEFAULT_VERIFICATION_COMMANDS = [
+  'pnpm type-check',
+  'pnpm test',
+  'pnpm verify',
+  'npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD',
+];
 
 export function standardProofPaths(issueId: string): Record<ProofArtifactName, string> {
   const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase());

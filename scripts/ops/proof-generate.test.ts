@@ -108,9 +108,22 @@ test('generated artifacts include manifest metadata, git truth, and SHA bindings
     assert.match(verificationContent, /^## Verification/m);
     assert.match(verificationContent, /`pnpm type-check`/);
     assert.match(verificationContent, /`pnpm test`/);
+    assert.match(verificationContent, /`pnpm verify`/);
+    assert.match(verificationContent, /scripts\/ci\/r-level-check\.ts/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// UTV2-1516: a freshly-generated verification.md must satisfy truth-check-lib's
+// own P13 ("pnpm verify" mention) and P14 ("r-level-check.ts" mention) checks --
+// otherwise ops:proof-generate --merge-sha (the automated post-merge step) writes
+// a file that immediately fails its own downstream truth-check, deadlocking any
+// T2 lane's auto-close.
+test('generated verification.md satisfies truth-check-lib P13/P14 requirements', () => {
+  const content = buildRuntimeVerification(input());
+  assert.match(content, /\bpnpm\s+verify\b/i);
+  assert.match(content, /\bscripts\/ci\/r-level-check\.ts\b/i);
 });
 
 test('existing artifacts are updated when they are missing current SHA bindings', () => {
