@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { ACTIVE_LOCK_STATUSES, readConfiguredEnvValue, resolveLaneExecutor } from './shared.js';
 import { linearQuery } from './linear-client.js';
+import {
+  FULL_VERIFY_THROTTLE_DIR,
+  FULL_VERIFY_THROTTLE_STALE_MS,
+  configuredFullVerifyConcurrency,
+} from './preflight.js';
 
 export interface LaneManifest {
   schema_version: number;
@@ -83,6 +88,12 @@ export interface LaneSaturationForecast {
   };
   active_singletons: string[];
   forbidden_combinations_active: string[][];
+  full_verify_throttle: {
+    max_concurrent: number;
+    active: number;
+    available_slots: number;
+    lock_dir: string;
+  };
   safe_class_recommendations: string[];
 }
 
@@ -304,6 +315,43 @@ function activeForbiddenCombinations(
   forbiddenCombinations: [string, string][],
 ): string[][] {
   return forbiddenCombinations.filter(([left, right]) => activeTypes.includes(left) && activeTypes.includes(right));
+}
+
+function readThrottleOwner(slotPath: string): { acquired_at?: string } | null {
+  const ownerPath = path.join(slotPath, 'owner.json');
+  if (!fs.existsSync(ownerPath)) {
+    return null;
+  }
+  try {
+    return JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { acquired_at?: string };
+  } catch {
+    return null;
+  }
+}
+
+function fullVerifySlotIsActive(slotPath: string): boolean {
+  const owner = readThrottleOwner(slotPath);
+  const acquiredAt = owner?.acquired_at
+    ? Date.parse(owner.acquired_at)
+    : fs.statSync(slotPath).mtimeMs;
+  return Boolean(acquiredAt) && Date.now() - acquiredAt <= FULL_VERIFY_THROTTLE_STALE_MS;
+}
+
+function readFullVerifyThrottleState(): LaneSaturationForecast['full_verify_throttle'] {
+  const maxConcurrent = configuredFullVerifyConcurrency();
+  const active = fs.existsSync(FULL_VERIFY_THROTTLE_DIR)
+    ? fs
+        .readdirSync(FULL_VERIFY_THROTTLE_DIR, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory() && /^slot-\d+$/.test(entry.name))
+        .filter((entry) => fullVerifySlotIsActive(path.join(FULL_VERIFY_THROTTLE_DIR, entry.name)))
+        .length
+    : 0;
+  return {
+    max_concurrent: maxConcurrent,
+    active,
+    available_slots: Math.max(0, maxConcurrent - active),
+    lock_dir: normalizePath(path.relative(ROOT, FULL_VERIFY_THROTTLE_DIR)),
+  };
 }
 
 function buildResult(
@@ -691,6 +739,7 @@ export function evaluateCandidates(
     return executor === 'codex-cli' || executor === 'codex-cloud';
   }).length;
   const initialActiveTypes = activeLaneTypes(activeLanes);
+  const fullVerifyThrottle = readFullVerifyThrottleState();
 
   const report: MaximizationReport = {
     generated_at: new Date().toISOString(),
@@ -719,6 +768,7 @@ export function evaluateCandidates(
         },
         active_singletons: initialActiveTypes.filter((laneType) => singletonLaneTypes.includes(laneType)),
         forbidden_combinations_active: activeForbiddenCombinations(initialActiveTypes, forbiddenCombinations),
+        full_verify_throttle: fullVerifyThrottle,
         safe_class_recommendations: [],
       },
     },
@@ -851,9 +901,17 @@ export function evaluateCandidates(
   forecast.safe_class_recommendations = availableSafeSlots > 0
     ? [
         `Queue up to ${availableSafeSlots} hygiene, verification, governance, or ops-tooling lanes with disjoint file scopes.`,
+        fullVerifyThrottle.available_slots > 0
+          ? `Full verify throttle has ${fullVerifyThrottle.available_slots}/${fullVerifyThrottle.max_concurrent} slot available; preflight heavy checks are serialized independently of executor caps.`
+          : `Full verify throttle is saturated (${fullVerifyThrottle.active}/${fullVerifyThrottle.max_concurrent}); wait before starting another full pnpm verify/pnpm test run.`,
         'Avoid runtime, migration, modeling, and data-canonical work while matching singleton classes are active.',
       ]
-    : ['All configured executor slots are saturated by active or planned lanes.'];
+    : [
+        'All configured executor slots are saturated by active or planned lanes.',
+        fullVerifyThrottle.available_slots > 0
+          ? `Full verify throttle has ${fullVerifyThrottle.available_slots}/${fullVerifyThrottle.max_concurrent} slot available for the next heavy verification run.`
+          : `Full verify throttle is saturated (${fullVerifyThrottle.active}/${fullVerifyThrottle.max_concurrent}); do not start another full pnpm verify/pnpm test run yet.`,
+      ];
 
   return report;
 }
