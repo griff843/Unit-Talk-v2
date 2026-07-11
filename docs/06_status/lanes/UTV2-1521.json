@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1521-authenticate-scope-override",
   "branch": "claude/utv2-1521-authenticate-scope-override",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "411f6f2c8c418bcb57ceb76d9e09b912843468f3",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1191",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,30 @@
     "docs/06_status/proof/UTV2-1521/diff-summary.md",
     "docs/06_status/proof/UTV2-1521/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-10T22:16:01.562Z",
-  "heartbeat_at": "2026-07-10T23:24:50.686Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-11T12:58:56.551Z",
+  "closed_at": "2026-07-11T12:58:56.551Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1521-authenticate-scope-override.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-11T12:58:53.783Z",
+      "verdict": "pass",
+      "merge_sha": "411f6f2c8c418bcb57ceb76d9e09b912843468f3",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1191",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

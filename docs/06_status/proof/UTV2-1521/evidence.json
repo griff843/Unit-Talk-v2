@@ -3,11 +3,13 @@
   "issue_id": "UTV2-1521",
   "title": "Authenticate file-scope scope_override authority",
   "sha_binding": {
-    "verified_source_sha": "9eae6ded1cacd745c1040539554c73ae43b37e89",
+    "verified_source_sha": "411f6f2c8c418bcb57ceb76d9e09b912843468f3",
     "verified_source_note": "Final branch commit before merge; evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha",
     "merge_sha": null,
     "evidence_commit_sha": "9eae6ded1cacd745c1040539554c73ae43b37e89",
-    "current_pr_head_sha": "9eae6ded1cacd745c1040539554c73ae43b37e89"
+    "current_pr_head_sha": "9eae6ded1cacd745c1040539554c73ae43b37e89",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-11T12:58:52.636Z"
   },
   "verifier": {
     "identity": "claude-sonnet-5/utv2-1521-lane",
@@ -20,11 +22,29 @@
   },
   "static_proof": {
     "pnpm_verify_components": {
-      "env_check": {"command": "pnpm env:check", "status": "PASS"},
-      "lint": {"command": "pnpm lint", "status": "PASS"},
-      "type_check": {"command": "pnpm type-check", "status": "PASS"},
-      "build": {"command": "pnpm build", "status": "PASS"},
-      "test": {"command": "pnpm test", "status": "PASS", "tests": 3185, "pass": 3185, "fail": 0}
+      "env_check": {
+        "command": "pnpm env:check",
+        "status": "PASS"
+      },
+      "lint": {
+        "command": "pnpm lint",
+        "status": "PASS"
+      },
+      "type_check": {
+        "command": "pnpm type-check",
+        "status": "PASS"
+      },
+      "build": {
+        "command": "pnpm build",
+        "status": "PASS"
+      },
+      "test": {
+        "command": "pnpm test",
+        "status": "PASS",
+        "tests": 3185,
+        "pass": 3185,
+        "fail": 0
+      }
     },
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -43,9 +63,21 @@
     "manual_cli_smoke": {
       "note": "Live CLI smoke of scripts/ci/file-scope-guard.ts against a real changed-file set, exercised during implementation.",
       "scenarios": [
-        {"case": "no override supplied", "expected": "FAIL (outside declared scope)", "observed": "FAIL"},
-        {"case": "matching issue_id/pr_number/head_sha override supplied", "expected": "PASS", "observed": "PASS"},
-        {"case": "override supplied with wrong pr_number", "expected": "FAIL (override does not apply)", "observed": "FAIL"}
+        {
+          "case": "no override supplied",
+          "expected": "FAIL (outside declared scope)",
+          "observed": "FAIL"
+        },
+        {
+          "case": "matching issue_id/pr_number/head_sha override supplied",
+          "expected": "PASS",
+          "observed": "PASS"
+        },
+        {
+          "case": "override supplied with wrong pr_number",
+          "expected": "FAIL (override does not apply)",
+          "observed": "FAIL"
+        }
       ]
     }
   },
@@ -75,7 +107,13 @@
     "row_counts": [
       {
         "note": "No lane-specific DB rows mutated by this change.",
-        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
       }
     ]
   },
