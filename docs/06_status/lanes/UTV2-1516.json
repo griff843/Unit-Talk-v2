@@ -22,10 +22,10 @@
     "docs/06_status/proof/UTV2-1516/diff-summary.md",
     "docs/06_status/proof/UTV2-1516/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-10T15:27:44.659Z",
-  "heartbeat_at": "2026-07-11T15:11:39.205Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-11T15:12:28.052Z",
+  "closed_at": "2026-07-11T15:12:28.052Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1516-throttle-verify-concurrency.json",
   "created_by": "claude",
@@ -38,6 +38,40 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193"
+    },
+    {
+      "checked_at": "2026-07-11T15:12:09.450Z",
+      "verdict": "pass",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-11T15:12:09.462Z",
+      "verdict": "fail",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-11T15:12:25.659Z",
+      "verdict": "pass",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
