@@ -9,37 +9,100 @@ const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
 
 type GuardVerdict = 'PASS' | 'FAIL';
 
-interface ScopeOverride {
-  approved_by?: string;
-  reason?: string;
-  evidence?: string;
-}
-
 interface LaneManifest {
   issue_id?: string;
   branch?: string;
   status?: string;
   file_scope_lock?: string[];
   expected_proof_paths?: string[];
-  // Documented override path (acceptance criteria: "support a documented
-  // override path only with PM evidence"). When present and well-formed, the
-  // trusted resolver in `resolveTrustedManifests` uses the manifest's current
-  // (head) content for THIS lane's own scope evaluation instead of the
-  // otherwise-immutable base/first-commit baseline. A malformed or missing
-  // override is never honored — scope widening fails closed by default.
-  scope_override?: ScopeOverride;
+  // A manifest-embedded `scope_override` field existed here before UTV2-1521.
+  // It was removed: the manifest is part of the PR's own diff, so a
+  // well-formed-looking override object proved nothing about actual
+  // authorization -- any PR could grant itself scope widening by typing
+  // non-empty strings into its own file. Scope widening now requires an
+  // externally-authored PR comment; see ExternalScopeOverride below and
+  // docs/05_operations/schemas/scope-override-v1.md.
 }
 
-function isWellFormedScopeOverride(candidate: ScopeOverride | undefined): candidate is Required<ScopeOverride> {
-  return Boolean(
-    candidate &&
-      typeof candidate.approved_by === 'string' &&
-      candidate.approved_by.trim().length > 0 &&
-      typeof candidate.reason === 'string' &&
-      candidate.reason.trim().length > 0 &&
-      typeof candidate.evidence === 'string' &&
-      candidate.evidence.trim().length > 0,
+// ── External scope override (UTV2-1521) ─────────────────────────────────────
+//
+// Replaces the manifest-embedded scope_override field. An override is only
+// trustworthy if it comes from a source the PR branch's own diff cannot
+// write to -- a PR comment authored by a real, authorized GitHub account is
+// exactly that: GitHub, not the PR's commits, attests to who posted it.
+//
+// The CI workflow (not this script) fetches PR comments, authenticates the
+// author against the same CODEOWNERS/non-bot check merge-gate.yml already
+// uses, and writes only the validated matches to an `--override-file`. This
+// script never talks to the GitHub API itself and never decides who counts
+// as authorized -- it only matches an already-authenticated override record
+// against the current evaluation context (issue, PR, head SHA).
+
+export interface ExternalScopeOverride {
+  issue_id: string;
+  pr_number: number;
+  head_sha: string;
+  paths: string[];
+  authorized_by: string;
+  reason: string;
+}
+
+function isWellFormedExternalOverride(candidate: unknown): candidate is ExternalScopeOverride {
+  if (!candidate || typeof candidate !== 'object') return false;
+  const value = candidate as Record<string, unknown>;
+  return (
+    typeof value.issue_id === 'string' &&
+    value.issue_id.trim().length > 0 &&
+    typeof value.pr_number === 'number' &&
+    Number.isInteger(value.pr_number) &&
+    typeof value.head_sha === 'string' &&
+    value.head_sha.trim().length > 0 &&
+    Array.isArray(value.paths) &&
+    value.paths.length > 0 &&
+    value.paths.every((p) => typeof p === 'string' && p.trim().length > 0) &&
+    typeof value.authorized_by === 'string' &&
+    value.authorized_by.trim().length > 0 &&
+    typeof value.reason === 'string' &&
+    value.reason.trim().length > 0
   );
+}
+
+/**
+ * Finds the (at most one) externally-authorized override that applies to the
+ * given manifest in the current evaluation context. Every field must match
+ * exactly -- issue_id, PR number, and head SHA -- so an override never
+ * silently carries forward to a different lane, a different PR, or a later
+ * push (a force-push or new commit needs a fresh override comment).
+ */
+export function resolveApplicableOverride(
+  overrides: ExternalScopeOverride[],
+  context: { issueId: string | null; prNumber: number | null; headSha: string | null },
+): ExternalScopeOverride | null {
+  if (!context.issueId || context.prNumber === null || !context.headSha) return null;
+
+  return (
+    overrides.find(
+      (override) =>
+        isWellFormedExternalOverride(override) &&
+        override.issue_id === context.issueId &&
+        override.pr_number === context.prNumber &&
+        override.head_sha === context.headSha,
+    ) ?? null
+  );
+}
+
+function loadExternalOverrides(overrideFile: string | null): ExternalScopeOverride[] {
+  if (!overrideFile) return [];
+  if (!fs.existsSync(overrideFile)) return [];
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(overrideFile, 'utf8'));
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(isWellFormedExternalOverride);
+  } catch {
+    // Malformed override file grants nothing -- fail closed.
+    return [];
+  }
 }
 
 interface GuardConflict {
@@ -75,6 +138,9 @@ interface ParsedArgs {
   manifestDir: string;
   outputJson: string | null;
   manifestSource: ManifestSourceMode;
+  overrideFile: string | null;
+  prNumber: number | null;
+  headSha: string | null;
 }
 
 function repoRoot(): string {
@@ -110,6 +176,11 @@ function parseArgs(argv: string[]): ParsedArgs {
   let manifestDir = 'docs/06_status/lanes';
   let outputJson: string | null = null;
   let manifestSource: ManifestSourceMode = 'worktree';
+  let overrideFile: string | null = null;
+  let prNumber: number | null = process.env.FILE_SCOPE_PR_NUMBER
+    ? Number.parseInt(process.env.FILE_SCOPE_PR_NUMBER, 10)
+    : null;
+  let headSha: string | null = process.env.FILE_SCOPE_HEAD_SHA ?? null;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -153,11 +224,41 @@ function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       continue;
     }
+    if (arg === '--override-file' && next) {
+      overrideFile = next;
+      index += 1;
+      continue;
+    }
+    if (arg === '--pr-number' && next) {
+      const parsed = Number.parseInt(next, 10);
+      if (!Number.isInteger(parsed)) {
+        throw new Error(`Invalid --pr-number "${next}" (expected an integer)`);
+      }
+      prNumber = parsed;
+      index += 1;
+      continue;
+    }
+    if (arg === '--head-sha' && next) {
+      headSha = next;
+      index += 1;
+      continue;
+    }
 
     throw new Error(`Unknown argument: ${arg}`);
   }
 
-  return { base, head, branch, changedFilesFile, manifestDir, outputJson, manifestSource };
+  return {
+    base,
+    head,
+    branch,
+    changedFilesFile,
+    manifestDir,
+    outputJson,
+    manifestSource,
+    overrideFile,
+    prNumber,
+    headSha,
+  };
 }
 
 function readChangedFiles(root: string, args: ParsedArgs): string[] {
@@ -247,24 +348,12 @@ export function resolveTrustedManifests(
       continue;
     }
 
-    // Documented override path: if the PR's own (head) tip declares a
-    // well-formed scope_override on this manifest, trust the head content
-    // instead of the base/first-commit baseline. A missing or malformed
-    // override never grants an exception — the baseline wins by default.
-    const headRaw = source.readFileAtRef(head, filePath);
-    if (headRaw) {
-      try {
-        const headManifest = JSON.parse(headRaw) as LaneManifest;
-        if (isWellFormedScopeOverride(headManifest.scope_override)) {
-          manifests.push(headManifest);
-          continue;
-        }
-      } catch {
-        // Malformed head content just means no override is honored; fall through
-        // to the trusted baseline computed above.
-      }
-    }
-
+    // No head-tip override path here (removed in UTV2-1521): the base/
+    // first-commit baseline is always authoritative for manifest content.
+    // Scope widening beyond the baseline is authorized exclusively through an
+    // externally-validated scope-override/v1 PR comment, applied later in
+    // fileIsAllowedByOwnManifest -- never by trusting anything the PR's own
+    // diff wrote into the manifest file itself.
     manifests.push(trusted);
   }
 
@@ -334,11 +423,16 @@ function ownLaneControlPlanePatterns(manifest: LaneManifest): string[] {
   ];
 }
 
-function fileIsAllowedByOwnManifest(file: string, manifest: LaneManifest): boolean {
+function fileIsAllowedByOwnManifest(
+  file: string,
+  manifest: LaneManifest,
+  applicableOverride: ExternalScopeOverride | null,
+): boolean {
   const allowedPatterns = [
     ...(manifest.file_scope_lock ?? []),
     ...(manifest.expected_proof_paths ?? []),
     ...ownLaneControlPlanePatterns(manifest),
+    ...(applicableOverride?.paths ?? []),
   ];
   return allowedPatterns.some((pattern) => matchesLockPattern(file, pattern));
 }
@@ -347,6 +441,9 @@ export function evaluateFileScopeGuard(input: {
   changedFiles: string[];
   prBranch: string;
   manifests: LaneManifest[];
+  externalOverrides?: ExternalScopeOverride[];
+  prNumber?: number | null;
+  headSha?: string | null;
 }): GuardResult {
   const errors: string[] = [];
   const active = activeManifests(input.manifests);
@@ -357,10 +454,21 @@ export function evaluateFileScopeGuard(input: {
     errors.push(`No active lane manifest found for branch "${input.prBranch}".`);
   }
 
+  // An override only ever applies to the PR's OWN manifest, in the current
+  // issue/PR/head-SHA context -- never to another lane's scope, and never
+  // carried forward from a stale context. See resolveApplicableOverride.
+  const applicableOverride = ownManifest
+    ? resolveApplicableOverride(input.externalOverrides ?? [], {
+        issueId: ownManifest.issue_id ?? null,
+        prNumber: input.prNumber ?? null,
+        headSha: input.headSha ?? null,
+      })
+    : null;
+
   const outsideScope: ScopeViolation[] = [];
   if (ownManifest) {
     for (const file of input.changedFiles) {
-      if (!fileIsAllowedByOwnManifest(file, ownManifest)) {
+      if (!fileIsAllowedByOwnManifest(file, ownManifest, applicableOverride)) {
         outsideScope.push({
           file,
           branch: input.prBranch,
@@ -433,10 +541,16 @@ function main(): void {
   const args = parseArgs(process.argv);
   const changedFiles = readChangedFiles(root, args);
   const manifests = loadManifests(root, args);
+  const externalOverrides = loadExternalOverrides(
+    args.overrideFile ? path.resolve(root, args.overrideFile) : null,
+  );
   const result = evaluateFileScopeGuard({
     changedFiles,
     prBranch: args.branch,
     manifests,
+    externalOverrides,
+    prNumber: args.prNumber,
+    headSha: args.headSha,
   });
 
   if (args.outputJson) {

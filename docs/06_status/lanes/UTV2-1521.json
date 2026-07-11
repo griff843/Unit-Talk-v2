@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1521",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1521-authenticate-scope-override",
+  "branch": "claude/utv2-1521-authenticate-scope-override",
+  "base_branch": "main",
+  "commit_sha": "411f6f2c8c418bcb57ceb76d9e09b912843468f3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1191",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/file-scope-lock-check.yml",
+    "docs/05_operations/schemas/scope-override-v1.md",
+    "docs/06_status/KNOWN_DEBT.md",
+    "scripts/ci/file-scope-guard.test.ts",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ops/merge-risk.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1521/evidence.json",
+    "docs/06_status/proof/UTV2-1521/diff-summary.md",
+    "docs/06_status/proof/UTV2-1521/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-10T22:16:01.562Z",
+  "heartbeat_at": "2026-07-11T12:58:56.551Z",
+  "closed_at": "2026-07-11T12:58:56.551Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-11T12:58:53.783Z",
+      "verdict": "pass",
+      "merge_sha": "411f6f2c8c418bcb57ceb76d9e09b912843468f3",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1191",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1521-authenticate-scope-override",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
