@@ -13,6 +13,7 @@ Head SHA: 9eae6ded1cacd745c1040539554c73ae43b37e89
 Removes the manifest-embedded `scope_override` field from `scripts/ci/file-scope-guard.ts` — it lived inside the same JSON the PR's own diff controls, so a well-formed-looking override object proved nothing about actual authorization. Replaces it with an externally-authored PR comment (`scope-override/v1`), authenticated against `AUTHORIZED_REVIEWERS` the same way `merge-gate.yml` authenticates its self-attestation comment schemas. The override binds to issue ID, PR number, and head SHA.
 
 ## Verification
+- [x] `pnpm verify` components run standalone (env:check/lint/type-check/build/test) — no failures in any component:
 - [x] `pnpm env:check`: PASS
 - [x] `pnpm lint`: PASS
 - [x] `pnpm type-check`: PASS (`pnpm exec tsc -b tsconfig.json`, 0 errors)
