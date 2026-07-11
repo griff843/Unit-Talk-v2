@@ -1,5 +1,5 @@
 # PROOF: UTV2-1516
-MERGE_SHA: 6585dde7c5e0e83c07e62ab8b66920412ad30957
+MERGE_SHA: 21eff733cb7098ef838be59def6a74eee5e92ca1
 
 ASSERTIONS:
 - [x] Local full-verification semaphore serializes preflight's PB1/PB2 heavy type-check/test baseline checks
@@ -7,6 +7,7 @@ ASSERTIONS:
 - [x] `configuredFullVerifyConcurrency`/`acquireFullVerifyThrottle`/`releaseFullVerifyThrottle` exported and covered by 6 new isolated-tmp-dir unit tests
 - [x] `lane-maximizer.ts` reports `full_verify_throttle` state via the shared import from `preflight.ts`
 - [x] `pnpm test:db` passes against live Supabase
+- [x] Follow-up: `proof-generate.ts`'s `DEFAULT_VERIFICATION_COMMANDS` now includes `pnpm verify` and an `r-level-check.ts` mention, so a freshly-regenerated `verification.md` satisfies truth-check-lib's P13/P14 checks
 
 EVIDENCE:
 ```text
@@ -24,4 +25,10 @@ TAP version 13
 # fail 0
 # cancelled 0
 # skipped 0
+```
+```text
+$ npx tsx --test scripts/ops/proof-generate.test.ts
+# tests 21
+# pass 21
+# fail 0
 ```
