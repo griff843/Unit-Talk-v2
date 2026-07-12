@@ -5,7 +5,8 @@ import Link from 'next/link';
 
 interface PicksExplorerClientProps {
   picks: Array<Record<string, unknown>>;
-  observedAt: string;
+  /** Retained for call-site compatibility; the shell TopBar owns the timestamp. */
+  observedAt?: string;
 }
 
 const STATUS_TONES: Record<string, string> = {
@@ -40,7 +41,7 @@ function formatOdds(odds: number | null): string {
   return odds > 0 ? `+${odds}` : String(odds);
 }
 
-export function PicksExplorerClient({ picks, observedAt }: PicksExplorerClientProps) {
+export function PicksExplorerClient({ picks }: PicksExplorerClientProps) {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const statuses = useMemo(() => {
@@ -60,26 +61,20 @@ export function PicksExplorerClient({ picks, observedAt }: PicksExplorerClientPr
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-lg font-bold text-gray-100">Picks Explorer</h1>
-          <p className="text-sm text-gray-500">
-            {visible.length} of {picks.length} picks · lifecycle index with drill-in
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <select
-            value={statusFilter}
-            onChange={(event) => setStatusFilter(event.target.value)}
-            className="cc-select text-xs"
-            aria-label="Filter by status"
-          >
-            <option value="all">All statuses</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
-          <span className="text-xs text-gray-500">{new Date(observedAt).toLocaleString()}</span>
-        </div>
+        <p className="text-sm text-gray-500">
+          {visible.length} of {picks.length} picks · lifecycle index with drill-in
+        </p>
+        <select
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+          className="cc-select text-xs"
+          aria-label="Filter by status"
+        >
+          <option value="all">All statuses</option>
+          {statuses.map((status) => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </select>
       </div>
       <div className="cc-surface overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
