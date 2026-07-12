@@ -147,31 +147,54 @@ function resolveChrome(pathname: string) {
  * Poll the app's own /api/health (derived from the same lifecycle signals as
  * the Executive Overview KPI) so the sidebar pill reflects runtime truth.
  */
-function useGlobalHealth(): { status: SidebarHealthStatus; label: string } {
-  const [health, setHealth] = useState<{ status: SidebarHealthStatus; label: string }>({
-    status: 'warning',
-    label: 'checking…',
-  });
+const HEALTH_STORAGE_KEY = 'cc-global-health-v1';
+
+function useGlobalHealth(): { status: SidebarHealthStatus; label: string; pending: boolean } {
+  // Debounced to last-settled truth: transitional states ("checking…",
+  // fetch errors) never reprint the chip — they only set a subtle pending
+  // flag. The last settled reading survives page loads via sessionStorage.
+  const [settled, setSettled] = useState<{ status: SidebarHealthStatus; label: string } | null>(null);
+  const [pending, setPending] = useState(true);
 
   useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(HEALTH_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { status: SidebarHealthStatus; label: string };
+        if (parsed && parsed.status && parsed.label) setSettled(parsed);
+      }
+    } catch {
+      /* storage unavailable — start unsettled */
+    }
+
     let cancelled = false;
     const load = async () => {
+      setPending(true);
       try {
         const response = await fetch('/api/health', { cache: 'no-store' });
         const body = (await response.json()) as { status?: string };
         if (cancelled) return;
         const status = body.status ?? 'unknown';
-        setHealth(
+        const next =
           status === 'healthy'
-            ? { status: 'healthy', label: 'healthy' }
+            ? { status: 'healthy' as const, label: 'healthy' }
             : status === 'degraded'
-              ? { status: 'warning', label: 'degraded' }
+              ? { status: 'warning' as const, label: 'degraded' }
               : status === 'down'
-                ? { status: 'critical', label: 'down' }
-                : { status: 'warning', label: 'unknown' },
-        );
+                ? { status: 'critical' as const, label: 'down' }
+                : null; // unknown = transitional, keep last settled
+        if (next) {
+          setSettled(next);
+          try {
+            window.sessionStorage.setItem(HEALTH_STORAGE_KEY, JSON.stringify(next));
+          } catch {
+            /* best effort */
+          }
+        }
+        setPending(false);
       } catch {
-        if (!cancelled) setHealth({ status: 'warning', label: 'unknown' });
+        // Fetch failure is transitional — keep the last settled reading.
+        if (!cancelled) setPending(false);
       }
     };
     void load();
@@ -182,7 +205,9 @@ function useGlobalHealth(): { status: SidebarHealthStatus; label: string } {
     };
   }, []);
 
-  return health;
+  return settled
+    ? { ...settled, pending }
+    : { status: 'warning', label: 'checking…', pending: true };
 }
 
 export function CommandCenterShell({ children }: CommandCenterShellProps) {
@@ -209,7 +234,7 @@ export function CommandCenterShell({ children }: CommandCenterShellProps) {
         navGroups={NAV_GROUPS}
         activeRoute={chrome.activeRoute}
         healthStatus={health.status}
-        healthLabel={health.label}
+        healthLabel={health.pending ? `${health.label} ·` : health.label}
         collapsed={collapsed}
         onToggle={() => setCollapsed((current) => !current)}
       />
