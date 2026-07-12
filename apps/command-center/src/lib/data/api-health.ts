@@ -318,7 +318,8 @@ export async function getApiHealthData(): Promise<ApiHealthPageData> {
   ]);
 
   if (runsResult.error) {
-    throw new Error(`getApiHealthData: ${String(runsResult.error)}`);
+    const e = runsResult.error as { message?: string; code?: string };
+    throw new Error(`getApiHealthData: ${e.message ?? e.code ?? JSON.stringify(runsResult.error)}`);
   }
 
   const providerHealth = providerHealthResult.data as ProviderHealth;
