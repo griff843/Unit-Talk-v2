@@ -6,6 +6,7 @@ import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
 import { fetchRuntimeHealth } from '@/lib/server-api';
 
 export const metadata = { title: 'Fire Board — Unit Talk Command Center' };
+import { describeThrown } from '@/lib/describe-error';
 import {
   buildFireBoard,
   countBySeverity,
@@ -138,7 +139,7 @@ export default async function FireBoardPage() {
     inputs = loaded.inputs;
     loadErrors = loaded.loadErrors;
   } catch (error) {
-    fatalError = error instanceof Error ? error.message : String(error);
+    fatalError = describeThrown(error);
   }
 
   const observedAt = new Date().toISOString();

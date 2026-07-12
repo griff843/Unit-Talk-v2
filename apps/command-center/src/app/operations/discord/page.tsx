@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import { getDiscordOpsSnapshot, type DiscordOpsSnapshot } from '@/lib/data/discord-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
+import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Discord Control — Unit Talk Command Center' };
 
@@ -28,7 +29,7 @@ export default async function DiscordOpsPage() {
   try {
     snapshot = await getDiscordOpsSnapshot();
   } catch (error) {
-    loadError = error instanceof Error ? error.message : String(error);
+    loadError = describeThrown(error);
   }
 
   return (

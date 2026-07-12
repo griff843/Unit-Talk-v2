@@ -1,6 +1,7 @@
 import { getBoardPerformance } from '@/lib/data';
 import { GovernedAttributionTable } from '@/components/GovernedAttributionTable';
 import type { GovernedPickPerformanceRow } from '@/lib/types';
+import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Attribution — Unit Talk Command Center' };
 
@@ -14,7 +15,7 @@ export default async function GovernedAttributionPage() {
     const result = await getBoardPerformance();
     if (result.ok) rows = result.data;
   } catch (err) {
-    fetchError = err instanceof Error ? err.message : String(err);
+    fetchError = describeThrown(err);
   }
 
   return (

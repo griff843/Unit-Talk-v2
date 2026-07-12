@@ -4,6 +4,7 @@ import { getProviderHealth, getSnapshotData } from '@/lib/data';
 import { getProviderCycleLatencySamples } from '@/lib/data/provider-cycle-health';
 import { buildApiHealthPageData } from '@/lib/command-center-page-data';
 import { fetchRuntimeTruth } from '@/lib/server-api';
+import { describeThrown } from '@/lib/describe-error';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
 
 export const metadata = { title: 'System Health — Unit Talk Command Center' };
@@ -14,7 +15,7 @@ export default async function ApiHealthPage() {
   const failures: string[] = [];
   const degrade = <T,>(promise: Promise<T>, label: string, fallback: T): Promise<T> =>
     promise.catch((error: unknown) => {
-      failures.push(`${label}: ${error instanceof Error ? error.message : String(error)}`);
+      failures.push(`${label}: ${describeThrown(error)}`);
       return fallback;
     });
 
@@ -26,7 +27,7 @@ export default async function ApiHealthPage() {
       .then((runtimeTruth) => ({ runtimeTruth, error: null as string | null }))
       .catch((error: unknown) => ({
         runtimeTruth: null,
-        error: error instanceof Error ? error.message : String(error),
+        error: describeThrown(error),
       })),
   ]);
 

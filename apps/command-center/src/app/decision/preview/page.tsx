@@ -1,5 +1,6 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getPromotionPreview } from '@/lib/data';
+import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Preview — Unit Talk Command Center' };
 
@@ -69,7 +70,7 @@ async function loadPromotionPreview(pickId: string) {
     if (raw.ok && raw.data) return { ok: true as const, data: raw.data };
     return { ok: false as const, error: raw.error ?? 'Promotion preview failed' };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false as const, error: describeThrown(error) };
   }
 }
 

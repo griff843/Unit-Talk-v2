@@ -1,5 +1,6 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getRoutingPreview } from '@/lib/data';
+import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Routing — Unit Talk Command Center' };
 
@@ -64,7 +65,7 @@ async function loadRoutingPreview(pickId: string) {
     if (raw.ok && raw.data) return { ok: true as const, data: raw.data };
     return { ok: false as const, error: raw.error ?? 'Routing preview failed' };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false as const, error: describeThrown(error) };
   }
 }
 

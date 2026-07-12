@@ -3,6 +3,7 @@ import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, Empt
 import type { InternalLabel } from '@/components/ui';
 import { getOutboxOverview, OUTBOX_STATUSES, type OutboxOverview } from '@/lib/data/outbox';
 import { formatRelativeAge } from '@/lib/fire-board-model';
+import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Dispatch / Outbox — Unit Talk Command Center' };
 
@@ -60,7 +61,7 @@ export default async function OutboxOpsPage({
   try {
     overview = await getOutboxOverview({ status, target });
   } catch (error) {
-    loadError = error instanceof Error ? error.message : String(error);
+    loadError = describeThrown(error);
   }
 
   return (

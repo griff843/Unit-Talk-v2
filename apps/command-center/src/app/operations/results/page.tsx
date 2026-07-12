@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow } from '@/lib/data/results-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
+import { describeThrown } from '@/lib/describe-error';
 
 export const metadata = { title: 'Results Ops — Unit Talk Command Center' };
 
@@ -63,7 +64,7 @@ export default async function ResultsOpsPage() {
   try {
     snapshot = await getResultsOpsSnapshot();
   } catch (error) {
-    loadError = error instanceof Error ? error.message : String(error);
+    loadError = describeThrown(error);
   }
 
   return (
