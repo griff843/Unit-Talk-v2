@@ -70,3 +70,5 @@ export type { MemberTier, IssueTier } from './TierBadge';
 export { AlertBanner, ErrorState } from './AlertBanner';
 export type { AlertBannerTone } from './AlertBanner';
 export { Table, TableHead, TableBody, Th, Td } from './Table';
+export { Num } from './Num';
+export type { NumProps } from './Num';

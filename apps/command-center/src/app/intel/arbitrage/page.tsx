@@ -176,20 +176,20 @@ export default async function ArbitragePage({
                     <Td>{r.eventName}</Td>
                     <Td>{r.market}</Td>
                     <Td>{r.selection}</Td>
-                    <Td>{r.line ?? '—'}</Td>
+                    <Td num align="right">{r.line ?? '—'}</Td>
                     <Td>
-                      {r.overBook} <span className="text-emerald-400">{formatAmerican(r.overOdds)}</span>
+                      {r.overBook} <span className="cc-num text-emerald-400">{formatAmerican(r.overOdds)}</span>
                     </Td>
                     <Td>
-                      {r.underBook} <span className="text-red-400">{formatAmerican(r.underOdds)}</span>
+                      {r.underBook} <span className="cc-num text-red-400">{formatAmerican(r.underOdds)}</span>
                     </Td>
                     <Td>
-                      <span className="font-semibold text-emerald-400">{formatPercent(r.arbPct)}</span>
+                      <span className="cc-num font-semibold text-emerald-400">{formatPercent(r.arbPct)}</span>
                     </Td>
                     <Td>
                       {formatUnits(r.overStake)}u over / {formatUnits(r.underStake)}u under
                     </Td>
-                    <Td>{formatUnits(r.guaranteedReturn)}u</Td>
+                    <Td num align="right">{formatUnits(r.guaranteedReturn)}u</Td>
                     <Td>
                       {formatTimestamp(r.oldestSnapshotAt)}{' '}
                       <span className="text-gray-500">({formatRelativeTime(r.oldestSnapshotAt)})</span>

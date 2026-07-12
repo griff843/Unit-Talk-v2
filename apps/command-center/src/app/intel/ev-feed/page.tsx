@@ -197,11 +197,11 @@ export default async function EvFeedPage({
                 <Th>Market</Th>
                 <Th>Selection / Side</Th>
                 <Th>Book</Th>
-                <Th>Odds</Th>
-                <Th>Implied</Th>
-                <Th>Fair</Th>
-                <Th>EV %</Th>
-                <Th>Books</Th>
+                <Th align="right">Odds</Th>
+                <Th align="right">Implied</Th>
+                <Th align="right">Fair</Th>
+                <Th align="right">EV %</Th>
+                <Th align="right">Books</Th>
                 <Th>Updated</Th>
                 <Th>Flags</Th>
               </TableHead>
@@ -214,15 +214,15 @@ export default async function EvFeedPage({
                       {r.selection} <span className="uppercase text-gray-500">{r.side}</span>
                     </Td>
                     <Td>{r.book}</Td>
-                    <Td>{formatAmerican(r.odds)}</Td>
-                    <Td>{formatProb(r.impliedProb)}</Td>
-                    <Td>{formatProb(r.fairProb)}</Td>
-                    <Td>
-                      <span className={r.evPct > 0 ? 'font-semibold text-emerald-400' : 'text-gray-400'}>
+                    <Td num align="right">{formatAmerican(r.odds)}</Td>
+                    <Td num align="right">{formatProb(r.impliedProb)}</Td>
+                    <Td num align="right">{formatProb(r.fairProb)}</Td>
+                    <Td num align="right">
+                      <span className={r.evPct > 0 ? 'cc-num-pos font-semibold' : 'cc-num-neutral'}>
                         {formatPercent(r.evPct)}
                       </span>
                     </Td>
-                    <Td>{r.booksInConsensus}</Td>
+                    <Td num align="right">{r.booksInConsensus}</Td>
                     <Td>
                       {formatTimestamp(r.snapshotAt)}{' '}
                       <span className="text-gray-500">({formatRelativeTime(r.snapshotAt)})</span>

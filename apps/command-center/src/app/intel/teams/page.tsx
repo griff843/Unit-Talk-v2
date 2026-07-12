@@ -187,10 +187,10 @@ export default async function TeamsPage({
                         <tr key={g.groupKey} className="border-b border-gray-800/50">
                           <Td>{g.providerMarketKey}</Td>
                           <Td>{g.providerParticipantId ?? '—'}</Td>
-                          <Td>{new Set(g.books.map((b) => b.bookmakerKey)).size}</Td>
+                          <Td num align="right">{new Set(g.books.map((b) => b.bookmakerKey)).size}</Td>
                           <Td>
                             {latest.bookmakerKey} / {latest.line ?? '—'} /{' '}
-                            {formatAmerican(latest.overOdds)} / {formatAmerican(latest.underOdds)}
+                            <span className="cc-num">{formatAmerican(latest.overOdds)} / {formatAmerican(latest.underOdds)}</span>
                           </Td>
                           <Td>
                             {formatTimestamp(latest.snapshotAt)}{' '}

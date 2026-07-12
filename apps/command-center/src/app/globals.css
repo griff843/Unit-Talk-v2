@@ -85,9 +85,32 @@ body {
 }
 
 /* Trading-desk numerics: aligned digits everywhere numbers stack vertically. */
+:root {
+  --cc-font-mono: ui-monospace, 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
 table,
 .font-mono {
   font-variant-numeric: tabular-nums;
+}
+
+/* Signature numeric identity — every odds, line, EV%, score, age, timestamp. */
+.cc-num {
+  font-family: var(--cc-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.cc-num-pos {
+  color: var(--cc-success);
+}
+
+.cc-num-neg {
+  color: var(--cc-danger);
+}
+
+.cc-num-neutral {
+  color: var(--cc-text-secondary);
 }
 
 body {

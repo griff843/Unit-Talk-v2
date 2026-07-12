@@ -182,11 +182,11 @@ export default async function MiddlesPage({
                     <Td>{r.selection}</Td>
                     <Td>
                       {r.lineLow} @ {r.overBook}{' '}
-                      <span className="text-emerald-400">{formatAmerican(r.overOdds)}</span>
+                      <span className="cc-num text-emerald-400">{formatAmerican(r.overOdds)}</span>
                     </Td>
                     <Td>
                       {r.lineHigh} @ {r.underBook}{' '}
-                      <span className="text-red-400">{formatAmerican(r.underOdds)}</span>
+                      <span className="cc-num text-red-400">{formatAmerican(r.underOdds)}</span>
                     </Td>
                     <Td>
                       {r.lineLow}–{r.lineHigh}{' '}

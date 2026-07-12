@@ -204,10 +204,10 @@ export default async function SharpBooksPage({
                       <span className="text-gray-500">({r.referenceLabel})</span>
                     </Td>
                     <Td>{r.retailBook}</Td>
-                    <Td>
+                    <Td num>
                       {formatAmerican(r.retailOverOdds)} / {formatAmerican(r.retailUnderOdds)}
                     </Td>
-                    <Td>{formatProb(r.retailOverProb)}</Td>
+                    <Td num align="right">{formatProb(r.retailOverProb)}</Td>
                     <Td>
                       <span className={Math.abs(r.gapPct) >= 3 ? 'font-semibold text-yellow-400' : 'text-gray-300'}>
                         {r.gapPct >= 0 ? '+' : ''}

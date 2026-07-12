@@ -238,10 +238,10 @@ export default async function LineMovementPage({
                 <Th>Market</Th>
                 <Th>Selection</Th>
                 <Th>Book</Th>
-                <Th>Opening</Th>
-                <Th>Current</Th>
-                <Th>High</Th>
-                <Th>Low</Th>
+                <Th align="right">Opening</Th>
+                <Th align="right">Current</Th>
+                <Th align="right">High</Th>
+                <Th align="right">Low</Th>
                 <Th>Line Δ</Th>
                 <Th>Over Odds (open → cur)</Th>
                 <Th>Snapshots</Th>
@@ -254,10 +254,10 @@ export default async function LineMovementPage({
                     <Td>{r.market}</Td>
                     <Td>{r.selection}</Td>
                     <Td>{r.book}</Td>
-                    <Td>{r.openingLine ?? '—'}</Td>
-                    <Td>{r.currentLine ?? '—'}</Td>
-                    <Td>{r.highLine ?? '—'}</Td>
-                    <Td>{r.lowLine ?? '—'}</Td>
+                    <Td num align="right">{r.openingLine ?? '—'}</Td>
+                    <Td num align="right">{r.currentLine ?? '—'}</Td>
+                    <Td num align="right">{r.highLine ?? '—'}</Td>
+                    <Td num align="right">{r.lowLine ?? '—'}</Td>
                     <Td>
                       {r.lineMove === null ? (
                         '—'
@@ -268,10 +268,10 @@ export default async function LineMovementPage({
                         </span>
                       )}
                     </Td>
-                    <Td>
+                    <Td num>
                       {formatAmerican(r.openingOverOdds)} → {formatAmerican(r.currentOverOdds)}
                     </Td>
-                    <Td>{r.snapshots}</Td>
+                    <Td num align="right">{r.snapshots}</Td>
                     <Td>
                       {formatTimestamp(r.lastSnapshotAt)}{' '}
                       <span className="text-gray-500">({formatRelativeTime(r.lastSnapshotAt)})</span>
