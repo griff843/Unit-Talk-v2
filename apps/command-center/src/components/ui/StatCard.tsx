@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { CounterAnimation } from './CounterAnimation';
+import { MicroSparkline } from './MicroSparkline';
 
 export interface StatCardProps {
   label: string;
@@ -9,6 +10,9 @@ export interface StatCardProps {
   delta?: number | string;
   unit?: string;
   liveUpdate?: boolean;
+  /** Optional trailing trend series (e.g. 7-day counts) rendered as a sparkline. */
+  sparkline?: number[];
+  sparklineLabel?: string;
 }
 
 function formatPrimary(value: number, unit?: string) {
@@ -32,7 +36,7 @@ function normalizeDelta(delta: number | string | undefined) {
   return { text: delta, tone } as const;
 }
 
-export function StatCard({ label, value, delta, unit, liveUpdate = false }: StatCardProps) {
+export function StatCard({ label, value, delta, unit, liveUpdate = false, sparkline, sparklineLabel }: StatCardProps) {
   const [showDelta, setShowDelta] = useState(false);
   const [glowing, setGlowing] = useState(false);
   const deltaMeta = useMemo(() => normalizeDelta(delta), [delta]);
@@ -80,6 +84,17 @@ export function StatCard({ label, value, delta, unit, liveUpdate = false }: Stat
           </span>
         ) : null}
       </div>
+      {sparkline ? (
+        <div className="mt-4">
+          <MicroSparkline
+            values={sparkline}
+            label={sparklineLabel ?? `${label} trend`}
+            width={220}
+            height={36}
+            className="w-full"
+          />
+        </div>
+      ) : null}
     </article>
   );
 }

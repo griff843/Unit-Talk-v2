@@ -1,5 +1,5 @@
 import { OverviewDashboardClient } from '@/components/OverviewDashboardClient';
-import { getDashboardData, getDashboardRuntimeData } from '@/lib/data';
+import { getDashboardData, getDashboardRuntimeData, getDailyPickCounts } from '@/lib/data';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
 
@@ -33,13 +33,16 @@ export default async function DashboardPage({
   const searchParams = await searchParamsPromise;
   let data: DashboardData;
   let runtime: DashboardRuntimeData;
+  let dailyPickCounts: number[] | null = null;
   try {
-    const [dashboardData, dashboardRuntimeData] = await Promise.all([
+    const [dashboardData, dashboardRuntimeData, dailyCounts] = await Promise.all([
       getDashboardData(),
       getDashboardRuntimeData(),
+      getDailyPickCounts(7),
     ]);
     data = dashboardData;
     runtime = dashboardRuntimeData;
+    dailyPickCounts = dailyCounts ? dailyCounts.map((d) => d.count) : null;
   } catch {
     data = {
       signals: BROKEN_SIGNALS,
@@ -177,7 +180,7 @@ export default async function DashboardPage({
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
-      <OverviewDashboardClient data={data} runtime={runtime} />
+      <OverviewDashboardClient data={data} runtime={runtime} dailyPickCounts={dailyPickCounts} />
     </div>
   );
 }

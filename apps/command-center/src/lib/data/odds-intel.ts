@@ -260,3 +260,77 @@ export async function getOfferHistory(params: {
     return null;
   }
 }
+
+// ── Pick line-movement series (UTV2-1522) ─────────────────────────────────────
+
+export interface LineMovementPoint {
+  /** epoch ms */
+  t: number;
+  line: number | null;
+  overOdds: number | null;
+}
+
+export interface LineMovementSeries {
+  book: string;
+  points: LineMovementPoint[];
+}
+
+export type PickLineMovementResult =
+  | { status: 'ok'; series: LineMovementSeries[]; externalEventId: string }
+  | { status: 'unresolved'; missing: string[] }
+  | { status: 'empty'; externalEventId: string }
+  | { status: 'error' };
+
+/**
+ * Line-movement series for a pick, backed by provider_offer_history.
+ * Requires the pick's event UUID (events.id) and a provider market key.
+ * Fail-closed: when identity cannot be resolved the result names exactly
+ * which contract fields are missing — callers render that, never fake points.
+ */
+export async function getPickLineMovement(params: {
+  eventUuid: string | null;
+  marketKey: string | null;
+}): Promise<PickLineMovementResult> {
+  const missing: string[] = [];
+  if (!params.eventUuid) missing.push('eventId (pick metadata / submission payload)');
+  if (!params.marketKey) missing.push('resolved provider market key (settlement clv_resolved_market_key)');
+  if (missing.length > 0) return { status: 'unresolved', missing };
+
+  try {
+    const client = getDataClient();
+    const { data: eventRows, error: eventError } = await client
+      .from('events')
+      .select('external_id')
+      .eq('id', params.eventUuid!)
+      .limit(1);
+    if (eventError) throw eventError;
+    const externalId =
+      eventRows && eventRows.length > 0 && typeof (eventRows[0] as Record<string, unknown>)['external_id'] === 'string'
+        ? String((eventRows[0] as Record<string, unknown>)['external_id'])
+        : null;
+    if (!externalId) {
+      return { status: 'unresolved', missing: ['events.external_id for this event UUID'] };
+    }
+
+    const history = await getOfferHistory({ eventId: externalId, market: params.marketKey!, limit: 1000 });
+    if (!history) return { status: 'error' };
+    if (history.rows.length === 0) return { status: 'empty', externalEventId: externalId };
+
+    const byBook = new Map<string, LineMovementPoint[]>();
+    for (const row of history.rows) {
+      const book = row.bookmakerKey ?? 'consensus';
+      const t = new Date(row.snapshotAt).getTime();
+      if (!Number.isFinite(t)) continue;
+      const list = byBook.get(book);
+      const point: LineMovementPoint = { t, line: row.line, overOdds: row.overOdds };
+      if (list) list.push(point);
+      else byBook.set(book, [point]);
+    }
+    const series: LineMovementSeries[] = Array.from(byBook.entries())
+      .map(([book, points]) => ({ book, points: points.sort((a, b) => a.t - b.t) }))
+      .sort((a, b) => b.points.length - a.points.length);
+    return { status: 'ok', series, externalEventId: externalId };
+  } catch {
+    return { status: 'error' };
+  }
+}

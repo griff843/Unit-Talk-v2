@@ -814,3 +814,47 @@ export async function getInterventionAudit(): Promise<InterventionAuditRow[]> {
 
   return (data ?? []) as InterventionAuditRow[];
 }
+
+// ── getDailyPickCounts (UTV2-1522) ────────────────────────────────────────────
+
+export interface DailyPickCount {
+  /** UTC date, YYYY-MM-DD */
+  day: string;
+  count: number;
+}
+
+/**
+ * Pick submissions per UTC day over the trailing `days` window (default 7),
+ * zero-filled for gap days. Backs the Overview KPI sparkline. Returns null on
+ * query failure — callers must degrade explicitly, never fabricate a trend.
+ */
+export async function getDailyPickCounts(days = 7): Promise<DailyPickCount[] | null> {
+  try {
+    const client = getDataClient();
+    const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000;
+    const sinceIso = new Date(sinceMs).toISOString();
+    const { data, error } = await client
+      .from('picks')
+      .select('created_at')
+      .gte('created_at', sinceIso)
+      .limit(10000);
+    if (error) throw error;
+
+    const byDay = new Map<string, number>();
+    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+      const iso = typeof row['created_at'] === 'string' ? row['created_at'] : null;
+      if (!iso) continue;
+      const day = iso.slice(0, 10);
+      byDay.set(day, (byDay.get(day) ?? 0) + 1);
+    }
+
+    const out: DailyPickCount[] = [];
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const day = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      out.push({ day, count: byDay.get(day) ?? 0 });
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}

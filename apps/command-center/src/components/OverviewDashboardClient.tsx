@@ -9,6 +9,8 @@ import { buildPipelineStages } from '@/lib/pipeline-stages';
 type OverviewDashboardClientProps = {
   data: DashboardData;
   runtime: DashboardRuntimeData;
+  /** 7-day submission counts (oldest first); null = trend query degraded. */
+  dailyPickCounts?: number[] | null;
 };
 
 type FeedRow = {
@@ -211,7 +213,7 @@ function AlertLog({ events }: { events: AlertLogEntry[] }) {
   );
 }
 
-export function OverviewDashboardClient({ data, runtime }: OverviewDashboardClientProps) {
+export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: OverviewDashboardClientProps) {
   const [feedPaused, setFeedPaused] = useState(false);
   const apiHealth = useMemo(() => apiHealthLabel(data.signals), [data.signals]);
   const yesterdayPicks = Math.max(0, data.stats.total - data.picks.length);
@@ -252,7 +254,14 @@ export function OverviewDashboardClient({ data, runtime }: OverviewDashboardClie
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 xl:grid-cols-4">
-        <StatCard label="Today's Picks" value={data.picks.length} delta={formatDelta(todayPickDelta)} liveUpdate />
+        <StatCard
+          label="Today's Picks"
+          value={data.picks.length}
+          delta={formatDelta(todayPickDelta)}
+          liveUpdate
+          sparkline={dailyPickCounts ?? undefined}
+          sparklineLabel="Pick submissions, last 7 days"
+        />
         <article className="cc-surface p-5">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">Active Agents</p>
           <div className="mt-4 flex items-end gap-3">

@@ -9,6 +9,8 @@ import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { getPickDetail } from '@/lib/data';
+import { getPickLineMovement } from '@/lib/data/odds-intel';
+import { LineMovementChart } from '@/components/LineMovementChart';
 import { notFound } from 'next/navigation';
 
 interface PickDetailPageProps {
@@ -269,6 +271,21 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const scoreMeaning = summarizeScoreMeaning(pick);
   const scoreInsight = buildScoreInsight(pick.metadata);
 
+  // Line movement (UTV2-1522): resolve identity fail-closed from pick metadata
+  // / submission payload (eventId) + settlement-resolved provider market key.
+  const submissionPayload = readObject(detail.submission?.payload ?? null);
+  const rawEventId =
+    (typeof pick.metadata['eventId'] === 'string' && pick.metadata['eventId']) ||
+    (typeof submissionPayload?.['eventId'] === 'string' && submissionPayload['eventId']) ||
+    null;
+  const resolvedMarketKey =
+    detail.settlements.find((s) => typeof s.clvResolvedMarketKey === 'string' && s.clvResolvedMarketKey)
+      ?.clvResolvedMarketKey ?? null;
+  const lineMovement = await getPickLineMovement({
+    eventUuid: rawEventId,
+    marketKey: resolvedMarketKey,
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <Breadcrumb
@@ -318,6 +335,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               <p className="mt-1 text-sm font-semibold text-gray-100">{latestSettlementSummary}</p>
             </div>
           </div>
+          <LineMovementChart result={lineMovement} />
           <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
             <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
             <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>

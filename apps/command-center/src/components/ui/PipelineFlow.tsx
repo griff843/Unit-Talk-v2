@@ -25,6 +25,7 @@ function ringClass(status: PipelineStage['status']) {
 }
 
 export function PipelineFlow({ stages }: PipelineFlowProps) {
+  const maxCount = Math.max(...stages.map((s) => s.count), 1);
   return (
     <div className="cc-surface overflow-x-auto p-5">
       <div className="flex min-w-max items-center gap-3">
@@ -46,6 +47,12 @@ export function PipelineFlow({ stages }: PipelineFlowProps) {
                   </span>
                 </div>
                 <div className="mt-3 text-xs capitalize text-[var(--cc-text-secondary)]">{stage.status}</div>
+                <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/[0.05]" aria-hidden="true">
+                  <div
+                    className={`h-full rounded-full ${isError ? 'bg-rose-400/80' : stage.status === 'idle' ? 'bg-slate-500/70' : 'bg-sky-400/80'}`}
+                    style={{ width: `${Math.max(stage.count > 0 ? 4 : 0, Math.round((stage.count / maxCount) * 100))}%` }}
+                  />
+                </div>
               </div>
 
               {index < stages.length - 1 ? (
