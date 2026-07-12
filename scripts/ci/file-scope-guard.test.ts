@@ -507,3 +507,56 @@ test('external override: a valid override for a DIFFERENT lane does not leak int
     { file: 'apps/api/src/index.ts', branch: 'claude/utv2-1497-other-lane', issue_id: 'UTV2-1497' },
   ]);
 });
+
+test('own manifest resolution (UTV2-1524 regression): a continuation PR from a renamed branch still finds its own lane by issue ID', () => {
+  // Reproduces the exact findOwnManifest trap: a lane merges, its manifest on
+  // origin/main still names the ORIGINAL branch, but a follow-up PR opens
+  // from a differently-named branch for the same issue. Exact branch-string
+  // equality alone makes the manifest invisible as "this PR's own lane" and
+  // silently disables any otherwise-valid scope-override for it.
+  const mergedLaneManifest = {
+    issue_id: 'UTV2-1516',
+    branch: 'codex/utv2-1516-throttle-verify-concurrency',
+    status: 'in_review',
+    file_scope_lock: ['scripts/ops/proof-generate.ts'],
+  };
+
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1516-follow-up-different-branch-name',
+    changedFiles: ['scripts/ops/proof-generate.ts'],
+    manifests: [mergedLaneManifest],
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.outside_scope, []);
+});
+
+test('own manifest resolution (UTV2-1524 regression): a valid scope-override still applies through the issue-ID fallback', () => {
+  const mergedLaneManifest = {
+    issue_id: 'UTV2-1516',
+    branch: 'codex/utv2-1516-throttle-verify-concurrency',
+    status: 'in_review',
+    file_scope_lock: ['scripts/ops/proof-generate.ts'],
+  };
+  const followUpBranch = 'claude/utv2-1516-follow-up-different-branch-name';
+  const override = {
+    issue_id: 'UTV2-1516',
+    pr_number: 99,
+    head_sha: 'deadbeef',
+    paths: ['docs/06_status/KNOWN_DEBT.md'],
+    authorized_by: 'griff843',
+    reason: 'follow-up fix needs an extra file',
+  };
+
+  const result = evaluateFileScopeGuard({
+    prBranch: followUpBranch,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
+    manifests: [mergedLaneManifest],
+    externalOverrides: [override],
+    prNumber: 99,
+    headSha: 'deadbeef',
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.outside_scope, []);
+});

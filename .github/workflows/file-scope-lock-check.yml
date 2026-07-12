@@ -88,18 +88,30 @@ jobs:
               const lines = body.split(/\r?\n/).map((l) => l.trim());
               if (lines[0] !== 'SCOPE_OVERRIDE: APPROVED' || lines[1] !== 'schema: scope-override/v1') continue;
 
+              // Fields (Issue/PR/Head-SHA/Reason) may appear before OR after
+              // the Paths: block -- the schema doc's own documented example
+              // places Reason after Paths (UTV2-1524). Walk every line after
+              // the two-line header, treating "Paths:" as the start of a
+              // contiguous "- " bullet list and everything else as a
+              // "Key: value" field, regardless of position relative to it.
               const fields = {};
-              const pathsIndex = lines.findIndex((l) => l === 'Paths:');
-              for (const line of lines.slice(2, pathsIndex === -1 ? lines.length : pathsIndex)) {
+              const paths = [];
+              let i = 2;
+              while (i < lines.length) {
+                const line = lines[i];
+                if (line === 'Paths:') {
+                  i += 1;
+                  while (i < lines.length && lines[i].startsWith('- ')) {
+                    const p = lines[i].slice(2).trim();
+                    if (p) paths.push(p);
+                    i += 1;
+                  }
+                  continue;
+                }
                 const match = line.match(/^([A-Za-z-]+):\s*(.+)$/);
                 if (match) fields[match[1]] = match[2].trim();
+                i += 1;
               }
-              const paths = pathsIndex === -1
-                ? []
-                : lines.slice(pathsIndex + 1)
-                    .filter((l) => l.startsWith('- '))
-                    .map((l) => l.slice(2).trim())
-                    .filter(Boolean);
 
               const issueMatch = (fields['Issue'] || '').match(/^UTV2-\d+$/);
               const prMatch = (fields['PR'] || '').match(/^#(\d+)$/);

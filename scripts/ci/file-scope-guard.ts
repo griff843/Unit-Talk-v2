@@ -406,7 +406,19 @@ function activeManifests(manifests: LaneManifest[]): LaneManifest[] {
 }
 
 function findOwnManifest(manifests: LaneManifest[], branch: string): LaneManifest | null {
-  return manifests.find((manifest) => manifest.branch === branch) ?? null;
+  const exact = manifests.find((manifest) => manifest.branch === branch) ?? null;
+  if (exact) return exact;
+
+  // A continuation PR for an already-merged-but-unclosed lane is often opened
+  // from a new branch name; the trusted manifest on origin/main still names
+  // the original branch. Exact branch equality alone makes that manifest
+  // invisible as "this PR's own lane" and silently disables any otherwise-
+  // valid scope-override for it (UTV2-1524). Fall back to matching on the
+  // issue ID encoded in the branch name when no exact branch match exists.
+  const issueMatch = branch.match(ISSUE_BRANCH_PATTERN);
+  if (!issueMatch) return null;
+  const issueId = issueMatch[1].toUpperCase();
+  return manifests.find((manifest) => (manifest.issue_id ?? '').toUpperCase() === issueId) ?? null;
 }
 
 function branchLooksLikeLane(branch: string): boolean {
@@ -480,7 +492,10 @@ export function evaluateFileScopeGuard(input: {
 
   const conflicts: GuardConflict[] = [];
   for (const manifest of active) {
-    if (manifest.branch === input.prBranch) continue;
+    // Skip the PR's own lane, however it was resolved (exact branch match or
+    // the UTV2-1524 issue-ID fallback) -- otherwise a continuation PR's own
+    // manifest is spuriously flagged as a conflicting foreign lane.
+    if (manifest.branch === input.prBranch || manifest === ownManifest) continue;
 
     for (const file of input.changedFiles) {
       for (const lockPattern of manifest.file_scope_lock ?? []) {
