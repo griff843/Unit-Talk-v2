@@ -2,7 +2,7 @@
 
 import type { InternalLabel } from '@/components/ui';
 
-export type ApprovalLabel = Extract<InternalLabel, 'Approvalable' | 'Needs PM' | 'Blocked' | 'Needs Review'>;
+export type ApprovalLabel = Extract<InternalLabel, 'Approvable' | 'Needs PM' | 'Blocked' | 'Needs Review'>;
 
 export type ApprovalQueueSource = 'awaiting_approval' | 'held' | 'review';
 
@@ -26,7 +26,7 @@ const TERMINAL_STATUSES = new Set(['voided', 'rejected', 'expired', 'settled', '
 /**
  * One clear label per row:
  * - Blocked: terminal/contradictory state — approving would be invalid.
- * - Approvalable: governance-brake awaiting_approval — PM can act right now.
+ * - Approvable: governance-brake awaiting_approval — PM can act right now.
  * - Needs PM: operator-held picks requiring a PM decision to release.
  * - Needs Review: legacy pending-review queue rows.
  */
@@ -42,7 +42,7 @@ export function classifyApproval(row: ApprovalRowInput): ApprovalClassification 
     return { label: 'Blocked', reason: `Approval status already "${approvalStatus}".` };
   }
   if (status === 'awaiting_approval' || governanceState === 'awaiting_approval') {
-    return { label: 'Approvalable', reason: 'Governance brake: pick is awaiting PM approval.' };
+    return { label: 'Approvable', reason: 'Governance brake: pick is awaiting PM approval.' };
   }
   if (row.queue === 'held') {
     return {
@@ -61,7 +61,7 @@ export function ageHoursFrom(createdAt: string | null, nowMs: number): number | 
 }
 
 const LABEL_ORDER: Record<ApprovalLabel, number> = {
-  Approvalable: 0,
+  Approvable: 0,
   'Needs PM': 1,
   'Needs Review': 2,
   Blocked: 3,

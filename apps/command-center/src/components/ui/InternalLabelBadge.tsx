@@ -6,7 +6,7 @@ export type InternalLabel =
   | 'Stale'
   | 'Blocked'
   | 'Needs PM'
-  | 'Approvalable'
+  | 'Approvable'
   | 'Retryable'
   | 'Dead Letter'
   | 'Pending'
@@ -29,7 +29,7 @@ const toneByLabel: Record<InternalLabel, string> = {
   Sent: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   Settled: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
   Certified: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  Approvalable: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+  Approvable: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
   Pending: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
   Retryable: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
   Stale: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',

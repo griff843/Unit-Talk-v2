@@ -20,13 +20,13 @@ function row(overrides: Partial<ApprovalRowInput>): ApprovalRowInput {
   };
 }
 
-test('awaiting_approval lifecycle status is Approvalable', () => {
-  assert.equal(classifyApproval(row({ status: 'awaiting_approval' })).label, 'Approvalable');
+test('awaiting_approval lifecycle status is Approvable', () => {
+  assert.equal(classifyApproval(row({ status: 'awaiting_approval' })).label, 'Approvable');
 });
 
-test('governanceQueueState awaiting_approval is Approvalable even off the held queue', () => {
+test('governanceQueueState awaiting_approval is Approvable even off the held queue', () => {
   const result = classifyApproval(row({ queue: 'held', governanceQueueState: 'awaiting_approval' }));
-  assert.equal(result.label, 'Approvalable');
+  assert.equal(result.label, 'Approvable');
 });
 
 test('held picks without governance state are Needs PM with hold reason surfaced', () => {
@@ -57,10 +57,10 @@ test('ageHoursFrom computes floor hours and tolerates bad input', () => {
   assert.equal(ageHoursFrom('garbage', now), null);
 });
 
-test('compareApprovalLabels orders Approvalable first, Blocked last', () => {
-  const labels = ['Blocked', 'Needs Review', 'Approvalable', 'Needs PM'] as const;
+test('compareApprovalLabels orders Approvable first, Blocked last', () => {
+  const labels = ['Blocked', 'Needs Review', 'Approvable', 'Needs PM'] as const;
   const sorted = [...labels].sort(compareApprovalLabels);
-  assert.deepEqual(sorted, ['Approvalable', 'Needs PM', 'Needs Review', 'Blocked']);
+  assert.deepEqual(sorted, ['Approvable', 'Needs PM', 'Needs Review', 'Blocked']);
 });
 
 test('humanizeAgeHours renders human ages, never raw hour counts', () => {

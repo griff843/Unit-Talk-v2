@@ -4,6 +4,7 @@ import { getReviewQueue, getHeldQueue } from '@/lib/data/queues';
 import { getAwaitingApprovalPicks } from '@/lib/data/approvals-ops';
 
 export const metadata = { title: 'Approvals — Unit Talk Command Center' };
+import { describeThrown } from '@/lib/describe-error';
 import {
   classifyApproval,
   compareApprovalLabels,
@@ -212,7 +213,7 @@ export default async function ApprovalsPage({
   try {
     load = await loadCockpitRows(nowMs);
   } catch (error) {
-    loadError = error instanceof Error ? error.message : String(error);
+    loadError = describeThrown(error);
   }
 
   const rows = load ? sortRows(load.rows, sort, dir) : null;
@@ -260,7 +261,7 @@ export default async function ApprovalsPage({
       ) : rows ? (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard label="Approvalable" value={countFor('Approvalable')} />
+            <StatCard label="Approvable" value={countFor('Approvable')} />
             <StatCard label="Needs PM" value={countFor('Needs PM')} />
             <StatCard label="Needs Review" value={countFor('Needs Review')} />
             <StatCard label="Blocked" value={countFor('Blocked')} />
