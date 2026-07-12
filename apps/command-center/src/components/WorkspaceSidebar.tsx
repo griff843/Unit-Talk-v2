@@ -100,7 +100,7 @@ export function WorkspaceSidebar({
   return (
     <aside
       className={cx(
-        'cc-sidebar sticky top-0 flex min-h-screen shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-[width] duration-[200ms] ease-[var(--ease-out)]',
+        'cc-sidebar sticky top-0 flex h-screen shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-[width] duration-[200ms] ease-[var(--ease-out)]',
         collapsed ? 'w-16' : 'w-60',
       )}
     >
@@ -133,7 +133,7 @@ export function WorkspaceSidebar({
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 pb-4" aria-label="Primary">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-16" aria-label="Primary">
         {navGroups.map((group) => (
         <div key={group.label} className="mb-2">
           {!collapsed && (
