@@ -98,6 +98,7 @@ export default async function EvFeedPage({
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
 
   let rows: EvRow[] = [];
+  let nearMisses: EvRow[] = [];
   let fetchError: string | null = null;
   let observedAt: string | null = null;
   let rowCap = 0;
@@ -109,11 +110,20 @@ export default async function EvFeedPage({
     } else {
       observedAt = result.observedAt;
       rowCap = result.rowCap;
-      rows = computeEvRows(result.groups).filter((r) => r.evPct >= threshold);
+      const allRows = computeEvRows(result.groups);
+      rows = allRows.filter((r) => r.evPct >= threshold);
+      if (rows.length === 0) {
+        // Dead air is never acceptable: with no above-threshold hits, surface
+        // the scanned window's best near-misses, explicitly marked below threshold.
+        nearMisses = allRows.filter((r) => r.evPct < threshold).slice(0, 25);
+      }
     }
   } catch (err) {
     fetchError = err instanceof Error ? err.message : 'Unknown error loading EV feed.';
   }
+
+  const displayRows = rows.length > 0 ? rows : nearMisses;
+  const showingNearMisses = rows.length === 0 && nearMisses.length > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -161,13 +171,25 @@ export default async function EvFeedPage({
         <Card title="Error">
           <p className="text-xs text-red-400">{fetchError}</p>
         </Card>
-      ) : rows.length === 0 ? (
+      ) : displayRows.length === 0 ? (
         <EmptyState
-          message="No offers meet the EV threshold"
-          detail={`No offer groups with ≥3 books at the same line yielded EV ≥ ${threshold}% in the scanned window.`}
+          message="No consensus groups in the scanned window"
+          detail={`No offer groups with ≥3 books at the same line were found in the ${rowCap}-row scan — near-misses would be listed here if any existed. Check ingestion freshness if this persists.`}
         />
       ) : (
-        <Card title={`EV Opportunities — ${rows.length} rows`}>
+        <Card
+          title={
+            showingNearMisses
+              ? `Near Misses — best ${displayRows.length} below the ${threshold}% threshold`
+              : `EV Opportunities — ${displayRows.length} rows`
+          }
+        >
+          {showingNearMisses && (
+            <div className="mb-3 rounded border border-amber-700/40 bg-amber-900/15 px-3 py-2 text-[11px] text-amber-300">
+              No offers met EV ≥ {threshold}% in the scanned window. Showing the closest
+              candidates instead — every row below is <span className="font-semibold">below threshold</span>.
+            </div>
+          )}
           <div className="overflow-x-auto">
             <Table>
               <TableHead>
@@ -184,7 +206,7 @@ export default async function EvFeedPage({
                 <Th>Flags</Th>
               </TableHead>
               <TableBody>
-                {rows.slice(0, 200).map((r, i) => (
+                {displayRows.slice(0, 200).map((r, i) => (
                   <tr key={i} className="border-b border-gray-800/50">
                     <Td>{r.eventName}</Td>
                     <Td>{r.market}</Td>
@@ -207,6 +229,11 @@ export default async function EvFeedPage({
                     </Td>
                     <Td>
                       <span className="flex gap-1">
+                        {showingNearMisses && (
+                          <span className="rounded border border-amber-700/40 bg-amber-900/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400">
+                            Below Threshold
+                          </span>
+                        )}
                         {isStaleOdds(r.snapshotAt) && <InternalLabelBadge label="Stale Odds" />}
                         {r.booksInConsensus < 4 && <InternalLabelBadge label="Needs Review" />}
                       </span>
