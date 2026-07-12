@@ -25,6 +25,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1524/evidence.json",
+    "docs/06_status/proof/UTV2-1524/diff-summary.md",
+    "docs/06_status/proof/UTV2-1524/verification.md",
     "docs/06_status/UTV2-1524-EVIDENCE-BUNDLE.md"
   ],
   "status": "started",
