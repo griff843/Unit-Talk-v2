@@ -415,3 +415,47 @@ body {
 .pipeline-connector-error .pipeline-travel-dot {
   display: none;
 }
+
+
+/* UTV2-1522 — restrained liveness */
+@keyframes cc-row-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--cc-accent) 18%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.cc-row-flash {
+  animation: cc-row-flash 1.6s var(--ease-out) 1;
+}
+
+@keyframes cc-tick-up {
+  0% { color: var(--cc-success); }
+  100% { color: inherit; }
+}
+
+@keyframes cc-tick-down {
+  0% { color: var(--cc-danger); }
+  100% { color: inherit; }
+}
+
+.cc-tick-up {
+  animation: cc-tick-up 1.2s ease-out 1;
+}
+
+.cc-tick-down {
+  animation: cc-tick-down 1.2s ease-out 1;
+}
+
+/* Bloomberg restraint: honor reduced-motion globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

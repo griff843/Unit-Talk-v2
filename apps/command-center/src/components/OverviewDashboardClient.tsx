@@ -134,7 +134,9 @@ function PicksTicker({ picks }: { picks: FeedRow[] }) {
             {tickerRows.map((pick, index) => (
               <article
                 key={`${pick.id}-${index}`}
-                className="rounded-[22px] border border-[var(--cc-border-subtle)] bg-[color-mix(in_srgb,var(--cc-bg-surface-elevated)_88%,transparent)] px-4 py-3"
+                className={`rounded-[22px] border border-[var(--cc-border-subtle)] bg-[color-mix(in_srgb,var(--cc-bg-surface-elevated)_88%,transparent)] px-4 py-3 ${
+                  Date.now() - new Date(pick.submittedAt).getTime() < 2 * 60_000 ? 'cc-row-flash' : ''
+                }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

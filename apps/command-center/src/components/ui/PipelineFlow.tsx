@@ -1,6 +1,22 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+/** Flash green/red once when a numeric value ticks up/down between refreshes. */
+function TickCount({ value }: { value: number }) {
+  const prev = useRef(value);
+  const [tick, setTick] = useState<'up' | 'down' | null>(null);
+  useEffect(() => {
+    if (value === prev.current) return;
+    setTick(value > prev.current ? 'up' : 'down');
+    prev.current = value;
+    const t = window.setTimeout(() => setTick(null), 1300);
+    return () => window.clearTimeout(t);
+  }, [value]);
+  return (
+    <span className={tick === 'up' ? 'cc-tick-up' : tick === 'down' ? 'cc-tick-down' : undefined}>{value}</span>
+  );
+}
 
 export interface PipelineStage {
   name: string;
@@ -45,7 +61,7 @@ export function PipelineFlow({ stages }: PipelineFlowProps) {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] uppercase tracking-[0.2em] text-[var(--cc-text-muted)]">{stage.name}</p>
-                    <p className="mt-2 text-2xl font-semibold tabular-nums text-[var(--cc-text-primary)]">{stage.count}</p>
+                    <p className="cc-num mt-2 text-2xl font-semibold text-[var(--cc-text-primary)]"><TickCount value={stage.count} /></p>
                   </div>
                   <span className="relative mt-1 inline-flex h-3 w-3">
                     <span className={`absolute inset-0 rounded-full ${ringClass(stage.status)} opacity-80`} />
