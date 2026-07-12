@@ -273,15 +273,20 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   // Line movement (UTV2-1522): resolve identity fail-closed from pick metadata
   // / submission payload (eventId) + settlement-resolved provider market key.
   const submissionPayload = readObject(detail.submission?.payload ?? null);
+  const metaStr = (key: string): string | null =>
+    typeof pick.metadata[key] === 'string' && pick.metadata[key] ? (pick.metadata[key] as string) : null;
   const rawEventId =
-    (typeof pick.metadata['eventId'] === 'string' && pick.metadata['eventId']) ||
-    (typeof submissionPayload?.['eventId'] === 'string' && submissionPayload['eventId']) ||
-    null;
+    metaStr('eventId') ??
+    (typeof submissionPayload?.['eventId'] === 'string' ? (submissionPayload['eventId'] as string) : null);
   const resolvedMarketKey =
+    metaStr('providerMarketKey') ??
     detail.settlements.find((s) => typeof s.clvResolvedMarketKey === 'string' && s.clvResolvedMarketKey)
-      ?.clvResolvedMarketKey ?? null;
+      ?.clvResolvedMarketKey ??
+    null;
   const lineMovement = await getPickLineMovement({
     eventUuid: rawEventId,
+    externalEventId: metaStr('providerEventId'),
+    participantId: metaStr('providerParticipantId'),
     marketKey: resolvedMarketKey,
   });
 
@@ -326,7 +331,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               <p className="mt-1 text-sm font-semibold text-gray-100">{latestSettlementSummary}</p>
             </div>
           </div>
-          <LineMovementChart result={lineMovement} />
+          <LineMovementChart result={lineMovement} pickLine={pick.line} pickSide={pick.selection} />
           <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
             <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
             <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>

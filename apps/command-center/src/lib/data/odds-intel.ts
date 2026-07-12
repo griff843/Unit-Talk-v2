@@ -224,6 +224,7 @@ export interface HistoryOfferRow {
 export async function getOfferHistory(params: {
   market?: string;
   eventId?: string;
+  participantId?: string;
   sinceIso?: string;
   limit?: number;
 }): Promise<{ rows: HistoryOfferRow[]; rowCap: number } | null> {
@@ -237,6 +238,7 @@ export async function getOfferHistory(params: {
       );
     if (params.market) query = query.ilike('provider_market_key', `%${params.market}%`);
     if (params.eventId) query = query.eq('provider_event_id', params.eventId);
+    if (params.participantId) query = query.eq('provider_participant_id', params.participantId);
     if (params.sinceIso) query = query.gte('snapshot_at', params.sinceIso);
     query = query.order('snapshot_at', { ascending: false }).limit(rowCap);
 
@@ -290,29 +292,41 @@ export type PickLineMovementResult =
 export async function getPickLineMovement(params: {
   eventUuid: string | null;
   marketKey: string | null;
+  /** Direct provider event id (pick metadata providerEventId) — preferred over UUID resolution. */
+  externalEventId?: string | null;
+  /** Provider participant id — scopes the chart to the pick's own market, not the whole event. */
+  participantId?: string | null;
 }): Promise<PickLineMovementResult> {
   const missing: string[] = [];
-  if (!params.eventUuid) missing.push('eventId (pick metadata / submission payload)');
-  if (!params.marketKey) missing.push('resolved provider market key (settlement clv_resolved_market_key)');
+  if (!params.externalEventId && !params.eventUuid) missing.push('eventId (pick metadata / submission payload)');
+  if (!params.marketKey) missing.push('resolved provider market key (metadata providerMarketKey or settlement clv_resolved_market_key)');
   if (missing.length > 0) return { status: 'unresolved', missing };
 
   try {
     const client = getDataClient();
-    const { data: eventRows, error: eventError } = await client
-      .from('events')
-      .select('external_id')
-      .eq('id', params.eventUuid!)
-      .limit(1);
-    if (eventError) throw eventError;
-    const externalId =
-      eventRows && eventRows.length > 0 && typeof (eventRows[0] as Record<string, unknown>)['external_id'] === 'string'
-        ? String((eventRows[0] as Record<string, unknown>)['external_id'])
-        : null;
+    let externalId = params.externalEventId ?? null;
+    if (!externalId) {
+      const { data: eventRows, error: eventError } = await client
+        .from('events')
+        .select('external_id')
+        .eq('id', params.eventUuid!)
+        .limit(1);
+      if (eventError) throw eventError;
+      externalId =
+        eventRows && eventRows.length > 0 && typeof (eventRows[0] as Record<string, unknown>)['external_id'] === 'string'
+          ? String((eventRows[0] as Record<string, unknown>)['external_id'])
+          : null;
+    }
     if (!externalId) {
       return { status: 'unresolved', missing: ['events.external_id for this event UUID'] };
     }
 
-    const history = await getOfferHistory({ eventId: externalId, market: params.marketKey!, limit: 1000 });
+    const history = await getOfferHistory({
+      eventId: externalId,
+      market: params.marketKey!,
+      participantId: params.participantId ?? undefined,
+      limit: 1000,
+    });
     if (!history) return { status: 'error' };
     if (history.rows.length === 0) return { status: 'empty', externalEventId: externalId };
 

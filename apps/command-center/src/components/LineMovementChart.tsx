@@ -9,7 +9,7 @@ const SERIES_COLORS = ['#3d8bff', '#22c55e', '#f59e0b', '#e879f9', '#94a3b8'];
 
 const W = 640;
 const H = 160;
-const PAD = { top: 10, right: 84, bottom: 22, left: 40 };
+const PAD = { top: 10, right: 16, bottom: 22, left: 40 };
 
 function fmtTime(t: number): string {
   return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -44,7 +44,16 @@ function ChartFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function LineMovementChart({ result }: { result: PickLineMovementResult }) {
+export function LineMovementChart({
+  result,
+  pickLine,
+  pickSide,
+}: {
+  result: PickLineMovementResult;
+  /** The pick's own line — when known, the chart plots per-book over-odds AT that line (books quote multiple alternate lines concurrently, so raw line-value mixing is misleading). */
+  pickLine?: number | null;
+  pickSide?: string | null;
+}) {
   if (result.status === 'unresolved') {
     return (
       <ChartFrame>
@@ -81,13 +90,17 @@ export function LineMovementChart({ result }: { result: PickLineMovementResult }
     );
   }
 
-  // ok: chart line value per book over time
+  // ok: when the pick's line is known, chart per-book OVER odds at exactly
+  // that line (books quote several alternate lines concurrently — mixing them
+  // zig-zags meaninglessly). Otherwise fall back to line value per book.
+  const atPickLine = pickLine !== null && pickLine !== undefined;
   const chartSeries: Array<{ book: string; pts: Array<{ t: number; v: number }> }> = [];
-  for (const s of result.series.slice(0, 5) as LineMovementSeries[]) {
+  for (const s of result.series as LineMovementSeries[]) {
     const pts = s.points
-      .filter((p) => p.line !== null)
-      .map((p) => ({ t: p.t, v: p.line as number }));
+      .filter((p) => (atPickLine ? p.line === pickLine && p.overOdds !== null : p.line !== null))
+      .map((p) => ({ t: p.t, v: (atPickLine ? p.overOdds : p.line) as number }));
     if (pts.length >= 2) chartSeries.push({ book: s.book, pts });
+    if (chartSeries.length >= 5) break;
   }
 
   if (chartSeries.length === 0) {
@@ -138,9 +151,6 @@ export function LineMovementChart({ result }: { result: PickLineMovementResult }
                 r="2.5"
                 fill={color}
               />
-              <text x={W - PAD.right + 6} y={y + 3} fontSize="9" fill={color} className="cc-num">
-                {s.book} {last.v}
-              </text>
             </g>
           );
         })}
@@ -151,8 +161,22 @@ export function LineMovementChart({ result }: { result: PickLineMovementResult }
           {fmtTime(tMax)}
         </text>
       </svg>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {chartSeries.map((s, i) => {
+          const color = SERIES_COLORS[i % SERIES_COLORS.length];
+          const last = s.pts[s.pts.length - 1]!;
+          return (
+            <span key={s.book} className="inline-flex items-center gap-1.5 text-[10px]" style={{ color }}>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: color }} />
+              {s.book} <span className="cc-num">{last.v}</span>
+            </span>
+          );
+        })}
+      </div>
       <p className="mt-2 text-[10px] text-gray-600">
-        Line value per book from provider_offer_history for event{' '}
+        {atPickLine
+          ? `Over odds per book at the pick's line (${pickLine}${pickSide ? `, pick is ${pickSide}` : ''}) from provider_offer_history for event `
+          : 'Line value per book from provider_offer_history for event '}
         <span className="cc-num">{result.externalEventId}</span>. Books capped at 5, ranked by
         snapshot depth.
       </p>
