@@ -20,7 +20,8 @@
     "scripts/ci/scope-override-comment-parser.test.ts",
     "package.json",
     "docs/06_status/UTV2-1524-EVIDENCE-BUNDLE.md",
-    "docs/06_status/evidence/UTV2-1524/.gitkeep"
+    "docs/06_status/evidence/UTV2-1524/.gitkeep",
+    ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1524/evidence.json",
