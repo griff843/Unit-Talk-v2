@@ -70,3 +70,23 @@ const LABEL_ORDER: Record<ApprovalLabel, number> = {
 export function compareApprovalLabels(a: ApprovalLabel, b: ApprovalLabel): number {
   return LABEL_ORDER[a] - LABEL_ORDER[b];
 }
+
+// ── Age humanization + urgency (UTV2-1522) ────────────────────────────────────
+
+export type AgeUrgency = 'fresh' | 'aging' | 'stale' | 'critical';
+
+/** "61d ago" / "5h ago" / "just now" — never raw hour counts or ISO strings. */
+export function humanizeAgeHours(ageHours: number | null): string {
+  if (ageHours === null) return '—';
+  if (ageHours < 1) return 'just now';
+  if (ageHours < 48) return `${ageHours}h ago`;
+  return `${Math.floor(ageHours / 24)}d ago`;
+}
+
+/** Urgency tier for visual triage: <4h fresh, <48h aging, <7d stale, else critical. */
+export function ageUrgency(ageHours: number | null): AgeUrgency {
+  if (ageHours === null || ageHours < 4) return 'fresh';
+  if (ageHours < 48) return 'aging';
+  if (ageHours < 24 * 7) return 'stale';
+  return 'critical';
+}

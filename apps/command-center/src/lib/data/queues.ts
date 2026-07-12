@@ -234,6 +234,12 @@ async function awaitWithTimeoutRetry(build: () => any): Promise<{ data: unknown;
   return first;
 }
 
+function describeQueueError(error: { code?: string; message?: string } | null): string {
+  if (!error) return 'unknown query error';
+  if (String(error.code) === '57014') return 'statement timeout (57014) — retried once, still timing out';
+  return error.message ? String(error.message) : `query error ${String(error.code ?? '')}`.trim();
+}
+
 function asRecord(v: unknown): JsonObject {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as JsonObject) : {};
 }
@@ -317,7 +323,7 @@ function mapReviewPick(row: JsonObject): ReviewPick {
 
 export async function getReviewQueue(
   params: Record<string, string>,
-): Promise<{ picks: ReviewPick[]; total: number }> {
+): Promise<{ picks: ReviewPick[]; total: number; degraded: string | null }> {
   try {
     const client: Client = getDataClient();
 
@@ -346,7 +352,7 @@ export async function getReviewQueue(
 
     if (error) {
       console.error('getReviewQueue error:', error);
-      return { picks: [], total: 0 };
+      return { picks: [], total: 0, degraded: describeQueueError(error) };
     }
 
     const rows = (data ?? []) as JsonObject[];
@@ -354,10 +360,10 @@ export async function getReviewQueue(
       .filter((row) => !isFixtureLikePick(row))
       .map(mapReviewPick);
 
-    return { picks, total: count ?? picks.length };
+    return { picks, total: count ?? picks.length, degraded: null };
   } catch (err) {
     console.error('getReviewQueue exception:', err);
-    return { picks: [], total: 0 };
+    return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -365,7 +371,7 @@ export async function getReviewQueue(
 
 export async function getHeldQueue(
   params: Record<string, string>,
-): Promise<{ picks: HeldPick[]; total: number }> {
+): Promise<{ picks: HeldPick[]; total: number; degraded: string | null }> {
   try {
     const client: Client = getDataClient();
 
@@ -392,7 +398,7 @@ export async function getHeldQueue(
 
     if (error) {
       console.error('getHeldQueue error:', error);
-      return { picks: [], total: 0 };
+      return { picks: [], total: 0, degraded: describeQueueError(error) };
     }
 
     const rows = (data ?? []) as JsonObject[];
@@ -447,10 +453,10 @@ export async function getHeldQueue(
         };
       });
 
-    return { picks, total: count ?? picks.length };
+    return { picks, total: count ?? picks.length, degraded: null };
   } catch (err) {
     console.error('getHeldQueue exception:', err);
-    return { picks: [], total: 0 };
+    return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
   }
 }
 

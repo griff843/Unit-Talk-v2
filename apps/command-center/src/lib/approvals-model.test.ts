@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ageHoursFrom,
+  ageUrgency,
+  humanizeAgeHours,
   classifyApproval,
   compareApprovalLabels,
   type ApprovalRowInput,
@@ -59,4 +61,20 @@ test('compareApprovalLabels orders Approvalable first, Blocked last', () => {
   const labels = ['Blocked', 'Needs Review', 'Approvalable', 'Needs PM'] as const;
   const sorted = [...labels].sort(compareApprovalLabels);
   assert.deepEqual(sorted, ['Approvalable', 'Needs PM', 'Needs Review', 'Blocked']);
+});
+
+test('humanizeAgeHours renders human ages, never raw hour counts', () => {
+  assert.equal(humanizeAgeHours(null), '—');
+  assert.equal(humanizeAgeHours(0), 'just now');
+  assert.equal(humanizeAgeHours(5), '5h ago');
+  assert.equal(humanizeAgeHours(47), '47h ago');
+  assert.equal(humanizeAgeHours(1456), '60d ago');
+});
+
+test('ageUrgency tiers by triage window', () => {
+  assert.equal(ageUrgency(null), 'fresh');
+  assert.equal(ageUrgency(2), 'fresh');
+  assert.equal(ageUrgency(10), 'aging');
+  assert.equal(ageUrgency(100), 'stale');
+  assert.equal(ageUrgency(1456), 'critical');
 });

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
+import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Td, EmptyState, SeverityBadge } from '@/components/ui';
 import { getReviewQueue, getHeldQueue } from '@/lib/data/queues';
 import { getAwaitingApprovalPicks } from '@/lib/data/approvals-ops';
 
@@ -8,6 +8,8 @@ import {
   classifyApproval,
   compareApprovalLabels,
   ageHoursFrom,
+  ageUrgency,
+  humanizeAgeHours,
   type ApprovalLabel,
   type ApprovalQueueSource,
 } from '@/lib/approvals-model';
@@ -30,12 +32,21 @@ interface CockpitRow {
   href: string;
 }
 
-async function loadCockpitRows(nowMs: number): Promise<CockpitRow[]> {
+interface CockpitLoad {
+  rows: CockpitRow[];
+  degraded: string[];
+}
+
+async function loadCockpitRows(nowMs: number): Promise<CockpitLoad> {
   const [review, held, awaiting] = await Promise.all([
     getReviewQueue({}),
     getHeldQueue({}),
     getAwaitingApprovalPicks(),
   ]);
+
+  const degraded: string[] = [];
+  if (review.degraded) degraded.push(`review queue: ${review.degraded}`);
+  if (held.degraded) degraded.push(`held queue: ${held.degraded}`);
 
   const rows: CockpitRow[] = [];
   const seen = new Set<string>();
@@ -123,35 +134,123 @@ async function loadCockpitRows(nowMs: number): Promise<CockpitRow[]> {
     });
   }
 
-  return rows.sort(
-    (a, b) => compareApprovalLabels(a.label, b.label) || (b.ageHours ?? 0) - (a.ageHours ?? 0),
+  return { rows, degraded };
+}
+
+type SortKey = 'age' | 'score' | 'label' | 'queue';
+
+function sortRows(rows: CockpitRow[], sort: SortKey, dir: 'asc' | 'desc'): CockpitRow[] {
+  const mult = dir === 'asc' ? 1 : -1;
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    switch (sort) {
+      case 'score':
+        return mult * ((a.score ?? -Infinity) - (b.score ?? -Infinity));
+      case 'age':
+        return mult * ((a.ageHours ?? -1) - (b.ageHours ?? -1));
+      case 'queue':
+        return mult * a.queue.localeCompare(b.queue);
+      case 'label':
+      default:
+        return mult * -compareApprovalLabels(a.label, b.label) || (b.ageHours ?? 0) - (a.ageHours ?? 0);
+    }
+  });
+  return sorted;
+}
+
+const URGENCY_CLASSES: Record<string, string> = {
+  fresh: 'text-gray-400',
+  aging: 'text-amber-300',
+  stale: 'text-orange-400',
+  critical: 'text-red-400 font-semibold',
+};
+
+function SortHeader({
+  label,
+  sortKey,
+  currentSort,
+  currentDir,
+  align,
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentSort: SortKey;
+  currentDir: 'asc' | 'desc';
+  align?: 'right';
+}) {
+  const active = currentSort === sortKey;
+  const nextDir = active && currentDir === 'desc' ? 'asc' : 'desc';
+  return (
+    <th className={`py-2 pr-4${align === 'right' ? ' text-right' : ''}`}>
+      <Link
+        href={`/operations/approvals?sort=${sortKey}&dir=${nextDir}`}
+        className={`inline-flex items-center gap-1 hover:text-gray-200 ${active ? 'text-gray-200' : ''}`}
+      >
+        {label}
+        <span className="text-[9px]">{active ? (currentDir === 'desc' ? '▼' : '▲') : '↕'}</span>
+      </Link>
+    </th>
   );
 }
 
-export default async function ApprovalsPage() {
-  const nowMs = Date.now();
-  const observedAt = new Date(nowMs).toISOString();
+export default async function ApprovalsPage({
+  searchParams: searchParamsPromise,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const searchParams = await searchParamsPromise;
+  const sortRaw = typeof searchParams['sort'] === 'string' ? searchParams['sort'] : 'label';
+  const sort: SortKey = (['age', 'score', 'label', 'queue'] as const).includes(sortRaw as SortKey)
+    ? (sortRaw as SortKey)
+    : 'label';
+  const dir: 'asc' | 'desc' = searchParams['dir'] === 'asc' ? 'asc' : 'desc';
 
-  let rows: CockpitRow[] | null = null;
+  const nowMs = Date.now();
+
+  let load: CockpitLoad | null = null;
   let loadError: string | null = null;
   try {
-    rows = await loadCockpitRows(nowMs);
+    load = await loadCockpitRows(nowMs);
   } catch (error) {
     loadError = error instanceof Error ? error.message : String(error);
   }
 
+  const rows = load ? sortRows(load.rows, sort, dir) : null;
   const countFor = (label: ApprovalLabel) => rows?.filter((row) => row.label === label).length ?? 0;
-  const uniformLabel =
-    rows && rows.length > 1 && rows.every((row) => row.label === rows[0]!.label) ? rows[0]!.label : null;
+
+  // Grouped governance banner: collapse repeated per-row reasons into one
+  // banner per reason with a count and the oldest since-date.
+  const reasonGroups = new Map<string, { count: number; oldest: number | null }>();
+  for (const row of rows ?? []) {
+    const g = reasonGroups.get(row.reason) ?? { count: 0, oldest: null };
+    g.count += 1;
+    if (row.ageHours !== null && (g.oldest === null || row.ageHours > g.oldest)) g.oldest = row.ageHours;
+    reasonGroups.set(row.reason, g);
+  }
+  const groupedReasons = Array.from(reasonGroups.entries()).sort((a, b) => b[1].count - a[1].count);
+  const collapseReasons = groupedReasons.length > 0 && groupedReasons.length <= 3;
+  const maxScore = Math.max(...(rows ?? []).map((r) => r.score ?? 0), 1);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
         <p className="text-sm cc-text-muted">
           What can the PM approve right now? Governance-brake awaiting_approval picks, held picks, and the legacy review queue.
-          Observed {observedAt}. Tier labels live in Linear and are not surfaced by the data layer yet.
+          Tier labels live in Linear and are not surfaced by the data layer yet.
         </p>
       </div>
+
+      {load && load.degraded.length > 0 && (
+        <div className="rounded border border-amber-700/40 bg-amber-900/15 px-4 py-3 text-xs text-amber-300">
+          <p className="font-semibold uppercase tracking-wide">Partial data</p>
+          {load.degraded.map((d) => (
+            <p key={d} className="mt-1 font-mono text-[11px] text-amber-200/80">{d}</p>
+          ))}
+          <p className="mt-1 text-[11px] text-amber-200/60">
+            Counts below exclude the degraded source(s). Refresh to retry; check DB health if timeouts persist.
+          </p>
+        </div>
+      )}
 
       {loadError ? (
         <div className="cc-surface p-5 border border-red-500/30">
@@ -170,64 +269,89 @@ export default async function ApprovalsPage() {
             <StatCard label="Blocked" value={countFor('Blocked')} />
           </div>
 
+          {collapseReasons && rows.length > 0 && (
+            <div className="cc-surface flex flex-col gap-2 p-4">
+              {groupedReasons.map(([reason, g]) => (
+                <div key={reason} className="flex flex-wrap items-baseline gap-2 text-xs">
+                  <span className="cc-num rounded border border-gray-700 bg-gray-900/60 px-1.5 py-0.5 text-[10px] text-gray-300">
+                    {g.count}
+                  </span>
+                  <span className="text-gray-300">{reason}</span>
+                  {g.oldest !== null && (
+                    <span className="cc-num cc-text-muted text-[10px]">oldest {humanizeAgeHours(g.oldest)}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="cc-surface p-5">
-            <h2 className="mb-3 flex items-center gap-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
+            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide cc-text-secondary">
               Approval Queue ({rows.length})
-              {uniformLabel !== null && (
-                <>
-                  <InternalLabelBadge label={uniformLabel} />
-                  <span className="text-[10px] font-normal normal-case tracking-normal cc-text-muted">applies to every row</span>
-                </>
-              )}
             </h2>
             {rows.length === 0 ? (
               <EmptyState
                 message="Nothing awaits approval."
-                detail="No awaiting_approval, held, or pending-review picks."
+                detail="No awaiting_approval, held, or pending-review picks. New governance-brake holds and operator holds appear here as they occur."
               />
             ) : (
               <div className="overflow-x-auto">
                 <Table>
                   <TableHead>
-                    {uniformLabel === null && <Th>Label</Th>}
-                    <Th>Pick</Th>
-                    <Th>Market / Selection</Th>
-                    <Th>Sport</Th>
-                    <Th>Capper</Th>
-                    <Th>Source</Th>
-                    <Th>Score</Th>
-                    <Th>Queue</Th>
-                    <Th>Age</Th>
-                    <Th>Created</Th>
-                    <Th>Why</Th>
+                    <SortHeader label="Label" sortKey="label" currentSort={sort} currentDir={dir} />
+                    <th className="py-2 pr-4">Pick</th>
+                    <th className="py-2 pr-4">Market / Selection</th>
+                    <th className="py-2 pr-4">Sport</th>
+                    <th className="py-2 pr-4">Capper</th>
+                    <th className="py-2 pr-4">Source</th>
+                    <SortHeader label="Score" sortKey="score" currentSort={sort} currentDir={dir} align="right" />
+                    <SortHeader label="Queue" sortKey="queue" currentSort={sort} currentDir={dir} />
+                    <SortHeader label="Age" sortKey="age" currentSort={sort} currentDir={dir} align="right" />
+                    {!collapseReasons && <th className="py-2 pr-4">Why</th>}
                   </TableHead>
                   <TableBody>
-                    {rows.map((row) => (
-                      <tr key={row.id} className="border-b border-gray-800/60">
-                        {uniformLabel === null && <Td><InternalLabelBadge label={row.label} /></Td>}
-                        <Td>
-                          <Link href={row.href} className="font-mono text-xs text-blue-400 hover:underline">
-                            {row.id.slice(0, 8)}…
-                          </Link>
-                        </Td>
-                        <Td>
-                          <span className="text-gray-100">{row.market ?? '—'}</span>
-                          <span className="cc-text-muted"> / {row.selection ?? '—'}</span>
-                        </Td>
-                        <Td>{row.sport ?? '—'}</Td>
-                        <Td>{row.capper ?? '—'}</Td>
-                        <Td>{row.source ?? '—'}</Td>
-                        <Td>{row.score != null ? row.score.toFixed(1) : '—'}</Td>
-                        <Td>{row.queue}</Td>
-                        <Td>
-                          <span className={row.ageHours != null && row.ageHours >= 4 ? 'text-yellow-300' : undefined}>
-                            {row.ageHours != null ? `${row.ageHours}h` : '—'}
-                          </span>
-                        </Td>
-                        <Td><span className="font-mono" title={row.createdAt ?? undefined}>{row.createdAt ?? '—'}</span></Td>
-                        <Td><span className="cc-text-muted">{row.reason}</span></Td>
-                      </tr>
-                    ))}
+                    {rows.map((row) => {
+                      const urgency = ageUrgency(row.ageHours);
+                      return (
+                        <tr key={row.id} className="border-b border-gray-800/60 transition-colors hover:bg-gray-800/30">
+                          <Td><InternalLabelBadge label={row.label} /></Td>
+                          <Td>
+                            <Link href={row.href} className="cc-num text-xs text-blue-400 hover:underline">
+                              {row.id.slice(0, 8)}…
+                            </Link>
+                          </Td>
+                          <Td>
+                            <span className="text-gray-100">{row.market ?? '—'}</span>
+                            <span className="cc-text-muted"> / {row.selection ?? '—'}</span>
+                          </Td>
+                          <Td>{row.sport ?? '—'}</Td>
+                          <Td>{row.capper ?? '—'}</Td>
+                          <Td>{row.source ?? '—'}</Td>
+                          <Td num align="right">
+                            {row.score != null ? (
+                              <span className="inline-flex items-center justify-end gap-2">
+                                <span className="inline-block h-1 w-12 overflow-hidden rounded-full bg-white/[0.06]" aria-hidden="true">
+                                  <span
+                                    className="block h-full rounded-full bg-blue-400/70"
+                                    style={{ width: `${Math.round(((row.score ?? 0) / maxScore) * 100)}%` }}
+                                  />
+                                </span>
+                                {row.score.toFixed(1)}
+                              </span>
+                            ) : (
+                              '—'
+                            )}
+                          </Td>
+                          <Td>{row.queue}</Td>
+                          <Td num align="right">
+                            <span className={URGENCY_CLASSES[urgency]} title={row.createdAt ?? undefined}>
+                              {humanizeAgeHours(row.ageHours)}
+                            </span>
+                          </Td>
+                          {!collapseReasons && <Td><span className="cc-text-muted">{row.reason}</span></Td>}
+                        </tr>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
