@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Td, EmptyState, SeverityBadge } from '@/components/ui';
+import { StatCard, InternalLabelBadge, Table, TableHead, TableBody, Td, EmptyState, SeverityBadge, DegradedState } from '@/components/ui';
 import { getReviewQueue, getHeldQueue } from '@/lib/data/queues';
 import { getAwaitingApprovalPicks } from '@/lib/data/approvals-ops';
 
@@ -241,15 +241,12 @@ export default async function ApprovalsPage({
       </div>
 
       {load && load.degraded.length > 0 && (
-        <div className="rounded border border-amber-700/40 bg-amber-900/15 px-4 py-3 text-xs text-amber-300">
-          <p className="font-semibold uppercase tracking-wide">Partial data</p>
-          {load.degraded.map((d) => (
-            <p key={d} className="mt-1 font-mono text-[11px] text-amber-200/80">{d}</p>
-          ))}
-          <p className="mt-1 text-[11px] text-amber-200/60">
-            Counts below exclude the degraded source(s). Refresh to retry; check DB health if timeouts persist.
-          </p>
-        </div>
+        <DegradedState
+          severity="warning"
+          title="Partial data — counts exclude degraded source(s)"
+          causes={load.degraded}
+          action={{ label: 'Retry', href: '/operations/approvals' }}
+        />
       )}
 
       {loadError ? (

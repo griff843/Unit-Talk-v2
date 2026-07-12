@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { StatCard, SeverityBadge, Table, TableHead, TableBody, Th, Td } from '@/components/ui';
+import { StatCard, SeverityBadge, Table, TableHead, TableBody, Th, Td, DegradedState } from '@/components/ui';
 import { getExceptionQueues } from '@/lib/data/picks';
 import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';
 import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
@@ -176,17 +176,12 @@ export default async function FireBoardPage() {
       </div>
 
       {loadErrors.length > 0 ? (
-        <div className="cc-surface p-5 border border-yellow-500/30">
-          <div className="flex items-center gap-2">
-            <SeverityBadge severity="warning" label="Partial Data" />
-            <span className="text-sm text-gray-200">Some health sources failed to load:</span>
-          </div>
-          <ul className="mt-2 list-disc pl-5 text-xs cc-text-muted font-mono">
-            {loadErrors.map((error) => (
-              <li key={error}>{error}</li>
-            ))}
-          </ul>
-        </div>
+        <DegradedState
+          severity="warning"
+          title="Partial data"
+          causes={loadErrors}
+          action={{ label: 'System Health', href: '/api-health' }}
+        />
       ) : null}
 
       {items.length === 0 ? (

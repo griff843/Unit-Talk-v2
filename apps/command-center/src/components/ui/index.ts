@@ -72,4 +72,5 @@ export type { AlertBannerTone } from './AlertBanner';
 export { Table, TableHead, TableBody, Th, Td } from './Table';
 export { Num } from './Num';
 export { MicroSparkline, MicroBars } from './MicroSparkline';
+export { DegradedState } from './DegradedState';
 export type { NumProps } from './Num';

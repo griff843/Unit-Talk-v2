@@ -280,10 +280,21 @@ export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: Over
         />
         <article className="cc-surface p-5">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">API Health</p>
-          <div className="mt-4 flex items-end gap-3">
-            <span className={`text-4xl font-semibold tracking-[-0.05em] ${apiHealth.tone}`}>{apiHealth.label}</span>
-            <span className="text-xs text-[var(--cc-text-secondary)]">{data.signals.filter((signal) => signal.status !== 'WORKING').length} degraded signals</span>
+          <div className="mt-4 flex items-center gap-3">
+            <span
+              className={`inline-block h-3 w-3 rounded-full ${
+                apiHealth.label === 'Healthy' ? 'bg-emerald-400' : apiHealth.label === 'Degraded' ? 'bg-amber-400' : 'bg-rose-400'
+              }`}
+              aria-hidden="true"
+            />
+            <span className={`text-2xl font-semibold tracking-[-0.03em] ${apiHealth.tone}`}>{apiHealth.label}</span>
           </div>
+          <p className="mt-2 text-xs text-[var(--cc-text-secondary)]">
+            {data.signals.filter((signal) => signal.status !== 'WORKING').length} of {data.signals.length} lifecycle signals degraded
+          </p>
+          <a href="/api-health" className="mt-2 inline-block text-[11px] font-medium text-blue-400 hover:underline">
+            Inspect on System Health →
+          </a>
         </article>
       </div>
 
