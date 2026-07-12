@@ -17,8 +17,6 @@ export default async function PromotionPreviewPage({ searchParams: searchParamsP
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Promotion Preview</h1>
       </div>
 
       <form className="flex flex-col gap-3 sm:flex-row" action="/decision/preview">

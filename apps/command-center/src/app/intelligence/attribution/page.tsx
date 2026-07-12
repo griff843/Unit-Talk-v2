@@ -20,8 +20,6 @@ export default async function GovernedAttributionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Intelligence</p>
-        <h1 className="text-xl font-bold text-white">Governed Pick Attribution</h1>
         <p className="mt-1 text-xs text-gray-500">
           Phase 6 feedback-loop substrate — full attribution chain for every{' '}
           <span className="font-mono text-gray-400">source=board-construction</span> pick.

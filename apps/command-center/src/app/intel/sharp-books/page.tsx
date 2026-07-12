@@ -134,8 +134,6 @@ export default async function SharpBooksPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Sharp Book Compare</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           {sharpBook
             ? `Reference book detected in live data: ${sharpBook}. Retail implied probabilities compared to the ${sharpBook} de-vigged price at the same line.`

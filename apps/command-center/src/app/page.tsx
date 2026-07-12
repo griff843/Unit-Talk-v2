@@ -175,7 +175,6 @@ export default async function DashboardPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <h1 className="text-lg font-bold text-gray-100">Overview</h1>
           <p className="text-sm text-gray-500">Live operator snapshot across picks, pipeline flow, runtime health, and alerts.</p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />

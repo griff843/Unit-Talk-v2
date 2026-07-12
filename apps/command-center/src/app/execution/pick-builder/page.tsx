@@ -8,7 +8,6 @@ export default function PickBuilderPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Pick Builder</h1>
         <p className="text-sm cc-text-secondary">
           Compose a Unit Talk pick and submit it into the governed pipeline. Submissions land in the
           review queue — nothing here posts directly to members.

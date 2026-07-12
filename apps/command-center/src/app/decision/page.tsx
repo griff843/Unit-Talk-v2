@@ -71,8 +71,6 @@ export default function DecisionPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Decision Workspace</h1>
         <p className="mt-2 text-sm text-gray-400">
           Promotion engine transparency for score breakdowns, routing, and board management.
           Start from a module below instead of navigating blind.

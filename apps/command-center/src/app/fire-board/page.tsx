@@ -146,7 +146,6 @@ export default async function FireBoardPage() {
   if (fatalError || !inputs) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="text-lg font-bold text-gray-100">Fire Board</h1>
         <div className="cc-surface p-5 border border-red-500/30">
           <div className="flex items-center gap-2">
             <SeverityBadge severity="critical" label="Load Failed" />
@@ -164,7 +163,6 @@ export default async function FireBoardPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Fire Board</h1>
         <p className="text-sm cc-text-muted">
           What is broken and what matters most, ranked by severity. Observed {observedAt}.
         </p>

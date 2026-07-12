@@ -19,7 +19,6 @@ export default async function ResultsTrackingPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Results Tracking</h1>
         <p className="text-sm cc-text-secondary">
           Internal audit of dispatched picks: settlement state, corrections, and delivery evidence.
           Window: most recent 100 posted/settled picks.

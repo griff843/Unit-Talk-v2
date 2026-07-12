@@ -19,8 +19,6 @@ export default async function PlayerCardPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Player Research</h1>
         <p className="mt-1 text-sm text-gray-400">
           Browse players and teams from the participants index.
         </p>

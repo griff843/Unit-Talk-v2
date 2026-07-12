@@ -50,8 +50,6 @@ export default function AlertBuilderPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Alert Builder</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Compose an internal alert definition. Alerts are internal-only and require operator
           approval before any dispatch — both flags are locked on.

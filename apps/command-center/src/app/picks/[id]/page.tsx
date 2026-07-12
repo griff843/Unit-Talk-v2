@@ -1,6 +1,5 @@
 import { Card } from '@/components/ui/Card';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
@@ -288,14 +287,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Picks', href: '/picks' },
-          { label: `${pick.id.slice(0, 12)}...` },
-        ]}
-      />
-
       <Card>
         <div className="flex flex-col gap-4">
           <PickIdentityPanel

@@ -32,7 +32,6 @@ export default async function DiscordPreviewPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Discord Preview</h1>
         <p className="text-sm cc-text-secondary">
           Exactly how a pick renders in Discord before dispatch. Pre-dispatch verification only.
         </p>

@@ -37,7 +37,6 @@ export default async function ApiHealthPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <h1 className="text-lg font-bold text-gray-100">API Health</h1>
           <p className="text-sm text-gray-500">
             External provider freshness, quota pressure, and ingestion latency from current runtime telemetry.
           </p>

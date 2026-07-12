@@ -34,7 +34,6 @@ export default async function DiscordOpsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Discord Control</h1>
         <p className="text-sm cc-text-muted">
           Delivery truth derived from distribution_outbox + distribution_receipts. Observed {observedAt}.
         </p>

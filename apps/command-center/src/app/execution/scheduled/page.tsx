@@ -79,7 +79,6 @@ export default async function ScheduledDispatchPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Scheduled Dispatch</h1>
         <p className="text-sm cc-text-secondary">
           Outbox-backed dispatch queue. The Postgres outbox is the only delivery queue; no
           operator-facing time-based scheduling exists yet.

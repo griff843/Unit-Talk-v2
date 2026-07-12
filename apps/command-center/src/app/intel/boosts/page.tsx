@@ -24,8 +24,6 @@ export default async function BoostsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Boost Analyzer</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Sportsbook boost/promo evaluation against internal fair pricing. Data source not yet
           connected.

@@ -66,7 +66,6 @@ export default async function OutboxOpsPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Dispatch / Outbox</h1>
         <p className="text-sm cc-text-muted">
           Are paid members receiving what they paid for? distribution_outbox + distribution_receipts, observed {observedAt}.
         </p>

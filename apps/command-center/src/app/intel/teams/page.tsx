@@ -91,8 +91,6 @@ export default async function TeamsPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Team Research</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Events and current markets for a team. Team list from participants (type=team); events
           matched by name; markets from provider_offer_current (first 3 events, 50 groups max).

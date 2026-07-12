@@ -77,8 +77,6 @@ export default async function RoiOverviewPage() {
   if (!perf) {
     return (
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Intelligence</p>
-        <h1 className="text-xl font-bold text-white">ROI Overview</h1>
         <div className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-6 text-center">
           <p className="text-sm text-gray-400">Unable to load performance data.</p>
           <p className="text-xs text-gray-600 mt-1">Check Supabase connectivity.</p>
@@ -96,8 +94,6 @@ export default async function RoiOverviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Intelligence</p>
-        <h1 className="text-xl font-bold text-white">ROI Overview</h1>
       </div>
 
       {!hasData ? (

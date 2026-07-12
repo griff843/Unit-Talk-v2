@@ -158,8 +158,6 @@ export default async function LineMovementPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Line Movement</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Per-book movement from provider_offer_history (opening / current / high / low). History
           scan capped at 1000 rows.

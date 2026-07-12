@@ -4,8 +4,6 @@ export default function HedgeOverlaysPage() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Hedge Overlays</h1>
       </div>
 
       <div className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-6 text-center">

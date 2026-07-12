@@ -147,7 +147,6 @@ export default async function ApprovalsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Approvals</h1>
         <p className="text-sm cc-text-muted">
           What can the PM approve right now? Governance-brake awaiting_approval picks, held picks, and the legacy review queue.
           Observed {observedAt}. Tier labels live in Linear and are not surfaced by the data layer yet.

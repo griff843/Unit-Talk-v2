@@ -29,7 +29,6 @@ export default async function PipelinePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-1">
-        <h1 className="text-lg font-bold text-gray-100">Today&apos;s Action</h1>
         <p className="text-sm text-gray-500">
           Live pipeline posture — stage flow, backlog pressure, and promotion staging from current runtime telemetry.
         </p>

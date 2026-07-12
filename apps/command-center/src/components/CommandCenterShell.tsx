@@ -116,7 +116,15 @@ function resolveChrome(pathname: string) {
   const activeGroup = NAV_GROUPS.find((group) => group.items.some((item) => item.href === activeRoute));
   const lastSegment = segments.length > 0 ? segments[segments.length - 1]! : '';
   const looksLikeId = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(lastSegment) || /^\d+$/.test(lastSegment);
-  const leaf = segments.length === 0 ? activeItem.label : looksLikeId ? `${activeItem.label} · ${lastSegment.slice(0, 8)}` : titleize(lastSegment);
+  // A pathname that exactly matches the nav item's href (or one of its match
+  // patterns) IS that surface — the nav label is the one canonical name.
+  const matchesItemExactly =
+    pathname === activeItem.href || (activeItem.match ?? []).includes(pathname);
+  const leaf = matchesItemExactly
+    ? activeItem.label
+    : looksLikeId
+      ? lastSegment.slice(0, 8)
+      : titleize(lastSegment);
   const sameName = (a: string, b: string) => a.replace(/[^a-z0-9]/gi, '').toLowerCase() === b.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
   return {
@@ -127,7 +135,11 @@ function resolveChrome(pathname: string) {
       activeItem.label,
       ...(sameName(leaf, activeItem.label) ? [] : [leaf]),
     ],
-    title: sameName(leaf, activeItem.label) ? activeItem.label : leaf,
+    title: sameName(leaf, activeItem.label)
+      ? activeItem.label
+      : looksLikeId
+        ? `${activeItem.label} · ${leaf}`
+        : leaf,
   };
 }
 

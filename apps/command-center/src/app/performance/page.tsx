@@ -121,7 +121,6 @@ export default async function PerformancePage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-lg font-bold text-gray-100">Performance</h1>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <SampleWarning title="Operator note">

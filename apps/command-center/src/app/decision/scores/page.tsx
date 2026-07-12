@@ -17,8 +17,6 @@ export default async function ScoreBreakdownPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Score Breakdown</h1>
         <p className="mt-1 text-xs text-gray-500">
           24h window — target: <span className="text-gray-300">{board.target}</span> —
           {sorted.length} record{sorted.length !== 1 ? 's' : ''}

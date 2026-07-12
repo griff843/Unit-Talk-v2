@@ -6,8 +6,6 @@ export default function TrendFiltersPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Trend Explorer</h1>
       </div>
 
       <div className="rounded-md border border-gray-700 bg-gray-900 px-4 py-4">

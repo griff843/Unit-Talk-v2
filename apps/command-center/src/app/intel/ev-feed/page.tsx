@@ -128,8 +128,6 @@ export default async function EvFeedPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">EV Feed</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Per-book EV against consensus fair probability (proportional de-vig, ≥3 books, same line).
           Scan capped at {rowCap || 500} most-recent offer rows.

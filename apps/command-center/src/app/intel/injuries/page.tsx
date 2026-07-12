@@ -22,8 +22,6 @@ export default async function InjuriesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="cc-text-muted text-xs font-medium uppercase tracking-widest">Intelligence</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Injury Monitor</h1>
         <p className="cc-text-secondary mt-1 text-sm">
           Player availability reports and the markets they affect. Data source not yet connected.
         </p>

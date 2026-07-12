@@ -96,8 +96,6 @@ export default async function ModelHealthPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Operations</p>
-        <h1 className="text-xl font-bold text-white">Model Health Alerts</h1>
         <p className="max-w-3xl text-sm text-gray-400">
           Review alerted model health snapshots and record operator decisions for models requiring attention.
         </p>
