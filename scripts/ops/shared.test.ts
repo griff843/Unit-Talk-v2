@@ -126,6 +126,143 @@ test('createManifest can require a real preflight token file for lane starts', (
   );
 });
 
+test('createManifest requires model_routing for a Codex lane (UTV2-1526)', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1526',
+        tier: 'T2',
+        branch: 'codex/utv2-1526-no-routing',
+        worktree_path: worktreePathForBranch('codex/utv2-1526-no-routing'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1526', 'T2'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1526-no-routing.json',
+        executor: 'codex-cli',
+      }),
+    /requires a model_routing decision at creation time/,
+  );
+});
+
+test('createManifest rejects model_routing on a Claude lane (UTV2-1526)', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1526',
+        tier: 'T2',
+        branch: 'claude/utv2-1526-with-routing',
+        worktree_path: worktreePathForBranch('claude/utv2-1526-with-routing'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1526', 'T2'),
+        preflight_token: '.out/ops/preflight/claude/utv2-1526-with-routing.json',
+        executor: 'claude',
+        model_routing: {
+          profile: 'codex-terra-medium',
+          model: 'gpt-5.6-terra',
+          reasoning_effort: 'medium',
+          selected_by: 'three-brain',
+          policy_version: '1.0.0',
+        },
+      }),
+    /model_routing is Codex-only/,
+  );
+});
+
+test('createManifest accepts a Codex lane with a valid model_routing block', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1526',
+    tier: 'T2',
+    branch: 'codex/utv2-1526-with-routing',
+    worktree_path: worktreePathForBranch('codex/utv2-1526-with-routing'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1526', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1526-with-routing.json',
+    executor: 'codex-cli',
+    model_routing: {
+      profile: 'codex-terra-medium',
+      model: 'gpt-5.6-terra',
+      reasoning_effort: 'medium',
+      selected_by: 'three-brain',
+      policy_version: '1.0.0',
+    },
+  });
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  assert.deepStrictEqual(validateManifest(manifest), []);
+  assert.strictEqual(manifest.model_routing?.profile, 'codex-terra-medium');
+});
+
+test('validateManifest rejects a model_routing block manually attached to a Claude manifest', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1528',
+    tier: 'T2',
+    branch: 'claude/utv2-1528-tamper',
+    worktree_path: worktreePathForBranch('claude/utv2-1528-tamper'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1528', 'T2'),
+    preflight_token: '.out/ops/preflight/claude/utv2-1528-tamper.json',
+    executor: 'claude',
+  });
+  // Simulate a hand-edited manifest bypassing createManifest's own guard —
+  // validateManifest must independently reject this on every write.
+  (manifest as { model_routing?: unknown }).model_routing = {
+    profile: 'codex-terra-medium',
+    model: 'gpt-5.6-terra',
+    reasoning_effort: 'medium',
+    selected_by: 'three-brain',
+    policy_version: '1.0.0',
+  };
+  assert.match(validateManifest(manifest).join('\n'), /model_routing is Codex-only/);
+});
+
+test('validateManifest rejects a structurally incomplete model_routing block', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1529',
+    tier: 'T2',
+    branch: 'codex/utv2-1529-bad-routing',
+    worktree_path: worktreePathForBranch('codex/utv2-1529-bad-routing'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1529', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1529-bad-routing.json',
+    executor: 'codex-cli',
+    model_routing: {
+      profile: 'codex-terra-medium',
+      model: 'gpt-5.6-terra',
+      reasoning_effort: 'medium',
+      selected_by: 'three-brain',
+      policy_version: '1.0.0',
+    },
+  });
+  (manifest as { model_routing?: { selected_by?: unknown } }).model_routing!.selected_by = 'because-i-said-so';
+  assert.match(
+    validateManifest(manifest).join('\n'),
+    /model_routing.selected_by must be "three-brain" or "manual-override"/,
+  );
+});
+
+test('validateManifest rejects an override block missing authority or reason', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1530',
+    tier: 'T1',
+    branch: 'codex/utv2-1530-bad-override',
+    worktree_path: worktreePathForBranch('codex/utv2-1530-bad-override'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1530', 'T1'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1530-bad-override.json',
+    executor: 'codex-cli',
+    model_routing: {
+      profile: 'codex-sol-max',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'max',
+      selected_by: 'manual-override',
+      policy_version: '1.0.0',
+      override: { authorized_by: '', reason: '' },
+    },
+  });
+  const errors = validateManifest(manifest).join('\n');
+  assert.match(errors, /model_routing.override.authorized_by is required/);
+  assert.match(errors, /model_routing.override.reason is required/);
+});
+
 test('validateManifest accepts Windows absolute worktree paths on non-Windows runners', () => {
   const manifest = createManifest({
     issue_id: 'UTV2-1062',

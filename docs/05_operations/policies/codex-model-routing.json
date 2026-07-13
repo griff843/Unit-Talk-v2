@@ -1,0 +1,69 @@
+{
+  "policy_version": "1.0.0",
+  "schema_version": 1,
+  "description": "Canonical Codex model-profile routing policy. Logical profiles map to concrete Codex CLI model IDs and reasoning-effort values. This file is the sole source of truth for model selection -- three-brain.md documents the routing rules in prose, scripts/ops/model-routing.ts and scripts/ops/codex-exec.ts are the only code paths permitted to resolve or validate a profile, and no other file may hardcode a concrete Codex model ID.",
+  "verified_against": {
+    "codex_cli_version": "0.144.1",
+    "verified_at": "2026-07-13",
+    "verification_method": "codex --version / codex exec --help / ~/.codex/models_cache.json model catalog inspected directly on the installed CLI -- concrete model slugs and supported_reasoning_levels are copied from that catalog, not guessed."
+  },
+  "profiles": {
+    "codex-terra-medium": {
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "medium",
+      "enabled": true,
+      "permitted_tiers": ["T2"],
+      "use_cases": [
+        "clear-scope-t2-implementation",
+        "bounded-work-deterministic-acceptance-criteria"
+      ],
+      "requires_pm_authorization": false,
+      "description": "Balanced agentic coding model for everyday work. Default profile for normal clear-scope T2 Codex lanes."
+    },
+    "codex-sol-high": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "high",
+      "enabled": true,
+      "permitted_tiers": ["T1", "T2"],
+      "use_cases": [
+        "complex-t2-multi-file-or-multi-package",
+        "failure-rescue-lane",
+        "root-cause-investigation",
+        "bounded-t1-implementation-under-existing-t1-guardrails",
+        "governance-tool-implementation-after-claude-architecture-approval"
+      ],
+      "requires_pm_authorization": false,
+      "description": "Frontier agentic coding model. Used for complex or higher-stakes Codex lanes that still pass through the full Rule 1 / Rule 6 guardrail chain in three-brain.md (Claude critique, runtime verification, human review before merge). This profile does not itself grant T1 merge authority or bypass any existing gate."
+    },
+    "codex-sol-max": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "max",
+      "enabled": true,
+      "permitted_tiers": ["T1", "T2"],
+      "use_cases": [
+        "rescue-threshold-exceeded-after-sol-high-failed",
+        "explicit-griff-authorization"
+      ],
+      "requires_pm_authorization": true,
+      "description": "Maximum reasoning depth. Reserved for a stuck lane that has already failed under codex-sol-high, or an explicitly PM-authorized escalation. Must never be selected as a default profile -- selecting this profile always requires a documented override (authorized_by + reason) in the manifest's model_routing block."
+    },
+    "codex-luna-low": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "low",
+      "enabled": false,
+      "permitted_tiers": [],
+      "use_cases": [],
+      "requires_pm_authorization": true,
+      "description": "Fast and affordable agentic coding model. Defined for future use but reserved/disabled -- no ratified use case exists yet. Resolution must fail closed with profile_disabled while enabled=false. Do not enable to manufacture work for this profile; enabling requires a separate ratified policy change."
+    }
+  },
+  "reasoning_effort_catalog": {
+    "gpt-5.6-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
+    "gpt-5.6-terra": ["low", "medium", "high", "xhigh", "max", "ultra"],
+    "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"]
+  },
+  "legacy_compatibility": {
+    "default_profile": "codex-terra-medium",
+    "description": "Manifests created by ops:lane-start before this policy shipped have no model_routing block. scripts/ops/codex-exec.ts detects this by the field's absence (never by a schema_version bump -- the lane manifest schema_version stays 1) and resolves default_profile at execution time only. This resolution is never written back into the historical manifest; it is recorded solely in that run's evidence output (legacy_compatibility_used: true) and printed as a visible stderr warning."
+  }
+}

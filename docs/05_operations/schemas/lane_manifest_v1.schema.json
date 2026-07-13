@@ -103,6 +103,30 @@
         "merge_type": { "enum": ["manual", "auto", null] }
       },
       "additionalProperties": false
+    },
+    "model_routing": {
+      "type": "object",
+      "description": "Deterministic Codex model-profile decision (UTV2-1526). Codex-only -- required for Codex lanes created by ops:lane-start after this field shipped; must be absent for Claude lanes. See docs/05_operations/policies/codex-model-routing.json.",
+      "required": ["profile", "model", "reasoning_effort", "selected_by", "policy_version"],
+      "properties": {
+        "profile": { "type": "string" },
+        "model": { "type": "string" },
+        "reasoning_effort": { "type": "string" },
+        "selected_by": { "enum": ["three-brain", "manual-override"] },
+        "policy_version": { "type": "string" },
+        "legacy_resolved": { "type": "boolean" },
+        "override": {
+          "type": "object",
+          "required": ["authorized_by", "reason"],
+          "properties": {
+            "authorized_by": { "type": "string" },
+            "reason": { "type": "string" },
+            "at": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": true

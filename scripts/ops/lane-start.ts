@@ -40,6 +40,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig, type ConcurrencyConfig, type EffectiveConcurrencyConfig } from './concurrency-config.js';
+import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
 
 export interface ConcurrencyViolation {
   code: string;
@@ -399,6 +400,44 @@ function main(): void {
         `Invalid --lane-type: ${laneType}. Use a canonical type (${CANONICAL_LANE_TYPES.join(', ')}) with optional --executor (claude|codex-cli|codex-cloud).`,
       );
     }
+
+    const isCodexExecutor = executor === 'codex-cli' || executor === 'codex-cloud';
+    const modelProfileFlag = flags.get('model-profile')?.at(-1);
+    let modelRouting: ModelRoutingBlock | undefined;
+    if (isCodexExecutor) {
+      if (!modelProfileFlag) {
+        emitJson({
+          ok: false,
+          code: 'model_profile_required',
+          message: `Codex lane ${issueId} requires --model-profile <profile-name> (see docs/05_operations/policies/codex-model-routing.json for valid profiles).`,
+        });
+        process.exit(1);
+      }
+      const overrideAuthorizedBy = flags.get('override-authorized-by')?.at(-1);
+      const overrideReason = flags.get('override-reason')?.at(-1);
+      const override =
+        overrideAuthorizedBy || overrideReason
+          ? { authorized_by: overrideAuthorizedBy ?? '', reason: overrideReason ?? '' }
+          : undefined;
+      const resolution = resolveModelProfile({ profileName: modelProfileFlag, tier, override });
+      if (!resolution.ok) {
+        emitJson({
+          ok: false,
+          code: `model_routing_${resolution.code.toLowerCase()}`,
+          message: resolution.message,
+        });
+        process.exit(1);
+      }
+      modelRouting = resolution.model_routing!;
+    } else if (modelProfileFlag) {
+      emitJson({
+        ok: false,
+        code: 'model_profile_not_applicable',
+        message: `--model-profile was supplied but executor "${executor}" is not Codex. model_routing is Codex-only.`,
+      });
+      process.exit(1);
+    }
+
     const singletonPaths = normalizedFiles.filter(isSingletonPath);
     const singletonApproved = flags.has('singleton-approved') || bools.has('singleton-approved');
     if (singletonPaths.length > 0 && !singletonApproved) {
@@ -552,6 +591,7 @@ function main(): void {
       status: 'started',
       now,
       requireExistingPreflightToken: true,
+      model_routing: modelRouting,
     });
 
     // UTV2-1492: declared-proof-path validation for T1 (formerly preflight's

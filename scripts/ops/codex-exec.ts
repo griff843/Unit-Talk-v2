@@ -10,7 +10,13 @@
  * Exit codes:
  *   0 = Codex completed and PR opened
  *   1 = Codex failed or CLI unavailable
- *   2 = Precondition failed (no manifest, wrong CWD, health check failed)
+ *   2 = Precondition failed (no manifest, wrong CWD, health check failed, invalid/disabled
+ *       model routing, policy-version mismatch, missing manual-override authority)
+ *
+ * Model routing (UTV2-1526): the manifest's `model_routing` block (or, for manifests that
+ * predate that field, a documented legacy default) is validated against
+ * docs/05_operations/policies/codex-model-routing.json and passed to `codex exec`
+ * explicitly via --model / -c model_reasoning_effort=... — never the CLI's own default.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -27,15 +33,120 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import {
+  buildCodexModelArgs,
+  resolveLegacyModelRouting,
+  validatePersistedModelRouting,
+  type ModelRoutingBlock,
+} from './model-routing.js';
 
 interface CodexExecResult {
   ok: boolean;
-  code: 'SUCCESS' | 'CODEX_UNAVAILABLE' | 'PRECONDITION_FAILED' | 'EXECUTION_FAILED' | 'DRY_RUN';
+  code:
+    | 'SUCCESS'
+    | 'CODEX_UNAVAILABLE'
+    | 'PRECONDITION_FAILED'
+    | 'MODEL_ROUTING_INVALID'
+    | 'EXECUTION_FAILED'
+    | 'DRY_RUN';
   issue_id: string;
   branch?: string;
   message: string;
   codex_exit_code?: number;
   dry_run?: boolean;
+  model_routing_error_code?: string;
+  model_profile?: string;
+  model?: string;
+  reasoning_effort?: string;
+  policy_version?: string;
+  legacy_compatibility_used?: boolean;
+  codex_cli_version?: string | null;
+}
+
+export interface ModelRoutingExecResolution {
+  ok: boolean;
+  code: string;
+  message: string;
+  model_routing?: ModelRoutingBlock;
+  legacy_compatibility_used: boolean;
+}
+
+/**
+ * Resolve the model routing to actually execute with: use the manifest's persisted
+ * decision when present (validated against current policy), or fall back to the
+ * documented legacy default when the manifest predates the model-routing policy. The
+ * legacy result is never written back into the manifest -- callers must treat it as
+ * execution-scoped only.
+ */
+export function resolveExecModelRouting(
+  manifest: Pick<LaneManifest, 'model_routing' | 'tier'>,
+): ModelRoutingExecResolution {
+  if (manifest.model_routing) {
+    const result = validatePersistedModelRouting(manifest.model_routing, manifest.tier);
+    return {
+      ok: result.ok,
+      code: result.code,
+      message: result.message,
+      model_routing: result.model_routing,
+      legacy_compatibility_used: false,
+    };
+  }
+  const legacy = resolveLegacyModelRouting(manifest.tier);
+  return {
+    ok: legacy.ok,
+    code: legacy.code,
+    message: legacy.message,
+    model_routing: legacy.model_routing,
+    legacy_compatibility_used: legacy.ok,
+  };
+}
+
+export interface ModelRoutingEvidence {
+  issue_id: string;
+  manifest_schema_version: number;
+  model_profile: string;
+  model: string;
+  reasoning_effort: string;
+  policy_version: string;
+  codex_cli_version: string | null;
+  legacy_compatibility_used: boolean;
+  override_used: boolean;
+  override_authorized_by: string | null;
+  codex_exit_code: number | null;
+  generated_at: string;
+}
+
+export function buildModelRoutingEvidence(input: {
+  issueId: string;
+  manifestSchemaVersion: number;
+  modelRouting: ModelRoutingBlock;
+  legacyCompatibilityUsed: boolean;
+  codexCliVersion: string | null;
+  codexExitCode: number | null;
+  now?: string;
+}): ModelRoutingEvidence {
+  return {
+    issue_id: input.issueId,
+    manifest_schema_version: input.manifestSchemaVersion,
+    model_profile: input.modelRouting.profile,
+    model: input.modelRouting.model,
+    reasoning_effort: input.modelRouting.reasoning_effort,
+    policy_version: input.modelRouting.policy_version,
+    codex_cli_version: input.codexCliVersion,
+    legacy_compatibility_used: input.legacyCompatibilityUsed,
+    override_used: Boolean(input.modelRouting.override),
+    override_authorized_by: input.modelRouting.override?.authorized_by ?? null,
+    codex_exit_code: input.codexExitCode,
+    generated_at: input.now ?? new Date().toISOString(),
+  };
+}
+
+function writeModelRoutingEvidence(cwd: string, issueId: string, evidence: ModelRoutingEvidence): string {
+  const dir = path.join(cwd, 'docs', '06_status', 'proof', issueId);
+  fs.mkdirSync(dir, { recursive: true });
+  const filePath = path.join(dir, 'model-routing.json');
+  fs.writeFileSync(filePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
+  return filePath;
 }
 
 function buildCodexChildEnv(cwd: string): NodeJS.ProcessEnv {
@@ -187,6 +298,31 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Resolve model routing — manifest's persisted decision, or a documented, warned
+  // legacy default when the manifest predates this policy. Never falls back silently:
+  // both paths always resolve to an explicit model + reasoning effort before any codex
+  // invocation is constructed.
+  const routing = resolveExecModelRouting(manifest);
+  if (!routing.ok) {
+    emitJson({
+      ok: false,
+      code: 'MODEL_ROUTING_INVALID',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: routing.message,
+      model_routing_error_code: routing.code,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
+  const modelRouting = routing.model_routing!;
+  if (routing.legacy_compatibility_used) {
+    process.stderr.write(
+      `[codex-exec] WARN: manifest ${issueId} has no model_routing (created before the model-routing policy shipped) — ` +
+        `using legacy default profile "${modelRouting.profile}" (${modelRouting.model}, effort=${modelRouting.reasoning_effort}). ` +
+        `This resolution is not written back to the manifest; it is recorded only in this run's evidence.\n`,
+    );
+  }
+
   // Build packet and prompt
   const packet = generateExecutionPacket(manifest);
   const prompt = buildCodexPrompt(packet);
@@ -199,7 +335,17 @@ async function main(): Promise<void> {
       branch: manifest.branch,
       message: `Dry run — would execute Codex in ${packet.cwd}`,
       dry_run: true,
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
     } satisfies CodexExecResult);
+    process.stdout.write('\n--- CODEX INVOCATION (would run) ---\n');
+    process.stdout.write(
+      `codex exec ${buildCodexModelArgs(modelRouting).join(' ')} -s danger-full-access <prompt>\n`,
+    );
     process.stdout.write('\n--- PROMPT PREVIEW ---\n');
     process.stdout.write(prompt.slice(0, 500) + '\n...(truncated)\n');
     process.exit(0);
@@ -220,10 +366,13 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  // Execute Codex — pass prompt as CLI argument (codex exec <PROMPT>)
+  // Execute Codex — pass prompt as CLI argument (codex exec <PROMPT>), with the
+  // resolved model and reasoning effort passed explicitly. Never fall back to the
+  // Codex CLI's own default model.
   // Use danger-full-access so Codex can commit/push inside the isolated worktree.
   // workspace-write (the default) blocks git index writes (.git/worktrees/.../index.lock).
-  const child = spawnSync('codex', ['exec', '-s', 'danger-full-access', prompt], {
+  const codexArgs = ['exec', ...buildCodexModelArgs(modelRouting), '-s', 'danger-full-access', prompt];
+  const child = spawnSync('codex', codexArgs, {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
@@ -231,14 +380,31 @@ async function main(): Promise<void> {
     timeout: 30 * 60 * 1000,
   });
 
+  const exitCode = child.status ?? 1;
+  const evidence = buildModelRoutingEvidence({
+    issueId,
+    manifestSchemaVersion: manifest.schema_version,
+    modelRouting,
+    legacyCompatibilityUsed: routing.legacy_compatibility_used,
+    codexCliVersion: health.version,
+    codexExitCode: child.error ? null : exitCode,
+  });
+  const evidencePath = writeModelRoutingEvidence(resolvedCwd, issueId, evidence);
+
   if (child.error || child.status !== 0) {
     emitJson({
       ok: false,
       code: 'EXECUTION_FAILED',
       issue_id: issueId,
       branch: manifest.branch,
-      message: `Codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}`,
+      message: `Codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}. Model routing evidence: ${evidencePath}`,
       codex_exit_code: child.status ?? 1,
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
     } satisfies CodexExecResult);
     process.exit(1);
   }
@@ -248,8 +414,14 @@ async function main(): Promise<void> {
     code: 'SUCCESS',
     issue_id: issueId,
     branch: manifest.branch,
-    message: `Codex execution completed for ${issueId}`,
+    message: `Codex execution completed for ${issueId}. Model routing evidence: ${evidencePath}`,
     codex_exit_code: 0,
+    model_profile: modelRouting.profile,
+    model: modelRouting.model,
+    reasoning_effort: modelRouting.reasoning_effort,
+    policy_version: modelRouting.policy_version,
+    legacy_compatibility_used: routing.legacy_compatibility_used,
+    codex_cli_version: health.version,
   } satisfies CodexExecResult);
 }
 

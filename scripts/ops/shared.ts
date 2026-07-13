@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
 export type LaneManifestStatus =
@@ -97,6 +98,14 @@ export interface LaneManifest {
   task_packet_hash?: string;
   notes?: string;
   p0_protocol?: P0ProtocolBlock;
+  /**
+   * Deterministic Codex model-profile decision (UTV2-1526). Required for every Codex
+   * lane created by ops:lane-start after this field shipped; must never be present on a
+   * Claude lane. Manifests written before this field existed simply lack it -- that
+   * absence, not a schema_version bump, is what scripts/ops/codex-exec.ts treats as the
+   * legacy-compatibility signal. See docs/05_operations/policies/codex-model-routing.json.
+   */
+  model_routing?: ModelRoutingBlock;
 }
 
 export interface PreflightToken {
@@ -796,6 +805,39 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     }
   }
 
+  if (manifest.model_routing) {
+    const mr = manifest.model_routing;
+    const isCodexExecutor = manifest.executor === 'codex-cli' || manifest.executor === 'codex-cloud';
+    if (!isCodexExecutor) {
+      errors.push(
+        `${sourcePath}: model_routing is present but executor is "${manifest.executor ?? 'unset'}" -- model_routing is Codex-only`,
+      );
+    }
+    if (!mr.profile || typeof mr.profile !== 'string') {
+      errors.push(`${sourcePath}: model_routing.profile is required`);
+    }
+    if (!mr.model || typeof mr.model !== 'string') {
+      errors.push(`${sourcePath}: model_routing.model is required`);
+    }
+    if (!mr.reasoning_effort || typeof mr.reasoning_effort !== 'string') {
+      errors.push(`${sourcePath}: model_routing.reasoning_effort is required`);
+    }
+    if (!['three-brain', 'manual-override'].includes(mr.selected_by)) {
+      errors.push(`${sourcePath}: model_routing.selected_by must be "three-brain" or "manual-override"`);
+    }
+    if (!mr.policy_version || typeof mr.policy_version !== 'string') {
+      errors.push(`${sourcePath}: model_routing.policy_version is required`);
+    }
+    if (mr.override) {
+      if (!mr.override.authorized_by || !mr.override.authorized_by.trim()) {
+        errors.push(`${sourcePath}: model_routing.override.authorized_by is required when override is present`);
+      }
+      if (!mr.override.reason || !mr.override.reason.trim()) {
+        errors.push(`${sourcePath}: model_routing.override.reason is required when override is present`);
+      }
+    }
+  }
+
   return errors;
 }
 
@@ -964,11 +1006,25 @@ export function createManifest(input: {
   status?: LaneManifestStatus;
   now?: string;
   requireExistingPreflightToken?: boolean;
+  model_routing?: ModelRoutingBlock;
 }): LaneManifest {
   const timestamp = input.now ?? nowIso();
   const preflightToken = validatePreflightTokenPathValue(input.preflight_token, {
     requireExistingFile: input.requireExistingPreflightToken,
   });
+  const isCodexExecutor = input.executor === 'codex-cli' || input.executor === 'codex-cloud';
+  if (isCodexExecutor && !input.model_routing) {
+    throw new Error(
+      `Codex lane ${input.issue_id} requires a model_routing decision at creation time. ` +
+        `Resolve a profile via scripts/ops/model-routing.ts and pass --model-profile to ops:lane-start.`,
+    );
+  }
+  if (!isCodexExecutor && input.model_routing) {
+    throw new Error(
+      `Lane ${input.issue_id} has executor "${input.executor ?? 'unset'}" but a model_routing block was supplied. ` +
+        `model_routing is Codex-only -- Claude lanes must never carry an executable Codex model configuration.`,
+    );
+  }
   return {
     schema_version: 1,
     issue_id: input.issue_id,
@@ -992,6 +1048,7 @@ export function createManifest(input: {
     created_by: input.created_by ?? 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
+    ...(input.model_routing ? { model_routing: input.model_routing } : {}),
   };
 }
 

@@ -238,6 +238,58 @@ Never route Griff escalations to Codex or the Explore subagent. Never continue i
 
 ---
 
+## Codex model-profile routing (Codex lanes only, UTV2-1526)
+
+Once a Codex lane decision resolves (Rule 1 T1-with-guardrails, Rule 4 T2 clear-scope, or
+Rule 6 failure rescue), three-brain also selects a deterministic **model profile** —
+never leave this to the Codex CLI's own default. Model profiles are logical names defined
+in the canonical policy `docs/05_operations/policies/codex-model-routing.json`; that file
+is the sole source of truth for which concrete Codex model ID and reasoning effort a
+profile means. This section documents the *rules*; the mapping lives only in the policy
+file — do not duplicate concrete model IDs here or anywhere else.
+
+Selection happens strictly after executor routing, using first-match rules over objective
+inputs (lane tier, package/file count touched, rescue status, verification strength):
+
+| Condition (first match wins) | Profile |
+|---|---|
+| Rescue threshold exceeded after `codex-sol-high` already failed on this lane, or explicit Griff authorization | `codex-sol-max` |
+| Complex T2 spanning several files/packages, failure-rescue lane (Rule 6), root-cause investigation, bounded T1 already permitted under Rule 1's guardrails, or governance-tool implementation after Claude has approved the architecture | `codex-sol-high` |
+| Normal clear-scope T2 with deterministic acceptance criteria, no Tier C path, no scope ambiguity, no repeated failure | `codex-terra-medium` |
+| — | `codex-luna-low` is defined but disabled; do not select it to manufacture work for it |
+
+`codex-sol-max`, and any future enabling of `codex-luna-low`, require a documented override
+(`authorized_by` + `reason`) persisted in the manifest — enforced by the policy's
+`requires_pm_authorization` flag. A model-profile selection never grants merge, scope, or
+tier authority by itself; it only determines which Codex model/effort executes a lane whose
+executor and tier gates have already been satisfied through the rules above.
+
+Pass the resolved profile to lane-start explicitly (Codex lanes only):
+
+```bash
+pnpm ops:lane-start UTV2-{number} --tier T2 --branch codex/utv2-{number}-slug \
+  --lane-type <type> --executor codex-cli --model-profile codex-terra-medium \
+  --files <path1> [--files <path2> ...]
+```
+
+`ops:lane-start` validates the profile against policy (enabled, permitted for this tier,
+override present and well-formed if required) and persists the resolved decision —
+concrete model, reasoning effort, and policy version — into the lane manifest's
+`model_routing` block. It rejects the lane if the profile is missing, unknown, disabled, or
+not permitted for the tier. **Claude lanes must never receive `--model-profile`** —
+`ops:lane-start` rejects it if supplied for a non-Codex executor.
+
+`scripts/ops/codex-exec.ts` re-validates the manifest's `model_routing` against current
+policy immediately before invoking `codex exec`, and passes the model and reasoning effort
+explicitly (`--model`, `-c model_reasoning_effort=...`) — it never relies on the Codex
+CLI's own default and never falls back silently. Lane manifests created before this policy
+shipped simply have no `model_routing` block; `codex-exec.ts` resolves the documented
+legacy default (`codex-terra-medium`) for those, with a visible warning, and records that
+resolution only in that run's evidence — it never rewrites the historical manifest. Full
+compatibility behavior: `docs/05_operations/LANE_MANIFEST_SPEC.md` §15.
+
+---
+
 ## Output Format (when called by /dispatch Phase 1)
 
 Return a one-line routing decision. For dispatchable implementation lanes, `executor`
@@ -245,10 +297,15 @@ must be one of the lane-start executor values:
 
 ```
 executor: claude | codex-cli | codex-cloud
+model_profile: <profile-name> | null
 announce: true | false
 escalate_to_griff: true | false
 reason: <one line>
 ```
+
+`model_profile` is required (non-null) whenever `executor` is `codex-cli` or
+`codex-cloud`, chosen per the routing table above. It must be `null` (or omitted) for
+`executor: claude` — Claude lanes carry no Codex model configuration.
 
 Explore and QA Agent are not lane-start executors. If a candidate needs Explore
 or QA Agent work, return `executor: claude` and include `action: explore-scan`
@@ -258,12 +315,12 @@ creating a malformed lane manifest.
 Examples:
 
 ```
-executor: codex-cli announce: false  escalate: false  reason: T2 clear-scope, health OK
-executor: claude   announce: false  escalate: true   reason: T1 — Tier C, PM plan required
-executor: claude   announce: false  escalate: false  reason: Codex unavailable, fallback
-executor: codex-cli announce: true   escalate: false  reason: failure rescue — 2× same test
-executor: claude   announce: false  escalate: false  reason: action: explore-scan — broad codebase scan before routing
-executor: claude   announce: true   escalate: false  reason: action: qa-agent — surface regression verification required
+executor: codex-cli model_profile: codex-terra-medium announce: false  escalate: false  reason: T2 clear-scope, health OK
+executor: claude   model_profile: null              announce: false  escalate: true   reason: T1 — Tier C, PM plan required
+executor: claude   model_profile: null              announce: false  escalate: false  reason: Codex unavailable, fallback
+executor: codex-cli model_profile: codex-sol-high     announce: true   escalate: false  reason: failure rescue — 2× same test
+executor: claude   model_profile: null              announce: false  escalate: false  reason: action: explore-scan — broad codebase scan before routing
+executor: claude   model_profile: null              announce: true   escalate: false  reason: action: qa-agent — surface regression verification required
 ```
 
 ---
