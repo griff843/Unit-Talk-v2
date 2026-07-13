@@ -64,6 +64,6 @@
   },
   "legacy_compatibility": {
     "default_profile": "codex-terra-medium",
-    "description": "Manifests created by ops:lane-start before this policy shipped have no model_routing block. scripts/ops/codex-exec.ts detects this by the field's absence (never by a schema_version bump -- the lane manifest schema_version stays 1) and resolves default_profile at execution time only. This resolution is never written back into the historical manifest; it is recorded solely in that run's evidence output (legacy_compatibility_used: true) and printed as a visible stderr warning."
+    "description": "The real compatibility boundary is the lane manifest's schema_version field (1 vs 2), not model_routing's presence or absence -- presence alone cannot distinguish 'predates this field' from 'was deleted from a schema_version-2 manifest' (PM review finding #2 on UTV2-1526). schema_version-1 manifests (created by ops:lane-start before this policy shipped) may lack model_routing; scripts/ops/codex-exec.ts resolves default_profile for those, at execution time only, and never writes it back into the historical manifest -- it is recorded solely in that run's evidence output (legacy_compatibility_used: true) and printed as a visible stderr warning. A schema_version-2 Codex-executor manifest MUST have model_routing; scripts/ops/shared.ts#validateManifest and codex-exec.ts#resolveExecModelRouting both reject one that is missing it, deleted or not."
   }
 }
