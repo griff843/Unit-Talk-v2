@@ -10,6 +10,16 @@ import {
   preflightTokenPathForBranch,
   validatePreflightSchemaDependencies,
 } from './shared.js';
+import {
+  acquireFullVerifyThrottle,
+  releaseFullVerifyThrottle,
+  configuredFullVerifyConcurrency,
+} from './preflight.js';
+import os from 'node:os';
+
+function makeTmpThrottleDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'full-verify-throttle-test-'));
+}
 
 test('preflight schema dependencies exist', () => {
   assert.doesNotThrow(() => validatePreflightSchemaDependencies());
@@ -104,4 +114,114 @@ test('preflight WAIVABLE_CHECKS no longer references removed PX3/PX4/PX5 checks'
   const waivableBlock = source.match(/const WAIVABLE_CHECKS[\s\S]*?\n};/);
   assert.ok(waivableBlock, 'WAIVABLE_CHECKS block should exist');
   assert.doesNotMatch(waivableBlock[0], /PX3|PX4|PX5/, 'removed checks must not linger in WAIVABLE_CHECKS');
+});
+
+// ── Full-verify concurrency throttle (UTV2-1516) ────────────────────────────
+
+test('configuredFullVerifyConcurrency defaults to 1 when env var is unset or invalid', () => {
+  const original = process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY;
+  try {
+    delete process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY;
+    assert.equal(configuredFullVerifyConcurrency(), 1);
+
+    process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY = 'not-a-number';
+    assert.equal(configuredFullVerifyConcurrency(), 1);
+
+    process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY = '0';
+    assert.equal(configuredFullVerifyConcurrency(), 1);
+
+    process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY = '3';
+    assert.equal(configuredFullVerifyConcurrency(), 3);
+  } finally {
+    if (original === undefined) delete process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY;
+    else process.env.UNIT_TALK_FULL_VERIFY_CONCURRENCY = original;
+  }
+});
+
+test('acquireFullVerifyThrottle reserves a slot directory with an owner record', () => {
+  const dir = makeTmpThrottleDir();
+  try {
+    const throttle = acquireFullVerifyThrottle(dir, 1);
+    assert.equal(throttle.slot, 0);
+    assert.equal(throttle.maxConcurrent, 1);
+    assert.ok(fs.existsSync(throttle.slotPath));
+    const owner = JSON.parse(fs.readFileSync(path.join(throttle.slotPath, 'owner.json'), 'utf8'));
+    assert.equal(owner.pid, process.pid);
+    assert.ok(owner.acquired_at);
+    releaseFullVerifyThrottle(throttle);
+    assert.equal(fs.existsSync(throttle.slotPath), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('acquireFullVerifyThrottle takes the second slot when the first is already held', () => {
+  const dir = makeTmpThrottleDir();
+  try {
+    const first = acquireFullVerifyThrottle(dir, 2);
+    const second = acquireFullVerifyThrottle(dir, 2);
+    assert.equal(first.slot, 0);
+    assert.equal(second.slot, 1);
+    releaseFullVerifyThrottle(first);
+    releaseFullVerifyThrottle(second);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('acquireFullVerifyThrottle reclaims a stale slot whose owner never released it', () => {
+  const dir = makeTmpThrottleDir();
+  try {
+    // Simulate a crashed/killed process that acquired slot-0 well past the
+    // stale threshold and never released it.
+    const staleSlotPath = path.join(dir, 'slot-0');
+    fs.mkdirSync(staleSlotPath, { recursive: true });
+    fs.writeFileSync(
+      path.join(staleSlotPath, 'owner.json'),
+      JSON.stringify({ pid: 999999, acquired_at: new Date(0).toISOString() }),
+      'utf8',
+    );
+
+    // staleMs=0 means "anything already acquired counts as stale" — avoids a
+    // real multi-hour wait in the test while exercising the same reclaim path.
+    const reclaimed = acquireFullVerifyThrottle(dir, 1, 0);
+    assert.equal(reclaimed.slot, 0);
+    const owner = JSON.parse(fs.readFileSync(path.join(reclaimed.slotPath, 'owner.json'), 'utf8'));
+    assert.equal(owner.pid, process.pid, 'the reclaiming process should now own the slot');
+    releaseFullVerifyThrottle(reclaimed);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('acquireFullVerifyThrottle does not reclaim a slot that is not yet stale', () => {
+  const dir = makeTmpThrottleDir();
+  try {
+    const staleSlotPath = path.join(dir, 'slot-0');
+    fs.mkdirSync(staleSlotPath, { recursive: true });
+    fs.writeFileSync(
+      path.join(staleSlotPath, 'owner.json'),
+      JSON.stringify({ pid: 999999, acquired_at: new Date().toISOString() }),
+      'utf8',
+    );
+
+    // With maxConcurrent=1 and a fresh (non-stale) slot-0, the only free slot
+    // is slot-1 once we raise maxConcurrent to 2 -- confirms slot-0 was left alone.
+    const result = acquireFullVerifyThrottle(dir, 2, 6 * 60 * 60 * 1000);
+    assert.equal(result.slot, 1, 'a fresh slot must not be reclaimed regardless of scan order');
+    releaseFullVerifyThrottle(result);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('releaseFullVerifyThrottle is idempotent (safe to call when the slot is already gone)', () => {
+  const dir = makeTmpThrottleDir();
+  try {
+    const throttle = acquireFullVerifyThrottle(dir, 1);
+    releaseFullVerifyThrottle(throttle);
+    assert.doesNotThrow(() => releaseFullVerifyThrottle(throttle));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

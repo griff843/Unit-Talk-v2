@@ -257,6 +257,27 @@ Pre-dispatch gates (all required when running ≥4 total lanes):
 3. All candidate lanes have execution packets (via `scripts/ops/execution-packet.ts`)
 4. Each lane attempt has a passing dispatch preflight artifact per §8
 
+### 10a. Full verification throttle
+
+Executor slot counts answer "how many lanes may be active." They do not answer
+"how many lanes may run the memory-heavy verification suite at the same time."
+On WSL2 hosts with default memory and swap ceilings, concurrent `pnpm verify`,
+`pnpm type-check`, and `pnpm test` runs can exhaust the VM and kill test
+processes without a useful failure line.
+
+Preflight therefore has an independent local semaphore for the heavy baseline
+section (`pnpm type-check` followed by `pnpm test`). The default limit is **1**
+concurrent full-verification slot per worktree checkout, recorded under
+`.out/ops/preflight/full-verify-semaphore/`. Operators may temporarily raise the
+limit with `UNIT_TALK_FULL_VERIFY_CONCURRENCY=<n>` only when the host memory and
+swap ceiling have been sized for that load. This does **not** change
+`CONCURRENCY_CONFIG.json` and does not raise Claude or Codex executor caps.
+
+`scripts/ops/lane-maximizer.ts` reports the current full-verification throttle
+state in `lane_saturation_forecast.full_verify_throttle`. If that throttle is
+saturated, do not start another manual full `pnpm verify`/`pnpm test` run until a
+slot clears, even if executor lane slots are still available.
+
 Example 5-lane topology (safe class mix):
 ```
 1 × Runtime          (Claude or Codex — singleton by type, not counted in executor safe-class limit)

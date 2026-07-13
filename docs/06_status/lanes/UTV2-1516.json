@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1516",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1516-throttle-verify-concurrency",
+  "branch": "codex/utv2-1516-throttle-verify-concurrency",
+  "base_branch": "main",
+  "commit_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/preflight.ts",
+    "scripts/ops/proof-generate.ts",
+    "scripts/ops/proof-generate.test.ts",
+    "docs/06_status/KNOWN_DEBT.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1516/diff-summary.md",
+    "docs/06_status/proof/UTV2-1516/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-10T15:27:44.659Z",
+  "heartbeat_at": "2026-07-11T15:12:28.052Z",
+  "closed_at": "2026-07-11T15:12:28.052Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1516-throttle-verify-concurrency.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-11T15:11:39.205Z",
+      "verdict": "pass",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193"
+    },
+    {
+      "checked_at": "2026-07-11T15:12:09.450Z",
+      "verdict": "pass",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-11T15:12:09.462Z",
+      "verdict": "fail",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-11T15:12:25.659Z",
+      "verdict": "pass",
+      "merge_sha": "3e80b6de24d87e8b94a2a5b4347e98dcf280d265",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1193",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1516-throttle-verify-concurrency",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

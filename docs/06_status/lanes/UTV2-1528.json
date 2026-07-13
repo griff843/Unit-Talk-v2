@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1528",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1528-ratify-os-v1-lock",
+  "branch": "claude/utv2-1528-ratify-os-v1-lock",
+  "base_branch": "main",
+  "commit_sha": "fa207483e6bf51fc555195a45b17d36b3d33bf9d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1199",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/OS_V1_LOCK.md",
+    ".lane/lanes/governance.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1528/diff-summary.md",
+    "docs/06_status/proof/UTV2-1528/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-13T13:55:13.447Z",
+  "heartbeat_at": "2026-07-13T14:12:44.635Z",
+  "closed_at": "2026-07-13T14:12:44.635Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-13T14:12:41.144Z",
+      "verdict": "pass",
+      "merge_sha": "fa207483e6bf51fc555195a45b17d36b3d33bf9d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1199",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1528-ratify-os-v1-lock",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1498",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1498-memory-skill-promotion",
+  "branch": "claude/utv2-1498-memory-skill-promotion",
+  "base_branch": "main",
+  "commit_sha": "d2839f5ba95a9be589b46ce779bb19e45c5cdcd4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1198",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/MEMORY_TO_SKILL_PROMOTION.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-07-13T13:00:15.754Z",
+  "heartbeat_at": "2026-07-13T13:17:01.371Z",
+  "closed_at": "2026-07-13T13:17:01.371Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-13T13:16:58.766Z",
+      "verdict": "pass",
+      "merge_sha": "d2839f5ba95a9be589b46ce779bb19e45c5cdcd4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1198",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1498-memory-skill-promotion",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

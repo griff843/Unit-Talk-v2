@@ -19,6 +19,13 @@ allowed_path_globs:
   - docs/05_operations/**
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
+  # Evidence bundles + the debt ledger they close against — added UTV2-1524.
+  # DEBT-025: this allowlist never included KNOWN_DEBT.md, so every
+  # governance-lane PR editing it failed "Lane authority" (reproduces on PR
+  # #1187 and #1191). Closed here.
+  - docs/06_status/evidence/**
+  - docs/06_status/UTV2-*-EVIDENCE-BUNDLE.md
+  - docs/06_status/KNOWN_DEBT.md
   - docs/06_status/incidents/**
   - docs/06_status/readiness/**
   - docs/06_status/gap-map/**
@@ -26,6 +33,10 @@ allowed_path_globs:
   - docs/06_status/CURRENT_STATE.md
   - docs/06_status/qa-roadmap-expansion.md
   - docs/06_status/model-performance-log.md
+  # OS v1 governance-lock document — added UTV2-1528 (PR #1199 hit the
+  # same DEBT-025-class gap: no lane allowed a top-level docs/06_status/*.md
+  # ratification doc).
+  - docs/06_status/OS_V1_LOCK.md
   # Certification authority documents — governance lanes author/reconcile these
   # (P1–P5 certification records and the certification board). Added UTV2-1195.
   - docs/06_status/programs/**
