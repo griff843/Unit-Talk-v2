@@ -222,21 +222,24 @@ function eventFieldsFromRow(row: JsonObject): { eventName: string | null; eventS
 }
 
 /**
- * Await a PostgREST query, retrying once on a transient statement timeout
- * (57014). Still fail-closed: a second timeout surfaces as the error.
+ * Await a PostgREST query, retrying up to twice with backoff on a transient
+ * statement timeout (57014). Still fail-closed: a final timeout surfaces as
+ * the error and the page renders its degraded state.
  */
 async function awaitWithTimeoutRetry(build: () => any): Promise<{ data: unknown; count: number | null; error: { code?: string } | null }> {
-  const first = await build();
-  if (first.error && String(first.error.code) === '57014') {
-    await new Promise((resolve) => setTimeout(resolve, 400));
-    return build();
+  const backoffsMs = [400, 1200];
+  let result = await build();
+  for (const backoffMs of backoffsMs) {
+    if (!result.error || String(result.error.code) !== '57014') break;
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    result = await build();
   }
-  return first;
+  return result;
 }
 
 function describeQueueError(error: { code?: string; message?: string } | null): string {
   if (!error) return 'unknown query error';
-  if (String(error.code) === '57014') return 'statement timeout (57014) — retried once, still timing out';
+  if (String(error.code) === '57014') return 'statement timeout (57014) — retried with backoff, still timing out';
   return error.message ? String(error.message) : `query error ${String(error.code ?? '')}`.trim();
 }
 
