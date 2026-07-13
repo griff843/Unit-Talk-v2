@@ -73,6 +73,14 @@ function isWellFormedExternalOverride(candidate: unknown): candidate is External
  * exactly -- issue_id, PR number, and head SHA -- so an override never
  * silently carries forward to a different lane, a different PR, or a later
  * push (a force-push or new commit needs a fresh override comment).
+ *
+ * When more than one comment matches the same (issue, PR, head SHA) triple,
+ * the LAST one (chronologically, as returned by the paginated comment list)
+ * wins. Comments are only ever written here after passing the authorized-
+ * reviewer check, so a later comment for the same SHA represents that same
+ * reviewer correcting or superseding an earlier one -- honoring the first
+ * match instead would silently pin an outdated/incomplete path list even
+ * after the reviewer posted a corrected comment (observed live on UTV2-1524).
  */
 export function resolveApplicableOverride(
   overrides: ExternalScopeOverride[],
@@ -80,15 +88,18 @@ export function resolveApplicableOverride(
 ): ExternalScopeOverride | null {
   if (!context.issueId || context.prNumber === null || !context.headSha) return null;
 
-  return (
-    overrides.find(
-      (override) =>
-        isWellFormedExternalOverride(override) &&
-        override.issue_id === context.issueId &&
-        override.pr_number === context.prNumber &&
-        override.head_sha === context.headSha,
-    ) ?? null
-  );
+  let match: ExternalScopeOverride | null = null;
+  for (const override of overrides) {
+    if (
+      isWellFormedExternalOverride(override) &&
+      override.issue_id === context.issueId &&
+      override.pr_number === context.prNumber &&
+      override.head_sha === context.headSha
+    ) {
+      match = override;
+    }
+  }
+  return match;
 }
 
 function loadExternalOverrides(overrideFile: string | null): ExternalScopeOverride[] {
@@ -405,7 +416,11 @@ function activeManifests(manifests: LaneManifest[]): LaneManifest[] {
   return manifests.filter((manifest) => ACTIVE_STATUSES.has(String(manifest.status ?? '')));
 }
 
-function findOwnManifest(manifests: LaneManifest[], branch: string): LaneManifest | null {
+function findOwnManifest(
+  manifests: LaneManifest[],
+  branch: string,
+  continuation: { overrides: ExternalScopeOverride[]; prNumber: number | null; headSha: string | null },
+): LaneManifest | null {
   const exact = manifests.find((manifest) => manifest.branch === branch) ?? null;
   if (exact) return exact;
 
@@ -413,11 +428,27 @@ function findOwnManifest(manifests: LaneManifest[], branch: string): LaneManifes
   // from a new branch name; the trusted manifest on origin/main still names
   // the original branch. Exact branch equality alone makes that manifest
   // invisible as "this PR's own lane" and silently disables any otherwise-
-  // valid scope-override for it (UTV2-1524). Fall back to matching on the
-  // issue ID encoded in the branch name when no exact branch match exists.
+  // valid scope-override for it (UTV2-1524).
+  //
+  // An issue ID merely embedded in the branch name is NOT proof of
+  // continuation authority by itself -- any branch could contain that token
+  // (e.g. `codex/utv2-1524-unrelated`) and would otherwise inherit an
+  // unrelated lane's file_scope_lock *and* be silently excluded from
+  // conflict detection (Codex P1 finding on UTV2-1524). Only accept the
+  // fallback when an externally authorized scope-override/v1 comment
+  // explicitly vouches for this exact issue, PR number, and head SHA -- the
+  // same GitHub-attested trust anchor already used to widen path scope.
   const issueMatch = branch.match(ISSUE_BRANCH_PATTERN);
   if (!issueMatch) return null;
   const issueId = issueMatch[1].toUpperCase();
+
+  const authorizedContinuation = resolveApplicableOverride(continuation.overrides, {
+    issueId,
+    prNumber: continuation.prNumber,
+    headSha: continuation.headSha,
+  });
+  if (!authorizedContinuation) return null;
+
   return manifests.find((manifest) => (manifest.issue_id ?? '').toUpperCase() === issueId) ?? null;
 }
 
@@ -459,7 +490,11 @@ export function evaluateFileScopeGuard(input: {
 }): GuardResult {
   const errors: string[] = [];
   const active = activeManifests(input.manifests);
-  const ownManifest = findOwnManifest(active, input.prBranch);
+  const ownManifest = findOwnManifest(active, input.prBranch, {
+    overrides: input.externalOverrides ?? [],
+    prNumber: input.prNumber ?? null,
+    headSha: input.headSha ?? null,
+  });
   const ownManifestIssue = ownManifest?.issue_id ?? null;
 
   if (!ownManifest && branchLooksLikeLane(input.prBranch)) {

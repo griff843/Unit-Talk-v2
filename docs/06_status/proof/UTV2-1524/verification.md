@@ -1,12 +1,12 @@
 # UTV2-1524 Runtime Verification
 
-Generated at: 2026-07-12T02:08:12.052Z
+Generated at: 2026-07-13T06:40:06.544Z
 Issue: UTV2-1524
 Tier: T1
 Lane type: governance
 Branch: claude/utv2-1524-scope-override-parser-fix
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1194
-Head SHA: 3db0d64361ce712e64a945b06752895a53060984
+Head SHA: 79677ab6b491a0e6bc10594df692d6ccf0e92ce0
 Merge SHA: N/A
 result: not_run
 
@@ -29,13 +29,17 @@ TAP version 13
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 112481.591475
+# duration_ms 225669.873911
 ```
 
-Supabase project: `zfzdnfwdarxucxtaojxm`. This is a CI-tooling-only change (comment parser + manifest-resolution logic); `pnpm test:db` is run as the standard T1 runtime-proof gate, not because this fix performs any DB write itself.
+Supabase project: `zfzdnfwdarxucxtaojxm`. This is a CI-tooling-only change (comment parser + manifest-resolution logic); `pnpm test:db` is run as the standard T1 runtime-proof gate, not because this fix performs any DB write itself. (An earlier re-run in this same session hit 1 transient failure / 6 pass, consistent with known live-Supabase flakiness; this clean 7/7 run supersedes it.)
 
-Full command outputs also run and green: `pnpm type-check`, `pnpm lint`, `pnpm test` (full repo suite, 0 failures).
+Full command outputs also run and green: `pnpm type-check`, `pnpm lint`, `pnpm test` (full repo suite, 0 failures), and the targeted suites `scripts/ci/file-scope-guard.test.ts` (28/28) and `scripts/ci/scope-override-comment-parser.test.ts` (5/5).
+
+### P1 correction (2026-07-13, independent PM review)
+
+Codex's P1 review found the original `findOwnManifest()` issue-ID fallback unsafe: it accepted any branch containing another lane's issue ID as that lane's own manifest, unconditionally. Corrected to require a trusted continuation binding — an externally authorized `scope-override/v1` comment bound to the exact issue, PR number, and head SHA — before accepting the fallback. Also fixed `resolveApplicableOverride` to honor the last matching comment for a head SHA rather than the first. All fixes covered by the targeted-suite results above; full T1 verification re-run and green.
 
 ## SHA Binding
-Head SHA: 3db0d64361ce712e64a945b06752895a53060984
+Head SHA: 79677ab6b491a0e6bc10594df692d6ccf0e92ce0
 Merge SHA: N/A

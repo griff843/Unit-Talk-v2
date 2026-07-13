@@ -508,51 +508,190 @@ test('external override: a valid override for a DIFFERENT lane does not leak int
   ]);
 });
 
-test('own manifest resolution (UTV2-1524 regression): a continuation PR from a renamed branch still finds its own lane by issue ID', () => {
-  // Reproduces the exact findOwnManifest trap: a lane merges, its manifest on
-  // origin/main still names the ORIGINAL branch, but a follow-up PR opens
-  // from a differently-named branch for the same issue. Exact branch-string
-  // equality alone makes the manifest invisible as "this PR's own lane" and
-  // silently disables any otherwise-valid scope-override for it.
-  const mergedLaneManifest = {
-    issue_id: 'UTV2-1516',
-    branch: 'codex/utv2-1516-throttle-verify-concurrency',
-    status: 'in_review',
-    file_scope_lock: ['scripts/ops/proof-generate.ts'],
-  };
+// ── Own-manifest continuation binding (UTV2-1524 P1 correction) ────────────
+//
+// findOwnManifest's issue-ID fallback exists for a real case (a continuation
+// PR for an already-merged-but-unclosed lane, opened from a renamed branch)
+// but an issue ID merely embedded in a branch name is not, by itself, proof
+// that this PR continues that lane -- any branch could contain that token.
+// Codex's P1 review of the first cut of this fix found exactly that: the
+// fallback matched on issue ID alone, letting an unrelated branch inherit
+// another lane's file_scope_lock and be silently excluded from conflict
+// detection. The fallback must require a trusted continuation binding: an
+// externally authorized scope-override/v1 comment bound to the exact issue,
+// PR number, and head SHA -- the same GitHub-attested trust anchor already
+// used to widen path scope.
 
+const MERGED_LANE_MANIFEST = {
+  issue_id: 'UTV2-1516',
+  branch: 'codex/utv2-1516-throttle-verify-concurrency',
+  status: 'in_review',
+  file_scope_lock: ['scripts/ops/proof-generate.ts'],
+};
+const CONTINUATION_BRANCH = 'claude/utv2-1516-follow-up-different-branch-name';
+const VALID_CONTINUATION_OVERRIDE = {
+  issue_id: 'UTV2-1516',
+  pr_number: 99,
+  head_sha: 'deadbeef',
+  paths: ['docs/06_status/KNOWN_DEBT.md'],
+  authorized_by: 'griff843',
+  reason: 'follow-up fix needs an extra file',
+};
+
+test('own manifest resolution: exact branch match still passes with no override needed', () => {
   const result = evaluateFileScopeGuard({
-    prBranch: 'claude/utv2-1516-follow-up-different-branch-name',
+    prBranch: MERGED_LANE_MANIFEST.branch,
     changedFiles: ['scripts/ops/proof-generate.ts'],
-    manifests: [mergedLaneManifest],
+    manifests: [MERGED_LANE_MANIFEST],
   });
 
   assert.equal(result.verdict, 'PASS');
   assert.deepEqual(result.outside_scope, []);
 });
 
-test('own manifest resolution (UTV2-1524 regression): a valid scope-override still applies through the issue-ID fallback', () => {
-  const mergedLaneManifest = {
-    issue_id: 'UTV2-1516',
-    branch: 'codex/utv2-1516-throttle-verify-concurrency',
-    status: 'in_review',
-    file_scope_lock: ['scripts/ops/proof-generate.ts'],
-  };
-  const followUpBranch = 'claude/utv2-1516-follow-up-different-branch-name';
-  const override = {
+test('own manifest resolution (UTV2-1524 P1 correction): a same-issue continuation with NO authorization fails closed', () => {
+  // This is the exact premise Codex flagged as unsafe: no override at all is
+  // provided, yet the branch embeds the same issue ID as an existing active
+  // manifest. The fallback must NOT resolve ownManifest from the issue-ID
+  // token alone.
+  const result = evaluateFileScopeGuard({
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
+    manifests: [MERGED_LANE_MANIFEST],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.own_manifest_issue, null);
+  assert.match(result.errors.join('\n'), /No active lane manifest found/);
+});
+
+test('own manifest resolution (UTV2-1524 P1 correction): an unrelated branch containing the same issue ID cannot inherit the manifest scope, and cannot bypass conflict detection', () => {
+  // `codex/utv2-1516-unrelated` embeds the same issue ID as MERGED_LANE_MANIFEST
+  // purely by coincidence/copy-paste, but is not actually that lane's
+  // continuation and carries no authorization. It must not inherit
+  // MERGED_LANE_MANIFEST's file_scope_lock, and MERGED_LANE_MANIFEST must
+  // still be evaluated as a foreign lane for conflict purposes -- i.e. the
+  // exact `manifest === ownManifest` skip must not fire for it.
+  const unrelatedBranch = 'codex/utv2-1516-unrelated';
+  const result = evaluateFileScopeGuard({
+    prBranch: unrelatedBranch,
+    changedFiles: ['scripts/ops/proof-generate.ts'],
+    manifests: [MERGED_LANE_MANIFEST],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.own_manifest_issue, null);
+  assert.deepEqual(result.conflicts, [
+    {
+      file: 'scripts/ops/proof-generate.ts',
+      locked_by: 'UTV2-1516',
+      lane_branch: 'codex/utv2-1516-throttle-verify-concurrency',
+      lock_pattern: 'scripts/ops/proof-generate.ts',
+    },
+  ]);
+});
+
+test('own manifest resolution (UTV2-1524 P1 correction): a properly authorized, PR-number-bound and head-SHA-bound continuation succeeds', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
+    manifests: [MERGED_LANE_MANIFEST],
+    externalOverrides: [VALID_CONTINUATION_OVERRIDE],
+    prNumber: 99,
+    headSha: 'deadbeef',
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.equal(result.own_manifest_issue, 'UTV2-1516');
+  assert.deepEqual(result.outside_scope, []);
+});
+
+test('own manifest resolution (UTV2-1524 P1 correction): a stale continuation override (head SHA no longer matches) fails closed', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
+    manifests: [MERGED_LANE_MANIFEST],
+    externalOverrides: [VALID_CONTINUATION_OVERRIDE],
+    prNumber: 99,
+    headSha: 'a-new-commit-landed-after-the-override-was-posted',
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.own_manifest_issue, null);
+});
+
+test('own manifest resolution (UTV2-1524 P1 correction): a wrong-PR continuation override fails closed', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
+    manifests: [MERGED_LANE_MANIFEST],
+    externalOverrides: [VALID_CONTINUATION_OVERRIDE],
+    prNumber: 7, // does not match VALID_CONTINUATION_OVERRIDE.pr_number
+    headSha: 'deadbeef',
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.own_manifest_issue, null);
+});
+
+test('own manifest resolution (UTV2-1524 P1 correction): a wrong-issue continuation override does not authorize a different lane\'s branch', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
+    manifests: [MERGED_LANE_MANIFEST],
+    externalOverrides: [{ ...VALID_CONTINUATION_OVERRIDE, issue_id: 'UTV2-9999' }],
+    prNumber: 99,
+    headSha: 'deadbeef',
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.own_manifest_issue, null);
+});
+
+test('own manifest resolution (UTV2-1524 P1 correction): a valid continuation override does not authorize paths beyond its declared scope', () => {
+  // The override only lists docs/06_status/KNOWN_DEBT.md. Even though it
+  // successfully authorizes the continuation binding (ownManifest resolves),
+  // a second changed file that is in neither the override's paths nor the
+  // manifest's own file_scope_lock/expected_proof_paths must still be flagged.
+  const result = evaluateFileScopeGuard({
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md', 'apps/api/src/unrelated.ts'],
+    manifests: [MERGED_LANE_MANIFEST],
+    externalOverrides: [VALID_CONTINUATION_OVERRIDE],
+    prNumber: 99,
+    headSha: 'deadbeef',
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.own_manifest_issue, 'UTV2-1516');
+  assert.deepEqual(result.outside_scope, [
+    { file: 'apps/api/src/unrelated.ts', branch: CONTINUATION_BRANCH, issue_id: 'UTV2-1516' },
+  ]);
+});
+
+test('resolveApplicableOverride: when two comments match the same head SHA, the later one wins', () => {
+  const earlier = {
     issue_id: 'UTV2-1516',
     pr_number: 99,
     head_sha: 'deadbeef',
     paths: ['docs/06_status/KNOWN_DEBT.md'],
     authorized_by: 'griff843',
-    reason: 'follow-up fix needs an extra file',
+    reason: 'first pass, incomplete path list',
+  };
+  const later = {
+    issue_id: 'UTV2-1516',
+    pr_number: 99,
+    head_sha: 'deadbeef',
+    paths: ['docs/06_status/KNOWN_DEBT.md', 'apps/api/src/unrelated.ts'],
+    authorized_by: 'griff843',
+    reason: 'corrected: this is the complete path set for this head SHA',
   };
 
   const result = evaluateFileScopeGuard({
-    prBranch: followUpBranch,
-    changedFiles: ['docs/06_status/KNOWN_DEBT.md'],
-    manifests: [mergedLaneManifest],
-    externalOverrides: [override],
+    prBranch: CONTINUATION_BRANCH,
+    changedFiles: ['docs/06_status/KNOWN_DEBT.md', 'apps/api/src/unrelated.ts'],
+    manifests: [MERGED_LANE_MANIFEST],
+    externalOverrides: [earlier, later],
     prNumber: 99,
     headSha: 'deadbeef',
   });
