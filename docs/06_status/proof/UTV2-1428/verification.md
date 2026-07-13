@@ -1,24 +1,24 @@
 # UTV2-1428 Runtime Verification
 
-Generated at: 2026-07-13T11:09:27.833Z
+Generated at: 2026-07-13T11:22:47.203Z
 Issue: UTV2-1428
 Tier: T3
 Lane type: governance
 Branch: claude/utv2-1428-launch-safety-runbook
-PR URL: N/A
-Head SHA: 5a751ec238a071a42571a0408c923b31bdaff41b
-Merge SHA: N/A
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1196
+Head SHA: 3439aff79cc3ead7f0cacfc8b92ad00278c425e8
+Merge SHA: 2b1c23169c8ca9329d1623970114015eeed72135
 result: not_run
 
 ## Verification
-- [x] `pnpm type-check`: PASS (0 errors)
-- [x] `pnpm test`: PASS (19/19, 0 failures, full repo suite)
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — no R-level artifacts required for this diff (docs-only)
+- [ ] `pnpm type-check`: not run by proof-generate
+- [ ] `pnpm test`: not run by proof-generate
+- [ ] `pnpm verify`: not run by proof-generate
+- [ ] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: not run by proof-generate
 
 ## Runtime Verification
-
-Not applicable — this is a T3 docs/process-only change (no runtime surface, no DB write path touched). No `pnpm test:db` run is required or claimed for this tier.
+- Generated foundation artifact. Replace or append command output when runtime proof is executed.
 
 ## SHA Binding
-Head SHA: 5a751ec238a071a42571a0408c923b31bdaff41b
-Merge SHA: N/A
+Head SHA: 3439aff79cc3ead7f0cacfc8b92ad00278c425e8
+Merge SHA: 2b1c23169c8ca9329d1623970114015eeed72135
