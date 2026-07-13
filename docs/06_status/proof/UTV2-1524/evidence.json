@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1524",
+  "title": "Fix scope-override parser Reason/Paths order + findOwnManifest trap (with P1 continuation-binding correction)",
+  "sha_binding": {
+    "verified_source_sha": "79677ab6b491a0e6bc10594df692d6ccf0e92ce0",
+    "verified_source_note": "Head SHA before the P1-correction commit; updated again after that commit is pushed, and again at merge close via ops:proof-generate --merge-sha",
+    "merge_sha": null,
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": "79677ab6b491a0e6bc10594df692d6ccf0e92ce0"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1524-scope-override-parser-fix",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify_components": {
+      "type_check": { "command": "pnpm type-check", "status": "PASS" },
+      "lint": { "command": "pnpm lint", "status": "PASS" },
+      "test": { "command": "pnpm test", "status": "PASS", "note": "full repo suite green, 0 failures" }
+    },
+    "new_tests": [
+      "scope-override-comment-parser.test.ts: parses a well-formed override with Reason before Paths",
+      "scope-override-comment-parser.test.ts: parses a well-formed override with Reason after Paths (schema doc documented order)",
+      "scope-override-comment-parser.test.ts: rejects a comment missing the two-line header",
+      "scope-override-comment-parser.test.ts: rejects a comment with no Paths",
+      "scope-override-comment-parser.test.ts: rejects a comment with a malformed Issue field",
+      "file-scope-guard.test.ts: own manifest resolution: exact branch match still passes with no override needed",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): a same-issue continuation with NO authorization fails closed",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): an unrelated branch containing the same issue ID cannot inherit the manifest scope, and cannot bypass conflict detection",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): a properly authorized, PR-number-bound and head-SHA-bound continuation succeeds",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): a stale continuation override (head SHA no longer matches) fails closed",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): a wrong-PR continuation override fails closed",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): a wrong-issue continuation override does not authorize a different lane's branch",
+      "file-scope-guard.test.ts: own manifest resolution (UTV2-1524 P1 correction): a valid continuation override does not authorize paths beyond its declared scope",
+      "file-scope-guard.test.ts: resolveApplicableOverride: when two comments match the same head SHA, the later one wins"
+    ]
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 225670,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "CI-tooling-only change (comment parser + manifest-resolution logic); test:db run as the standard T1 runtime-proof gate, not because this fix performs any DB write itself. Re-run clean (7/7) after the P1 correction; an earlier same-session run showed 1 transient failure consistent with known live-Supabase flakiness."
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "reason_after_paths_now_parses": "PASS",
+    "regression_test_for_documented_field_order": "PASS",
+    "findownmanifest_false_fail_fixed": "PASS",
+    "no_regression_to_existing_override_tests": "PASS",
+    "p1_correction_continuation_requires_trusted_binding": "PASS",
+    "p1_correction_unrelated_branch_cannot_inherit_or_bypass_conflict_detection": "PASS"
+  },
+  "verdict": "PASS"
+}
