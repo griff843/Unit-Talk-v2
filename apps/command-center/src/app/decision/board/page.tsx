@@ -4,6 +4,8 @@ import { BoardCapacityGauge } from '@/components/BoardCapacityGauge';
 import { ConflictCard } from '@/components/ConflictCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+export const metadata = { title: 'Board — Unit Talk Command Center' };
+
 export default async function BoardSaturationPage() {
   const boardResult = await getBoardState();
   const board = (boardResult.ok ? boardResult.data : null) as BoardStateData;
@@ -11,8 +13,6 @@ export default async function BoardSaturationPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Board Saturation</h1>
         <p className="mt-1 text-xs text-gray-500">
           24h window — target: <span className="text-gray-300">{board.target}</span> —
           computed <span className="text-gray-300">{new Date(board.computedAt).toLocaleTimeString()}</span>

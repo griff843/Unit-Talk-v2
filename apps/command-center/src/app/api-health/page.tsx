@@ -4,18 +4,30 @@ import { getProviderHealth, getSnapshotData } from '@/lib/data';
 import { getProviderCycleLatencySamples } from '@/lib/data/provider-cycle-health';
 import { buildApiHealthPageData } from '@/lib/command-center-page-data';
 import { fetchRuntimeTruth } from '@/lib/server-api';
+import { describeThrown } from '@/lib/describe-error';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
 
+export const metadata = { title: 'System Health — Unit Talk Command Center' };
+
 export default async function ApiHealthPage() {
+  // Fail closed but never 500: a transient telemetry-store timeout degrades
+  // to an explicit banner rather than crashing the whole surface.
+  const failures: string[] = [];
+  const degrade = <T,>(promise: Promise<T>, label: string, fallback: T): Promise<T> =>
+    promise.catch((error: unknown) => {
+      failures.push(`${label}: ${describeThrown(error)}`);
+      return fallback;
+    });
+
   const [providerHealth, snapshot, latencySamples, runtimeTruthState] = await Promise.all([
-    getProviderHealth(),
-    getSnapshotData(),
-    getProviderCycleLatencySamples(),
+    degrade(getProviderHealth(), 'provider health', null),
+    degrade(getSnapshotData(), 'snapshot', null),
+    degrade(getProviderCycleLatencySamples(), 'cycle latency', []),
     fetchRuntimeTruth()
       .then((runtimeTruth) => ({ runtimeTruth, error: null as string | null }))
       .catch((error: unknown) => ({
         runtimeTruth: null,
-        error: error instanceof Error ? error.message : String(error),
+        error: describeThrown(error),
       })),
   ]);
 
@@ -26,13 +38,23 @@ export default async function ApiHealthPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <h1 className="text-lg font-bold text-gray-100">API Health</h1>
           <p className="text-sm text-gray-500">
             External provider freshness, quota pressure, and ingestion latency from current runtime telemetry.
           </p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={30_000} className="lg:min-w-[360px]" />
       </div>
+
+      {failures.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <div className="font-semibold">Telemetry partially unavailable</div>
+          <ul className="mt-1 list-disc pl-5 text-xs opacity-85">
+            {failures.map((failure) => (
+              <li key={failure}>{failure}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         {cards.map((card) => (

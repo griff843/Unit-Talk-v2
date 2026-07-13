@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback } from 'react';
 import { Button } from '@/components/ui/Button';
 
-const inputClass = 'rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500';
+const inputClass = 'cc-input text-xs';
 const labelClass = 'text-[10px] font-medium uppercase tracking-wide text-gray-500';
 
 const LIFECYCLE_OPTIONS = ['', 'validated', 'queued', 'posted', 'settled', 'voided'];
@@ -23,7 +23,7 @@ export function PickFilters() {
       const v = String(val).trim();
       if (v) params.set(key, v);
     }
-    router.push(`/picks-list?${params.toString()}`);
+    router.push(`/picks?${params.toString()}`);
   }, [router]);
 
   return (
@@ -121,7 +121,7 @@ export function PickFilters() {
 
       <div className="flex gap-2">
         <Button type="submit" variant="primary" size="sm">Search</Button>
-        <Button type="button" variant="secondary" size="sm" onClick={() => router.push('/picks-list')}>Clear</Button>
+        <Button type="button" variant="secondary" size="sm" onClick={() => router.push('/picks')}>Clear</Button>
       </div>
     </form>
   );

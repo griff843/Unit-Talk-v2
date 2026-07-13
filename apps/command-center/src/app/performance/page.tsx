@@ -2,6 +2,8 @@ import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
 import { getPerformanceData, getLeaderboard } from '@/lib/data';
 
+export const metadata = { title: 'Performance — Unit Talk Command Center' };
+
 interface Stats {
   total: number;
   settled: number;
@@ -99,24 +101,26 @@ function SampleWarning({
 }
 
 export default async function PerformancePage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const windowParam = searchParams['window'];
   const window = windowParam === '7' ? 7 : windowParam === '90' ? 90 : 30;
 
-  const [perf, leaderboard] = await Promise.all([
+  const [perf, leaderboardResult] = await Promise.all([
     getPerformanceData(),
     getLeaderboard(window),
   ]);
-  const leaderboardHasThinSignal = leaderboard.length === 0;
+  const leaderboard = leaderboardResult.rows;
+  const leaderboardError = leaderboardResult.error;
+  const leaderboardHasThinSignal = leaderboardError === null && leaderboard.length === 0;
   const heldReviewSignalIsThin =
     (perf?.decisions.approved.total ?? 0) + (perf?.decisions.denied.total ?? 0) + (perf?.decisions.held.total ?? 0) < 10;
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-lg font-bold text-gray-100">Performance</h1>
 
       <div className="grid gap-3 lg:grid-cols-2">
         <SampleWarning title="Operator note">
@@ -220,7 +224,12 @@ export default async function PerformancePage({
           ))}
         </div>
 
-        {leaderboard.length === 0 ? (
+        {leaderboardError !== null ? (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+            <div className="font-semibold">Leaderboard query failed</div>
+            <p className="mt-1 font-mono text-xs opacity-85">{leaderboardError}</p>
+          </div>
+        ) : leaderboard.length === 0 ? (
           <p className="text-sm text-gray-500">No capper data available.</p>
         ) : (
           <div className="overflow-x-auto">

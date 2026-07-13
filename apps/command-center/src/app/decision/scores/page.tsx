@@ -3,6 +3,8 @@ import type { BoardStateData } from '@/lib/types';
 import { ScoreBreakdownBar } from '@/components/ScoreBreakdownBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 
+export const metadata = { title: 'Scores — Unit Talk Command Center' };
+
 export default async function ScoreBreakdownPage() {
   const boardResult = await getBoardState();
   const board = (boardResult.ok ? boardResult.data : null) as BoardStateData;
@@ -15,8 +17,6 @@ export default async function ScoreBreakdownPage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Score Breakdown</h1>
         <p className="mt-1 text-xs text-gray-500">
           24h window — target: <span className="text-gray-300">{board.target}</span> —
           {sorted.length} record{sorted.length !== 1 ? 's' : ''}
@@ -30,8 +30,8 @@ export default async function ScoreBreakdownPage() {
         />
       ) : (
         <div className="space-y-3">
-          {sorted.map((breakdown) => (
-            <ScoreBreakdownBar key={breakdown.pickId} breakdown={breakdown} />
+          {sorted.map((breakdown, index) => (
+            <ScoreBreakdownBar key={`${breakdown.pickId}-${index}`} breakdown={breakdown} />
           ))}
         </div>
       )}

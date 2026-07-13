@@ -36,7 +36,7 @@ export function PickIdentityPanel({
             {identity.wagerLabel}
           </Link>
         ) : (
-          <h1 className={titleClass}>{identity.wagerLabel}</h1>
+          <h2 className={titleClass}>{identity.wagerLabel}</h2>
         )}
         {pickId ? (
           <span className="font-mono text-[11px] text-gray-500">{pickId}</span>

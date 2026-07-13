@@ -2,6 +2,8 @@ import { getBoardQueue } from '@/lib/data';
 import type { BoardQueueData } from '@/lib/data';
 import { BoardQueueTable } from '@/components/BoardQueueTable';
 
+export const metadata = { title: 'Board Queue — Unit Talk Command Center' };
+
 export default async function BoardQueuePage() {
   let queue: BoardQueueData;
   try {
@@ -14,8 +16,6 @@ export default async function BoardQueuePage() {
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Board Queue</h1>
         <p className="mt-1 text-xs text-gray-500">
           Governed write surface — system-board candidates awaiting pick creation.
           {queue.boardRunId && (

@@ -368,7 +368,7 @@ export async function getPicksContent(): Promise<PicksContent> {
   }
 }
 
-export async function getPipelineContent(): Promise<PipelineContent> {
+export async function getPipelineContent(): Promise<PipelineContent | null> {
   try {
     const snapshot = await getPipelineHealthSnapshot();
     return {
@@ -389,28 +389,8 @@ export async function getPipelineContent(): Promise<PipelineContent> {
       promotion: snapshot.promotionQueueRows.map((row) => ({ label: row.label, count: row.count, detail: row.detail })),
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Items in flight', value: 118, delta: '22/hr' },
-        { label: 'Stage errors', value: 1, delta: 'warning' },
-        { label: 'Backlog buckets', value: 4, delta: 'tracked' },
-        { label: 'Promotion lanes', value: 3, delta: 'active' },
-      ],
-      pipeline: [
-        { key: 'ingest', label: 'Ingest', status: 'healthy', metric: '44', detail: 'Providers are staying inside freshness guardrails.' },
-        { key: 'normalize', label: 'Normalize', status: 'healthy', metric: '39', detail: 'Market cleanup is keeping pace with feed volume.' },
-        { key: 'grade', label: 'Grade', status: 'warning', metric: '21', detail: 'Two picks are waiting on score write confirmation.' },
-        { key: 'publish', label: 'Publish', status: 'healthy', metric: '14', detail: 'Delivery is draining cleanly.' },
-      ],
-      backlog: [
-        { label: 'Validated backlog', count: 4, detail: 'Picks waiting for grade writeback.' },
-        { label: 'Queued backlog', count: 2, detail: 'Promotion target chosen, not yet posted.' },
-      ],
-      promotion: [
-        { label: 'Best bets target', count: 5, detail: 'Qualified with human review pending.' },
-        { label: 'Canary target', count: 2, detail: 'Low-risk release path is open.' },
-      ],
-    };
+    // Fail closed: no fabricated pipeline numbers — the page renders an explicit unavailable state.
+    return null;
   }
 }
 

@@ -1,7 +1,9 @@
 import { OverviewDashboardClient } from '@/components/OverviewDashboardClient';
-import { getDashboardData, getDashboardRuntimeData } from '@/lib/data';
+import { getDashboardData, getDashboardRuntimeData, getDailyPickCounts } from '@/lib/data';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
+
+export const metadata = { title: 'Executive Overview — Unit Talk Command Center' };
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
@@ -24,19 +26,23 @@ function readRefreshIntervalMs(searchParams?: Record<string, string | string[] |
 }
 
 export default async function DashboardPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   let data: DashboardData;
   let runtime: DashboardRuntimeData;
+  let dailyPickCounts: number[] | null = null;
   try {
-    const [dashboardData, dashboardRuntimeData] = await Promise.all([
+    const [dashboardData, dashboardRuntimeData, dailyCounts] = await Promise.all([
       getDashboardData(),
       getDashboardRuntimeData(),
+      getDailyPickCounts(7),
     ]);
     data = dashboardData;
     runtime = dashboardRuntimeData;
+    dailyPickCounts = dailyCounts ? dailyCounts.map((d) => d.count) : null;
   } catch {
     data = {
       signals: BROKEN_SIGNALS,
@@ -169,12 +175,11 @@ export default async function DashboardPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <h1 className="text-lg font-bold text-gray-100">Overview</h1>
           <p className="text-sm text-gray-500">Live operator snapshot across picks, pipeline flow, runtime health, and alerts.</p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
-      <OverviewDashboardClient data={data} runtime={runtime} />
+      <OverviewDashboardClient data={data} runtime={runtime} dailyPickCounts={dailyPickCounts} />
     </div>
   );
 }

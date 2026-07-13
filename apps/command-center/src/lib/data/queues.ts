@@ -206,6 +206,43 @@ function asBooleanOrNull(v: unknown): boolean | null {
   return typeof v === 'boolean' ? v : null;
 }
 
+/**
+ * picks_current_state has no event_name/event_start_time columns — event
+ * context lives in picks.metadata. Fail-closed: null when absent.
+ */
+function eventFieldsFromRow(row: JsonObject): { eventName: string | null; eventStartTime: string | null } {
+  const metadata = asRecord(row['metadata']);
+  return {
+    eventName: asStringOrNull(metadata['eventName']) ?? asStringOrNull(metadata['event_name']),
+    eventStartTime:
+      asStringOrNull(metadata['eventStartTime']) ??
+      asStringOrNull(metadata['eventTime']) ??
+      asStringOrNull(metadata['event_start_time']),
+  };
+}
+
+/**
+ * Await a PostgREST query, retrying up to twice with backoff on a transient
+ * statement timeout (57014). Still fail-closed: a final timeout surfaces as
+ * the error and the page renders its degraded state.
+ */
+async function awaitWithTimeoutRetry(build: () => any): Promise<{ data: unknown; count: number | null; error: { code?: string } | null }> {
+  const backoffsMs = [400, 1200];
+  let result = await build();
+  for (const backoffMs of backoffsMs) {
+    if (!result.error || String(result.error.code) !== '57014') break;
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    result = await build();
+  }
+  return result;
+}
+
+function describeQueueError(error: { code?: string; message?: string } | null): string {
+  if (!error) return 'unknown query error';
+  if (String(error.code) === '57014') return 'statement timeout (57014) — retried with backoff, still timing out';
+  return error.message ? String(error.message) : `query error ${String(error.code ?? '')}`.trim();
+}
+
 function asRecord(v: unknown): JsonObject {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as JsonObject) : {};
 }
@@ -252,8 +289,6 @@ const QUEUE_SELECT = [
   'review_decided_at',
   'posted_at',
   'settled_at',
-  'event_name',
-  'event_start_time',
 ].join(', ');
 
 // ── Map a raw picks_current_state row to ReviewPick ───────────────────────────
@@ -278,8 +313,7 @@ function mapReviewPick(row: JsonObject): ReviewPick {
     approval_status: asString(row['approval_status']),
     governanceQueueState,
     metadata,
-    eventName: asStringOrNull(row['event_name']),
-    eventStartTime: asStringOrNull(row['event_start_time']),
+    ...eventFieldsFromRow(row),
     sportDisplayName: asStringOrNull(row['sport_display_name']),
     capperDisplayName: asStringOrNull(row['capper_display_name']),
     marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
@@ -292,7 +326,7 @@ function mapReviewPick(row: JsonObject): ReviewPick {
 
 export async function getReviewQueue(
   params: Record<string, string>,
-): Promise<{ picks: ReviewPick[]; total: number }> {
+): Promise<{ picks: ReviewPick[]; total: number; degraded: string | null }> {
   try {
     const client: Client = getDataClient();
 
@@ -305,7 +339,7 @@ export async function getReviewQueue(
     // Base query: awaiting_approval lifecycle OR pending approval_status
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'exact' })
+      .select(QUEUE_SELECT, { count: 'estimated' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
     // Exclude held picks (review_decision = 'hold')
@@ -317,11 +351,11 @@ export async function getReviewQueue(
       .order(sort, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await query;
+    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
     if (error) {
       console.error('getReviewQueue error:', error);
-      return { picks: [], total: 0 };
+      return { picks: [], total: 0, degraded: describeQueueError(error) };
     }
 
     const rows = (data ?? []) as JsonObject[];
@@ -329,10 +363,10 @@ export async function getReviewQueue(
       .filter((row) => !isFixtureLikePick(row))
       .map(mapReviewPick);
 
-    return { picks, total: count ?? picks.length };
+    return { picks, total: count ?? picks.length, degraded: null };
   } catch (err) {
     console.error('getReviewQueue exception:', err);
-    return { picks: [], total: 0 };
+    return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -340,7 +374,7 @@ export async function getReviewQueue(
 
 export async function getHeldQueue(
   params: Record<string, string>,
-): Promise<{ picks: HeldPick[]; total: number }> {
+): Promise<{ picks: HeldPick[]; total: number; degraded: string | null }> {
   try {
     const client: Client = getDataClient();
 
@@ -353,7 +387,7 @@ export async function getHeldQueue(
     // Base query: awaiting_approval OR pending, filtered to ONLY held (review_decision = 'hold')
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'exact' })
+      .select(QUEUE_SELECT, { count: 'estimated' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending')
       .eq('review_decision', 'hold');
 
@@ -363,11 +397,11 @@ export async function getHeldQueue(
       .order(sort, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await query;
+    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
     if (error) {
       console.error('getHeldQueue error:', error);
-      return { picks: [], total: 0 };
+      return { picks: [], total: 0, degraded: describeQueueError(error) };
     }
 
     const rows = (data ?? []) as JsonObject[];
@@ -413,8 +447,7 @@ export async function getHeldQueue(
           approval_status: asString(row['approval_status']),
           governanceQueueState,
           metadata,
-          eventName: asStringOrNull(row['event_name']),
-          eventStartTime: asStringOrNull(row['event_start_time']),
+          ...eventFieldsFromRow(row),
           sportDisplayName: asStringOrNull(row['sport_display_name']),
           capperDisplayName: asStringOrNull(row['capper_display_name']),
           marketTypeDisplayName: asStringOrNull(row['market_type_display_name']),
@@ -423,10 +456,10 @@ export async function getHeldQueue(
         };
       });
 
-    return { picks, total: count ?? picks.length };
+    return { picks, total: count ?? picks.length, degraded: null };
   } catch (err) {
     console.error('getHeldQueue exception:', err);
-    return { picks: [], total: 0 };
+    return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
   }
 }
 
@@ -460,15 +493,13 @@ export async function searchPicks(
       'market_type_display_name',
       'settlement_result',
       'review_decision',
-      'event_name',
-      'event_start_time',
       'promotion_target',
       'promotion_status',
     ].join(', ');
 
     let query = client
       .from('picks_current_state')
-      .select(selectCols, { count: 'exact' });
+      .select(selectCols, { count: 'estimated' });
 
     // Full-text / substring search on market + selection + source
     const q = params['q']?.trim();
@@ -504,7 +535,7 @@ export async function searchPicks(
       .order(sortCol, { ascending: sortAsc })
       .range(offset, offset + limit - 1);
 
-    const { data, count, error } = await query;
+    const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
     if (error) {
       console.error('searchPicks error:', error);
@@ -518,8 +549,8 @@ export async function searchPicks(
       .filter((row) => !isFixtureLikePick(row))
       .map((row) => ({
         ...row,
-        matchup: asStringOrNull(row['event_name']),
-        eventStartTime: asStringOrNull(row['event_start_time']),
+        matchup: eventFieldsFromRow(row).eventName,
+        eventStartTime: eventFieldsFromRow(row).eventStartTime,
         sport: asStringOrNull(row['sport_display_name']),
         submitter: asStringOrNull(row['capper_display_name']),
       }));
@@ -562,8 +593,6 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         'review_decision',
         'posted_at',
         'settled_at',
-        'event_name',
-        'event_start_time',
       ].join(', '))
       .eq('id', pickId)
       .single();
@@ -654,12 +683,10 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 
     // Resolve matchup from event_name or metadata
     const matchup =
-      asStringOrNull(pickRow['event_name']) ??
-      asStringOrNull(metadata['eventName']);
+      asStringOrNull(metadata['eventName']) ?? asStringOrNull(metadata['event_name']);
 
     // Resolve eventStartTime from view or metadata
     const eventStartTime =
-      asStringOrNull(pickRow['event_start_time']) ??
       asStringOrNull(metadata['eventStartTime']) ??
       asStringOrNull(metadata['eventTime']);
 

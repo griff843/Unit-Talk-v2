@@ -1,6 +1,9 @@
 import { getBoardPerformance } from '@/lib/data';
 import { GovernedAttributionTable } from '@/components/GovernedAttributionTable';
 import type { GovernedPickPerformanceRow } from '@/lib/types';
+import { describeThrown } from '@/lib/describe-error';
+
+export const metadata = { title: 'Attribution — Unit Talk Command Center' };
 
 export const dynamic = 'force-dynamic';
 
@@ -12,14 +15,12 @@ export default async function GovernedAttributionPage() {
     const result = await getBoardPerformance();
     if (result.ok) rows = result.data;
   } catch (err) {
-    fetchError = err instanceof Error ? err.message : String(err);
+    fetchError = describeThrown(err);
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Intelligence</p>
-        <h1 className="text-xl font-bold text-white">Governed Pick Attribution</h1>
         <p className="mt-1 text-xs text-gray-500">
           Phase 6 feedback-loop substrate — full attribution chain for every{' '}
           <span className="font-mono text-gray-400">source=board-construction</span> pick.

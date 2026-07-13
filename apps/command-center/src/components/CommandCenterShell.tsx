@@ -1,9 +1,11 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { CommandPalette } from '@/components/CommandPalette';
 import { TopBar } from '@/components/TopBar';
-import { SidebarHealthStatus, SidebarNavItem, WorkspaceSidebar } from '@/components/WorkspaceSidebar';
+import { SidebarHealthStatus, SidebarNavGroup, SidebarNavItem, WorkspaceSidebar } from '@/components/WorkspaceSidebar';
+import type { CommandEntry } from '@/lib/command-palette-model';
 
 type CommandCenterShellProps = {
   children: React.ReactNode;
@@ -17,16 +19,73 @@ function icon(path: React.ReactNode) {
   );
 }
 
-const NAV_ITEMS: SidebarNavItem[] = [
-  { href: '/', label: 'Overview', icon: icon(<path d="M3 12h18M3 6h18M3 18h18" />), match: ['/'] },
-  { href: '/picks', label: 'Picks', icon: icon(<><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>), match: ['/picks', '/picks-list'] },
-  { href: '/pipeline', label: 'Pipeline', icon: icon(<><path d="M4 7h16" /><path d="M7 12h10" /><path d="M10 17h4" /></>), match: ['/pipeline', '/review', '/decision', '/decisions', '/held'] },
-  { href: '/events', label: 'Events', icon: icon(<><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" /></>), match: ['/events', '/research', '/research/matchups', '/research/players', '/research/props', '/research/lines', '/research/hit-rate'] },
-  { href: '/api-health', label: 'API Health', icon: icon(<><path d="M3 12h4l3-9 4 18 3-9h4" /></>), match: ['/api-health', '/burn-in', '/model-health'] },
-  { href: '/agents', label: 'Agents', icon: icon(<><path d="M12 2a3 3 0 0 0-3 3v2H7a2 2 0 0 0-2 2v3a7 7 0 1 0 14 0V9a2 2 0 0 0-2-2h-2V5a3 3 0 0 0-3-3Z" /></>), match: ['/agents', '/interventions'] },
-  { href: '/intelligence', label: 'Intelligence', icon: icon(<><path d="m12 3 2.5 5 5.5.8-4 3.9.9 5.5L12 16l-4.9 2.2.9-5.5-4-3.9 5.5-.8L12 3Z" /></>), match: ['/intelligence', '/performance'] },
-  { href: '/ops', label: 'Ops', icon: icon(<><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.82-.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1H4a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.6-1l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6h.09A1.7 1.7 0 0 0 10 3V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1 .6h.09a1.7 1.7 0 0 0 1.1-.4l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c0 .38.14.74.4 1H20a2 2 0 1 1 0 4h-.09c-.26.26-.4.62-.4 1Z" /></>), match: ['/ops', '/exceptions'] },
+const dot = icon(<circle cx="12" cy="12" r="4" />);
+
+const NAV_GROUPS: SidebarNavGroup[] = [
+  {
+    label: 'Desk',
+    items: [
+      { href: '/', label: 'Executive Overview', icon: icon(<path d="M3 12h18M3 6h18M3 18h18" />), match: ['/'] },
+      { href: '/fire-board', label: 'Fire Board', icon: icon(<path d="M12 2c1 4-4 5-4 10a4 4 0 0 0 8 0c0-2-1-3-1-5 3 2 5 4 5 7a8 8 0 1 1-16 0c0-6 7-8 8-12Z" />), match: ['/fire-board'] },
+      { href: '/pipeline', label: "Today's Action", icon: icon(<><path d="M4 7h16" /><path d="M7 12h10" /><path d="M10 17h4" /></>), match: ['/pipeline'] },
+      { href: '/picks', label: 'Picks Explorer', icon: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18" /><path d="M9 4v16" /></>), match: ['/picks', '/picks-list'] },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { href: '/operations/outbox', label: 'Dispatch / Outbox', icon: icon(<><path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4 20-7Z" /></>), match: ['/operations/outbox'] },
+      { href: '/operations/approvals', label: 'Approvals', icon: icon(<><path d="M20 6 9 17l-5-5" /></>), match: ['/operations/approvals', '/held', '/decisions'] },
+      { href: '/operations/discord', label: 'Discord Control', icon: icon(<><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><path d="M8 17c2.5 1.3 5.5 1.3 8 0" /><path d="M19 5c-1.5-1-3.5-1.5-5-1.5h-4C8.5 3.5 6.5 4 5 5 3 8 2.5 12 3 16c1.7 1.3 3.5 2 5 2l1-2" /><path d="M15 16l1 2c1.5 0 3.3-.7 5-2 .5-4 0-8-2-11" /></>), match: ['/operations/discord'] },
+      { href: '/operations/results', label: 'Results Ops', icon: icon(<><path d="M3 3v18h18" /><path d="M7 14l4-4 3 3 5-6" /></>), match: ['/operations/results', '/exceptions', '/interventions'] },
+      { href: '/events', label: 'Events Feed', icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M12 8v4l2.5 2.5" /></>), match: ['/events'] },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { href: '/api-health', label: 'System Health', icon: icon(<path d="M3 12h4l3-9 4 18 3-9h4" />), match: ['/api-health', '/burn-in', '/runtime-dashboard', '/ops', '/agents'] },
+      { href: '/model-health', label: 'Model Health', icon: icon(<><path d="M12 3v3" /><path d="M12 18v3" /><circle cx="12" cy="12" r="6" /><path d="M9 12h6" /></>), match: ['/model-health'] },
+      { href: '/operations/governance', label: 'Governance / Lanes', icon: icon(<><rect x="3" y="11" width="18" height="10" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>), match: ['/operations/governance'] },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { href: '/research/lines', label: 'Odds Board', icon: dot, match: ['/research/lines'] },
+      { href: '/research/props', label: 'Props Explorer', icon: dot, match: ['/research/props'] },
+      { href: '/intel/ev-feed', label: 'EV Feed', icon: dot, match: ['/intel/ev-feed'] },
+      { href: '/intel/arbitrage', label: 'Arbitrage Finder', icon: dot, match: ['/intel/arbitrage'] },
+      { href: '/intel/middles', label: 'Middle Finder', icon: dot, match: ['/intel/middles'] },
+      { href: '/intel/boosts', label: 'Boost Analyzer', icon: dot, match: ['/intel/boosts'] },
+      { href: '/intel/sharp-books', label: 'Sharp Book Compare', icon: dot, match: ['/intel/sharp-books'] },
+      { href: '/intel/line-movement', label: 'Line Movement', icon: dot, match: ['/intel/line-movement'] },
+      { href: '/research/players', label: 'Player Research', icon: dot, match: ['/research/players'] },
+      { href: '/intel/teams', label: 'Team Research', icon: dot, match: ['/intel/teams', '/research/matchups'] },
+      { href: '/intel/injuries', label: 'Injury Monitor', icon: dot, match: ['/intel/injuries'] },
+      { href: '/research/trends', label: 'Trend Explorer', icon: dot, match: ['/research/trends', '/research/hit-rate', '/research'] },
+      { href: '/performance', label: 'Performance', icon: dot, match: ['/performance', '/intelligence'] },
+      { href: '/intel/alerts', label: 'Alert Builder', icon: dot, match: ['/intel/alerts'] },
+    ],
+  },
+  {
+    label: 'Execution',
+    items: [
+      { href: '/execution/pick-builder', label: 'Pick Builder', icon: icon(<><path d="M12 5v14" /><path d="M5 12h14" /></>), match: ['/execution/pick-builder'] },
+      { href: '/review', label: 'Review Queue', icon: icon(<><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></>), match: ['/review', '/decisions'] },
+      { href: '/decision', label: 'Decision Cockpit', icon: icon(<><circle cx="12" cy="12" r="3" /><path d="M12 2v4" /><path d="M12 18v4" /><path d="M2 12h4" /><path d="M18 12h4" /></>), match: ['/decision'] },
+      { href: '/execution/discord-preview', label: 'Discord Preview', icon: icon(<><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 15h6" /><path d="M7 11h10" /></>), match: ['/execution/discord-preview'] },
+      { href: '/execution/scheduled', label: 'Scheduled Dispatch', icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></>), match: ['/execution/scheduled'] },
+      { href: '/execution/results', label: 'Results Tracking', icon: icon(<><path d="M9 11l3 3 8-8" /><path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11" /></>), match: ['/execution/results'] },
+    ],
+  },
 ];
+
+const ALL_NAV_ITEMS: SidebarNavItem[] = NAV_GROUPS.flatMap((group) => group.items);
+
+const COMMAND_ENTRIES: CommandEntry[] = NAV_GROUPS.flatMap((group) =>
+  group.items.map((item) => ({ href: item.href, label: item.label, group: group.label })),
+);
 
 function titleize(value: string) {
   return value
@@ -37,57 +96,153 @@ function titleize(value: string) {
 }
 
 function resolveActiveRoute(pathname: string) {
-  for (const item of NAV_ITEMS) {
+  let best: { href: string; length: number } | null = null;
+  for (const item of ALL_NAV_ITEMS) {
     const patterns = item.match ?? [item.href];
-    if (patterns.some((pattern) => pathname === pattern || pathname.startsWith(pattern + '/'))) {
-      return item.href;
+    for (const pattern of patterns) {
+      const matches = pathname === pattern || (pattern !== '/' && pathname.startsWith(pattern + '/'));
+      if (matches && (!best || pattern.length > best.length)) {
+        best = { href: item.href, length: pattern.length };
+      }
     }
   }
-  return '/';
-}
-
-function resolveHealthStatus(pathname: string): SidebarHealthStatus {
-  if (pathname.startsWith('/exceptions') || pathname.startsWith('/held')) {
-    return 'warning';
-  }
-  if (pathname.startsWith('/burn-in')) {
-    return 'critical';
-  }
-  return 'healthy';
+  return best?.href ?? '/';
 }
 
 function resolveChrome(pathname: string) {
   const segments = pathname === '/' ? [] : pathname.split('/').filter(Boolean);
   const activeRoute = resolveActiveRoute(pathname);
-  const activeItem = NAV_ITEMS.find((item) => item.href === activeRoute) ?? NAV_ITEMS[0];
-  const leaf = segments.length > 0 ? titleize(segments[segments.length - 1]!) : activeItem.label;
+  const activeItem = ALL_NAV_ITEMS.find((item) => item.href === activeRoute) ?? ALL_NAV_ITEMS[0];
+  const activeGroup = NAV_GROUPS.find((group) => group.items.some((item) => item.href === activeRoute));
+  const lastSegment = segments.length > 0 ? segments[segments.length - 1]! : '';
+  const looksLikeId = /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(lastSegment) || /^\d+$/.test(lastSegment);
+  // A pathname that exactly matches the nav item's href (or one of its match
+  // patterns) IS that surface — the nav label is the one canonical name.
+  const matchesItemExactly =
+    pathname === activeItem.href || (activeItem.match ?? []).includes(pathname);
+  const leaf = matchesItemExactly
+    ? activeItem.label
+    : looksLikeId
+      ? lastSegment.slice(0, 8)
+      : titleize(lastSegment);
+  const sameName = (a: string, b: string) => a.replace(/[^a-z0-9]/gi, '').toLowerCase() === b.replace(/[^a-z0-9]/gi, '').toLowerCase();
 
   return {
     activeRoute,
-    breadcrumb: ['Command Center', activeItem.label, ...(leaf !== activeItem.label ? [leaf] : [])],
-    title: leaf,
-    healthStatus: resolveHealthStatus(pathname),
+    breadcrumb: [
+      'Command Center',
+      ...(activeGroup ? [activeGroup.label] : []),
+      activeItem.label,
+      ...(sameName(leaf, activeItem.label) ? [] : [leaf]),
+    ],
+    title: sameName(leaf, activeItem.label)
+      ? activeItem.label
+      : looksLikeId
+        ? `${activeItem.label} · ${leaf}`
+        : leaf,
   };
+}
+
+/**
+ * Poll the app's own /api/health (derived from the same lifecycle signals as
+ * the Executive Overview KPI) so the sidebar pill reflects runtime truth.
+ */
+const HEALTH_STORAGE_KEY = 'cc-global-health-v1';
+
+function useGlobalHealth(): { status: SidebarHealthStatus; label: string; pending: boolean } {
+  // Debounced to last-settled truth: transitional states ("checking…",
+  // fetch errors) never reprint the chip — they only set a subtle pending
+  // flag. The last settled reading survives page loads via sessionStorage.
+  const [settled, setSettled] = useState<{ status: SidebarHealthStatus; label: string } | null>(null);
+  const [pending, setPending] = useState(true);
+
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem(HEALTH_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { status: SidebarHealthStatus; label: string };
+        if (parsed && parsed.status && parsed.label) setSettled(parsed);
+      }
+    } catch {
+      /* storage unavailable — start unsettled */
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      setPending(true);
+      try {
+        const response = await fetch('/api/health', { cache: 'no-store' });
+        const body = (await response.json()) as { status?: string };
+        if (cancelled) return;
+        const status = body.status ?? 'unknown';
+        const next =
+          status === 'healthy'
+            ? { status: 'healthy' as const, label: 'healthy' }
+            : status === 'degraded'
+              ? { status: 'warning' as const, label: 'degraded' }
+              : status === 'down'
+                ? { status: 'critical' as const, label: 'down' }
+                : null; // unknown = transitional, keep last settled
+        if (next) {
+          setSettled(next);
+          try {
+            window.sessionStorage.setItem(HEALTH_STORAGE_KEY, JSON.stringify(next));
+          } catch {
+            /* best effort */
+          }
+        }
+        setPending(false);
+      } catch {
+        // Fetch failure is transitional — keep the last settled reading.
+        if (!cancelled) setPending(false);
+      }
+    };
+    void load();
+    const id = window.setInterval(load, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  return settled
+    ? { ...settled, pending }
+    : { status: 'warning', label: 'checking…', pending: true };
 }
 
 export function CommandCenterShell({ children }: CommandCenterShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const chrome = resolveChrome(pathname);
+  const health = useGlobalHealth();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((current) => !current);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   return (
     <>
       <WorkspaceSidebar
-        navItems={NAV_ITEMS}
+        navGroups={NAV_GROUPS}
         activeRoute={chrome.activeRoute}
-        healthStatus={chrome.healthStatus}
+        healthStatus={health.status}
+        healthLabel={health.pending ? `${health.label} ·` : health.label}
         collapsed={collapsed}
         onToggle={() => setCollapsed((current) => !current)}
       />
       <main id="main-content" className="flex-1 min-w-0 overflow-y-auto px-4 py-4 md:px-6 md:py-6">
-        <TopBar title={chrome.title} breadcrumb={chrome.breadcrumb} />
+        <TopBar title={chrome.title} breadcrumb={chrome.breadcrumb} onOpenPalette={() => setPaletteOpen(true)} />
         {children}
       </main>
+      <CommandPalette entries={COMMAND_ENTRIES} open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </>
   );
 }

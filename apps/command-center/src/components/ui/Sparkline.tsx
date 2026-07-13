@@ -7,11 +7,18 @@ export interface SparklineProps {
   label: string;
   strokeClassName?: string;
   fillClassName?: string;
+  emptyLabel?: string;
 }
 
-export function Sparkline({ points, label, strokeClassName, fillClassName }: SparklineProps) {
-  if (points.length === 0) {
-    return <div className="h-8 bg-white/[0.06] rounded" />;
+export function Sparkline({ points, label, strokeClassName, fillClassName, emptyLabel }: SparklineProps) {
+  if (points.length === 0 || points.every((point) => point === 0)) {
+    return (
+      <div className="flex h-8 items-center justify-center rounded border border-dashed border-[var(--cc-border-subtle)] bg-white/[0.02]">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-[var(--cc-text-muted)]">
+          {emptyLabel ?? 'no samples in window'}
+        </span>
+      </div>
+    );
   }
 
   const min = Math.min(...points);

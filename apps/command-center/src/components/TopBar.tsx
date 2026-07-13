@@ -6,6 +6,7 @@ type TopBarProps = {
   title: string;
   breadcrumb: string[];
   lastUpdatedAt?: number;
+  onOpenPalette?: () => void;
 };
 
 function formatElapsed(ms: number) {
@@ -46,7 +47,7 @@ function ThemeIcon({ dark }: { dark: boolean }) {
   );
 }
 
-export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now() }: TopBarProps) {
+export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenPalette }: TopBarProps) {
   const [now, setNow] = useState(Date.now());
   const [dark, setDark] = useState(true);
 
@@ -83,6 +84,21 @@ export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now() }: TopBar
       </div>
 
       <div className="flex items-center gap-2 md:gap-3">
+        {onOpenPalette && (
+          <button
+            type="button"
+            onClick={onOpenPalette}
+            className="hidden items-center gap-2 rounded-full border border-[var(--cc-border-subtle)] bg-[var(--cc-bg-surface-elevated)] px-3 py-2 text-xs text-[var(--cc-text-muted)] transition-colors hover:text-[var(--cc-text-primary)] md:inline-flex"
+            aria-label="Open command palette"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <span>Jump to…</span>
+            <kbd className="rounded border border-[var(--cc-border-strong)] px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+          </button>
+        )}
         <div className="rounded-full border border-[var(--cc-border-subtle)] bg-[var(--cc-bg-surface-elevated)] px-3 py-2 text-xs text-[var(--cc-text-secondary)]">
           Updated {updatedLabel}
         </div>

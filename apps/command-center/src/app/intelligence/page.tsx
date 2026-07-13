@@ -3,6 +3,8 @@ import { LLMUsageChart, StatCard, TopBar } from '@/components/ui';
 import { getIntelligenceContent } from '@/lib/command-center-data';
 import { getRouteMeta } from '@/lib/command-center-nav';
 
+export const metadata = { title: 'Intelligence — Unit Talk Command Center' };
+
 export default async function IntelligencePage() {
   const meta = getRouteMeta('/intelligence');
   const content = await getIntelligenceContent();

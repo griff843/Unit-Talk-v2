@@ -1,5 +1,10 @@
+import Link from 'next/link';
 import { Card, EmptyState } from '@/components/ui';
 import { getResearchLines } from '@/lib/data';
+import { getCurrentOfferGroups, type IntelOfferGroup } from '@/lib/data/odds-intel';
+import { formatRelativeTime } from '@/lib/data/research';
+
+export const metadata = { title: 'Odds Board — Unit Talk Command Center' };
 
 interface LineShopperBook {
   bookmakerKey: string;
@@ -80,10 +85,11 @@ function formatSnapshot(iso: string): string {
 }
 
 export default async function LineShopperPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const participant =
     typeof searchParams['participant'] === 'string' ? searchParams['participant'] : '';
   const market =
@@ -93,11 +99,24 @@ export default async function LineShopperPage({
   const data = canFetch ? await fetchLineShopperData(participant, market) : null;
   const fetchFailed = canFetch && data === null;
 
+  // Default board: recently-active markets ranked by book coverage + recency.
+  // Filters refine; they never gate the surface behind an empty form.
+  const activeBoard = !canFetch ? await getCurrentOfferGroups({ minBooks: 2, limit: 500 }) : null;
+  const trendingGroups: IntelOfferGroup[] = (activeBoard?.groups ?? [])
+    .filter((g) => g.providerParticipantId)
+    .sort((a, b) => {
+      const booksA = new Set(a.books.map((x) => x.bookmakerKey)).size;
+      const booksB = new Set(b.books.map((x) => x.bookmakerKey)).size;
+      if (booksB !== booksA) return booksB - booksA;
+      const latestA = a.books.reduce((m, x) => (x.snapshotAt > m ? x.snapshotAt : m), '');
+      const latestB = b.books.reduce((m, x) => (x.snapshotAt > m ? x.snapshotAt : m), '');
+      return latestB.localeCompare(latestA);
+    })
+    .slice(0, 30);
+
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Line-Shopper</h1>
         <p className="mt-1 text-sm text-gray-400">
           Compare lines across bookmakers for a player prop or game market.
         </p>
@@ -155,9 +174,84 @@ export default async function LineShopperPage({
         />
       ) : !data ? (
         !canFetch ? (
-          <div className="rounded border border-gray-800 bg-gray-900/50 p-6 text-center text-xs text-gray-500">
-            Enter a participant ID and market key above to compare bookmaker lines.
-          </div>
+          trendingGroups.length === 0 ? (
+            <EmptyState
+              message="No recently active markets"
+              detail="This board lists markets with fresh multi-book coverage in provider_offer_current. Nothing qualifies in the scanned window — check ingestion health if this persists."
+              action={{ label: 'API Health', href: '/api-health' }}
+            />
+          ) : (
+            <Card
+              title={`Recently Active Markets — ${trendingGroups.length} shown`}
+            >
+              <p className="cc-text-muted mb-3 text-[11px]">
+                Ranked by book coverage, then freshness. Select a market to open the full
+                cross-book comparison, or refine with the form above.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-800 text-left text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                      <th className="pb-2 pr-4">Participant</th>
+                      <th className="pb-2 pr-4">Market</th>
+                      <th className="pb-2 pr-4">Sport</th>
+                      <th className="pb-2 pr-4 text-right">Books</th>
+                      <th className="pb-2 pr-4 text-right">Line Range</th>
+                      <th className="pb-2 pr-4 text-right">Updated</th>
+                      <th className="pb-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800/50">
+                    {trendingGroups.map((g) => {
+                      const bookCount = new Set(g.books.map((b) => b.bookmakerKey)).size;
+                      const lines = g.books
+                        .map((b) => b.line)
+                        .filter((l): l is number => l !== null);
+                      const lineRange =
+                        lines.length === 0
+                          ? '—'
+                          : Math.min(...lines) === Math.max(...lines)
+                            ? String(lines[0])
+                            : `${Math.min(...lines)}–${Math.max(...lines)}`;
+                      const latest = g.books.reduce(
+                        (m, b) => (b.snapshotAt > m ? b.snapshotAt : m),
+                        '',
+                      );
+                      const href = `/research/lines?participant=${encodeURIComponent(g.providerParticipantId ?? '')}&market=${encodeURIComponent(g.providerMarketKey)}`;
+                      return (
+                        <tr key={g.groupKey} className="align-middle transition-colors hover:bg-gray-800/40">
+                          <td className="py-2 pr-4 font-mono text-gray-200">
+                            <Link href={href} className="hover:text-blue-300">
+                              {g.providerParticipantId}
+                            </Link>
+                          </td>
+                          <td className="py-2 pr-4 text-gray-400">{g.providerMarketKey}</td>
+                          <td className="py-2 pr-4 text-gray-500">{g.sportKey ?? '—'}</td>
+                          <td className="py-2 pr-4 text-right font-mono text-gray-300">{bookCount}</td>
+                          <td className="py-2 pr-4 text-right font-mono text-gray-300">{lineRange}</td>
+                          <td className="py-2 pr-4 text-right font-mono text-gray-500">
+                            {formatRelativeTime(latest)}
+                          </td>
+                          <td className="py-2 text-right">
+                            <Link
+                              href={href}
+                              className="rounded border border-gray-700 px-2 py-0.5 text-[10px] text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200"
+                            >
+                              Compare →
+                            </Link>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="cc-text-muted mt-3 text-[10px]">
+                Scanned {activeBoard?.totalOffersScanned ?? 0} most-recent offer rows (cap{' '}
+                {activeBoard?.rowCap ?? 500}) as of {formatSnapshot(activeBoard?.observedAt ?? new Date().toISOString())}.
+              </p>
+            </Card>
+          )
         ) : null
       ) : data.books.length === 0 ? (
         <EmptyState

@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 
 interface InterventionActionProps {
   label: string;
-  variant: 'primary' | 'danger' | 'warning' | 'success';
+  variant: 'primary' | 'danger' | 'warning' | 'success' | 'secondary';
   pickId: string;
   action: 'retry_delivery' | 'rerun_promotion' | 'force_promote' | 'suppress' | 'requeue_delivery';
   target?: string;

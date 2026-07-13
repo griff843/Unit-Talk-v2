@@ -5,6 +5,8 @@ import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { Suspense } from 'react';
 import { getReviewQueue } from '@/lib/data';
 
+export const metadata = { title: 'Review Queue — Unit Talk Command Center' };
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
@@ -17,10 +19,11 @@ function readRefreshIntervalMs(searchParams?: Record<string, string | string[] |
 }
 
 export default async function ReviewQueuePage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const params: Record<string, string> = {};
   for (const [key, val] of Object.entries(searchParams)) {
     if (typeof val === 'string' && val.trim()) params[key] = val.trim();
@@ -38,7 +41,6 @@ export default async function ReviewQueuePage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <h1 className="text-lg font-bold text-gray-100">Review Queue</h1>
           <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} awaiting review</span>
           <p className="text-xs text-gray-500">
             Governance queue truth: {lifecycleAwaitingApproval} lifecycle-gated awaiting_approval

@@ -66,7 +66,7 @@ export async function writeSystemPicks(): Promise<WriteBoardPicksResult> {
   };
 
   revalidatePath('/decision/board-queue');
-  revalidatePath('/picks-list');
+  revalidatePath('/picks');
 
   return {
     ok: true,

@@ -10,12 +10,18 @@ export type SidebarNavItem = {
   unreadCount?: number;
 };
 
+export type SidebarNavGroup = {
+  label: string;
+  items: SidebarNavItem[];
+};
+
 export type SidebarHealthStatus = 'healthy' | 'warning' | 'critical';
 
 type WorkspaceSidebarProps = {
-  navItems: SidebarNavItem[];
+  navGroups: SidebarNavGroup[];
   activeRoute: string;
   healthStatus: SidebarHealthStatus;
+  healthLabel?: string;
   collapsed: boolean;
   onToggle: () => void;
 };
@@ -84,16 +90,17 @@ function OperatorBadge({ collapsed }: { collapsed: boolean }) {
 }
 
 export function WorkspaceSidebar({
-  navItems,
+  navGroups,
   activeRoute,
   healthStatus,
+  healthLabel,
   collapsed,
   onToggle,
 }: WorkspaceSidebarProps) {
   return (
     <aside
       className={cx(
-        'cc-sidebar sticky top-0 flex min-h-screen shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-[width] duration-[200ms] ease-[var(--ease-out)]',
+        'cc-sidebar sticky top-0 flex h-screen shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-[width] duration-[200ms] ease-[var(--ease-out)]',
         collapsed ? 'w-16' : 'w-60',
       )}
     >
@@ -121,21 +128,28 @@ export function WorkspaceSidebar({
         {!collapsed && (
           <div className="ml-3 min-w-0">
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Global Health</div>
-            <div className="text-sm text-[var(--cc-text-primary)]">{healthStatus}</div>
+            <div className="text-sm text-[var(--cc-text-primary)]">{healthLabel ?? healthStatus}</div>
           </div>
         )}
       </div>
 
-      <nav className="flex-1 px-2 pb-4" aria-label="Primary">
-        <ul className="space-y-1">
-          {navItems.map((item) => {
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-16" aria-label="Primary">
+        {navGroups.map((group) => (
+        <div key={group.label} className="mb-2">
+          {!collapsed && (
+            <div className="px-3 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.28em] text-[var(--cc-text-muted)]">
+              {group.label}
+            </div>
+          )}
+        <ul className="space-y-0.5">
+          {group.items.map((item) => {
             const isActive = activeRoute === item.href;
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   className={cx(
-                    'group relative flex items-center rounded-2xl px-3 py-3 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-out)]',
+                    'group relative flex items-center rounded-2xl px-3 py-2 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-out)]',
                     collapsed && 'justify-center px-0',
                     isActive
                       ? 'bg-[color-mix(in_srgb,var(--cc-accent)_14%,transparent)] text-[var(--cc-text-primary)]'
@@ -161,6 +175,8 @@ export function WorkspaceSidebar({
             );
           })}
         </ul>
+        </div>
+        ))}
       </nav>
 
       <OperatorBadge collapsed={collapsed} />

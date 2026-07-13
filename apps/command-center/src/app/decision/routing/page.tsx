@@ -1,21 +1,23 @@
 import { EmptyState } from '@/components/ui/EmptyState';
 import { getRoutingPreview } from '@/lib/data';
+import { describeThrown } from '@/lib/describe-error';
+
+export const metadata = { title: 'Routing — Unit Talk Command Center' };
 
 interface RoutingPreviewPageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     pickId?: string;
-  };
+  }>;
 }
 
-export default async function RoutingPreviewPage({ searchParams }: RoutingPreviewPageProps) {
+export default async function RoutingPreviewPage({ searchParams: searchParamsPromise }: RoutingPreviewPageProps) {
+  const searchParams = await searchParamsPromise;
   const pickId = searchParams?.pickId?.trim() ?? '';
   const preview = pickId ? await loadRoutingPreview(pickId) : null;
 
   return (
     <div className="space-y-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Decision</p>
-        <h1 className="text-xl font-bold text-white">Routing Preview</h1>
       </div>
 
       <form className="flex flex-col gap-3 sm:flex-row" action="/decision/routing">
@@ -63,7 +65,7 @@ async function loadRoutingPreview(pickId: string) {
     if (raw.ok && raw.data) return { ok: true as const, data: raw.data };
     return { ok: false as const, error: raw.error ?? 'Routing preview failed' };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false as const, error: describeThrown(error) };
   }
 }
 

@@ -27,6 +27,29 @@
   --cc-warning: #f59e0b;
   --cc-radius-md: 0.5rem;
   --cc-radius-lg: 0.75rem;
+
+  /*
+   * Neutral scale as RGB triplets — the single token source for Tailwind's
+   * gray/slate scales (see tailwind.config.ts). Dark-first: low steps are
+   * light ink, high steps are deep surfaces. Light theme flips these below.
+   */
+  --cc-n-50: 247 250 255;
+  --cc-n-100: 231 237 248; /* text-primary */
+  --cc-n-200: 205 215 233;
+  --cc-n-300: 182 195 218;
+  --cc-n-400: 151 167 195; /* text-secondary */
+  --cc-n-500: 111 129 159; /* text-muted */
+  --cc-n-600: 70 88 122;
+  --cc-n-700: 45 60 86;    /* border-strong */
+  --cc-n-800: 31 43 64;    /* border-subtle */
+  --cc-n-900: 11 17 27;    /* surface */
+  --cc-n-950: 5 7 13;      /* canvas */
+  --cc-rgb-elevated: 19 27 42;
+  --cc-rgb-hover: 26 36 54;
+  --cc-rgb-accent: 61 139 255;
+  --cc-rgb-success: 34 197 94;
+  --cc-rgb-danger: 239 68 68;
+  --cc-rgb-warning: 245 158 11;
 }
 
 [data-theme='light'] {
@@ -40,11 +63,54 @@
   --cc-text-primary: #0f172a;
   --cc-text-secondary: #334155;
   --cc-text-muted: #64748b;
+
+  --cc-n-50: 15 23 42;
+  --cc-n-100: 15 23 42;
+  --cc-n-200: 30 41 59;
+  --cc-n-300: 51 65 85;
+  --cc-n-400: 51 65 85;
+  --cc-n-500: 100 116 139;
+  --cc-n-600: 148 163 184;
+  --cc-n-700: 174 191 215;
+  --cc-n-800: 207 219 236;
+  --cc-n-900: 255 255 255;
+  --cc-n-950: 237 243 251;
+  --cc-rgb-elevated: 246 249 252;
+  --cc-rgb-hover: 232 238 248;
 }
 
 html,
 body {
   min-height: 100%;
+}
+
+/* Trading-desk numerics: aligned digits everywhere numbers stack vertically. */
+:root {
+  --cc-font-mono: ui-monospace, 'JetBrains Mono', 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+}
+
+table,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Signature numeric identity — every odds, line, EV%, score, age, timestamp. */
+.cc-num {
+  font-family: var(--cc-font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.cc-num-pos {
+  color: var(--cc-success);
+}
+
+.cc-num-neg {
+  color: var(--cc-danger);
+}
+
+.cc-num-neutral {
+  color: var(--cc-text-secondary);
 }
 
 body {
@@ -128,6 +194,48 @@ body {
 .cc-icon-button:focus-visible {
   outline: 2px solid var(--cc-accent);
   outline-offset: 2px;
+}
+
+/* Token-styled form controls — replaces stock-browser selects/inputs. */
+.cc-input,
+.cc-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 1px solid var(--cc-border-strong);
+  border-radius: var(--cc-radius-md);
+  background-color: color-mix(in srgb, var(--cc-bg-surface-elevated) 92%, transparent);
+  color: var(--cc-text-primary);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  transition: border-color var(--motion-fast) var(--ease-out), background-color var(--motion-fast) var(--ease-out);
+}
+
+.cc-select {
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236f819f' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+}
+
+.cc-input::placeholder {
+  color: var(--cc-text-muted);
+}
+
+.cc-input:hover,
+.cc-select:hover {
+  border-color: color-mix(in srgb, var(--cc-accent) 40%, var(--cc-border-strong));
+}
+
+.cc-input:focus-visible,
+.cc-select:focus-visible {
+  outline: 2px solid var(--cc-accent);
+  outline-offset: 1px;
+}
+
+/* Dark-native pickers for native date/time inputs that remain. */
+.cc-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
 }
 
 .skip-link:focus {
@@ -306,4 +414,48 @@ body {
 .pipeline-connector-idle .pipeline-travel-dot,
 .pipeline-connector-error .pipeline-travel-dot {
   display: none;
+}
+
+
+/* UTV2-1522 — restrained liveness */
+@keyframes cc-row-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--cc-accent) 18%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.cc-row-flash {
+  animation: cc-row-flash 1.6s var(--ease-out) 1;
+}
+
+@keyframes cc-tick-up {
+  0% { color: var(--cc-success); }
+  100% { color: inherit; }
+}
+
+@keyframes cc-tick-down {
+  0% { color: var(--cc-danger); }
+  100% { color: inherit; }
+}
+
+.cc-tick-up {
+  animation: cc-tick-up 1.2s ease-out 1;
+}
+
+.cc-tick-down {
+  animation: cc-tick-down 1.2s ease-out 1;
+}
+
+/* Bloomberg restraint: honor reduced-motion globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,6 +1,5 @@
 import { Card } from '@/components/ui/Card';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
-import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
@@ -9,10 +8,12 @@ import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { getPickDetail } from '@/lib/data';
+import { getPickLineMovement } from '@/lib/data/odds-intel';
+import { LineMovementChart } from '@/components/LineMovementChart';
+import { notFound } from 'next/navigation';
 
 interface PickDetailPageProps {
-  params: { id: string };
-  searchParams: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
 }
 
 interface LifecycleRow {
@@ -151,11 +152,14 @@ function KV({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function EmptyRow({ cols }: { cols: number }) {
+function EmptyRow({ cols, label }: { cols: number; label: string }) {
   return (
     <tr>
-      <td colSpan={cols} className="py-2 text-xs italic text-gray-500">
-        No rows.
+      <td colSpan={cols} className="py-3">
+        <span className="inline-flex items-center gap-2 rounded-full border border-gray-800 bg-gray-950/40 px-3 py-1 text-xs text-gray-500">
+          <span className="h-1.5 w-1.5 rounded-full bg-gray-700" aria-hidden="true" />
+          {label}
+        </span>
       </td>
     </tr>
   );
@@ -233,29 +237,17 @@ function renderClvSummary(settlement: SettlementRow | undefined) {
   return settlement.hasClv ? 'present' : 'missing';
 }
 
+export async function generateMetadata({ params }: PickDetailPageProps) {
+  const { id } = await params;
+  return { title: `Pick ${id.slice(0, 8)} — Unit Talk Command Center` };
+}
+
 export default async function PickDetailPage({ params }: PickDetailPageProps) {
-  const pickId = params.id;
+  const { id: pickId } = await params;
   const detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
 
   if (detail == null) {
-    return (
-      <div className="flex flex-col gap-6">
-        <Breadcrumb
-          items={[
-            { label: 'Dashboard', href: '/' },
-            { label: 'Picks', href: '/picks-list' },
-            { label: `${pickId.slice(0, 8)}...` },
-          ]}
-        />
-        <div>
-          <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
-          <p className="mt-1 font-mono text-sm text-gray-400">{pickId}</p>
-        </div>
-        <div className="text-sm text-red-400">
-          Pick not found or database unavailable: {pickId}
-        </div>
-      </div>
-    );
+    notFound();
   }
 
   const { pick } = detail;
@@ -278,16 +270,28 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const scoreMeaning = summarizeScoreMeaning(pick);
   const scoreInsight = buildScoreInsight(pick.metadata);
 
+  // Line movement (UTV2-1522): resolve identity fail-closed from pick metadata
+  // / submission payload (eventId) + settlement-resolved provider market key.
+  const submissionPayload = readObject(detail.submission?.payload ?? null);
+  const metaStr = (key: string): string | null =>
+    typeof pick.metadata[key] === 'string' && pick.metadata[key] ? (pick.metadata[key] as string) : null;
+  const rawEventId =
+    metaStr('eventId') ??
+    (typeof submissionPayload?.['eventId'] === 'string' ? (submissionPayload['eventId'] as string) : null);
+  const resolvedMarketKey =
+    metaStr('providerMarketKey') ??
+    detail.settlements.find((s) => typeof s.clvResolvedMarketKey === 'string' && s.clvResolvedMarketKey)
+      ?.clvResolvedMarketKey ??
+    null;
+  const lineMovement = await getPickLineMovement({
+    eventUuid: rawEventId,
+    externalEventId: metaStr('providerEventId'),
+    participantId: metaStr('providerParticipantId'),
+    marketKey: resolvedMarketKey,
+  });
+
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb
-        items={[
-          { label: 'Dashboard', href: '/' },
-          { label: 'Picks', href: '/picks-list' },
-          { label: `${pick.id.slice(0, 12)}...` },
-        ]}
-      />
-
       <Card>
         <div className="flex flex-col gap-4">
           <PickIdentityPanel
@@ -327,6 +331,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               <p className="mt-1 text-sm font-semibold text-gray-100">{latestSettlementSummary}</p>
             </div>
           </div>
+          <LineMovementChart result={lineMovement} pickLine={pick.line} pickSide={pick.selection} />
           <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
             <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
             <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>
@@ -373,7 +378,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             />
             <InterventionAction
               label="Force Promote to Best Bets"
-              variant="warning"
+              variant="secondary"
               pickId={pickId}
               action="force_promote"
               target="best-bets"
@@ -417,7 +422,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.lifecycle.length === 0 ? (
-              <EmptyRow cols={5} />
+              <EmptyRow cols={5} label="No lifecycle events recorded yet." />
             ) : (
               detail.lifecycle.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -445,7 +450,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.promotionHistory.length === 0 ? (
-              <EmptyRow cols={6} />
+              <EmptyRow cols={6} label="No promotion decisions recorded for this pick." />
             ) : (
               detail.promotionHistory.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -476,7 +481,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               </TableHead>
               <TableBody>
                 {detail.outboxRows.length === 0 ? (
-                  <EmptyRow cols={5} />
+                  <EmptyRow cols={5} label="No outbox deliveries queued for this pick." />
                 ) : (
                   detail.outboxRows.map((row) => (
                     <tr key={row.id} className="border-t border-gray-800">
@@ -502,7 +507,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               </TableHead>
               <TableBody>
                 {detail.receipts.length === 0 ? (
-                  <EmptyRow cols={4} />
+                  <EmptyRow cols={4} label="No delivery receipts — nothing has been dispatched." />
                 ) : (
                   detail.receipts.map((row) => (
                     <tr key={row.id} className="border-t border-gray-800">
@@ -569,7 +574,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.settlements.length === 0 ? (
-              <EmptyRow cols={8} />
+              <EmptyRow cols={8} label="Not settled yet — no settlement records." />
             ) : (
               detail.settlements.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
@@ -662,7 +667,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           </TableHead>
           <TableBody>
             {detail.auditTrail.length === 0 ? (
-              <EmptyRow cols={5} />
+              <EmptyRow cols={5} label="No audit entries reference this pick." />
             ) : (
               detail.auditTrail.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">

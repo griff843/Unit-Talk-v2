@@ -1,6 +1,8 @@
 import { Card, EmptyState, MetricsCard } from '@/components/ui';
 import { getIntelligenceData } from '@/lib/data';
 
+export const metadata = { title: 'Calibration — Unit Talk Command Center' };
+
 function formatPercent(value: number | null) {
   return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(1)}%`;
 }
@@ -17,8 +19,6 @@ export default async function ScoringCalibrationPage() {
     return (
       <div className="space-y-4">
         <div>
-          <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Intelligence</p>
-          <h1 className="text-xl font-bold text-white">Model Feedback Scaffold</h1>
         </div>
 
         <EmptyState
@@ -40,8 +40,6 @@ export default async function ScoringCalibrationPage() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Intelligence</p>
-        <h1 className="text-xl font-bold text-white">Model Feedback Scaffold</h1>
       </div>
 
       <div className="rounded-md border border-blue-800/50 bg-blue-950/20 px-4 py-4 text-sm text-blue-100">

@@ -6,11 +6,16 @@ import { Button } from '@/components/ui/Button';
 
 type ResultType = 'win' | 'loss' | 'push' | 'void';
 
-const RESULTS: { value: ResultType; label: string; variant: 'success' | 'danger' | 'secondary' | 'warning' }[] = [
-  { value: 'win', label: 'Win', variant: 'success' },
-  { value: 'loss', label: 'Loss', variant: 'danger' },
-  { value: 'push', label: 'Push', variant: 'secondary' },
-  { value: 'void', label: 'Void', variant: 'warning' },
+const RESULTS: {
+  value: ResultType;
+  label: string;
+  variant: 'success' | 'danger' | 'secondary' | 'warning';
+  idleClass: string;
+}[] = [
+  { value: 'win', label: 'Win', variant: 'success', idleClass: 'border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10' },
+  { value: 'loss', label: 'Loss', variant: 'danger', idleClass: 'border-rose-500/40 text-rose-300 hover:bg-rose-500/10' },
+  { value: 'push', label: 'Push', variant: 'secondary', idleClass: 'border-gray-600 text-gray-300 hover:bg-white/[0.06]' },
+  { value: 'void', label: 'Void', variant: 'warning', idleClass: 'border-amber-500/40 text-amber-300 hover:bg-amber-500/10' },
 ];
 
 interface SettlementFormProps {
@@ -74,14 +79,18 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
         )}
       </div>
 
+      <p className="text-xs text-gray-500">
+        Settlement writes an immutable record — corrections append, they never overwrite.
+      </p>
       <div className="flex flex-wrap gap-2">
-        {RESULTS.map(({ value, label, variant }) => (
+        {RESULTS.map(({ value, label, variant, idleClass }) => (
           <Button
             key={value}
-            variant={selected === value ? variant : 'secondary'}
-            size="sm"
+            variant={selected === value ? variant : 'ghost'}
+            size="md"
             onClick={() => handleSelect(value)}
             disabled={isPending}
+            className={selected === value ? 'min-w-[88px] font-semibold' : `min-w-[88px] border font-semibold ${idleClass}`}
           >
             {label}
           </Button>
@@ -98,7 +107,8 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
         <div className="flex flex-col gap-3 rounded-md border border-gray-700 bg-gray-900 p-4">
           <p className="text-sm text-gray-200">
             Confirm: mark this pick as{' '}
-            <span className="font-semibold uppercase text-white">{selected}</span>?
+            <span className="font-semibold uppercase text-white">{selected}</span>? This creates a
+            permanent settlement record.
           </p>
           <div className="flex gap-2">
             <Button variant="primary" size="sm" loading={isPending} onClick={handleSubmit}>

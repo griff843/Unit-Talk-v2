@@ -2,6 +2,8 @@ import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
 import { getPropOffers, getMarketUniverseStalenessByMarketKey, formatRelativeTime } from '@/lib/data';
 
+export const metadata = { title: 'Props Explorer — Unit Talk Command Center' };
+
 function formatOdds(odds: number | null): string {
   if (odds === null) return '—';
   return odds > 0 ? `+${odds}` : String(odds);
@@ -41,10 +43,11 @@ const SPORT_OPTIONS = [
 ];
 
 export default async function PropExplorerPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
   const market = typeof searchParams['market'] === 'string' ? searchParams['market'] : undefined;
   const bookmaker = typeof searchParams['bookmaker'] === 'string' ? searchParams['bookmaker'] : undefined;
@@ -55,9 +58,31 @@ export default async function PropExplorerPage({
 
   const hasFilters = Boolean(sport || market || bookmaker || participant || since);
 
-  const data = hasFilters || offset > 0
-    ? await getPropOffers({ sport, market, bookmaker, participant, since, offset })
-    : null;
+  // Default board: today's slate (offers snapshotted in the last 24h), newest first.
+  // Filters refine the board; they never gate it behind an empty prompt.
+  const defaultSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const effectiveSince = since ?? (hasFilters ? undefined : defaultSince);
+  let data = await getPropOffers({
+    sport,
+    market,
+    bookmaker,
+    participant,
+    since: effectiveSince,
+    offset,
+  });
+  const isDefaultBoard = !hasFilters && offset === 0;
+
+  // If the 24h slate is empty (stale ingestion), fall back to the most recent
+  // real snapshot and say so explicitly — live data with an honest staleness
+  // banner beats a void. Never fabricated: same table, no window.
+  let staleFallback = false;
+  if (isDefaultBoard && data && data.offers.length === 0) {
+    const fallback = await getPropOffers({ offset: 0 });
+    if (fallback && fallback.offers.length > 0) {
+      data = fallback;
+      staleFallback = true;
+    }
+  }
 
   // UTV2-775: Fetch market universe staleness for the filtered market/participant/sport.
   // Only when filters are active so we don't show irrelevant staleness info.
@@ -75,8 +100,6 @@ export default async function PropExplorerPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Props Explorer</h1>
         <p className="mt-1 text-sm text-gray-400">
           Browse live prop offers from ingested provider data. Source: <code className="text-gray-300">provider_offer_current</code>.
         </p>
@@ -95,7 +118,7 @@ export default async function PropExplorerPage({
             id="po-sport"
             name="sport"
             defaultValue={sport ?? ''}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-select"
           >
             {SPORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -111,7 +134,7 @@ export default async function PropExplorerPage({
             id="po-bookmaker"
             name="bookmaker"
             defaultValue={bookmaker ?? ''}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-select"
           >
             {BOOKMAKER_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -154,7 +177,7 @@ export default async function PropExplorerPage({
             name="since"
             type="date"
             defaultValue={since?.slice(0, 10) ?? ''}
-            className="rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="cc-input text-xs"
           />
         </div>
 
@@ -206,18 +229,8 @@ export default async function PropExplorerPage({
         </div>
       )}
 
-      {/* No-filter prompt */}
-      {!hasFilters && offset === 0 && (
-        <div className="rounded border border-gray-800 bg-gray-900/50 p-6 text-center">
-          <p className="text-sm text-gray-400">Apply at least one filter to browse prop offers.</p>
-          <p className="mt-1 text-xs text-gray-600">
-            The <code className="text-gray-500">provider_offer_current</code> table is filtered to keep results useful.
-          </p>
-        </div>
-      )}
-
       {/* Error state */}
-      {hasFilters && !data && (
+      {!data && (
         <EmptyState
           message="Unable to load prop offers."
           detail="Prop offers could not be read from the database. Check Supabase connectivity."
@@ -228,15 +241,39 @@ export default async function PropExplorerPage({
       {/* Empty results */}
       {data && data.offers.length === 0 && (
         <EmptyState
-          message="No prop offers match your filters."
-          detail="Try broadening the search — adjust sport, bookmaker, or date range."
-          action={{ label: 'Clear Filters', href: '/research/props' }}
+          message={isDefaultBoard ? 'No offers snapshotted in the last 24h' : 'No prop offers match your filters.'}
+          detail={
+            isDefaultBoard
+              ? 'The default board shows the last 24 hours of ingested offers. Nothing landed in that window — check ingestion health if this persists.'
+              : 'Try broadening the search — adjust sport, bookmaker, or date range.'
+          }
+          action={
+            isDefaultBoard
+              ? { label: 'API Health', href: '/api-health' }
+              : { label: 'Clear Filters', href: '/research/props' }
+          }
         />
       )}
 
       {/* Results table */}
       {data && data.offers.length > 0 && (
-        <Card title={`Prop Offers — ${data.total.toLocaleString()} total`}>
+        <Card
+          title={
+            isDefaultBoard
+              ? staleFallback
+                ? `Most Recent Offers — ${data.total.toLocaleString()} total`
+                : `Today's Slate — last 24h, ${data.total.toLocaleString()} offers`
+              : `Prop Offers — ${data.total.toLocaleString()} total`
+          }
+        >
+          {staleFallback && (
+            <div className="mb-3 rounded border border-amber-700/40 bg-amber-900/15 px-3 py-2 text-[11px] text-amber-300">
+              No offers were snapshotted in the last 24h — showing the most recent ingested
+              snapshot instead. Last ingest{' '}
+              <span className="font-mono">{formatRelativeTime(data.offers[0]?.snapshotAt)}</span>.
+              Check ingestion health if this persists.
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>

@@ -1,5 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+
+export const metadata = { title: 'Model Health — Unit Talk Command Center' };
 import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
@@ -82,10 +84,11 @@ async function submitModelHealthDecision(formData: FormData) {
 }
 
 export default async function ModelHealthPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const result = await fetchModelHealthAlerts();
   const error = typeof searchParams?.error === 'string' ? searchParams.error : null;
   const decision = typeof searchParams?.decision === 'string' ? searchParams.decision : null;
@@ -93,8 +96,6 @@ export default async function ModelHealthPage({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Operations</p>
-        <h1 className="text-xl font-bold text-white">Model Health Alerts</h1>
         <p className="max-w-3xl text-sm text-gray-400">
           Review alerted model health snapshots and record operator decisions for models requiring attention.
         </p>
@@ -164,7 +165,7 @@ export default async function ModelHealthPage({
                         id={`action-${snapshot.id}`}
                         name="action"
                         defaultValue="acknowledge"
-                        className="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-xs text-gray-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="cc-select"
                       >
                         {DECISION_ACTIONS.map((action) => (
                           <option key={action} value={action}>{action}</option>

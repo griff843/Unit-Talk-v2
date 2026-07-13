@@ -2,11 +2,14 @@ import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
 import { getResearchPlayers } from '@/lib/data';
 
+export const metadata = { title: 'Player Research — Unit Talk Command Center' };
+
 export default async function PlayerCardPage({
-  searchParams,
+  searchParams: searchParamsPromise,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const searchParams = await searchParamsPromise;
   const tab = searchParams['tab'] === 'team' ? 'team' : 'player';
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
   const q = typeof searchParams['q'] === 'string' ? searchParams['q'] : undefined;
@@ -16,8 +19,6 @@ export default async function PlayerCardPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
-        <h1 className="mt-1 text-xl font-bold text-white">Player Card</h1>
         <p className="mt-1 text-sm text-gray-400">
           Browse players and teams from the participants index.
         </p>
