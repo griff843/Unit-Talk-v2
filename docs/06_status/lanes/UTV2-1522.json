@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1522-command-center-v2",
   "branch": "claude/utv2-1522-command-center-v2",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b0a9002be3dfae89ee1abb49ed17c15f2addd741",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1190",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/**",
