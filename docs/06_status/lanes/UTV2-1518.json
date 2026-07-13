@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1518-scope-guard-canonical-paths-reopen",
   "branch": "claude/utv2-1518-scope-guard-canonical-paths-reopen",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "28d6bac3f67bcfd3ac059b9b9eb3359ce07cd781",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1197",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,14 +19,30 @@
     "docs/06_status/proof/UTV2-1518/diff-summary.md",
     "docs/06_status/proof/UTV2-1518/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-13T12:14:37.052Z",
-  "heartbeat_at": "2026-07-13T12:14:37.052Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-13T12:47:12.896Z",
+  "closed_at": "2026-07-13T12:47:12.896Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1518-scope-guard-canonical-paths-reopen.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-13T12:47:10.472Z",
+      "verdict": "pass",
+      "merge_sha": "28d6bac3f67bcfd3ac059b9b9eb3359ce07cd781",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1197",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
