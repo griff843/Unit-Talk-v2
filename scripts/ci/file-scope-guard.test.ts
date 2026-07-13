@@ -316,6 +316,112 @@ test('trusted resolution + evaluateFileScopeGuard: a same-PR manifest widening a
   ]);
 });
 
+test('own lane proof directory (UTV2-1518 reopened): a fresh multi-commit lane whose SECOND commit adds proof files still passes without needing them in expected_proof_paths', () => {
+  // Reproduces the exact two-commit T3 docs-lane failure hit live on
+  // UTV2-1428: `ops:lane-start` commits the manifest with
+  // expected_proof_paths: [] (nothing generated yet), then a LATER commit
+  // runs `ops:proof-generate` and adds diff-summary.md/verification.md.
+  // Trusted resolution locks expected_proof_paths to the FIRST commit's
+  // (empty) content, so the guard must not depend on expected_proof_paths
+  // to permit these files -- they are the lane's own canonical proof
+  // bookkeeping and must always be allowed via ownLaneControlPlanePatterns.
+  const source = fakeGitSource({
+    refs: {
+      base: {},
+      head: {
+        'docs/06_status/lanes/UTV2-1600.json': JSON.stringify({
+          issue_id: 'UTV2-1600',
+          branch: 'claude/utv2-1600-fresh-docs-lane',
+          status: 'started',
+          file_scope_lock: ['docs/05_operations/SOME_DOC.md'],
+          expected_proof_paths: [
+            'docs/06_status/proof/UTV2-1600/diff-summary.md',
+            'docs/06_status/proof/UTV2-1600/verification.md',
+          ],
+        }),
+      },
+      'first-commit-sha': {
+        'docs/06_status/lanes/UTV2-1600.json': JSON.stringify({
+          issue_id: 'UTV2-1600',
+          branch: 'claude/utv2-1600-fresh-docs-lane',
+          status: 'started',
+          file_scope_lock: ['docs/05_operations/SOME_DOC.md'],
+          expected_proof_paths: [],
+        }),
+      },
+    },
+    firstAdditions: {
+      'base..head::docs/06_status/lanes/UTV2-1600.json': 'first-commit-sha',
+    },
+  });
+
+  const manifests = resolveTrustedManifests(source, 'base', 'head');
+  // Confirms the premise: trusted content is locked to the first commit's
+  // EMPTY expected_proof_paths, not head's widened (later-committed) value.
+  assert.deepEqual(manifests[0].expected_proof_paths, []);
+
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1600-fresh-docs-lane',
+    changedFiles: [
+      'docs/05_operations/SOME_DOC.md',
+      'docs/06_status/proof/UTV2-1600/diff-summary.md',
+      'docs/06_status/proof/UTV2-1600/verification.md',
+    ],
+    manifests,
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.outside_scope, []);
+});
+
+test('own lane proof directory (UTV2-1518 reopened): files outside the proof directory still require file_scope_lock/expected_proof_paths declaration', () => {
+  // Companion to the test above: the proof-directory exemption must not
+  // become a general escape hatch. A file outside the lane's declared
+  // file_scope_lock and outside its proof directory still fails closed.
+  const source = fakeGitSource({
+    refs: {
+      base: {},
+      head: {
+        'docs/06_status/lanes/UTV2-1600.json': JSON.stringify({
+          issue_id: 'UTV2-1600',
+          branch: 'claude/utv2-1600-fresh-docs-lane',
+          status: 'started',
+          file_scope_lock: ['docs/05_operations/SOME_DOC.md'],
+          expected_proof_paths: [],
+        }),
+      },
+      'first-commit-sha': {
+        'docs/06_status/lanes/UTV2-1600.json': JSON.stringify({
+          issue_id: 'UTV2-1600',
+          branch: 'claude/utv2-1600-fresh-docs-lane',
+          status: 'started',
+          file_scope_lock: ['docs/05_operations/SOME_DOC.md'],
+          expected_proof_paths: [],
+        }),
+      },
+    },
+    firstAdditions: {
+      'base..head::docs/06_status/lanes/UTV2-1600.json': 'first-commit-sha',
+    },
+  });
+
+  const manifests = resolveTrustedManifests(source, 'base', 'head');
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1600-fresh-docs-lane',
+    changedFiles: [
+      'docs/05_operations/SOME_DOC.md',
+      'docs/06_status/proof/UTV2-1600/diff-summary.md',
+      'apps/api/src/unrelated.ts',
+    ],
+    manifests,
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.deepEqual(result.outside_scope, [
+    { file: 'apps/api/src/unrelated.ts', branch: 'claude/utv2-1600-fresh-docs-lane', issue_id: 'UTV2-1600' },
+  ]);
+});
+
 test('trusted resolution: malformed JSON at the resolved ref is skipped, not thrown', () => {
   const source = fakeGitSource({
     refs: {
