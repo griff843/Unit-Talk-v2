@@ -33,6 +33,10 @@ allowed_path_globs:
   - docs/06_status/CURRENT_STATE.md
   - docs/06_status/qa-roadmap-expansion.md
   - docs/06_status/model-performance-log.md
+  # OS v1 governance-lock document — added UTV2-1528 (PR #1199 hit the
+  # same DEBT-025-class gap: no lane allowed a top-level docs/06_status/*.md
+  # ratification doc).
+  - docs/06_status/OS_V1_LOCK.md
   # Certification authority documents — governance lanes author/reconcile these
   # (P1–P5 certification records and the certification board). Added UTV2-1195.
   - docs/06_status/programs/**
