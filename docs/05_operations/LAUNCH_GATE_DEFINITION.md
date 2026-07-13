@@ -170,8 +170,8 @@ The following lanes are required before any Tier A gate can be considered comple
 |---|---|---|---|
 | UTV2-1319 | Discord Launch Gate Audit — confirm readiness state and blockers | Tier B | Claude + Codex |
 | UTV2-1320 | Queue readiness semantics — encode governance-held vs true failures | Tier B | Claude + Codex |
-| UTV2-XXXX | Incident response runbook — define alert/escalation/rollback procedure | Tier A | Claude |
-| UTV2-XXXX | Rollback procedure — define explicit steps to revert any launch step | Tier A | Claude |
+| UTV2-1428 | Incident response runbook — define alert/escalation/rollback procedure (`docs/05_operations/INCIDENT_RUNBOOK.md`) | Tier A | Claude |
+| UTV2-1428 | Rollback procedure — define explicit steps to revert any launch step (same runbook, "Rollback Procedure" section) | Tier A | Claude |
 | UTV2-XXXX | Monitoring dashboard spec — define what is watched and by whom | Tier B | Claude |
 | UTV2-1042 | P3 empirical gate — honest pass/fail/defer verdict on CLV/edge data | Tier B | Claude/Griff |
 | UTV2-1176 | 7-lane burn-in — FROZEN until P5 conditions met | Tier C (blocked) | PM-gated |
