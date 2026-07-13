@@ -13,10 +13,11 @@
 | Tier | T1 |
 | Phase / Gate | OS v1 stabilization — scope-override authority path fix |
 | Owner | claude (orchestrator) |
-| Date | 2026-07-12 / 2026-07-13 (P1 correction) |
+| Date | 2026-07-12 / 2026-07-13 (P1 correction) / 2026-07-13 (merged) |
 | Verifier Identity | claude/utv2-1524-scope-override-parser-fix |
-| Commit SHA(s) | 6cbb43e3 (original fix) + P1 correction commit (see PR #1194 head) |
-| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1194 |
+| Commit SHA(s) | 6cbb43e3 (original fix), 1bebb8ad (P1 correction, PR head) |
+| Merge SHA | 60a2a15028aad049e8ff0f3c8c10da5275879ebb |
+| Related PRs | https://github.com/griff843/Unit-Talk-v2/pull/1194 (merged) |
 
 ---
 
@@ -226,11 +227,12 @@ This is a CI-tooling-only change (no DB schema or data-path touch); `test:db` is
 
 ## Stop Conditions Encountered
 
-Independent PM review (2026-07-13) found the original fix's issue-ID fallback unsafe — Codex's P1 review thread on `scripts/ci/file-scope-guard.ts` identified that an unrelated branch could inherit another lane's scope by embedding its issue ID. PM verdict was CHANGES REQUIRED; work stopped, the correction above was implemented and independently re-verified (full suite + type-check + lint + test:db), and PM review is being requested again before any merge/approval step. No `t1-approved` label, PM verdict, merge, or lane-close has been applied.
+Independent PM review (2026-07-13) found the original fix's issue-ID fallback unsafe — Codex's P1 review thread on `scripts/ci/file-scope-guard.ts` identified that an unrelated branch could inherit another lane's scope by embedding its issue ID. PM verdict was CHANGES REQUIRED; work stopped, the correction above was implemented and independently re-verified (full suite + type-check + lint + test:db). PM subsequently posted a `pm-verdict/v1` APPROVED comment and PR #1194 merged (squash) as `60a2a15028aad049e8ff0f3c8c10da5275879ebb`.
 
 ---
 
 ## Sign-off
 
 **Verifier:** claude/utv2-1524-scope-override-parser-fix — 2026-07-13 (P1 correction)
-**PM acceptance:** pending
+**PM acceptance:** APPROVED (`pm-verdict/v1`, PR #1194) — 2026-07-13
+**Merge SHA:** 60a2a15028aad049e8ff0f3c8c10da5275879ebb

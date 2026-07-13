@@ -3,12 +3,22 @@
   "issue_id": "UTV2-1524",
   "title": "Fix scope-override parser Reason/Paths order + findOwnManifest trap (with P1 continuation-binding correction)",
   "sha_binding": {
-    "verified_source_sha": "79677ab6b491a0e6bc10594df692d6ccf0e92ce0",
-    "verified_source_note": "Head SHA before the P1-correction commit; updated again after that commit is pushed, and again at merge close via ops:proof-generate --merge-sha",
-    "merge_sha": null,
-    "evidence_commit_sha": null,
-    "current_pr_head_sha": "79677ab6b491a0e6bc10594df692d6ccf0e92ce0"
+    "verified_source_sha": "60a2a15028aad049e8ff0f3c8c10da5275879ebb",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-13T10:45:49Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "executor_result_validation": "pass",
+      "merge_gate": "pass",
+      "p0_protocol": "pass",
+      "t1_proof_gate": "pass"
+    },
+    "verified_source_note": "PR head SHA (1bebb8ad) at merge time; verified_source_sha bound to the merge SHA after squash-merge.",
+    "merge_sha": "60a2a15028aad049e8ff0f3c8c10da5275879ebb",
+    "evidence_commit_sha": "60a2a15028aad049e8ff0f3c8c10da5275879ebb",
+    "current_pr_head_sha": "1bebb8ad0251e22577ba3cc958a1ff9e8f17a063"
   },
+  "status": "merged",
   "verifier": {
     "identity": "claude/utv2-1524-scope-override-parser-fix",
     "role": "implementation-lane"
@@ -48,6 +58,27 @@
       {
         "supabase_project": "zfzdnfwdarxucxtaojxm",
         "note": "CI-tooling-only change (comment parser + manifest-resolution logic); test:db run as the standard T1 runtime-proof gate, not because this fix performs any DB write itself. Re-run clean (7/7) after the P1 correction; an earlier same-session run showed 1 transient failure consistent with known live-Supabase flakiness."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+      "UTV2-996: correction chain is additive — original settlement row is not mutated"
+    ],
+    "row_counts": [
+      {
+        "note": "This is a CI-tooling-only change (comment parser + manifest-resolution logic); no lane-specific DB rows are mutated by it. test:db exercises the standard smoke suite's monitored tables as the T1 runtime-proof gate.",
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
       }
     ]
   },
