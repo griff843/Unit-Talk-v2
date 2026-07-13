@@ -253,16 +253,24 @@ inputs (lane tier, package/file count touched, rescue status, verification stren
 
 | Condition (first match wins) | Profile |
 |---|---|
-| Rescue threshold exceeded after `codex-sol-high` already failed on this lane, or explicit Griff authorization | `codex-sol-max` |
+| Rescue threshold exceeded after `codex-sol-high` already failed on this lane, or explicit Griff authorization | `codex-sol-max` — **mechanically unavailable**, see below |
 | Complex T2 spanning several files/packages, failure-rescue lane (Rule 6), root-cause investigation, bounded T1 already permitted under Rule 1's guardrails, or governance-tool implementation after Claude has approved the architecture | `codex-sol-high` |
 | Normal clear-scope T2 with deterministic acceptance criteria, no Tier C path, no scope ambiguity, no repeated failure | `codex-terra-medium` |
 | — | `codex-luna-low` is defined but disabled; do not select it to manufacture work for it |
 
-`codex-sol-max`, and any future enabling of `codex-luna-low`, require a documented override
-(`authorized_by` + `reason`) persisted in the manifest — enforced by the policy's
-`requires_pm_authorization` flag. A model-profile selection never grants merge, scope, or
-tier authority by itself; it only determines which Codex model/effort executes a lane whose
-executor and tier gates have already been satisfied through the rules above.
+**`codex-sol-max` is mechanically unavailable** (`enabled: false` in policy, and
+`scripts/ops/model-routing.ts#resolveModelProfile` unconditionally rejects any
+`requires_pm_authorization: true` profile regardless of any caller-supplied override). A
+caller-supplied `authorized_by`/`reason` string is self-asserted, not proof of PM
+authorization — the same self-certification loophole UTV2-1521 already closed for
+file-scope overrides. There is currently no way to route to `codex-sol-max`; re-enabling
+it requires a trusted external authorization mechanism (e.g. an authenticated PR-comment
+scheme mirroring `docs/05_operations/schemas/scope-override-v1.md`, verified against
+CODEOWNERS) landing in a follow-up governance lane. Do not route to it, and do not add an
+override-based unlock without that mechanism shipping first. A model-profile selection
+never grants merge, scope, or tier authority by itself; it only determines which Codex
+model/effort executes a lane whose executor and tier gates have already been satisfied
+through the rules above.
 
 Pass the resolved profile to lane-start explicitly (Codex lanes only):
 
@@ -272,11 +280,12 @@ pnpm ops:lane-start UTV2-{number} --tier T2 --branch codex/utv2-{number}-slug \
   --files <path1> [--files <path2> ...]
 ```
 
-`ops:lane-start` validates the profile against policy (enabled, permitted for this tier,
-override present and well-formed if required) and persists the resolved decision —
-concrete model, reasoning effort, and policy version — into the lane manifest's
-`model_routing` block. It rejects the lane if the profile is missing, unknown, disabled, or
-not permitted for the tier. **Claude lanes must never receive `--model-profile`** —
+`ops:lane-start` validates the profile against policy (enabled, permitted for this tier)
+and persists the resolved decision — concrete model, reasoning effort, and policy
+version — into the lane manifest's `model_routing` block. It rejects the lane if the
+profile is missing, unknown, disabled, not permitted for the tier, or requires PM
+authorization (no override flag exists to bypass this). **Claude lanes must never
+receive `--model-profile`** —
 `ops:lane-start` rejects it if supplied for a non-Codex executor.
 
 `scripts/ops/codex-exec.ts` re-validates the manifest's `model_routing` against current

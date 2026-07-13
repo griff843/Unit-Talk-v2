@@ -38,14 +38,14 @@
     "codex-sol-max": {
       "model": "gpt-5.6-sol",
       "reasoning_effort": "max",
-      "enabled": true,
+      "enabled": false,
       "permitted_tiers": ["T1", "T2"],
       "use_cases": [
         "rescue-threshold-exceeded-after-sol-high-failed",
         "explicit-griff-authorization"
       ],
       "requires_pm_authorization": true,
-      "description": "Maximum reasoning depth. Reserved for a stuck lane that has already failed under codex-sol-high, or an explicitly PM-authorized escalation. Must never be selected as a default profile -- selecting this profile always requires a documented override (authorized_by + reason) in the manifest's model_routing block."
+      "description": "Maximum reasoning depth. Reserved for a stuck lane that has already failed under codex-sol-high, or an explicitly PM-authorized escalation. Mechanically UNAVAILABLE (enabled: false) as of PM review on UTV2-1526 (2026-07-13): a caller-supplied authorized_by/reason override is not proof of PM authorization -- it is self-asserted, the same loophole UTV2-1521 already closed for file-scope overrides. scripts/ops/model-routing.ts#resolveModelProfile rejects any requires_pm_authorization:true profile unconditionally, regardless of override content, as defense in depth beyond this enabled flag. Re-enabling this profile requires a trusted external authorization mechanism (e.g. an authenticated PR-comment scheme mirroring docs/05_operations/schemas/scope-override-v1.md, verified against CODEOWNERS) landing in a follow-up governance lane -- do not flip enabled:true without it."
     },
     "codex-luna-low": {
       "model": "gpt-5.6-luna",

@@ -48,6 +48,7 @@ interface CodexExecResult {
     | 'PRECONDITION_FAILED'
     | 'MODEL_ROUTING_INVALID'
     | 'EXECUTION_FAILED'
+    | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'DRY_RUN';
   issue_id: string;
   branch?: string;
@@ -79,7 +80,7 @@ export interface ModelRoutingExecResolution {
  * execution-scoped only.
  */
 export function resolveExecModelRouting(
-  manifest: Pick<LaneManifest, 'model_routing' | 'tier'>,
+  manifest: Pick<LaneManifest, 'model_routing' | 'tier' | 'schema_version'>,
 ): ModelRoutingExecResolution {
   if (manifest.model_routing) {
     const result = validatePersistedModelRouting(manifest.model_routing, manifest.tier);
@@ -88,6 +89,20 @@ export function resolveExecModelRouting(
       code: result.code,
       message: result.message,
       model_routing: result.model_routing,
+      legacy_compatibility_used: false,
+    };
+  }
+  // The version boundary is load-bearing here (PM review finding #2): only a
+  // schema_version-1 manifest may fall back to the legacy default. A schema_version-2
+  // Codex manifest with model_routing missing means it was deleted (or never resolved)
+  // after this policy shipped -- that fails closed, it never silently downgrades.
+  if (manifest.schema_version !== 1) {
+    return {
+      ok: false,
+      code: 'MODEL_ROUTING_REQUIRED_FOR_SCHEMA_VERSION',
+      message:
+        `manifest schema_version ${manifest.schema_version} requires a model_routing block; ` +
+        `only schema_version 1 manifests may use the legacy-default resolution path`,
       legacy_compatibility_used: false,
     };
   }
@@ -147,6 +162,45 @@ function writeModelRoutingEvidence(cwd: string, issueId: string, evidence: Model
   const filePath = path.join(dir, 'model-routing.json');
   fs.writeFileSync(filePath, `${JSON.stringify(evidence, null, 2)}\n`, 'utf8');
   return filePath;
+}
+
+export interface EvidencePersistenceResult {
+  ok: boolean;
+  step: 'add' | 'commit' | 'push' | 'none';
+  detail: string;
+}
+
+/**
+ * Commit and push the model-routing evidence sidecar inside the lane worktree, on the
+ * lane's own branch. Required because Codex's own commit/push (its last action before
+ * codex-exec.ts's spawnSync call returns) necessarily happens BEFORE this evidence file
+ * exists -- writing it after Codex exits and stopping there would leave it permanently
+ * untracked, never reaching the PR (PM review finding #4). This does not broaden the
+ * runner's commit authority: codex-exec.ts already runs with git access to this same
+ * worktree/branch as the trusted orchestrator entry point: it only adds one narrow,
+ * auditable commit to the branch it already owns.
+ */
+export function commitAndPushEvidence(cwd: string, relativeEvidencePath: string, message: string): EvidencePersistenceResult {
+  const add = spawnSync('git', ['add', relativeEvidencePath], { cwd, stdio: 'pipe', encoding: 'utf8' });
+  if (add.status !== 0) {
+    return { ok: false, step: 'add', detail: add.stderr || add.stdout || 'git add failed' };
+  }
+
+  const commit = spawnSync('git', ['commit', '-m', message], { cwd, stdio: 'pipe', encoding: 'utf8' });
+  if (commit.status !== 0) {
+    const combined = `${commit.stdout ?? ''}${commit.stderr ?? ''}`;
+    if (/nothing to commit/i.test(combined)) {
+      return { ok: true, step: 'none', detail: 'evidence unchanged, nothing to commit' };
+    }
+    return { ok: false, step: 'commit', detail: combined || 'git commit failed' };
+  }
+
+  const push = spawnSync('git', ['push'], { cwd, stdio: 'pipe', encoding: 'utf8' });
+  if (push.status !== 0) {
+    return { ok: false, step: 'push', detail: push.stderr || push.stdout || 'git push failed' };
+  }
+
+  return { ok: true, step: 'push', detail: 'committed and pushed' };
 }
 
 function buildCodexChildEnv(cwd: string): NodeJS.ProcessEnv {
@@ -390,6 +444,16 @@ async function main(): Promise<void> {
     codexExitCode: child.error ? null : exitCode,
   });
   const evidencePath = writeModelRoutingEvidence(resolvedCwd, issueId, evidence);
+  const evidenceRelativePath = path.relative(resolvedCwd, evidencePath).split(path.sep).join('/');
+  // Commit and push the evidence sidecar BEFORE reporting either outcome -- a successful
+  // Codex run must never leave an untracked/uncommitted evidence file behind (PM review
+  // finding #4). Attempted on both the success and failure path so failure evidence is
+  // preserved through the same canonical location too.
+  const persistence = commitAndPushEvidence(
+    resolvedCwd,
+    evidenceRelativePath,
+    `chore(proof): ${issueId} model-routing evidence`,
+  );
 
   if (child.error || child.status !== 0) {
     emitJson({
@@ -397,8 +461,31 @@ async function main(): Promise<void> {
       code: 'EXECUTION_FAILED',
       issue_id: issueId,
       branch: manifest.branch,
-      message: `Codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}. Model routing evidence: ${evidencePath}`,
+      message:
+        `Codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}. ` +
+        `Model routing evidence: ${evidencePath} (persistence: ${persistence.ok ? persistence.detail : `FAILED at ${persistence.step}: ${persistence.detail}`})`,
       codex_exit_code: child.status ?? 1,
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
+    } satisfies CodexExecResult);
+    process.exit(1);
+  }
+
+  if (!persistence.ok) {
+    // Codex itself succeeded, but the evidence sidecar failed to commit/push -- the
+    // invariant "a successful execution cannot leave dangling evidence" means this run
+    // must NOT report SUCCESS/READY_FOR_REVIEW. Fail closed instead.
+    emitJson({
+      ok: false,
+      code: 'EVIDENCE_PERSISTENCE_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `Codex completed successfully, but model-routing evidence failed to persist at ${persistence.step}: ${persistence.detail}. Evidence file: ${evidencePath}`,
+      codex_exit_code: 0,
       model_profile: modelRouting.profile,
       model: modelRouting.model,
       reasoning_effort: modelRouting.reasoning_effort,
@@ -414,7 +501,7 @@ async function main(): Promise<void> {
     code: 'SUCCESS',
     issue_id: issueId,
     branch: manifest.branch,
-    message: `Codex execution completed for ${issueId}. Model routing evidence: ${evidencePath}`,
+    message: `Codex execution completed for ${issueId}. Model routing evidence: ${evidencePath} (${persistence.detail})`,
     codex_exit_code: 0,
     model_profile: modelRouting.profile,
     model: modelRouting.model,

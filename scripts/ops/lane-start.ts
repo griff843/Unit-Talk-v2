@@ -401,35 +401,17 @@ function main(): void {
       );
     }
 
+    // Model-profile resolution/enforcement happens later, ONLY on the path that
+    // actually calls createManifest (a genuinely new lane) -- see the comment at that
+    // call site. A `pnpm ops:lane:resume` re-invocation of ops:lane-start for an
+    // existing, blocked Codex lane must NOT be required to (re)specify --model-profile;
+    // it takes the "already exists" branch below, which never calls createManifest and
+    // simply preserves whatever model_routing the manifest already has (PM review
+    // finding #1). Enforcing this check unconditionally here would have broken every
+    // Codex lane resume.
     const isCodexExecutor = executor === 'codex-cli' || executor === 'codex-cloud';
     const modelProfileFlag = flags.get('model-profile')?.at(-1);
-    let modelRouting: ModelRoutingBlock | undefined;
-    if (isCodexExecutor) {
-      if (!modelProfileFlag) {
-        emitJson({
-          ok: false,
-          code: 'model_profile_required',
-          message: `Codex lane ${issueId} requires --model-profile <profile-name> (see docs/05_operations/policies/codex-model-routing.json for valid profiles).`,
-        });
-        process.exit(1);
-      }
-      const overrideAuthorizedBy = flags.get('override-authorized-by')?.at(-1);
-      const overrideReason = flags.get('override-reason')?.at(-1);
-      const override =
-        overrideAuthorizedBy || overrideReason
-          ? { authorized_by: overrideAuthorizedBy ?? '', reason: overrideReason ?? '' }
-          : undefined;
-      const resolution = resolveModelProfile({ profileName: modelProfileFlag, tier, override });
-      if (!resolution.ok) {
-        emitJson({
-          ok: false,
-          code: `model_routing_${resolution.code.toLowerCase()}`,
-          message: resolution.message,
-        });
-        process.exit(1);
-      }
-      modelRouting = resolution.model_routing!;
-    } else if (modelProfileFlag) {
+    if (!isCodexExecutor && modelProfileFlag) {
       emitJson({
         ok: false,
         code: 'model_profile_not_applicable',
@@ -552,6 +534,36 @@ function main(): void {
       throw new Error('Worktree exists but branch does not exist; Phase 1 fails closed');
     }
 
+    // Model-profile resolution: only reached when genuinely creating a new lane (never
+    // on a resume re-invocation, which returned above at the "already exists" branch).
+    // Resolved before any branch/worktree/lease side effects so a bad profile fails
+    // closed without leaving orphaned state behind.
+    let modelRouting: ModelRoutingBlock | undefined;
+    if (isCodexExecutor) {
+      if (!modelProfileFlag) {
+        emitJson({
+          ok: false,
+          code: 'model_profile_required',
+          message: `Codex lane ${issueId} requires --model-profile <profile-name> (see docs/05_operations/policies/codex-model-routing.json for valid profiles).`,
+        });
+        process.exit(1);
+      }
+      // No --override-authorized-by/--override-reason flags: PM review finding #3 --
+      // a caller-supplied override is not proof of PM authorization, so lane-start does
+      // not accept one. requires_pm_authorization profiles are mechanically unavailable
+      // until a trusted external mechanism exists (see codex-model-routing.json).
+      const resolution = resolveModelProfile({ profileName: modelProfileFlag, tier });
+      if (!resolution.ok) {
+        emitJson({
+          ok: false,
+          code: `model_routing_${resolution.code.toLowerCase()}`,
+          message: resolution.message,
+        });
+        process.exit(1);
+      }
+      modelRouting = resolution.model_routing!;
+    }
+
     if (!branchAlreadyExists && !worktreeAlreadyExists) {
       createBranchAndWorktree(branch, worktreePath);
       linkWorktreeEnv(worktreePath);
@@ -577,13 +589,22 @@ function main(): void {
       throw new Error(`Manifest already exists for ${issueId} with non-done status ${existingManifest.status}`);
     }
 
+    // Codex lanes get an additional declared proof path for the model-routing evidence
+    // sidecar codex-exec.ts writes and commits (PM review finding #4) -- declaring it
+    // here means the path is already in the lane's own scope; docs/06_status/proof/**
+    // is exempt from the file-scope existence check (it's an intent declaration).
+    const expectedProofPaths = defaultProofPaths(issueId, tier);
+    if (isCodexExecutor) {
+      expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
+    }
+
     const manifest = createManifest({
       issue_id: issueId,
       tier,
       branch,
       worktree_path: worktreePath,
       file_scope_lock: normalizedFiles,
-      expected_proof_paths: defaultProofPaths(issueId, tier),
+      expected_proof_paths: expectedProofPaths,
       preflight_token: preflight.tokenRelativePath,
       lane_type: canonicalLaneType,
       executor,

@@ -64,7 +64,7 @@ export type ModelRoutingResultCode =
   | 'MODEL_MISMATCH'
   | 'REASONING_EFFORT_INVALID'
   | 'POLICY_VERSION_MISMATCH'
-  | 'OVERRIDE_REQUIRED'
+  | 'TRUSTED_AUTHORIZATION_UNAVAILABLE'
   | 'OVERRIDE_INVALID';
 
 export interface ModelRoutingResolution {
@@ -191,22 +191,32 @@ export function resolveModelProfile(input: {
   }
 
   if (profile.requires_pm_authorization) {
-    if (!input.override) {
-      return {
-        ok: false,
-        code: 'OVERRIDE_REQUIRED',
-        message: `Model profile "${input.profileName}" requires_pm_authorization -- an override block with authorized_by and reason is required`,
-      };
-    }
+    // PM review finding #3: a self-asserted authorized_by/reason string is not proof of
+    // PM authorization -- it is a caller typing non-empty strings into its own request,
+    // exactly the same self-certification loophole UTV2-1521 already closed for file
+    // scope (see docs/05_operations/schemas/scope-override-v1.md). No override, however
+    // well-formed, unlocks a requires_pm_authorization profile. This profile is
+    // mechanically unavailable until a trusted external authorization mechanism exists
+    // (e.g. an authenticated PR-comment scheme mirroring scope-override-v1) -- see the
+    // follow-up governance issue referenced in codex-model-routing.json's
+    // requires_pm_authorization description. Do not reintroduce an override-based
+    // unlock here without that mechanism landing first.
+    return {
+      ok: false,
+      code: 'TRUSTED_AUTHORIZATION_UNAVAILABLE',
+      message:
+        `Model profile "${input.profileName}" requires PM authorization, but no trusted authorization mechanism exists yet -- ` +
+        `it is mechanically unavailable. A caller-supplied override is never sufficient. See the follow-up governance issue.`,
+    };
+  }
+  if (input.override) {
     const overrideCheck = validateOverride(input.override);
     if (!overrideCheck.ok) {
       return { ok: false, code: 'OVERRIDE_INVALID', message: overrideCheck.message };
     }
-  } else if (input.override) {
-    const overrideCheck = validateOverride(input.override);
-    if (!overrideCheck.ok) {
-      return { ok: false, code: 'OVERRIDE_INVALID', message: overrideCheck.message };
-    }
+    // An override on a profile that doesn't require PM authorization is accepted only
+    // as an audit annotation (e.g. "operator explicitly chose this over the default") --
+    // it grants no additional capability the profile didn't already have.
   }
 
   const catalog = policy.reasoning_effort_catalog[profile.model] ?? [];

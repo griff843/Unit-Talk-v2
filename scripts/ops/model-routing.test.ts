@@ -107,14 +107,21 @@ test('scenario 3: failure-rescue lane resolves to codex-sol-high', () => {
   assert.ok(policy.profiles['codex-sol-high']!.use_cases.includes('failure-rescue-lane'));
 });
 
-test('scenario 4 & 19: codex-sol-max is rejected without an escalation override', () => {
+// PM review finding #3: a caller-supplied authorized_by/reason override is not proof of
+// PM authorization -- it is self-asserted. codex-sol-max (requires_pm_authorization:
+// true) is mechanically unavailable regardless of any override, until a trusted
+// external authorization mechanism exists. This fixture deliberately sets
+// codex-sol-max.enabled: true so these tests exercise the requires_pm_authorization
+// rejection itself (defense in depth), independent of the real policy's enabled: false.
+
+test('scenario 4 & 19: codex-sol-max is rejected with no override', () => {
   const policy = fixturePolicy();
   const result = resolveModelProfile({ profileName: 'codex-sol-max', tier: 'T2', policy });
   assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.code, 'OVERRIDE_REQUIRED');
+  assert.strictEqual(result.code, 'TRUSTED_AUTHORIZATION_UNAVAILABLE');
 });
 
-test('scenario 4: codex-sol-max succeeds with a valid, authorized override', () => {
+test('scenario 4 & 19: codex-sol-max is rejected even with a well-formed, "authorized" override', () => {
   const policy = fixturePolicy();
   const result = resolveModelProfile({
     profileName: 'codex-sol-max',
@@ -122,33 +129,34 @@ test('scenario 4: codex-sol-max succeeds with a valid, authorized override', () 
     policy,
     override: { authorized_by: 'griff', reason: 'stuck lane, sol-high failed twice' },
   });
-  assert.strictEqual(result.ok, true);
-  assert.strictEqual(result.model_routing?.selected_by, 'manual-override');
-  assert.strictEqual(result.model_routing?.override?.authorized_by, 'griff');
+  assert.strictEqual(result.ok, false, 'a caller-supplied override must never unlock a requires_pm_authorization profile');
+  assert.strictEqual(result.code, 'TRUSTED_AUTHORIZATION_UNAVAILABLE');
 });
 
-test('scenario 19: manual override without authority is rejected', () => {
+test('scenario 19: codex-sol-max is rejected the same way regardless of override content quality', () => {
   const policy = fixturePolicy();
-  const result = resolveModelProfile({
+  const withEmptyAuthority = resolveModelProfile({
     profileName: 'codex-sol-max',
     tier: 'T2',
     policy,
     override: { authorized_by: '', reason: 'stuck lane' },
   });
-  assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.code, 'OVERRIDE_INVALID');
-});
-
-test('scenario 19: manual override without a reason is rejected', () => {
-  const policy = fixturePolicy();
-  const result = resolveModelProfile({
+  const withEmptyReason = resolveModelProfile({
     profileName: 'codex-sol-max',
     tier: 'T2',
     policy,
     override: { authorized_by: 'griff', reason: '' },
   });
-  assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.code, 'OVERRIDE_INVALID');
+  assert.strictEqual(withEmptyAuthority.ok, false);
+  assert.strictEqual(withEmptyAuthority.code, 'TRUSTED_AUTHORIZATION_UNAVAILABLE');
+  assert.strictEqual(withEmptyReason.ok, false);
+  assert.strictEqual(withEmptyReason.code, 'TRUSTED_AUTHORIZATION_UNAVAILABLE');
+});
+
+test('the real canonical policy disables codex-sol-max as defense in depth beyond the code-level rejection', () => {
+  const policy = loadModelRoutingPolicy();
+  assert.strictEqual(policy.profiles['codex-sol-max']!.enabled, false);
+  assert.strictEqual(policy.profiles['codex-sol-max']!.requires_pm_authorization, true);
 });
 
 test('scenario 5 & 9: codex-luna-low is disabled and fails closed by default', () => {

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { ROOT } from './ops/shared.js';
-import { buildDispatchPacket } from './codex-dispatch.js';
+import { buildDispatchPacket, resolveDispatchModelProfile } from './codex-dispatch.js';
 
 test('buildDispatchPacket uses manifest truth for the canonical header block', () => {
   const packet = buildDispatchPacket({
@@ -119,6 +119,32 @@ test('codex-dispatch leaves lease reservation to lane-start', () => {
   assert.doesNotMatch(source, /reserveLease/, 'dispatch should not pre-reserve a lease before lane-start');
   assert.doesNotMatch(source, /defaultLeaseOwner/, 'dispatch should not own lease creation');
   assert.match(source, /laneStartJson\.lease_path/, 'dispatch should report the lease created by lane-start');
+});
+
+test('UTV2-1526 scenario 1: codex-dispatch resolves codex-terra-medium for T2 by default', () => {
+  assert.strictEqual(resolveDispatchModelProfile('T2', undefined), 'codex-terra-medium');
+});
+
+test('UTV2-1526 scenario 2: codex-dispatch resolves codex-sol-high for T1 by default', () => {
+  assert.strictEqual(resolveDispatchModelProfile('T1', undefined), 'codex-sol-high');
+});
+
+test('UTV2-1526: codex-dispatch honors an explicit --model-profile override from an already-run /three-brain routing decision', () => {
+  assert.strictEqual(resolveDispatchModelProfile('T2', 'codex-sol-high'), 'codex-sol-high');
+});
+
+test('UTV2-1526: codex-dispatch fails closed on an unknown --model-profile rather than silently falling back', () => {
+  assert.throws(() => resolveDispatchModelProfile('T2', 'codex-nonexistent'), /model-profile resolution failed/);
+});
+
+test('UTV2-1526: codex-dispatch fails closed when the resolved profile is disabled (codex-luna-low)', () => {
+  assert.throws(() => resolveDispatchModelProfile('T2', 'codex-luna-low'), /PROFILE_DISABLED/);
+});
+
+test('UTV2-1526: codex-dispatch passes --model-profile through to ops:lane-start', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+  assert.match(source, /'--model-profile',\s*\n?\s*modelProfile/, 'lane-start invocation should include the resolved --model-profile');
+  assert.match(source, /would_run_lane_start:.*'--model-profile', modelProfile/, 'dry-run preview should also report --model-profile');
 });
 
 test('dispatch skill documents the Codex lane workflow', () => {
