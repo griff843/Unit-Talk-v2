@@ -87,14 +87,37 @@
     "docs/06_status/proof/UTV2-1522/diff-summary.md",
     "docs/06_status/proof/UTV2-1522/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-10T19:44:43.884Z",
-  "heartbeat_at": "2026-07-10T19:44:43.884Z",
+  "heartbeat_at": "2026-07-13T19:15:02.971Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1522-command-center-v2.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-13T19:15:02.959Z",
+      "verdict": "pass",
+      "merge_sha": "b0a9002be3dfae89ee1abb49ed17c15f2addd741",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1190",
+      "repaired_fields": [
+        "status",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-13T19:15:02.971Z",
+      "verdict": "fail",
+      "merge_sha": "b0a9002be3dfae89ee1abb49ed17c15f2addd741",
+      "failures": [
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

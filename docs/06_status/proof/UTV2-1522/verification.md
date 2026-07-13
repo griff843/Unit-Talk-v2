@@ -15,6 +15,7 @@ result: not_run
 - [x] `pnpm test` (full repo suite): PASS, 0 failures
 - [x] `pnpm --filter @unit-talk/command-center test`: PASS, 116/116
 - [x] `pnpm verify` (full, branch synced with main): PASS
+- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS — no R-level artifacts required for this diff
 - [x] CI on merge SHA: verify/Executor Result Validation/P0 Protocol/Merge Gate all green
 
 ## Runtime Verification
