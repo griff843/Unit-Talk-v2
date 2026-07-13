@@ -459,10 +459,25 @@ function branchLooksLikeLane(branch: string): boolean {
 function ownLaneControlPlanePatterns(manifest: LaneManifest): string[] {
   if (!manifest.issue_id) return [];
 
+  // These are the lane's own canonical bookkeeping paths -- always derivable
+  // from the issue ID alone, never a path any OTHER lane could legitimately
+  // write to. They must work unconditionally on a normal fresh multi-commit
+  // lane, independent of the trusted-at-first-commit snapshot timing of
+  // file_scope_lock/expected_proof_paths (UTV2-1518, reopened): a lane
+  // that runs `ops:proof-generate` (or otherwise writes its own proof
+  // artifacts) in a commit AFTER the manifest's first-committed content
+  // must not fail the guard for that alone. The full proof-directory glob
+  // is exempted here -- not just the `.gitkeep` placeholder -- since any
+  // file under a lane's own `docs/06_status/proof/<issue-id>/` is, by
+  // construction, that lane's own proof bookkeeping, not scope bleed.
+  // This does NOT touch file_scope_lock/expected_proof_paths/override
+  // resolution -- arbitrary scope widening beyond these three canonical
+  // paths still requires an externally authorized scope-override/v1
+  // comment, same as before.
   return [
     `.ops/sync/${manifest.issue_id}.yml`,
     `docs/06_status/lanes/${manifest.issue_id}.json`,
-    `docs/06_status/proof/${manifest.issue_id}/.gitkeep`,
+    `docs/06_status/proof/${manifest.issue_id}/**`,
   ];
 }
 
