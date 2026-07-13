@@ -11,7 +11,8 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1199",
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/OS_V1_LOCK.md"
+    "docs/06_status/OS_V1_LOCK.md",
+    ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1528/diff-summary.md",
