@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1526",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1526-codex-model-routing",
+  "branch": "claude/utv2-1526-codex-model-routing",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch.md",
+    ".claude/commands/three-brain.md",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/05_operations/OPERATING_MODEL_SONNET5.md",
+    "docs/05_operations/policies/codex-model-routing.json",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+    "docs/06_status/proof/UTV2-1526/evidence.json",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/model-routing.test.ts",
+    "scripts/ops/model-routing.ts",
+    "scripts/ops/shared.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1526/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-13T06:38:24.277Z",
+  "heartbeat_at": "2026-07-13T06:38:24.277Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1526-codex-model-routing.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1526-codex-model-routing",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
