@@ -170,15 +170,19 @@ test('commitAndPushEvidence commits and pushes a real evidence file to its origi
   const bareRemote = path.join(tmpRoot, 'origin.git');
   const workingRepo = path.join(tmpRoot, 'work');
   try {
-    spawnSync('git', ['init', '--bare', bareRemote], { stdio: 'pipe' });
+    // --initial-branch and an explicit HEAD symref make this independent of the
+    // runner's init.defaultBranch config (CI runners often default to something other
+    // than "main", which left the bare repo's HEAD pointing nowhere and the later
+    // fresh-clone verification checking out an empty tree).
+    spawnSync('git', ['init', '--bare', '--initial-branch=main', bareRemote], { stdio: 'pipe' });
+    spawnSync('git', ['-C', bareRemote, 'symbolic-ref', 'HEAD', 'refs/heads/main'], { stdio: 'pipe' });
     spawnSync('git', ['clone', bareRemote, workingRepo], { stdio: 'pipe' });
     spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: workingRepo, stdio: 'pipe' });
     spawnSync('git', ['config', 'user.name', 'Test'], { cwd: workingRepo, stdio: 'pipe' });
+    spawnSync('git', ['checkout', '-B', 'main'], { cwd: workingRepo, stdio: 'pipe' });
     fs.writeFileSync(path.join(workingRepo, 'README.md'), 'seed\n');
     spawnSync('git', ['add', 'README.md'], { cwd: workingRepo, stdio: 'pipe' });
     spawnSync('git', ['commit', '-m', 'seed'], { cwd: workingRepo, stdio: 'pipe' });
-    spawnSync('git', ['push', 'origin', 'HEAD:main'], { cwd: workingRepo, stdio: 'pipe' });
-    spawnSync('git', ['checkout', '-b', 'main'], { cwd: workingRepo, stdio: 'pipe' });
     spawnSync('git', ['push', '-u', 'origin', 'main'], { cwd: workingRepo, stdio: 'pipe' });
 
     fs.mkdirSync(path.join(workingRepo, 'docs', '06_status', 'proof', 'UTV2-9999'), { recursive: true });
@@ -189,9 +193,10 @@ test('commitAndPushEvidence commits and pushes a real evidence file to its origi
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.step, 'push');
 
-    // Prove it actually reached the remote, not just the local branch.
+    // Prove it actually reached the remote, not just the local branch. Check out main
+    // explicitly rather than relying on the clone's auto-selected default branch.
     const freshClone = path.join(tmpRoot, 'verify-clone');
-    spawnSync('git', ['clone', bareRemote, freshClone], { stdio: 'pipe' });
+    spawnSync('git', ['clone', '--branch', 'main', bareRemote, freshClone], { stdio: 'pipe' });
     const cloned = fs.readFileSync(path.join(freshClone, evidenceRelPath), 'utf8');
     assert.match(cloned, /"ok":true/);
   } finally {
