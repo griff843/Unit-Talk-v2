@@ -5,11 +5,11 @@
   "status": "ready_for_pm_review",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "7a7df199c3926567fde5ac535acc06e9d8ae513d",
-    "verified_source_note": "Implementation commit on claude/utv2-1526-codex-model-routing; evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha",
+    "verified_source_sha": "c0bcdaf597162b1ebb88dec9c75e1e8445d2b6a3",
+    "verified_source_note": "Implementation commit on claude/utv2-1526-codex-model-routing; evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha. Updated after a rebase onto main changed all prior commit SHAs on this branch.",
     "merge_sha": null,
     "sha_type": "branch_head",
-    "bound_at": "2026-07-13T07:07:55.000Z",
+    "bound_at": "2026-07-13T12:40:00.000Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "local_verify": "pass",

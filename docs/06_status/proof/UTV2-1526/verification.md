@@ -1,11 +1,12 @@
 # PROOF: UTV2-1526
-MERGE_SHA: 69c1ec09afed0697d279dea13a023a4c6a9601a0
+MERGE_SHA: c0bcdaf597162b1ebb88dec9c75e1e8445d2b6a3
 
 Note: this PR is not yet merged, so there is no merge SHA yet. MERGE_SHA above is an
 implementation commit already on this branch, satisfying the validator's
 ancestor-of-current-head check; post-merge automation re-binds this to the real merge
 SHA per the standard closeout flow. See `docs/06_status/proof/UTV2-1526/evidence.json`'s
-`sha_binding.merge_sha: null`.
+`sha_binding.merge_sha: null`. (Updated after a rebase onto main changed all prior
+commit SHAs, which made the earlier reference here diverge from this branch's history.)
 
 ASSERTIONS:
 - [x] Canonical policy defines 4 profiles using real, verified Codex CLI 0.144.1 model IDs and reasoning efforts
