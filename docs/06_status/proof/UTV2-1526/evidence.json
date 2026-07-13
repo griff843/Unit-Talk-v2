@@ -5,11 +5,11 @@
   "status": "ready_for_pm_review",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "c0bcdaf597162b1ebb88dec9c75e1e8445d2b6a3",
-    "verified_source_note": "Implementation commit on claude/utv2-1526-codex-model-routing; evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha. Updated after a rebase onto main changed all prior commit SHAs on this branch.",
+    "verified_source_sha": "145d3a07573126d78af12185e44204a2d4da1a11",
+    "verified_source_note": "Last non-proof commit on claude/utv2-1526-codex-model-routing (fix(ops): UTV2-1526 thread --model-profile through lane-maximizer's recommendation). This is an ancestor of the current PR head, not the head itself -- this proof-correction commit and evidence.json/verification.md are proof-path-only on top of it, matching this repo's substantive_commit_sha convention (see docs/06_status/proof/UTV2-1244/evidence.json). Evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "merge_sha": null,
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-13T12:40:00.000Z",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-07-13T18:56:06.000Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "local_verify": "pass",
@@ -40,21 +40,26 @@
       }
     },
     "targeted_new_tests": {
-      "command": "npx tsx --test scripts/ops/model-routing.test.ts scripts/ops/codex-exec.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts",
+      "command": "npx tsx --test scripts/ops/model-routing.test.ts scripts/ops/codex-exec.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/lane-resume.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
       "status": "PASS",
-      "tests": 56,
-      "pass": 56,
+      "tests": 117,
+      "pass": 117,
       "fail": 0,
       "new_test_files": [
-        "scripts/ops/model-routing.test.ts",
+        "scripts/ops/model-routing.test.ts (new)",
         "scripts/ops/codex-exec.test.ts (extended)",
-        "scripts/ops/shared.test.ts (extended)"
+        "scripts/ops/shared.test.ts (extended)",
+        "scripts/ops/lane-start.test.ts (extended)",
+        "scripts/ops/lane-manifest.test.ts (extended)",
+        "scripts/ops/lane-resume.test.ts (new)",
+        "scripts/ops/lane-maximizer.test.ts (extended)",
+        "scripts/codex-dispatch.test.ts (extended)"
       ],
       "coverage": [
         "scenario 1: standard clear-scope T2 resolves to codex-terra-medium",
         "scenario 2: complex multi-package T2 resolves to codex-sol-high",
         "scenario 3: failure-rescue lane resolves to codex-sol-high",
-        "scenario 4 & 19: codex-sol-max rejected without escalation override; succeeds with a valid authorized override",
+        "scenario 4 & 19: codex-sol-max is rejected with no override, and rejected the same way even with a well-formed, self-asserted authorized_by/reason override -- a caller-supplied override never unlocks a requires_pm_authorization:true profile (model-routing.test.ts, 'scenario 4 & 19: codex-sol-max is rejected even with a well-formed, \"authorized\" override')",
         "scenario 5 & 9: codex-luna-low disabled, fails closed by default",
         "scenario 6: createManifest rejects model_routing on a Claude lane",
         "scenario 7: createManifest requires model_routing for a Codex lane",
@@ -67,14 +72,19 @@
         "scenario 14 & 15: codex-exec passes explicit --model and -c model_reasoning_effort= arguments",
         "scenario 16: dry-run reports resolved profile/model/effort without executing",
         "scenario 17: no silent fallback to Codex CLI default",
-        "scenario 19: manual override without authority or reason rejected",
-        "scenario 20: existing lane-manifest fixtures (shared.test.ts, lane-start.test.ts) remain green, unmodified where not touched"
+        "scenario 18: the real canonical policy disables codex-sol-max as defense in depth beyond the code-level rejection (enabled:false AND requires_pm_authorization:true both hold)",
+        "scenario 19: manual override without authority or reason rejected, including per-field emptiness (authorized_by empty, reason empty)",
+        "scenario 20: existing lane-manifest fixtures (shared.test.ts, lane-start.test.ts) remain green, unmodified where not touched",
+        "caller coverage: scripts/codex-dispatch.ts resolves and threads --model-profile into the codex exec invocation it builds for a Codex lane (codex-dispatch.test.ts)",
+        "caller coverage: scripts/ops/lane-manifest.ts's manual/repair 'create' command resolves and persists model_routing for a Codex lane the same way ops:lane-start does, and rejects it for a Claude lane (lane-manifest.test.ts scenarios 6 & 7 above, exercised against this second caller)",
+        "caller coverage: scripts/ops/lane-resume.ts never reads, reconstructs, or requires model_routing when resuming a blocked Codex lane -- it forwards the existing manifest's model_routing block untouched (lane-resume.test.ts, 'UTV2-1526 PM review finding #1')",
+        "caller coverage: scripts/ops/lane-maximizer.ts's advisory recommended-command builder appends --model-profile codex-sol-high (T1) / codex-terra-medium (T2) to the dispatch command it suggests for a Codex candidate (lane-maximizer.test.ts)"
       ]
     },
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "changed_files": 16,
+      "changed_files": 44,
       "rules_matched": "(none) -- no R-level artifacts required for this diff"
     },
     "policy_verification": {
@@ -137,12 +147,20 @@
       "evidence": "scripts/ops/shared.ts createManifest/validateManifest; scripts/ops/lane-start.ts --model-profile handling; shared.test.ts scenarios 6 & 7 above; LANE_MANIFEST_SPEC.md sec.15 documents the never-rewrite compatibility rule."
     },
     {
+      "criterion": "Model routing is threaded through every live Codex-lane-creating or Codex-lane-dispatching caller, not just ops:lane-start directly, and is preserved (never reconstructed) on resume.",
+      "evidence": "scripts/codex-dispatch.ts resolveModelProfile call + --model-profile threaded into the built invocation (codex-dispatch.test.ts); scripts/ops/lane-manifest.ts 'create' command resolves model_routing for a Codex lane the same way lane-start.ts does (lane-manifest.test.ts); scripts/ops/lane-resume.ts forwards an existing manifest's model_routing untouched and never requires or reconstructs it (lane-resume.test.ts, 'UTV2-1526 PM review finding #1'); scripts/ops/lane-maximizer.ts's advisory recommended-command builder appends --model-profile to its suggested Codex dispatch command (lane-maximizer.test.ts)."
+    },
+    {
       "criterion": "codex-exec.ts never invokes codex exec without an explicit --model and reasoning-effort override.",
       "evidence": "scripts/ops/codex-exec.ts buildCodexModelArgs(...) spliced directly into the spawnSync argv; codex-exec.test.ts + model-routing.test.ts scenarios 14, 15, 17 above."
     },
     {
       "criterion": "Fail closed on invalid/disabled profile, unknown model, invalid reasoning effort, policy-version mismatch.",
       "evidence": "model-routing.test.ts scenarios 8, 9, 10, 11, 12 above."
+    },
+    {
+      "criterion": "A caller-supplied override can never unlock a requires_pm_authorization:true profile (e.g. codex-sol-max); a trusted authorization mechanism is out of scope for this lane and tracked separately.",
+      "evidence": "codex-sol-max is disabled (policies/codex-model-routing.json profiles['codex-sol-max'].enabled: false) and requires_pm_authorization: true. scripts/ops/model-routing.ts#resolveModelProfile rejects any requires_pm_authorization:true profile unconditionally -- a caller-supplied authorized_by/reason override string is never sufficient, regardless of content quality, because it is self-asserted rather than independently verified (the same self-certification loophole UTV2-1521 closed for file-scope overrides). model-routing.test.ts scenarios 4, 18, 19 above. Follow-up governance issue UTV2-1527 ('Trusted PM-authorization mechanism for restricted Codex model profiles (codex-sol-max)') tracks building the authenticated, PR-comment-based mechanism that would let this profile be re-enabled; this lane does not implement or claim that mechanism."
     },
     {
       "criterion": "pnpm verify green; targeted tests for all required scenarios pass.",
@@ -156,6 +174,8 @@
   "does_not_claim": [
     "No live/paid Codex model invocation was made to produce this evidence -- Codex CLI's own inference is out of scope for unit verification per PM instruction; argument construction is verified via pure function unit tests instead.",
     "No change to T1/T2/T3 merge authority, lane concurrency limits, or Griff/PM approval requirements -- none of those were touched.",
+    "Does not claim codex-sol-max or any requires_pm_authorization:true profile is usable by any means, override or otherwise -- it is mechanically unavailable, and building a trusted unlock mechanism is explicitly out of scope here (tracked by UTV2-1527).",
+    "Does not claim the Return Review Packet advisory check's own scope-finding logic was changed -- its inability to recognize a valid scope-override/v1 comment is a pre-existing analyzer gap unrelated to this lane's own diff, confirmed mechanically (grep for override-consumption logic returns zero matches) and tracked separately by UTV2-1529. Return Review Packet is not in main's required branch-protection status checks, so it is not a live merge blocker.",
     "Does not claim the PR is merged."
   ],
   "stop_conditions_encountered": [
