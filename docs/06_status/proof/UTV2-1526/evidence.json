@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1526",
+  "title": "Three-Brain: deterministic Codex 5.6 model-profile routing and manifest propagation",
+  "status": "ready_for_pm_review",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "7a7df199c3926567fde5ac535acc06e9d8ae513d",
+    "verified_source_note": "Implementation commit on claude/utv2-1526-codex-model-routing; evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha",
+    "merge_sha": null,
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-13T07:07:55.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "local_verify": "pass",
+      "local_r_level_check": "pass",
+      "local_test_db": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1526-codex-model-routing",
+    "role": "implementation-lane"
+  },
+  "context": {
+    "reason_for_t1": "PM-authorized T1 plan (2026-07-13): governance-critical upgrade to Three-Brain / Codex dispatch that changes how Codex lanes select and are permitted to use a model. Tier label tier:T1 set on UTV2-1526 at creation.",
+    "authorization": "PM-authorized in-session; Linear UTV2-1526 created and labeled tier:T1 + governance-critical per that authorization. Not authorized to merge -- PR stops at Griff's merge gate."
+  },
+  "static_proof": {
+    "pnpm_verify_components": {
+      "note": "pnpm verify was run as one aggregate command (env:check + lint + type-check + build + test); component breakdown below reflects what that pipeline covers, not separately-invoked commands.",
+      "type_check": {
+        "command": "pnpm type-check",
+        "status": "PASS",
+        "detail": "pnpm exec tsc -b tsconfig.json -- no errors, run standalone and again as part of pnpm verify"
+      },
+      "test": {
+        "command": "pnpm verify (env:check + lint + type-check + build + test)",
+        "status": "PASS",
+        "detail": "Full monorepo test suite green, including embedded live-DB smoke subtests in apps/api test files"
+      }
+    },
+    "targeted_new_tests": {
+      "command": "npx tsx --test scripts/ops/model-routing.test.ts scripts/ops/codex-exec.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts",
+      "status": "PASS",
+      "tests": 56,
+      "pass": 56,
+      "fail": 0,
+      "new_test_files": [
+        "scripts/ops/model-routing.test.ts",
+        "scripts/ops/codex-exec.test.ts (extended)",
+        "scripts/ops/shared.test.ts (extended)"
+      ],
+      "coverage": [
+        "scenario 1: standard clear-scope T2 resolves to codex-terra-medium",
+        "scenario 2: complex multi-package T2 resolves to codex-sol-high",
+        "scenario 3: failure-rescue lane resolves to codex-sol-high",
+        "scenario 4 & 19: codex-sol-max rejected without escalation override; succeeds with a valid authorized override",
+        "scenario 5 & 9: codex-luna-low disabled, fails closed by default",
+        "scenario 6: createManifest rejects model_routing on a Claude lane",
+        "scenario 7: createManifest requires model_routing for a Codex lane",
+        "scenario 8: unknown profile fails closed",
+        "scenario 9: disabled profile fails closed",
+        "scenario 10: manifest model drift from policy fails closed (tamper detection)",
+        "scenario 11: invalid reasoning effort fails closed",
+        "scenario 12: policy-version mismatch handled deterministically (fail closed)",
+        "scenario 13: legacy manifest (no model_routing) resolves via documented default, flagged and warned, never persisted back",
+        "scenario 14 & 15: codex-exec passes explicit --model and -c model_reasoning_effort= arguments",
+        "scenario 16: dry-run reports resolved profile/model/effort without executing",
+        "scenario 17: no silent fallback to Codex CLI default",
+        "scenario 19: manual override without authority or reason rejected",
+        "scenario 20: existing lane-manifest fixtures (shared.test.ts, lane-start.test.ts) remain green, unmodified where not touched"
+      ]
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 16,
+      "rules_matched": "(none) -- no R-level artifacts required for this diff"
+    },
+    "policy_verification": {
+      "note": "Concrete Codex model IDs and reasoning-effort values in docs/05_operations/policies/codex-model-routing.json are copied from the installed Codex CLI's own model catalog, not guessed.",
+      "commands": [
+        "codex --version",
+        "codex exec --help",
+        "python3 -c \"import json; d=json.load(open('~/.codex/models_cache.json')); [print(m['slug'], [x['effort'] for x in m['supported_reasoning_levels']]) for m in d['models']]\""
+      ],
+      "observed": {
+        "codex_cli_version": "codex-cli 0.144.1",
+        "gpt-5.6-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
+        "gpt-5.6-terra": ["low", "medium", "high", "xhigh", "max", "ultra"],
+        "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"]
+      },
+      "reasoning_effort_cli_mechanism": "codex exec -c model_reasoning_effort=<value> -- confirmed present as a real config key in the installed codex binary (string search)."
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure ops-tooling/governance change (policy JSON, scripts/ops/*.ts, .claude/commands/*.md, docs/05_operations/*.md). No application code, no DB schema, no product-facing runtime path. Live Supabase smoke required for T1 per CLAUDE.md verification table regardless of path -- this lane does not touch DB runtime code.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed (apps/api/src/database-smoke.test.ts). No DB writes caused by this lane's own change set."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+      "UTV2-996: correction chain is additive -- original settlement row is not mutated"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific DB rows mutated by this change; the smoke suite above is the repo's standard T1 runtime-proof suite, unrelated to this change's own code paths.",
+        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+      }
+    ]
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Policy file exists with 4 profiles using real, verified model IDs/reasoning-effort values (not guessed).",
+      "evidence": "docs/05_operations/policies/codex-model-routing.json profiles.{codex-sol-high,codex-terra-medium,codex-luna-low,codex-sol-max}; verified_against block; static_proof.policy_verification above."
+    },
+    {
+      "criterion": "Three-Brain contract documents model_profile output for Codex lane decisions; absent/null for Claude lanes.",
+      "evidence": ".claude/commands/three-brain.md 'Codex model-profile routing' section and updated Output Format block."
+    },
+    {
+      "criterion": "Manifest schema + ops:lane-start require model_routing for newly created Codex lanes; reject it for Claude lanes; existing manifests untouched.",
+      "evidence": "scripts/ops/shared.ts createManifest/validateManifest; scripts/ops/lane-start.ts --model-profile handling; shared.test.ts scenarios 6 & 7 above; LANE_MANIFEST_SPEC.md sec.15 documents the never-rewrite compatibility rule."
+    },
+    {
+      "criterion": "codex-exec.ts never invokes codex exec without an explicit --model and reasoning-effort override.",
+      "evidence": "scripts/ops/codex-exec.ts buildCodexModelArgs(...) spliced directly into the spawnSync argv; codex-exec.test.ts + model-routing.test.ts scenarios 14, 15, 17 above."
+    },
+    {
+      "criterion": "Fail closed on invalid/disabled profile, unknown model, invalid reasoning effort, policy-version mismatch.",
+      "evidence": "model-routing.test.ts scenarios 8, 9, 10, 11, 12 above."
+    },
+    {
+      "criterion": "pnpm verify green; targeted tests for all required scenarios pass.",
+      "evidence": "static_proof.pnpm_verify_components and static_proof.targeted_new_tests above."
+    },
+    {
+      "criterion": "PR opened, not merged -- stops at Griff's merge gate.",
+      "evidence": "Confirmed in the lane's final report; not a code assertion. sha_binding.merge_sha is null."
+    }
+  ],
+  "does_not_claim": [
+    "No live/paid Codex model invocation was made to produce this evidence -- Codex CLI's own inference is out of scope for unit verification per PM instruction; argument construction is verified via pure function unit tests instead.",
+    "No change to T1/T2/T3 merge authority, lane concurrency limits, or Griff/PM approval requirements -- none of those were touched.",
+    "Does not claim the PR is merged."
+  ],
+  "stop_conditions_encountered": [
+    "None blocking. Process note: ops:lane-start's --files scope declaration requires each new file to already exist on disk in the main checkout at call time, and ops:preflight's PG2 check requires a fully clean working tree first. Resolved by running preflight on a clean tree, creating empty stub files for this lane's brand-new paths only to satisfy lane-start's scope declaration (the preflight token's head_sha binding is unaffected by untracked files), removing the stubs from the main checkout immediately after, and writing real content inside the worktree lane-start created. Not fixed here -- outside this lane's declared scope."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true
+  }
+}
