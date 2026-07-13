@@ -39,7 +39,7 @@
     "apps/command-center/src/app/page.tsx",
     "apps/command-center/src/app/performance/page.tsx",
     "apps/command-center/src/app/picks-list/page.tsx",
-    "apps/command-center/src/app/picks/[id]/page.tsx",
+    "apps/command-center/src/app/picks",
     "apps/command-center/src/app/picks/page.tsx",
     "apps/command-center/src/app/pipeline/page.tsx",
     "apps/command-center/src/app/research/page.tsx",
