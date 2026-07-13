@@ -99,7 +99,7 @@ test('clean candidate with no overlaps is recommended', () => {
   assert.deepStrictEqual(report.recommended[0]?.reason_codes, []);
   assert.equal(
     report.dispatch_plan.fill_now[0]?.dispatch_command,
-    'pnpm ops:lane-start UTV2-96801 --tier T2 --branch codex/utv2-96801-utv2-96801 --executor codex-cli --lane-type hygiene --files scripts/ops/clean-a.ts',
+    'pnpm ops:lane-start UTV2-96801 --tier T2 --branch codex/utv2-96801-utv2-96801 --executor codex-cli --model-profile codex-terra-medium --lane-type hygiene --files scripts/ops/clean-a.ts',
   );
 });
 
@@ -118,7 +118,7 @@ test('dispatch command includes lane-start required tier branch and file flags',
 
   assert.equal(
     report.dispatch_plan.fill_now[0]?.dispatch_command,
-    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --model-profile codex-terra-medium --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
   );
 });
 
@@ -194,7 +194,7 @@ test('queue intake parses ready issues into dispatchable candidates', () => {
     ]);
     assert.equal(
       report.dispatch_plan.fill_now[0]?.dispatch_command,
-      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --model-profile codex-terra-medium --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
     );
   });
 });
