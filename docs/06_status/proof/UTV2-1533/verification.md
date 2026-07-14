@@ -121,7 +121,7 @@ Ran clean end to end at least three times across this issue's rounds (round 2 co
 
 ## Commit SHA reference
 
-Branch HEAD commit in the continuation worktree at authoring time: `c32e3a955407d3273e28dc1fb86c93f7570beada` (manifest-repair commit, on top of the unchanged accepted implementation at `24696311888e8c24beb530d557efe3e95ee4aa52` / substantive code at `c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0`).
+Branch HEAD (replacement PR head) at authoring time: `9b66517a72cd8f8989c47fa6eb40c403cd0aaf57` — a merge commit bringing this branch up to date with `origin/main` (which advanced with unrelated Command Center work during this continuation), on top of the manifest-repair commit `c32e3a95` and the unchanged accepted implementation at `24696311888e8c24beb530d557efe3e95ee4aa52` / substantive code at `c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0`.
 
 ## Merge SHA reference
 
