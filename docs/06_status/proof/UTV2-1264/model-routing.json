@@ -1,0 +1,14 @@
+{
+  "issue_id": "UTV2-1264",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.144.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "generated_at": "2026-07-14T12:55:22.865Z"
+}
