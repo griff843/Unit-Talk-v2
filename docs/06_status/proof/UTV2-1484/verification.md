@@ -1,5 +1,7 @@
 # UTV2-1484 Verification
 
+**Commit SHA:** 6f2b8492 (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
+
 ## Verification
 
 - `npx tsx --test apps/command-center/src/app/api/governance/lanes/route.test.ts` — PASS (2 tests).
