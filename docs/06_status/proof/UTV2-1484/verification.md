@@ -1,3 +1,18 @@
+# PROOF: UTV2-1484
+MERGE_SHA: e5e1a0bdf1a76c61f45223d30b9f44cfb3918db0
+
+ASSERTIONS:
+- [x] Read-only API surface only, no write handlers
+- [x] Command Center UI labels missing data clearly
+- [x] pnpm verify and pnpm test:db are green
+
+EVIDENCE:
+```text
+$ npx tsx --test apps/command-center/src/app/api/governance/lanes/route.test.ts
+# pass 2
+# fail 0
+```
+
 # UTV2-1484 Verification
 
 **Commit SHA:** 752ac10e4e03d1b464bbc39d91bd5569637d9e55 (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
