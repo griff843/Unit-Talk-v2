@@ -1,16 +1,24 @@
-# UTV2-1531 Verification
+# UTV2-1531 Runtime Verification
+
+Generated at: 2026-07-14T05:06:11.087Z
+Issue: UTV2-1531
+Tier: T2
+Lane type: hygiene
+Branch: codex/utv2-1531-debt-030-031-file-scope
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1202
+Head SHA: 93d8881f87d0997240036a09a405d983b6927705
+Merge SHA: f63dbcf1f6bb032e5b57fc4e603c2d60786d5157
+result: not_run
 
 ## Verification
+- [ ] `pnpm type-check`: not run by proof-generate
+- [ ] `pnpm test`: not run by proof-generate
+- [ ] `pnpm verify`: not run by proof-generate
+- [ ] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: not run by proof-generate
 
-Commands run from the UTV2-1531 lane worktree:
+## Runtime Verification
+- Generated foundation artifact. Replace or append command output when runtime proof is executed.
 
-| Command | Result | Notes |
-| --- | --- | --- |
-| `npx tsx --test scripts/ops/shared.test.ts scripts/ci/file-scope-guard.test.ts` | PASS | 56 tests passed, including DEBT-030 and DEBT-031 regressions. |
-| `npx tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch codex/utv2-1531-debt-030-031-file-scope --manifest-source git` | PASS | Current branch has no scope violations or active-lock conflicts. |
-| `pnpm type-check` | PASS | TypeScript project-references check completed. |
-| `pnpm test` | PASS | Root aggregate test suite completed. |
-| `pnpm verify` | PASS | Full repository gate completed, including static checks and live-DB smoke tests. |
-| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | 10 changed files; no R-level rules matched and no artifacts are required. |
-
-`pnpm test:db` is not required for this T2 scripts-only change; no migration, `packages/db/**`, or API service file changed.
+## SHA Binding
+Head SHA: 93d8881f87d0997240036a09a405d983b6927705
+Merge SHA: f63dbcf1f6bb032e5b57fc4e603c2d60786d5157
