@@ -9,7 +9,7 @@ MERGE_SHA: e2f26623563c16a701453ee476614efe2ea4c203
 - [x] `GET /api/discord/kill-switch` now requires `operator`-role auth (dispatch moved to after the auth gate; new test asserts 401 without auth, 200 with it).
 - [x] Audit actor derived from `request.auth.identity` (trusted context), never from client-supplied body — new test asserts a spoofed body actor is not what lands in `audit_log`.
 - [x] `health.ts`'s ops-alert-webhook check uses `isProductionLikeRuntime(runtime.environment)` (loaded, validated `AppEnv`), not raw `process.env`.
-- [x] Confirmed no change to `best-bets`/`trader-insights` default posture in `packages/contracts/src/promotion.ts` — still deferred to a separate explicit PM approval.
+- [x] Confirmed no change to `best-bets`/`trader-insights` default posture in `packages/contracts/src/promotion.ts` — still deferred to a separate explicit PM approval. (Round 3 below: this claim was true for `promotion.ts` but incomplete — the kill switch's own fail-closed default on an unseeded table would have silently disabled delivery regardless of `promotion.ts`. Fixed by the bootstrap migration.)
 - [x] `pnpm verify` and `pnpm test:db` green after all fixes.
 
 ASSERTIONS:
@@ -83,6 +83,43 @@ $ npx tsx --test apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts
 - [x] `setKilled` upserts on `target` (one row per target, not one insert per call)
 - [x] `isKilled` fails closed (returns `true`) for a target with no row, against the real database
 - [x] `listAll` surfaces the row with correct field mapping (`actor`, `killed`, `updatedAt`)
+
+## PM review round 3 — bootstrap the pre-existing production posture
+
+The docs claimed "no change to current Discord delivery defaults," which was true for `promotion.ts`'s `enabled` flags but incomplete: the worker's kill-switch check treats a missing row as `killed=true` (fail closed), and `20260714120000_add_delivery_kill_switch.sql` seeded zero rows. Deploying this lane as-is would have silently disabled delivery for every governed target on day one — the opposite of "no change."
+
+Fixed with a second, PR-governed migration (`20260714130000_bootstrap_delivery_kill_switch_posture.sql`) that seeds one row per governed target, derived from `packages/contracts/src/promotion.ts`'s `defaultTargetRegistry` — the canonical registry, not an assumption:
+
+| Target | `defaultTargetRegistry.enabled` | Seeded `killed` |
+|---|---|---|
+| `best-bets` | `true` | `false` |
+| `trader-insights` | `true` | `false` |
+| `exclusive-insights` | `false` (also in `blockedDiscordTargets`) | `true` |
+
+`actor='system-bootstrap'` on every seeded row for provenance; `ON CONFLICT (target) DO NOTHING` for idempotency and to never clobber an operator's own toggle. Down script deletes only rows matching both target AND `actor='system-bootstrap'`, so it never reverts a real operator action.
+
+Not manually seeded and not direct-written — this migration file went through the same PR-governed path as the first: committed to this branch, reviewed via CI (`migration-reversibility-gate.yml`, `Live Schema Parity`, etc.), and applied to the live Supabase project only with the same PM sign-off pattern as the first migration.
+
+New test — `apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts`'s `"bootstrap migration preserves the pre-existing production delivery posture"` — reads (never writes) the three real governed-target rows and asserts each one's `killed` state matches what `defaultTargetRegistry` says it should be, computed live from the imported registry rather than hardcoded. This test never calls `setKilled` on a real governed target — only on the synthetic fixture target — so it cannot itself alter live delivery state.
+
+```text
+$ npx tsx --test apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Acceptance criteria from PM review round 3, all proven by the test above plus the pre-existing round-1/round-2 tests:
+1. **Deployment preserves the current target posture** — the new "bootstrap migration preserves..." test, read-only against real governed targets.
+2. **Operators can subsequently engage/release the switch live** — unchanged from round 2's setKilled/isKilled round-trip test (same code path, safe fixture target).
+3. **Unknown targets and read failures remain killed** — unchanged from round 2's fail-closed test.
+
+`docs/05_operations/DELIVERY_KILL_SWITCH.md` §2 and §5 updated to describe the bootstrap seed and correct the "no production-consequential default state" framing; §4 also corrected — its "GET is unauthenticated" line was stale from before round 1's auth fix and is now accurate.
 
 ## Routing note
 

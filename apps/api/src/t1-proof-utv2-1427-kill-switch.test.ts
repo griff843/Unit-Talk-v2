@@ -25,6 +25,7 @@ import {
   DatabaseDeliveryKillSwitchRepository,
   createServiceRoleDatabaseConnectionConfig,
 } from '@unit-talk/db';
+import { defaultTargetRegistry, isPromotionTargetBlocked } from '@unit-talk/contracts';
 
 function hasSupabaseSmokeEnvironment() {
   try {
@@ -116,5 +117,42 @@ test('UTV2-1427 listAll surfaces the fixture row with correct field mapping', { 
   console.log(`  listAll field mapping OK — target=${FIXTURE_TARGET} updatedAt=${fixtureRow!.updatedAt}`);
 });
 
-// Left in place at killed=false (released, inert) — never deleted. This
-// fixture's target name can never collide with a real governed target.
+test('UTV2-1427 bootstrap migration preserves the pre-existing production delivery posture', { skip: skipReason }, async () => {
+  // Read-only against the real governed targets — this test must never call
+  // setKilled on a real target name, since that would actually toggle live
+  // production delivery. It only confirms the bootstrap migration's seeded
+  // read-state matches the canonical registry it was derived from.
+  const all = await repository.listAll();
+  const byTarget = new Map(all.map((row) => [row.target, row]));
+
+  for (const entry of defaultTargetRegistry) {
+    const expectedKilled = !entry.enabled || isPromotionTargetBlocked(entry.target);
+    const row = byTarget.get(entry.target);
+
+    assert.ok(
+      row,
+      `bootstrap migration must seed a delivery_kill_switch row for governed target "${entry.target}"`,
+    );
+    assert.equal(
+      row!.killed,
+      expectedKilled,
+      `"${entry.target}": defaultTargetRegistry says enabled=${entry.enabled} (blocked=${isPromotionTargetBlocked(entry.target)}) so bootstrap-seeded killed must be ${expectedKilled}, got ${row!.killed}`,
+    );
+    assert.equal(
+      row!.actor,
+      'system-bootstrap',
+      `"${entry.target}": bootstrap-seeded row must carry actor="system-bootstrap" for provenance (unless an operator has since toggled it, in which case this assertion should fail loudly, not silently pass)`,
+    );
+
+    console.log(
+      `  bootstrap posture OK — target=${entry.target} enabled=${entry.enabled} killed=${row!.killed}`,
+    );
+  }
+});
+
+// Fixture rows left in place (not deleted) — T1 proofs never mutate/delete
+// unrelated live data, and the fixture's own target name can never collide
+// with a real governed target. The bootstrap-seeded rows for real governed
+// targets (best-bets, trader-insights, exclusive-insights) are never
+// written to by this file — only read — so they are untouched by this test
+// run regardless of outcome.

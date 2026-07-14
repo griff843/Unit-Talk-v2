@@ -7,6 +7,8 @@ Adds a live, DB-backed, no-code-deploy delivery kill switch for governed Discord
 ## Files changed
 
 - `supabase/migrations/20260714120000_add_delivery_kill_switch.sql` (new) — `delivery_kill_switch` table
+- `supabase/migrations/20260714130000_bootstrap_delivery_kill_switch_posture.sql` (new) — seeds one row per governed target derived from `defaultTargetRegistry`, preserving current production delivery posture on deploy
+- `db/migrations-rollback/20260714130000_bootstrap_delivery_kill_switch_posture.down.sql` (new) — down script for the bootstrap migration
 - `packages/db/src/database.types.ts` — regenerated against an applied migration on an isolated Supabase dev branch (deleted after use); no longer hand-authored
 - `db/migrations-rollback/20260714120000_add_delivery_kill_switch.down.sql` (new) — down script required by `migration-reversibility-gate.yml`
 - `apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts` (new) — live-DB proof for `DatabaseDeliveryKillSwitchRepository`, required by `proof-coverage-guard.yml`
@@ -33,6 +35,7 @@ Standalone. No dependency on any other currently-open lane.
 
 This lane does not flip `best-bets`/`trader-insights` from their current `enabled: true` default in `packages/contracts/src/promotion.ts` — see `verification.md`'s routing note and `DELIVERY_KILL_SWITCH.md` §5. That flip is deliberately left for a follow-up gated on explicit PM sign-off at merge time, not bundled into this PR's default state.
 
-## Migration applied to production (PM-approved)
+## Migrations applied to production (PM-approved)
 
-`20260714120000_add_delivery_kill_switch.sql` was applied directly to the live Supabase project (`zfzdnfwdarxucxtaojxm`) with PM sign-off, after a genuine live-DB proof test revealed it had only ever run against a temporary, since-deleted dev branch. See `verification.md`'s "PM review round 2 — live-DB proof" section.
+- `20260714120000_add_delivery_kill_switch.sql` was applied directly to the live Supabase project (`zfzdnfwdarxucxtaojxm`) with PM sign-off, after a genuine live-DB proof test revealed it had only ever run against a temporary, since-deleted dev branch.
+- `20260714130000_bootstrap_delivery_kill_switch_posture.sql` fixes a real gap that migration left: the table started empty, and the fail-closed application default (missing row = killed) would have silently disabled all governed delivery on deploy. This migration seeds current posture from `defaultTargetRegistry` — landed through this same PR-governed path, not a manual write. See `verification.md`'s "PM review round 3" section.
