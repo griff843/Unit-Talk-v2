@@ -23,7 +23,7 @@ Environment files passed validation.
 (lint, type-check clean)
 
 $ pnpm verify
-(exit 0: env:check, lint, type-check, build, pnpm test — full suite including all live-DB T1 proof chains — all green)
+(exit 0: env:check, lint, pnpm type-check, build, pnpm test — full suite including all live-DB T1 proof chains — all green)
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
