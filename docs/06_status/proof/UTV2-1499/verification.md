@@ -1,3 +1,20 @@
+# PROOF: UTV2-1499
+MERGE_SHA: e37219cf9c3d25cdfb2cbb233a2c79dbf0ded42a
+
+ASSERTIONS:
+- [x] Runtime Operations Governance chapter added, consolidating existing ratified authority (no new governance program)
+- [x] No implementation, no deploy — docs-only, matching the issue's own constraint
+- [x] pnpm verify and pnpm test:db are green
+
+EVIDENCE:
+```text
+$ pnpm test:db
+1..7
+# tests 7
+# pass 7
+# fail 0
+```
+
 # UTV2-1499 Verification
 
 ## Verification
