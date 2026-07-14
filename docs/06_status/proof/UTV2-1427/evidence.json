@@ -6,8 +6,8 @@
   "description": "Live, DB-backed, no-code-deploy delivery kill switch for governed Discord targets (best-bets, trader-insights, exclusive-insights), plus a fail-loud ops alert webhook health check.",
   "status": "COMPLETE",
   "sha_binding": {
-    "verified_source_sha": "e2f26623563c16a701453ee476614efe2ea4c203",
-    "verified_source_note": "Live-DB proof test commit — last commit to touch non-proof paths (apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts).",
+    "verified_source_sha": "16de263944971073725ee627681d7b2c4a177a40",
+    "verified_source_note": "Bootstrap migration commit — last commit to touch non-proof paths (supabase/migrations/20260714130000_bootstrap_delivery_kill_switch_posture.sql, its down script, DELIVERY_KILL_SWITCH.md, and the extended proof test).",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -41,7 +41,7 @@
     "receipts": [
       {
         "supabase_project": "zfzdnfwdarxucxtaojxm",
-        "note": "Live Supabase smoke passed. No production DB writes by this lane; type regeneration used a temporary isolated dev branch, deleted after use."
+        "note": "Live Supabase smoke passed. database.types.ts regeneration used a temporary isolated dev branch, deleted after use, with no production writes. Two migrations WERE applied directly to production with PM sign-off (see verification.md rounds 2 and 3): the delivery_kill_switch table itself, and the bootstrap seed correcting the empty-table fail-closed risk this round addresses."
       }
     ]
   },
@@ -51,7 +51,10 @@
     "audit_actor_from_trusted_context": "PASS",
     "health_check_uses_loaded_runtime_config": "PASS",
     "down_migration_script_present": "PASS",
-    "no_change_to_discord_target_defaults": "PASS — best-bets/trader-insights left at existing enabled:true default; flip explicitly deferred to a separate PM-gated follow-up"
+    "no_change_to_discord_target_defaults": "PASS — best-bets/trader-insights left at existing enabled:true default; flip explicitly deferred to a separate PM-gated follow-up",
+    "bootstrap_migration_preserves_production_posture": "PASS — best-bets/trader-insights seeded killed=false, exclusive-insights seeded killed=true, derived from defaultTargetRegistry and verified live against production",
+    "operators_can_engage_release_live": "PASS — setKilled/isKilled round-trip proven against real Postgres on the safe fixture target",
+    "unknown_targets_and_read_failures_remain_killed": "PASS — proven against real Postgres for a target with no row"
   },
   "verdict": "PASS"
 }
