@@ -303,6 +303,40 @@ importers:
         specifier: ^5.3.3
         version: 5.9.3
 
+  apps/web:
+    dependencies:
+      next:
+        specifier: 15.5.18
+        version: 15.5.18(@babel/core@7.29.6)(@playwright/test@1.58.2)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: 18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/node':
+        specifier: ^20
+        version: 20.19.37
+      '@types/react':
+        specifier: ^18
+        version: 18.3.28
+      '@types/react-dom':
+        specifier: ^18
+        version: 18.3.7(@types/react@18.3.28)
+      autoprefixer:
+        specifier: ^10
+        version: 10.4.27(postcss@8.5.14)
+      postcss:
+        specifier: 8.5.14
+        version: 8.5.14
+      tailwindcss:
+        specifier: ^3.4.1
+        version: 3.4.19(tsx@4.21.0)(yaml@2.8.3)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
   apps/worker:
     dependencies:
       '@unit-talk/config':
