@@ -1,10 +1,14 @@
 {
   "issue_id": "UTV2-1531",
-  "model_routing": {
-    "profile": "codex-terra-medium",
-    "model": "gpt-5.6-terra",
-    "reasoning_effort": "medium",
-    "selected_by": "three-brain",
-    "policy_version": "1.0.0"
-  }
+  "manifest_schema_version": 2,
+  "model_profile": "codex-terra-medium",
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "medium",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.144.1",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "generated_at": "2026-07-14T04:40:36.757Z"
 }
