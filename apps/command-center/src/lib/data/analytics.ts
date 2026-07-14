@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getDataClient } from './client';
+import { getDataClient, isTestFixturePick } from './client';
 
 type Client = any;
 type Row = Record<string, unknown>;
@@ -375,13 +375,14 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
       _settledAt: string | null;
     }
 
-    const enriched: EnrichedRow[] = settlementRows.map((sr) => {
+    const enriched: EnrichedRow[] = settlementRows.flatMap((sr) => {
       const pickId = asString(sr['pick_id']) ?? '';
       const pick = picksMap.get(pickId) ?? {};
+      if (isTestFixturePick(pick)) return [];
       const pcs = pcsMap.get(pickId) ?? {};
       const metadata = asRecord(pick['metadata']);
       const payload = asRecord(sr['payload']);
-      return {
+      return [{
         ...sr,
         promotion_score: asNumber(pick['promotion_score']),
         stake_units: asNumber(pick['stake_units']),
@@ -392,7 +393,7 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
         _reviewDecision: asString(pcs['review_decision']),
         _settledAt: asString(sr['settled_at'] ?? sr['created_at']),
         payload,
-      };
+      }];
     });
 
     // Time-window partitioning
@@ -551,6 +552,7 @@ export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
     for (const sr of settlementRows) {
       const pickId = asString(sr['pick_id']) ?? '';
       const pick = picksMap.get(pickId) ?? {};
+      if (isTestFixturePick(pick)) continue;
       const capperName = extractCapperName(pick);
       const payload = asRecord(sr['payload']);
       const clv = asNumber(payload['clvPercent']);
@@ -829,18 +831,19 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
       _reviewDecision: string | null;
     }
 
-    const enriched: IntelRow[] = settlementRows.map((sr) => {
+    const enriched: IntelRow[] = settlementRows.flatMap((sr) => {
       const pickId = asString(sr['pick_id']) ?? '';
       const pick = picksMap.get(pickId) ?? {};
+      if (isTestFixturePick(pick)) return [];
       const pcs = pcsMap.get(pickId) ?? {};
       const metadata = asRecord(pick['metadata']);
-      return {
+      return [{
         ...sr,
         _source: safeString(pick['source'], 'unknown'),
         _sport: extractSport(metadata),
         _score: asNumber(pick['promotion_score']),
         _reviewDecision: asString(pcs['review_decision']),
-      };
+      }];
     });
 
     // Recent form — overall
