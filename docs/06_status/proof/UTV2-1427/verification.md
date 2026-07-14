@@ -1,5 +1,14 @@
 # PROOF: UTV2-1427
-MERGE_SHA: 51e4fa069b043409876fb0998a18d8fbf9d6138f
+MERGE_SHA: 7da7b145986c0a630538738aa7f3749b6a9c9633
+
+## PM review round 1 — addressed
+
+- [x] `database.types.ts` regenerated for real against an applied migration on an isolated Supabase dev branch (deleted after use) — verified byte-identical to the prior hand-authored entry.
+- [x] `GET /api/discord/kill-switch` now requires `operator`-role auth (dispatch moved to after the auth gate; new test asserts 401 without auth, 200 with it).
+- [x] Audit actor derived from `request.auth.identity` (trusted context), never from client-supplied body — new test asserts a spoofed body actor is not what lands in `audit_log`.
+- [x] `health.ts`'s ops-alert-webhook check uses `isProductionLikeRuntime(runtime.environment)` (loaded, validated `AppEnv`), not raw `process.env`.
+- [x] Confirmed no change to `best-bets`/`trader-insights` default posture in `packages/contracts/src/promotion.ts` — still deferred to a separate explicit PM approval.
+- [x] `pnpm verify` and `pnpm test:db` green after all fixes.
 
 ASSERTIONS:
 - [x] Live, DB-backed kill switch checked by the worker before every dequeue, distinct from the enabled/rolloutPct registry
