@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1504",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1504-concurrency-cap-c4-audit",
+  "branch": "codex/utv2-1504-concurrency-cap-c4-audit",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/CONCURRENCY_CAP_C4_INCIDENT_AUDIT.md",
+    "docs/06_status/proof/UTV2-1504/diff-summary.md",
+    "docs/06_status/proof/UTV2-1504/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1504/diff-summary.md",
+    "docs/06_status/proof/UTV2-1504/verification.md",
+    "docs/06_status/proof/UTV2-1504/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-14T04:47:01.562Z",
+  "heartbeat_at": "2026-07-14T04:47:01.562Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1504-concurrency-cap-c4-audit.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1504-concurrency-cap-c4-audit",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
