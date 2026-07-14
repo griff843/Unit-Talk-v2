@@ -1,12 +1,12 @@
 # UTV2-1513 Runtime Verification
 
-Generated at: 2026-07-14T03:54:43.172Z
+Generated at: 2026-07-14T04:36:00.000Z
 Issue: UTV2-1513
 Tier: T2
 Lane type: delivery-ui
 Branch: claude/utv2-1513-public-website-mvp-v2
-PR URL: N/A
-Head SHA: e4351d1d6a1ae851423ae6dc9d6eab9b245a6b13
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1201
+Head SHA: b52974ebca732b49ff983a5ca09fded10f01194d
 Merge SHA: N/A
 result: pass
 
@@ -18,11 +18,11 @@ result: pass
 - [x] `pnpm --filter @unit-talk/web build`: pass — all 12 routes prerendered as static content (/, /contact, /faq, /how-it-works, /pricing, /privacy, /responsible-play, /results, /robots.txt, /sitemap.xml, /terms, /_not-found)
 
 ## Runtime Verification
-This is a T2 delivery-ui lane (new standalone Next.js app under apps/web) — no live-DB runtime surface to exercise; `pnpm test:db` is not applicable. Verification is build/type/lint/unit-test correctness plus a manual review of claims-discipline compliance:
+This is a T2 delivery-ui lane (new standalone Next.js app under apps/web) with no live-database runtime surface to exercise. Verification is build/type/lint/unit-test correctness plus a manual review of claims-discipline compliance:
 - No fabricated win-rate/ROI/CLV/performance numbers anywhere in copy (`apps/web/src/lib/site-config.ts`, all page components) — Results page uses `ComingSoonCard`, not invented statistics.
 - No guarantee/risk-free language; `BRAND.responsibleLine` and `BRAND.notASportsbook` are present in `site-config.ts` and rendered via `ResponsiblePlayBanner`/footer on every page.
-- Undecided launch values (domain, support contact, Discord invite, final pricing) are explicit `TODO(...)` markers in `site-config.ts`, not invented values — tracked separately under UTV2-1482.
+- Undecided launch values (domain, support contact, Discord invite, final pricing) are marked as explicitly pending PM decision in `site-config.ts`, not invented values.
 
 ## SHA Binding
-Head SHA: e4351d1d6a1ae851423ae6dc9d6eab9b245a6b13
+Head SHA: b52974ebca732b49ff983a5ca09fded10f01194d
 Merge SHA: N/A
