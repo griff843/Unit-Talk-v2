@@ -1,5 +1,5 @@
 # PROOF: UTV2-1532
-MERGE_SHA: 2f19d0bed6de0e5f43200cd649226835fcd9a0b5
+MERGE_SHA: c0edafe907d547bb35aa990739267ff3a7ab13ba
 
 ASSERTIONS:
 - [x] codex-exec.ts:198's evidence push is self-sufficient regardless of upstream tracking state
