@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1505/verification.md",
     "docs/06_status/proof/UTV2-1505/model-routing.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-14T04:50:46.099Z",
-  "heartbeat_at": "2026-07-14T05:19:31.615Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-14T05:19:54.532Z",
+  "closed_at": "2026-07-14T05:19:54.532Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1505-qa-red-team-charter.json",
   "created_by": "codex-cli",
@@ -36,6 +36,18 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1205"
+    },
+    {
+      "checked_at": "2026-07-14T05:19:52.247Z",
+      "verdict": "pass",
+      "merge_sha": "81999a613ed1abbdaa281e3060aebf74b2d5a0dd",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1205",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
