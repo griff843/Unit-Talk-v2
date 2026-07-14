@@ -3,7 +3,7 @@
 **Issue:** UTV2-1533 — Post-lock concurrency ramp: raise ceiling to 10 active lanes (4 Claude + 6 Codex)
 **Tier:** T1 (governance-critical)
 **Lane type:** governance
-**Status:** Round 5 — 2 fresh Codex-review findings on the replacement PR (#1215) fixed below. Replacement PR **not merged**.
+**Status:** Round 6 — 3 fresh Codex-review findings across two review passes on the replacement PR (#1215) fixed below. Replacement PR **not merged**.
 
 ## Files changed (cumulative, vs origin/main — generated via `git diff --stat origin/main...HEAD`, not hand-typed)
 
@@ -28,7 +28,13 @@ $ git diff --stat origin/main...HEAD -- docs/governance/CONCURRENCY_CONFIG.json 
 
 Plus control-plane/proof files (exempt from file-scope-lock, no override needed): `docs/06_status/lanes/UTV2-1533.json`, `.ops/sync/UTV2-1533.yml`, `docs/06_status/proof/UTV2-1533/{.gitkeep,diff-summary.md,evidence.json,verification.md}`.
 
-## Round 5 (this round — 2 fresh Codex-review findings on PR #1215, both fixed)
+## Round 6 (this round — 1 more Codex-review finding on PR #1215's round-5 head, fixed)
+
+The confirmation Codex review triggered against round 5's head surfaced 1 more real finding: `requireIssueId()` (used by round 5's normalization fix) accepts both `UTV2-###` and `UNI-###` (`ISSUE_PATTERN`), but `verification_target` is documented `UTV2-###` only in `lane_manifest_v1.schema.json` and `LANE_MANIFEST_SPEC.md` §16 — a `UNI-###` verification target would silently pass validation while disagreeing with the documented schema. `createManifest()`'s own check had the identical gap (also used the general `ISSUE_PATTERN`).
+
+Fixed: new `VERIFICATION_TARGET_PATTERN` (`/^UTV2-\d+$/`, stricter than `ISSUE_PATTERN`) and an exported `requireVerificationTarget()` helper in `scripts/ops/shared.ts`, used consistently in `lane-start.ts`'s early CLI check, `createManifest()`, and `validateManifest()`. 2 new tests: `createManifest rejects a UNI-prefixed verification_target` and a direct `requireVerificationTarget` unit test confirming it rejects what `requireIssueId` accepts. One round-5 test's own assertion (checking for the old `requireIssueId(verificationTargetFlag)` call) was updated to match the new helper name.
+
+## Round 5 (2 fresh Codex-review findings on PR #1215, both fixed)
 
 A fresh Codex review triggered against the replacement PR's initial head surfaced 2 more real bugs in `scripts/ops/lane-start.ts`, both introduced by this issue's own round-2/round-3 work (not pre-existing accepted code):
 

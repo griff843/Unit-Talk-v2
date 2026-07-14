@@ -30,6 +30,7 @@ import {
   readManifest,
   relativeToRoot,
   requireIssueId,
+  requireVerificationTarget,
   validateBranchName,
   validatePreflightToken,
   validateTier,
@@ -538,14 +539,17 @@ function main(): void {
     // first line of defense.)
     if (verificationTargetFlag) {
       try {
-        // Codex review fix (PR #1215): requireIssueId() normalizes (uppercases) internally but
-        // only its RETURN VALUE reflects that -- discarding it and reusing the raw flag left a
-        // lower-case input (e.g. "utv2-123") passing this check via requireIssueId's own
-        // uppercasing, then failing ISSUE_PATTERN's case-sensitive test deep inside
-        // createManifest(), after branch/worktree/lease side effects had already run. Reassign
-        // to the normalized value so every downstream consumer (checkConcurrencyLimits,
-        // createManifest, the resume-backfill comparison) sees the same canonical form.
-        verificationTargetFlag = requireIssueId(verificationTargetFlag);
+        // Codex review fix (PR #1215, round 5): reassign to the normalized return value so
+        // every downstream consumer (checkConcurrencyLimits, createManifest, the
+        // resume-backfill comparison) sees the same canonical form -- a discarded return
+        // value previously let a lower-case input pass this check but still fail deep inside
+        // createManifest(), after branch/worktree/lease side effects had already run.
+        // Codex review fix (PR #1215, round 6): use requireVerificationTarget(), not the
+        // general requireIssueId() -- the latter also accepts UNI-### (ISSUE_PATTERN), but
+        // verification_target is documented UTV2-### only in the manifest schema and
+        // LANE_MANIFEST_SPEC.md §16; accepting UNI-### here would silently disagree with
+        // that documented contract.
+        verificationTargetFlag = requireVerificationTarget(verificationTargetFlag);
       } catch {
         emitJson({
           ok: false,

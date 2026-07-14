@@ -6,6 +6,8 @@ import {
   deriveDeliveryUiApp,
   normalizeFileScopePath,
   normalizeRepoRelativePath,
+  requireIssueId,
+  requireVerificationTarget,
   validateBranchName,
   validateManifest,
   worktreePathForBranch,
@@ -499,6 +501,38 @@ test('createManifest rejects a malformed verification_target', () => {
       }),
     /verification_target must match UTV2-###/,
   );
+});
+
+// Codex review fix (PR #1215, round 6): verification_target is documented UTV2-### only
+// (lane_manifest_v1.schema.json, LANE_MANIFEST_SPEC.md §16) -- reusing the general
+// requireIssueId()/ISSUE_PATTERN (which also accepts UNI-###) would silently let a UNI target
+// pass despite disagreeing with the documented schema.
+test('createManifest rejects a UNI-prefixed verification_target (UTV2-### only, not the general issue-id pattern)', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1533',
+        tier: 'T2',
+        branch: 'codex/utv2-1533-uni-target',
+        worktree_path: worktreePathForBranch('codex/utv2-1533-uni-target'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1533', 'T2'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1533-uni-target.json',
+        lane_type: 'verification',
+        verification_target: 'UNI-123',
+      }),
+    /verification_target must match UTV2-###/,
+  );
+});
+
+test('requireVerificationTarget rejects UNI-### even though requireIssueId accepts it', () => {
+  assert.doesNotThrow(() => requireIssueId('uni-123'), 'sanity check: the general helper accepts UNI-###');
+  assert.throws(
+    () => requireVerificationTarget('uni-123'),
+    /verification_target must match UTV2-###/,
+    'requireVerificationTarget must reject UNI-### -- it is deliberately stricter than requireIssueId',
+  );
+  assert.strictEqual(requireVerificationTarget('utv2-1533'), 'UTV2-1533', 'valid lower-case UTV2 input must still normalize to upper-case');
 });
 
 // ── deriveDeliveryUiApp (UTV2-1533 P2 fix) ─────────────────────────────────────────

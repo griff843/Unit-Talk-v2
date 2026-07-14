@@ -279,6 +279,12 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 );
 
 const ISSUE_PATTERN = /^(?:UTV2|UNI)-\d+$/;
+// verification_target is intentionally narrower than the general ISSUE_PATTERN above (which
+// also accepts UNI-###): the manifest schema (lane_manifest_v1.schema.json) and
+// LANE_MANIFEST_SPEC.md §16 both document verification_target as UTV2-### only, and
+// requireIssueId()/ISSUE_PATTERN's UNI- acceptance let a UNI-### target silently pass
+// validation while disagreeing with the documented JSON schema (Codex review, PR #1215).
+const VERIFICATION_TARGET_PATTERN = /^UTV2-\d+$/;
 const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN = 'dispatch-auto';
 export const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
@@ -438,6 +444,22 @@ export function requireIssueId(issueId: string): string {
   const normalized = issueId.toUpperCase();
   if (!ISSUE_PATTERN.test(normalized)) {
     throw new Error(`Invalid issue id: ${issueId}`);
+  }
+
+  return normalized;
+}
+
+/**
+ * Deliberately stricter than requireIssueId()/ISSUE_PATTERN (which also accepts UNI-###):
+ * verification_target is documented as UTV2-### only in lane_manifest_v1.schema.json and
+ * LANE_MANIFEST_SPEC.md §16. Using the general issue-id helper here would silently let a
+ * UNI-### value pass despite disagreeing with the documented JSON schema (Codex review,
+ * PR #1215).
+ */
+export function requireVerificationTarget(value: string): string {
+  const normalized = value.toUpperCase();
+  if (!VERIFICATION_TARGET_PATTERN.test(normalized)) {
+    throw new Error(`verification_target must match UTV2-### (got "${value}")`);
   }
 
   return normalized;
@@ -901,7 +923,7 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   }
 
   if (manifest.verification_target !== undefined) {
-    if (!ISSUE_PATTERN.test(manifest.verification_target)) {
+    if (!VERIFICATION_TARGET_PATTERN.test(manifest.verification_target)) {
       errors.push(`${sourcePath}: verification_target must match UTV2-### (got "${manifest.verification_target}")`);
     }
     if (manifest.lane_type !== 'verification') {
@@ -1172,7 +1194,7 @@ export function createManifest(input: {
         `verification_target is verification-lane-only.`,
     );
   }
-  if (input.verification_target && !ISSUE_PATTERN.test(input.verification_target)) {
+  if (input.verification_target && !VERIFICATION_TARGET_PATTERN.test(input.verification_target)) {
     throw new Error(`verification_target must match UTV2-### (got "${input.verification_target}")`);
   }
   return {

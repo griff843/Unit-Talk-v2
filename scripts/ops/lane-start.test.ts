@@ -193,14 +193,19 @@ test('lane-start validates verification_target format before creating branch/wor
   );
 });
 
-// PR #1215 Codex review fix: requireIssueId() normalizes (uppercases) internally, but a
-// discarded return value means a lower-case --verification-target passes this early check
-// (via requireIssueId's own normalization) yet still reaches createManifest's case-sensitive
-// ISSUE_PATTERN check as the original lower-case string, failing after branch/worktree/lease
-// side effects had already run -- the exact orphaned-state case this early check exists to
-// prevent. verificationTargetFlag must be declared with `let` and reassigned to the
-// normalized return value, not left as a `const` alias to the raw flag.
-test('lane-start normalizes verification_target from requireIssueId before any downstream use', () => {
+// PR #1215 Codex review fix (round 5): requireVerificationTarget() normalizes (uppercases)
+// internally, but a discarded return value means a lower-case --verification-target passes
+// this early check yet still reaches createManifest's case-sensitive pattern check as the
+// original lower-case string, failing after branch/worktree/lease side effects had already
+// run -- the exact orphaned-state case this early check exists to prevent.
+// verificationTargetFlag must be declared with `let` and reassigned to the normalized return
+// value, not left as a `const` alias to the raw flag.
+//
+// PR #1215 Codex review fix (round 6): the normalization call must use
+// requireVerificationTarget(), not the general requireIssueId() -- the latter also accepts
+// UNI-### (ISSUE_PATTERN), but verification_target is documented UTV2-### only in the
+// manifest schema and LANE_MANIFEST_SPEC.md §16.
+test('lane-start normalizes verification_target via requireVerificationTarget (UTV2-### only) before any downstream use', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
 
   assert.match(
@@ -212,16 +217,22 @@ test('lane-start normalizes verification_target from requireIssueId before any d
   const malformedCheckIndex = source.indexOf("code: 'verification_target_malformed'");
   assert.notStrictEqual(malformedCheckIndex, -1, 'expected the verification_target_malformed precondition block');
   const tryBlockStart = source.lastIndexOf('try {', malformedCheckIndex);
-  const requireIssueIdCallIndex = source.indexOf('requireIssueId(verificationTargetFlag)', tryBlockStart);
-  assert.notStrictEqual(requireIssueIdCallIndex, -1, 'expected a requireIssueId(verificationTargetFlag) call inside the try block');
+  const normalizeCallIndex = source.indexOf('requireVerificationTarget(verificationTargetFlag)', tryBlockStart);
+  assert.notStrictEqual(normalizeCallIndex, -1, 'expected a requireVerificationTarget(verificationTargetFlag) call inside the try block');
+  assert.strictEqual(
+    source.indexOf('requireIssueId(verificationTargetFlag)', tryBlockStart) === -1 ||
+      source.indexOf('requireIssueId(verificationTargetFlag)', tryBlockStart) > malformedCheckIndex + 500,
+    true,
+    'the general requireIssueId() must not be used to validate verification_target -- it also accepts UNI-###',
+  );
 
   const reassignmentLine = source.slice(
-    source.lastIndexOf('\n', requireIssueIdCallIndex) + 1,
-    source.indexOf('\n', requireIssueIdCallIndex),
+    source.lastIndexOf('\n', normalizeCallIndex) + 1,
+    source.indexOf('\n', normalizeCallIndex),
   ).trim();
   assert.strictEqual(
     reassignmentLine,
-    'verificationTargetFlag = requireIssueId(verificationTargetFlag);',
-    `requireIssueId's normalized return value must be reassigned back to verificationTargetFlag, not discarded -- found: "${reassignmentLine}"`,
+    'verificationTargetFlag = requireVerificationTarget(verificationTargetFlag);',
+    `requireVerificationTarget's normalized return value must be reassigned back to verificationTargetFlag, not discarded -- found: "${reassignmentLine}"`,
   );
 });
