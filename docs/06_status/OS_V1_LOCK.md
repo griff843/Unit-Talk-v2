@@ -1,6 +1,6 @@
-# OS v1 Lock — Final Candidate
+# OS v1 Lock — Ratified
 
-**Status: FINAL CANDIDATE — ready for PM ratification.** All lock criteria set 2026-07-12 are now met, including a clean Wave A acceptance replay with zero manual rescue and zero direct-main bypass. This document itself is not yet ratified — PM sign-off is the remaining step. A lock of this kind is itself a governance change and should be ratified explicitly, not treated as binding by default.
+**Status: RATIFIED 2026-07-14 by PM.** All lock criteria set 2026-07-12 were met, including a clean Wave A acceptance replay with zero manual rescue and zero direct-main bypass (§5, Round 2 / UTV2-1498). Per the ramp schedule (§6), Wave B/C dispatch and post-lock repair debt (DEBT-030/031, tracked as UTV2-1531) are now authorized. This ratification was recorded through the normal governed path (UTV2-1530), not a direct-main edit.
 
 Compiled 2026-07-11, updated 2026-07-12 and 2026-07-13 through three more rounds: closing UTV2-1524 (scope-override parser bug + a P1-caught unsafe fallback), reopening and properly fixing UTV2-1518 (the scope-guard proof-directory exemption), and running the Wave A acceptance test twice — once revealing the UTV2-1518 gap, once clean after the fix.
 
@@ -116,11 +116,11 @@ Documented location causes `proof-auditor-gate.ts`'s non-recursive `listFiles()`
 
 ---
 
-## 6. Ramp schedule (proposed, pending PM sign-off)
+## 6. Ramp schedule — executed
 
 1. Wave A acceptance lane — done, clean (§5).
-2. If PM ratifies: 2 concurrent T2/T3 lanes, still watched.
-3. If clean: restore normal Wave B/C concurrency caps per `LANE_CONCURRENCY_POLICY.md`. **Do not open the 10-lane wave until this lock is ratified** — Wave B/C issues may be prepared and improved in parallel, but not dispatched.
+2. **Ratified 2026-07-14 (UTV2-1530).** Wave B/C dispatch and post-lock repair debt (DEBT-030/031 / UTV2-1531) are authorized as of this ratification.
+3. Normal Wave B/C concurrency caps per `LANE_CONCURRENCY_POLICY.md` apply going forward, still watched per §7 abort metrics.
 
 ## 7. Abort metrics (proposed)
 
