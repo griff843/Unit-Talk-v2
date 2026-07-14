@@ -58,7 +58,11 @@ Pre-closure checklist (R-level, proof, CI, tier label, truth-check) lives in `/v
 
 Declared at lane start, immutable for lane life. Overlap check is hard — second lane is refused. Locks release on `status: done`. Blocked/reopened lanes retain locks.
 
-Do not edit files outside your lane's scope. Scope bleed in Codex returns is a rejection reason.
+Do not edit files outside your lane's scope. Scope bleed in a returned Claude or Codex lane is a rejection reason — the same standard applies to both executors.
+
+## Concurrent lanes
+
+Multiple lanes — Claude and/or Codex, in any mix — may be active at once, up to the executor limits in `docs/governance/CONCURRENCY_CONFIG.json`. Claude is not single-threaded: `/dispatch` runs Claude implementation as a background agent per lane (`/dispatch` Phase 4), the same pattern already used for Codex, so several Claude lanes can execute with overlapping windows as long as each has its own worktree and a disjoint `file_scope_lock`. Concurrency applies to execution only — merge and lane-close remain serialized through the merge mutex (`ops:merge-lock`) regardless of executor or how many lanes finished implementing around the same time.
 
 ---
 

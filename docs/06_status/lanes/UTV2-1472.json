@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1472",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1472-dispatch-board-concurrent-claude-lanes",
+  "branch": "claude/utv2-1472-dispatch-board-concurrent-claude-lanes",
+  "base_branch": "main",
+  "commit_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1217",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch-board.md",
+    ".claude/commands/dispatch.md",
+    ".claude/commands/lane-management.md",
+    ".ops/sync/**",
+    "docs/06_status/lanes/**",
+    "docs/06_status/proof/UTV2-1472/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1472/diff-summary.md",
+    "docs/06_status/proof/UTV2-1472/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-14T22:14:43.094Z",
+  "heartbeat_at": "2026-07-14T22:42:06.606Z",
+  "closed_at": "2026-07-14T22:42:06.606Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1472-dispatch-board-concurrent-claude-lanes.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T22:40:19.745Z",
+      "verdict": "pass",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1217"
+    },
+    {
+      "checked_at": "2026-07-14T22:40:23.522Z",
+      "verdict": "pass",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1217",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T22:40:23.538Z",
+      "verdict": "fail",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T22:40:39.594Z",
+      "verdict": "fail",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [
+        "P3",
+        "C4",
+        "P12",
+        "P14"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T22:41:32.817Z",
+      "verdict": "pass",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1217",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T22:41:32.822Z",
+      "verdict": "fail",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T22:41:40.456Z",
+      "verdict": "fail",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T22:41:56.255Z",
+      "verdict": "pass",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T22:42:04.647Z",
+      "verdict": "pass",
+      "merge_sha": "2206156811e6ca2487acc97f60c815d51da0ef4d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1217",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1472-dispatch-board-concurrent-claude-lanes",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
