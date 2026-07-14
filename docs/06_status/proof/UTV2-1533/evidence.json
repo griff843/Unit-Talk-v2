@@ -43,11 +43,31 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 73551, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 109203, "status": "healthy" },
-      { "table": "submissions", "count": 75697, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 4930, "status": "healthy" },
-      { "table": "audit_log", "count": 194041, "status": "healthy" }
+      {
+        "table": "picks",
+        "count": 73551,
+        "status": "healthy"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 109203,
+        "status": "healthy"
+      },
+      {
+        "table": "submissions",
+        "count": 75697,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 4930,
+        "status": "healthy"
+      },
+      {
+        "table": "audit_log",
+        "count": 194041,
+        "status": "healthy"
+      }
     ],
     "row_counts_captured_at": "2026-07-14T23:05:00Z",
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This diff's scope (governance config/docs + TypeScript ops-orchestration tooling) does not itself touch any of these tables; this runtime proof exists because T1 tier requires it unconditionally per truth-check-lib.ts's runtime_proof_required gate (tier === 'T1'), independent of whether the diff's own files touch DB code."
@@ -85,7 +105,7 @@
   "sha_binding": {
     "pre_utv2_1533_main_baseline_sha": "9e630fe9188f6ef0722c862ebde2ee71a797f80e",
     "pre_utv2_1533_main_baseline_note": "origin/main's tip immediately before UTV2-1533's first commit. Used to prove origin/main never independently touched any of the 14 intended implementation paths: `git diff --stat 9e630fe9..40782f85 -- <14 paths>` (40782f85 = origin/main's tip at the moment this clean branch was created) produced zero output.",
-    "verified_source_sha": "e726d84c4b5a86567f2279738e2a49c78f7d9b13",
+    "verified_source_sha": "74eb6cd65da829cb969a4a7819494a1d3747ccb2",
     "verified_source_note": "This clean branch's own substantive implementation commit (post-rebase onto origin/main's tip after UTV2-1499 landed) -- the 14 files carried in verbatim from the accepted implementation, byte-identical, zero reconciliation. An ancestor of the PR's actual live head at every point checked.",
     "verification_target_fix_sha": "b215bdfc9cb59ffd1b7c4c297714bbbffcd96d96",
     "verification_target_fix_note": "The lane-maximizer P2 fix commit (explicit verification_target contract, replacing the issue_id-guessing default) -- new work on this clean branch, not carried from any prior PR.",
@@ -100,7 +120,9 @@
       "r_level_check": "PASS -- Verdict: PASS, Changed files: 20, Rules matched: (none)",
       "targeted_tests_137_of_137": "PASS -- 128 carried (concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, codex-dispatch.test.ts's pre-existing suite, and lane-maximizer.test.ts's pre-existing suite) + 8 new for the lane-maximizer verification_target fix + 1 new for the codex-dispatch.ts verification_target fix (net +1 after rewriting 1 stale static-inspection test)",
       "pnpm_verify": "PASS -- see verification.md for the captured run"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-14T23:07:20.806Z"
   },
   "scope": {
     "implementation_paths": [
