@@ -204,9 +204,9 @@ test('merge_serialized_max is 1 in CONCURRENCY_CONFIG.json', async () => {
   const configPath = path.join(ROOT, 'docs', 'governance', 'CONCURRENCY_CONFIG.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as ConcurrencyConfig;
   assert.strictEqual(config.merge_serialized_max, 1, 'merge_serialized_max must be 1');
-  assert.strictEqual(config.total, 6, 'total must be 6');
-  assert.strictEqual(config.executors.claude, 2, 'claude limit must be 2');
-  assert.strictEqual(config.executors.codex, 4, 'codex limit must be 4');
+  assert.strictEqual(config.total, 10, 'total must be 10');
+  assert.strictEqual(config.executors.claude, 4, 'claude limit must be 4');
+  assert.strictEqual(config.executors.codex, 6, 'codex limit must be 6');
 });
 
 // ── 9. Done manifests don't count against limits ──────────────────────────

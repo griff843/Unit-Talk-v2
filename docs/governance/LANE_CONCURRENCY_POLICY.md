@@ -8,7 +8,9 @@
 
 This document defines the concurrency rules for simultaneous execution of lanes in Unit Talk V2. It supplements the lane taxonomy with the enforcement mechanism for safe parallel execution.
 
-The operating model is: 6 total active lanes (2 Claude + 4 Codex), enforced mechanically by `ops:lane-start` reading `CONCURRENCY_CONFIG.json`. Prose policy alone does not enforce anything — scripts enforce.
+The operating model is: 10 total active lanes (4 Claude + 6 Codex), enforced mechanically by `ops:lane-start` reading `CONCURRENCY_CONFIG.json`. Prose policy alone does not enforce anything — scripts enforce.
+
+**Provenance (UTV2-1533, 2026-07-14, post OS v1 lock ratification):** the prior 6-lane (2 Claude + 4 Codex) ceiling was a stabilization-era policy choice, not a mechanical limit — no external constraint (API rate limit, license seat count, host process cap) enforced 2/4/6 anywhere; only this repo's own `ops:lane-start` did. The audit backing this ramp found exactly two constraints that remain real regardless of lane count: merge-train serialization (§8b, `merge_serialized_max: 1`) and the WSL2-RAM-driven full-verification semaphore (§10a, decoupled from the active-lane cap). Raising the lane count does not touch either. See UTV2-1533 for the full audit.
 
 ---
 
@@ -18,9 +20,9 @@ These limits are hard caps enforced by `ops:lane-start`. The command refuses if 
 
 | Limit | Value | Enforcement |
 |---|---|---|
-| Total active lanes (any type) | **6** | `ops:lane-start` rejects lane 7 |
-| Claude executor lanes | **2** | `ops:lane-start` rejects third Claude lane |
-| Codex executor lanes | **4** | `ops:lane-start` rejects fifth Codex lane |
+| Total active lanes (any type) | **10** | `ops:lane-start` rejects lane 11 |
+| Claude executor lanes | **4** | `ops:lane-start` rejects fifth Claude lane |
+| Codex executor lanes | **6** | `ops:lane-start` rejects seventh Codex lane |
 | Runtime lanes | **1** | `ops:lane-start` rejects second Runtime |
 | Migration lanes | **1** | `ops:lane-start` rejects second Migration |
 | Modeling lanes | **1** | `ops:lane-start` rejects second Modeling |
@@ -109,7 +111,7 @@ When in doubt, declare the file scope and let `ops:lane-start` arbitrate.
 
 ---
 
-## 6. Scaling to 5–8 lanes safely
+## 6. Scaling to 10, then 12–14 lanes safely
 
 The current system operates safely at 3 active lanes because:
 - Runtime and Migration are always singletons
@@ -137,7 +139,21 @@ To safely operate at **6–8 lanes**, additional Governance and Hygiene lanes ma
 1/app × Delivery/UI
 ```
 
-Total: up to 8 lanes simultaneously if the above distribution is respected.
+### 10-lane base ceiling (UTV2-1533, effective 2026-07-14)
+
+The type-level caps in §1 (Hygiene ≤4, Governance ≤3, Delivery/UI 1/app across up to 4 apps, Verification unbounded across distinct targets) already accommodate 10 concurrent safe-type lanes plus one Runtime singleton without raising any type-level cap — only the executor (`claude`/`codex`) and `total` caps needed to move. Example 10-lane topology:
+
+```
+1 × Runtime          (Claude or Codex — singleton by type)
+1–2 × Verification   (Claude or Codex — read-only)
+2–3 × Governance      (distinct doc sections)
+2–3 × Hygiene         (distinct file scopes)
+1–4 × Delivery/UI     (1 per app: command-center, discord-bot, smart-form, qa-agent)
+```
+
+Total: up to 10 lanes simultaneously, Claude ≤4 / Codex ≤6, if the above distribution is respected and file-scope locks do not conflict.
+
+**Ramp discipline (PM directive, UTV2-1533):** start a wave at 10, hold it there, and watch — ghost-lane count, stale-lease count, WSL2 memory pressure during concurrent full-verify queuing (§10a), CI/PR review delay, and merge-train drain rate. Only after that 10-lane wave runs healthy (no sustained regression in those signals) should the PM enable the disabled 12–14 trial block in `CONCURRENCY_CONFIG.json` (§11) — raising the ceiling further before the 10-lane wave is proven is explicitly out of scope for this ramp step.
 
 ---
 
@@ -236,17 +252,17 @@ Full protocol, CLI usage, and rollback: `docs/05_operations/WORKFLOW_SPEC.md`, "
 
 The type-based limits in §1 govern which lane *types* can coexist. This section governs how many lanes each *executor* (Claude Code, Codex CLI) may hold simultaneously. Both policies apply.
 
-**Issued under:** UTV2-979  
-**Ratified:** 2026-05-16 (PM governance review)  
-**Effective:** 2026-05-16
+**Issued under:** UTV2-979 (base standard), UTV2-1533 (2026-07-14 post-lock ramp to 10)  
+**Ratified:** 2026-05-16 (PM governance review); raised 2026-07-14  
+**Effective:** 2026-07-14
 
 ### Ratified standard (safe work classes — enforced mechanically)
 
 | Executor | Ratified limit | Notes |
 |---|---|---|
-| Claude Code | **2 active lanes** | Safe work classes only; see §10 ineligible list |
-| Codex CLI | **4 active lanes** | Safe work classes only |
-| Total hard cap | **6** | Matches §1; type-level limits always apply on top |
+| Claude Code | **4 active lanes** | Safe work classes only; see §10 ineligible list |
+| Codex CLI | **6 active lanes** | Safe work classes only |
+| Total hard cap | **10** | Matches §1; type-level limits always apply on top |
 
 All limits are sourced from `docs/governance/CONCURRENCY_CONFIG.json`. Scripts read this file directly — no manual sync required. The limits are enforced by `ops:lane-start` before any branch or manifest is created.
 
@@ -309,16 +325,16 @@ These lane types are **always singleton**, regardless of executor counts or PM w
 | Modeling | Shadow scoring cannot compare against two moving baselines |
 | Data/Canonical | Touches schema or ingestor; same constraints as Migration |
 
-### 6-lane ceiling — ratified and mechanically enforced
+### 10-lane ceiling — ratified and mechanically enforced
 
-The 6-lane operating model (2 Claude + 4 Codex) is the ratified default. It is enforced by:
+The 10-lane operating model (4 Claude + 6 Codex) is the ratified default as of UTV2-1533 (2026-07-14), superseding the 6-lane (2 Claude + 4 Codex) stabilization-era ceiling. It is enforced by:
 
 1. **`ops:lane-start`** — reads `CONCURRENCY_CONFIG.json` and refuses when any limit would be exceeded
 2. **`ops:execution-state`** — reports `dispatch_slots` using the same config values
 3. **`ops:merge-risk`** — emits `DISPATCH_LIMIT_SATURATION` based on the same config values
 4. **`ops:lane-maximizer`** — evaluates candidates against the same config defaults
 
-To raise limits above 6 requires a PM-authorized change to `CONCURRENCY_CONFIG.json` with a PR, not a prose override.
+To raise limits above 10 requires a PM-authorized change to `CONCURRENCY_CONFIG.json` with a PR, not a prose override. Note: raising the executor cap alone does not guarantee genuine parallelism — see UTV2-1472 (Claude lanes currently dispatch sequentially in the orchestrator session; unblocked but not yet implemented as of this ramp).
 
 ### Canonical citation
 
@@ -326,12 +342,12 @@ When `dispatch-board`, `dispatch`, or any agent skill references executor-level 
 
 ---
 
-## 11. Trial governor (7–8 lane ceiling)
+## 11. Trial governor (12–14 lane ceiling)
 
-**Issued under:** UTV2-1165  
-**Effective:** 2026-05-25
+**Issued under:** UTV2-1165 (mechanism), UTV2-1533 (2026-07-14, retargeted from the exhausted 7–8 lane trial to a 12–14 lane trial once the 10-lane base wave proves healthy)  
+**Effective:** 2026-07-14
 
-The ratified default ceiling is 6 lanes (§1, §10). When operational demand requires temporarily operating at 7–8 lanes, a PM-authorized trial governor may raise the ceiling for a bounded period.
+The ratified default ceiling is 10 lanes (§1, §10). When operational demand requires temporarily operating at 12–14 lanes — and only after the 10-lane wave has run healthy per the ramp criteria in §6 — a PM-authorized trial governor may raise the ceiling for a bounded period. The prior 7–8 lane trial (UTV2-1165) expired 2026-06-26 and was absorbed into the new 10-lane base rather than renewed; it is not usable as-is.
 
 ### Enabling the trial governor
 
@@ -340,15 +356,15 @@ The trial governor is configured in `docs/governance/CONCURRENCY_CONFIG.json` un
 ```json
 "trial": {
   "enabled": true,
-  "total": 8,
-  "executors": { "claude": 3, "codex": 5 },
-  "allowed_until": "2026-06-30T00:00:00Z",
+  "total": 14,
+  "executors": { "claude": 5, "codex": 9 },
+  "allowed_until": "2026-08-15T00:00:00Z",
   "rationale": "UTV2-XXXX: reason for trial authorization",
   "safe_types_only": ["governance", "hygiene", "delivery-ui", "verification"]
 }
 ```
 
-**Only PM may enable the trial governor.** Enabling it requires a PR changing `CONCURRENCY_CONFIG.json` with `tier:T1` label and PM approval.
+**Only PM may enable the trial governor.** Enabling it requires a PR changing `CONCURRENCY_CONFIG.json` with `tier:T1` label and PM approval, and should not happen until the 10-lane base wave has demonstrated the health criteria in §6 (no ghost-lane spike, no repeated stale-lease/substrate-guard failures, stable merge-train drain rate, stable CI/review delay).
 
 ### Behavior
 
@@ -356,8 +372,8 @@ The trial governor is configured in `docs/governance/CONCURRENCY_CONFIG.json` un
 
 | Condition | Effective limits |
 |---|---|
-| `trial.enabled = false` | Base limits (total: 6, claude: 2, codex: 4) |
-| `trial.enabled = true` AND `allowed_until` is in the future (or null) | Trial limits (total: 8, claude: 3, codex: 5) |
+| `trial.enabled = false` | Base limits (total: 10, claude: 4, codex: 6) |
+| `trial.enabled = true` AND `allowed_until` is in the future (or null) | Trial limits (total: 14, claude: 5, codex: 9) |
 | `trial.enabled = true` AND `allowed_until` is in the past | **Auto-reverts** to base limits — no action required |
 
 ### Safe-types constraint
