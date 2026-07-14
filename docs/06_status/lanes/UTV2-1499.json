@@ -14,7 +14,8 @@
     "docs/05_operations/RUNTIME_OPERATIONS_GOVERNANCE.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1499/evidence.json"
+    "docs/06_status/proof/UTV2-1499/verification.md",
+    "docs/06_status/proof/UTV2-1499/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-07-14T12:03:33.832Z",
