@@ -1,5 +1,5 @@
 # PROOF: UTV2-1485
-MERGE_SHA: 71eda96e7dff2ba91342a2480c19d8be33f1c972
+MERGE_SHA: 580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0
 
 ASSERTIONS:
 - [x] Internal-only, browser-local persistence — no schema/migration/API changes

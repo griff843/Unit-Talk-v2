@@ -1,5 +1,5 @@
 # PROOF: UTV2-1484
-MERGE_SHA: e5e1a0bdf1a76c61f45223d30b9f44cfb3918db0
+MERGE_SHA: 484c25bdf07173b902ee178312b7560f3e530a1d
 
 ASSERTIONS:
 - [x] Read-only API surface only, no write handlers
