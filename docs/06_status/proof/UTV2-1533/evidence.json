@@ -1,19 +1,27 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1533",
-  "status": "PRE-MERGE -- PR #1213 open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "status": "PRE-MERGE -- replacement PR (superseding PR #1213) open, not merged. This bundle documents the state at the commit SHAs below, not a completed lane.",
+  "continuation": {
+    "superseded_pr": "https://github.com/griff843/Unit-Talk-v2/pull/1213",
+    "superseded_branch": "griffadavi/utv2-1533-post-lock-concurrency-ramp",
+    "reason": "griffadavi/... can never satisfy Executor Result Validation's ratified claude/- or codex/-prefixed branch contract, a required fail-closed CI check. The implementation is unchanged and accepted at the code level (structured T1 evidence, 10/4/6 limits, mechanically enforced type caps, schema-validated resume-safe verification_target, early validation, 109/109 tests, pnpm verify green, all review threads resolved). History preserved exactly via `git branch` from the accepted head, not cherry-picked or reconstructed.",
+    "continuation_branch": "claude/utv2-1533-post-lock-concurrency-ramp"
+  },
   "sha_binding": {
     "verified_source_sha": "c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0",
-    "verified_source_note": "Round 3: fixes 2 fresh Codex-review findings (submitted 2026-07-14T17:24:09Z against round-2 head e8835a4a) on the round-2 verification_target enforcement -- resume-path backfill + self-exclusion, and early format validation before branch/worktree/lease creation. Round 2 (P2 fix, commit 343735ba/e8835a4a): mechanical type-cap enforcement -- CONCURRENCY_CONFIG.json type_caps block, concurrency-config.ts, shared.ts (deriveDeliveryUiApp + verification_target), lane-start.ts (checkConcurrencyLimits extension + --verification-target flag), lane-maximizer.ts advisory command fix.",
+    "verified_source_note": "The last substantive implementation commit -- accepted at the code level, unchanged by this continuation. Round 3 fixed 2 fresh Codex-review findings (resume-path backfill + self-exclusion; early format validation before branch/worktree/lease creation) on top of round 2's P2 fix (mechanical type-cap enforcement) and round 1's P1 fix (T1 evidence bundle). Not the current PR head -- see accepted_pr_head_sha below.",
+    "accepted_pr_head_sha": "24696311888e8c24beb530d557efe3e95ee4aa52",
+    "accepted_pr_head_note": "PR #1213's final head, carrying the accepted implementation plus round-3/round-4 proof-doc corrections. This exact commit is the root of the continuation branch (git branch, not cherry-pick) -- full history preserved.",
     "merge_sha": null,
     "merge_sha_note": "Not merged. This field is intentionally null -- no merge SHA exists yet and none is invented. Will be populated post-merge via ops:proof-generate --merge-sha per this repo's standard closeout automation.",
-    "current_pr_head_sha": "c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0",
+    "current_pr_head_sha": "PENDING -- set to the replacement PR's actual head SHA once opened and pushed; never the substantive-commit SHA above, to avoid conflating 'last implementation commit' with 'current PR head' (PM review correction).",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "r_level_check": "PASS",
       "targeted_tests_109_of_109": "PASS",
       "pnpm_verify": "PASS",
-      "pnpm_test_db": "NOT_APPLICABLE -- no DB/runtime code in this diff's scope, see runtime_proof below"
+      "pnpm_test_db_via_t1_proof_gate_ci": "PASS -- CI's \"T1 Proof Gate\" job (proof-gate.yml, job t1-proof, step \"C2 — live-DB proof execution\") runs `pnpm ci:db-smoke` (pnpm test:db equivalent) unconditionally for T1 PRs and is a hard gate within that job; the T1 Proof Gate check-run reported SUCCESS on PR #1213 at the accepted head, so this CI-run test:db execution did occur and passed, even though it was not separately re-invoked by the executor in the local session. See t1_proof_gate below for the correction this replaces."
     }
   },
   "verifier": {
@@ -22,7 +30,7 @@
   },
   "tier": "T1",
   "scope": {
-    "summary": "Raise the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforce the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only.",
+    "summary": "Raise the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforce the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only. This continuation adds no implementation change -- only branch/manifest/proof-doc repair.",
     "files_changed": [
       "docs/governance/CONCURRENCY_CONFIG.json",
       "docs/governance/LANE_CONCURRENCY_POLICY.md",
@@ -39,13 +47,15 @@
       "docs/06_status/proof/UTV2-1533/diff-summary.md",
       "docs/06_status/proof/UTV2-1533/verification.md",
       "docs/06_status/proof/UTV2-1533/evidence.json"
-    ]
+    ],
+    "files_changed_source": "Generated from `git diff --stat origin/main...HEAD` in the continuation worktree, not typed by hand (PM review correction)."
   },
   "non_goals": [
     "merge_serialized_max unchanged -- merge-train serialization is a real architectural constraint, untouched",
     "12-14 lane trial stays disabled (enabled: false) -- not enabled by this lane",
     "UTV2-1472 (Claude parallel dispatch) not folded in -- separate companion issue",
-    "scripts/ops/execution-state.ts / merge-risk.ts / lane-maximizer.ts's own '?? 2' / '?? 4' fallback defaults (config-load-failure-only dead code path) left unchanged -- pre-existing minor gap, out of scope"
+    "scripts/ops/execution-state.ts / merge-risk.ts / lane-maximizer.ts's own '?? 2' / '?? 4' fallback defaults (config-load-failure-only dead code path) left unchanged -- pre-existing minor gap, out of scope",
+    "No implementation redesign in this continuation -- the accepted code from PR #1213 is carried forward unchanged; only branch, lane-manifest, lease, and proof-doc metadata were repaired"
   ],
   "config_changes": {
     "docs/governance/CONCURRENCY_CONFIG.json": {
@@ -67,7 +77,8 @@
   "static_proof": {
     "type_check": {
       "command": "pnpm type-check",
-      "status": "PASS"
+      "status": "PASS",
+      "note": "Confirmed clean at the substantive commit and independently re-confirmed in the continuation worktree at the branch-repair commit."
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -80,18 +91,20 @@
       "tests": 109,
       "pass": 109,
       "fail": 0,
-      "note": "concurrency-simulation.test.ts: 37/37 (23 pre-existing + 14 new PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 9/9 (7 pre-existing + 2 new round-3 regression tests for the Codex-review resume-backfill and early-validation fixes). lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string)."
+      "note": "concurrency-simulation.test.ts: 37/37 (23 pre-existing + 14 PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 9/9 (7 pre-existing + 2 round-3 regression tests for the Codex-review resume-backfill and early-validation fixes). lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string). Independently re-confirmed clean in the continuation worktree."
     },
     "pnpm_verify": {
       "command": "pnpm verify",
       "status": "PASS",
-      "note": "Round 2 (commit 343735ba/e8835a4a): full chain ran clean end to end -- zero 'not ok' lines, zero ELIFECYCLE failures. Ran concurrently with 3 other active lanes' own pnpm verify runs (UTV2-1499, UTV2-1427, UTV2-1264) contending for the shared full-verify semaphore -- slower than solo but still clean, itself a small live data point for the ramp-health observability this issue's companion (UTV2-1534) tracks. Round 3 (commit c9ddd22d, this head): re-ran the full chain again after the resume-backfill and early-validation fixes -- clean end to end, zero 'not ok' lines, zero ELIFECYCLE failures."
+      "note": "Round 2 (commit 343735ba/e8835a4a): full chain ran clean end to end -- zero 'not ok' lines, zero ELIFECYCLE failures. Round 3 (commit c9ddd22d): re-ran the full chain again after the resume-backfill and early-validation fixes -- clean end to end. Independently re-confirmed in the continuation worktree (branch-repair commit) before opening the replacement PR."
     }
   },
   "runtime_proof": {
-    "note": "This lane touches no runtime/DB code -- config JSON, docs, and TypeScript ops-tooling (lane orchestration scripts, unit tests with in-memory fixtures) only. R-level check independently confirmed no DB/runtime rule is triggered by this diff.",
-    "test_db_run": false,
-    "test_db_statement": "pnpm test:db was NOT run for this lane and this is not a claim of execution. Not applicable: no DB schema, DB query, or Supabase-connected code path is touched by any file in this diff's scope. This is a factual statement, not a tier-skip -- the R-level check (which reads file-path-triggered rules, not the tier label alone) independently confirms no test:db-requiring rule matched."
+    "note": "No file in this diff's scope touches DB schema, DB queries, or Supabase-connected code -- governance config/docs and TypeScript ops-orchestration tooling (lane-lifecycle scripts, unit tests with in-memory fixtures) only. R-level check independently confirms no DB/runtime rule is triggered by this diff's file paths.",
+    "test_db_run_locally_by_executor": false,
+    "t1_proof_gate_ci_ran_test_db": true,
+    "t1_proof_gate_correction": "PM review caught an inaccuracy in an earlier round of this document: 'pnpm test:db was NOT run for this lane' was true only for the local executor session, and was written in a way that could be read as claiming no test:db execution occurred anywhere for this PR. That was wrong. CI's \"T1 Proof Gate\" job (.github/workflows/proof-gate.yml, job t1-proof) runs a hard-gated \"C2 — live-DB proof execution\" step that executes `pnpm ci:db-smoke` (the pnpm test:db equivalent) unconditionally for every T1 PR unless a narrow schema-parity exception applies (it does not here -- this manifest has no runtime_proof_kind field). The T1 Proof Gate check-run reported SUCCESS on PR #1213 at the accepted head, meaning C2 (and therefore pnpm test:db) genuinely ran and passed in CI. That CI execution is the applicable T1 runtime-verification step for this diff and is not being denied here.",
+    "test_db_statement": "R-level check (file-path-triggered, not tier-label-driven) independently confirms no rule requiring a local pnpm test:db invocation was triggered by this diff's specific files. The executor did not separately re-run pnpm test:db locally for that reason. Separately and correctly: CI's T1 Proof Gate DID execute pnpm test:db (via ci:db-smoke) as part of its own required C2 step, and it passed -- see t1_proof_gate_correction above."
   },
   "acceptance_criteria": {
     "type_caps_machine_readable_config": "PASS -- docs/governance/CONCURRENCY_CONFIG.json type_caps + concurrency-config.ts TypeCapsConfig",
@@ -103,9 +116,12 @@
     "execution_state_reports_effective_caps": "PASS -- test 14",
     "evidence_json_added_at_declared_path": "PASS -- this file",
     "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
-    "no_placeholders": "PASS -- every field below is either a real captured value or an explicit not-yet-available note (pnpm_verify pending append)",
-    "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state PR #1213 is open, unmerged",
-    "fresh_codex_review_findings_addressed": "PASS -- 2 new P2 findings from the round-2 Codex review (resume path skips --verification-target backfill; malformed target validated too late) both fixed in round 3, with 2 new regression tests"
+    "no_placeholders": "PASS -- every field is either a real captured value or an explicit not-yet-available note (current_pr_head_sha pending the replacement PR's actual head)",
+    "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state the replacement PR is open, unmerged",
+    "fresh_codex_review_findings_addressed": "PASS -- 2 P2 findings from the round-2 Codex review (resume path skips --verification-target backfill; malformed target validated too late) both fixed in round 3, with 2 new regression tests",
+    "continuation_history_preserved": "PASS -- claude/utv2-1533-post-lock-concurrency-ramp created via `git branch <name> 24696311...`, not cherry-picked or reconstructed; full commit history intact",
+    "continuation_metadata_truthful": "PASS -- lane manifest branch/worktree_path/execution_location.cwd/preflight_token/commit_sha/status/file_scope_lock all repaired to match the new branch; old branch's lease released, new lease reserved with the full accepted file scope",
+    "scope_accounting_corrected": "PASS -- 9 expanded-scope files (not 8): the round-2 accounting omitted scripts/ops/lane-start.test.ts, added in round 3 -- corrected below"
   },
   "scope_expansion": {
     "original_file_scope_lock": [
@@ -116,17 +132,20 @@
       "scripts/ops/concurrency-simulation.test.ts"
     ],
     "new_paths_requiring_codeowner_scope_override_v1": [
-      "scripts/ops/shared.ts",
-      "scripts/ops/shared.test.ts",
+      "docs/05_operations/LANE_MANIFEST_SPEC.md",
+      "docs/05_operations/schemas/lane_manifest_v1.schema.json",
       "scripts/ops/concurrency-config.ts",
-      "scripts/ops/lane-start.ts",
       "scripts/ops/lane-maximizer.ts",
       "scripts/ops/lane-maximizer.test.ts",
-      "docs/05_operations/schemas/lane_manifest_v1.schema.json",
-      "docs/05_operations/LANE_MANIFEST_SPEC.md"
+      "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-start.test.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/shared.test.ts"
     ],
+    "new_paths_count": 9,
+    "new_paths_count_correction": "PM review caught this was previously reported as 8 -- the omission was scripts/ops/lane-start.test.ts, added during round 3 (the Codex-review regression tests) but never added to this list at the time. Corrected here; the actual lane manifest's file_scope_lock (repaired during this continuation) now truthfully declares the full 9-file expanded scope plus the original 5.",
     "self_authorized": false,
-    "note": "docs/06_status/proof/UTV2-1533/evidence.json (this file) does NOT require an override -- proof-directory files for a lane's own issue are exempted from file-scope-lock by ownLaneControlPlanePatterns() (DEBT-028 fix). No scope-override/v1 comment has been posted by this agent; per PM instruction, that authorization is not self-granted."
+    "note": "docs/06_status/proof/UTV2-1533/{diff-summary.md,verification.md,evidence.json} and docs/06_status/lanes/UTV2-1533.json / .ops/sync/UTV2-1533.yml do NOT require an override -- proof-directory and lane-manifest control-plane files for a lane's own issue are exempted from file-scope-lock by ownLaneControlPlanePatterns() (DEBT-028 fix). No scope-override/v1 comment has been posted by this agent for the 9 files above; per PM instruction, that authorization is not self-granted -- it requires a CODEOWNER (@griff843) comment on the replacement PR, bound to its exact head SHA."
   },
-  "verdict": "ALL_STATIC_CHECKS_PASS -- AWAITING_PM_APPROVAL_AND_SCOPE_OVERRIDE"
+  "verdict": "IMPLEMENTATION_ACCEPTED_CONTINUATION_REPAIRED -- AWAITING_PM_APPROVAL_AND_SCOPE_OVERRIDE_ON_REPLACEMENT_PR"
 }
