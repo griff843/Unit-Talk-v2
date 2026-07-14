@@ -5,11 +5,11 @@
   "status": "ready_for_pm_review",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "145d3a07573126d78af12185e44204a2d4da1a11",
-    "verified_source_note": "Last non-proof commit on claude/utv2-1526-codex-model-routing (fix(ops): UTV2-1526 thread --model-profile through lane-maximizer's recommendation). This is an ancestor of the current PR head, not the head itself -- this proof-correction commit and evidence.json/verification.md are proof-path-only on top of it, matching this repo's substantive_commit_sha convention (see docs/06_status/proof/UTV2-1244/evidence.json). Evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "verified_source_sha": "d31954e68764ae0c154fb8e6f7163bd3560de1e2",
+    "verified_source_note": "Last non-proof commit on claude/utv2-1526-codex-model-routing (fix(ops): UTV2-1526 thread --model-profile through lane-maximizer's recommendation). Rebound after a required ops:merge-wrapper main-sync (branch protection is strict; the PR was BEHIND main) rewrote every commit SHA on this branch via rebase -- this is the rebased equivalent of the previously-bound 145d3a07..., content-identical (git diff between the pre- and post-rebase branch tips shows zero changes under docs/06_status/proof/UTV2-1526/). This is an ancestor of the current PR head, not the head itself -- this proof-correction commit and evidence.json/verification.md are proof-path-only on top of it, matching this repo's substantive_commit_sha convention (see docs/06_status/proof/UTV2-1244/evidence.json). Evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "merge_sha": null,
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-13T18:56:06.000Z",
+    "bound_at": "2026-07-14T00:30:29.000Z",
     "ci_sentinels": {
       "merge_gate": "pending",
       "local_verify": "pass",
@@ -84,7 +84,7 @@
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "changed_files": 44,
+      "changed_files": 27,
       "rules_matched": "(none) -- no R-level artifacts required for this diff"
     },
     "policy_verification": {
