@@ -675,18 +675,30 @@ async function resolveEventScopedTotalContext(
   const metadataEventId = readString(metadata, 'eventId');
   const providerEventId = readString(metadata, 'providerEventId');
   const eventName = readEventScopedTotalEventName(metadata);
+  const retainedEventStartTime = readRetainedEventStartTime(metadata);
 
   if (metadataEventId) {
     const event =
       (await events.findById(metadataEventId)) ??
       (await events.findByExternalId(metadataEventId));
-    const context = event ? eventScopedContextFromEvent(pick, event) : null;
+    const context = event
+      ? eventScopedContextFromEvent(pick, event, retainedEventStartTime)
+      : null;
     if (context) {
       return context;
     }
   }
 
   if (providerEventId) {
+    if (retainedEventStartTime) {
+      return {
+        providerEventId,
+        eventStartTime: retainedEventStartTime,
+        participantExternalId: null,
+        participantSide: null,
+      };
+    }
+
     const event = await events.findByExternalId(providerEventId);
     const context = event ? eventScopedContextFromEvent(pick, event) : null;
     if (context) {
@@ -704,12 +716,10 @@ async function resolveEventScopedTotalContext(
       (!pick.sport_id || event.sport_id.toLowerCase() === pick.sport_id.toLowerCase()),
   );
 
-  const expectedStartTime =
-    readString(metadata, 'eventStartTime') ?? readString(metadata, 'eventTime');
-  if (expectedStartTime) {
-    const expectedEventDate = expectedStartTime.slice(0, 10);
+  if (retainedEventStartTime) {
+    const expectedStartTimeMs = Date.parse(retainedEventStartTime);
     namedEvents = namedEvents.filter(
-      (event) => readEventStartTime(event).slice(0, 10) === expectedEventDate,
+      (event) => Date.parse(readEventStartTime(event)) === expectedStartTimeMs,
     );
   } else if (namedEvents.length > 1) {
     const pickCreatedAtMs = Date.parse(pick.created_at);
@@ -738,7 +748,15 @@ async function resolveEventScopedTotalContext(
   }
 
   return namedEvents.length === 1
-    ? eventScopedContextFromEvent(pick, namedEvents[0]!)
+    ? eventScopedContextFromEvent(pick, namedEvents[0]!, retainedEventStartTime)
+    : null;
+}
+
+function readRetainedEventStartTime(metadata: Record<string, unknown>): string | null {
+  const eventStartTime =
+    readString(metadata, 'eventStartTime') ?? readString(metadata, 'eventTime');
+  return eventStartTime && Number.isFinite(Date.parse(eventStartTime))
+    ? eventStartTime
     : null;
 }
 
@@ -764,6 +782,7 @@ function eventScopedContextFromEvent(
     event_date: string;
     metadata: Record<string, unknown>;
   },
+  retainedEventStartTime: string | null = null,
 ): PickEventContext | null {
   if (
     !event.external_id ||
@@ -774,7 +793,7 @@ function eventScopedContextFromEvent(
 
   return {
     providerEventId: event.external_id,
-    eventStartTime: readEventStartTime(event),
+    eventStartTime: retainedEventStartTime ?? readEventStartTime(event),
     participantExternalId: null,
     participantSide: null,
   };

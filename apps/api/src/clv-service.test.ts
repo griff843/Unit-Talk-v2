@@ -348,7 +348,101 @@ test('UTV2-1264: game total resolves event-scoped closing odds from metadata.eve
   assert.equal(outcome.resolvedClosingLine?.provider_participant_id, null);
 });
 
-test('UTV2-1264: game total disambiguates repeated event names by event start date', async () => {
+test('UTV2-1264: game total resolves providerEventId without a local event row', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.providerOffers.resolveProviderMarketKey = async () => 'points-all-game-ou';
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'sgo-retained-provider-event',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 221.5,
+      overOdds: -107,
+      underOdds: -113,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: true,
+      snapshotAt: '2026-06-20T23:25:00.000Z',
+      idempotencyKey: 'retained-provider-event-closing',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const outcome = await computeCLVOutcome(
+    makeGameTotalPick({
+      metadata: {
+        providerEventId: 'sgo-retained-provider-event',
+        eventStartTime: '2026-06-20T23:30:00.000Z',
+      },
+    }),
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.equal(outcome.result?.closingOdds, -107);
+  assert.equal(
+    outcome.resolvedClosingLine?.provider_event_id,
+    'sgo-retained-provider-event',
+  );
+});
+
+test('UTV2-1264: game total never uses an offer captured after retained event start', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.providerOffers.resolveProviderMarketKey = async () => 'points-all-game-ou';
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'sgo-cutoff-event',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 220.5,
+      overOdds: -105,
+      underOdds: -115,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: true,
+      snapshotAt: '2026-06-20T23:29:00.000Z',
+      idempotencyKey: 'pre-start-closing',
+      bookmakerKey: null,
+    },
+    {
+      providerKey: 'sgo',
+      providerEventId: 'sgo-cutoff-event',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 224.5,
+      overOdds: -125,
+      underOdds: 105,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: true,
+      snapshotAt: '2026-06-20T23:31:00.000Z',
+      idempotencyKey: 'post-start-offer',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const outcome = await computeCLVOutcome(
+    makeGameTotalPick({
+      metadata: {
+        providerEventId: 'sgo-cutoff-event',
+        eventStartTime: '2026-06-20T23:30:00.000Z',
+      },
+    }),
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.equal(outcome.result?.closingOdds, -105);
+  assert.equal(outcome.result?.closingLine, 220.5);
+  assert.equal(outcome.result?.closingSnapshotAt, '2026-06-20T23:29:00.000Z');
+});
+
+test('UTV2-1264: game total disambiguates same-day events by exact retained start', async () => {
   const repositories = createInMemoryRepositoryBundle();
   repositories.providerOffers.resolveProviderMarketKey = async () => 'points-all-game-ou';
 
@@ -356,9 +450,9 @@ test('UTV2-1264: game total disambiguates repeated event names by event start da
     externalId: 'sgo-series-game-one',
     sportId: 'MLB',
     eventName: 'Chicago Cubs vs. St. Louis Cardinals',
-    eventDate: '2026-06-20',
+    eventDate: '2026-06-21',
     status: 'completed',
-    metadata: { starts_at: '2026-06-20T18:20:00.000Z' },
+    metadata: { starts_at: '2026-06-21T17:20:00.000Z' },
   });
   await repositories.events.upsertByExternalId({
     externalId: 'sgo-series-game-two',
