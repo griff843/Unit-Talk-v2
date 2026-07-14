@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies } from '../server.js';
 import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import type { AuthContext } from '../auth.js';
 import { promotionTargets, type PromotionTarget } from '@unit-talk/contracts';
 
 /**
@@ -14,7 +15,6 @@ import { promotionTargets, type PromotionTarget } from '@unit-talk/contracts';
 interface KillSwitchRequestBody {
   target?: unknown;
   killed?: unknown;
-  actor?: unknown;
   reason?: unknown;
 }
 
@@ -41,12 +41,18 @@ export async function handleKillSwitchSet(
       error: { code: 'INVALID_KILLED', message: 'killed must be a boolean' },
     });
   }
-  if (typeof body.actor !== 'string' || body.actor.trim().length === 0) {
-    return writeJson(response, 400, {
+  // UTV2-1427 fix: actor is derived from the authenticated request context
+  // (attached by the auth gate in server.ts before this handler runs), never
+  // from client-supplied body — a client could otherwise spoof any identity
+  // in the audit_log trail for a security-sensitive toggle.
+  const auth = (request as IncomingMessage & { auth?: AuthContext }).auth;
+  if (!auth) {
+    return writeJson(response, 401, {
       ok: false,
-      error: { code: 'INVALID_ACTOR', message: 'actor is required' },
+      error: { code: 'UNAUTHENTICATED', message: 'authenticated actor required' },
     });
   }
+  const actor = auth.identity;
   const reason = typeof body.reason === 'string' ? body.reason : undefined;
 
   if (!runtime.repositories.killSwitch) {
@@ -59,7 +65,7 @@ export async function handleKillSwitchSet(
   const row = await runtime.repositories.killSwitch.setKilled({
     target: body.target,
     killed: body.killed,
-    actor: body.actor,
+    actor,
     ...(reason === undefined ? {} : { reason }),
   });
 

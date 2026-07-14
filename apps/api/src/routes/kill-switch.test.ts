@@ -30,7 +30,7 @@ test('POST /api/discord/kill-switch rejects an invalid target', async () => {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/discord/kill-switch`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ target: 'not-a-real-target', killed: true, actor: 'test-op' }),
+      body: JSON.stringify({ target: 'not-a-real-target', killed: true }),
     });
     const body = (await response.json()) as { ok: boolean; error?: { code: string } };
     assert.equal(response.status, 400);
@@ -51,7 +51,7 @@ test('POST /api/discord/kill-switch engages the switch, records audit, and GET r
     const postResponse = await fetch(`http://127.0.0.1:${address.port}/api/discord/kill-switch`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ target: 'best-bets', killed: true, actor: 'test-op', reason: 'incident drill' }),
+      body: JSON.stringify({ target: 'best-bets', killed: true, reason: 'incident drill' }),
     });
     const postBody = (await postResponse.json()) as { ok: boolean; target: string; killed: boolean };
     assert.equal(postResponse.status, 200);
@@ -76,6 +76,63 @@ test('POST /api/discord/kill-switch engages the switch, records audit, and GET r
     assert.equal(getBody.targets.find((t) => t.target === 'best-bets')?.killed, true);
   } finally {
     server.close();
+  }
+});
+
+test('POST /api/discord/kill-switch ignores a client-supplied actor and derives it from the authenticated context', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+  try {
+    // No API keys configured on this server -> auth runs in fail_open bypass
+    // mode with a fixed bypass identity. Even if a client tries to spoof an
+    // actor in the body, the audit trail must record the real (bypass)
+    // authenticated identity, never the client-supplied value.
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/discord/kill-switch`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ target: 'best-bets', killed: true, actor: 'attacker-spoofed-identity' }),
+    });
+    const body = (await response.json()) as { ok: boolean; actor?: string };
+    assert.equal(response.status, 200);
+
+    const auditRows = await repositories.audit.listRecentByEntityType(
+      'delivery_target',
+      new Date(Date.now() - 60_000).toISOString(),
+    );
+    const engaged = auditRows.find((row) => row.action === 'discord_kill_switch.engaged');
+    assert.ok(engaged, 'expected an audit row for the engage action');
+    assert.notEqual(engaged?.actor, 'attacker-spoofed-identity');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/discord/kill-switch requires authentication when API keys are configured', async () => {
+  const previousOperatorKey = process.env.UNIT_TALK_API_KEY_OPERATOR;
+  process.env.UNIT_TALK_API_KEY_OPERATOR = 'test-operator-key';
+
+  const server = createApiServer({ repositories: createInMemoryRepositoryBundle() });
+  server.listen(0);
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+  try {
+    const unauthenticated = await fetch(`http://127.0.0.1:${address.port}/api/discord/kill-switch`);
+    assert.equal(unauthenticated.status, 401);
+
+    const authenticated = await fetch(`http://127.0.0.1:${address.port}/api/discord/kill-switch`, {
+      headers: { authorization: 'Bearer test-operator-key' },
+    });
+    assert.equal(authenticated.status, 200);
+  } finally {
+    server.close();
+    if (previousOperatorKey === undefined) {
+      delete process.env.UNIT_TALK_API_KEY_OPERATOR;
+    } else {
+      process.env.UNIT_TALK_API_KEY_OPERATOR = previousOperatorKey;
+    }
   }
 });
 

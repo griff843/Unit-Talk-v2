@@ -388,11 +388,6 @@ export type Database = {
           },
         ]
       }
-      // UTV2-1427: hand-authored pending `pnpm supabase:types` regeneration —
-      // the delivery_kill_switch table does not exist in production yet
-      // (migration 20260714120000_add_delivery_kill_switch.sql ships in this
-      // PR; real generation requires the migration to be live first). Shape
-      // matches the migration's DDL exactly so the eventual regen is a no-op.
       delivery_kill_switch: {
         Row: {
           actor: string | null
