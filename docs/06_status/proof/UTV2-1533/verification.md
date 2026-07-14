@@ -9,18 +9,18 @@ ASSERTIONS:
 - [x] verification_target is resume-safe: ops:lane:resume backfills it from the existing manifest and excludes the incoming issue's own active manifest from the conflict-search set
 - [x] A malformed --verification-target is validated before createBranchAndWorktree/reserveLease run, preventing orphaned branch/worktree/lease state
 - [x] T1 evidence.json bundle exists at docs/06_status/proof/UTV2-1533/evidence.json, satisfying the T1 Proof Gate's C6 expected_proof_paths check
-- [x] 114/114 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts
+- [x] 128/128 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts
 - [x] pnpm verify passes clean end to end (multiple independent runs)
 - [x] R-level check reports no triggered R1-R5 rules for this diff (governance config/docs + ops-tooling only, no DB/runtime code)
-- [x] All 7 review threads across PR #1213 and PR #1215 (2 PM CHANGES REQUIRED findings, 2 fresh-Codex-review findings on PR #1213, 3 fresh-Codex-review findings across two review passes on PR #1215) replied to with file:line evidence and resolved
+- [x] 7 of 8 review threads across PR #1213 and PR #1215 replied to with file:line evidence and resolved; 1 (lane-maximizer's advisory verification-target guess) deliberately left unresolved and deferred to the pre-existing UTV2-1535 follow-up, not a mechanical safety gap
 
 EVIDENCE:
 ```text
-$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts
+$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
 ...
-# tests 114
+# tests 128
 # suites 0
-# pass 114
+# pass 128
 # fail 0
 # cancelled 0
 # skipped 0
@@ -47,7 +47,7 @@ $ pnpm exec tsx scripts/ops/execution-state.ts --json | jq .dispatch_slots
 
 ## Summary
 
-Raises the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforces the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only. Round 4 recorded the branch continuation from PR #1213 (`griffadavi/utv2-1533-post-lock-concurrency-ramp`) to this canonical `claude/utv2-1533-post-lock-concurrency-ramp` branch — required because `griffadavi/...` can never satisfy `Executor Result Validation`'s ratified `claude/`- or `codex/`-prefixed branch contract. Rounds 5 and 6 (this document) fix 3 real bugs surfaced by two independent Codex review passes on the replacement PR (#1215) itself. The core implementation is unchanged from the accepted PR #1213 head (`24696311888e8c24beb530d557efe3e95ee4aa52`) except for these 3 real bug fixes found by review, not a redesign.
+Raises the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforces the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only. Round 4 recorded the branch continuation from PR #1213 (`griffadavi/utv2-1533-post-lock-concurrency-ramp`) to this canonical `claude/utv2-1533-post-lock-concurrency-ramp` branch — required because `griffadavi/...` can never satisfy `Executor Result Validation`'s ratified `claude/`- or `codex/`-prefixed branch contract. Rounds 5–7 (this document) fix 4 real bugs surfaced by three independent Codex review passes on the replacement PR (#1215) itself, and defer 1 advisory-quality finding to the pre-existing UTV2-1535 follow-up (not a mechanical safety gap). The core implementation is unchanged from the accepted PR #1213 head (`24696311888e8c24beb530d557efe3e95ee4aa52`) except for these real bug fixes found by review, not a redesign.
 
 **Status: PR not merged.** No merge SHA is invented anywhere in this bundle. The `MERGE_SHA:` field above (required by `executor-result-validator.yml`'s proof-file contract) references the last substantive implementation commit (`c9ddd22d`), which is an ancestor of this PR's head — the validator explicitly supports this pattern ("allows proof files to reference the implementation commit SHA rather than their own commit SHA, avoiding the SHA preimage circular dependency"). `evidence.json`'s `sha_binding.merge_sha` remains `null`.
 
@@ -71,11 +71,11 @@ No R1–R5 rule paths matched the changed files (governance config/docs, `docs/0
 ### Targeted tests
 
 ```
-$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts
+$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
 ...
-# tests 114
+# tests 128
 # suites 0
-# pass 114
+# pass 128
 # fail 0
 # cancelled 0
 # skipped 0
@@ -87,6 +87,7 @@ Breakdown:
 - `shared.test.ts`: 37/37 (26 pre-existing + 9 verification_target/deriveDeliveryUiApp tests + 2 round-6 tests for the UTV2-only verification_target pattern).
 - `lane-start.test.ts`: 10/10 (7 pre-existing, unaffected by the `checkConcurrencyLimits()` signature extension, + 2 round-3 regression tests for the resume-backfill and early-validation fixes + 1 round-5/6 test for the verification-target normalization fix, updated in round 6 to assert the stricter `requireVerificationTarget()` helper).
 - `lane-maximizer.test.ts`: 28/28 (2 pre-existing fixtures updated for the corrected advisory `--verification-target` suggestion).
+- `codex-dispatch.test.ts`: 14/14 (13 pre-existing + 1 round-7 regression test for the `--verification-target` threading fix into `pnpm codex:dispatch`'s real execution path).
 
 Re-confirmed clean on PR #1215's final head before this packet was assembled.
 

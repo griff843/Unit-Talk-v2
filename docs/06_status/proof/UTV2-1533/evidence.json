@@ -5,7 +5,7 @@
   "continuation": {
     "superseded_pr": "https://github.com/griff843/Unit-Talk-v2/pull/1213",
     "superseded_branch": "griffadavi/utv2-1533-post-lock-concurrency-ramp",
-    "reason": "griffadavi/... can never satisfy Executor Result Validation's ratified claude/- or codex/-prefixed branch contract, a required fail-closed CI check. The implementation is unchanged and accepted at the code level (structured T1 evidence, 10/4/6 limits, mechanically enforced type caps, schema-validated resume-safe verification_target, early validation, 114/114 tests, pnpm verify green, all review threads resolved). History preserved exactly via `git branch` from the accepted head, not cherry-picked or reconstructed.",
+    "reason": "griffadavi/... can never satisfy Executor Result Validation's ratified claude/- or codex/-prefixed branch contract, a required fail-closed CI check. The implementation is unchanged and accepted at the code level (structured T1 evidence, 10/4/6 limits, mechanically enforced type caps, schema-validated resume-safe verification_target, early validation, 128/128 tests, pnpm verify green, all review threads resolved). History preserved exactly via `git branch` from the accepted head, not cherry-picked or reconstructed.",
     "continuation_branch": "claude/utv2-1533-post-lock-concurrency-ramp"
   },
   "sha_binding": {
@@ -20,7 +20,7 @@
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "r_level_check": "PASS",
-      "targeted_tests_114_of_114": "PASS",
+      "targeted_tests_128_of_128": "PASS",
       "pnpm_verify": "PASS",
       "pnpm_test_db_via_t1_proof_gate_ci": "PASS -- CI's \"T1 Proof Gate\" job (proof-gate.yml, job t1-proof, step \"C2 — live-DB proof execution\") runs `pnpm ci:db-smoke` (pnpm test:db equivalent) unconditionally for T1 PRs and is a hard gate within that job; the T1 Proof Gate check-run reported SUCCESS on PR #1213 at the accepted head, so this CI-run test:db execution did occur and passed, even though it was not separately re-invoked by the executor in the local session. See t1_proof_gate below for the correction this replaces."
     }
@@ -43,6 +43,8 @@
       "scripts/ops/lane-start.test.ts",
       "scripts/ops/lane-maximizer.ts",
       "scripts/ops/lane-maximizer.test.ts",
+      "scripts/codex-dispatch.ts",
+      "scripts/codex-dispatch.test.ts",
       "docs/05_operations/schemas/lane_manifest_v1.schema.json",
       "docs/05_operations/LANE_MANIFEST_SPEC.md",
       "docs/06_status/proof/UTV2-1533/diff-summary.md",
@@ -87,12 +89,12 @@
       "rules_matched": "none -- no DB/runtime rule triggered by this diff (governance config, docs, and ops-tooling/test files only)"
     },
     "targeted_tests": {
-      "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts",
+      "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
       "status": "PASS",
-      "tests": 114,
-      "pass": 114,
+      "tests": 128,
+      "pass": 128,
       "fail": 0,
-      "note": "concurrency-simulation.test.ts: 39/39 (23 pre-existing + 14 PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config + 2 round-5 tests for the Delivery/UI undetermined-active-lane fail-closed fix). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 10/10 (7 pre-existing + 2 round-3 regression tests for the Codex-review resume-backfill and early-validation fixes + 1 round-5 test for the verification-target normalization fix). lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string). Independently re-confirmed clean on PR #1215's final head."
+      "note": "concurrency-simulation.test.ts: 39/39. shared.test.ts: 37/37 (includes 2 round-6 UTV2-only-pattern tests). lane-start.test.ts: 10/10 (round-5 test updated in round 6 to assert requireVerificationTarget). lane-maximizer.test.ts: 28/28. codex-dispatch.test.ts: 14/14 (13 pre-existing + 1 round-7 regression test for the --verification-target threading fix). Independently re-confirmed clean on PR #1215's final head. Command in the row above expanded in round 7 to include scripts/codex-dispatch.test.ts."
     },
     "pnpm_verify": {
       "command": "pnpm verify",
@@ -116,6 +118,11 @@
     "source": "A second confirmation Codex review triggered against round 5's head (ba5d67c9) surfaced 1 more real finding, again in this issue's own code (round 5's own normalization fix), not pre-existing accepted code.",
     "verification_target_accepted_uni_prefix": "FIXED -- round 5's normalization fix used the general requireIssueId() helper, which accepts both UTV2-### and UNI-### (ISSUE_PATTERN), but verification_target is documented UTV2-### only in lane_manifest_v1.schema.json's pattern (\"^UTV2-[0-9]+$\") and LANE_MANIFEST_SPEC.md SS16 -- a UNI-### verification target would silently pass validation (both the CLI early check and createManifest's own check, which had the identical gap) while disagreeing with the documented JSON schema. Fixed: new VERIFICATION_TARGET_PATTERN (/^UTV2-\\d+$/, stricter than ISSUE_PATTERN) and an exported requireVerificationTarget() helper in shared.ts, used consistently in lane-start.ts's CLI check, createManifest(), and validateManifest(). 2 new tests."
   },
+  "round_7_fix": {
+    "source": "A third confirmation Codex review triggered against round 6's head (103dce4b) surfaced 2 more findings: one real functional regression, one advisory-quality concern.",
+    "codex_dispatch_broke_verification_lanes": "FIXED -- scripts/codex-dispatch.ts's runLaneStart() built its ops:lane-start invocation without ever passing --verification-target, so any Codex-executed lane_type:verification dispatch would fail closed with verification_target_missing before the lane could be created. Round 5's fix in lane-maximizer.ts only covered the *advisory suggested command text*, never the actual Codex execution path in codex-dispatch.ts. Fixed: codex-dispatch.ts now computes verificationTarget = laneType === 'verification' ? (explicitVerificationTarget ?? issueId) : undefined (same default-with-override pattern as --lane-type/--model-profile in that file) and threads it through runLaneStart() and the --dry-run preview. New regression test in codex-dispatch.test.ts.",
+    "lane_maximizer_advisory_target_guess_deferred": "NOT FIXED HERE, DEFERRED -- if a candidate's real intended verification target differs from its own issue_id, lane-maximizer's advisory default guess could differ from the real target, so a blindly-run suggested command might not trip the per-target cap against a genuinely conflicting active lane. This is an advisory-quality concern, not a mechanical safety gap: ops:lane-start's checkConcurrencyLimits() remains the fail-closed authority and correctly enforces whatever target it is actually given -- the risk is confined to the *suggestion* being potentially wrong, already documented as a known limitation in lane-maximizer.ts's own code comment (\"this script cannot know the real target with certainty\"). Already covered in spirit by the pre-existing follow-up UTV2-1535. Replied on the PR explaining this deferral rather than silently fixing or silently resolving; left unresolved for PM visibility."
+  },
   "acceptance_criteria": {
     "type_caps_machine_readable_config": "PASS -- docs/governance/CONCURRENCY_CONFIG.json type_caps + concurrency-config.ts TypeCapsConfig",
     "hygiene_governance_simple_caps_enforced": "PASS -- checkConcurrencyLimits() active-count checks, tests 4 and 5",
@@ -128,7 +135,7 @@
     "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
     "no_placeholders": "PASS -- every field is either a real captured value or an explicit not-yet-available note (current_pr_head_sha pending the replacement PR's actual head)",
     "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state the replacement PR is open, unmerged",
-    "fresh_codex_review_findings_addressed": "PASS -- 2 P2 findings from the round-2 Codex review on PR #1213 (resume path skips --verification-target backfill; malformed target validated too late) fixed in round 3; 2 more P2 findings from a fresh Codex review on PR #1215 (Delivery/UI fail-open on undetermined active lane; verification-target normalization discarded) fixed in round 5; 1 more P2 finding from a second confirmation Codex review on PR #1215 (verification_target accepted UNI-### despite the documented UTV2-only schema) fixed in round 6 -- see round_5_fixes/round_6_fix above. 7 total review threads across both PRs, all replied to and resolved.",
+    "fresh_codex_review_findings_addressed": "PARTIAL PASS -- 2 P2 findings from the round-2 Codex review on PR #1213 fixed in round 3; 2 more from a Codex review on PR #1215 fixed in round 5; 1 more from a second confirmation Codex review fixed in round 6; 2 more from a third confirmation Codex review in round 7, of which 1 (codex:dispatch broke for verification lanes) is fixed and 1 (lane-maximizer's advisory target guess) is deliberately deferred to the pre-existing UTV2-1535 follow-up and left unresolved on the PR for PM visibility -- see round_5_fixes/round_6_fix/round_7_fix above. 8 total review threads across both PRs: 7 resolved, 1 deliberately left open.",
     "continuation_history_preserved": "PASS -- claude/utv2-1533-post-lock-concurrency-ramp created via `git branch <name> 24696311...`, not cherry-picked or reconstructed; full commit history intact",
     "continuation_metadata_truthful": "PASS -- lane manifest branch/worktree_path/execution_location.cwd/preflight_token/commit_sha/status/file_scope_lock all repaired to match the new branch; old branch's lease released, new lease reserved with the full accepted file scope",
     "scope_accounting_corrected": "PASS -- 9 expanded-scope files (not 8): the round-2 accounting omitted scripts/ops/lane-start.test.ts, added in round 3 -- corrected below"
@@ -144,6 +151,8 @@
     "new_paths_requiring_codeowner_scope_override_v1": [
       "docs/05_operations/LANE_MANIFEST_SPEC.md",
       "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+      "scripts/codex-dispatch.test.ts",
+      "scripts/codex-dispatch.ts",
       "scripts/ops/concurrency-config.ts",
       "scripts/ops/lane-maximizer.ts",
       "scripts/ops/lane-maximizer.test.ts",
@@ -152,10 +161,10 @@
       "scripts/ops/shared.ts",
       "scripts/ops/shared.test.ts"
     ],
-    "new_paths_count": 9,
-    "new_paths_count_correction": "PM review caught this was previously reported as 8 -- the omission was scripts/ops/lane-start.test.ts, added during round 3 (the Codex-review regression tests) but never added to this list at the time. Corrected here; the actual lane manifest's file_scope_lock (repaired during this continuation) now truthfully declares the full 9-file expanded scope plus the original 5.",
+    "new_paths_count": 11,
+    "new_paths_count_correction": "Was 8, then corrected to 9 (PM review caught the omission of scripts/ops/lane-start.test.ts, added round 3 but never added to this list). Round 7 adds 2 more: scripts/codex-dispatch.ts and scripts/codex-dispatch.test.ts, needed to fix a real regression a third Codex review pass found (pnpm codex:dispatch failing closed for verification lanes -- see round_7_fix below). The actual lane manifest's file_scope_lock (repaired during this continuation) now truthfully declares the full 11-file expanded scope plus the original 5.",
     "self_authorized": false,
-    "note": "docs/06_status/proof/UTV2-1533/{diff-summary.md,verification.md,evidence.json} and docs/06_status/lanes/UTV2-1533.json / .ops/sync/UTV2-1533.yml do NOT require an override -- proof-directory and lane-manifest control-plane files for a lane's own issue are exempted from file-scope-lock by ownLaneControlPlanePatterns() (DEBT-028 fix). No scope-override/v1 comment has been posted by this agent for the 9 files above; per PM instruction, that authorization is not self-granted -- it requires a CODEOWNER (@griff843) comment on the replacement PR, bound to its exact head SHA."
+    "note": "docs/06_status/proof/UTV2-1533/{diff-summary.md,verification.md,evidence.json} and docs/06_status/lanes/UTV2-1533.json / .ops/sync/UTV2-1533.yml do NOT require an override -- proof-directory and lane-manifest control-plane files for a lane's own issue are exempted from file-scope-lock by ownLaneControlPlanePatterns() (DEBT-028 fix). No scope-override/v1 comment has been posted by this agent for the 11 files above; per PM instruction, that authorization is not self-granted -- it requires a CODEOWNER (@griff843) comment on the replacement PR, bound to its exact head SHA."
   },
   "verdict": "IMPLEMENTATION_ACCEPTED_CONTINUATION_REPAIRED -- AWAITING_PM_APPROVAL_AND_SCOPE_OVERRIDE_ON_REPLACEMENT_PR"
 }

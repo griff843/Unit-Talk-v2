@@ -3,11 +3,11 @@
 **Issue:** UTV2-1533 — Post-lock concurrency ramp: raise ceiling to 10 active lanes (4 Claude + 6 Codex)
 **Tier:** T1 (governance-critical)
 **Lane type:** governance
-**Status:** Round 6 — 3 fresh Codex-review findings across two review passes on the replacement PR (#1215) fixed below. Replacement PR **not merged**.
+**Status:** Round 7 — 4 fresh Codex-review findings across three review passes on the replacement PR (#1215) fixed (1 deferred, see Round 7). Replacement PR **not merged**.
 
 ## Files changed (cumulative, vs origin/main — generated via `git diff --stat origin/main...HEAD`, not hand-typed)
 
-Substantive implementation + docs (9 files beyond the original 5-file lane scope; see `evidence.json`'s `scope_expansion` for the corrected count):
+Substantive implementation + docs (11 files beyond the original 5-file lane scope as of round 7 — round 5/6 added `scripts/codex-dispatch.ts`/`scripts/codex-dispatch.test.ts`, neither previously scoped; see `evidence.json`'s `scope_expansion` for the corrected count):
 
 ```
 $ git diff --stat origin/main...HEAD -- docs/governance/CONCURRENCY_CONFIG.json docs/governance/LANE_CONCURRENCY_POLICY.md scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.ts scripts/ops/shared.test.ts scripts/ops/concurrency-config.ts scripts/ops/lane-start.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.ts scripts/ops/lane-maximizer.test.ts docs/05_operations/schemas/lane_manifest_v1.schema.json docs/05_operations/LANE_MANIFEST_SPEC.md
@@ -28,7 +28,14 @@ $ git diff --stat origin/main...HEAD -- docs/governance/CONCURRENCY_CONFIG.json 
 
 Plus control-plane/proof files (exempt from file-scope-lock, no override needed): `docs/06_status/lanes/UTV2-1533.json`, `.ops/sync/UTV2-1533.yml`, `docs/06_status/proof/UTV2-1533/{.gitkeep,diff-summary.md,evidence.json,verification.md}`.
 
-## Round 6 (this round — 1 more Codex-review finding on PR #1215's round-5 head, fixed)
+## Round 7 (this round — 1 real bug + 1 deferred quality finding from a third Codex review pass)
+
+A third Codex review triggered against round 6's head surfaced 2 more findings:
+
+1. **`pnpm codex:dispatch` broke for verification lanes (real bug, fixed).** `scripts/codex-dispatch.ts`'s `runLaneStart()` built its `ops:lane-start` invocation without ever passing `--verification-target`, so any Codex-executed `lane_type: "verification"` dispatch would now fail closed with `verification_target_missing` before the lane could be created — round 5's advisory-only fix in `lane-maximizer.ts` covered the *suggested* command text but never the actual Codex execution path. Fixed: `codex-dispatch.ts` now computes `verificationTarget = laneType === 'verification' ? (explicitVerificationTarget ?? issueId) : undefined` (same default-with-override pattern already used for `--lane-type`/`--model-profile` in this file) and threads it through `runLaneStart()` and the `--dry-run` preview. New regression test in `codex-dispatch.test.ts` (static source-inspection, matching the file's own convention for the equivalent `--model-profile` threading test).
+2. **Lane-maximizer's advisory target guess could mask a real conflict (quality finding, deferred, not fixed here).** If a candidate's *actual* intended verification target differs from its own `issue_id`, the advisory tool's default guess (`candidate.issue_id`) could differ from the real target, so a suggested command run verbatim might not trip the per-target cap against an already-active lane genuinely targeting the same real issue. This is a planning-accuracy/advisory-quality concern, not a mechanical safety gap: `ops:lane-start`'s `checkConcurrencyLimits()` remains the fail-closed authority and correctly enforces whatever target it is actually given. Already covered in spirit by the pre-existing follow-up UTV2-1535 ("lane-maximizer: forecast full type_caps... against active+planned wave"); replied on the PR explaining the deferral rather than silently fixing or silently resolving. Left unresolved for PM visibility.
+
+## Round 6 (1 more Codex-review finding on PR #1215's round-5 head, fixed)
 
 The confirmation Codex review triggered against round 5's head surfaced 1 more real finding: `requireIssueId()` (used by round 5's normalization fix) accepts both `UTV2-###` and `UNI-###` (`ISSUE_PATTERN`), but `verification_target` is documented `UTV2-###` only in `lane_manifest_v1.schema.json` and `LANE_MANIFEST_SPEC.md` §16 — a `UNI-###` verification target would silently pass validation while disagreeing with the documented schema. `createManifest()`'s own check had the identical gap (also used the general `ISSUE_PATTERN`).
 
