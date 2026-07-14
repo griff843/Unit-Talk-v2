@@ -75,6 +75,7 @@ const ROUTE_ROLES: ReadonlyArray<{
   { pattern: /^\/api\/candidates\/build$/, roles: ['operator'] },
   { pattern: /^\/api\/model-health\/decision$/, roles: ['operator'] },
   { pattern: /^\/api\/qa\/seed-pick$/, roles: ['operator'] },
+  { pattern: /^\/api\/discord\/kill-switch$/, roles: ['operator'] },
 ];
 
 /** The context returned when auth is disabled (fail_open + no keys). */

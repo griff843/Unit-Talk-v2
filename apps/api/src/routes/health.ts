@@ -156,22 +156,38 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
   }
   const queueUnhealthy = queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
   const zombiePickUnhealthy = zombiePicks.status === 'down';
+  // UTV2-1427: the ops alert webhook must fail loud when unset in a production-like
+  // environment where Discord delivery is active — previously it silently
+  // dropped alerts (DEVOPS_PRODUCTION_POSTURE_AUDIT.md:186,234). Mirrors the
+  // exact production-like condition server.ts already uses elsewhere
+  // (isProductionLikeRuntime) so local dev, CI, and unit tests are unaffected.
+  const isProductionLikeEnv =
+    process.env['UNIT_TALK_APP_ENV'] === 'production' ||
+    process.env['UNIT_TALK_APP_ENV'] === 'staging' ||
+    process.env['NODE_ENV'] === 'production';
+  const opsAlertWebhookMissing =
+    isProductionLikeEnv && !process.env['UNIT_TALK_OPS_ALERT_WEBHOOK_URL']?.trim();
   const status: ApiHealthStatus = !isDurable
     ? 'degraded'
     : zombiePickUnhealthy
       ? 'down'
     : queueHealth?.status === 'down'
       ? 'down'
-      : queueHealth?.status === 'degraded'
+      : queueHealth?.status === 'degraded' || opsAlertWebhookMissing
         ? 'degraded'
         : 'healthy';
-  const httpStatus = isDurable && !queueUnhealthy && !zombiePickUnhealthy ? 200 : 503;
+  const httpStatus = isDurable && !queueUnhealthy && !zombiePickUnhealthy && !opsAlertWebhookMissing ? 200 : 503;
   const warnings = [
     ...(schemaDrift?.warnings ?? []),
     ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ?? []),
     ...(zombiePicks.status === 'down'
       ? [
           `zombie picks detected: count=${zombiePicks.count} [remediation=${zombiePicks.remediation}]`,
+        ]
+      : []),
+    ...(opsAlertWebhookMissing
+      ? [
+          'UNIT_TALK_OPS_ALERT_WEBHOOK_URL is unset in a non-local environment — ops alerts are silently dropping. Set the webhook or this health check will keep reporting degraded.',
         ]
       : []),
   ];

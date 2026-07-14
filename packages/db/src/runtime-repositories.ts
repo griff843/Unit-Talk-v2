@@ -25,6 +25,9 @@ import type {
   AuditLogRepository,
   BrowseSearchResult,
   ClosingLineLookupCriteria,
+  DeliveryKillSwitchRepository,
+  DeliveryKillSwitchRow,
+  DeliveryKillSwitchSetInput,
   EventParticipantRepository,
   EventParticipantUpsertInput,
   EventRepository,
@@ -2217,6 +2220,32 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
           (action === undefined || record.action === action),
       )
       .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  }
+}
+
+export class InMemoryDeliveryKillSwitchRepository implements DeliveryKillSwitchRepository {
+  private readonly state = new Map<string, DeliveryKillSwitchRow>();
+
+  async isKilled(target: string): Promise<boolean> {
+    const entry = this.state.get(target);
+    // Fail closed: an unknown target has never been explicitly released.
+    return entry ? entry.killed : true;
+  }
+
+  async setKilled(input: DeliveryKillSwitchSetInput): Promise<DeliveryKillSwitchRow> {
+    const row: DeliveryKillSwitchRow = {
+      target: input.target,
+      killed: input.killed,
+      reason: input.reason ?? null,
+      actor: input.actor,
+      updatedAt: new Date().toISOString(),
+    };
+    this.state.set(input.target, row);
+    return row;
+  }
+
+  async listAll(): Promise<DeliveryKillSwitchRow[]> {
+    return [...this.state.values()];
   }
 }
 
@@ -5702,6 +5731,72 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
   }
 }
 
+export class DatabaseDeliveryKillSwitchRepository implements DeliveryKillSwitchRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async isKilled(target: string): Promise<boolean> {
+    const { data, error } = await this.client
+      .from('delivery_kill_switch')
+      .select('killed')
+      .eq('target', target)
+      .maybeSingle();
+
+    // Fail closed: a read error or a missing row both mean "treat as killed."
+    if (error || !data) {
+      return true;
+    }
+    return data.killed;
+  }
+
+  async setKilled(input: DeliveryKillSwitchSetInput): Promise<DeliveryKillSwitchRow> {
+    const { data, error } = await this.client
+      .from('delivery_kill_switch')
+      .upsert({
+        target: input.target,
+        killed: input.killed,
+        reason: input.reason ?? null,
+        actor: input.actor,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `Failed to set kill switch for ${input.target}: ${error?.message ?? 'unknown error'}`,
+      );
+    }
+
+    return {
+      target: data.target,
+      killed: data.killed,
+      reason: data.reason,
+      actor: data.actor,
+      updatedAt: data.updated_at,
+    };
+  }
+
+  async listAll(): Promise<DeliveryKillSwitchRow[]> {
+    const { data, error } = await this.client.from('delivery_kill_switch').select('*');
+
+    if (error) {
+      throw new Error(`Failed to list kill switch state: ${error.message}`);
+    }
+
+    return (data ?? []).map((row) => ({
+      target: row.target,
+      killed: row.killed,
+      reason: row.reason,
+      actor: row.actor,
+      updatedAt: row.updated_at,
+    }));
+  }
+}
+
 export class DatabaseParticipantRepository implements ParticipantRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -8520,6 +8615,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     experimentLedger: new InMemoryExperimentLedgerRepository(),
     executionIntents: new InMemoryExecutionIntentRepository(),
     pickOfferSnapshots: new InMemoryPickOfferSnapshotRepository(),
+    killSwitch: new InMemoryDeliveryKillSwitchRepository(),
   };
 }
 
@@ -8556,6 +8652,7 @@ export function createDatabaseRepositoryBundle(
     ),
     executionIntents: new DatabaseExecutionIntentRepository(connection),
     pickOfferSnapshots: new DatabasePickOfferSnapshotRepository(connection),
+    killSwitch: new DatabaseDeliveryKillSwitchRepository(connection),
   };
 }
 

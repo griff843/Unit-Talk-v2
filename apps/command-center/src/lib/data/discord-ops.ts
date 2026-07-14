@@ -97,3 +97,28 @@ export async function getDiscordOpsSnapshot(): Promise<DiscordOpsSnapshot> {
 
   return { channelStats, failedPosts, receiptsSampled: receipts.length };
 }
+
+// UTV2-1427: delivery kill switch status — read directly from Supabase,
+// matching this app's existing read pattern. The toggle itself is a write
+// and goes through apps/api (see operations/discord/actions.ts).
+
+export interface DeliveryKillSwitchStatus {
+  target: string;
+  killed: boolean;
+  reason: string | null;
+  actor: string | null;
+  updatedAt: string;
+}
+
+export async function getDeliveryKillSwitchStatuses(): Promise<DeliveryKillSwitchStatus[]> {
+  const client: Client = getDataClient();
+  const { data, error } = await client.from('delivery_kill_switch').select('*');
+  if (error) throw error;
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    target: String(row['target'] ?? ''),
+    killed: Boolean(row['killed']),
+    reason: typeof row['reason'] === 'string' ? row['reason'] : null,
+    actor: typeof row['actor'] === 'string' ? row['actor'] : null,
+    updatedAt: String(row['updated_at'] ?? ''),
+  }));
+}

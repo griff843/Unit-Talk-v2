@@ -26,6 +26,7 @@ import type {
   SystemRunRecord,
   SystemRunRepository,
 } from '@unit-talk/db';
+import { InMemoryDeliveryKillSwitchRepository } from '@unit-talk/db';
 import type { CanonicalPick, LifecycleEvent } from '@unit-talk/contracts';
 import {
   createDeliveryAdapter,
@@ -2159,6 +2160,55 @@ test('runWorkerCycles skips disabled target — outbox row stays pending', async
   });
   assert.equal(cycles[0]?.results[0]?.status, 'target-disabled');
   assert.equal(outbox.status, 'pending');
+});
+
+// ---------------------------------------------------------------------------
+// Delivery kill switch tests (UTV2-1427)
+// ---------------------------------------------------------------------------
+
+test('runWorkerCycles skips a killed governed target — outbox row stays pending', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  await killSwitch.setKilled({ target: 'best-bets', killed: true, actor: 'test-operator' });
+
+  const cycles = await runWorkerCycles({
+    repositories: { ...repositories, killSwitch },
+    workerId: 'worker-kill-switch',
+    targets: ['discord:best-bets'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+    targetRegistry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+  });
+
+  assert.equal(cycles[0]?.results[0]?.status, 'kill-switch-engaged');
+  assert.equal(outbox.status, 'pending');
+});
+
+test('runWorkerCycles processes normally once the kill switch is released', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  await killSwitch.setKilled({ target: 'best-bets', killed: false, actor: 'test-operator' });
+
+  const cycles = await runWorkerCycles({
+    repositories: { ...repositories, killSwitch },
+    workerId: 'worker-kill-switch-released',
+    targets: ['discord:best-bets'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+    targetRegistry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+  });
+
+  assert.notEqual(cycles[0]?.results[0]?.status, 'kill-switch-engaged');
+});
+
+test('an unknown target with no kill-switch row is treated as killed (fail closed)', async () => {
+  const killSwitch = new InMemoryDeliveryKillSwitchRepository();
+  const killed = await killSwitch.isKilled('best-bets');
+  assert.equal(killed, true, 'a target with no explicit release/engage row must default to killed');
 });
 
 test('resolveTargetRegistry with UNIT_TALK_ENABLED_TARGETS=best-bets disables all other targets', async () => {

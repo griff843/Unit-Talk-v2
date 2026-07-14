@@ -864,6 +864,36 @@ export interface AuditLogRepository {
   ): Promise<AuditLogRow[]>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1427: delivery kill switch — a live, DB-backed, no-deploy-required
+// operational control distinct from the enabled/rolloutPct target registry.
+
+export interface DeliveryKillSwitchRow {
+  target: string;
+  killed: boolean;
+  reason: string | null;
+  actor: string | null;
+  updatedAt: string;
+}
+
+export interface DeliveryKillSwitchSetInput {
+  target: string;
+  killed: boolean;
+  actor: string;
+  reason?: string | undefined;
+}
+
+export interface DeliveryKillSwitchRepository {
+  /**
+   * Whether delivery to this target is currently killed. Must return `true`
+   * (fail closed) for an unknown target or on any read error — never
+   * silently fall through to "not killed".
+   */
+  isKilled(target: string): Promise<boolean>;
+  setKilled(input: DeliveryKillSwitchSetInput): Promise<DeliveryKillSwitchRow>;
+  listAll(): Promise<DeliveryKillSwitchRow[]>;
+}
+
 export interface ModelRegistryCreateInput {
   modelName: string;
   version: string;
@@ -1079,6 +1109,8 @@ export interface RepositoryBundle {
   executionIntents?: ExecutionIntentRepository;
   /** UTV2-1262: closing_for_clv snapshot evidence writes at settlement time. */
   pickOfferSnapshots?: PickOfferSnapshotRepository;
+  /** UTV2-1427: live delivery kill switch, read by the worker before dequeue. */
+  killSwitch?: DeliveryKillSwitchRepository;
 }
 
 export type { IMarketUniverseRepository, MarketUniverseClosingLine, MarketUniverseUpsertInput };
