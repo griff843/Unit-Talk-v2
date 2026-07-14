@@ -13,16 +13,22 @@
 export type LaneTier = 'T1' | 'T2' | 'T3';
 
 export type LaneState =
-  | 'preflight'
+  | 'started'
   | 'in_progress'
   | 'blocked'
   | 'in_review'
   | 'merged'
-  | 'done';
+  | 'done'
+  | 'reopened';
 
 export type TruthCheckStatus = 'pass' | 'fail' | 'not_run';
 
-export type PmVerdictStatus = 'approved' | 'rejected' | 'pending' | 'not_required';
+export type PmVerdictStatus =
+  | 'approved'
+  | 'rejected'
+  | 'pending'
+  | 'not_required'
+  | 'not_available';
 
 export interface LaneSummary {
   issueId: string; // e.g. "UTV2-1480"
@@ -42,6 +48,8 @@ export interface LaneSummary {
 
 export interface GovernanceBoardSnapshot {
   observedAt: string;
+  sourceStatus: 'available' | 'degraded' | 'unavailable';
+  missingSources: string[];
   activeLanes: LaneSummary[];
   blockedLanes: LaneSummary[];
   awaitingPmVerdict: LaneSummary[];
