@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1502/verification.md",
     "docs/06_status/proof/UTV2-1502/model-routing.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-14T04:43:25.744Z",
-  "heartbeat_at": "2026-07-14T05:30:44.177Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-14T05:31:05.450Z",
+  "closed_at": "2026-07-14T05:31:05.450Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1502-watchdog-external-heartbeat.json",
   "created_by": "codex-cli",
@@ -36,6 +36,18 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1203"
+    },
+    {
+      "checked_at": "2026-07-14T05:31:03.102Z",
+      "verdict": "pass",
+      "merge_sha": "614ebd2110a20f2cde1eac4c6c4e0fac3cf9b61e",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1203",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
