@@ -1,6 +1,6 @@
 # UTV2-1532 Verification
 
-**Commit SHA:** 23b30d3f (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; temporal binding closes the gap per the gate's own advisory note, and `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
+**Commit SHA:** bee05f79b29f1c93cb82696f48f73cf3a8f65ecf (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; temporal binding closes the gap per the gate's own advisory note, and `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
 
 ## Verification
 
