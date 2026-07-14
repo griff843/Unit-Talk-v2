@@ -517,6 +517,22 @@ function main(): void {
       });
       process.exit(1);
     }
+    // Codex review fix (PR #1213): validate format immediately, before createBranchAndWorktree
+    // or reserveLease run below -- a malformed value must never leave orphaned branch/worktree/
+    // lease state behind it. (createManifest's own validation is defense-in-depth, not the
+    // first line of defense.)
+    if (verificationTargetFlag) {
+      try {
+        requireIssueId(verificationTargetFlag);
+      } catch {
+        emitJson({
+          ok: false,
+          code: 'verification_target_malformed',
+          message: `--verification-target must match UTV2-### (got "${verificationTargetFlag}").`,
+        });
+        process.exit(1);
+      }
+    }
 
     const singletonPaths = normalizedFiles.filter(isSingletonPath);
     const singletonApproved = flags.has('singleton-approved') || bools.has('singleton-approved');
@@ -530,13 +546,24 @@ function main(): void {
       process.exit(1);
     }
 
+    // Codex review fix (PR #1213): ops:lane:resume re-invokes ops:lane-start for an
+    // existing blocked lane without re-supplying --verification-target (mirrors how it
+    // doesn't re-supply --model-profile) -- backfill from the existing manifest so
+    // resuming a verification lane doesn't spuriously fail the per-target cap's
+    // "missing target" check. Also exclude the incoming issue's own active manifest from
+    // the conflict-search set below: a lane must never be treated as conflicting with
+    // itself on resume (this is a no-op for a genuinely new issue_id, since no manifest
+    // with that id exists yet).
+    const existingManifestForResume = manifestExists(issueId) ? readManifest(issueId) : null;
+    const effectiveVerificationTarget = verificationTargetFlag ?? existingManifestForResume?.verification_target;
+
     const concurrencyConfig = getEffectiveConfig(loadConcurrencyConfig());
     const concurrencyViolations = checkConcurrencyLimits(
-      readAllManifests(),
+      readAllManifests().filter((m) => m.issue_id !== issueId),
       canonicalLaneType,
       executor,
       concurrencyConfig,
-      { fileScopeLock: normalizedFiles, verificationTarget: verificationTargetFlag },
+      { fileScopeLock: normalizedFiles, verificationTarget: effectiveVerificationTarget },
     );
     if (concurrencyViolations.length > 0) {
       emitJson({

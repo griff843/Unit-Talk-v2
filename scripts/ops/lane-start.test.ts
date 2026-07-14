@@ -138,3 +138,57 @@ test('lane-start declares the model-routing evidence path in expected_proof_path
     'a Codex lane must declare docs/06_status/proof/<issue>/model-routing.json in expected_proof_paths at lane-start time',
   );
 });
+
+// PR #1213 Codex review fix: ops:lane:resume re-invokes ops:lane-start for a blocked
+// verification lane without re-supplying --verification-target (same as it doesn't
+// re-supply --model-profile) -- the concurrency check must backfill from the existing
+// manifest, not treat every resume as a "missing target" violation.
+test('lane-start backfills verification_target from the existing manifest on resume, before the concurrency check', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const backfillIndex = source.indexOf('const effectiveVerificationTarget = verificationTargetFlag ?? existingManifestForResume?.verification_target;');
+  assert.notStrictEqual(backfillIndex, -1, 'expected the resume-backfill assignment for effectiveVerificationTarget');
+
+  const concurrencyCallIndex = source.indexOf('const concurrencyViolations = checkConcurrencyLimits(');
+  assert.notStrictEqual(concurrencyCallIndex, -1, 'expected the checkConcurrencyLimits call site');
+  assert.ok(
+    backfillIndex < concurrencyCallIndex,
+    'effectiveVerificationTarget must be computed before checkConcurrencyLimits runs, not after -- ' +
+      'otherwise every verification-lane resume spuriously fails the per-target cap\'s missing-target check',
+  );
+
+  const concurrencyCallBlockEnd = source.indexOf(');', concurrencyCallIndex);
+  const concurrencyCallBlock = source.slice(concurrencyCallIndex, concurrencyCallBlockEnd);
+  assert.match(
+    concurrencyCallBlock,
+    /verificationTarget: effectiveVerificationTarget/,
+    'checkConcurrencyLimits must receive the backfilled effectiveVerificationTarget, not the raw CLI flag',
+  );
+  assert.match(
+    concurrencyCallBlock,
+    /readAllManifests\(\)\.filter\(\(m\) => m\.issue_id !== issueId\)/,
+    'checkConcurrencyLimits must exclude the incoming issue\'s own active manifest from the conflict-search set -- ' +
+      'a lane must never be treated as conflicting with itself on resume',
+  );
+});
+
+// PR #1213 Codex review fix: a malformed --verification-target must fail before
+// createBranchAndWorktree/reserveLease run, not deep inside createManifest -- otherwise a
+// typo leaves an orphaned branch/worktree/lease behind it.
+test('lane-start validates verification_target format before creating branch/worktree/lease state', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const formatCheckIndex = source.indexOf("code: 'verification_target_malformed'");
+  assert.notStrictEqual(formatCheckIndex, -1, 'expected an early verification_target_malformed precondition');
+
+  const createBranchIndex = source.indexOf('createBranchAndWorktree(branch, worktreePath);');
+  assert.notStrictEqual(createBranchIndex, -1, 'expected the createBranchAndWorktree call site');
+  const reserveLeaseIndex = source.indexOf('const lease = reserveLease({', createBranchIndex);
+  assert.notStrictEqual(reserveLeaseIndex, -1, 'expected a reserveLease call site after createBranchAndWorktree');
+
+  assert.ok(
+    formatCheckIndex < createBranchIndex && formatCheckIndex < reserveLeaseIndex,
+    'verification_target_malformed must be checked before createBranchAndWorktree and reserveLease run -- ' +
+      'validating it only inside createManifest happens too late, after real branch/worktree/lease side effects',
+  );
+});
