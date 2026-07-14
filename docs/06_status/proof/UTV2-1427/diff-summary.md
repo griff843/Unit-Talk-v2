@@ -7,7 +7,8 @@ Adds a live, DB-backed, no-code-deploy delivery kill switch for governed Discord
 ## Files changed
 
 - `supabase/migrations/20260714120000_add_delivery_kill_switch.sql` (new) — `delivery_kill_switch` table
-- `packages/db/src/database.types.ts` — hand-authored types for the new table (pending real regen post-deploy)
+- `packages/db/src/database.types.ts` — regenerated against an applied migration on an isolated Supabase dev branch (deleted after use); no longer hand-authored
+- `db/migrations-rollback/20260714120000_add_delivery_kill_switch.down.sql` (new) — down script required by `migration-reversibility-gate.yml`
 - `packages/db/src/repositories.ts` — `DeliveryKillSwitchRepository` interface, `RepositoryBundle.killSwitch`
 - `packages/db/src/runtime-repositories.ts` — `InMemoryDeliveryKillSwitchRepository`, `DatabaseDeliveryKillSwitchRepository`, wired into both factory functions
 - `apps/worker/src/distribution-worker.ts` — `WorkerProcessKillSwitchEngagedResult` type
