@@ -20,6 +20,29 @@ import {
   validatePreflightToken,
   validateTier,
 } from './ops/shared.js';
+import { resolveModelProfile } from './ops/model-routing.js';
+
+/**
+ * Default model-profile-per-tier mapping for pnpm codex:dispatch (UTV2-1526).
+ * codex-dispatch.ts always routes to executor codex-cli mechanically (it does not run
+ * the full /three-brain judgment); this mirrors three-brain.md's routing table at the
+ * same mechanical level -- T1 Codex is only ever reached under Rule 1's guardrails
+ * (already the case before this field existed), so it defaults to the "complex/bounded
+ * T1" profile; anything else defaults to the standard clear-scope profile. An operator
+ * or an orchestrator that already ran /three-brain can override with --model-profile.
+ */
+function defaultModelProfileForTier(tier: string): string {
+  return tier === 'T1' ? 'codex-sol-high' : 'codex-terra-medium';
+}
+
+export function resolveDispatchModelProfile(tier: string, explicitProfile: string | undefined): string {
+  const profileName = explicitProfile ?? defaultModelProfileForTier(tier);
+  const resolution = resolveModelProfile({ profileName, tier });
+  if (!resolution.ok) {
+    throw new Error(`model-profile resolution failed for "${profileName}": ${resolution.code} ${resolution.message}`);
+  }
+  return profileName;
+}
 
 const CANONICAL_LANE_TYPES = new Set([
   'runtime',
@@ -257,8 +280,22 @@ function runLaneStart(
   branch: string,
   files: string[],
   laneType: string,
+  modelProfile: string,
 ): ChildResult {
-  const args = ['ops:lane-start', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli'];
+  const args = [
+    'ops:lane-start',
+    issueId,
+    '--tier',
+    tier,
+    '--branch',
+    branch,
+    '--lane-type',
+    laneType,
+    '--executor',
+    'codex-cli',
+    '--model-profile',
+    modelProfile,
+  ];
   for (const filePath of files) {
     args.push('--files', filePath);
   }
@@ -443,6 +480,7 @@ async function main(): Promise<number> {
     const packetOut = getFlag(flags, 'packet-out');
     const preflightTokenFlag = getFlag(flags, 'preflight-token');
     const explicitLaneType = getFlag(flags, 'lane-type');
+    const explicitModelProfile = getFlag(flags, 'model-profile');
     const env = loadEnvironment();
     const linearToken = env.LINEAR_API_TOKEN?.trim();
 
@@ -462,10 +500,12 @@ async function main(): Promise<number> {
 
     const issue = await fetchIssue(issueId, linearToken);
     const laneType = inferLaneType(issue, explicitLaneType);
+    const modelProfile = resolveDispatchModelProfile(tier, explicitModelProfile);
     if (explain) {
       process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
       process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);
       process.stderr.write(`Lane type: ${laneType}\n`);
+      process.stderr.write(`Model profile: ${modelProfile}\n`);
     }
 
     let preflightRelativePath = relativeToRoot(preflightTokenPathForBranch(branch));
@@ -508,7 +548,7 @@ async function main(): Promise<number> {
         branch,
         preflight_token: preflightRelativePath,
         details: {
-          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli', ...files.flatMap((entry) => ['--files', entry])],
+          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli', '--model-profile', modelProfile, ...files.flatMap((entry) => ['--files', entry])],
           would_write_packet: relativeToRoot(packetPathForIssue(issueId, packetOut)),
           tier_verification_hint: readTierVerificationHint(tier),
         },
@@ -525,7 +565,7 @@ async function main(): Promise<number> {
       return 0;
     }
 
-    const laneStart = runLaneStart(issueId, tier, branch, files, laneType);
+    const laneStart = runLaneStart(issueId, tier, branch, files, laneType, modelProfile);
     if (laneStart.status !== 0) {
       if (laneStart.stdout) {
         process.stdout.write(`${laneStart.stdout}\n`);

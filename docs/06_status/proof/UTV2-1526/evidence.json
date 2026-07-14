@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1526",
+  "title": "Three-Brain: deterministic Codex 5.6 model-profile routing and manifest propagation",
+  "status": "ready_for_pm_review",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "d31954e68764ae0c154fb8e6f7163bd3560de1e2",
+    "verified_source_note": "Last non-proof commit on claude/utv2-1526-codex-model-routing (fix(ops): UTV2-1526 thread --model-profile through lane-maximizer's recommendation). Rebound after a required ops:merge-wrapper main-sync (branch protection is strict; the PR was BEHIND main) rewrote every commit SHA on this branch via rebase -- this is the rebased equivalent of the previously-bound 145d3a07..., content-identical (git diff between the pre- and post-rebase branch tips shows zero changes under docs/06_status/proof/UTV2-1526/). This is an ancestor of the current PR head, not the head itself -- this proof-correction commit and evidence.json/verification.md are proof-path-only on top of it, matching this repo's substantive_commit_sha convention (see docs/06_status/proof/UTV2-1244/evidence.json). Evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "merge_sha": null,
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-07-14T00:30:29.000Z",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "local_verify": "pass",
+      "local_r_level_check": "pass",
+      "local_test_db": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1526-codex-model-routing",
+    "role": "implementation-lane"
+  },
+  "context": {
+    "reason_for_t1": "PM-authorized T1 plan (2026-07-13): governance-critical upgrade to Three-Brain / Codex dispatch that changes how Codex lanes select and are permitted to use a model. Tier label tier:T1 set on UTV2-1526 at creation.",
+    "authorization": "PM-authorized in-session; Linear UTV2-1526 created and labeled tier:T1 + governance-critical per that authorization. Not authorized to merge -- PR stops at Griff's merge gate."
+  },
+  "static_proof": {
+    "pnpm_verify_components": {
+      "note": "pnpm verify was run as one aggregate command (env:check + lint + type-check + build + test); component breakdown below reflects what that pipeline covers, not separately-invoked commands.",
+      "type_check": {
+        "command": "pnpm type-check",
+        "status": "PASS",
+        "detail": "pnpm exec tsc -b tsconfig.json -- no errors, run standalone and again as part of pnpm verify"
+      },
+      "test": {
+        "command": "pnpm verify (env:check + lint + type-check + build + test)",
+        "status": "PASS",
+        "detail": "Full monorepo test suite green, including embedded live-DB smoke subtests in apps/api test files"
+      }
+    },
+    "targeted_new_tests": {
+      "command": "npx tsx --test scripts/ops/model-routing.test.ts scripts/ops/codex-exec.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/lane-resume.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
+      "status": "PASS",
+      "tests": 117,
+      "pass": 117,
+      "fail": 0,
+      "new_test_files": [
+        "scripts/ops/model-routing.test.ts (new)",
+        "scripts/ops/codex-exec.test.ts (extended)",
+        "scripts/ops/shared.test.ts (extended)",
+        "scripts/ops/lane-start.test.ts (extended)",
+        "scripts/ops/lane-manifest.test.ts (extended)",
+        "scripts/ops/lane-resume.test.ts (new)",
+        "scripts/ops/lane-maximizer.test.ts (extended)",
+        "scripts/codex-dispatch.test.ts (extended)"
+      ],
+      "coverage": [
+        "scenario 1: standard clear-scope T2 resolves to codex-terra-medium",
+        "scenario 2: complex multi-package T2 resolves to codex-sol-high",
+        "scenario 3: failure-rescue lane resolves to codex-sol-high",
+        "scenario 4 & 19: codex-sol-max is rejected with no override, and rejected the same way even with a well-formed, self-asserted authorized_by/reason override -- a caller-supplied override never unlocks a requires_pm_authorization:true profile (model-routing.test.ts, 'scenario 4 & 19: codex-sol-max is rejected even with a well-formed, \"authorized\" override')",
+        "scenario 5 & 9: codex-luna-low disabled, fails closed by default",
+        "scenario 6: createManifest rejects model_routing on a Claude lane",
+        "scenario 7: createManifest requires model_routing for a Codex lane",
+        "scenario 8: unknown profile fails closed",
+        "scenario 9: disabled profile fails closed",
+        "scenario 10: manifest model drift from policy fails closed (tamper detection)",
+        "scenario 11: invalid reasoning effort fails closed",
+        "scenario 12: policy-version mismatch handled deterministically (fail closed)",
+        "scenario 13: legacy manifest (no model_routing) resolves via documented default, flagged and warned, never persisted back",
+        "scenario 14 & 15: codex-exec passes explicit --model and -c model_reasoning_effort= arguments",
+        "scenario 16: dry-run reports resolved profile/model/effort without executing",
+        "scenario 17: no silent fallback to Codex CLI default",
+        "scenario 18: the real canonical policy disables codex-sol-max as defense in depth beyond the code-level rejection (enabled:false AND requires_pm_authorization:true both hold)",
+        "scenario 19: manual override without authority or reason rejected, including per-field emptiness (authorized_by empty, reason empty)",
+        "scenario 20: existing lane-manifest fixtures (shared.test.ts, lane-start.test.ts) remain green, unmodified where not touched",
+        "caller coverage: scripts/codex-dispatch.ts resolves and threads --model-profile into the codex exec invocation it builds for a Codex lane (codex-dispatch.test.ts)",
+        "caller coverage: scripts/ops/lane-manifest.ts's manual/repair 'create' command resolves and persists model_routing for a Codex lane the same way ops:lane-start does, and rejects it for a Claude lane (lane-manifest.test.ts scenarios 6 & 7 above, exercised against this second caller)",
+        "caller coverage: scripts/ops/lane-resume.ts never reads, reconstructs, or requires model_routing when resuming a blocked Codex lane -- it forwards the existing manifest's model_routing block untouched (lane-resume.test.ts, 'UTV2-1526 PM review finding #1')",
+        "caller coverage: scripts/ops/lane-maximizer.ts's advisory recommended-command builder appends --model-profile codex-sol-high (T1) / codex-terra-medium (T2) to the dispatch command it suggests for a Codex candidate (lane-maximizer.test.ts)"
+      ]
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 27,
+      "rules_matched": "(none) -- no R-level artifacts required for this diff"
+    },
+    "policy_verification": {
+      "note": "Concrete Codex model IDs and reasoning-effort values in docs/05_operations/policies/codex-model-routing.json are copied from the installed Codex CLI's own model catalog, not guessed.",
+      "commands": [
+        "codex --version",
+        "codex exec --help",
+        "python3 -c \"import json; d=json.load(open('~/.codex/models_cache.json')); [print(m['slug'], [x['effort'] for x in m['supported_reasoning_levels']]) for m in d['models']]\""
+      ],
+      "observed": {
+        "codex_cli_version": "codex-cli 0.144.1",
+        "gpt-5.6-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
+        "gpt-5.6-terra": ["low", "medium", "high", "xhigh", "max", "ultra"],
+        "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"]
+      },
+      "reasoning_effort_cli_mechanism": "codex exec -c model_reasoning_effort=<value> -- confirmed present as a real config key in the installed codex binary (string search)."
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure ops-tooling/governance change (policy JSON, scripts/ops/*.ts, .claude/commands/*.md, docs/05_operations/*.md). No application code, no DB schema, no product-facing runtime path. Live Supabase smoke required for T1 per CLAUDE.md verification table regardless of path -- this lane does not touch DB runtime code.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed (apps/api/src/database-smoke.test.ts). No DB writes caused by this lane's own change set."
+      }
+    ],
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+      "UTV2-996: correction chain is additive -- original settlement row is not mutated"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific DB rows mutated by this change; the smoke suite above is the repo's standard T1 runtime-proof suite, unrelated to this change's own code paths.",
+        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+      }
+    ]
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Policy file exists with 4 profiles using real, verified model IDs/reasoning-effort values (not guessed).",
+      "evidence": "docs/05_operations/policies/codex-model-routing.json profiles.{codex-sol-high,codex-terra-medium,codex-luna-low,codex-sol-max}; verified_against block; static_proof.policy_verification above."
+    },
+    {
+      "criterion": "Three-Brain contract documents model_profile output for Codex lane decisions; absent/null for Claude lanes.",
+      "evidence": ".claude/commands/three-brain.md 'Codex model-profile routing' section and updated Output Format block."
+    },
+    {
+      "criterion": "Manifest schema + ops:lane-start require model_routing for newly created Codex lanes; reject it for Claude lanes; existing manifests untouched.",
+      "evidence": "scripts/ops/shared.ts createManifest/validateManifest; scripts/ops/lane-start.ts --model-profile handling; shared.test.ts scenarios 6 & 7 above; LANE_MANIFEST_SPEC.md sec.15 documents the never-rewrite compatibility rule."
+    },
+    {
+      "criterion": "Model routing is threaded through every live Codex-lane-creating or Codex-lane-dispatching caller, not just ops:lane-start directly, and is preserved (never reconstructed) on resume.",
+      "evidence": "scripts/codex-dispatch.ts resolveModelProfile call + --model-profile threaded into the built invocation (codex-dispatch.test.ts); scripts/ops/lane-manifest.ts 'create' command resolves model_routing for a Codex lane the same way lane-start.ts does (lane-manifest.test.ts); scripts/ops/lane-resume.ts forwards an existing manifest's model_routing untouched and never requires or reconstructs it (lane-resume.test.ts, 'UTV2-1526 PM review finding #1'); scripts/ops/lane-maximizer.ts's advisory recommended-command builder appends --model-profile to its suggested Codex dispatch command (lane-maximizer.test.ts)."
+    },
+    {
+      "criterion": "codex-exec.ts never invokes codex exec without an explicit --model and reasoning-effort override.",
+      "evidence": "scripts/ops/codex-exec.ts buildCodexModelArgs(...) spliced directly into the spawnSync argv; codex-exec.test.ts + model-routing.test.ts scenarios 14, 15, 17 above."
+    },
+    {
+      "criterion": "Fail closed on invalid/disabled profile, unknown model, invalid reasoning effort, policy-version mismatch.",
+      "evidence": "model-routing.test.ts scenarios 8, 9, 10, 11, 12 above."
+    },
+    {
+      "criterion": "A caller-supplied override can never unlock a requires_pm_authorization:true profile (e.g. codex-sol-max); a trusted authorization mechanism is out of scope for this lane and tracked separately.",
+      "evidence": "codex-sol-max is disabled (policies/codex-model-routing.json profiles['codex-sol-max'].enabled: false) and requires_pm_authorization: true. scripts/ops/model-routing.ts#resolveModelProfile rejects any requires_pm_authorization:true profile unconditionally -- a caller-supplied authorized_by/reason override string is never sufficient, regardless of content quality, because it is self-asserted rather than independently verified (the same self-certification loophole UTV2-1521 closed for file-scope overrides). model-routing.test.ts scenarios 4, 18, 19 above. Follow-up governance issue UTV2-1527 ('Trusted PM-authorization mechanism for restricted Codex model profiles (codex-sol-max)') tracks building the authenticated, PR-comment-based mechanism that would let this profile be re-enabled; this lane does not implement or claim that mechanism."
+    },
+    {
+      "criterion": "pnpm verify green; targeted tests for all required scenarios pass.",
+      "evidence": "static_proof.pnpm_verify_components and static_proof.targeted_new_tests above."
+    },
+    {
+      "criterion": "PR opened, not merged -- stops at Griff's merge gate.",
+      "evidence": "Confirmed in the lane's final report; not a code assertion. sha_binding.merge_sha is null."
+    }
+  ],
+  "does_not_claim": [
+    "No live/paid Codex model invocation was made to produce this evidence -- Codex CLI's own inference is out of scope for unit verification per PM instruction; argument construction is verified via pure function unit tests instead.",
+    "No change to T1/T2/T3 merge authority, lane concurrency limits, or Griff/PM approval requirements -- none of those were touched.",
+    "Does not claim codex-sol-max or any requires_pm_authorization:true profile is usable by any means, override or otherwise -- it is mechanically unavailable, and building a trusted unlock mechanism is explicitly out of scope here (tracked by UTV2-1527).",
+    "Does not claim the Return Review Packet advisory check's own scope-finding logic was changed -- its inability to recognize a valid scope-override/v1 comment is a pre-existing analyzer gap unrelated to this lane's own diff, confirmed mechanically (grep for override-consumption logic returns zero matches) and tracked separately by UTV2-1529. Return Review Packet is not in main's required branch-protection status checks, so it is not a live merge blocker.",
+    "Does not claim the PR is merged."
+  ],
+  "stop_conditions_encountered": [
+    "None blocking. Process note: ops:lane-start's --files scope declaration requires each new file to already exist on disk in the main checkout at call time, and ops:preflight's PG2 check requires a fully clean working tree first. Resolved by running preflight on a clean tree, creating empty stub files for this lane's brand-new paths only to satisfy lane-start's scope declaration (the preflight token's head_sha binding is unaffected by untracked files), removing the stubs from the main checkout immediately after, and writing real content inside the worktree lane-start created. Not fixed here -- outside this lane's declared scope."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true
+  }
+}

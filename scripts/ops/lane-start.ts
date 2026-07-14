@@ -40,6 +40,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig, type ConcurrencyConfig, type EffectiveConcurrencyConfig } from './concurrency-config.js';
+import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
 
 export interface ConcurrencyViolation {
   code: string;
@@ -399,6 +400,26 @@ function main(): void {
         `Invalid --lane-type: ${laneType}. Use a canonical type (${CANONICAL_LANE_TYPES.join(', ')}) with optional --executor (claude|codex-cli|codex-cloud).`,
       );
     }
+
+    // Model-profile resolution/enforcement happens later, ONLY on the path that
+    // actually calls createManifest (a genuinely new lane) -- see the comment at that
+    // call site. A `pnpm ops:lane:resume` re-invocation of ops:lane-start for an
+    // existing, blocked Codex lane must NOT be required to (re)specify --model-profile;
+    // it takes the "already exists" branch below, which never calls createManifest and
+    // simply preserves whatever model_routing the manifest already has (PM review
+    // finding #1). Enforcing this check unconditionally here would have broken every
+    // Codex lane resume.
+    const isCodexExecutor = executor === 'codex-cli' || executor === 'codex-cloud';
+    const modelProfileFlag = flags.get('model-profile')?.at(-1);
+    if (!isCodexExecutor && modelProfileFlag) {
+      emitJson({
+        ok: false,
+        code: 'model_profile_not_applicable',
+        message: `--model-profile was supplied but executor "${executor}" is not Codex. model_routing is Codex-only.`,
+      });
+      process.exit(1);
+    }
+
     const singletonPaths = normalizedFiles.filter(isSingletonPath);
     const singletonApproved = flags.has('singleton-approved') || bools.has('singleton-approved');
     if (singletonPaths.length > 0 && !singletonApproved) {
@@ -513,6 +534,36 @@ function main(): void {
       throw new Error('Worktree exists but branch does not exist; Phase 1 fails closed');
     }
 
+    // Model-profile resolution: only reached when genuinely creating a new lane (never
+    // on a resume re-invocation, which returned above at the "already exists" branch).
+    // Resolved before any branch/worktree/lease side effects so a bad profile fails
+    // closed without leaving orphaned state behind.
+    let modelRouting: ModelRoutingBlock | undefined;
+    if (isCodexExecutor) {
+      if (!modelProfileFlag) {
+        emitJson({
+          ok: false,
+          code: 'model_profile_required',
+          message: `Codex lane ${issueId} requires --model-profile <profile-name> (see docs/05_operations/policies/codex-model-routing.json for valid profiles).`,
+        });
+        process.exit(1);
+      }
+      // No --override-authorized-by/--override-reason flags: PM review finding #3 --
+      // a caller-supplied override is not proof of PM authorization, so lane-start does
+      // not accept one. requires_pm_authorization profiles are mechanically unavailable
+      // until a trusted external mechanism exists (see codex-model-routing.json).
+      const resolution = resolveModelProfile({ profileName: modelProfileFlag, tier });
+      if (!resolution.ok) {
+        emitJson({
+          ok: false,
+          code: `model_routing_${resolution.code.toLowerCase()}`,
+          message: resolution.message,
+        });
+        process.exit(1);
+      }
+      modelRouting = resolution.model_routing!;
+    }
+
     if (!branchAlreadyExists && !worktreeAlreadyExists) {
       createBranchAndWorktree(branch, worktreePath);
       linkWorktreeEnv(worktreePath);
@@ -538,13 +589,22 @@ function main(): void {
       throw new Error(`Manifest already exists for ${issueId} with non-done status ${existingManifest.status}`);
     }
 
+    // Codex lanes get an additional declared proof path for the model-routing evidence
+    // sidecar codex-exec.ts writes and commits (PM review finding #4) -- declaring it
+    // here means the path is already in the lane's own scope; docs/06_status/proof/**
+    // is exempt from the file-scope existence check (it's an intent declaration).
+    const expectedProofPaths = defaultProofPaths(issueId, tier);
+    if (isCodexExecutor) {
+      expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
+    }
+
     const manifest = createManifest({
       issue_id: issueId,
       tier,
       branch,
       worktree_path: worktreePath,
       file_scope_lock: normalizedFiles,
-      expected_proof_paths: defaultProofPaths(issueId, tier),
+      expected_proof_paths: expectedProofPaths,
       preflight_token: preflight.tokenRelativePath,
       lane_type: canonicalLaneType,
       executor,
@@ -552,6 +612,7 @@ function main(): void {
       status: 'started',
       now,
       requireExistingPreflightToken: true,
+      model_routing: modelRouting,
     });
 
     // UTV2-1492: declared-proof-path validation for T1 (formerly preflight's

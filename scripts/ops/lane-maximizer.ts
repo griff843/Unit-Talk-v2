@@ -794,6 +794,15 @@ export function evaluateCandidates(
     const fileArgs = candidate.file_scope
       .map(normalizePath)
       .flatMap((filePath) => ['--files', shellQuote(filePath)]);
+    // UTV2-1526: a Codex candidate's recommended command must include --model-profile --
+    // ops:lane-start now requires it for codex-cli/codex-cloud executors. This mirrors
+    // codex-dispatch.ts's own tier-based default (three-brain.md's routing table at the
+    // same mechanical level); it is advisory text only, never executed by this script, so
+    // an operator or /three-brain-informed orchestrator can still override it before running.
+    const modelProfileArgs =
+      candidate.executor === 'codex-cli' || candidate.executor === 'codex-cloud'
+        ? ['--model-profile', candidate.tier === 'T1' ? 'codex-sol-high' : 'codex-terra-medium']
+        : [];
     report.dispatch_plan.fill_now.push({
       issue_id: candidate.issue_id,
       executor: candidate.executor,
@@ -812,6 +821,7 @@ export function evaluateCandidates(
         shellQuote(branch),
         '--executor',
         candidate.executor,
+        ...modelProfileArgs,
         '--lane-type',
         laneType,
         ...fileArgs,

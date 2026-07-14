@@ -93,3 +93,48 @@ test('lane-start rechecks file-scope overlap inside the docs-only fast path befo
     'the fast-path overlap conflict response must be ok:false',
   );
 });
+
+// UTV2-1526 PM review finding #1: a `pnpm ops:lane:resume` re-invocation of
+// ops:lane-start for an existing, blocked Codex lane must reuse the manifest's
+// existing model_routing untouched -- it must never be required to (re)specify
+// --model-profile, and must never reconstruct/overwrite model_routing.
+test('lane-start resume branch never requires or reconstructs model_routing', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const resumeBlockStart = source.indexOf('if (branchAlreadyExists && worktreeAlreadyExists) {');
+  assert.notStrictEqual(resumeBlockStart, -1, 'expected the branch+worktree-already-exist resume branch');
+  const resumeBlockEnd = source.indexOf("code: 'lane_resumed',", resumeBlockStart);
+  assert.notStrictEqual(resumeBlockEnd, -1, 'expected a lane_resumed success emit inside the resume branch');
+  const resumeBlock = source.slice(resumeBlockStart, resumeBlockEnd);
+
+  assert.doesNotMatch(
+    resumeBlock,
+    /model_profile_required|resolveModelProfile|model_routing:/,
+    'the resume branch must not require --model-profile or reconstruct model_routing -- ' +
+      'it only mutates heartbeat_at/status/execution_location and preserves everything else on the existing manifest object',
+  );
+  assert.doesNotMatch(
+    resumeBlock,
+    /createManifest\(/,
+    'the resume branch must not call createManifest -- that would require re-deriving model_routing for a lane that already has it',
+  );
+
+  const modelProfileRequiredIndex = source.indexOf("code: 'model_profile_required'");
+  assert.notStrictEqual(modelProfileRequiredIndex, -1, 'expected the model_profile_required precondition to exist');
+  assert.ok(
+    modelProfileRequiredIndex > resumeBlockEnd,
+    'the --model-profile requirement must be enforced strictly after the resume branch, on the create-new-lane path only -- ' +
+      'enforcing it earlier (unconditionally) would break every Codex lane resume',
+  );
+});
+
+// PM review finding #4: the model-routing evidence sidecar's path must be declared in
+// the Codex lane's own expected_proof_paths at creation time, not left implicit.
+test('lane-start declares the model-routing evidence path in expected_proof_paths for Codex lanes', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /if \(isCodexExecutor\) \{\s*\n\s*expectedProofPaths\.push\(`docs\/06_status\/proof\/\$\{issueId\}\/model-routing\.json`\)/,
+    'a Codex lane must declare docs/06_status/proof/<issue>/model-routing.json in expected_proof_paths at lane-start time',
+  );
+});

@@ -20,8 +20,10 @@ import {
   validateTier,
   worktreePathForBranch,
   writeManifest,
+  type LaneExecutor,
 } from './shared.js';
 import { buildLaneExecutionLocation } from './lane-execution.js';
+import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
 
 interface PullRequestMergeInfo {
   input: string;
@@ -82,7 +84,7 @@ export function main(argv = process.argv.slice(2)): number {
   }
 }
 
-function createCommand(flags: Map<string, string[]>) {
+export function createCommand(flags: Map<string, string[]>) {
   const issueId = getRequired(flags, 'issue');
   const tier = validateTier(getRequired(flags, 'tier'));
   const branch = getRequired(flags, 'branch');
@@ -94,6 +96,27 @@ function createCommand(flags: Map<string, string[]>) {
 
   const fileScopeLock = normalizeFileScope(files);
   const worktreePath = worktreePathForBranch(branch);
+  const executorFlag = getFlag(flags, 'executor');
+  const executor = executorFlag as LaneExecutor | undefined;
+  const isCodexExecutor = executor === 'codex-cli' || executor === 'codex-cloud';
+  const modelProfileFlag = getFlag(flags, 'model-profile');
+  let modelRouting: ModelRoutingBlock | undefined;
+  if (isCodexExecutor) {
+    if (!modelProfileFlag) {
+      throw new Error(
+        `--model-profile is required when --executor is codex-cli/codex-cloud (manual/repair manifest creation, UTV2-1526). ` +
+          `See docs/05_operations/policies/codex-model-routing.json for valid profiles.`,
+      );
+    }
+    const resolution = resolveModelProfile({ profileName: modelProfileFlag, tier });
+    if (!resolution.ok) {
+      throw new Error(`model-profile resolution failed for "${modelProfileFlag}": ${resolution.code} ${resolution.message}`);
+    }
+    modelRouting = resolution.model_routing;
+  } else if (modelProfileFlag) {
+    throw new Error('--model-profile was supplied but --executor is not codex-cli/codex-cloud. model_routing is Codex-only.');
+  }
+
   const manifest = createManifest({
     issue_id: issueId.toUpperCase(),
     tier,
@@ -102,6 +125,8 @@ function createCommand(flags: Map<string, string[]>) {
     file_scope_lock: fileScopeLock,
     expected_proof_paths: getFlags(flags, 'proof-path'),
     preflight_token: getRequired(flags, 'preflight-token'),
+    executor,
+    model_routing: modelRouting,
   });
   manifest.execution_location = buildLaneExecutionLocation(worktreePath, fileScopeLock);
   writeManifest(manifest);

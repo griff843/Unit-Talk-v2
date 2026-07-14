@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
 export type LaneManifestStatus =
@@ -56,8 +57,27 @@ export interface P0ProtocolBlock {
   merge_type?: 'manual' | 'auto' | null;
 }
 
+/**
+ * Lane manifest schema versions. `1` is the historical version (all lanes before
+ * UTV2-1526's model-routing compatibility rework). `2` is the current version written
+ * by createManifest for every newly created lane going forward.
+ *
+ * This is the real compatibility boundary for Codex model routing (UTV2-1526 PM review
+ * finding #2) -- NOT field presence. Presence-based detection cannot distinguish "this
+ * manifest predates model_routing" from "someone deleted model_routing from a v2
+ * manifest", so validateManifest enforces version-scoped rules:
+ *   - schema_version 1: model_routing is optional (legacy path; codex-exec.ts resolves
+ *     the documented default when absent).
+ *   - schema_version 2: a Codex-executor manifest MUST have a valid model_routing block
+ *     (deleting it fails validation); a Claude-executor manifest must not have one.
+ *   - any other value: rejected outright (fail closed).
+ */
+export type LaneManifestSchemaVersion = 1 | 2;
+export const LANE_MANIFEST_CURRENT_SCHEMA_VERSION: LaneManifestSchemaVersion = 2;
+const VALID_LANE_MANIFEST_SCHEMA_VERSIONS: readonly LaneManifestSchemaVersion[] = [1, 2];
+
 export interface LaneManifest {
-  schema_version: 1;
+  schema_version: LaneManifestSchemaVersion;
   issue_id: string;
   lane_type: LaneType;
   executor?: LaneExecutor;
@@ -97,6 +117,14 @@ export interface LaneManifest {
   task_packet_hash?: string;
   notes?: string;
   p0_protocol?: P0ProtocolBlock;
+  /**
+   * Deterministic Codex model-profile decision (UTV2-1526). Required for every
+   * schema_version-2 Codex-executor manifest; forbidden on any Claude-executor manifest,
+   * at any schema version. Optional (legacy path) on schema_version-1 manifests. See
+   * docs/05_operations/policies/codex-model-routing.json and
+   * LANE_MANIFEST_CURRENT_SCHEMA_VERSION's doc comment above for the version boundary.
+   */
+  model_routing?: ModelRoutingBlock;
 }
 
 export interface PreflightToken {
@@ -679,8 +707,10 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   const errors: string[] = [];
   const sourcePath = filePath ? relativeToRoot(filePath) : `${manifest.issue_id}.json`;
 
-  if (manifest.schema_version !== 1) {
-    errors.push(`${sourcePath}: schema_version must be 1`);
+  if (!VALID_LANE_MANIFEST_SCHEMA_VERSIONS.includes(manifest.schema_version)) {
+    errors.push(
+      `${sourcePath}: schema_version must be one of ${VALID_LANE_MANIFEST_SCHEMA_VERSIONS.join(', ')} (got ${String(manifest.schema_version)})`,
+    );
   }
   if (!ISSUE_PATTERN.test(manifest.issue_id)) {
     errors.push(`${sourcePath}: issue_id must match UTV2-###`);
@@ -793,6 +823,50 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
       errors.push(
         `${sourcePath}: ${error instanceof Error ? error.message : String(error)}`,
       );
+    }
+  }
+
+  const isCodexExecutorForVersionCheck =
+    manifest.executor === 'codex-cli' || manifest.executor === 'codex-cloud';
+  if (manifest.schema_version === 2 && isCodexExecutorForVersionCheck && !manifest.model_routing) {
+    // The core fix for PM review finding #2: presence alone cannot distinguish "this
+    // manifest predates model_routing" from "model_routing was deleted from a v2
+    // manifest". schema_version 2 makes deletion detectable and rejected outright.
+    errors.push(
+      `${sourcePath}: schema_version 2 Codex-executor manifest is missing model_routing (deleting or omitting it is rejected -- only schema_version 1 manifests may lack model_routing)`,
+    );
+  }
+
+  if (manifest.model_routing) {
+    const mr = manifest.model_routing;
+    const isCodexExecutor = manifest.executor === 'codex-cli' || manifest.executor === 'codex-cloud';
+    if (!isCodexExecutor) {
+      errors.push(
+        `${sourcePath}: model_routing is present but executor is "${manifest.executor ?? 'unset'}" -- model_routing is Codex-only`,
+      );
+    }
+    if (!mr.profile || typeof mr.profile !== 'string') {
+      errors.push(`${sourcePath}: model_routing.profile is required`);
+    }
+    if (!mr.model || typeof mr.model !== 'string') {
+      errors.push(`${sourcePath}: model_routing.model is required`);
+    }
+    if (!mr.reasoning_effort || typeof mr.reasoning_effort !== 'string') {
+      errors.push(`${sourcePath}: model_routing.reasoning_effort is required`);
+    }
+    if (!['three-brain', 'manual-override'].includes(mr.selected_by)) {
+      errors.push(`${sourcePath}: model_routing.selected_by must be "three-brain" or "manual-override"`);
+    }
+    if (!mr.policy_version || typeof mr.policy_version !== 'string') {
+      errors.push(`${sourcePath}: model_routing.policy_version is required`);
+    }
+    if (mr.override) {
+      if (!mr.override.authorized_by || !mr.override.authorized_by.trim()) {
+        errors.push(`${sourcePath}: model_routing.override.authorized_by is required when override is present`);
+      }
+      if (!mr.override.reason || !mr.override.reason.trim()) {
+        errors.push(`${sourcePath}: model_routing.override.reason is required when override is present`);
+      }
     }
   }
 
@@ -964,13 +1038,38 @@ export function createManifest(input: {
   status?: LaneManifestStatus;
   now?: string;
   requireExistingPreflightToken?: boolean;
+  model_routing?: ModelRoutingBlock;
+  /**
+   * Schema version to write. Defaults to LANE_MANIFEST_CURRENT_SCHEMA_VERSION (2) for
+   * every real lane-start call. The only sanctioned reason to pass `1` is constructing a
+   * legacy-manifest fixture in a test that specifically exercises the schema_version-1
+   * compatibility path -- ops:lane-start never passes this.
+   */
+  schema_version?: LaneManifestSchemaVersion;
 }): LaneManifest {
   const timestamp = input.now ?? nowIso();
   const preflightToken = validatePreflightTokenPathValue(input.preflight_token, {
     requireExistingFile: input.requireExistingPreflightToken,
   });
+  const schemaVersion = input.schema_version ?? LANE_MANIFEST_CURRENT_SCHEMA_VERSION;
+  if (!VALID_LANE_MANIFEST_SCHEMA_VERSIONS.includes(schemaVersion)) {
+    throw new Error(`Invalid schema_version: ${String(schemaVersion)}`);
+  }
+  const isCodexExecutor = input.executor === 'codex-cli' || input.executor === 'codex-cloud';
+  if (isCodexExecutor && schemaVersion === 2 && !input.model_routing) {
+    throw new Error(
+      `Codex lane ${input.issue_id} requires a model_routing decision at creation time (schema_version 2). ` +
+        `Resolve a profile via scripts/ops/model-routing.ts and pass --model-profile to ops:lane-start.`,
+    );
+  }
+  if (!isCodexExecutor && input.model_routing) {
+    throw new Error(
+      `Lane ${input.issue_id} has executor "${input.executor ?? 'unset'}" but a model_routing block was supplied. ` +
+        `model_routing is Codex-only -- Claude lanes must never carry an executable Codex model configuration.`,
+    );
+  }
   return {
-    schema_version: 1,
+    schema_version: schemaVersion,
     issue_id: input.issue_id,
     lane_type: input.lane_type ?? 'runtime',
     executor: input.executor,
@@ -992,6 +1091,7 @@ export function createManifest(input: {
     created_by: input.created_by ?? 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
+    ...(input.model_routing ? { model_routing: input.model_routing } : {}),
   };
 }
 

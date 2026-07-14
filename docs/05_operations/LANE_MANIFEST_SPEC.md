@@ -288,3 +288,33 @@ Key rules:
 - Post-merge closeout on main uses actor guard (`github.actor != 'github-actions[bot]'`) instead of `[skip ci]` to prevent push loops
 - Per-issue sync files (`.ops/sync/UTV2-NNN.yml`) replace shared `.ops/sync.yml` mutation, eliminating rebase conflicts
 - Manifest-only PRs should carry `tier:T3` so `merge-gate.yml` auto-passes
+
+## 15. Codex model-routing compatibility (UTV2-1526)
+
+Optional field `model_routing` (schema: `docs/05_operations/schemas/lane_manifest_v1.schema.json`) records the deterministic Codex model/reasoning-effort decision three-brain made for a Codex lane:
+
+```json
+{
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain" | "manual-override",
+    "policy_version": "1.0.0",
+    "legacy_resolved": false,
+    "override": { "authorized_by": "griff", "reason": "..." }
+  }
+}
+```
+
+Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permitted tiers, PM-authorization requirement): `docs/05_operations/policies/codex-model-routing.json`. This spec never duplicates that mapping.
+
+**Who writes it:** `ops:lane-start` only, at manifest creation, via `scripts/ops/model-routing.ts#resolveModelProfile` — never a later `update`. Required (creation fails without it) for any lane whose `executor` is `codex-cli` or `codex-cloud`. Forbidden (creation fails if present) for `executor: claude`. `validateManifest` independently rejects `model_routing` on a non-Codex `executor` on every write, defending against a hand-edited manifest, not just the creation-time guard.
+
+**Compatibility cutoff:** there is no `schema_version` bump for this field — `schema_version` stays `1`. The cutoff is the field's *presence*. Manifests created by `ops:lane-start` after this field shipped always carry `model_routing`. Manifests created before it simply lack the field, and are never retroactively rewritten to add it — `writeManifest`/`updateManifest` never synthesize a missing `model_routing` for an existing manifest.
+
+**Legacy resolution (execution-time only):** `scripts/ops/codex-exec.ts` detects a missing `model_routing` at the moment it is about to invoke Codex, resolves the policy's documented `legacy_compatibility.default_profile` (`codex-terra-medium`), prints a visible `stderr` warning, and records `legacy_compatibility_used: true` in that run's evidence (`docs/06_status/proof/<issue>/model-routing.json`) and in its own JSON result. This resolution is scoped to that single execution — it is never written back into the manifest file.
+
+**Fail-closed conditions** (creation or execution refuses to proceed): unknown profile, disabled profile, profile not permitted for the lane's tier, missing/invalid manual-override authority+reason on a profile that requires one, manifest's `model`/`reasoning_effort` no longer matching what current policy defines for that profile (drift/tamper), and manifest `model_routing.policy_version` not matching the currently loaded policy's version.
+
+A `model_routing` decision — including any manual override — never implies merge, scope, or tier authority. It only selects which Codex model and reasoning effort execute a lane whose tier, scope, and merge gates were already satisfied independently.

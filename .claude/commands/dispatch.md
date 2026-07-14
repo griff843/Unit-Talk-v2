@@ -126,6 +126,8 @@ For each validated target:
    pnpm ops:merge-wrapper main-sync --issue UTV2-{number} --branch main
    pnpm ops:lane-start UTV2-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
    ```
+   **Codex executors only:** append `--model-profile {profile}` using the profile three-brain resolved (`/three-brain`'s Codex model-profile routing table). `ops:lane-start` rejects a Codex lane started without `--model-profile`, and rejects `--model-profile` on a `claude` executor. See `/three-brain` and `docs/05_operations/policies/codex-model-routing.json`.
+
    `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification. Treat the `cwd`/`worktree_path` it reports as the only valid execution directory for that lane.
    For the T3 docs-only fast path only, replace lane creation with:
    ```bash
@@ -267,7 +269,7 @@ Paste the PASS output into PR body under `## R-level compliance`.
   ```bash
   npx tsx scripts/ops/codex-exec.ts --issue UTV2-{number}
   ```
-  This script reads the lane manifest, embeds `agent-brief.md`, validates CWD, and runs Codex with standardized args. `--dry-run` flag previews the prompt without executing.
+  This script reads the lane manifest, embeds `agent-brief.md`, validates CWD, and runs Codex with standardized args. It also reads the manifest's `model_routing` block (or the documented legacy default for manifests predating it, with a visible warning), validates it against `docs/05_operations/policies/codex-model-routing.json`, and passes the resolved model and reasoning effort explicitly to `codex exec` — it never relies on the CLI's own default model. `--dry-run` flag previews the resolved profile/model/effort and the prompt without executing.
 - Codex must complete the following before opening the PR:
 
 **Before opening PR — required for all lanes:**

@@ -27,9 +27,16 @@
     "reopen_history"
   ],
   "properties": {
-    "schema_version": { "const": 1 },
+    "schema_version": {
+      "enum": [1, 2],
+      "description": "1 = historical (pre-UTV2-1526 model-routing compatibility rework); 2 = current, written by createManifest for every newly created lane. This is the real Codex model-routing compatibility boundary -- NOT model_routing's presence/absence. See the allOf conditionals below and scripts/ops/shared.ts's LANE_MANIFEST_CURRENT_SCHEMA_VERSION doc comment."
+    },
     "issue_id": { "type": "string", "pattern": "^UTV2-[0-9]+$" },
     "lane_type": { "enum": ["claude", "codex-cli", "codex-cloud"] },
+    "executor": {
+      "enum": ["claude", "codex-cli", "codex-cloud"],
+      "description": "Distinct from lane_type in the current (post-canonical-lane-type) manifest shape; scripts/ops/shared.ts is authoritative for the exact relationship."
+    },
     "tier": { "enum": ["T1", "T2", "T3"] },
     "worktree_path": { "type": "string" },
     "branch": { "type": "string" },
@@ -103,7 +110,52 @@
         "merge_type": { "enum": ["manual", "auto", null] }
       },
       "additionalProperties": false
+    },
+    "model_routing": {
+      "type": "object",
+      "description": "Deterministic Codex model-profile decision (UTV2-1526). Codex-only. Required on a schema_version-2 Codex-executor manifest (deleting it fails validation); optional/legacy on schema_version-1; forbidden on any Claude-executor manifest. See docs/05_operations/policies/codex-model-routing.json.",
+      "required": ["profile", "model", "reasoning_effort", "selected_by", "policy_version"],
+      "properties": {
+        "profile": { "type": "string" },
+        "model": { "type": "string" },
+        "reasoning_effort": { "type": "string" },
+        "selected_by": { "enum": ["three-brain", "manual-override"] },
+        "policy_version": { "type": "string" },
+        "legacy_resolved": { "type": "boolean" },
+        "override": {
+          "type": "object",
+          "required": ["authorized_by", "reason"],
+          "properties": {
+            "authorized_by": { "type": "string" },
+            "reason": { "type": "string" },
+            "at": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
     }
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "description": "schema_version 2 + Codex executor requires model_routing (the deletion-attack fix from PM review finding #2 -- this is documentation of the same rule scripts/ops/shared.ts#validateManifest enforces at runtime; this JSON schema is not itself run through an AJV validator anywhere in this repo today).",
+      "if": {
+        "properties": {
+          "schema_version": { "const": 2 },
+          "executor": { "enum": ["codex-cli", "codex-cloud"] }
+        },
+        "required": ["schema_version", "executor"]
+      },
+      "then": { "required": ["model_routing"] }
+    },
+    {
+      "description": "A Claude-executor manifest must never carry model_routing, at any schema version.",
+      "if": {
+        "properties": { "executor": { "const": "claude" } },
+        "required": ["executor"]
+      },
+      "then": { "not": { "required": ["model_routing"] } }
+    }
+  ]
 }
