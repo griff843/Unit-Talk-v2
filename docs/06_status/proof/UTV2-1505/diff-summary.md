@@ -1,28 +1,44 @@
 # UTV2-1505 Diff Summary
 
-## Summary
+Generated at: 2026-07-14T05:19:33.176Z
+Issue: UTV2-1505
+Tier: T2
+Lane type: hygiene
+Branch: codex/utv2-1505-qa-red-team-charter
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1205
+Head SHA: df912717d52d9e8612bca0525ef2cd613224925c
+Merge SHA: 81999a613ed1abbdaa281e3060aebf74b2d5a0dd
+Diff base: 81999a613ed1abbdaa281e3060aebf74b2d5a0dd^1
+Diff target: 81999a613ed1abbdaa281e3060aebf74b2d5a0dd
 
-Adds the QA Red-Team Agent Charter: a bounded, evidence-led operating contract
-for independent adversarial verification of Unit Talk changes.
+## Git Diff Stat
+```
+.ops/sync/UTV2-1505.yml                            |  10 ++
+ docs/05_operations/QA_RED_TEAM_AGENT_CHARTER.md    | 118 +++++++++++++++++++++
+ docs/06_status/lanes/UTV2-1505.json                |  46 ++++++++
+ docs/06_status/proof/UTV2-1505/.gitkeep            |   0
+ docs/06_status/proof/UTV2-1505/diff-summary.md     |  28 +++++
+ .../proof/UTV2-1505/executor-result-proof.md       |  28 +++++
+ docs/06_status/proof/UTV2-1505/model-routing.json  |  14 +++
+ docs/06_status/proof/UTV2-1505/verification.md     |  28 +++++
+ 8 files changed, 272 insertions(+)
+```
 
-## Changes
+## Git Name Status
+```
+A	.ops/sync/UTV2-1505.yml
+A	docs/05_operations/QA_RED_TEAM_AGENT_CHARTER.md
+A	docs/06_status/lanes/UTV2-1505.json
+A	docs/06_status/proof/UTV2-1505/.gitkeep
+A	docs/06_status/proof/UTV2-1505/diff-summary.md
+A	docs/06_status/proof/UTV2-1505/executor-result-proof.md
+A	docs/06_status/proof/UTV2-1505/model-routing.json
+A	docs/06_status/proof/UTV2-1505/verification.md
+```
 
-- `docs/05_operations/QA_RED_TEAM_AGENT_CHARTER.md` defines the agent's
-  purpose, authority limits, adversarial testing posture, method, finding
-  severity, escalation rules, and evidence standard.
-- The charter explicitly prevents the QA role from approving, merging,
-  deploying, mutating production data, widening scope, or treating missing
-  evidence as a pass.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Scope
-
-Documentation and UTV2-1505 proof artifacts only. No runtime code, database
-schema, contracts, or production configuration changed.
-
-## Verification plan
-
-- `pnpm type-check`
-- `pnpm test`
-- charter structure and required guardrail checks
-- `pnpm verify`
-- R-level check against `origin/main`
+## SHA Binding
+Head SHA: df912717d52d9e8612bca0525ef2cd613224925c
+Merge SHA: 81999a613ed1abbdaa281e3060aebf74b2d5a0dd
