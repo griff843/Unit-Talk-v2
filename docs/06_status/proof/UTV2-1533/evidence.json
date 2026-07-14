@@ -15,8 +15,8 @@
     "accepted_pr_head_note": "PR #1213's final head, carrying the accepted implementation plus round-3/round-4 proof-doc corrections. This exact commit is the root of the continuation branch (git branch, not cherry-pick) -- full history preserved.",
     "merge_sha": null,
     "merge_sha_note": "Not merged. This field is intentionally null -- no merge SHA exists yet and none is invented. Will be populated post-merge via ops:proof-generate --merge-sha per this repo's standard closeout automation.",
-    "current_pr_head_sha": "9b66517a72cd8f8989c47fa6eb40c403cd0aaf57",
-    "current_pr_head_note": "This branch's actual tip -- a merge commit bringing in origin/main (which advanced with unrelated UTV2-1484/1485/1532 Command Center work during this continuation) so the R-level check's two-dot diff (origin/main..HEAD, the same invocation CI's R-Level Compliance Check uses) reflects only this issue's real changes instead of a stale-base artifact. No conflicts; main's new commits touch no file this branch touches.",
+    "current_pr_head_sha": "ba5d67c9661a2ab45961e6197f4246e9714e6ab2",
+    "current_pr_head_note": "This branch's actual tip -- the round-5 commit fixing 2 fresh Codex-review findings on PR #1215, on top of two merges with origin/main (unrelated concurrent lanes UTV2-1484/1485/1532/1396 landing during this continuation) so the R-level check's two-dot diff (origin/main..HEAD, the same invocation CI's R-Level Compliance Check uses) reflects only this issue's real changes instead of a stale-base artifact. No conflicts in either merge.",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "r_level_check": "PASS",
