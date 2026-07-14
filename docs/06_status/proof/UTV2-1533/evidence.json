@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1533",
+  "status": "PRE-MERGE -- PR #1213 open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "sha_binding": {
+    "verified_source_sha": "343735ba3ab1751f4a71815f7c9d606eb3574bc4",
+    "verified_source_note": "Round 2 (P2 fix): mechanical type-cap enforcement -- CONCURRENCY_CONFIG.json type_caps block, concurrency-config.ts, shared.ts (deriveDeliveryUiApp + verification_target), lane-start.ts (checkConcurrencyLimits extension + --verification-target flag), lane-maximizer.ts advisory command fix.",
+    "merge_sha": null,
+    "merge_sha_note": "Not merged. This field is intentionally null -- no merge SHA exists yet and none is invented. Will be populated post-merge via ops:proof-generate --merge-sha per this repo's standard closeout automation.",
+    "current_pr_head_sha": "343735ba3ab1751f4a71815f7c9d606eb3574bc4",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "r_level_check": "PASS",
+      "targeted_tests_107_of_107": "PASS",
+      "pnpm_verify": "PASS",
+      "pnpm_test_db": "NOT_APPLICABLE -- no DB/runtime code in this diff's scope, see runtime_proof below"
+    }
+  },
+  "verifier": {
+    "identity": "claude-sonnet-5",
+    "role": "implementation-lane"
+  },
+  "tier": "T1",
+  "scope": {
+    "summary": "Raise the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforce the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only.",
+    "files_changed": [
+      "docs/governance/CONCURRENCY_CONFIG.json",
+      "docs/governance/LANE_CONCURRENCY_POLICY.md",
+      "scripts/ops/concurrency-config.ts",
+      "scripts/ops/concurrency-simulation.test.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/shared.test.ts",
+      "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-maximizer.ts",
+      "scripts/ops/lane-maximizer.test.ts",
+      "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+      "docs/05_operations/LANE_MANIFEST_SPEC.md",
+      "docs/06_status/proof/UTV2-1533/diff-summary.md",
+      "docs/06_status/proof/UTV2-1533/verification.md",
+      "docs/06_status/proof/UTV2-1533/evidence.json"
+    ]
+  },
+  "non_goals": [
+    "merge_serialized_max unchanged -- merge-train serialization is a real architectural constraint, untouched",
+    "12-14 lane trial stays disabled (enabled: false) -- not enabled by this lane",
+    "UTV2-1472 (Claude parallel dispatch) not folded in -- separate companion issue",
+    "scripts/ops/execution-state.ts / merge-risk.ts / lane-maximizer.ts's own '?? 2' / '?? 4' fallback defaults (config-load-failure-only dead code path) left unchanged -- pre-existing minor gap, out of scope"
+  ],
+  "config_changes": {
+    "docs/governance/CONCURRENCY_CONFIG.json": {
+      "version": "2 -> 3",
+      "total": "6 -> 10",
+      "executors.claude": "2 -> 4",
+      "executors.codex": "4 -> 6",
+      "type_caps": "new field: { hygiene: 4, governance: 3, delivery-ui: { max_per_app: 1 }, verification: { max_per_target: 1 } }",
+      "trial": "expired 8-lane trial replaced with a disabled 14-lane trial (claude:5, codex:9, allowed_until:null)"
+    }
+  },
+  "safety_rationale": {
+    "why_10_lanes_is_safe": "Audited: total/executor caps were self-imposed policy numbers with no external mechanical constraint. The two real constraints (merge-train serialization, WSL2 full-verify semaphore) are both decoupled from active-lane count and untouched by this change.",
+    "why_type_caps_needed_real_code_not_prose": "PR #1213 automated review (Codex, P2 finding) and PM review round 1 both identified that ops:lane-start enforced total/executor/singleton/forbidden-combination limits but had no machine-readable per-type distribution cap -- the policy doc's Hygiene<=4/Governance<=3/Delivery-UI-1-per-app/Verification-1-per-target claims were aspirational, not enforced. A 5th-10th same-safe-type lane could be admitted whenever executor slots and file scopes allowed it.",
+    "identity_derivation_design": "Delivery/UI app identity is derived deterministically from the lane's own file_scope_lock against the 4 canonical app roots already defined in LANE_TAXONOMY.md SS7 (deriveDeliveryUiApp()) -- never inferred from free-form text. Verification target identity has no reliable existing field (a verification lane's own issue_id is not necessarily the issue it verifies), so a new validated verification_target manifest field was added, schema_version-2-gated, mirroring the exact enforcement shape already used for model_routing (UTV2-1526) -- same deletion-attack protection, same required/forbidden/malformed validation.",
+    "fail_closed_design": "Both new checks fail closed: a Delivery/UI lane whose scope doesn't map to exactly one app root is refused, not guessed (delivery_ui_app_undetermined). An active Verification lane whose target can't be determined (legacy manifest with no verification_target) blocks every new Verification lane start until resolved (verification_target_undetermined_conflict) -- treated as a conflict, not a silent pass.",
+    "trial_isolation": "type_caps is read unconditionally from base config in getEffectiveConfig() (both the trial-active and trial-inactive return branches spread ...config, and neither branch overrides type_caps) -- a future 12-14 lane trial widens total/executor headroom only, never the per-type distribution caps. Verified by a dedicated adversarial test."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none -- no DB/runtime rule triggered by this diff (governance config, docs, and ops-tooling/test files only)"
+    },
+    "targeted_tests": {
+      "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts",
+      "status": "PASS",
+      "tests": 107,
+      "pass": 107,
+      "fail": 0,
+      "note": "concurrency-simulation.test.ts: 37/37 (23 pre-existing + 14 new PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 7/7 unaffected. lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string)."
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "note": "Full chain (ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test:apps/verification/domain-*/qa-agent/ut-cli/ops/t1-proof:local, smart-form verify, verify:commands, then verify:static && test:live-db -> test:db && test:t1-proof:live) ran clean end to end against commit 343735ba3ab1751f4a71815f7c9d606eb3574bc4 -- zero 'not ok' lines, zero ELIFECYCLE failures across the full captured log. Ran concurrently with 3 other active lanes' own pnpm verify runs (UTV2-1499, UTV2-1427, UTV2-1264) contending for the shared full-verify semaphore -- slower than solo but still clean, itself a small live data point for the ramp-health observability this issue's companion (UTV2-1534) tracks."
+    }
+  },
+  "runtime_proof": {
+    "note": "This lane touches no runtime/DB code -- config JSON, docs, and TypeScript ops-tooling (lane orchestration scripts, unit tests with in-memory fixtures) only. R-level check independently confirmed no DB/runtime rule is triggered by this diff.",
+    "test_db_run": false,
+    "test_db_statement": "pnpm test:db was NOT run for this lane and this is not a claim of execution. Not applicable: no DB schema, DB query, or Supabase-connected code path is touched by any file in this diff's scope. This is a factual statement, not a tier-skip -- the R-level check (which reads file-path-triggered rules, not the tier label alone) independently confirms no test:db-requiring rule matched."
+  },
+  "acceptance_criteria": {
+    "type_caps_machine_readable_config": "PASS -- docs/governance/CONCURRENCY_CONFIG.json type_caps + concurrency-config.ts TypeCapsConfig",
+    "hygiene_governance_simple_caps_enforced": "PASS -- checkConcurrencyLimits() active-count checks, tests 4 and 5",
+    "delivery_ui_per_app_enforced_no_free_text_inference": "PASS -- deriveDeliveryUiApp() from file_scope_lock only, tests 6 and 7",
+    "verification_per_target_enforced_no_free_text_inference": "PASS -- verification_target manifest field, tests 8 and 9",
+    "singleton_and_forbidden_combination_preserved": "PASS -- tests 10 and 11",
+    "trial_does_not_bypass_type_caps": "PASS -- test 13 (adversarial)",
+    "execution_state_reports_effective_caps": "PASS -- test 14",
+    "evidence_json_added_at_declared_path": "PASS -- this file",
+    "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
+    "no_placeholders": "PASS -- every field below is either a real captured value or an explicit not-yet-available note (pnpm_verify pending append)",
+    "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state PR #1213 is open, unmerged"
+  },
+  "scope_expansion": {
+    "original_file_scope_lock": [
+      "docs/06_status/proof/UTV2-1533/diff-summary.md",
+      "docs/06_status/proof/UTV2-1533/verification.md",
+      "docs/governance/CONCURRENCY_CONFIG.json",
+      "docs/governance/LANE_CONCURRENCY_POLICY.md",
+      "scripts/ops/concurrency-simulation.test.ts"
+    ],
+    "new_paths_requiring_codeowner_scope_override_v1": [
+      "scripts/ops/shared.ts",
+      "scripts/ops/shared.test.ts",
+      "scripts/ops/concurrency-config.ts",
+      "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-maximizer.ts",
+      "scripts/ops/lane-maximizer.test.ts",
+      "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+      "docs/05_operations/LANE_MANIFEST_SPEC.md"
+    ],
+    "self_authorized": false,
+    "note": "docs/06_status/proof/UTV2-1533/evidence.json (this file) does NOT require an override -- proof-directory files for a lane's own issue are exempted from file-scope-lock by ownLaneControlPlanePatterns() (DEBT-028 fix). No scope-override/v1 comment has been posted by this agent; per PM instruction, that authorization is not self-granted."
+  },
+  "verdict": "ALL_STATIC_CHECKS_PASS -- AWAITING_PM_APPROVAL_AND_SCOPE_OVERRIDE"
+}
