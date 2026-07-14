@@ -9,7 +9,7 @@
       "https://github.com/griff843/Unit-Talk-v2/pull/1213",
       "https://github.com/griff843/Unit-Talk-v2/pull/1215"
     ],
-    "superseded_prs_note": "Recorded here as provenance only -- their SHAs are never used as verified_source_sha, current_pr_head_sha, or any validator binding for this lane. Both remain open until this clean PR is independently proven healthy, then will be closed as superseded.",
+    "superseded_prs_note": "Recorded here as provenance only -- their SHAs are never used as verified_source_sha, proof_bundle_base_sha, or any validator binding for this lane. Both remain open until this clean PR is independently proven healthy, then will be closed as superseded.",
     "clean_branch": "claude/utv2-1533-concurrency-ramp-clean"
   },
   "static_proof": {
@@ -35,15 +35,15 @@
     "pre_utv2_1533_main_baseline_sha": "9e630fe9188f6ef0722c862ebde2ee71a797f80e",
     "pre_utv2_1533_main_baseline_note": "origin/main's tip immediately before UTV2-1533's first commit. Used to prove origin/main never independently touched any of the 14 intended implementation paths: `git diff --stat 9e630fe9..40782f85 -- <14 paths>` (40782f85 = origin/main's tip at the moment this clean branch was created) produced zero output.",
     "verified_source_sha": "e726d84c4b5a86567f2279738e2a49c78f7d9b13",
-    "verified_source_note": "This clean branch's own substantive implementation commit (post-rebase onto origin/main's tip after UTV2-1499 landed) -- the 14 files carried in verbatim from the accepted implementation, byte-identical, zero reconciliation. Ancestor of current_pr_head_sha below.",
+    "verified_source_note": "This clean branch's own substantive implementation commit (post-rebase onto origin/main's tip after UTV2-1499 landed) -- the 14 files carried in verbatim from the accepted implementation, byte-identical, zero reconciliation. An ancestor of the PR's actual live head at every point checked.",
     "verification_target_fix_sha": "b215bdfc9cb59ffd1b7c4c297714bbbffcd96d96",
     "verification_target_fix_note": "The lane-maximizer P2 fix commit (explicit verification_target contract, replacing the issue_id-guessing default) -- new work on this clean branch, not carried from any prior PR.",
     "accepted_pr_head_sha_prior_lineage": "24696311888e8c24beb530d557efe3e95ee4aa52",
     "accepted_pr_head_sha_prior_lineage_note": "PR #1213's accepted head, from which the 14 files' content was sourced (via the working tree of the branch built on top of it). Provenance only -- not an ancestor of this clean branch and not used as any current binding.",
     "merge_sha": null,
     "merge_sha_note": "Not merged. This field is intentionally null. Will be populated post-merge via ops:proof-generate --merge-sha.",
-    "current_pr_head_sha": "c390bb603a51df382a0190e6542b0ba4e83f8d1d",
-    "current_pr_head_note": "This clean branch's actual tip -- the round-2 fix commit (see codex_dispatch_p2_fix below), on top of the control-plane commit, on top of the lane-maximizer P2 fix commit, rebased onto origin/main's tip (73a989a0, after UTV2-1499 landed) with zero conflicts.",
+    "proof_bundle_base_sha": "62fcc34bf889abc205aee02b93de94b211d5754d",
+    "proof_bundle_base_note": "The commit this proof bundle document was authored against (its own parent) -- NOT a claim about the PR's current live head. A field inside a commit can never truthfully claim to equal the PR's current head: the act of committing that claim immediately produces a new commit, making the claim false again the instant it's recorded. This repo removed an equivalent current_pr_head_sha field from this schema for exactly that reason (see docs/06_status/proof/UTV2-1533/verification.md's Commit SHA reference section). The PR's actual, live current head is validated externally -- by GitHub itself (`gh pr view <PR> --json headRefOid`) and by the SHA-bound executor-result/v1 comment posted after each push -- never self-recorded inside a commit belonging to the branch it describes.",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "r_level_check": "PASS -- Verdict: PASS, Changed files: 20, Rules matched: (none)",

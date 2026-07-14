@@ -117,7 +117,9 @@ No file in this diff's scope touches DB schema, DB queries, or Supabase-connecte
 
 ## Commit SHA reference
 
-Branch HEAD (clean PR head): see evidence.json's `sha_binding.current_pr_head_sha` -- rebased onto origin/main's tip after UTV2-1499 landed mid-session (zero conflicts), plus the control-plane commit, plus the round-2 codex-dispatch.ts fix from Codex review round 1. Re-verified clean (20 files total) after every step.
+This bundle does not, and cannot, self-record the PR's current live head SHA: any commit that claims to contain "the current head" is trivially false the instant it is made, since committing that claim itself produces a new commit. `evidence.json`'s `sha_binding.proof_bundle_base_sha` records only this proof bundle's own parent commit (a true, permanent, historical fact -- not a live-head claim). The PR's actual, current head is validated externally, at read time, by GitHub itself (`gh pr view <PR> --json headRefOid`) and by the SHA-bound `executor-result/v1` comment posted after every push.
+
+For provenance: this branch was created directly from `origin/main`, rebased onto its tip after UTV2-1499 landed mid-session (zero conflicts), then received the control-plane commit and the round-2 `codex-dispatch.ts` fix from Codex review round 1. Re-verified clean (20 files total, exactly the intended set) after every step.
 
 ## Merge SHA reference
 
