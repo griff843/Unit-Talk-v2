@@ -16,7 +16,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1264/evidence.json",
-    "docs/06_status/proof/UTV2-1264/model-routing.json"
+    "docs/06_status/proof/UTV2-1264/model-routing.json",
+    "docs/06_status/proof/UTV2-1264/verification.md"
   ],
   "status": "started",
   "started_at": "2026-07-14T12:25:07.080Z",
