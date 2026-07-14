@@ -1,5 +1,7 @@
 # UTV2-1532 Verification
 
+**Commit SHA:** 23b30d3f (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; temporal binding closes the gap per the gate's own advisory note, and `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
+
 ## Verification
 
 - `npx tsx --test scripts/ops/codex-exec.test.ts` — PASS (13 tests), including the new no-upstream first-push regression case.
