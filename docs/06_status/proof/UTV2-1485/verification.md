@@ -1,5 +1,7 @@
 # UTV2-1485 Verification
 
+**Commit SHA:** 0c15a118 (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
+
 ## Verification
 
 - `pnpm type-check`: PASS — root project-reference type check completed with no errors.
