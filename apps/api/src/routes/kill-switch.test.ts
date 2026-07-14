@@ -95,7 +95,6 @@ test('POST /api/discord/kill-switch ignores a client-supplied actor and derives 
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ target: 'best-bets', killed: true, actor: 'attacker-spoofed-identity' }),
     });
-    const body = (await response.json()) as { ok: boolean; actor?: string };
     assert.equal(response.status, 200);
 
     const auditRows = await repositories.audit.listRecentByEntityType(
