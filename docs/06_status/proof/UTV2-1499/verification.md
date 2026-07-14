@@ -1,5 +1,10 @@
 # PROOF: UTV2-1499
-MERGE_SHA: e37219cf9c3d25cdfb2cbb233a2c79dbf0ded42a
+MERGE_SHA: 4899683816cead37b79aace5ca0e8cc765bdab57
+
+## PM review round 1 — addressed
+
+- [x] Restart authority no longer derived from unratified `INCIDENT_RUNBOOK.md` — §1/§4 now require PM sign-off for routine restart, pending that document's ratification (UTV2-1428).
+- [x] Lane manifest `expected_proof_paths` corrected to `verification.md`/`diff-summary.md` (the artifacts actually delivered), replacing the never-created `evidence.json` reference.
 
 ASSERTIONS:
 - [x] Runtime Operations Governance chapter added, consolidating existing ratified authority (no new governance program)
