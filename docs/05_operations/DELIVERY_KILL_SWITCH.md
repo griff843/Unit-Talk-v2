@@ -14,7 +14,7 @@ A live, DB-backed, no-code-deploy operational control distinct from the existing
 
 Table: `delivery_kill_switch` (migration `20260714120000_add_delivery_kill_switch.sql`). One row per governed target (`best-bets`, `trader-insights`, `exclusive-insights`). `killed boolean NOT NULL DEFAULT true` — the column default and the application-layer default agree: **absence of a row, or any read error, means killed.**
 
-**Bootstrap seed (migration `<bootstrap-migration-filename>`):** the table starts empty on creation, and fail-closed means every governed target with no row is treated as killed. Without a seed, deploying the worker's kill-switch check would have silently disabled delivery for every governed target on day one. The bootstrap migration seeds one row per target, derived from `packages/contracts/src/promotion.ts`'s `defaultTargetRegistry` (the canonical source of truth, not an assumption):
+**Bootstrap seed (migration `20260714130000_bootstrap_delivery_kill_switch_posture.sql`):** the table starts empty on creation, and fail-closed means every governed target with no row is treated as killed. Without a seed, deploying the worker's kill-switch check would have silently disabled delivery for every governed target on day one. The bootstrap migration seeds one row per target, derived from `packages/contracts/src/promotion.ts`'s `defaultTargetRegistry` (the canonical source of truth, not an assumption):
 
 | Target | `defaultTargetRegistry.enabled` | Seeded `killed` |
 |---|---|---|
