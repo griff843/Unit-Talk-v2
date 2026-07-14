@@ -2,12 +2,12 @@
 
 ## Change
 
-Extends CLV resolution to event-scoped game-total picks in `apps/api/src/clv-service.ts`, resolving closing line via retained event identity (canonical `eventId`/`providerEventId`/start time) rather than requiring `picks.metadata.marketUniverseId` linkage.
+Extends CLV resolution to event-scoped game-total picks in `apps/api/src/clv-service.ts`, resolving closing line via retained event identity (canonical `eventId`/`providerEventId`/start time) rather than requiring `picks.metadata.marketUniverseId` linkage. A retained provider event can resolve without a local event row, and the retained event start remains the strict closing-offer cutoff.
 
 ## Files changed
 
 - `apps/api/src/clv-service.ts` — join-chain resolution for event-scoped game totals
-- `apps/api/src/clv-service.test.ts` — new test coverage
+- `apps/api/src/clv-service.test.ts` — coverage for direct provider identity, exact same-day event disambiguation, and rejection of post-start offers
 
 ## Key finding
 
