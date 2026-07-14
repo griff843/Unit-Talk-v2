@@ -52,6 +52,10 @@ Confirms `getEffectiveConfig()` picks up the new base limits from the working-tr
 
 `pnpm verify` run on this branch; see `docs/06_status/proof/UTV2-1533/evidence.json` / PR CI checks for the full log (env-check, lint, type-check, build, test).
 
+## Commit SHA reference
+
+Branch HEAD commit at time of verification: `c608a2e11b6bfa128b93745fb4988c476ba1f3cd`.
+
 ## Merge SHA reference
 
 To be appended after merge via `ops:proof-generate --merge-sha` (automated, `post-merge-lane-close.yml`).
