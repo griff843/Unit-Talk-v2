@@ -281,6 +281,7 @@ function runLaneStart(
   files: string[],
   laneType: string,
   modelProfile: string,
+  verificationTarget?: string,
 ): ChildResult {
   const args = [
     'ops:lane-start',
@@ -296,6 +297,9 @@ function runLaneStart(
     '--model-profile',
     modelProfile,
   ];
+  if (verificationTarget) {
+    args.push('--verification-target', verificationTarget);
+  }
   for (const filePath of files) {
     args.push('--files', filePath);
   }
@@ -481,6 +485,7 @@ async function main(): Promise<number> {
     const preflightTokenFlag = getFlag(flags, 'preflight-token');
     const explicitLaneType = getFlag(flags, 'lane-type');
     const explicitModelProfile = getFlag(flags, 'model-profile');
+    const explicitVerificationTarget = getFlag(flags, 'verification-target');
     const env = loadEnvironment();
     const linearToken = env.LINEAR_API_TOKEN?.trim();
 
@@ -501,11 +506,23 @@ async function main(): Promise<number> {
     const issue = await fetchIssue(issueId, linearToken);
     const laneType = inferLaneType(issue, explicitLaneType);
     const modelProfile = resolveDispatchModelProfile(tier, explicitModelProfile);
+    // Codex review fix (UTV2-1533, PR #1215): ops:lane-start requires --verification-target
+    // for a new lane_type:"verification" start (schema_version 2) -- codex:dispatch must
+    // thread it through, not just lane-maximizer's advisory suggestion, or every
+    // verification-lane dispatch through this path fails closed with
+    // verification_target_missing before the lane can even be created. Defaults to the
+    // lane's own issueId (the common case: a verification lane produces proof for its own
+    // tracking issue), overridable via --verification-target for the "verifies a different
+    // issue" case -- same default-with-override pattern as --lane-type/--model-profile above.
+    const verificationTarget = laneType === 'verification' ? (explicitVerificationTarget ?? issueId) : undefined;
     if (explain) {
       process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
       process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);
       process.stderr.write(`Lane type: ${laneType}\n`);
       process.stderr.write(`Model profile: ${modelProfile}\n`);
+      if (verificationTarget) {
+        process.stderr.write(`Verification target: ${verificationTarget}\n`);
+      }
     }
 
     let preflightRelativePath = relativeToRoot(preflightTokenPathForBranch(branch));
@@ -548,7 +565,7 @@ async function main(): Promise<number> {
         branch,
         preflight_token: preflightRelativePath,
         details: {
-          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli', '--model-profile', modelProfile, ...files.flatMap((entry) => ['--files', entry])],
+          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli', '--model-profile', modelProfile, ...(verificationTarget ? ['--verification-target', verificationTarget] : []), ...files.flatMap((entry) => ['--files', entry])],
           would_write_packet: relativeToRoot(packetPathForIssue(issueId, packetOut)),
           tier_verification_hint: readTierVerificationHint(tier),
         },
@@ -565,7 +582,7 @@ async function main(): Promise<number> {
       return 0;
     }
 
-    const laneStart = runLaneStart(issueId, tier, branch, files, laneType, modelProfile);
+    const laneStart = runLaneStart(issueId, tier, branch, files, laneType, modelProfile, verificationTarget);
     if (laneStart.status !== 0) {
       if (laneStart.stdout) {
         process.stdout.write(`${laneStart.stdout}\n`);

@@ -803,6 +803,14 @@ export function evaluateCandidates(
       candidate.executor === 'codex-cli' || candidate.executor === 'codex-cloud'
         ? ['--model-profile', candidate.tier === 'T1' ? 'codex-sol-high' : 'codex-terra-medium']
         : [];
+    // UTV2-1533 P2 fix: ops:lane-start now requires --verification-target for
+    // lane_type:"verification" (the per-target concurrency cap depends on it). This
+    // script cannot know the real target with certainty -- it defaults to the
+    // candidate's own issue_id (the common case: a verification lane produces proof for
+    // its own tracking issue), advisory only, exactly like modelProfileArgs above; an
+    // operator dispatching a lane that verifies a *different* issue must override it.
+    const verificationTargetArgs =
+      laneType === 'verification' ? ['--verification-target', candidate.issue_id] : [];
     report.dispatch_plan.fill_now.push({
       issue_id: candidate.issue_id,
       executor: candidate.executor,
@@ -824,6 +832,7 @@ export function evaluateCandidates(
         ...modelProfileArgs,
         '--lane-type',
         laneType,
+        ...verificationTargetArgs,
         ...fileArgs,
       ].join(' '),
     });

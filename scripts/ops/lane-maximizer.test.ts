@@ -118,7 +118,7 @@ test('dispatch command includes lane-start required tier branch and file flags',
 
   assert.equal(
     report.dispatch_plan.fill_now[0]?.dispatch_command,
-    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --model-profile codex-terra-medium --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --model-profile codex-terra-medium --lane-type verification --verification-target UTV2-96801B --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
   );
 });
 
@@ -194,7 +194,7 @@ test('queue intake parses ready issues into dispatchable candidates', () => {
     ]);
     assert.equal(
       report.dispatch_plan.fill_now[0]?.dispatch_command,
-      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --model-profile codex-terra-medium --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --model-profile codex-terra-medium --lane-type verification --verification-target UTV2-96818 --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
     );
   });
 });

@@ -21,6 +21,36 @@ const POLICY: ConcurrencyConfig = {
     ['runtime', 'runtime'],
     ['modeling', 'modeling'],
   ],
+  type_caps: {
+    hygiene: 4,
+    governance: 3,
+    'delivery-ui': { max_per_app: 1 },
+    verification: { max_per_target: 1 },
+  },
+};
+
+// Mirrors the real docs/governance/CONCURRENCY_CONFIG.json base values exactly (UTV2-1533),
+// so the "Lane N rejected" tests below prove the shipped numbers, not just the generic
+// mechanism (which the POLICY fixture above already covers at smaller numbers).
+const PROD_POLICY: ConcurrencyConfig = {
+  version: 3,
+  total: 10,
+  executors: { claude: 4, codex: 6 },
+  merge_serialized_max: 1,
+  singleton_types: ['runtime', 'migration', 'modeling', 'data-canonical'],
+  forbidden_combinations: [
+    ['migration', 'runtime'],
+    ['migration', 'migration'],
+    ['migration', 'data-canonical'],
+    ['runtime', 'runtime'],
+    ['modeling', 'modeling'],
+  ],
+  type_caps: {
+    hygiene: 4,
+    governance: 3,
+    'delivery-ui': { max_per_app: 1 },
+    verification: { max_per_target: 1 },
+  },
 };
 
 function manifest(
@@ -204,9 +234,9 @@ test('merge_serialized_max is 1 in CONCURRENCY_CONFIG.json', async () => {
   const configPath = path.join(ROOT, 'docs', 'governance', 'CONCURRENCY_CONFIG.json');
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as ConcurrencyConfig;
   assert.strictEqual(config.merge_serialized_max, 1, 'merge_serialized_max must be 1');
-  assert.strictEqual(config.total, 6, 'total must be 6');
-  assert.strictEqual(config.executors.claude, 2, 'claude limit must be 2');
-  assert.strictEqual(config.executors.codex, 4, 'codex limit must be 4');
+  assert.strictEqual(config.total, 10, 'total must be 10');
+  assert.strictEqual(config.executors.claude, 4, 'claude limit must be 4');
+  assert.strictEqual(config.executors.codex, 6, 'codex limit must be 6');
 });
 
 // ── 9. Done manifests don't count against limits ──────────────────────────
@@ -318,9 +348,15 @@ test('trial mode: 7th lane allowed when trial active (6 active → add 1 more)',
     total: eff.total,
     executors: { claude: eff.executors.claude, codex: eff.executors.codex },
   };
+  // UTV2-1533: rebalanced from the original fixture (which put 4 hygiene lanes active
+  // and then added a 5th) now that hygiene has its own type cap of 4 -- that scenario is
+  // covered on its own merits by 'fifth Hygiene lane rejected' below. This fixture keeps
+  // the original test's intent (prove total/executor headroom allows a 7th lane under
+  // trial) while respecting every type cap: 3 governance (at cap, not exceeded) + 3
+  // hygiene, adding a 4th hygiene (at cap, not exceeded).
   const active = [
     manifest('UTV2-T01', 'claude', 'governance', ['scripts/ops/t01.ts']),
-    manifest('UTV2-T02', 'claude', 'hygiene', ['scripts/ops/t02.ts']),
+    manifest('UTV2-T02', 'claude', 'governance', ['scripts/ops/t02.ts']),
     manifest('UTV2-T03', 'claude', 'governance', ['scripts/ops/t03.ts']),
     manifest('UTV2-T04', 'codex-cli', 'hygiene', ['scripts/ops/t04.ts']),
     manifest('UTV2-T05', 'codex-cli', 'hygiene', ['scripts/ops/t05.ts']),
@@ -386,4 +422,269 @@ test('trial mode: unsafe lane types cannot fill slots above the base cap', () =>
     violations.some((violation) => violation.code === 'trial_unsafe_lane_type'),
     `Expected trial_unsafe_lane_type violation above base cap: ${JSON.stringify(violations)}`,
   );
+});
+
+// ── 12. Type-level distribution caps (UTV2-1533 P2 fix) ───────────────────
+// Tested against PROD_POLICY (the real shipped 10/4/6 + hygiene:4/governance:3/
+// delivery-ui:1-per-app/verification:1-per-target numbers), not the generic small-number
+// POLICY fixture above, so these tests prove the actual production caps hold.
+
+test('1. lane 11 rejected by total cap', () => {
+  const active = [
+    manifest('UTV2-P01', 'claude', 'runtime', ['apps/worker/src/a.ts']),
+    manifest('UTV2-P02', 'claude', 'modeling', ['packages/domain/src/score.ts']),
+    manifest('UTV2-P03', 'claude', 'governance', ['docs/gov/a.md']),
+    manifest('UTV2-P04', 'claude', 'governance', ['docs/gov/b.md']),
+    manifest('UTV2-P05', 'codex-cli', 'hygiene', ['scripts/ops/p05.ts']),
+    manifest('UTV2-P06', 'codex-cli', 'hygiene', ['scripts/ops/p06.ts']),
+    manifest('UTV2-P07', 'codex-cli', 'hygiene', ['scripts/ops/p07.ts']),
+    manifest('UTV2-P08', 'codex-cli', 'hygiene', ['scripts/ops/p08.ts']),
+    manifest('UTV2-P09', 'codex-cli', 'delivery-ui', ['apps/command-center/page.tsx']),
+    { ...manifest('UTV2-P10', 'codex-cli', 'verification', ['apps/api/src/x.test.ts']), verification_target: 'UTV2-9001' },
+  ];
+  assert.strictEqual(active.length, 10, 'fixture must have exactly 10 active lanes');
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/discord-bot/x.tsx'] },
+  );
+  assert.ok(
+    violationCodes(violations).includes('total_cap_exceeded'),
+    `Expected total_cap_exceeded at lane 11, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('2. fifth Claude lane rejected', () => {
+  const active = [
+    manifest('UTV2-P20', 'claude', 'governance', ['docs/gov/c.md']),
+    manifest('UTV2-P21', 'claude', 'governance', ['docs/gov/d.md']),
+    manifest('UTV2-P22', 'claude', 'governance', ['docs/gov/e.md']),
+    manifest('UTV2-P23', 'claude', 'runtime', ['apps/worker/src/b.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'hygiene', 'claude', PROD_POLICY);
+  assert.ok(
+    violationCodes(violations).includes('claude_cap_exceeded'),
+    `Expected claude_cap_exceeded at the 5th Claude lane, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('3. seventh Codex lane rejected', () => {
+  const active = [
+    manifest('UTV2-P30', 'codex-cli', 'hygiene', ['scripts/ops/p30.ts']),
+    manifest('UTV2-P31', 'codex-cli', 'hygiene', ['scripts/ops/p31.ts']),
+    manifest('UTV2-P32', 'codex-cli', 'hygiene', ['scripts/ops/p32.ts']),
+    manifest('UTV2-P33', 'codex-cli', 'hygiene', ['scripts/ops/p33.ts']),
+    manifest('UTV2-P34', 'codex-cli', 'delivery-ui', ['apps/command-center/page.tsx']),
+    { ...manifest('UTV2-P35', 'codex-cli', 'verification', ['apps/api/src/y.test.ts']), verification_target: 'UTV2-9001' },
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'verification',
+    'codex-cli',
+    PROD_POLICY,
+    { verificationTarget: 'UTV2-9002' },
+  );
+  assert.ok(
+    violationCodes(violations).includes('codex_cap_exceeded'),
+    `Expected codex_cap_exceeded at the 7th Codex lane, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('4. fifth Hygiene lane rejected (isolated: no other cap fires)', () => {
+  const active = [
+    manifest('UTV2-P40', 'claude', 'hygiene', ['scripts/ops/p40.ts']),
+    manifest('UTV2-P41', 'claude', 'hygiene', ['scripts/ops/p41.ts']),
+    manifest('UTV2-P42', 'codex-cli', 'hygiene', ['scripts/ops/p42.ts']),
+    manifest('UTV2-P43', 'codex-cli', 'hygiene', ['scripts/ops/p43.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'hygiene', 'claude', PROD_POLICY);
+  assert.deepStrictEqual(
+    violationCodes(violations),
+    ['hygiene_type_cap_exceeded'],
+    `Expected exactly hygiene_type_cap_exceeded (isolated), got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('5. fourth Governance lane rejected (isolated: no other cap fires)', () => {
+  const active = [
+    manifest('UTV2-P50', 'claude', 'governance', ['docs/gov/f.md']),
+    manifest('UTV2-P51', 'claude', 'governance', ['docs/gov/g.md']),
+    manifest('UTV2-P52', 'codex-cli', 'governance', ['docs/gov/h.md']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'governance', 'claude', PROD_POLICY);
+  assert.deepStrictEqual(
+    violationCodes(violations),
+    ['governance_type_cap_exceeded'],
+    `Expected exactly governance_type_cap_exceeded (isolated), got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('6. second Delivery/UI lane for the same app rejected', () => {
+  const active = [
+    manifest('UTV2-P60', 'claude', 'delivery-ui', ['apps/command-center/page.tsx']),
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/command-center/other-page.tsx'] },
+  );
+  assert.ok(
+    violationCodes(violations).includes('delivery_ui_app_conflict'),
+    `Expected delivery_ui_app_conflict for same-app Delivery/UI lanes, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('7. Delivery/UI lanes for different apps accepted', () => {
+  const active = [
+    manifest('UTV2-P70', 'claude', 'delivery-ui', ['apps/command-center/page.tsx']),
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/discord-bot/formatter.ts'] },
+  );
+  assert.strictEqual(violations.length, 0, `Expected no violations across different apps, got: ${JSON.stringify(violations)}`);
+});
+
+test('8. second Verification lane for the same target rejected', () => {
+  const active = [
+    { ...manifest('UTV2-P80', 'claude', 'verification', ['apps/api/src/z.test.ts']), verification_target: 'UTV2-9010' },
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'verification',
+    'codex-cli',
+    PROD_POLICY,
+    { verificationTarget: 'UTV2-9010' },
+  );
+  assert.ok(
+    violationCodes(violations).includes('verification_target_conflict'),
+    `Expected verification_target_conflict for same-target Verification lanes, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('9. Verification lanes for different targets accepted', () => {
+  const active = [
+    { ...manifest('UTV2-P90', 'claude', 'verification', ['apps/api/src/z2.test.ts']), verification_target: 'UTV2-9020' },
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'verification',
+    'codex-cli',
+    PROD_POLICY,
+    { verificationTarget: 'UTV2-9021' },
+  );
+  assert.strictEqual(violations.length, 0, `Expected no violations across different targets, got: ${JSON.stringify(violations)}`);
+});
+
+test('10. existing singleton behavior remains intact under PROD_POLICY', () => {
+  const active = [manifest('UTV2-P100', 'claude', 'runtime', ['apps/worker/src/c.ts'])];
+  const violations = checkConcurrencyLimits(active, 'runtime', 'codex-cli', PROD_POLICY);
+  assert.ok(
+    violationCodes(violations).includes('singleton_type_conflict'),
+    `Expected singleton_type_conflict to still fire under PROD_POLICY, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('11. forbidden combinations remain intact under PROD_POLICY', () => {
+  const active = [manifest('UTV2-P110', 'claude', 'migration', ['supabase/migrations/d.sql'])];
+  const violations = checkConcurrencyLimits(active, 'runtime', 'claude', PROD_POLICY);
+  assert.ok(
+    violationCodes(violations).includes('forbidden_combination'),
+    `Expected forbidden_combination to still fire under PROD_POLICY, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('12. disabled 12-14 trial remains inactive in the real shipped config', async () => {
+  const fs = await import('node:fs');
+  const configPath = path.join(ROOT, 'docs', 'governance', 'CONCURRENCY_CONFIG.json');
+  const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as ConcurrencyConfig;
+  assert.strictEqual(config.trial?.enabled, false, 'the 12-14 trial must be disabled in the shipped config');
+  const eff = getEffectiveConfig(config);
+  assert.strictEqual(eff.total, 10, 'effective total must be the 10-lane base while trial is disabled');
+  assert.strictEqual(eff.executors.claude, 4);
+  assert.strictEqual(eff.executors.codex, 6);
+  assert.strictEqual(eff.trial_active, false);
+});
+
+test('13. trial activation does not silently remove type-level protections', () => {
+  const trialActiveHighHeadroom: ConcurrencyConfig = {
+    ...PROD_POLICY,
+    trial: {
+      enabled: true,
+      total: 14,
+      executors: { claude: 5, codex: 9 },
+      allowed_until: null,
+      rationale: 'test',
+      safe_types_only: ['governance', 'hygiene', 'delivery-ui', 'verification'],
+    },
+  };
+  const eff = getEffectiveConfig(trialActiveHighHeadroom);
+  assert.strictEqual(eff.trial_active, true);
+  assert.strictEqual(eff.total, 14, 'trial total headroom must be in effect');
+  // 4 active hygiene lanes -- well within the trial's 14-lane/9-codex headroom, but
+  // already AT the type_caps.hygiene cap, which trial must not widen.
+  const active = [
+    manifest('UTV2-P130', 'codex-cli', 'hygiene', ['scripts/ops/p130.ts']),
+    manifest('UTV2-P131', 'codex-cli', 'hygiene', ['scripts/ops/p131.ts']),
+    manifest('UTV2-P132', 'codex-cli', 'hygiene', ['scripts/ops/p132.ts']),
+    manifest('UTV2-P133', 'codex-cli', 'hygiene', ['scripts/ops/p133.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'hygiene', 'codex-cli', eff);
+  assert.ok(
+    violationCodes(violations).includes('hygiene_type_cap_exceeded'),
+    `Trial headroom must not bypass the hygiene type cap, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('14. execution-state reports the effective caps from the real CONCURRENCY_CONFIG.json', async () => {
+  const { MAX_CLAUDE_LANES, MAX_CODEX_LANES } = await import('./execution-state.js');
+  assert.strictEqual(MAX_CLAUDE_LANES, 4, 'execution-state must report claude max=4 from the real shipped config');
+  assert.strictEqual(MAX_CODEX_LANES, 6, 'execution-state must report codex max=6 from the real shipped config');
+});
+
+// ── 15. Delivery/UI fail-closed on an undetermined ACTIVE lane (PR #1215 Codex review) ────
+// deriveDeliveryUiApp() returning null for an active lane means "cannot determine which app",
+// not "proven to be a different app" -- treating it as non-conflicting would let a second
+// Delivery/UI lane onto the same app whenever the first lane's scope happens to be ambiguous.
+
+test('15. delivery-ui: active lane with an undetermined app is treated as a conflict, not ignored', () => {
+  const active = [
+    // Spans two app roots -- deriveDeliveryUiApp returns null for this manifest's own scope.
+    manifest('UTV2-P150', 'claude', 'delivery-ui', [
+      'apps/command-center/src/app/page.tsx',
+      'apps/discord-bot/src/formatter.ts',
+    ]),
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/command-center/src/app/other.tsx'] },
+  );
+  assert.ok(
+    violationCodes(violations).includes('delivery_ui_app_undetermined_conflict'),
+    `Expected delivery_ui_app_undetermined_conflict when an active lane's app can't be determined, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('15b. delivery-ui: a determined active lane on a different app is still accepted (regression guard)', () => {
+  const active = [
+    manifest('UTV2-P151', 'claude', 'delivery-ui', ['apps/discord-bot/src/formatter.ts']),
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/command-center/src/app/other.tsx'] },
+  );
+  assert.strictEqual(violations.length, 0, `Expected no violations for a clearly different app, got: ${JSON.stringify(violations)}`);
 });

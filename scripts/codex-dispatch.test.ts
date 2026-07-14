@@ -147,6 +147,52 @@ test('UTV2-1526: codex-dispatch passes --model-profile through to ops:lane-start
   assert.match(source, /would_run_lane_start:.*'--model-profile', modelProfile/, 'dry-run preview should also report --model-profile');
 });
 
+// Codex review fix (UTV2-1533, PR #1215): a verification-type Codex dispatch must thread
+// --verification-target through to ops:lane-start -- without it, every verification-lane
+// dispatch via `pnpm codex:dispatch` failed closed with verification_target_missing before
+// the lane could even be created, since ops:lane-start now requires it for a new
+// lane_type:"verification" start (schema_version 2).
+test('UTV2-1533: codex-dispatch threads --verification-target through to ops:lane-start for verification lanes', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+
+  assert.match(
+    source,
+    /const verificationTarget = laneType === 'verification' \? \(explicitVerificationTarget \?\? issueId\) : undefined;/,
+    'verificationTarget must default to the lane\'s own issueId for verification lanes, overridable via --verification-target, and be undefined for any other lane type',
+  );
+
+  const runLaneStartDefIndex = source.indexOf('function runLaneStart(');
+  assert.notStrictEqual(runLaneStartDefIndex, -1, 'expected the runLaneStart function definition');
+  const runLaneStartDefEnd = source.indexOf('): ChildResult {', runLaneStartDefIndex);
+  const runLaneStartSignature = source.slice(runLaneStartDefIndex, runLaneStartDefEnd);
+  assert.match(
+    runLaneStartSignature,
+    /verificationTarget\?: string/,
+    'runLaneStart must accept an optional verificationTarget parameter',
+  );
+
+  assert.match(
+    source,
+    /if \(verificationTarget\) \{\s*\n\s*args\.push\('--verification-target', verificationTarget\);/,
+    'runLaneStart must conditionally push --verification-target into the lane-start args when present',
+  );
+
+  const callSiteIndex = source.indexOf('const laneStart = runLaneStart(');
+  assert.notStrictEqual(callSiteIndex, -1, 'expected the runLaneStart call site');
+  const callSiteLine = source.slice(callSiteIndex, source.indexOf('\n', callSiteIndex));
+  assert.match(
+    callSiteLine,
+    /runLaneStart\(issueId, tier, branch, files, laneType, modelProfile, verificationTarget\)/,
+    'the real (non-dry-run) call site must pass verificationTarget through',
+  );
+
+  assert.match(
+    source,
+    /would_run_lane_start:.*\.\.\.\(verificationTarget \? \['--verification-target', verificationTarget\] : \[\]\)/,
+    'the dry-run preview must also report --verification-target when applicable',
+  );
+});
+
 test('dispatch skill documents the Codex lane workflow', () => {
   const skill = fs.readFileSync(
     path.join(ROOT, '.agents', 'skills', 'dispatch', 'SKILL.md'),
