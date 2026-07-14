@@ -13,3 +13,16 @@
 The focused tests prove that valid internal alert definitions can be restored from browser storage, while malformed JSON, malformed entries, and entries whose governance flags are changed are ignored. Existing validation continues to require sport, market, and at least one threshold.
 
 No live database test is applicable: this T2 change contains no database, API service, migration, worker, or runtime delivery changes.
+
+- `pnpm test:db` — PASS (7/7), required unconditionally by `proof-auditor-gate.ts` regardless of tier:
+
+```
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
