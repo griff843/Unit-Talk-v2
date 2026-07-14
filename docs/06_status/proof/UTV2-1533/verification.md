@@ -12,7 +12,8 @@ ASSERTIONS:
 - [x] 128/128 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts
 - [x] pnpm verify passes clean end to end (multiple independent runs)
 - [x] R-level check reports no triggered R1-R5 rules for this diff (governance config/docs + ops-tooling only, no DB/runtime code)
-- [x] 7 of 8 review threads across PR #1213 and PR #1215 replied to with file:line evidence and resolved; 1 (lane-maximizer's advisory verification-target guess) deliberately left unresolved and deferred to the pre-existing UTV2-1535 follow-up, not a mechanical safety gap
+- [x] 8 of 9 review threads across PR #1213 (4, all resolved) and PR #1215 (5, 4 resolved) replied to with file:line evidence and resolved; 1 (lane-maximizer's advisory verification-target guess) deliberately left unresolved and deferred to the pre-existing UTV2-1535 follow-up, not a mechanical safety gap
+- [x] Round 8: Branch Discipline Guard reduced from 5 stray cross-issue references to 1 via a message-only history rewrite of this continuation's own 4 commits (accepted_pr_head_sha and everything before it untouched); the 1 remaining reference lives in protected accepted history (commit 343735ba, an ancestor of accepted_pr_head_sha, also present in the still-failing original PR #1213) and cannot be fixed without breaking SHA preservation
 
 EVIDENCE:
 ```text
@@ -122,7 +123,7 @@ Ran clean end to end at least three times across this issue's rounds (round 2 co
 
 ## Commit SHA reference
 
-Branch HEAD (replacement PR head) at authoring time: `ba5d67c9661a2ab45961e6197f4246e9714e6ab2` — round-5 fix commit, on top of two merges with `origin/main` (unrelated concurrent lanes landing during this continuation), the manifest-repair commit `c32e3a95`, and the accepted implementation at `24696311888e8c24beb530d557efe3e95ee4aa52` / substantive code at `c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0`.
+Branch HEAD (replacement PR head) at final packet assembly: `5a48c51d57c34e6d2db28a8088578921044bd09d` — round 8's message-only history rewrite (`git filter-branch --msg-filter`, non-interactive, restricted to the range `accepted_pr_head_sha..HEAD`) applied on top of round 7's fix commit `f9a06c98`, round 5's fix commit `ba5d67c9`, two merges with `origin/main` (unrelated concurrent lanes landing during this continuation), the manifest-repair commit `c32e3a95`, and the accepted implementation at `24696311888e8c24beb530d557efe3e95ee4aa52` / substantive code at `c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0`. Round 8 touched only commit messages (removing stray UTV2-1396/1484/1535 references to satisfy Branch Discipline Guard) — every commit tree/diff in the range is byte-identical before and after, and `accepted_pr_head_sha` remains an exact, unmodified ancestor.
 
 ## Merge SHA reference
 
