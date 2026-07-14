@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1484",
+  "lane_type": "delivery-ui",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1484-command-center-governance-board-readonly-api",
+  "branch": "codex/utv2-1484-command-center-governance-board-readonly-api",
+  "base_branch": "main",
+  "commit_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1208",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/command-center/src/app/api/**",
+    "apps/command-center/src/app/operations/governance/**",
+    "apps/command-center/src/lib/governance-contract.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1484/diff-summary.md",
+    "docs/06_status/proof/UTV2-1484/verification.md",
+    "docs/06_status/proof/UTV2-1484/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-07-14T12:10:28.559Z",
+  "heartbeat_at": "2026-07-14T17:47:45.642Z",
+  "closed_at": "2026-07-14T17:47:45.642Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1484-command-center-governance-board-readonly-api.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T17:35:58.491Z",
+      "verdict": "pass",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1208"
+    },
+    {
+      "checked_at": "2026-07-14T17:36:07.166Z",
+      "verdict": "pass",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1208",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T17:36:07.171Z",
+      "verdict": "fail",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T17:36:21.925Z",
+      "verdict": "fail",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T17:45:55.602Z",
+      "verdict": "pass",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1208",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T17:45:55.607Z",
+      "verdict": "fail",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T17:46:11.721Z",
+      "verdict": "fail",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T17:47:43.470Z",
+      "verdict": "pass",
+      "merge_sha": "484c25bdf07173b902ee178312b7560f3e530a1d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1208",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1484-command-center-governance-board-readonly-api",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

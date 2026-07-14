@@ -4,6 +4,7 @@ import type { AppEnv } from '../../../../../packages/config/dist/env.js';
 import {
   createDatabaseConnectionConfig,
   createServiceRoleDatabaseConnectionConfig,
+  isTestFixturePick,
 } from './client';
 
 test('service-role data client fails closed in production without Command Center auth', () => {
@@ -35,6 +36,21 @@ test('service-role data client is available when production auth is configured',
     assert.equal(connection.role, 'service_role');
     assert.equal(connection.key, 'service-role-key');
   });
+});
+
+test('test fixture detection covers current and legacy proof markers', () => {
+  for (const row of [
+    { metadata: { testRun: true } },
+    { metadata: { proof_issue: 'UTV2-1396' } },
+    { metadata: { proof_fixture_id: 'fixture-1' } },
+    { metadata: { proof_script: 'proof.ts' } },
+    { metadata: { test_key: 'fixture-1' } },
+    { metadata: {}, selection: 'UTV2 proof selection' },
+  ]) {
+    assert.equal(isTestFixturePick(row), true);
+  }
+
+  assert.equal(isTestFixturePick({ metadata: {}, selection: 'Production selection' }), false);
 });
 
 function createEnv(overrides: Partial<AppEnv> = {}): AppEnv {

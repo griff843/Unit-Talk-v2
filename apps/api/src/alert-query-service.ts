@@ -197,7 +197,9 @@ export async function getAlertSignalQuality(
   },
   now: Date = new Date(),
 ): Promise<AlertSignalQualityResponse> {
-  const picks = await repositories.picks.listBySource('alert-agent');
+  const picks = (await repositories.picks.listBySource('alert-agent')).filter(
+    (pick) => !isTestFixturePick(pick),
+  );
   const settled = (
     await Promise.all(
       picks.map(async (pick) => {
@@ -254,6 +256,20 @@ function settleWithinDays(
 ) {
   const cutoff = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
   return records.filter((record) => record.settledAt >= cutoff);
+}
+
+function isTestFixturePick(pick: { metadata: unknown; selection: string }): boolean {
+  if (pick.metadata === null || typeof pick.metadata !== 'object' || Array.isArray(pick.metadata)) {
+    return /proof/i.test(pick.selection);
+  }
+
+  const value = pick.metadata as Record<string, unknown>;
+  return value['testRun'] === true ||
+    value['proof_issue'] != null ||
+    value['proof_fixture_id'] != null ||
+    value['proof_script'] != null ||
+    value['test_key'] != null ||
+    /proof/i.test(pick.selection);
 }
 
 function summarizeSettledAlertPicks(
