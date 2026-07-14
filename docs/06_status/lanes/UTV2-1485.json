@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1485-command-center-alert-definitions-persistence",
   "branch": "codex/utv2-1485-command-center-alert-definitions-persistence",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1210",
   "files_changed": [],
   "file_scope_lock": [
     "apps/command-center/src/app/intel/alerts/**",
@@ -20,14 +20,124 @@
     "docs/06_status/proof/UTV2-1485/verification.md",
     "docs/06_status/proof/UTV2-1485/model-routing.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-14T12:23:41.440Z",
-  "heartbeat_at": "2026-07-14T12:23:41.440Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-14T17:47:32.497Z",
+  "closed_at": "2026-07-14T17:47:32.497Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1485-command-center-alert-definitions-persistence.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T17:36:00.298Z",
+      "verdict": "pass",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1210"
+    },
+    {
+      "checked_at": "2026-07-14T17:36:12.842Z",
+      "verdict": "pass",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1210",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T17:36:12.853Z",
+      "verdict": "fail",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T17:36:25.539Z",
+      "verdict": "fail",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T17:45:36.273Z",
+      "verdict": "pass",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1210",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T17:45:36.278Z",
+      "verdict": "fail",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T17:46:01.050Z",
+      "verdict": "pass",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1210",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T17:46:01.055Z",
+      "verdict": "fail",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T17:46:15.283Z",
+      "verdict": "fail",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T17:47:30.333Z",
+      "verdict": "pass",
+      "merge_sha": "580ca5795fc74bbb9de7fbbcf4bd5b827ea321d0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1210",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-terra-medium",
