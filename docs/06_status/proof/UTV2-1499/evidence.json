@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1499",
+  "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+  "tier": "T1",
+  "verifier": {
+    "identity": "claude/utv2-1499-runtime-operations-governance-chapter",
+    "role": "implementation-lane"
+  },
+  "static_proof": {
+    "pnpm_verify": { "status": "PASS", "exit_code": 0 },
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "note": "This lane is a documentation-only change to docs/05_operations/RUNTIME_OPERATIONS_GOVERNANCE.md (restart-authority PM-gating language). No application, worker, API, or migration code was touched, so there is no runtime behavior to exercise against Supabase. pnpm test:db was still run as the unconditional CI requirement.",
+    "queries": [
+      "pnpm test:db live smoke suite (database-smoke.test.ts) — confirms Supabase connectivity; no query specific to this change exists because no runtime code changed"
+    ],
+    "row_counts": [
+      { "note": "No tables read or written by this lane. No monitored-table row counts apply — governance-doc-only change.", "tables_monitored": [] }
+    ]
+  },
+  "acceptance_criteria": {
+    "restart_authority_no_longer_cites_unratified_source": "PASS",
+    "expected_proof_paths_match_delivered_artifacts": "PASS"
+  },
+  "verdict": "PASS"
+}

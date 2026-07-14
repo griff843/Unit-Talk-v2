@@ -1,5 +1,7 @@
 # UTV2-1499 Diff Summary
 
+MERGE_SHA: 441b6c6f40c878179e23e49935ac91e2160fe9db
+
 ## Change
 
 Adds `docs/05_operations/RUNTIME_OPERATIONS_GOVERNANCE.md` — the minimum enforceable Runtime Operations Governance chapter. Docs-only; no runtime code, no implementation, no deploy.
