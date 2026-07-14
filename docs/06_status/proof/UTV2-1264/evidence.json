@@ -1,0 +1,117 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1264",
+  "title": "Extend CLV resolution to event-scoped game totals",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "status": "ready_for_review",
+  "generated_at": "2026-07-14T17:17:30Z",
+  "sha_binding": {
+    "verified_source_sha": "278aff00a537217843b3294069cf278911fae7e0",
+    "verified_source_note": "Last non-proof commit, containing only lane proof-scope alignment after the verified implementation commit; subsequent commits are proof-only.",
+    "sha_type": "pre_merge_head",
+    "bound_at": "2026-07-14T17:17:30Z",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "merge_gate": "pending",
+      "proof_binding": "validated_at_runtime"
+    }
+  },
+  "verifier": {
+    "identity": "openai-codex-runtime-verifier",
+    "role": "implementation-and-live-proof verification"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "coverage": [
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "test:db",
+        "T1 live proof suites"
+      ]
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "focused_test": {
+      "command": "npx tsx --test apps/api/src/clv-service.test.ts",
+      "status": "PASS",
+      "tests": 38,
+      "pass": 38,
+      "fail": 0,
+      "skipped": 0
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 8,
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 111300
+    },
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "mutation_posture": "read_only",
+    "queries": [
+      "Read canonical game_total_ou picks and retained metadata from picks.",
+      "Resolve canonical aliases through provider_market_aliases.",
+      "Read verified event-scoped closing snapshots from provider_offer_history.",
+      "Check market_universe linkage only to select production-shaped fallback candidates."
+    ],
+    "row_counts": [
+      {
+        "scope": "top 1000 canonical game_total_ou picks",
+        "production_shaped_scanner_rows": 47
+      },
+      {
+        "scope": "1100 scanner game-total rows inspected for retained identity",
+        "rows_with_provider_event_id_and_event_start": 79
+      },
+      {
+        "scope": "read-only retained-identity runtime sample",
+        "sampled": 10,
+        "computed": 10,
+        "post_start_snapshots_selected": 0
+      }
+    ],
+    "receipts": [
+      {
+        "kind": "runtime_replay",
+        "result": "10/10 production-shaped game totals computed through retained provider identity using verified historical snapshots."
+      },
+      {
+        "kind": "cutoff_invariant",
+        "result": "Every selected snapshot timestamp was at or before the retained event start; zero post-start selections."
+      },
+      {
+        "kind": "database_smoke",
+        "result": "pnpm test:db passed 7/7 against the live Supabase project."
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "provider_event_identity_without_local_event": "PASS",
+    "retained_event_start_cutoff": "PASS",
+    "exact_same_day_disambiguation": "PASS",
+    "verified_provider_data_only": "PASS",
+    "no_live_mutation_for_runtime_audit": "PASS"
+  },
+  "verdict": "PASS"
+}
