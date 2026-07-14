@@ -434,6 +434,39 @@ test('trusted resolution: malformed JSON at the resolved ref is skipped, not thr
   assert.deepEqual(manifests, []);
 });
 
+test('trusted resolution excludes parked manifests from active scope evaluation', () => {
+  const source = fakeGitSource({
+    refs: {
+      base: {
+        'docs/06_status/lanes/UTV2-1601.json': JSON.stringify({
+          issue_id: 'UTV2-1601',
+          branch: 'codex/utv2-1601-active-lane',
+          status: 'started',
+          file_scope_lock: ['scripts/ci/file-scope-guard.ts'],
+        }),
+        'docs/06_status/lanes/parked/UTV2-1602.json': JSON.stringify({
+          issue_id: 'UTV2-1602',
+          branch: 'codex/utv2-1602-parked-lane',
+          status: 'started',
+          file_scope_lock: ['scripts/ci/file-scope-guard.ts'],
+        }),
+      },
+      head: {},
+    },
+  });
+
+  const manifests = resolveTrustedManifests(source, 'base', 'head');
+  assert.deepEqual(manifests.map((manifest) => manifest.issue_id), ['UTV2-1601']);
+
+  const result = evaluateFileScopeGuard({
+    prBranch: 'codex/utv2-1601-active-lane',
+    changedFiles: ['scripts/ci/file-scope-guard.ts'],
+    manifests,
+  });
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.conflicts, []);
+});
+
 test('trusted resolution (UTV2-1521 regression): a manifest-embedded scope_override is never honored, even if well-formed', () => {
   // Before UTV2-1521, a well-formed-looking scope_override object embedded in
   // the manifest's head content was trusted directly -- a self-certification
