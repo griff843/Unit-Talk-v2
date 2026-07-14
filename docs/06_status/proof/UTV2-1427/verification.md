@@ -1,5 +1,7 @@
 # PROOF: UTV2-1427
-MERGE_SHA: 7da7b145986c0a630538738aa7f3749b6a9c9633
+MERGE_SHA: eff7993ab2ad4040d93ba901c91fca460971324b
+
+## Verification
 
 ## PM review round 1 — addressed
 
@@ -52,12 +54,42 @@ Advisory (PM-gated) artifacts missing:
   - r4-fault-report [PM-gated]
 ```
 
+## PM review round 2 — live-DB proof
+
+`pnpm test:db` runs a generic smoke test (`apps/api/src/database-smoke.test.ts`)
+that never touched `delivery_kill_switch` specifically — the table's live
+behavior was unproven. Fixing "Require live-DB proof for runtime changes"
+required writing a genuine live-DB proof (`apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts`),
+which surfaced that `20260714120000_add_delivery_kill_switch.sql` had only ever
+been applied to a temporary, since-deleted dev branch (used earlier for type
+generation) — never to the persistent Supabase project. With PM sign-off, the
+migration was applied directly to the live project (`zfzdnfwdarxucxtaojxm`);
+`database.types.ts` was regenerated against the live schema and is unchanged
+(byte-identical to the branch-generated version already in this diff).
+
+```text
+$ npx tsx --test apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+- [x] `setKilled` persists to real Postgres; `isKilled` reads the persisted state back
+- [x] `setKilled` upserts on `target` (one row per target, not one insert per call)
+- [x] `isKilled` fails closed (returns `true`) for a target with no row, against the real database
+- [x] `listAll` surfaces the row with correct field mapping (`actor`, `killed`, `updatedAt`)
+
 ## Routing note
 
 This lane touches Tier C sensitive paths (`apps/worker/**`, `apps/api/src/auth.ts`, `packages/db/src/repositories.ts`, `packages/db/src/runtime-repositories.ts`, `supabase/migrations/**`). It was first dispatched to Codex per the PM's direct instruction, but Codex self-blocked citing `DELEGATION_POLICY.md`'s "Codex is never authorized for Tier C work" rule — confirming this really is a mechanical boundary in this codebase, not just a three-brain heuristic. Re-routed to Claude execution directly; see the UTV2-1427 Linear thread for the full routing-correction note.
 
 ## Known gaps / interim items
 
-- `packages/db/src/database.types.ts`'s `delivery_kill_switch` entry is hand-authored (documented inline in the file) pending `pnpm supabase:types` regeneration once this migration is live in production — the shape matches the migration DDL exactly so the eventual regen is a no-op.
+- `packages/db/src/database.types.ts`'s `delivery_kill_switch` entry was regenerated for real (`pnpm supabase:types`-equivalent) against an applied migration on a temporary isolated Supabase dev branch, deleted after use, and confirmed byte-identical to the prior hand-authored entry — it is no longer hand-authored or pending regeneration.
 - `packages/db/src/schema.ts`'s `canonicalTables`/`canonicalSchema` catalog was not updated to include `delivery_kill_switch` (not in this lane's declared file scope; no CI check currently enforces this catalog's completeness). Recommend a fast T3 follow-up.
 - `r3-shadow-report` and `qa-experience-report` artifacts were attempted but not generated cleanly in this sandbox (missing `@supabase/supabase-js` resolution for the shadow runner; QA experience ran but flagged pre-existing unrelated Discord sandbox issues). R-level verdict is PASS without them; only `r4-fault-report` (PM-gated, not required) is listed as missing.
