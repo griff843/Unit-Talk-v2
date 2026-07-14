@@ -4,10 +4,10 @@
   "lane_type": "governance",
   "executor": "claude",
   "tier": "T1",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1533-post-lock-concurrency-ramp",
-  "branch": "griffadavi/utv2-1533-post-lock-concurrency-ramp",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1533-post-lock-concurrency-ramp",
+  "branch": "claude/utv2-1533-post-lock-concurrency-ramp",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "24696311888e8c24beb530d557efe3e95ee4aa52",
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
@@ -15,25 +15,35 @@
     "docs/06_status/proof/UTV2-1533/verification.md",
     "docs/governance/CONCURRENCY_CONFIG.json",
     "docs/governance/LANE_CONCURRENCY_POLICY.md",
-    "scripts/ops/concurrency-simulation.test.ts"
+    "scripts/ops/concurrency-simulation.test.ts",
+    "scripts/ops/shared.ts",
+    "scripts/ops/shared.test.ts",
+    "scripts/ops/concurrency-config.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1533/evidence.json"
   ],
-  "status": "started",
+  "status": "in_progress",
   "started_at": "2026-07-14T13:13:44.217Z",
-  "heartbeat_at": "2026-07-14T13:13:44.217Z",
+  "heartbeat_at": "2026-07-14T18:28:47.866Z",
   "closed_at": null,
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1533-post-lock-concurrency-ramp.json",
+  "preflight_token": ".out/ops/preflight/claude/utv2-1533-post-lock-concurrency-ramp.json",
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1533-post-lock-concurrency-ramp",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1533-post-lock-concurrency-ramp",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "notes": "Continuation of PR #1213 (branch griffadavi/utv2-1533-post-lock-concurrency-ramp, last accepted head 24696311888e8c24beb530d557efe3e95ee4aa52) onto this canonical claude/ branch, per PM directive: the code-level concurrency implementation is accepted (T1 evidence bundle, 10/4/6 limits, mechanically enforced Hygiene/Governance/Delivery-UI/Verification type caps, schema-validated resume-safe verification_target, early validation, 109/109 targeted tests, pnpm verify green, all review threads resolved). Replaced because griffadavi/... can never satisfy Executor Result Validation's ratified claude/codex branch-prefix contract, which is a required fail-closed CI check. History preserved exactly (git branch, not cherry-pick). PR #1213 stays open as the superseded review record until this continuation is proven healthy."
 }
