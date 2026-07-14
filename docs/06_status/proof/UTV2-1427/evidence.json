@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1427",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "description": "Live, DB-backed, no-code-deploy delivery kill switch for governed Discord targets (best-bets, trader-insights, exclusive-insights), plus a fail-loud ops alert webhook health check.",
+  "status": "COMPLETE",
+  "sha_binding": {
+    "verified_source_sha": "f0c5aad17a9b6d63b53b6e8dc6addd8f20b6ef53",
+    "verified_source_note": "Down-migration script commit — last commit to touch non-proof paths (db/migrations-rollback/20260714120000_add_delivery_kill_switch.down.sql).",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1427-delivery-kill-switch",
+    "role": "implementation-lane"
+  },
+  "static_proof": {
+    "pnpm_verify": {"status": "PASS", "exit_code": 0},
+    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "kill_switch_tests": {
+      "command": "npx tsx --test apps/api/src/routes/kill-switch.test.ts",
+      "status": "PASS"
+    },
+    "worker_runtime_tests": {
+      "command": "npx tsx --test apps/worker/src/worker-runtime.test.ts",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "note": "database.types.ts regenerated for real against an applied migration on an isolated Supabase dev branch (created, migrated, typed, then deleted). Verified byte-identical output before/after.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase smoke passed. No production DB writes by this lane; type regeneration used a temporary isolated dev branch, deleted after use."
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "database_types_regenerated_for_real": "PASS",
+    "get_route_requires_auth": "PASS",
+    "audit_actor_from_trusted_context": "PASS",
+    "health_check_uses_loaded_runtime_config": "PASS",
+    "down_migration_script_present": "PASS",
+    "no_change_to_discord_target_defaults": "PASS — best-bets/trader-insights left at existing enabled:true default; flip explicitly deferred to a separate PM-gated follow-up"
+  },
+  "verdict": "PASS"
+}
