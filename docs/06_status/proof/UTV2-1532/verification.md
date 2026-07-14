@@ -1,3 +1,19 @@
+# PROOF: UTV2-1532
+MERGE_SHA: 2f19d0bed6de0e5f43200cd649226835fcd9a0b5
+
+ASSERTIONS:
+- [x] codex-exec.ts:198's evidence push is self-sufficient regardless of upstream tracking state
+- [x] A regression test covers the no-upstream-tracking first-push path
+- [x] pnpm verify and pnpm test:db are green
+
+EVIDENCE:
+```text
+$ npx tsx --test scripts/ops/codex-exec.test.ts
+# tests 13
+# pass 13
+# fail 0
+```
+
 # UTV2-1532 Verification
 
 **Commit SHA:** bee05f79b29f1c93cb82696f48f73cf3a8f65ecf (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; temporal binding closes the gap per the gate's own advisory note, and `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
