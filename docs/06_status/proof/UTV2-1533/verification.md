@@ -13,7 +13,7 @@ ASSERTIONS:
 - [x] pnpm verify passes clean end to end (multiple independent runs)
 - [x] R-level check reports no triggered R1-R5 rules for this diff (governance config/docs + ops-tooling only, no DB/runtime code)
 - [x] 8 of 9 review threads across PR #1213 (4, all resolved) and PR #1215 (5, 4 resolved) replied to with file:line evidence and resolved; 1 (lane-maximizer's advisory verification-target guess) deliberately left unresolved and deferred to the pre-existing UTV2-1535 follow-up, not a mechanical safety gap
-- [x] Round 8: Branch Discipline Guard reduced from 5 stray cross-issue references to 1 via a message-only history rewrite of this continuation's own 4 commits (accepted_pr_head_sha and everything before it untouched); the 1 remaining reference lives in protected accepted history (commit 343735ba, an ancestor of accepted_pr_head_sha, also present in the still-failing original PR #1213) and cannot be fixed without breaking SHA preservation
+- [ ] Round 8: Branch Discipline Guard -- fixed everything within unilateral authority (this continuation's own stray commit-message references) via a message-only history rewrite (accepted_pr_head_sha and everything before it untouched); still RED because the two origin/main merges pulled in individual commits from other already-shipped lanes as ancestors, and one pre-existing accepted-history commit (343735ba) independently references UTV2-1526 -- none of these are removable without a rebase that would change accepted_pr_head_sha's own SHA, which the continuation directive explicitly forbids. Full breakdown in evidence.json round_8_fix. PM-arbitrable, not self-resolved.
 
 EVIDENCE:
 ```text
