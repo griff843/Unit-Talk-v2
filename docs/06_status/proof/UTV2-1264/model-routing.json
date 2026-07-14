@@ -1,5 +1,6 @@
 {
   "issue_id": "UTV2-1264",
+  "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
   "manifest_schema_version": 2,
   "model_profile": "codex-sol-high",
   "model": "gpt-5.6-sol",

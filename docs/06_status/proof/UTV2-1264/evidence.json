@@ -1,6 +1,7 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1264",
+  "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
   "title": "Extend CLV resolution to event-scoped game totals",
   "tier": "T1",
   "lane_type": "modeling",
