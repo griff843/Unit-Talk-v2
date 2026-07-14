@@ -1,0 +1,429 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * "Signal desk" design system for the Unit Talk public site.
+ *
+ * Point of view: a late-night sports-intelligence desk, not a generic SaaS
+ * template. Warm near-black canvas, ivory ink, one amber "signal" accent,
+ * monospace data typography, sharp notched geometry instead of rounded
+ * card-grid boilerplate. Inspired by dark analytical/trading-desk products
+ * (structure and restraint, not a specific brand's assets or copy).
+ */
+
+:root {
+  --ut-bg-canvas: #08090c;
+  --ut-bg-surface: #0e1013;
+  --ut-bg-surface-elevated: #15171b;
+  --ut-bg-surface-hover: #1c1f24;
+  --ut-border-subtle: #23262b;
+  --ut-border-strong: #383c44;
+  --ut-text-primary: #f3f1ea;
+  --ut-text-secondary: #a7a294;
+  --ut-text-muted: #706c60;
+  --ut-signal: #f0a63c;
+  --ut-signal-strong: #d68d22;
+  --ut-signal-ink: #1a1206;
+  --ut-tick-pos: #4fae7a;
+  --ut-tick-neg: #d16a5e;
+  --ut-line: rgba(243, 241, 234, 0.05);
+  --ut-radius: 3px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--ut-bg-canvas);
+  background-image:
+    radial-gradient(80% 60% at 12% -10%, rgba(240, 166, 60, 0.08) 0%, transparent 55%),
+    radial-gradient(60% 50% at 100% 0%, rgba(243, 241, 234, 0.05) 0%, transparent 50%);
+  color: var(--ut-text-primary);
+  overflow-x: hidden;
+  font-feature-settings: 'tnum' 1;
+}
+
+::selection {
+  background-color: var(--ut-signal);
+  color: var(--ut-signal-ink);
+}
+
+/* ---------- typography ---------- */
+
+.ut-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ut-signal);
+}
+
+.ut-eyebrow::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: var(--ut-signal);
+}
+
+.ut-text-secondary {
+  color: var(--ut-text-secondary);
+}
+
+.ut-text-muted {
+  color: var(--ut-text-muted);
+}
+
+.ut-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.ut-link {
+  color: var(--ut-text-secondary);
+  transition: color 150ms ease;
+}
+
+.ut-link:hover {
+  color: var(--ut-text-primary);
+}
+
+/* ---------- notched panel geometry ---------- */
+/* Signature shape: opposite corners clipped at 45deg. Keep padding >= 20px
+   so clipped corners never intersect content. */
+
+.ut-notch {
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
+}
+
+.ut-notch-sm {
+  clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.ut-panel {
+  position: relative;
+  background-color: var(--ut-bg-surface);
+  border: 1px solid var(--ut-border-subtle);
+}
+
+.ut-panel-elevated {
+  position: relative;
+  background-color: var(--ut-bg-surface-elevated);
+  border: 1px solid var(--ut-border-subtle);
+}
+
+.ut-grid-texture {
+  background-image:
+    linear-gradient(var(--ut-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ut-line) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* ---------- buttons ---------- */
+
+.ut-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    transform 150ms ease;
+}
+
+.ut-btn:active {
+  transform: translateY(1px);
+}
+
+.ut-btn-primary {
+  background-color: var(--ut-signal);
+  color: var(--ut-signal-ink);
+}
+
+.ut-btn-primary:hover {
+  background-color: var(--ut-signal-strong);
+}
+
+.ut-btn-secondary {
+  background-color: transparent;
+  color: var(--ut-text-primary);
+  border: 1px solid var(--ut-border-strong);
+}
+
+.ut-btn-secondary:hover {
+  background-color: var(--ut-bg-surface-hover);
+  border-color: var(--ut-text-muted);
+}
+
+.ut-btn-primary:focus-visible,
+.ut-btn-secondary:focus-visible,
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--ut-signal);
+  outline-offset: 2px;
+}
+
+/* ---------- tags / chips ---------- */
+
+.ut-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--ut-border-strong);
+  padding: 0.1875rem 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ut-text-muted);
+}
+
+.ut-tag-signal {
+  border-color: var(--ut-signal);
+  color: var(--ut-signal);
+}
+
+/* ---------- index rows (replaces generic icon-card grids) ---------- */
+
+.ut-index-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 1.25rem;
+  padding: 1.75rem 0;
+  border-top: 1px solid var(--ut-border-subtle);
+  transition: padding-left 200ms ease;
+}
+
+.ut-index-row:last-child {
+  border-bottom: 1px solid var(--ut-border-subtle);
+}
+
+.ut-index-row:hover {
+  padding-left: 0.5rem;
+}
+
+.ut-index-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--ut-signal);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 200ms ease;
+}
+
+.ut-index-row:hover::before {
+  transform: scaleY(1);
+}
+
+.ut-index-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ut-text-muted);
+  line-height: 1;
+}
+
+/* ---------- ticker marquee ---------- */
+
+.ut-ticker {
+  position: relative;
+  overflow: hidden;
+  border-top: 1px solid var(--ut-border-subtle);
+  border-bottom: 1px solid var(--ut-border-subtle);
+  background-color: var(--ut-bg-surface);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 8%, black 92%, transparent);
+}
+
+.ut-ticker-track {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 2.5rem;
+  padding: 0.875rem 1.25rem;
+}
+
+.ut-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ut-text-secondary);
+  white-space: nowrap;
+}
+
+.ut-ticker-item::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  background-color: var(--ut-signal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ut-ticker-track {
+    animation: none !important;
+  }
+}
+
+/* ---------- live dot ---------- */
+
+.ut-live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--ut-tick-pos);
+}
+
+/* ---------- timeline (how-it-works track) ---------- */
+
+.ut-track {
+  position: relative;
+}
+
+.ut-track::before {
+  content: '';
+  position: absolute;
+  top: 0.9rem;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--ut-border-strong) 0,
+    var(--ut-border-strong) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+@media (max-width: 767px) {
+  .ut-track::before {
+    top: 0;
+    bottom: 0;
+    left: 0.9rem;
+    right: auto;
+    width: 1px;
+    height: auto;
+    background-image: repeating-linear-gradient(
+      180deg,
+      var(--ut-border-strong) 0,
+      var(--ut-border-strong) 6px,
+      transparent 6px,
+      transparent 12px
+    );
+  }
+}
+
+/* ---------- long-form legal content ---------- */
+
+.ut-prose h2 {
+  color: var(--ut-text-primary);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  margin-top: 2.25rem;
+  margin-bottom: 0.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--ut-border-subtle);
+}
+
+.ut-prose h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.ut-prose p,
+.ut-prose li {
+  color: var(--ut-text-secondary);
+  line-height: 1.75;
+  margin-bottom: 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.ut-prose ul {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 1rem;
+}
+
+.ut-prose li {
+  padding-left: 1.25rem;
+  position: relative;
+}
+
+.ut-prose li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--ut-text-muted);
+}
+
+/* ---------- table ---------- */
+
+.ut-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.ut-table th,
+.ut-table td {
+  border-bottom: 1px solid var(--ut-border-subtle);
+  padding: 0.875rem 1rem;
+  text-align: left;
+}
+
+.ut-table thead th {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ut-text-muted);
+}
+
+.ut-table tbody tr:hover {
+  background-color: var(--ut-bg-surface-hover);
+}
+
+.ut-table td.ut-cell-yes {
+  color: var(--ut-tick-pos);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ut-table td.ut-cell-no {
+  color: var(--ut-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
