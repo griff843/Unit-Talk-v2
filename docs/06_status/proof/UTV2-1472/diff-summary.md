@@ -1,5 +1,7 @@
 # UTV2-1472 Diff Summary
 
+MERGE_SHA: 2206156811e6ca2487acc97f60c815d51da0ef4d
+
 ## Change
 
 Updates the dispatch skill files so Claude implementation lanes run as background subagents in their own dedicated worktrees — the same pattern already used for Codex lanes — instead of executing sequentially, synchronously, in the orchestrator's own session.

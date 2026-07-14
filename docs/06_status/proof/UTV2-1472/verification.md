@@ -1,5 +1,5 @@
 # PROOF: UTV2-1472
-MERGE_SHA: f9fd694a756261dd6c9cbe5c8284864def173e0f
+MERGE_SHA: 2206156811e6ca2487acc97f60c815d51da0ef4d
 
 ## Verification
 
@@ -21,6 +21,14 @@ $ pnpm verify:quick
 [automation-coverage] verdict=PASS fail=0 warn=0 classified=15
 Environment files passed validation.
 (lint, type-check clean)
+
+$ pnpm verify
+(exit 0: env:check, lint, type-check, build, pnpm test — full suite including all live-DB T1 proof chains — all green)
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 3
+Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ## Demonstration — acceptance criteria (2+ Claude lanes, overlapping execution windows)
