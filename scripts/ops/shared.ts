@@ -125,6 +125,17 @@ export interface LaneManifest {
    * LANE_MANIFEST_CURRENT_SCHEMA_VERSION's doc comment above for the version boundary.
    */
   model_routing?: ModelRoutingBlock;
+  /**
+   * The target issue this verification lane produces proof for (UTV2-1533 P2 fix).
+   * Required for every schema_version-2 lane_type:"verification" manifest; forbidden on
+   * any other lane_type, at any schema version. There is no reliable existing field to
+   * derive this from -- a verification lane's own issue_id is its own tracking issue,
+   * not necessarily the issue it verifies, and its file_scope_lock (test files, proof
+   * dirs) does not reliably encode a UTV2-### id in the path. Same version-gated
+   * enforcement pattern as model_routing above (checkConcurrencyLimits' per-target cap
+   * in lane-start.ts depends on this being present and trustworthy).
+   */
+  verification_target?: string;
 }
 
 export interface PreflightToken {
@@ -556,6 +567,40 @@ export function normalizeFileScope(pathsToNormalize: string[]): string[] {
   return [...seen].sort((left, right) => left.localeCompare(right));
 }
 
+/**
+ * Canonical Delivery/UI app roots (docs/governance/LANE_TAXONOMY.md §7 "Allowed
+ * paths"). Single source of truth -- do not duplicate this list elsewhere.
+ */
+export const DELIVERY_UI_APP_ROOTS: Readonly<Record<string, string>> = {
+  'command-center': 'apps/command-center/',
+  'discord-bot': 'apps/discord-bot/',
+  'smart-form': 'apps/smart-form/',
+  'qa-agent': 'apps/qa-agent/',
+};
+
+/**
+ * Deterministically derives which Delivery/UI app a lane's file_scope_lock
+ * belongs to (UTV2-1533 P2 fix). Deliberately does NOT infer from free-form
+ * text (issue title, branch name, commit message) -- only from file_scope_lock,
+ * which is validated, canonical, and immutable for lane life. Fails closed
+ * (returns null) when the scope is empty, touches zero canonical app roots, or
+ * spans more than one app -- callers must treat null as "cannot admit this
+ * lane" rather than falling back to a guess.
+ */
+export function deriveDeliveryUiApp(fileScopeLock: string[]): string | null {
+  if (fileScopeLock.length === 0) return null;
+  const apps = new Set<string>();
+  for (const entry of fileScopeLock) {
+    const normalized = entry.replace(/^\.\//, '');
+    const match = Object.entries(DELIVERY_UI_APP_ROOTS).find(([, prefix]) =>
+      normalized.startsWith(prefix),
+    );
+    if (!match) return null;
+    apps.add(match[0]);
+  }
+  return apps.size === 1 ? [...apps][0]! : null;
+}
+
 export function validatePreflightTokenPathValue(
   preflightToken: string,
   options: { requireExistingFile?: boolean } = {},
@@ -842,6 +887,30 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     }
   }
 
+  if (
+    manifest.schema_version === 2 &&
+    manifest.lane_type === 'verification' &&
+    !manifest.verification_target
+  ) {
+    // Mirrors the model_routing fix below (UTV2-1526): presence alone can't distinguish
+    // "predates verification_target" from "deleted from a v2 manifest". schema_version 2
+    // makes deletion detectable and rejected outright.
+    errors.push(
+      `${sourcePath}: schema_version 2 verification-type manifest is missing verification_target (the UTV2-### issue this lane produces proof for -- deleting or omitting it is rejected)`,
+    );
+  }
+
+  if (manifest.verification_target !== undefined) {
+    if (!ISSUE_PATTERN.test(manifest.verification_target)) {
+      errors.push(`${sourcePath}: verification_target must match UTV2-### (got "${manifest.verification_target}")`);
+    }
+    if (manifest.lane_type !== 'verification') {
+      errors.push(
+        `${sourcePath}: verification_target is present but lane_type is "${manifest.lane_type}" -- verification_target is verification-lane-only`,
+      );
+    }
+  }
+
   const isCodexExecutorForVersionCheck =
     manifest.executor === 'codex-cli' || manifest.executor === 'codex-cloud';
   if (manifest.schema_version === 2 && isCodexExecutorForVersionCheck && !manifest.model_routing) {
@@ -1056,6 +1125,12 @@ export function createManifest(input: {
   requireExistingPreflightToken?: boolean;
   model_routing?: ModelRoutingBlock;
   /**
+   * The target issue this verification lane produces proof for. Required for
+   * lane_type:"verification" at schema_version 2; forbidden on any other
+   * lane_type. See the LaneManifest.verification_target doc comment.
+   */
+  verification_target?: string;
+  /**
    * Schema version to write. Defaults to LANE_MANIFEST_CURRENT_SCHEMA_VERSION (2) for
    * every real lane-start call. The only sanctioned reason to pass `1` is constructing a
    * legacy-manifest fixture in a test that specifically exercises the schema_version-1
@@ -1084,6 +1159,22 @@ export function createManifest(input: {
         `model_routing is Codex-only -- Claude lanes must never carry an executable Codex model configuration.`,
     );
   }
+  const isVerificationLane = input.lane_type === 'verification';
+  if (isVerificationLane && schemaVersion === 2 && !input.verification_target) {
+    throw new Error(
+      `Verification lane ${input.issue_id} requires a verification_target at creation time (schema_version 2): ` +
+        `the UTV2-### issue this lane produces proof for. Pass --verification-target to ops:lane-start.`,
+    );
+  }
+  if (!isVerificationLane && input.verification_target) {
+    throw new Error(
+      `Lane ${input.issue_id} has lane_type "${input.lane_type ?? 'unset'}" but a verification_target was supplied. ` +
+        `verification_target is verification-lane-only.`,
+    );
+  }
+  if (input.verification_target && !ISSUE_PATTERN.test(input.verification_target)) {
+    throw new Error(`verification_target must match UTV2-### (got "${input.verification_target}")`);
+  }
   return {
     schema_version: schemaVersion,
     issue_id: input.issue_id,
@@ -1108,6 +1199,7 @@ export function createManifest(input: {
     truth_check_history: [],
     reopen_history: [],
     ...(input.model_routing ? { model_routing: input.model_routing } : {}),
+    ...(input.verification_target ? { verification_target: input.verification_target } : {}),
   };
 }
 

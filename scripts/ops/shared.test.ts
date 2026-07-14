@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   createManifest,
   defaultProofPaths,
+  deriveDeliveryUiApp,
   normalizeFileScopePath,
   normalizeRepoRelativePath,
   validateBranchName,
@@ -404,4 +405,128 @@ test('validateManifest accepts Windows absolute worktree paths on non-Windows ru
     entry.includes('worktree_path') || entry.includes('execution_location.cwd'),
   );
   assert.deepStrictEqual(errors, []);
+});
+
+// ── verification_target (UTV2-1533 P2 fix) — mirrors the model_routing pattern above ──
+
+test('createManifest requires verification_target for a verification lane (UTV2-1533)', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1533',
+        tier: 'T2',
+        branch: 'codex/utv2-1533-no-target',
+        worktree_path: worktreePathForBranch('codex/utv2-1533-no-target'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1533', 'T2'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1533-no-target.json',
+        lane_type: 'verification',
+      }),
+    /requires a verification_target at creation time/,
+  );
+});
+
+test('createManifest allows a schema_version-1 verification fixture to omit verification_target (legacy compatibility)', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1533',
+    tier: 'T2',
+    branch: 'codex/utv2-1533-legacy-verification',
+    worktree_path: worktreePathForBranch('codex/utv2-1533-legacy-verification'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1533', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1533-legacy-verification.json',
+    lane_type: 'verification',
+    schema_version: 1,
+  });
+  assert.strictEqual(manifest.schema_version, 1);
+  assert.strictEqual(manifest.verification_target, undefined);
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  assert.deepStrictEqual(validateManifest(manifest), []);
+});
+
+test('validateManifest rejects a schema_version-2 verification manifest with verification_target deleted', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1533',
+    tier: 'T2',
+    branch: 'codex/utv2-1533-deletion-attack',
+    worktree_path: worktreePathForBranch('codex/utv2-1533-deletion-attack'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1533', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1533-deletion-attack.json',
+    lane_type: 'verification',
+    verification_target: 'UTV2-9001',
+  });
+  assert.strictEqual(manifest.schema_version, 2);
+  delete (manifest as { verification_target?: unknown }).verification_target;
+  assert.match(
+    validateManifest(manifest).join('\n'),
+    /schema_version 2 verification-type manifest is missing verification_target/,
+  );
+});
+
+test('createManifest rejects verification_target on a non-verification lane', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1533',
+        tier: 'T2',
+        branch: 'codex/utv2-1533-misapplied-target',
+        worktree_path: worktreePathForBranch('codex/utv2-1533-misapplied-target'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1533', 'T2'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1533-misapplied-target.json',
+        lane_type: 'hygiene',
+        verification_target: 'UTV2-9001',
+      }),
+    /verification_target is verification-lane-only/,
+  );
+});
+
+test('createManifest rejects a malformed verification_target', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1533',
+        tier: 'T2',
+        branch: 'codex/utv2-1533-bad-target',
+        worktree_path: worktreePathForBranch('codex/utv2-1533-bad-target'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1533', 'T2'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1533-bad-target.json',
+        lane_type: 'verification',
+        verification_target: 'not-an-issue-id',
+      }),
+    /verification_target must match UTV2-###/,
+  );
+});
+
+// ── deriveDeliveryUiApp (UTV2-1533 P2 fix) ─────────────────────────────────────────
+
+test('deriveDeliveryUiApp identifies the single app for a scoped Delivery/UI lane', () => {
+  assert.strictEqual(
+    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'apps/command-center/src/components/Card.tsx']),
+    'command-center',
+  );
+  assert.strictEqual(deriveDeliveryUiApp(['apps/discord-bot/src/formatter.ts']), 'discord-bot');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/smart-form/src/flow.ts']), 'smart-form');
+  assert.strictEqual(deriveDeliveryUiApp(['apps/qa-agent/src/scaffold.ts']), 'qa-agent');
+});
+
+test('deriveDeliveryUiApp fails closed on empty scope', () => {
+  assert.strictEqual(deriveDeliveryUiApp([]), null);
+});
+
+test('deriveDeliveryUiApp fails closed when scope spans more than one app', () => {
+  assert.strictEqual(
+    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'apps/discord-bot/src/formatter.ts']),
+    null,
+  );
+});
+
+test('deriveDeliveryUiApp fails closed when a path is outside any canonical app root', () => {
+  assert.strictEqual(
+    deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'scripts/ops/shared.ts']),
+    null,
+  );
 });

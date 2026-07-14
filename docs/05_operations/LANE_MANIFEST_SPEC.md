@@ -318,3 +318,17 @@ Canonical policy (concrete model IDs, reasoning efforts, enabled/disabled, permi
 **Fail-closed conditions** (creation or execution refuses to proceed): unknown profile, disabled profile, profile not permitted for the lane's tier, missing/invalid manual-override authority+reason on a profile that requires one, manifest's `model`/`reasoning_effort` no longer matching what current policy defines for that profile (drift/tamper), and manifest `model_routing.policy_version` not matching the currently loaded policy's version.
 
 A `model_routing` decision — including any manual override — never implies merge, scope, or tier authority. It only selects which Codex model and reasoning effort execute a lane whose tier, scope, and merge gates were already satisfied independently.
+
+## 16. Verification-lane target (UTV2-1533)
+
+Optional field `verification_target` (schema: `docs/05_operations/schemas/lane_manifest_v1.schema.json`) records the UTV2-### issue a `lane_type: "verification"` lane produces proof for. There is no reliable existing field to derive this from: a verification lane's own `issue_id` is its own tracking issue, not necessarily the issue it verifies, and `file_scope_lock` (test files, `docs/06_status/proof/**`) does not reliably encode a target `UTV2-###` in the path.
+
+```json
+{ "verification_target": "UTV2-1327" }
+```
+
+**Who writes it:** `ops:lane-start` only, at manifest creation, via the `--verification-target <UTV2-###>` CLI flag — never a later `update`. Required (creation fails without it) for any `schema_version: 2` manifest with `lane_type: "verification"`. Forbidden (creation fails if present) for any other `lane_type`, at any schema version.
+
+**Compatibility cutoff:** `schema_version 2` is the real boundary (same shape as `model_routing`'s UTV2-1526 fix above, and the same reasoning: field presence alone cannot distinguish "predates this field" from "deleted from a schema_version-2 manifest"). `schema_version: 1` verification manifests may lack `verification_target`; `schema_version: 2` verification manifests must carry a valid one, and deleting it fails `validateManifest`.
+
+**What it's for:** `checkConcurrencyLimits()` in `scripts/ops/lane-start.ts` uses it to enforce the per-target Verification cap (`docs/governance/CONCURRENCY_CONFIG.json`'s `type_caps.verification.max_per_target`, default 1 — see `docs/governance/LANE_CONCURRENCY_POLICY.md` §1). An active verification lane whose `verification_target` cannot be determined (a legacy `schema_version: 1` manifest with no target) blocks every new verification lane start until it is resolved or closed — fail-closed, not a silent pass.

@@ -134,6 +134,11 @@
         }
       },
       "additionalProperties": false
+    },
+    "verification_target": {
+      "type": "string",
+      "pattern": "^UTV2-[0-9]+$",
+      "description": "The UTV2-### issue this verification lane produces proof for (UTV2-1533). Required on a schema_version-2 lane_type:\"verification\" manifest (deleting it fails validation); optional/legacy on schema_version-1; forbidden on any other lane_type, at any schema version. Backs the per-target Verification concurrency cap in docs/governance/CONCURRENCY_CONFIG.json's type_caps.verification.max_per_target."
     }
   },
   "additionalProperties": true,
@@ -156,6 +161,27 @@
         "required": ["executor"]
       },
       "then": { "not": { "required": ["model_routing"] } }
+    },
+    {
+      "description": "schema_version 2 + lane_type:verification requires verification_target (UTV2-1533 P2 fix -- same deletion-attack shape as model_routing above; scripts/ops/shared.ts#validateManifest enforces this at runtime, this schema documents it).",
+      "if": {
+        "properties": {
+          "schema_version": { "const": 2 },
+          "lane_type": { "const": "verification" }
+        },
+        "required": ["schema_version", "lane_type"]
+      },
+      "then": { "required": ["verification_target"] }
+    },
+    {
+      "description": "A non-verification-type manifest must never carry verification_target, at any schema version.",
+      "if": {
+        "not": {
+          "properties": { "lane_type": { "const": "verification" } },
+          "required": ["lane_type"]
+        }
+      },
+      "then": { "not": { "required": ["verification_target"] } }
     }
   ]
 }

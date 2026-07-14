@@ -34,6 +34,14 @@ These limits are hard caps enforced by `ops:lane-start`. The command refuses if 
 
 Active means `status ∈ {started, in_progress, in_review, blocked, reopened}`. Closed (`done`) and stale manifests older than 48h do not count toward these limits.
 
+**Mechanization note (UTV2-1533 P2 fix, 2026-07-14):** the Hygiene/Governance/Delivery-UI/Verification rows above were prose-only until this fix — `ops:lane-start` enforced total, executor, singleton, and forbidden-combination limits, but nothing read a per-type distribution cap, so a fifth Hygiene or fourth Governance lane (or two Delivery/UI lanes on the same app, or two Verification lanes on the same target) could be admitted whenever executor slots and file scopes allowed it (flagged in PR #1213 review). Now backed by `docs/governance/CONCURRENCY_CONFIG.json`'s `type_caps` block and `checkConcurrencyLimits()` in `scripts/ops/lane-start.ts`:
+
+- **Hygiene / Governance** are simple active-count checks against `type_caps.hygiene` / `type_caps.governance`.
+- **Delivery/UI** app identity is derived deterministically from the lane's own `file_scope_lock` against the four canonical app roots in `docs/governance/LANE_TAXONOMY.md` §7 (`deriveDeliveryUiApp()` in `scripts/ops/shared.ts`) — never inferred from free-form text (title, branch, commit message). A lane whose scope doesn't map to exactly one app root is refused (`delivery_ui_app_undetermined`), not guessed.
+- **Verification** target identity has no reliable existing field to derive from (a verification lane's own `issue_id` is its own tracking issue, not necessarily what it verifies) — backed by a new validated `verification_target` manifest field (`docs/05_operations/LANE_MANIFEST_SPEC.md` §16), required for every `schema_version: 2` Verification manifest via `--verification-target <UTV2-###>` at `ops:lane-start` time. An active Verification lane whose target can't be determined (a legacy manifest with no `verification_target`) blocks every new Verification lane start until resolved — fail-closed, not a silent pass.
+- Both are layered on top of, not a replacement for, the total/executor caps — a lane must clear all applicable checks.
+- Trial-mode headroom (§11) never widens `type_caps` — it is always sourced from base config, confirmed by test (`scripts/ops/concurrency-simulation.test.ts`, "trial activation does not silently remove type-level protections").
+
 ---
 
 ## 2. File-scope lock precedence

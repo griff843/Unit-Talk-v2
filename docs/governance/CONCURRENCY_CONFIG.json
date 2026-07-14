@@ -14,6 +14,12 @@
     ["runtime", "runtime"],
     ["modeling", "modeling"]
   ],
+  "type_caps": {
+    "hygiene": 4,
+    "governance": 3,
+    "delivery-ui": { "max_per_app": 1 },
+    "verification": { "max_per_target": 1 }
+  },
   "trial": {
     "enabled": false,
     "total": 14,
