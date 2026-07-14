@@ -7,6 +7,8 @@
 | `pnpm type-check` | Passed — TypeScript project references completed without errors. |
 | `pnpm test` | Passed — root aggregate test suite completed successfully. |
 | `pnpm test:db` | Passed — live database repository smoke test passed (1 test, 0 failures). |
+| `pnpm verify` | Passed — full repository gate (env:check, lint, type-check, build, test, live-DB smoke) completed successfully. |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | Passed — Verdict: PASS, no R-level artifacts required for this diff. |
 | `git diff --check origin/main...HEAD` | Passed — no whitespace errors. |
 | Model-routing validation | Passed — `jq -e` confirmed issue ID, schema version, selected model/profile, medium reasoning effort, no legacy compatibility or override, and exit code `0`. |
 
