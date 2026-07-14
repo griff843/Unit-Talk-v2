@@ -1,3 +1,18 @@
+# PROOF: UTV2-1485
+MERGE_SHA: 71eda96e7dff2ba91342a2480c19d8be33f1c972
+
+ASSERTIONS:
+- [x] Internal-only, browser-local persistence — no schema/migration/API changes
+- [x] Missing server-side persistence remains clearly labeled in the UI
+- [x] pnpm verify and pnpm test:db are green
+
+EVIDENCE:
+```text
+$ npx tsx --test apps/command-center/src/lib/alert-builder.test.ts
+# pass 10
+# fail 0
+```
+
 # UTV2-1485 Verification
 
 **Commit SHA:** ca0c2c59fa2a190229f84811c9036c59cca349f5 (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
