@@ -1,5 +1,5 @@
 # PROOF: UTV2-1396
-MERGE_SHA: c92a3701ec220211c1e5e984688964f469d70a16
+MERGE_SHA: d90ff5bf82f968b2ad3bb6ccc5fcfda32229c80b
 
 ## Verification
 
@@ -20,6 +20,9 @@ $ npx tsx --test apps/api/src/alert-query-service.test.ts apps/command-center/sr
 
 $ pnpm verify
 (exit 0: env:check, lint, type-check, build, test, test:db, and repository live-proof suite green)
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
 ```
 
 No database-writing verification was added for this T2 read-path change; no scanner or runtime configuration was changed.
