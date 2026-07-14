@@ -1,4 +1,4 @@
-import { getDataClient } from './client';
+import { getDataClient, isTestFixturePick } from './client';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -125,8 +125,7 @@ async function enrichPickRowsWithIdentity(client: Client, rows: Array<JsonObject
 }
 
 function isFixtureLikePick(row: JsonObject) {
-  const metadata = readJsonObject(row['metadata']);
-  return Boolean(typeof metadata?.['proof_fixture_id'] === 'string' || typeof metadata?.['proof_script'] === 'string' || typeof metadata?.['test_key'] === 'string');
+  return isTestFixturePick(row);
 }
 
 function splitProviderBookKey(providerKey: string) {
