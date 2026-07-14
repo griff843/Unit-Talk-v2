@@ -157,15 +157,30 @@ export function checkConcurrencyLimits(
             'Cannot admit a Delivery/UI lane whose app cannot be determined from its declared scope.',
         });
       } else {
-        const conflictingApp = active.find((m) => {
-          if (String(m.lane_type ?? '') !== 'delivery-ui') return false;
-          return deriveDeliveryUiApp(m.file_scope_lock ?? []) === incomingApp;
-        });
-        if (conflictingApp) {
+        const activeDeliveryUi = active.filter((m) => String(m.lane_type ?? '') === 'delivery-ui');
+        // Fail closed (Codex review, PR #1215): an active Delivery/UI lane whose own scope
+        // cannot be reduced to one canonical app must never be treated as non-conflicting --
+        // deriveDeliveryUiApp() returning null for it is "cannot prove which app", not "proven
+        // to be a different app". Mirrors the identical fail-closed treatment already applied
+        // to undetermined active Verification lanes above.
+        const undeterminedActive = activeDeliveryUi.find(
+          (m) => deriveDeliveryUiApp(m.file_scope_lock ?? []) === null,
+        );
+        if (undeterminedActive) {
           violations.push({
-            code: 'delivery_ui_app_conflict',
-            message: `Delivery/UI app "${incomingApp}" already has an active lane (${conflictingApp.issue_id}). Only one Delivery/UI lane per app at a time.`,
+            code: 'delivery_ui_app_undetermined_conflict',
+            message: `Active Delivery/UI lane ${undeterminedActive.issue_id} has a file_scope_lock that cannot be reduced to one canonical app -- cannot prove it targets a different app than "${incomingApp}". Fails closed: resolve or close ${undeterminedActive.issue_id} first.`,
           });
+        } else {
+          const conflictingApp = activeDeliveryUi.find(
+            (m) => deriveDeliveryUiApp(m.file_scope_lock ?? []) === incomingApp,
+          );
+          if (conflictingApp) {
+            violations.push({
+              code: 'delivery_ui_app_conflict',
+              message: `Delivery/UI app "${incomingApp}" already has an active lane (${conflictingApp.issue_id}). Only one Delivery/UI lane per app at a time.`,
+            });
+          }
         }
       }
     }
@@ -508,7 +523,7 @@ function main(): void {
     // Same resume-vs-new-lane reasoning as model-profile above: only required/consumed
     // on the path that calls createManifest for a brand-new verification lane.
     const isVerificationLaneType = canonicalLaneType === 'verification';
-    const verificationTargetFlag = flags.get('verification-target')?.at(-1);
+    let verificationTargetFlag = flags.get('verification-target')?.at(-1);
     if (!isVerificationLaneType && verificationTargetFlag) {
       emitJson({
         ok: false,
@@ -523,7 +538,14 @@ function main(): void {
     // first line of defense.)
     if (verificationTargetFlag) {
       try {
-        requireIssueId(verificationTargetFlag);
+        // Codex review fix (PR #1215): requireIssueId() normalizes (uppercases) internally but
+        // only its RETURN VALUE reflects that -- discarding it and reusing the raw flag left a
+        // lower-case input (e.g. "utv2-123") passing this check via requireIssueId's own
+        // uppercasing, then failing ISSUE_PATTERN's case-sensitive test deep inside
+        // createManifest(), after branch/worktree/lease side effects had already run. Reassign
+        // to the normalized value so every downstream consumer (checkConcurrencyLimits,
+        // createManifest, the resume-backfill comparison) sees the same canonical form.
+        verificationTargetFlag = requireIssueId(verificationTargetFlag);
       } catch {
         emitJson({
           ok: false,

@@ -5,7 +5,7 @@
   "continuation": {
     "superseded_pr": "https://github.com/griff843/Unit-Talk-v2/pull/1213",
     "superseded_branch": "griffadavi/utv2-1533-post-lock-concurrency-ramp",
-    "reason": "griffadavi/... can never satisfy Executor Result Validation's ratified claude/- or codex/-prefixed branch contract, a required fail-closed CI check. The implementation is unchanged and accepted at the code level (structured T1 evidence, 10/4/6 limits, mechanically enforced type caps, schema-validated resume-safe verification_target, early validation, 109/109 tests, pnpm verify green, all review threads resolved). History preserved exactly via `git branch` from the accepted head, not cherry-picked or reconstructed.",
+    "reason": "griffadavi/... can never satisfy Executor Result Validation's ratified claude/- or codex/-prefixed branch contract, a required fail-closed CI check. The implementation is unchanged and accepted at the code level (structured T1 evidence, 10/4/6 limits, mechanically enforced type caps, schema-validated resume-safe verification_target, early validation, 112/112 tests, pnpm verify green, all review threads resolved). History preserved exactly via `git branch` from the accepted head, not cherry-picked or reconstructed.",
     "continuation_branch": "claude/utv2-1533-post-lock-concurrency-ramp"
   },
   "sha_binding": {
@@ -20,7 +20,7 @@
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "r_level_check": "PASS",
-      "targeted_tests_109_of_109": "PASS",
+      "targeted_tests_112_of_112": "PASS",
       "pnpm_verify": "PASS",
       "pnpm_test_db_via_t1_proof_gate_ci": "PASS -- CI's \"T1 Proof Gate\" job (proof-gate.yml, job t1-proof, step \"C2 — live-DB proof execution\") runs `pnpm ci:db-smoke` (pnpm test:db equivalent) unconditionally for T1 PRs and is a hard gate within that job; the T1 Proof Gate check-run reported SUCCESS on PR #1213 at the accepted head, so this CI-run test:db execution did occur and passed, even though it was not separately re-invoked by the executor in the local session. See t1_proof_gate below for the correction this replaces."
     }
@@ -89,10 +89,10 @@
     "targeted_tests": {
       "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts",
       "status": "PASS",
-      "tests": 109,
-      "pass": 109,
+      "tests": 112,
+      "pass": 112,
       "fail": 0,
-      "note": "concurrency-simulation.test.ts: 37/37 (23 pre-existing + 14 PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 9/9 (7 pre-existing + 2 round-3 regression tests for the Codex-review resume-backfill and early-validation fixes). lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string). Independently re-confirmed clean in the continuation worktree."
+      "note": "concurrency-simulation.test.ts: 39/39 (23 pre-existing + 14 PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config + 2 round-5 tests for the Delivery/UI undetermined-active-lane fail-closed fix). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 10/10 (7 pre-existing + 2 round-3 regression tests for the Codex-review resume-backfill and early-validation fixes + 1 round-5 test for the verification-target normalization fix). lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string). Independently re-confirmed clean on PR #1215's final head."
     },
     "pnpm_verify": {
       "command": "pnpm verify",
@@ -107,6 +107,11 @@
     "t1_proof_gate_correction": "PM review caught an inaccuracy in an earlier round of this document: 'pnpm test:db was NOT run for this lane' was true only for the local executor session, and was written in a way that could be read as claiming no test:db execution occurred anywhere for this PR. That was wrong. CI's \"T1 Proof Gate\" job (.github/workflows/proof-gate.yml, job t1-proof) runs a hard-gated \"C2 — live-DB proof execution\" step that executes `pnpm ci:db-smoke` (the pnpm test:db equivalent) unconditionally for every T1 PR unless a narrow schema-parity exception applies (it does not here -- this manifest has no runtime_proof_kind field). The T1 Proof Gate check-run reported SUCCESS on PR #1213 at the accepted head, meaning C2 (and therefore pnpm test:db) genuinely ran and passed in CI. That CI execution is the applicable T1 runtime-verification step for this diff and is not being denied here.",
     "test_db_statement": "R-level check (file-path-triggered, not tier-label-driven) independently confirms no rule requiring a local pnpm test:db invocation was triggered by this diff's specific files. The executor did not separately re-run pnpm test:db locally for that reason. Separately and correctly: CI's T1 Proof Gate DID execute pnpm test:db (via ci:db-smoke) as part of its own required C2 step, and it passed -- see t1_proof_gate_correction above."
   },
+  "round_5_fixes": {
+    "source": "Fresh Codex review triggered against the replacement PR #1215's initial head (27dcf5cf), both P2 severity, both real bugs in this issue's own round-2/round-3 code -- not pre-existing accepted code, and not a redesign of the accepted implementation.",
+    "delivery_ui_fail_open_on_undetermined_active_lane": "FIXED -- the per-app conflict check compared the incoming lane's derived app against each active Delivery/UI lane's derived app, but an active lane whose own file_scope_lock could not be reduced to one canonical app (deriveDeliveryUiApp() returns null) always compared as non-conflicting (`null === incomingApp` is false), silently admitting a same-app collision. Codex cited a live example: the workspace's own active UTV2-1396 manifest has this exact shape. Fixed by mirroring the identical fail-closed treatment already applied to undetermined active Verification lanes -- an undetermined active Delivery/UI lane now blocks any new Delivery/UI lane start (delivery_ui_app_undetermined_conflict) rather than being silently skipped. 2 new tests.",
+    "verification_target_normalization_discarded": "FIXED -- requireIssueId() normalizes (uppercases) its input and returns the normalized value, but the early-validation call discarded that return value, so a lower-case --verification-target (e.g. \"utv2-123\") passed the early check via requireIssueId's own internal uppercasing, then reached createManifest's case-sensitive ISSUE_PATTERN test as the original lower-case string and failed AFTER createBranchAndWorktree/reserveLease had already run -- the exact orphaned-state case the early check exists to prevent. Fixed by declaring verificationTargetFlag with `let` and reassigning it to requireIssueId()'s normalized return value, so every downstream consumer sees the canonical form. 1 new test."
+  },
   "acceptance_criteria": {
     "type_caps_machine_readable_config": "PASS -- docs/governance/CONCURRENCY_CONFIG.json type_caps + concurrency-config.ts TypeCapsConfig",
     "hygiene_governance_simple_caps_enforced": "PASS -- checkConcurrencyLimits() active-count checks, tests 4 and 5",
@@ -119,7 +124,7 @@
     "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
     "no_placeholders": "PASS -- every field is either a real captured value or an explicit not-yet-available note (current_pr_head_sha pending the replacement PR's actual head)",
     "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state the replacement PR is open, unmerged",
-    "fresh_codex_review_findings_addressed": "PASS -- 2 P2 findings from the round-2 Codex review (resume path skips --verification-target backfill; malformed target validated too late) both fixed in round 3, with 2 new regression tests",
+    "fresh_codex_review_findings_addressed": "PASS -- 2 P2 findings from the round-2 Codex review on PR #1213 (resume path skips --verification-target backfill; malformed target validated too late) fixed in round 3; 2 more P2 findings from a fresh Codex review on PR #1215 (Delivery/UI fail-open on undetermined active lane; verification-target normalization discarded) fixed in round 5 -- see round_5_fixes above. 6 total review threads across both PRs, all replied to and resolved.",
     "continuation_history_preserved": "PASS -- claude/utv2-1533-post-lock-concurrency-ramp created via `git branch <name> 24696311...`, not cherry-picked or reconstructed; full commit history intact",
     "continuation_metadata_truthful": "PASS -- lane manifest branch/worktree_path/execution_location.cwd/preflight_token/commit_sha/status/file_scope_lock all repaired to match the new branch; old branch's lease released, new lease reserved with the full accepted file scope",
     "scope_accounting_corrected": "PASS -- 9 expanded-scope files (not 8): the round-2 accounting omitted scripts/ops/lane-start.test.ts, added in round 3 -- corrected below"

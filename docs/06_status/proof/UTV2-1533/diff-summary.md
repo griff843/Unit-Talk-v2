@@ -3,7 +3,7 @@
 **Issue:** UTV2-1533 — Post-lock concurrency ramp: raise ceiling to 10 active lanes (4 Claude + 6 Codex)
 **Tier:** T1 (governance-critical)
 **Lane type:** governance
-**Status:** Round 4 — continuation onto a canonical `claude/` branch, superseding PR #1213 (accepted at the code level; see round 3 close-out and PM continuation directive below). Replacement PR **not merged**.
+**Status:** Round 5 — 2 fresh Codex-review findings on the replacement PR (#1215) fixed below. Replacement PR **not merged**.
 
 ## Files changed (cumulative, vs origin/main — generated via `git diff --stat origin/main...HEAD`, not hand-typed)
 
@@ -28,7 +28,16 @@ $ git diff --stat origin/main...HEAD -- docs/governance/CONCURRENCY_CONFIG.json 
 
 Plus control-plane/proof files (exempt from file-scope-lock, no override needed): `docs/06_status/lanes/UTV2-1533.json`, `.ops/sync/UTV2-1533.yml`, `docs/06_status/proof/UTV2-1533/{.gitkeep,diff-summary.md,evidence.json,verification.md}`.
 
-## Round 4 (this round — continuation onto claude/ branch, superseding PR #1213)
+## Round 5 (this round — 2 fresh Codex-review findings on PR #1215, both fixed)
+
+A fresh Codex review triggered against the replacement PR's initial head surfaced 2 more real bugs in `scripts/ops/lane-start.ts`, both introduced by this issue's own round-2/round-3 work (not pre-existing accepted code):
+
+1. **Delivery/UI active-lane fail-open on an undetermined app.** The per-app conflict check derived the incoming lane's app and compared it against each active Delivery/UI lane's derived app — but if an *active* lane's own `file_scope_lock` couldn't be reduced to one canonical app (`deriveDeliveryUiApp()` returns `null`), the comparison `null === incomingApp` was always `false`, so that active lane was silently treated as non-conflicting regardless of the incoming app. Codex cited a live example: the workspace's own active UTV2-1396 manifest has this exact shape. Fixed: mirrors the existing fail-closed treatment for undetermined active Verification lanes — an active Delivery/UI lane with an undetermined app now blocks *any* new Delivery/UI lane start (`delivery_ui_app_undetermined_conflict`) until resolved, rather than being silently skipped.
+2. **Verification-target normalization discarded.** `requireIssueId()` normalizes (uppercases) its input internally and returns the normalized value, but the early-validation call only used it to check for a thrown error — the return value was discarded, so a lower-case `--verification-target utv2-123` passed the early check (via `requireIssueId`'s own internal uppercasing) but then reached `createManifest()`'s case-sensitive `ISSUE_PATTERN` test as the original lower-case string, failing *after* `createBranchAndWorktree`/`reserveLease` had already run — the exact orphaned-state case the early check exists to prevent. Fixed: `verificationTargetFlag` is now declared `let` and reassigned to `requireIssueId()`'s normalized return value, so every downstream consumer (the concurrency check, `createManifest`, the resume-backfill comparison) sees the same canonical form.
+
+3 new regression tests: 2 functional tests in `concurrency-simulation.test.ts` (active-lane-undetermined-conflict, and a same-fix regression guard confirming a genuinely different active app is still accepted) and 1 static source-order/content test in `lane-start.test.ts` (confirms `verificationTargetFlag` is `let`-declared and reassigned from `requireIssueId()`'s return value, not discarded).
+
+## Round 4 (continuation onto claude/ branch, superseding PR #1213)
 
 PM directive: the concurrency implementation is accepted at the code level (structured T1 evidence, 10/4/6 limits, mechanically enforced type caps, schema-validated resume-safe `verification_target`, early validation, 109/109 tests, `pnpm verify` green, all review threads resolved) — do not redesign or repeat it. Replace PR #1213 with a canonically-named continuation because `griffadavi/...` can never satisfy `Executor Result Validation`'s ratified `claude/`- or `codex/`-prefixed branch contract, a required fail-closed CI check.
 

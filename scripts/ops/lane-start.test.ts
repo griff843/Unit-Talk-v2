@@ -192,3 +192,36 @@ test('lane-start validates verification_target format before creating branch/wor
       'validating it only inside createManifest happens too late, after real branch/worktree/lease side effects',
   );
 });
+
+// PR #1215 Codex review fix: requireIssueId() normalizes (uppercases) internally, but a
+// discarded return value means a lower-case --verification-target passes this early check
+// (via requireIssueId's own normalization) yet still reaches createManifest's case-sensitive
+// ISSUE_PATTERN check as the original lower-case string, failing after branch/worktree/lease
+// side effects had already run -- the exact orphaned-state case this early check exists to
+// prevent. verificationTargetFlag must be declared with `let` and reassigned to the
+// normalized return value, not left as a `const` alias to the raw flag.
+test('lane-start normalizes verification_target from requireIssueId before any downstream use', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  assert.match(
+    source,
+    /let verificationTargetFlag = flags\.get\('verification-target'\)\?\.at\(-1\);/,
+    'verificationTargetFlag must be declared with `let` (it is reassigned after normalization), not `const`',
+  );
+
+  const malformedCheckIndex = source.indexOf("code: 'verification_target_malformed'");
+  assert.notStrictEqual(malformedCheckIndex, -1, 'expected the verification_target_malformed precondition block');
+  const tryBlockStart = source.lastIndexOf('try {', malformedCheckIndex);
+  const requireIssueIdCallIndex = source.indexOf('requireIssueId(verificationTargetFlag)', tryBlockStart);
+  assert.notStrictEqual(requireIssueIdCallIndex, -1, 'expected a requireIssueId(verificationTargetFlag) call inside the try block');
+
+  const reassignmentLine = source.slice(
+    source.lastIndexOf('\n', requireIssueIdCallIndex) + 1,
+    source.indexOf('\n', requireIssueIdCallIndex),
+  ).trim();
+  assert.strictEqual(
+    reassignmentLine,
+    'verificationTargetFlag = requireIssueId(verificationTargetFlag);',
+    `requireIssueId's normalized return value must be reassigned back to verificationTargetFlag, not discarded -- found: "${reassignmentLine}"`,
+  );
+});

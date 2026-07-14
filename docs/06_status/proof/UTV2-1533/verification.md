@@ -9,18 +9,18 @@ ASSERTIONS:
 - [x] verification_target is resume-safe: ops:lane:resume backfills it from the existing manifest and excludes the incoming issue's own active manifest from the conflict-search set
 - [x] A malformed --verification-target is validated before createBranchAndWorktree/reserveLease run, preventing orphaned branch/worktree/lease state
 - [x] T1 evidence.json bundle exists at docs/06_status/proof/UTV2-1533/evidence.json, satisfying the T1 Proof Gate's C6 expected_proof_paths check
-- [x] 109/109 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts
+- [x] 112/112 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts
 - [x] pnpm verify passes clean end to end (multiple independent runs)
 - [x] R-level check reports no triggered R1-R5 rules for this diff (governance config/docs + ops-tooling only, no DB/runtime code)
-- [x] All 4 PR #1213 review threads (2 PM CHANGES REQUIRED findings, 2 fresh-Codex-review findings) replied to with file:line evidence and resolved
+- [x] All 6 review threads across PR #1213 and PR #1215 (2 PM CHANGES REQUIRED findings, 2 fresh-Codex-review findings on PR #1213, 2 fresh-Codex-review findings on PR #1215) replied to with file:line evidence and resolved
 
 EVIDENCE:
 ```text
 $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts
 ...
-# tests 109
+# tests 112
 # suites 0
-# pass 109
+# pass 112
 # fail 0
 # cancelled 0
 # skipped 0
@@ -47,7 +47,7 @@ $ pnpm exec tsx scripts/ops/execution-state.ts --json | jq .dispatch_slots
 
 ## Summary
 
-Raises the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforces the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only. This document (round 4) also records the branch continuation from PR #1213 (`griffadavi/utv2-1533-post-lock-concurrency-ramp`) to this canonical `claude/utv2-1533-post-lock-concurrency-ramp` branch — required because `griffadavi/...` can never satisfy `Executor Result Validation`'s ratified `claude/`- or `codex/`-prefixed branch contract. The implementation is unchanged from the accepted PR #1213 head (`24696311888e8c24beb530d557efe3e95ee4aa52`); this is a metadata/proof continuation, not a redesign.
+Raises the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (4 Claude + 6 Codex) active lanes, and mechanically enforces the per-type distribution caps (Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, Verification<=1-per-target) that were previously prose-only. Round 4 recorded the branch continuation from PR #1213 (`griffadavi/utv2-1533-post-lock-concurrency-ramp`) to this canonical `claude/utv2-1533-post-lock-concurrency-ramp` branch — required because `griffadavi/...` can never satisfy `Executor Result Validation`'s ratified `claude/`- or `codex/`-prefixed branch contract. Round 5 (this document) fixes 2 fresh Codex-review findings surfaced on the replacement PR (#1215) itself. The core implementation is unchanged from the accepted PR #1213 head (`24696311888e8c24beb530d557efe3e95ee4aa52`) except for these 2 real bug fixes found by review, not a redesign.
 
 **Status: PR not merged.** No merge SHA is invented anywhere in this bundle. The `MERGE_SHA:` field above (required by `executor-result-validator.yml`'s proof-file contract) references the last substantive implementation commit (`c9ddd22d`), which is an ancestor of this PR's head — the validator explicitly supports this pattern ("allows proof files to reference the implementation commit SHA rather than their own commit SHA, avoiding the SHA preimage circular dependency"). `evidence.json`'s `sha_binding.merge_sha` remains `null`.
 
@@ -73,9 +73,9 @@ No R1–R5 rule paths matched the changed files (governance config/docs, `docs/0
 ```
 $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts
 ...
-# tests 109
+# tests 112
 # suites 0
-# pass 109
+# pass 112
 # fail 0
 # cancelled 0
 # skipped 0
@@ -83,12 +83,12 @@ $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.t
 ```
 
 Breakdown:
-- `concurrency-simulation.test.ts`: 37/37 (23 pre-existing + 14 PM-requested distribution-cap tests against a `PROD_POLICY` fixture matching the real shipped 10/4/6 + `type_caps` numbers, isolating each cap's violation code and proving trial mode does not bypass `type_caps`).
+- `concurrency-simulation.test.ts`: 39/39 (23 pre-existing + 14 PM-requested distribution-cap tests against a `PROD_POLICY` fixture matching the real shipped 10/4/6 + `type_caps` numbers + 2 round-5 tests for the Delivery/UI undetermined-active-lane fail-closed fix).
 - `shared.test.ts`: 35/35 (26 pre-existing + 9 new: `verification_target` enforcement in `createManifest`/`validateManifest` mirroring the existing `model_routing` test pattern, plus 4 `deriveDeliveryUiApp` edge-case tests).
-- `lane-start.test.ts`: 9/9 (7 pre-existing, unaffected by the `checkConcurrencyLimits()` signature extension, + 2 regression tests for the resume-backfill and early-validation fixes).
+- `lane-start.test.ts`: 10/10 (7 pre-existing, unaffected by the `checkConcurrencyLimits()` signature extension, + 2 round-3 regression tests for the resume-backfill and early-validation fixes + 1 round-5 test for the verification-target normalization fix).
 - `lane-maximizer.test.ts`: 28/28 (2 pre-existing fixtures updated for the corrected advisory `--verification-target` suggestion).
 
-Re-confirmed clean in this continuation worktree (`.out/worktrees/claude__utv2-1533-post-lock-concurrency-ramp`) at commit `c32e3a95` before opening the replacement PR.
+Re-confirmed clean on PR #1215's final head before this packet was assembled.
 
 ### Runtime confirmation (execution-state)
 

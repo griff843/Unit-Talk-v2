@@ -648,3 +648,43 @@ test('14. execution-state reports the effective caps from the real CONCURRENCY_C
   assert.strictEqual(MAX_CLAUDE_LANES, 4, 'execution-state must report claude max=4 from the real shipped config');
   assert.strictEqual(MAX_CODEX_LANES, 6, 'execution-state must report codex max=6 from the real shipped config');
 });
+
+// ── 15. Delivery/UI fail-closed on an undetermined ACTIVE lane (PR #1215 Codex review) ────
+// deriveDeliveryUiApp() returning null for an active lane means "cannot determine which app",
+// not "proven to be a different app" -- treating it as non-conflicting would let a second
+// Delivery/UI lane onto the same app whenever the first lane's scope happens to be ambiguous.
+
+test('15. delivery-ui: active lane with an undetermined app is treated as a conflict, not ignored', () => {
+  const active = [
+    // Spans two app roots -- deriveDeliveryUiApp returns null for this manifest's own scope.
+    manifest('UTV2-P150', 'claude', 'delivery-ui', [
+      'apps/command-center/src/app/page.tsx',
+      'apps/discord-bot/src/formatter.ts',
+    ]),
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/command-center/src/app/other.tsx'] },
+  );
+  assert.ok(
+    violationCodes(violations).includes('delivery_ui_app_undetermined_conflict'),
+    `Expected delivery_ui_app_undetermined_conflict when an active lane's app can't be determined, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('15b. delivery-ui: a determined active lane on a different app is still accepted (regression guard)', () => {
+  const active = [
+    manifest('UTV2-P151', 'claude', 'delivery-ui', ['apps/discord-bot/src/formatter.ts']),
+  ];
+  const violations = checkConcurrencyLimits(
+    active,
+    'delivery-ui',
+    'codex-cli',
+    PROD_POLICY,
+    { fileScopeLock: ['apps/command-center/src/app/other.tsx'] },
+  );
+  assert.strictEqual(violations.length, 0, `Expected no violations for a clearly different app, got: ${JSON.stringify(violations)}`);
+});
