@@ -1,18 +1,10 @@
 # PROOF: UTV2-1526
-MERGE_SHA: d31954e68764ae0c154fb8e6f7163bd3560de1e2
+MERGE_SHA: 9bde73ab8f3714e3b73eb0337666103679cebb9b
 
-Note: this PR is not yet merged, so there is no merge SHA yet. MERGE_SHA above is the
-last non-proof (substantive) implementation commit already on this branch -- this proof
-correction and evidence.json are proof-path-only commits on top of it -- satisfying the
-validator's ancestor-of-current-head check; post-merge automation re-binds this to the
-real merge SHA per the standard closeout flow. Rebound from the previously-bound
-145d3a07... after a required `ops:merge-wrapper main-sync` (branch protection is strict;
-the PR was BEHIND main) rewrote every commit SHA on this branch via rebase -- this is the
-content-identical rebased equivalent, verified via `git diff` under
-`docs/06_status/proof/UTV2-1526/` between the pre- and post-rebase branch tips (empty).
-See `docs/06_status/proof/UTV2-1526/evidence.json`'s `sha_binding.merge_sha: null` and
-`sha_binding.sha_type: "substantive_commit_sha"`. Do not read this as a claim that the
-PR is merged or that this commit is the current PR head.
+Note: PR #1195 merged 2026-07-14T00:59:51Z after t1-approved label + pm-verdict/v1
+APPROVED from griff843 (CODEOWNERS). MERGE_SHA above is the real merge commit on main.
+See `docs/06_status/proof/UTV2-1526/evidence.json`'s `sha_binding.merge_sha` and
+`sha_binding.sha_type: "merge_sha"`.
 
 ASSERTIONS:
 - [x] Canonical policy defines 4 profiles using real, verified Codex CLI 0.144.1 model IDs and reasoning efforts

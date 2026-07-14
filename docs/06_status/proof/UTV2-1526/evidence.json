@@ -2,16 +2,16 @@
   "schema_version": 1,
   "issue_id": "UTV2-1526",
   "title": "Three-Brain: deterministic Codex 5.6 model-profile routing and manifest propagation",
-  "status": "ready_for_pm_review",
+  "status": "merged",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "d31954e68764ae0c154fb8e6f7163bd3560de1e2",
-    "verified_source_note": "Last non-proof commit on claude/utv2-1526-codex-model-routing (fix(ops): UTV2-1526 thread --model-profile through lane-maximizer's recommendation). Rebound after a required ops:merge-wrapper main-sync (branch protection is strict; the PR was BEHIND main) rewrote every commit SHA on this branch via rebase -- this is the rebased equivalent of the previously-bound 145d3a07..., content-identical (git diff between the pre- and post-rebase branch tips shows zero changes under docs/06_status/proof/UTV2-1526/). This is an ancestor of the current PR head, not the head itself -- this proof-correction commit and evidence.json/verification.md are proof-path-only on top of it, matching this repo's substantive_commit_sha convention (see docs/06_status/proof/UTV2-1244/evidence.json). Evidence generated pre-merge and will be re-tied by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
-    "merge_sha": null,
-    "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-14T00:30:29.000Z",
+    "verified_source_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+    "verified_source_note": "Real merge SHA, bound post-merge (PR #1195 merged into main). Prior to this rebind, verified_source_sha pointed to d31954e6... (the last non-proof commit, an ancestor of the PR head) per this repo's substantive_commit_sha convention; that commit's content is identical to what landed in this merge SHA.",
+    "merge_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-14T01:01:50.570Z",
     "ci_sentinels": {
-      "merge_gate": "pending",
+      "merge_gate": "pass",
       "local_verify": "pass",
       "local_r_level_check": "pass",
       "local_test_db": "pass"
@@ -23,7 +23,7 @@
   },
   "context": {
     "reason_for_t1": "PM-authorized T1 plan (2026-07-13): governance-critical upgrade to Three-Brain / Codex dispatch that changes how Codex lanes select and are permitted to use a model. Tier label tier:T1 set on UTV2-1526 at creation.",
-    "authorization": "PM-authorized in-session; Linear UTV2-1526 created and labeled tier:T1 + governance-critical per that authorization. Not authorized to merge -- PR stops at Griff's merge gate."
+    "authorization": "PM-authorized in-session; Linear UTV2-1526 created and labeled tier:T1 + governance-critical per that authorization. PR #1195 merged 2026-07-14T00:59:51Z by griff843 (CODEOWNERS) after posting t1-approved label + pm-verdict/v1 APPROVED."
   },
   "static_proof": {
     "pnpm_verify_components": {
@@ -167,16 +167,15 @@
       "evidence": "static_proof.pnpm_verify_components and static_proof.targeted_new_tests above."
     },
     {
-      "criterion": "PR opened, not merged -- stops at Griff's merge gate.",
-      "evidence": "Confirmed in the lane's final report; not a code assertion. sha_binding.merge_sha is null."
+      "criterion": "PR merged only after Griff's merge gate (t1-approved label + pm-verdict/v1 APPROVED).",
+      "evidence": "PR #1195 merged 2026-07-14T00:59:51Z, merge SHA 9bde73ab8f3714e3b73eb0337666103679cebb9b. sha_binding.merge_sha is set to that SHA."
     }
   ],
   "does_not_claim": [
     "No live/paid Codex model invocation was made to produce this evidence -- Codex CLI's own inference is out of scope for unit verification per PM instruction; argument construction is verified via pure function unit tests instead.",
     "No change to T1/T2/T3 merge authority, lane concurrency limits, or Griff/PM approval requirements -- none of those were touched.",
     "Does not claim codex-sol-max or any requires_pm_authorization:true profile is usable by any means, override or otherwise -- it is mechanically unavailable, and building a trusted unlock mechanism is explicitly out of scope here (tracked by UTV2-1527).",
-    "Does not claim the Return Review Packet advisory check's own scope-finding logic was changed -- its inability to recognize a valid scope-override/v1 comment is a pre-existing analyzer gap unrelated to this lane's own diff, confirmed mechanically (grep for override-consumption logic returns zero matches) and tracked separately by UTV2-1529. Return Review Packet is not in main's required branch-protection status checks, so it is not a live merge blocker.",
-    "Does not claim the PR is merged."
+    "Does not claim the Return Review Packet advisory check's own scope-finding logic was changed -- its inability to recognize a valid scope-override/v1 comment is a pre-existing analyzer gap unrelated to this lane's own diff, confirmed mechanically (grep for override-consumption logic returns zero matches) and tracked separately by UTV2-1529. Return Review Packet is not in main's required branch-protection status checks, so it is not a live merge blocker."
   ],
   "stop_conditions_encountered": [
     "None blocking. Process note: ops:lane-start's --files scope declaration requires each new file to already exist on disk in the main checkout at call time, and ops:preflight's PG2 check requires a fully clean working tree first. Resolved by running preflight on a clean tree, creating empty stub files for this lane's brand-new paths only to satisfy lane-start's scope declaration (the preflight token's head_sha binding is unaffected by untracked files), removing the stubs from the main checkout immediately after, and writing real content inside the worktree lane-start created. Not fixed here -- outside this lane's declared scope."

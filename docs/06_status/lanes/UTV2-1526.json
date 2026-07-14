@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1526-codex-model-routing",
   "branch": "claude/utv2-1526-codex-model-routing",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1195",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/commands/dispatch.md",
@@ -29,14 +29,31 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1526/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-13T06:38:24.277Z",
-  "heartbeat_at": "2026-07-13T06:38:24.277Z",
+  "heartbeat_at": "2026-07-14T01:04:28.350Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1526-codex-model-routing.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T01:01:38.634Z",
+      "verdict": "pass",
+      "merge_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1195"
+    },
+    {
+      "checked_at": "2026-07-14T01:04:28.350Z",
+      "verdict": "pass",
+      "merge_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
