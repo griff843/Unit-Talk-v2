@@ -19,5 +19,5 @@ The effective configuration was evaluated at the audit timestamp. Although the t
 
 ## SHA binding
 
-Head SHA: pending commit
-Merge SHA: pending merge
+Head SHA: c88d3b8a92903665c52875afd8159cd5b9373e01
+Merge SHA: dca6b52c38de1df980b2b44ac72a2130d7f0c2c4
