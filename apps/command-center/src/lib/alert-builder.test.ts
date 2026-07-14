@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createEmptyAlertDefinition,
+  parseSavedAlertDefinitions,
   validateAlertDefinition,
   type AlertDefinition,
 } from './alert-builder';
@@ -88,4 +89,22 @@ test('tampered governance flags fail closed', () => {
 
   const tampered3 = { ...validDef(), destination: 'discord' } as unknown as AlertDefinition;
   assert.equal(validateAlertDefinition(tampered3).valid, false);
+});
+
+test('parses valid locally saved definitions and discards malformed or tampered entries', () => {
+  const valid = { id: 'saved-1', savedAt: '2026-07-14T12:00:00.000Z', definition: validDef() };
+  const tampered = {
+    id: 'saved-2',
+    savedAt: '2026-07-14T12:00:00.000Z',
+    definition: { ...validDef(), destination: 'discord' },
+  };
+
+  const result = parseSavedAlertDefinitions(JSON.stringify([valid, tampered, { nope: true }]));
+  assert.deepEqual(result, [valid]);
+});
+
+test('returns no saved definitions for unavailable or invalid browser storage', () => {
+  assert.deepEqual(parseSavedAlertDefinitions(null), []);
+  assert.deepEqual(parseSavedAlertDefinitions('{invalid'), []);
+  assert.deepEqual(parseSavedAlertDefinitions(JSON.stringify({ definitions: [] })), []);
 });
