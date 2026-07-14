@@ -20,14 +20,14 @@
     "targeted_tests": {
       "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
       "status": "PASS",
-      "tests": 136,
-      "pass": 136,
+      "tests": 137,
+      "pass": 137,
       "fail": 0
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "changed_files": 14,
+      "changed_files": 20,
       "rules_matched": "none"
     }
   },
@@ -42,12 +42,12 @@
     "accepted_pr_head_sha_prior_lineage_note": "PR #1213's accepted head, from which the 14 files' content was sourced (via the working tree of the branch built on top of it). Provenance only -- not an ancestor of this clean branch and not used as any current binding.",
     "merge_sha": null,
     "merge_sha_note": "Not merged. This field is intentionally null. Will be populated post-merge via ops:proof-generate --merge-sha.",
-    "current_pr_head_sha": "b215bdfc9cb59ffd1b7c4c297714bbbffcd96d96",
-    "current_pr_head_note": "This clean branch's actual tip, rebased onto origin/main's current tip (73a989a0, after UTV2-1499 landed) with zero conflicts (UTV2-1499 touched none of the 14 intended paths). Re-verified clean (14 files, no more, no less) after the rebase.",
+    "current_pr_head_sha": "c390bb603a51df382a0190e6542b0ba4e83f8d1d",
+    "current_pr_head_note": "This clean branch's actual tip -- the round-2 fix commit (see codex_dispatch_p2_fix below), on top of the control-plane commit, on top of the lane-maximizer P2 fix commit, rebased onto origin/main's tip (73a989a0, after UTV2-1499 landed) with zero conflicts.",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
-      "r_level_check": "PASS -- Verdict: PASS, Changed files: 14, Rules matched: (none)",
-      "targeted_tests_136_of_136": "PASS -- 128 carried (concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, codex-dispatch.test.ts, and lane-maximizer.test.ts's pre-existing suite) + 8 new for the lane-maximizer verification_target fix",
+      "r_level_check": "PASS -- Verdict: PASS, Changed files: 20, Rules matched: (none)",
+      "targeted_tests_137_of_137": "PASS -- 128 carried (concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, codex-dispatch.test.ts's pre-existing suite, and lane-maximizer.test.ts's pre-existing suite) + 8 new for the lane-maximizer verification_target fix + 1 new for the codex-dispatch.ts verification_target fix (net +1 after rewriting 1 stale static-inspection test)",
       "pnpm_verify": "PASS -- see verification.md for the captured run"
     }
   },
@@ -86,6 +86,13 @@
     "tests": "8 new tests in lane-maximizer.test.ts: explicit target passes through unchanged; missing target blocked; malformed target blocked; same active target blocked; different active target allowed; undetermined active target fails closed; two same-wave candidates for one target not both recommended; issue_id never silently substituted.",
     "scope_note": "The broader lane-maximizer planner-forecast gap (evaluateCandidates() not yet forecasting the complete active-plus-planned wave against all new type caps) remains tracked in the pre-existing UTV2-1535 follow-up -- that is a distinct, non-blocking planning-accuracy concern; ops:lane-start's checkConcurrencyLimits() is and remains the fail-closed mechanical authority regardless. This fix resolves the specific target-guessing bug, not UTV2-1535's broader scope."
   },
+  "codex_review_round_1": {
+    "trigger": "A fresh Codex review requested on this clean PR (2 passes: one on the original push, one re-triggered by an explicit '@codex review' comment after the rebase + control-plane commit) surfaced 4 findings, 2 of which were the same finding restated across the two passes.",
+    "codex_dispatch_verification_target_default_FIXED": "REAL, FIXED -- scripts/codex-dispatch.ts:517 (old) still had the exact same target-guessing bug this PR was created to fix, just in the real Codex execution path instead of lane-maximizer.ts's advisory suggestion: `laneType === 'verification' ? (explicitVerificationTarget ?? issueId) : undefined`. Fixed in commit c390bb60 -- a verification-lane dispatch with no --verification-target now throws before the lane is created; a supplied value is validated via requireVerificationTarget(). 2 duplicate review threads (one per Codex pass) replied to with file:line evidence and both resolved.",
+    "lane_maximizer_broader_type_caps_DEFERRED": "Same pre-existing gap as lane_maximizer_p2_fix.scope_note above -- the PM's own continuation directive explicitly carves this out as acceptable to remain in UTV2-1535. Replied on the thread explaining the deferral; left unresolved for PM visibility, not silently closed.",
+    "agents_md_stale_limits_DEFERRED": "REAL finding (AGENTS.md line 171 and .claude/commands/dispatch.md still state the old 2/4/6 limits), but fixing it would require touching files outside this PR's explicit, PM-declared 20-file scope boundary -- the exact boundary that exists specifically because an earlier version of this PR's ancestry let unrelated files creep in. Filed as a new, narrowly-scoped follow-up (UTV2-1536) instead of expanding this PR's scope. Replied on the thread explaining the deferral and citing the follow-up; left unresolved for PM visibility.",
+    "net_result": "1 of 2 distinct real findings fixed with code + tests in this PR (the one specifically in this PR's own remit per the continuation directive); 2 of 2 distinct advisory/scope findings deferred with an explicit, honest reason and a real follow-up (UTV2-1535 pre-existing, UTV2-1536 new) rather than silently resolved or silently ignored."
+  },
   "acceptance_criteria": {
     "type_caps_machine_readable_config": "PASS -- docs/governance/CONCURRENCY_CONFIG.json type_caps + concurrency-config.ts TypeCapsConfig",
     "hygiene_governance_simple_caps_enforced": "PASS -- checkConcurrencyLimits() active-count checks",
@@ -101,5 +108,5 @@
     "clean_ancestry": "PASS -- branch created directly from origin/main, no merge/cherry-pick of the superseded PRs' history; rebased (not merged) onto a later origin/main advance mid-session with zero conflicts",
     "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, PR title, and PR body reference only UTV2-1533; the superseded PRs are referenced by GitHub PR number only (#1213, #1215), never by UTV2-### ID, so Branch Discipline Guard's issue-reference scan is not triggered"
   },
-  "verdict": "IMPLEMENTATION_CLEAN_AND_COMPLETE -- AWAITING_CI_CONFIRMATION_AND_PM_APPROVAL"
+  "verdict": "IMPLEMENTATION_CLEAN_COMPLETE_AND_REVIEWED -- CODEX_ROUND_1_ADDRESSED -- AWAITING_PM_APPROVAL"
 }

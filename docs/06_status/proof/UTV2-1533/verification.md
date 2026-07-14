@@ -1,5 +1,5 @@
 # PROOF: UTV2-1533
-MERGE_SHA: e726d84c
+MERGE_SHA: c390bb60
 
 ASSERTIONS:
 - [x] Base concurrency ceiling raised to 10 active lanes (4 Claude + 6 Codex) in docs/governance/CONCURRENCY_CONFIG.json, with audited safety rationale (no external mechanical constraint on the prior 6-lane cap; merge-train serialization and the WSL2 full-verify semaphore, the two real constraints, are untouched)
@@ -10,19 +10,20 @@ ASSERTIONS:
 - [x] Clean branch: created directly from origin/main via `git worktree add -b claude/utv2-1533-concurrency-ramp-clean origin/main` -- no merge, no cherry-pick, no ancestry relationship to the two superseded PRs
 - [x] Confirmed origin/main never independently touched any of the 14 intended implementation paths since UTV2-1533 began (`git diff --stat 9e630fe9..40782f85 -- <14 paths>` produced zero output) -- the carried content required zero reconciliation
 - [x] T1 evidence.json bundle exists at docs/06_status/proof/UTV2-1533/evidence.json, satisfying the T1 Proof Gate's C6 expected_proof_paths check
-- [x] 136/136 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts (28 pre-existing + 8 new), codex-dispatch.test.ts
+- [x] 137/137 targeted tests pass across concurrency-simulation.test.ts, shared.test.ts, lane-start.test.ts, lane-maximizer.test.ts (28 pre-existing + 8 new), codex-dispatch.test.ts (13 pre-existing + 1 rewritten + 1 new for the round-2 codex-dispatch.ts fix)
 - [x] pnpm verify passes clean end to end
-- [x] R-level check reports no triggered R1-R5 rules for this diff (governance config/docs + ops-tooling only, no DB/runtime code); 14 changed files exactly match the intended implementation path list
+- [x] R-level check reports no triggered R1-R5 rules for this diff (governance config/docs + ops-tooling only, no DB/runtime code); 20 changed files exactly match the intended 14-implementation + 6-control-plane path list
 - [x] file_scope_lock in the lane manifest declares all 14 implementation paths upfront -- no scope-override/v1 required
 - [x] No cross-issue UTV2-### references anywhere in commit subjects/bodies, PR title, or PR body -- the superseded PRs are cited only by GitHub PR number (#1213, #1215)
+- [x] Codex review round 1 (2 passes): 4 findings, 2 distinct after dedup. 1 real+material (codex-dispatch.ts had the same verification_target-guessing bug this PR was created to fix, in the real execution path) -- FIXED with code + tests, both duplicate threads resolved. 1 advisory/scope (lane-maximizer's broader type-cap forecasting) -- deferred to the pre-existing UTV2-1535 per the PM's own explicit carve-out, thread left open for visibility. 1 real but out-of-declared-scope (AGENTS.md/dispatch skill stale hard-coded limits) -- filed as new follow-up UTV2-1536, thread left open for visibility.
 
 EVIDENCE:
 ```text
 $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
 ...
-# tests 136
+# tests 137
 # suites 0
-# pass 136
+# pass 137
 # fail 0
 # cancelled 0
 # skipped 0
@@ -30,7 +31,7 @@ $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.t
 
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 14
+Changed files: 20
 Rules matched: (none) — no R-level artifacts required for this diff
 
 $ pnpm type-check
@@ -72,7 +73,7 @@ Both diff stats are identical in shape to the originally-accepted UTV2-1533 diff
 ```
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 14
+Changed files: 20
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
@@ -81,9 +82,9 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ```
 $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
 ...
-# tests 136
+# tests 137
 # suites 0
-# pass 136
+# pass 137
 # fail 0
 ```
 
@@ -92,7 +93,15 @@ Breakdown:
 - `shared.test.ts`: 37/37.
 - `lane-start.test.ts`: 10/10.
 - `lane-maximizer.test.ts`: 36/36 (28 pre-existing, 2 updated to supply an explicit verification_target now that the default-guess is removed, + 8 new for the explicit-target contract).
-- `codex-dispatch.test.ts`: 14/14.
+- `codex-dispatch.test.ts`: 15/15 (13 pre-existing, 1 rewritten for the removed default-to-issueId path, + 1 new confirming the shared validator import -- round-2 fix after Codex review round 1 found the same target-guessing bug in the real dispatch execution path).
+
+### Codex review round 1
+
+A fresh Codex review (triggered on PR open, then re-triggered via an explicit `@codex review` comment after the rebase) surfaced 4 findings, 2 distinct after dedup:
+
+- **Real, material, fixed**: `scripts/codex-dispatch.ts` had the identical verification_target-guessing bug this PR exists to fix, just in the real dispatch execution path rather than lane-maximizer's advisory suggestion. Fixed in commit `c390bb60` -- see `evidence.json`'s `codex_review_round_1.codex_dispatch_verification_target_default_FIXED`. Both duplicate review threads replied to with file:line evidence and resolved.
+- **Advisory, deferred**: lane-maximizer's broader type-cap forecasting gap -- the PM's own continuation directive explicitly carves this out as acceptable to remain in the pre-existing UTV2-1535 follow-up. Thread replied to and left open (not resolved) for PM visibility.
+- **Real, out of declared scope, deferred**: `AGENTS.md` and `.claude/commands/dispatch.md` still hard-code the old 2/4/6 concurrency limits. Confirmed real, but fixing it would touch files outside this PR's explicit 20-file scope boundary. Filed as a new follow-up (UTV2-1536). Thread replied to and left open (not resolved) for PM visibility.
 
 ### Full verify
 
@@ -108,7 +117,7 @@ No file in this diff's scope touches DB schema, DB queries, or Supabase-connecte
 
 ## Commit SHA reference
 
-Branch HEAD (clean PR head): see evidence.json's `sha_binding.current_pr_head_sha` -- rebased onto origin/main's tip after UTV2-1499 landed mid-session, zero conflicts, re-verified clean (14 files) post-rebase.
+Branch HEAD (clean PR head): see evidence.json's `sha_binding.current_pr_head_sha` -- rebased onto origin/main's tip after UTV2-1499 landed mid-session (zero conflicts), plus the control-plane commit, plus the round-2 codex-dispatch.ts fix from Codex review round 1. Re-verified clean (20 files total) after every step.
 
 ## Merge SHA reference
 

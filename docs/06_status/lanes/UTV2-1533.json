@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1533-concurrency-ramp-clean",
   "branch": "claude/utv2-1533-concurrency-ramp-clean",
   "base_branch": "main",
-  "commit_sha": "b215bdfc9cb59ffd1b7c4c297714bbbffcd96d96",
+  "commit_sha": "c390bb603a51df382a0190e6542b0ba4e83f8d1d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1216",
   "files_changed": [
     "docs/governance/CONCURRENCY_CONFIG.json",

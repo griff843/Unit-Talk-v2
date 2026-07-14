@@ -42,21 +42,57 @@ Successfully rebased and updated refs/heads/claude/utv2-1533-concurrency-ramp-cl
 
 Zero conflicts -- UTV2-1499 touched `.ops/sync/UTV2-1499.yml`, `docs/05_operations/RUNTIME_OPERATIONS_GOVERNANCE.md`, `docs/06_status/lanes/UTV2-1499.json`, `docs/06_status/proof/UTV2-1499/*`, none of which overlap the 14 intended paths. Re-verified post-rebase: `git diff --name-only origin/main..HEAD` returns exactly the 14 intended paths, no more, no fewer.
 
+## Codex review round 1
+
+A fresh Codex review (2 passes -- one on PR open, one re-triggered by an explicit `@codex review` comment after the rebase + control-plane commit) surfaced 4 findings, 2 distinct after dedup:
+
+1. **Real, material, fixed** -- `scripts/codex-dispatch.ts` (the real Codex dispatch execution path, distinct from lane-maximizer's advisory suggestion) had the identical verification_target-guessing bug this PR exists to fix: `laneType === 'verification' ? (explicitVerificationTarget ?? issueId) : undefined`. A verification-lane dispatch through `pnpm codex:dispatch` with no `--verification-target` silently recorded its own tracking issue as the target. Fixed in commit `c390bb60` -- now throws before the lane is created; a supplied value is validated via `requireVerificationTarget()`. Both duplicate review threads replied to with file:line evidence and resolved.
+2. **Advisory, deferred to the pre-existing follow-up** -- lane-maximizer's broader type-cap forecasting gap (not yet checking the complete active-plus-planned wave against Hygiene/Governance/Delivery-UI caps). The PM's own continuation directive explicitly names this as acceptable to remain in UTV2-1535. Thread replied to and left open (not resolved) for PM visibility.
+3. **Real, out of this PR's declared scope, deferred to a new follow-up** -- `AGENTS.md` and `.claude/commands/dispatch.md` still hard-code the old 2/4/6 concurrency limits. Confirmed real; not fixed here because doing so would touch files outside this PR's explicit 20-file scope boundary (the exact boundary this clean-replacement exercise exists to enforce). Filed as UTV2-1536. Thread replied to and left open (not resolved) for PM visibility.
+
 ## Commit structure
 
-Two substantive commits, no merge commits:
+Three substantive commits, no merge commits:
 
 1. `UTV2-1533: raise concurrency ceiling to 10 active lanes with mechanical type caps` -- the 14 carried implementation files, as-is from the accepted state.
 2. `UTV2-1533: lane-maximizer never guesses verification_target from issue_id` -- the new lane-maximizer P2 fix (real code + 8 new tests), fixing the review finding the superseded PR had left deferred.
+3. `UTV2-1533: codex-dispatch never defaults verification_target to issueId` -- round-2 fix for the same bug class, found by Codex review round 1 in the real dispatch execution path.
 
-Plus a third, control-plane commit (this bundle + lane manifest + sync file).
+Plus a fourth, control-plane commit (this bundle + lane manifest + sync file), landed between commits 2 and 3.
 
 No commit subject, commit body, PR title, or PR body anywhere in this branch's history references any UTV2-### or UNI-### issue ID other than UTV2-1533. The two superseded PRs are cited only by their GitHub PR numbers (#1213, #1215), which do not match the `UTV2-\d+`/`UNI-\d+` patterns Branch Discipline Guard scans for.
 
 ## Files changed (GitHub-verified)
 
-To be populated with the real `gh pr diff --name-only` / `gh pr view --json changedFiles` output once the control-plane commit is pushed -- see the return packet for the final captured count and list.
+```
+$ gh pr diff 1216 --name-only
+.ops/sync/UTV2-1533.yml
+docs/05_operations/LANE_MANIFEST_SPEC.md
+docs/05_operations/schemas/lane_manifest_v1.schema.json
+docs/06_status/lanes/UTV2-1533.json
+docs/06_status/proof/UTV2-1533/.gitkeep
+docs/06_status/proof/UTV2-1533/diff-summary.md
+docs/06_status/proof/UTV2-1533/evidence.json
+docs/06_status/proof/UTV2-1533/verification.md
+docs/governance/CONCURRENCY_CONFIG.json
+docs/governance/LANE_CONCURRENCY_POLICY.md
+scripts/codex-dispatch.test.ts
+scripts/codex-dispatch.ts
+scripts/ops/concurrency-config.ts
+scripts/ops/concurrency-simulation.test.ts
+scripts/ops/lane-maximizer.test.ts
+scripts/ops/lane-maximizer.ts
+scripts/ops/lane-start.test.ts
+scripts/ops/lane-start.ts
+scripts/ops/shared.test.ts
+scripts/ops/shared.ts
+
+$ gh pr view 1216 --json changedFiles --jq .changedFiles
+20
+```
+
+Exactly the intended set: 14 implementation + 6 control-plane. No file belonging to another UTV2 lane. No unrelated API or Command Center product file. Captured immediately after the control-plane commit push; the round-2 codex-dispatch.ts fix (commit `c390bb60`) only modified 2 files already in this list (`scripts/codex-dispatch.ts`, `scripts/codex-dispatch.test.ts`), so the count is unchanged.
 
 ## Lane-maximizer P2 fix
 
-See `evidence.json`'s `lane_maximizer_p2_fix` block for the full before/after and test list. Summary: `--verification-target` is never guessed from `candidate.issue_id` anymore -- an explicit, validated, conflict-checked target is required for any `lane_type:"verification"` candidate before it can be recommended.
+See `evidence.json`'s `lane_maximizer_p2_fix` block for the full before/after and test list. Summary: `--verification-target` is never guessed from `candidate.issue_id` anymore -- an explicit, validated, conflict-checked target is required for any `lane_type:"verification"` candidate before it can be recommended. See `evidence.json`'s `codex_review_round_1` block for the matching fix in the real dispatch execution path.
