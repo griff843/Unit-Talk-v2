@@ -31,6 +31,24 @@ test('normalizeFileScopePath accepts non-existent proof paths without requiring 
   assert.strictEqual(normalized, 'docs/06_status/proof/UTV2-9999/diff-summary.md');
 });
 
+test('normalizeFileScopePath accepts the guard-supported trailing directory glob', () => {
+  assert.strictEqual(normalizeFileScopePath('scripts/ops/**'), 'scripts/ops/**');
+});
+
+test('normalizeFileScopePath accepts literal bracketed route paths', () => {
+  assert.strictEqual(
+    normalizeFileScopePath('apps/command-center/src/app/picks/[id]/page.tsx'),
+    'apps/command-center/src/app/picks/[id]/page.tsx',
+  );
+});
+
+test('normalizeFileScopePath rejects unsupported glob syntax', () => {
+  assert.throws(
+    () => normalizeFileScopePath('scripts/*/shared.ts'),
+    /Only a trailing \/\*\* directory glob is allowed/,
+  );
+});
+
 test('normalizeFileScopePath still rejects parent traversal for proof paths', () => {
   assert.throws(
     () => normalizeFileScopePath('../docs/06_status/proof/UTV2-9999/diff-summary.md'),
@@ -72,6 +90,22 @@ test('validateManifest accepts a canonical done status manifest', () => {
   manifest.closed_at = new Date().toISOString();
   const errors = validateManifest(manifest);
   assert.deepStrictEqual(errors, []);
+});
+
+test('validateManifest accepts a supported directory glob and literal bracketed route', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1531',
+    tier: 'T2',
+    branch: 'codex/utv2-1531-file-scope-debt',
+    worktree_path: worktreePathForBranch('codex/utv2-1531-file-scope-debt'),
+    file_scope_lock: ['scripts/ops/**', 'apps/command-center/src/app/picks/[id]/page.tsx'],
+    expected_proof_paths: defaultProofPaths('UTV2-1531', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1531-file-scope-debt.json',
+  });
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+
+  assert.deepStrictEqual(validateManifest(manifest), []);
 });
 
 test('validateManifest rejects dispatch-auto for active lane manifests', () => {

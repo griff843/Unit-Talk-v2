@@ -336,8 +336,13 @@ export function resolveTrustedManifests(
   base: string,
   head: string,
 ): LaneManifest[] {
-  const basePaths = new Set(source.listPathsAtRef(base));
-  const headPaths = new Set(source.listPathsAtRef(head));
+  // Parked manifests are deliberately removed from active-lane concurrency
+  // accounting. Keep the trusted scope reader aligned: a parked lane cannot
+  // reserve files or create a cross-lane conflict (DEBT-031).
+  const isActiveManifestPath = (filePath: string): boolean =>
+    !normalizePath(filePath).includes('/parked/');
+  const basePaths = new Set(source.listPathsAtRef(base).filter(isActiveManifestPath));
+  const headPaths = new Set(source.listPathsAtRef(head).filter(isActiveManifestPath));
   const allPaths = new Set<string>([...basePaths, ...headPaths]);
 
   const manifests: LaneManifest[] = [];

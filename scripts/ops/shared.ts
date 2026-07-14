@@ -495,11 +495,27 @@ export function normalizeRepoRelativePath(
   if (path.posix.isAbsolute(normalized)) {
     throw new Error(`Absolute paths are not allowed in file scope: ${input}`);
   }
-  if (/[*?[\]{}]/.test(normalized)) {
-    throw new Error(`Glob patterns are not allowed in file scope: ${input}`);
+  const hasTrailingDirectoryGlob = normalized.endsWith('/**');
+  const pathWithoutTrailingDirectoryGlob = hasTrailingDirectoryGlob
+    ? normalized.slice(0, -3)
+    : normalized;
+  const containsUnsupportedGlobSyntax = /[*?{}]/.test(pathWithoutTrailingDirectoryGlob);
+  if (containsUnsupportedGlobSyntax) {
+    throw new Error(`Only a trailing /** directory glob is allowed in file scope: ${input}`);
   }
 
   if (options.requireExistingFile) {
+    if (hasTrailingDirectoryGlob) {
+      const directory = normalized.slice(0, -3);
+      const absoluteDirectory = path.join(ROOT, directory);
+      if (!fs.existsSync(absoluteDirectory)) {
+        throw new Error(`File scope directory does not exist: ${directory}`);
+      }
+      if (!fs.statSync(absoluteDirectory).isDirectory()) {
+        throw new Error(`File scope glob must reference a directory: ${normalized}`);
+      }
+      return normalized;
+    }
     const absolute = path.join(ROOT, normalized);
     if (!fs.existsSync(absolute)) {
       throw new Error(`File scope path does not exist: ${normalized}`);
