@@ -1,5 +1,5 @@
 # PROOF: UTV2-1533
-MERGE_SHA: c390bb60
+MERGE_SHA: 8ca5acf38a31fc1492961a0951a6af10029bc6c0
 
 ASSERTIONS:
 - [x] Base concurrency ceiling raised to 10 active lanes (4 Claude + 6 Codex) in docs/governance/CONCURRENCY_CONFIG.json, with audited safety rationale (no external mechanical constraint on the prior 6-lane cap; merge-train serialization and the WSL2 full-verify semaphore, the two real constraints, are untouched)
@@ -48,7 +48,7 @@ Raises the ratified base concurrency ceiling from 6 (2 Claude + 4 Codex) to 10 (
 
 **This is a clean replacement branch.** PR #1215 (itself a replacement for PR #1213) was found by the PM to report 60 GitHub-visible changed files instead of the intended 20, because its branch ancestry -- built via `git branch` from an already-accepted head, then advanced with two `git merge origin/main` passes -- had accumulated individual commits from other, unrelated, already-shipped lanes as ancestors. Those commits surfaced their own files in the PR-vs-main comparison and their own native issue-ID text in commit messages, which was also the root cause of an unfixable-without-history-rewrite Branch Discipline Guard failure. Per PM directive, exact commit-history preservation is no longer a requirement; this branch (`claude/utv2-1533-concurrency-ramp-clean`) was created directly from `origin/main` instead, carrying only the accepted implementation **content and review conclusions** for the 14 intended paths (verified byte-identical to the accepted tree -- see Evidence below) -- no merge commits, no cherry-picked merge commits, no ancestry relationship to either superseded PR.
 
-**Status: PR not merged.** No merge SHA is invented anywhere in this bundle. The `MERGE_SHA:` field above references this branch's own substantive implementation commit (an ancestor of this PR's head), per `executor-result-validator.yml`'s documented implementation-commit-as-ancestor pattern. `evidence.json`'s `sha_binding.merge_sha` remains `null`.
+**Status: MERGED.** PR #1216 merged to main via `pnpm ops:merge-wrapper pr-merge` (squash, auto-merge, no `--admin`) at `2026-07-14T22:58:29Z`. The `MERGE_SHA:` field above is now the real, permanent merge commit SHA. `evidence.json`'s `sha_binding.merge_sha` is populated with the same value. Post-merge, real live-DB runtime proof (`evidence.json`'s `runtime_proof`, from an actual `pnpm test:db` run) was added to satisfy `truth-check-lib.ts`'s unconditional T1 `runtime_proof_required` gate.
 
 ## Evidence
 
@@ -123,4 +123,18 @@ For provenance: this branch was created directly from `origin/main`, rebased ont
 
 ## Merge SHA reference
 
-Not applicable yet -- **the PR is not merged.** No merge SHA is invented here (`evidence.json`'s `sha_binding.merge_sha` stays `null`). Will be populated post-merge via `ops:proof-generate --merge-sha`, per this repo's standard closeout automation.
+`8ca5acf38a31fc1492961a0951a6af10029bc6c0` -- PR #1216's real merge commit on `main`, confirmed via `git log --oneline -1 origin/main` and `gh pr view 1216 --json mergeCommit`. `evidence.json`'s `sha_binding.merge_sha` is bound to the same value.
+
+### Runtime proof (added post-merge)
+
+```
+$ pnpm test:db
+> tsx --test apps/api/src/database-smoke.test.ts
+...
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+```
+
+Full evidence (queries, live row counts against the `zfzdnfwdarxucxtaojxm` Supabase project, captured immediately after this run) in `evidence.json`'s `runtime_proof` block. This diff's own scope does not touch DB code -- this runtime proof exists because `scripts/ops/truth-check-lib.ts`'s `runtime_proof_required` gate is unconditional for `tier === 'T1'`, independent of whether the diff's files touch DB paths.

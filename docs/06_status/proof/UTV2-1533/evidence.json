@@ -1,7 +1,58 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1533",
-  "status": "PRE-MERGE -- clean replacement PR open, not merged. This bundle documents the state at the commit SHAs below, not a completed lane.",
+  "verifier": {
+    "identity": "claude/utv2-1533-postmerge-proof"
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts inserts and deletes a real submission row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts inserts and deletes a real pick row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts selects pick_lifecycle rows to verify no lifecycle event is written on an invalid atomic enqueue (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts selects distribution_outbox rows to verify status/receipt/lifecycle/audit rollback on an invalid atomic delivery confirmation (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts selects distribution_receipts rows as part of the same atomic-delivery rollback verification"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts selects audit_log rows to verify no audit row is written on an invalid atomic settlement (UTV2-920 rollback test) and that a re-settlement correction is additive (UTV2-996)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts inserts settlement_records rows to verify a correction chain is additive and the original settlement row is not mutated (UTV2-996)"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 73551, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 109203, "status": "healthy" },
+      { "table": "submissions", "count": 75697, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 4930, "status": "healthy" },
+      { "table": "audit_log", "count": 194041, "status": "healthy" }
+    ],
+    "row_counts_captured_at": "2026-07-14T23:05:00Z",
+    "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This diff's scope (governance config/docs + TypeScript ops-orchestration tooling) does not itself touch any of these tables; this runtime proof exists because T1 tier requires it unconditionally per truth-check-lib.ts's runtime_proof_required gate (tier === 'T1'), independent of whether the diff's own files touch DB code."
+  },
+  "status": "MERGED -- PR #1216 merged to main at merge SHA 8ca5acf38a31fc1492961a0951a6af10029bc6c0. This bundle now includes real live-DB runtime proof, added post-merge to satisfy the unconditional T1 runtime_proof_required gate.",
   "continuation": {
     "reason": "PM verdict CHANGES_REQUIRED on the prior replacement PR: GitHub reported that PR's merge-visible diff as 60 changed files (not the intended 20), because its branch ancestry (built via `git branch` from an already-accepted head, plus two later `git merge origin/main` passes) had accumulated individual commits from unrelated, already-shipped lanes as ancestors -- each surfacing its own files in the PR-vs-main comparison and each carrying its own native issue-ID text into commit messages (also breaking Branch Discipline Guard for reasons beyond this agent's unilateral authority to fix without a history rewrite).",
     "resolution": "This branch was created directly from `origin/main` via `git worktree add -b claude/utv2-1533-concurrency-ramp-clean origin/main` -- no merge, no cherry-pick of merge commits, no ancestry relationship to the prior PRs at all. Only the intended implementation content for 14 declared paths was carried over (copied file-by-file from the prior branch's accepted tree, then committed fresh). A verification confirmed origin/main had not independently touched any of those 14 paths since UTV2-1533 began (see verified_source_sha below), so the carried content is byte-identical to the accepted implementation with zero reconciliation needed.",
@@ -40,8 +91,8 @@
     "verification_target_fix_note": "The lane-maximizer P2 fix commit (explicit verification_target contract, replacing the issue_id-guessing default) -- new work on this clean branch, not carried from any prior PR.",
     "accepted_pr_head_sha_prior_lineage": "24696311888e8c24beb530d557efe3e95ee4aa52",
     "accepted_pr_head_sha_prior_lineage_note": "PR #1213's accepted head, from which the 14 files' content was sourced (via the working tree of the branch built on top of it). Provenance only -- not an ancestor of this clean branch and not used as any current binding.",
-    "merge_sha": null,
-    "merge_sha_note": "Not merged. This field is intentionally null. Will be populated post-merge via ops:proof-generate --merge-sha.",
+    "merge_sha": "8ca5acf38a31fc1492961a0951a6af10029bc6c0",
+    "merge_sha_note": "PR #1216 merged via pnpm ops:merge-wrapper pr-merge (squash, auto-merge armed, no --admin) at 2026-07-14T22:58:29Z. This is a real, permanent, immutable historical fact once merged -- unlike proof_bundle_base_sha (an open PR's head, which changes on every push), a merge SHA cannot become stale after the fact, so it is safe to record here.",
     "proof_bundle_base_sha": "62fcc34bf889abc205aee02b93de94b211d5754d",
     "proof_bundle_base_note": "The commit this proof bundle document was authored against (its own parent) -- NOT a claim about the PR's current live head. A field inside a commit can never truthfully claim to equal the PR's current head: the act of committing that claim immediately produces a new commit, making the claim false again the instant it's recorded. This repo removed an equivalent current_pr_head_sha field from this schema for exactly that reason (see docs/06_status/proof/UTV2-1533/verification.md's Commit SHA reference section). The PR's actual, live current head is validated externally -- by GitHub itself (`gh pr view <PR> --json headRefOid`) and by the SHA-bound executor-result/v1 comment posted after each push -- never self-recorded inside a commit belonging to the branch it describes.",
     "ci_sentinels": {
@@ -108,5 +159,5 @@
     "clean_ancestry": "PASS -- branch created directly from origin/main, no merge/cherry-pick of the superseded PRs' history; rebased (not merged) onto a later origin/main advance mid-session with zero conflicts",
     "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, PR title, and PR body reference only UTV2-1533; the superseded PRs are referenced by GitHub PR number only (#1213, #1215), never by UTV2-### ID, so Branch Discipline Guard's issue-reference scan is not triggered"
   },
-  "verdict": "IMPLEMENTATION_CLEAN_COMPLETE_AND_REVIEWED -- CODEX_ROUND_1_ADDRESSED -- AWAITING_PM_APPROVAL"
+  "verdict": "MERGED -- RUNTIME_PROOF_ADDED_POST_MERGE -- AWAITING_TRUTH_CHECK_AND_LANE_CLOSE"
 }
