@@ -1,6 +1,6 @@
 # UTV2-1484 Verification
 
-**Commit SHA:** 6f2b8492 (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
+**Commit SHA:** 752ac10e4e03d1b464bbc39d91bd5569637d9e55 (this proof commit's parent — exact HEAD SHA cannot be embedded pre-commit; `post-merge-lane-close.yml` rebinds to the merge SHA automatically after merge)
 
 ## Verification
 
