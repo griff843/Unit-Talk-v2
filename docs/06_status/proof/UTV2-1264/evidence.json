@@ -7,8 +7,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-07-14T17:17:30Z",
   "sha_binding": {
-    "verified_source_sha": "201282a2ae363112679ab4d84a9ba11887e72718",
-    "verified_source_note": "Last substantive implementation commit; subsequent commits are proof-only.",
+    "verified_source_sha": "278aff00a537217843b3294069cf278911fae7e0",
+    "verified_source_note": "Last non-proof commit, containing only lane proof-scope alignment after the verified implementation commit; subsequent commits are proof-only.",
     "sha_type": "pre_merge_head",
     "bound_at": "2026-07-14T17:17:30Z",
     "evidence_commit_sha": "set-by-ci",
