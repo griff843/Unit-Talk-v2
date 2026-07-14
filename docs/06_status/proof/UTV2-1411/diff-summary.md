@@ -1,5 +1,8 @@
 # UTV2-1411 Diff Summary
 
+Head SHA: 88da8b00601f94d399d5cf52fd177163556a0b1b
+Merge SHA: 4f216c8619fb05b4ca9ece1e97ebff4d92d4fff5
+
 ## Scope
 
 This is a read-only live-DB verification lane per the issue's own instructions. No
