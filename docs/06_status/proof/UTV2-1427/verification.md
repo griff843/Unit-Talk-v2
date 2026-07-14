@@ -117,6 +117,12 @@ $ npx tsx --test apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts
 Acceptance criteria from PM review round 3, all proven by the test above plus the pre-existing round-1/round-2 tests:
 1. **Deployment preserves the current target posture** — the new "bootstrap migration preserves..." test, read-only against real governed targets.
 2. **Operators can subsequently engage/release the switch live** — unchanged from round 2's setKilled/isKilled round-trip test (same code path, safe fixture target).
+
+### Known CI-tooling gap (non-blocking, not a defect in this fix)
+
+`migration-reversibility-gate.yml`'s "Down-script presence check" (specifically its "Validate schema v2 proof binding" step) fails on this PR — but for a reason unrelated to this fix's correctness. That workflow's `actions/checkout@v4` steps do not set `ref: ${{ github.event.pull_request.head.sha }}`, so on a `pull_request`-triggered run, `GITHUB_SHA` resolves to GitHub's synthetic PR-merge-commit ref rather than the actual PR branch head. `proof-binding-validator.ts`'s rule 4 (everything between `verified_source_sha` and `HEAD` must be proof-only) then diffs against that synthetic ref, which pulls in every unrelated file from every other PR merged to `main` since this proof was bound — not this PR's own diff.
+
+Confirmed by running the identical validator locally against the real branch head (`git rev-parse HEAD` = `c56f57b0d2012fcc3d0f0a9b3f140a01500b5d6e`), which passes cleanly with zero violations — see the `ok: true` result earlier in this document's history. This gate is advisory, not in the branch-protection required-checks list (`verify`, `Executor Result Validation`, `Merge Gate`, `P0 Protocol`). Recommend a follow-up fix to add the missing `ref:` to `migration-reversibility-gate.yml`'s checkout steps so this stops false-failing on any migration PR that outlives other PRs merging to main — out of this lane's declared file scope, so not fixed here.
 3. **Unknown targets and read failures remain killed** — unchanged from round 2's fail-closed test.
 
 `docs/05_operations/DELIVERY_KILL_SWITCH.md` §2 and §5 updated to describe the bootstrap seed and correct the "no production-consequential default state" framing; §4 also corrected — its "GET is unauthenticated" line was stale from before round 1's auth fix and is now accurate.
