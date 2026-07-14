@@ -16,6 +16,7 @@ import {
   readManifest,
   relativeToRoot,
   requireIssueId,
+  requireVerificationTarget,
   validateBranchName,
   validatePreflightToken,
   validateTier,
@@ -506,15 +507,21 @@ async function main(): Promise<number> {
     const issue = await fetchIssue(issueId, linearToken);
     const laneType = inferLaneType(issue, explicitLaneType);
     const modelProfile = resolveDispatchModelProfile(tier, explicitModelProfile);
-    // Codex review fix (UTV2-1533, PR #1215): ops:lane-start requires --verification-target
-    // for a new lane_type:"verification" start (schema_version 2) -- codex:dispatch must
-    // thread it through, not just lane-maximizer's advisory suggestion, or every
-    // verification-lane dispatch through this path fails closed with
-    // verification_target_missing before the lane can even be created. Defaults to the
-    // lane's own issueId (the common case: a verification lane produces proof for its own
-    // tracking issue), overridable via --verification-target for the "verifies a different
-    // issue" case -- same default-with-override pattern as --lane-type/--model-profile above.
-    const verificationTarget = laneType === 'verification' ? (explicitVerificationTarget ?? issueId) : undefined;
+    // A verification lane's own tracking issue (issueId) is not necessarily the issue it
+    // verifies -- ops:lane-start's per-target concurrency cap depends on knowing the real
+    // target, and silently defaulting to issueId would let two distinct verification
+    // tracking issues for the same real target both slip past that cap. --verification-target
+    // is therefore required and validated explicitly for every verification-lane dispatch;
+    // never guessed. Mirrors lane-maximizer.ts's own explicit-target contract.
+    let verificationTarget: string | undefined;
+    if (laneType === 'verification') {
+      if (!explicitVerificationTarget) {
+        throw new Error(
+          'lane_type "verification" requires --verification-target (the real UTV2-### issue this lane verifies) -- it is never inferred from the lane\'s own issue ID.',
+        );
+      }
+      verificationTarget = requireVerificationTarget(explicitVerificationTarget);
+    }
     if (explain) {
       process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
       process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);

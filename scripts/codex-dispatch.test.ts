@@ -147,18 +147,29 @@ test('UTV2-1526: codex-dispatch passes --model-profile through to ops:lane-start
   assert.match(source, /would_run_lane_start:.*'--model-profile', modelProfile/, 'dry-run preview should also report --model-profile');
 });
 
-// Codex review fix (UTV2-1533, PR #1215): a verification-type Codex dispatch must thread
-// --verification-target through to ops:lane-start -- without it, every verification-lane
-// dispatch via `pnpm codex:dispatch` failed closed with verification_target_missing before
-// the lane could even be created, since ops:lane-start now requires it for a new
-// lane_type:"verification" start (schema_version 2).
-test('UTV2-1533: codex-dispatch threads --verification-target through to ops:lane-start for verification lanes', () => {
+// UTV2-1533: a Codex verification-lane dispatch must never guess its real verification
+// target from the lane's own issue ID -- an explicit, validated --verification-target is
+// required and threaded through to ops:lane-start unchanged, or the dispatch fails closed
+// before the lane is ever created. Mirrors lane-maximizer.ts's own explicit-target contract.
+test('UTV2-1533: codex-dispatch never defaults verification_target to issueId', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+
+  assert.doesNotMatch(
+    source,
+    /\?\?\s*issueId\)\s*:\s*undefined/,
+    'verificationTarget must never fall back to the lane\'s own issueId',
+  );
 
   assert.match(
     source,
-    /const verificationTarget = laneType === 'verification' \? \(explicitVerificationTarget \?\? issueId\) : undefined;/,
-    'verificationTarget must default to the lane\'s own issueId for verification lanes, overridable via --verification-target, and be undefined for any other lane type',
+    /if\s*\(laneType === 'verification'\)\s*\{\s*\n\s*if\s*\(!explicitVerificationTarget\)\s*\{\s*\n\s*throw new Error\(/,
+    'a verification-lane dispatch with no --verification-target must throw (fail closed) before the lane is created',
+  );
+
+  assert.match(
+    source,
+    /verificationTarget = requireVerificationTarget\(explicitVerificationTarget\);/,
+    'an explicitly-supplied --verification-target must be validated via requireVerificationTarget, not accepted as-is',
   );
 
   const runLaneStartDefIndex = source.indexOf('function runLaneStart(');
@@ -183,7 +194,7 @@ test('UTV2-1533: codex-dispatch threads --verification-target through to ops:lan
   assert.match(
     callSiteLine,
     /runLaneStart\(issueId, tier, branch, files, laneType, modelProfile, verificationTarget\)/,
-    'the real (non-dry-run) call site must pass verificationTarget through',
+    'the real (non-dry-run) call site must pass verificationTarget through unchanged',
   );
 
   assert.match(
@@ -191,6 +202,12 @@ test('UTV2-1533: codex-dispatch threads --verification-target through to ops:lan
     /would_run_lane_start:.*\.\.\.\(verificationTarget \? \['--verification-target', verificationTarget\] : \[\]\)/,
     'the dry-run preview must also report --verification-target when applicable',
   );
+});
+
+test('UTV2-1533: codex-dispatch imports requireVerificationTarget from shared.js', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+  assert.match(source, /requireVerificationTarget/);
+  assert.match(source, /from '\.\/ops\/shared\.js'/);
 });
 
 test('dispatch skill documents the Codex lane workflow', () => {
