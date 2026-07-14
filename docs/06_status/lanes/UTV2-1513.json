@@ -50,10 +50,10 @@
     "docs/06_status/proof/UTV2-1513/diff-summary.md",
     "docs/06_status/proof/UTV2-1513/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-14T01:45:19.427Z",
-  "heartbeat_at": "2026-07-14T05:04:34.628Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-14T05:05:03.440Z",
+  "closed_at": "2026-07-14T05:05:03.440Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1513-public-website-mvp-v2.json",
   "created_by": "claude",
@@ -110,6 +110,18 @@
         "C4"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T05:05:01.051Z",
+      "verdict": "pass",
+      "merge_sha": "c9531ae7616f6812bb1f743c5d46704b213b70c4",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1201",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],
