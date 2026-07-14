@@ -112,7 +112,7 @@ Codex health: OK  |  Claude slots: {available}/{configured}  |  Codex slots: {av
 
 If any T1 in routing:
 
-1. Dispatch all non-T1 issues first (Claude is single-threaded; complete non-T1 before pausing)
+1. Dispatch all non-T1 issues first — Claude lanes run concurrently as background agents (Phase 5), so this is a sequencing preference (get T1 plan gates in front of PM early), not a concurrency limitation
 2. Surface T1 gates one at a time:
    ```
    [dispatch-board] T1 PLAN GATE — UTV2-### {title}
@@ -141,42 +141,35 @@ Parallel dispatch guard:
 
 ## Phase 5: Monitor → verify → close
 
-### Claude lanes (you are the executor)
+**Both executors run implementation as background agents; the orchestrator is control-plane only for either.** Claude lanes dispatch via the `Agent({run_in_background: true, ...})` call defined in `/dispatch` Phase 4 — one call per lane, in the worktree `ops:lane-start` already created. The orchestrator session never implements a lane directly (no editing lane files, no running the lane's own `pnpm verify`/tests, no pushing lane commits) for either executor. Dispatch, wait for the automatic completion notification, then run the same monitor → verify → close cycle below regardless of which executor produced the PR.
 
 **Pre-merge verification is not `ops:truth-check`.** `ops:truth-check` is the **done-gate**: it requires a merged/Done lane and the merge SHA, so it cannot pass before merge. `ops:lane-close` runs it *after* merge. Pre-merge, validate merge-readiness with verification + proof-check + merge-ready + R-level; never call `ops:truth-check` to "pass" a branch before merge.
 
-After PR open:
+### On any lane's completion notification (Claude or Codex)
+
 1. CI green on PR (on the PR head)
 2. Run `/verification` (tier-appropriate)
 3. Confirm merge-readiness pre-merge (NOT truth-check):
    - proof artifacts present and well-formed: `pnpm ops:proof-check --issue UTV2-###`
    - merge-readiness: `pnpm ops:merge-ready --issue UTV2-### --pr <n>`
    - R-level required artifacts present: `npx tsx scripts/ci/r-level-check.ts --issue UTV2-###`
+   - For a Codex lane, also diff-review: files within `file_scope_lock`, no scope bleed
 4. Pre-merge diagnostic: `pnpm ops:pr-block-diagnostic --pr <n>` → if genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
-5. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
-6. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-7. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
-8. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
-9. Then dispatch next Claude candidate.
-10. On pre-merge FAIL: mark blocked with the specific failing check → dispatch next from unblocked pool.
+5. For a Codex lane specifically: `gh pr review <n> --approve` before merging (Claude lanes don't self-review their own PR — a Claude-authored PR proceeds straight to merge on PASS, same as before).
+6. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
+7. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
+8. `ops:lane-close` runs `ops:truth-check` (the done-gate, against the merge SHA) and owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. If `ops:lane-close` exits non-zero, the lane is **merged-but-not-closed** — repair and re-run close before moving on.
+9. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
+10. Then dispatch the next candidate (Claude or Codex, whichever has an open slot).
+11. On pre-merge FAIL / scope bleed: mark blocked with the specific failing check, leave PR open → dispatch next from unblocked pool.
 
-### Codex lanes (async)
+**Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently.** If two lanes' completion notifications arrive close together, run steps 1–5 for both in parallel (review is not merge), but queue step 6 onward: let the first lane's `ops:lane-close` exit before acquiring the mutex for the second. Concurrent execution windows are the point of this workflow; concurrent merge/close attempts are never allowed.
 
-After dispatching: emit check-in instruction.
+While a lane runs in the background, emit a check-in note so a returning session knows what to expect:
 ```
-[dispatch-board] Codex lane(s) dispatched: UTV2-### [, UTV2-###]
-When Codex finishes and opens its PR(s), run: /dispatch-board --check-codex
+[dispatch-board] Lane(s) dispatched in background: UTV2-### [claude], UTV2-### [codex]
+You'll be notified automatically as each completes.
 ```
-
-On `--check-codex`: query GitHub for open PRs on active Codex branches, then for each:
-1. Diff review — files within `file_scope_lock`, no scope bleed, `pnpm verify` + R-level section present and green
-2. Run `pnpm ops:pr-block-diagnostic --pr <n>`; if a genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
-3. Clean → `gh pr review <n> --approve` → `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
-4. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-5. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release.
-6. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes closed worktree.
-7. Then dispatch next Codex candidate.
-6. Scope bleed / verify failure → leave PR open, mark blocked, dispatch next
 
 ### T1 merge gate
 

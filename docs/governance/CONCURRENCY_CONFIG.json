@@ -1,9 +1,9 @@
 {
-  "version": 2,
-  "total": 6,
+  "version": 3,
+  "total": 10,
   "executors": {
-    "claude": 2,
-    "codex": 4
+    "claude": 4,
+    "codex": 6
   },
   "merge_serialized_max": 1,
   "singleton_types": ["runtime", "migration", "modeling", "data-canonical"],
@@ -14,15 +14,21 @@
     ["runtime", "runtime"],
     ["modeling", "modeling"]
   ],
+  "type_caps": {
+    "hygiene": 4,
+    "governance": 3,
+    "delivery-ui": { "max_per_app": 1 },
+    "verification": { "max_per_target": 1 }
+  },
   "trial": {
-    "enabled": true,
-    "total": 8,
+    "enabled": false,
+    "total": 14,
     "executors": {
-      "claude": 3,
-      "codex": 5
+      "claude": 5,
+      "codex": 9
     },
-    "allowed_until": "2026-06-26",
-    "rationale": "UTV2-1165: 7–8 lane trial governor. PM enables by setting enabled=true and allowed_until ISO date. Reverts automatically when allowed_until is in the past.",
+    "allowed_until": null,
+    "rationale": "UTV2-1533: post-lock ramp step 2 (12-14 lane ceiling). PM enables only after the 10-lane base wave (v3) has run healthy — no ghost-lane spike, no repeated stale-lease/substrate-guard failures, merge-train drain rate holding, CI/review delay not growing — per docs/governance/LANE_CONCURRENCY_POLICY.md §6. PM enables by setting enabled=true and allowed_until ISO date. Reverts automatically when allowed_until is in the past.",
     "safe_types_only": ["governance", "hygiene", "delivery-ui", "verification"]
   }
 }

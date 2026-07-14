@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1499",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1499-runtime-operations-governance-chapter",
+  "branch": "claude/utv2-1499-runtime-operations-governance-chapter",
+  "base_branch": "main",
+  "commit_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1209",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/RUNTIME_OPERATIONS_GOVERNANCE.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1499/verification.md",
+    "docs/06_status/proof/UTV2-1499/diff-summary.md",
+    "docs/06_status/proof/UTV2-1499/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-07-14T12:03:33.832Z",
+  "heartbeat_at": "2026-07-14T20:53:52.109Z",
+  "closed_at": "2026-07-14T20:53:52.109Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1499-runtime-operations-governance-chapter.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T20:51:33.558Z",
+      "verdict": "pass",
+      "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1209"
+    },
+    {
+      "checked_at": "2026-07-14T20:51:35.601Z",
+      "verdict": "pass",
+      "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1209",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T20:51:35.611Z",
+      "verdict": "fail",
+      "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T20:51:48.522Z",
+      "verdict": "fail",
+      "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T20:53:40.654Z",
+      "verdict": "pass",
+      "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T20:53:49.708Z",
+      "verdict": "pass",
+      "merge_sha": "441b6c6f40c878179e23e49935ac91e2160fe9db",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1209",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1499-runtime-operations-governance-chapter",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
