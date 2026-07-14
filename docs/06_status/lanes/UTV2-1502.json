@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1502",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1502-watchdog-external-heartbeat",
+  "branch": "codex/utv2-1502-watchdog-external-heartbeat",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/WATCHDOG_EXTERNAL_HEARTBEAT.md",
+    "docs/06_status/proof/UTV2-1502/diff-summary.md",
+    "docs/06_status/proof/UTV2-1502/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1502/diff-summary.md",
+    "docs/06_status/proof/UTV2-1502/verification.md",
+    "docs/06_status/proof/UTV2-1502/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-14T04:43:25.744Z",
+  "heartbeat_at": "2026-07-14T04:43:25.744Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1502-watchdog-external-heartbeat.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1502-watchdog-external-heartbeat",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
