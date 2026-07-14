@@ -165,7 +165,7 @@ test('buildModelRoutingEvidence marks legacy resolutions explicitly', () => {
 // PM review finding #4: the evidence sidecar must be committed and pushed by
 // codex-exec.ts itself -- Codex's own commit/push already happened before this file
 // even exists, so nothing else on the branch would ever pick it up otherwise.
-test('commitAndPushEvidence commits and pushes a real evidence file to its origin remote', () => {
+test('commitAndPushEvidence publishes a first-push lane branch and establishes its upstream', () => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-evidence-'));
   const bareRemote = path.join(tmpRoot, 'origin.git');
   const workingRepo = path.join(tmpRoot, 'work');
@@ -184,6 +184,7 @@ test('commitAndPushEvidence commits and pushes a real evidence file to its origi
     spawnSync('git', ['add', 'README.md'], { cwd: workingRepo, stdio: 'pipe' });
     spawnSync('git', ['commit', '-m', 'seed'], { cwd: workingRepo, stdio: 'pipe' });
     spawnSync('git', ['push', '-u', 'origin', 'main'], { cwd: workingRepo, stdio: 'pipe' });
+    spawnSync('git', ['checkout', '-b', 'codex/utv2-9999-first-push'], { cwd: workingRepo, stdio: 'pipe' });
 
     fs.mkdirSync(path.join(workingRepo, 'docs', '06_status', 'proof', 'UTV2-9999'), { recursive: true });
     const evidenceRelPath = 'docs/06_status/proof/UTV2-9999/model-routing.json';
@@ -193,10 +194,17 @@ test('commitAndPushEvidence commits and pushes a real evidence file to its origi
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.step, 'push');
 
-    // Prove it actually reached the remote, not just the local branch. Check out main
-    // explicitly rather than relying on the clone's auto-selected default branch.
+    // Prove it reached the new remote lane branch and that subsequent bare pushes can
+    // rely on the upstream established by the helper.
+    const upstream = spawnSync('git', ['rev-parse', '--abbrev-ref', '@{upstream}'], {
+      cwd: workingRepo,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    assert.strictEqual(upstream.status, 0);
+    assert.strictEqual(upstream.stdout.trim(), 'origin/codex/utv2-9999-first-push');
     const freshClone = path.join(tmpRoot, 'verify-clone');
-    spawnSync('git', ['clone', '--branch', 'main', bareRemote, freshClone], { stdio: 'pipe' });
+    spawnSync('git', ['clone', '--branch', 'codex/utv2-9999-first-push', bareRemote, freshClone], { stdio: 'pipe' });
     const cloned = fs.readFileSync(path.join(freshClone, evidenceRelPath), 'utf8');
     assert.match(cloned, /"ok":true/);
   } finally {

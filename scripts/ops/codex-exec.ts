@@ -170,6 +170,12 @@ export interface EvidencePersistenceResult {
   detail: string;
 }
 
+function currentBranch(cwd: string): string | null {
+  const branch = spawnSync('git', ['branch', '--show-current'], { cwd, stdio: 'pipe', encoding: 'utf8' });
+  if (branch.status !== 0) return null;
+  return branch.stdout.trim() || null;
+}
+
 /**
  * Commit and push the model-routing evidence sidecar inside the lane worktree, on the
  * lane's own branch. Required because Codex's own commit/push (its last action before
@@ -195,7 +201,19 @@ export function commitAndPushEvidence(cwd: string, relativeEvidencePath: string,
     return { ok: false, step: 'commit', detail: combined || 'git commit failed' };
   }
 
-  const push = spawnSync('git', ['push'], { cwd, stdio: 'pipe', encoding: 'utf8' });
+  // Lanes are created locally by `git worktree add -b`, so their first push has no
+  // configured upstream. Explicitly publish the current branch and establish that
+  // tracking relationship; a bare `git push` fails at exactly the point this runner
+  // is meant to make the evidence durable.
+  const branch = currentBranch(cwd);
+  if (!branch) {
+    return { ok: false, step: 'push', detail: 'unable to determine current branch for evidence push' };
+  }
+  const push = spawnSync('git', ['push', '--set-upstream', 'origin', `HEAD:refs/heads/${branch}`], {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
   if (push.status !== 0) {
     return { ok: false, step: 'push', detail: push.stderr || push.stdout || 'git push failed' };
   }
