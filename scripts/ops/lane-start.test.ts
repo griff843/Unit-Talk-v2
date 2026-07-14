@@ -138,3 +138,101 @@ test('lane-start declares the model-routing evidence path in expected_proof_path
     'a Codex lane must declare docs/06_status/proof/<issue>/model-routing.json in expected_proof_paths at lane-start time',
   );
 });
+
+// PR #1213 Codex review fix: ops:lane:resume re-invokes ops:lane-start for a blocked
+// verification lane without re-supplying --verification-target (same as it doesn't
+// re-supply --model-profile) -- the concurrency check must backfill from the existing
+// manifest, not treat every resume as a "missing target" violation.
+test('lane-start backfills verification_target from the existing manifest on resume, before the concurrency check', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const backfillIndex = source.indexOf('const effectiveVerificationTarget = verificationTargetFlag ?? existingManifestForResume?.verification_target;');
+  assert.notStrictEqual(backfillIndex, -1, 'expected the resume-backfill assignment for effectiveVerificationTarget');
+
+  const concurrencyCallIndex = source.indexOf('const concurrencyViolations = checkConcurrencyLimits(');
+  assert.notStrictEqual(concurrencyCallIndex, -1, 'expected the checkConcurrencyLimits call site');
+  assert.ok(
+    backfillIndex < concurrencyCallIndex,
+    'effectiveVerificationTarget must be computed before checkConcurrencyLimits runs, not after -- ' +
+      'otherwise every verification-lane resume spuriously fails the per-target cap\'s missing-target check',
+  );
+
+  const concurrencyCallBlockEnd = source.indexOf(');', concurrencyCallIndex);
+  const concurrencyCallBlock = source.slice(concurrencyCallIndex, concurrencyCallBlockEnd);
+  assert.match(
+    concurrencyCallBlock,
+    /verificationTarget: effectiveVerificationTarget/,
+    'checkConcurrencyLimits must receive the backfilled effectiveVerificationTarget, not the raw CLI flag',
+  );
+  assert.match(
+    concurrencyCallBlock,
+    /readAllManifests\(\)\.filter\(\(m\) => m\.issue_id !== issueId\)/,
+    'checkConcurrencyLimits must exclude the incoming issue\'s own active manifest from the conflict-search set -- ' +
+      'a lane must never be treated as conflicting with itself on resume',
+  );
+});
+
+// PR #1213 Codex review fix: a malformed --verification-target must fail before
+// createBranchAndWorktree/reserveLease run, not deep inside createManifest -- otherwise a
+// typo leaves an orphaned branch/worktree/lease behind it.
+test('lane-start validates verification_target format before creating branch/worktree/lease state', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const formatCheckIndex = source.indexOf("code: 'verification_target_malformed'");
+  assert.notStrictEqual(formatCheckIndex, -1, 'expected an early verification_target_malformed precondition');
+
+  const createBranchIndex = source.indexOf('createBranchAndWorktree(branch, worktreePath);');
+  assert.notStrictEqual(createBranchIndex, -1, 'expected the createBranchAndWorktree call site');
+  const reserveLeaseIndex = source.indexOf('const lease = reserveLease({', createBranchIndex);
+  assert.notStrictEqual(reserveLeaseIndex, -1, 'expected a reserveLease call site after createBranchAndWorktree');
+
+  assert.ok(
+    formatCheckIndex < createBranchIndex && formatCheckIndex < reserveLeaseIndex,
+    'verification_target_malformed must be checked before createBranchAndWorktree and reserveLease run -- ' +
+      'validating it only inside createManifest happens too late, after real branch/worktree/lease side effects',
+  );
+});
+
+// PR #1215 Codex review fix (round 5): requireVerificationTarget() normalizes (uppercases)
+// internally, but a discarded return value means a lower-case --verification-target passes
+// this early check yet still reaches createManifest's case-sensitive pattern check as the
+// original lower-case string, failing after branch/worktree/lease side effects had already
+// run -- the exact orphaned-state case this early check exists to prevent.
+// verificationTargetFlag must be declared with `let` and reassigned to the normalized return
+// value, not left as a `const` alias to the raw flag.
+//
+// PR #1215 Codex review fix (round 6): the normalization call must use
+// requireVerificationTarget(), not the general requireIssueId() -- the latter also accepts
+// UNI-### (ISSUE_PATTERN), but verification_target is documented UTV2-### only in the
+// manifest schema and LANE_MANIFEST_SPEC.md §16.
+test('lane-start normalizes verification_target via requireVerificationTarget (UTV2-### only) before any downstream use', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  assert.match(
+    source,
+    /let verificationTargetFlag = flags\.get\('verification-target'\)\?\.at\(-1\);/,
+    'verificationTargetFlag must be declared with `let` (it is reassigned after normalization), not `const`',
+  );
+
+  const malformedCheckIndex = source.indexOf("code: 'verification_target_malformed'");
+  assert.notStrictEqual(malformedCheckIndex, -1, 'expected the verification_target_malformed precondition block');
+  const tryBlockStart = source.lastIndexOf('try {', malformedCheckIndex);
+  const normalizeCallIndex = source.indexOf('requireVerificationTarget(verificationTargetFlag)', tryBlockStart);
+  assert.notStrictEqual(normalizeCallIndex, -1, 'expected a requireVerificationTarget(verificationTargetFlag) call inside the try block');
+  assert.strictEqual(
+    source.indexOf('requireIssueId(verificationTargetFlag)', tryBlockStart) === -1 ||
+      source.indexOf('requireIssueId(verificationTargetFlag)', tryBlockStart) > malformedCheckIndex + 500,
+    true,
+    'the general requireIssueId() must not be used to validate verification_target -- it also accepts UNI-###',
+  );
+
+  const reassignmentLine = source.slice(
+    source.lastIndexOf('\n', normalizeCallIndex) + 1,
+    source.indexOf('\n', normalizeCallIndex),
+  ).trim();
+  assert.strictEqual(
+    reassignmentLine,
+    'verificationTargetFlag = requireVerificationTarget(verificationTargetFlag);',
+    `requireVerificationTarget's normalized return value must be reassigned back to verificationTargetFlag, not discarded -- found: "${reassignmentLine}"`,
+  );
+});

@@ -110,6 +110,9 @@ test('dispatch command includes lane-start required tier branch and file flags',
         title: 'Queue Intake Wave Builder',
         branch: 'codex/utv2-96801b-wave-builder',
         file_scope: ['scripts/ops/lane-maximizer.ts', 'scripts/ops/lane-maximizer.test.ts'],
+        // Deliberately NOT equal to the candidate's own issue_id, to prove the
+        // supplied value is carried through verbatim rather than defaulted.
+        verification_target: 'UTV2-9999',
       }),
     ],
     [],
@@ -118,7 +121,7 @@ test('dispatch command includes lane-start required tier branch and file flags',
 
   assert.equal(
     report.dispatch_plan.fill_now[0]?.dispatch_command,
-    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --model-profile codex-terra-medium --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --model-profile codex-terra-medium --lane-type verification --verification-target UTV2-9999 --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
   );
 });
 
@@ -178,6 +181,8 @@ test('queue intake parses ready issues into dispatchable candidates', () => {
     'Acceptance criteria:',
     '- emits lane-start command',
     '',
+    'Verification target: UTV2-96818',
+    '',
     'Allowed file scope',
     '- scripts/ops/lane-maximizer.ts',
     '- scripts/ops/lane-maximizer.test.ts',
@@ -192,9 +197,10 @@ test('queue intake parses ready issues into dispatchable candidates', () => {
       'scripts/ops/lane-maximizer.ts',
       'scripts/ops/lane-maximizer.test.ts',
     ]);
+    assert.equal(candidates[0]?.verification_target, 'UTV2-96818');
     assert.equal(
       report.dispatch_plan.fill_now[0]?.dispatch_command,
-      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --model-profile codex-terra-medium --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --model-profile codex-terra-medium --lane-type verification --verification-target UTV2-96818 --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
     );
   });
 });
@@ -553,4 +559,156 @@ test('priority checks MIGRATION_PATH before TIER_C_PATH', () => {
   );
 
   assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MIGRATION_PATH']);
+});
+
+// UTV2-1533 lane-maximizer P2 fix: verification_target is never guessed from
+// candidate.issue_id. These tests prove the explicit-target contract end to end.
+
+test('UTV2-1533 P2: explicit verification_target appears unchanged in the dispatch command', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96820', {
+        lane_type: 'verification',
+        verification_target: 'UTV2-4242',
+        file_scope: ['scripts/ops/verify-runner.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-96820']);
+  assert.match(report.dispatch_plan.fill_now[0]?.dispatch_command ?? '', /--verification-target UTV2-4242\b/);
+});
+
+test('UTV2-1533 P2: missing verification_target blocks the candidate', () => {
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-96821', { lane_type: 'verification', file_scope: ['scripts/ops/verify-runner.ts'] })],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MISSING_VERIFICATION_TARGET']);
+  assert.deepStrictEqual(report.dispatch_plan.fill_now, []);
+});
+
+test('UTV2-1533 P2: malformed verification_target blocks the candidate', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96822', {
+        lane_type: 'verification',
+        verification_target: 'not-an-issue-id',
+        file_scope: ['scripts/ops/verify-runner.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MALFORMED_VERIFICATION_TARGET']);
+  assert.deepStrictEqual(report.dispatch_plan.fill_now, []);
+});
+
+test('UTV2-1533 P2: candidate is blocked when its target is already claimed by an active verification lane', () => {
+  const activeLanes = [
+    makeManifest('UTV2-96823A', { lane_type: 'verification', verification_target: 'UTV2-500' }),
+  ];
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96823', {
+        lane_type: 'verification',
+        verification_target: 'UTV2-500',
+        file_scope: ['scripts/ops/verify-runner.ts'],
+      }),
+    ],
+    activeLanes,
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['VERIFICATION_TARGET_ACTIVE']);
+});
+
+test('UTV2-1533 P2: candidate with a different target than an active verification lane is allowed', () => {
+  const activeLanes = [
+    makeManifest('UTV2-96824A', { lane_type: 'verification', verification_target: 'UTV2-500' }),
+  ];
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96824', {
+        lane_type: 'verification',
+        verification_target: 'UTV2-600',
+        file_scope: ['scripts/ops/verify-runner.ts'],
+      }),
+    ],
+    activeLanes,
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-96824']);
+});
+
+test('UTV2-1533 P2: an active verification lane with no trustworthy target fails closed for any incoming verification candidate', () => {
+  const activeLanes = [
+    // Legacy active verification lane predating the verification_target field --
+    // undetermined, not merely absent-and-fine.
+    makeManifest('UTV2-96825A', { lane_type: 'verification' }),
+  ];
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96825', {
+        lane_type: 'verification',
+        verification_target: 'UTV2-900',
+        file_scope: ['scripts/ops/verify-runner.ts'],
+      }),
+    ],
+    activeLanes,
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['VERIFICATION_TARGET_UNDETERMINED_CONFLICT']);
+});
+
+test('UTV2-1533 P2: two planned candidates for the same target are not both recommended', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96826A', {
+        lane_type: 'verification',
+        verification_target: 'UTV2-700',
+        file_scope: ['scripts/ops/verify-runner-a.ts'],
+      }),
+      makeCandidate('UTV2-96826B', {
+        lane_type: 'verification',
+        verification_target: 'UTV2-700',
+        file_scope: ['scripts/ops/verify-runner-b.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 2, maxCodex: 4 },
+  );
+
+  assert.equal(findDecisionIssueIds(report, 'recommended').length, 1);
+  const blockedEntry = report.blocked.find((entry) => entry.reason_codes.includes('VERIFICATION_TARGET_ALREADY_PLANNED'));
+  assert.ok(blockedEntry, 'expected exactly one candidate blocked as VERIFICATION_TARGET_ALREADY_PLANNED');
+  assert.equal(report.dispatch_plan.fill_now.filter((entry) => entry.lane_type === 'verification').length, 1);
+});
+
+test('UTV2-1533 P2: candidate issue_id is never silently substituted as the verification target', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96827', {
+        lane_type: 'verification',
+        // No verification_target supplied -- must not fall back to issue_id.
+        file_scope: ['scripts/ops/verify-runner.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), []);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MISSING_VERIFICATION_TARGET']);
+  assert.ok(
+    !report.dispatch_plan.fill_now.some((entry) => entry.dispatch_command.includes('--verification-target UTV2-96827')),
+    'issue_id must never appear as a silently substituted --verification-target value',
+  );
 });

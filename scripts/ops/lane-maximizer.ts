@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
-import { ACTIVE_LOCK_STATUSES, readConfiguredEnvValue, resolveLaneExecutor } from './shared.js';
+import {
+  ACTIVE_LOCK_STATUSES,
+  readConfiguredEnvValue,
+  requireVerificationTarget,
+  resolveLaneExecutor,
+} from './shared.js';
 import { linearQuery } from './linear-client.js';
 import {
   FULL_VERIFY_THROTTLE_DIR,
@@ -23,6 +28,7 @@ export interface LaneManifest {
   blocked_by: string[];
   commit_sha: string | null;
   pr_url: string | null;
+  verification_target?: string;
 }
 
 export interface CandidateLane {
@@ -39,6 +45,11 @@ export interface CandidateLane {
   has_acceptance_criteria?: boolean;
   labels?: string[];
   url?: string;
+  // Explicit, machine-supplied target for a lane_type:"verification" candidate.
+  // Never inferred -- see UTV2-1533's lane-maximizer P2 fix. A verification
+  // candidate with no explicit target is blocked (MISSING_VERIFICATION_TARGET),
+  // never defaulted to issue_id.
+  verification_target?: string;
 }
 
 export type RecommendDecision = 'recommended' | 'blocked' | 'risky' | 'deferred';
@@ -137,7 +148,29 @@ const REASON_MESSAGES: Record<string, string> = {
     'Candidate does not declare a file scope, so overlap and singleton path checks cannot be proven before lane start.',
   MISSING_ACCEPTANCE_CRITERIA:
     'Candidate does not include acceptance criteria, so it is not safe to dispatch automatically.',
+  MISSING_VERIFICATION_TARGET:
+    'Verification-lane candidate does not supply an explicit verification_target and cannot be safely recommended -- the per-target concurrency cap cannot be proven without it. Never inferred from issue_id.',
+  MALFORMED_VERIFICATION_TARGET:
+    'Verification-lane candidate supplies a verification_target that does not match UTV2-###.',
+  VERIFICATION_TARGET_UNDETERMINED_CONFLICT:
+    'An active verification lane has no trustworthy verification_target, so this candidate cannot be proven to target a different issue. Fails closed until the ambiguous active lane is resolved.',
+  VERIFICATION_TARGET_ACTIVE:
+    'Candidate verification_target is already claimed by an active verification lane.',
+  VERIFICATION_TARGET_ALREADY_PLANNED:
+    'Candidate verification_target is already claimed by another candidate recommended earlier in this same wave.',
 };
+
+function isValidVerificationTarget(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false;
+  }
+  try {
+    requireVerificationTarget(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function normalizePath(value: string): string {
   return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/+$/, '');
@@ -230,6 +263,18 @@ function extractFileScopeFromText(text: string | null | undefined): string[] {
         .filter((scope) => scope.length > 0 && scope !== '-' && scope !== '—'),
     ),
   );
+}
+
+// Explicit, narrowly-parsed intake for a lane_type:"verification" candidate's
+// real target. Deliberately a single machine-readable line ("Verification
+// target: UTV2-####"), never inferred from title, branch name, free-form
+// purpose text, or file paths -- UTV2-1533's lane-maximizer P2 fix.
+function extractVerificationTargetFromText(text: string | null | undefined): string | undefined {
+  if (!text) {
+    return undefined;
+  }
+  const match = text.match(/^\s*Verification\s+target:\s*(UTV2-\d+)\s*$/im);
+  return match ? match[1].toUpperCase() : undefined;
 }
 
 function overlapsPath(left: string, right: string): boolean {
@@ -584,6 +629,7 @@ export function parseQueueCandidates(queuePath: string): CandidateLane[] {
       blocked_by: parseBlockedByFromText(block),
       has_acceptance_criteria: hasAcceptanceCriteria(block),
       labels,
+      verification_target: extractVerificationTargetFromText(block),
     });
   }
 
@@ -694,6 +740,7 @@ async function fetchLinearCandidates(argv: string[]): Promise<CandidateLane[]> {
       has_acceptance_criteria: hasAcceptanceCriteria(issue.description),
       labels,
       url: issue.url,
+      verification_target: extractVerificationTargetFromText(issue.description),
     }];
   });
 }
@@ -780,6 +827,16 @@ export function evaluateCandidates(
   let plannedClaude = 0;
   let plannedCodex = 0;
   const plannedLaneTypes = [...initialActiveTypes];
+  const plannedVerificationTargets = new Set<string>();
+  const activeVerificationLanes = activeLanes.filter((lane) => lane.lane_type === 'verification');
+  const undeterminedActiveVerificationLane = activeVerificationLanes.find(
+    (lane) => !isValidVerificationTarget(lane.verification_target),
+  );
+  const activeVerificationTargets = new Set(
+    activeVerificationLanes
+      .map((lane) => lane.verification_target)
+      .filter((target): target is string => isValidVerificationTarget(target)),
+  );
 
   const remainingSlots = (executor: CandidateLane['executor']): number => {
     if (executor === 'claude') return Math.max(0, limits.maxClaude - activeClaude - plannedClaude);
@@ -803,6 +860,14 @@ export function evaluateCandidates(
       candidate.executor === 'codex-cli' || candidate.executor === 'codex-cloud'
         ? ['--model-profile', candidate.tier === 'T1' ? 'codex-sol-high' : 'codex-terra-medium']
         : [];
+    // UTV2-1533 lane-maximizer P2 fix: verification_target is never guessed from
+    // candidate.issue_id. By the time pushPlan runs for a lane_type:"verification"
+    // candidate, the evaluation loop has already required an explicit, validated
+    // candidate.verification_target (MISSING_VERIFICATION_TARGET /
+    // MALFORMED_VERIFICATION_TARGET block otherwise) -- the exact supplied value is
+    // carried through unchanged.
+    const verificationTargetArgs =
+      laneType === 'verification' ? ['--verification-target', candidate.verification_target as string] : [];
     report.dispatch_plan.fill_now.push({
       issue_id: candidate.issue_id,
       executor: candidate.executor,
@@ -824,12 +889,16 @@ export function evaluateCandidates(
         ...modelProfileArgs,
         '--lane-type',
         laneType,
+        ...verificationTargetArgs,
         ...fileArgs,
       ].join(' '),
     });
     if (candidate.executor === 'claude') plannedClaude += 1;
     else plannedCodex += 1;
     if (!plannedLaneTypes.includes(laneType)) plannedLaneTypes.push(laneType);
+    if (laneType === 'verification' && candidate.verification_target) {
+      plannedVerificationTargets.add(candidate.verification_target);
+    }
   };
 
   for (const candidate of rankCandidates(candidates)) {
@@ -865,6 +934,41 @@ export function evaluateCandidates(
     if (candidate.tier === 'T1') {
       report.deferred.push(buildResult(candidate.issue_id, 'deferred', 'T1_REQUIRES_PM', ranking));
       continue;
+    }
+
+    // UTV2-1533 lane-maximizer P2 fix: a lane_type:"verification" candidate's real
+    // target is never guessed from its own issue_id. Explicit, validated, and
+    // conflict-checked here -- fail closed at every step rather than silently
+    // defaulting or silently allowing an unprovable per-target cap.
+    if (laneType === 'verification') {
+      if (!candidate.verification_target) {
+        report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'MISSING_VERIFICATION_TARGET', ranking));
+        continue;
+      }
+
+      if (!isValidVerificationTarget(candidate.verification_target)) {
+        report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'MALFORMED_VERIFICATION_TARGET', ranking));
+        continue;
+      }
+
+      if (undeterminedActiveVerificationLane) {
+        report.blocked.push(
+          buildResult(candidate.issue_id, 'blocked', 'VERIFICATION_TARGET_UNDETERMINED_CONFLICT', ranking),
+        );
+        continue;
+      }
+
+      if (activeVerificationTargets.has(candidate.verification_target)) {
+        report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'VERIFICATION_TARGET_ACTIVE', ranking));
+        continue;
+      }
+
+      if (plannedVerificationTargets.has(candidate.verification_target)) {
+        report.blocked.push(
+          buildResult(candidate.issue_id, 'blocked', 'VERIFICATION_TARGET_ALREADY_PLANNED', ranking),
+        );
+        continue;
+      }
     }
 
     if (candidate.executor === 'claude' && remainingSlots(candidate.executor) <= 0) {
