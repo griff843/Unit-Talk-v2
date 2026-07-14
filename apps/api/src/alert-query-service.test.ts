@@ -216,6 +216,39 @@ test('getAlertSignalQuality aggregates periods and bySport from settled alert-ag
   assert.equal(result.insufficientData, false);
 });
 
+test('getAlertSignalQuality excludes test and proof fixture picks from production metrics', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const now = new Date('2026-04-04T12:00:00.000Z');
+
+  await seedAlertAgentSettlement(repositories, {
+    selection: 'Production alert selection',
+    sport: 'NBA',
+    settledAt: '2026-04-03T12:00:00.000Z',
+    result: 'win',
+    clvPercent: 3,
+  });
+  await seedAlertAgentSettlement(repositories, {
+    selection: 'Fixture alert selection',
+    sport: 'NBA',
+    settledAt: '2026-04-03T12:00:00.000Z',
+    result: 'loss',
+    clvPercent: -10,
+    metadata: { testRun: true },
+  });
+
+  const result = await getAlertSignalQuality(repositories, now);
+
+  assert.deepEqual(result.periods['30d'], {
+    count: 1,
+    avgClvPct: null,
+    winRate: null,
+    sufficientSample: false,
+  });
+  assert.deepEqual(result.bySport, {
+    NBA: { count: 1, avgClvPct: null, winRate: null },
+  });
+});
+
 async function seedDetection(
   repository: Pick<AlertDetectionRepository, 'saveDetection'>,
   overrides: {
@@ -260,6 +293,7 @@ async function seedAlertAgentSettlement(
     settledAt: string;
     result: 'win' | 'loss' | 'push';
     clvPercent: number;
+    metadata?: Record<string, unknown>;
   },
 ) {
   const created = await processSubmission(
@@ -270,6 +304,7 @@ async function seedAlertAgentSettlement(
       confidence: 0.65,
       metadata: {
         sport: input.sport,
+        ...input.metadata,
       },
     },
     repositories,

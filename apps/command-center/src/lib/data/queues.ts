@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getDataClient } from './client';
+import { getDataClient, isTestFixturePick } from './client';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -254,13 +254,7 @@ function asRecordOrNull(v: unknown): JsonObject | null {
 // ── Fixture filter ────────────────────────────────────────────────────────────
 
 function isFixtureLikePick(row: JsonObject): boolean {
-  const metadata = asRecordOrNull(row['metadata']);
-  if (!metadata) return false;
-  return (
-    typeof metadata['proof_fixture_id'] === 'string' ||
-    typeof metadata['proof_script'] === 'string' ||
-    typeof metadata['test_key'] === 'string'
-  );
+  return isTestFixturePick(row);
 }
 
 // ── Queue select columns ──────────────────────────────────────────────────────
