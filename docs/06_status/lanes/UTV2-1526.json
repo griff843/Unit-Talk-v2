@@ -29,12 +29,12 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1526/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-13T06:38:24.277Z",
-  "heartbeat_at": "2026-07-14T01:04:28.350Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-14T01:05:41.233Z",
+  "closed_at": "2026-07-14T01:05:41.233Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1526-codex-model-routing.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -52,6 +52,19 @@
       "merge_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T01:05:38.936Z",
+      "verdict": "pass",
+      "merge_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1195",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
     }
   ],
   "reopen_history": [],

@@ -5,11 +5,11 @@
   "status": "merged",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
+    "verified_source_sha": "c2b612278f27a14f88ae189fa5d2843c39392909",
     "verified_source_note": "Real merge SHA, bound post-merge (PR #1195 merged into main). Prior to this rebind, verified_source_sha pointed to d31954e6... (the last non-proof commit, an ancestor of the PR head) per this repo's substantive_commit_sha convention; that commit's content is identical to what landed in this merge SHA.",
     "merge_sha": "9bde73ab8f3714e3b73eb0337666103679cebb9b",
     "sha_type": "merge_sha",
-    "bound_at": "2026-07-14T01:01:50.570Z",
+    "bound_at": "2026-07-14T01:05:37.707Z",
     "ci_sentinels": {
       "merge_gate": "pass",
       "local_verify": "pass",
@@ -96,9 +96,29 @@
       ],
       "observed": {
         "codex_cli_version": "codex-cli 0.144.1",
-        "gpt-5.6-sol": ["low", "medium", "high", "xhigh", "max", "ultra"],
-        "gpt-5.6-terra": ["low", "medium", "high", "xhigh", "max", "ultra"],
-        "gpt-5.6-luna": ["low", "medium", "high", "xhigh", "max"]
+        "gpt-5.6-sol": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ],
+        "gpt-5.6-terra": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max",
+          "ultra"
+        ],
+        "gpt-5.6-luna": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ]
       },
       "reasoning_effort_cli_mechanism": "codex exec -c model_reasoning_effort=<value> -- confirmed present as a real config key in the installed codex binary (string search)."
     }
@@ -129,7 +149,13 @@
     "row_counts": [
       {
         "note": "No lane-specific DB rows mutated by this change; the smoke suite above is the repo's standard T1 runtime-proof suite, unrelated to this change's own code paths.",
-        "tables_monitored": ["picks", "pick_lifecycle", "audit_log", "settlement_records", "participants"]
+        "tables_monitored": [
+          "picks",
+          "pick_lifecycle",
+          "audit_log",
+          "settlement_records",
+          "participants"
+        ]
       }
     ]
   },
