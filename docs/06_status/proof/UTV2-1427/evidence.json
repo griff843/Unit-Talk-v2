@@ -6,8 +6,8 @@
   "description": "Live, DB-backed, no-code-deploy delivery kill switch for governed Discord targets (best-bets, trader-insights, exclusive-insights), plus a fail-loud ops alert webhook health check.",
   "status": "COMPLETE",
   "sha_binding": {
-    "verified_source_sha": "f0c5aad17a9b6d63b53b6e8dc6addd8f20b6ef53",
-    "verified_source_note": "Down-migration script commit — last commit to touch non-proof paths (db/migrations-rollback/20260714120000_add_delivery_kill_switch.down.sql).",
+    "verified_source_sha": "e2f26623563c16a701453ee476614efe2ea4c203",
+    "verified_source_note": "Live-DB proof test commit — last commit to touch non-proof paths (apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts).",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
