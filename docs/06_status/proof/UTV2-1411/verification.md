@@ -61,3 +61,8 @@ The additional live-DB smoke run (`pnpm test:db`) passed to satisfy the proof au
 ## Commit binding
 
 Evidence was captured for commit `cedcf59d0a05e6a1caf1dfc418a6c80ab1874ed9`.
+
+## SHA Binding
+
+Head SHA: 88da8b00601f94d399d5cf52fd177163556a0b1b
+Merge SHA: 4f216c8619fb05b4ca9ece1e97ebff4d92d4fff5
