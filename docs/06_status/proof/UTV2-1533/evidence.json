@@ -3,15 +3,15 @@
   "issue_id": "UTV2-1533",
   "status": "PRE-MERGE -- PR #1213 open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
   "sha_binding": {
-    "verified_source_sha": "343735ba3ab1751f4a71815f7c9d606eb3574bc4",
-    "verified_source_note": "Round 2 (P2 fix): mechanical type-cap enforcement -- CONCURRENCY_CONFIG.json type_caps block, concurrency-config.ts, shared.ts (deriveDeliveryUiApp + verification_target), lane-start.ts (checkConcurrencyLimits extension + --verification-target flag), lane-maximizer.ts advisory command fix.",
+    "verified_source_sha": "c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0",
+    "verified_source_note": "Round 3: fixes 2 fresh Codex-review findings (submitted 2026-07-14T17:24:09Z against round-2 head e8835a4a) on the round-2 verification_target enforcement -- resume-path backfill + self-exclusion, and early format validation before branch/worktree/lease creation. Round 2 (P2 fix, commit 343735ba/e8835a4a): mechanical type-cap enforcement -- CONCURRENCY_CONFIG.json type_caps block, concurrency-config.ts, shared.ts (deriveDeliveryUiApp + verification_target), lane-start.ts (checkConcurrencyLimits extension + --verification-target flag), lane-maximizer.ts advisory command fix.",
     "merge_sha": null,
     "merge_sha_note": "Not merged. This field is intentionally null -- no merge SHA exists yet and none is invented. Will be populated post-merge via ops:proof-generate --merge-sha per this repo's standard closeout automation.",
-    "current_pr_head_sha": "343735ba3ab1751f4a71815f7c9d606eb3574bc4",
+    "current_pr_head_sha": "c9ddd22d7a22342c2a65cd17f5e2012536dfb4c0",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "r_level_check": "PASS",
-      "targeted_tests_107_of_107": "PASS",
+      "targeted_tests_109_of_109": "PASS",
       "pnpm_verify": "PASS",
       "pnpm_test_db": "NOT_APPLICABLE -- no DB/runtime code in this diff's scope, see runtime_proof below"
     }
@@ -31,6 +31,7 @@
       "scripts/ops/shared.ts",
       "scripts/ops/shared.test.ts",
       "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-start.test.ts",
       "scripts/ops/lane-maximizer.ts",
       "scripts/ops/lane-maximizer.test.ts",
       "docs/05_operations/schemas/lane_manifest_v1.schema.json",
@@ -76,15 +77,15 @@
     "targeted_tests": {
       "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts",
       "status": "PASS",
-      "tests": 107,
-      "pass": 107,
+      "tests": 109,
+      "pass": 109,
       "fail": 0,
-      "note": "concurrency-simulation.test.ts: 37/37 (23 pre-existing + 14 new PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 7/7 unaffected. lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string)."
+      "note": "concurrency-simulation.test.ts: 37/37 (23 pre-existing + 14 new PM-requested distribution-cap tests, PROD_POLICY fixture matching the real 10/4/6+type_caps config). shared.test.ts: 35/35 (26 pre-existing + 9 new: verification_target enforcement mirroring model_routing, deriveDeliveryUiApp edge cases). lane-start.test.ts: 9/9 (7 pre-existing + 2 new round-3 regression tests for the Codex-review resume-backfill and early-validation fixes). lane-maximizer.test.ts: 28/28 (2 pre-existing fixtures updated for the corrected advisory command string)."
     },
     "pnpm_verify": {
       "command": "pnpm verify",
       "status": "PASS",
-      "note": "Full chain (ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test:apps/verification/domain-*/qa-agent/ut-cli/ops/t1-proof:local, smart-form verify, verify:commands, then verify:static && test:live-db -> test:db && test:t1-proof:live) ran clean end to end against commit 343735ba3ab1751f4a71815f7c9d606eb3574bc4 -- zero 'not ok' lines, zero ELIFECYCLE failures across the full captured log. Ran concurrently with 3 other active lanes' own pnpm verify runs (UTV2-1499, UTV2-1427, UTV2-1264) contending for the shared full-verify semaphore -- slower than solo but still clean, itself a small live data point for the ramp-health observability this issue's companion (UTV2-1534) tracks."
+      "note": "Round 2 (commit 343735ba/e8835a4a): full chain ran clean end to end -- zero 'not ok' lines, zero ELIFECYCLE failures. Ran concurrently with 3 other active lanes' own pnpm verify runs (UTV2-1499, UTV2-1427, UTV2-1264) contending for the shared full-verify semaphore -- slower than solo but still clean, itself a small live data point for the ramp-health observability this issue's companion (UTV2-1534) tracks. Round 3 (commit c9ddd22d, this head): re-ran the full chain again after the resume-backfill and early-validation fixes -- clean end to end, zero 'not ok' lines, zero ELIFECYCLE failures."
     }
   },
   "runtime_proof": {
@@ -103,7 +104,8 @@
     "evidence_json_added_at_declared_path": "PASS -- this file",
     "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
     "no_placeholders": "PASS -- every field below is either a real captured value or an explicit not-yet-available note (pnpm_verify pending append)",
-    "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state PR #1213 is open, unmerged"
+    "no_claim_pr_is_merged": "PASS -- status field and sha_binding.merge_sha_note both state PR #1213 is open, unmerged",
+    "fresh_codex_review_findings_addressed": "PASS -- 2 new P2 findings from the round-2 Codex review (resume path skips --verification-target backfill; malformed target validated too late) both fixed in round 3, with 2 new regression tests"
   },
   "scope_expansion": {
     "original_file_scope_lock": [

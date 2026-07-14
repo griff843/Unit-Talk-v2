@@ -3,7 +3,7 @@
 **Issue:** UTV2-1533 — Post-lock concurrency ramp: raise ceiling to 10 active lanes (4 Claude + 6 Codex)
 **Tier:** T1 (governance-critical)
 **Lane type:** governance
-**Status:** PM review round 2 (CHANGES REQUIRED round 1 addressed below). PR #1213 **not merged**.
+**Status:** PM review round 3 (CHANGES REQUIRED round 1 addressed in round 2; a fresh Codex review on round 2's head surfaced 2 more findings, addressed in round 3 below). PR #1213 **not merged**.
 
 ## Files changed (cumulative, vs origin/main)
 
@@ -51,6 +51,17 @@ scripts/ops/shared.ts                                               |  92 ++++++
 - **`scripts/ops/lane-maximizer.ts`**: the advisory (never-executed) `dispatch_command` suggestion for `lane_type: "verification"` candidates now includes `--verification-target <candidate.issue_id>` (defaults to the candidate's own issue, documented as an operator-confirmable default, same as the existing `--model-profile` default). Two `lane-maximizer.test.ts` fixtures asserting the exact old command string updated to match.
 - **`docs/05_operations/schemas/lane_manifest_v1.schema.json`** + **`docs/05_operations/LANE_MANIFEST_SPEC.md` §16**: documented `verification_target` and its `schema_version`-2 requirement, mirroring `model_routing`'s existing documentation shape.
 - **`docs/governance/LANE_CONCURRENCY_POLICY.md`** §1: added a "Mechanization note" explaining what changed and why (the Hygiene/Governance/Delivery-UI/Verification rows' enforcement claim is now true, not aspirational).
+
+## Round 3 (this round — fresh Codex review on round 2's head, 2 new P2 findings)
+
+A fresh Codex review triggered against round 2's head (e8835a4a) surfaced 2 real bugs in the round-2 `verification_target` enforcement, both in `scripts/ops/lane-start.ts`:
+
+1. **Resume path broke verification-lane resume.** `ops:lane:resume` re-invokes `ops:lane-start` for a blocked lane without re-supplying `--verification-target` (confirmed in `scripts/ops/lane-resume.ts`, which also doesn't re-supply `--model-profile` for the same reason) — the concurrency check ran *before* the "already exists" resume branch and unconditionally required the flag, so any verification-lane resume would spuriously fail. Fixed: `effectiveVerificationTarget` now backfills from the existing manifest (`manifestExists(issueId) ? readManifest(issueId) : null`) when the flag is absent, computed before `checkConcurrencyLimits` runs. Also excluded the incoming issue's own active manifest from the conflict-search set (`readAllManifests().filter((m) => m.issue_id !== issueId)`) — a lane must never be treated as conflicting with itself, whether resuming or (defensively) on a hypothetical duplicate-issue_id case.
+2. **Malformed target validated too late.** A bad `--verification-target` (e.g. missing the numeral) wasn't caught until deep inside `createManifest()`, by which point `createBranchAndWorktree`/`reserveLease` had already run, leaving orphaned state behind a failed lane-start. Fixed: format validated immediately after parsing (reusing the existing `requireIssueId()` helper), before any branch/worktree/lease side effect.
+
+Two new regression tests added to `scripts/ops/lane-start.test.ts` (static source-order checks, matching this file's existing convention for the equivalent `model_routing` resume-safety test): one asserts the backfill/self-exclusion code exists and runs before `checkConcurrencyLimits`, the other asserts the malformed-target check exists before `createBranchAndWorktree`/`reserveLease`.
+
+Both threads (the PM-review P1/P2 from round 1, replied to and resolved with file:line evidence in round 2) and the fresh review's 2 new findings are now addressed. `verify`/type-check/R-level/targeted-tests all re-confirmed green at the round-3 head.
 
 ## Tests (14 requested + supporting coverage)
 
