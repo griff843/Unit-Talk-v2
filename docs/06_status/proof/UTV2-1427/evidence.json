@@ -1,5 +1,6 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
+  "merge_sha": "d39214cdeabdae75a4c7d04f1f6ad10d0aa58a92",
   "issue_id": "UTV2-1427",
   "tier": "T1",
   "lane_type": "runtime",
@@ -38,6 +39,19 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
+    "queries": [
+      "SELECT killed FROM delivery_kill_switch WHERE target = $1 (isKilled, DatabaseDeliveryKillSwitchRepository)",
+      "UPSERT delivery_kill_switch ON CONFLICT (target) (setKilled, DatabaseDeliveryKillSwitchRepository)",
+      "SELECT * FROM delivery_kill_switch (listAll, used by the bootstrap-posture proof test)"
+    ],
+    "row_counts": [
+      {
+        "table": "delivery_kill_switch",
+        "note": "3 governed-target rows (best-bets, trader-insights, exclusive-insights) seeded by the bootstrap migration, plus 1 synthetic fixture row (t1-proof-utv2-1427-kill-switch) used only for the write/round-trip proof test.",
+        "rows_seeded": 3,
+        "fixture_rows": 1
+      }
+    ],
     "receipts": [
       {
         "supabase_project": "zfzdnfwdarxucxtaojxm",
