@@ -5,7 +5,7 @@
   "verifier": {
     "identity": "claude/utv2-1535-lane-maximizer-typecaps"
   },
-  "status": "OPEN -- branch pushed, PR not yet created/merged at the time this bundle was authored. merge_sha will be bound post-merge by post-merge-lane-close.yml (ops:proof-generate --merge-sha), per this repo's standard T1 closeout automation. Do not treat any SHA in this bundle as a merge SHA.",
+  "status": "MERGED -- PR #1220 merged as 8c379cfd069d08080aa46406c04d8709e0d665f8. sha_binding.merge_sha bound below via governed post-merge closeout repair (claude/utv2-1535-lane-close-repair).",
   "architecture_decision": {
     "summary": "Reused ops:lane-start's checkConcurrencyLimits() by extracting it (byte-identical logic) into a new shared module scripts/ops/concurrency-rules.ts, narrowing its manifest parameter to a minimal structural type (ConcurrencyManifestLike) instead of shared.ts's full LaneManifest interface. lane-start.ts imports and re-exports the same symbols so every existing caller is unaffected. lane-maximizer.ts imports the same function and calls it incrementally against a growing wave-projected active-lane list.",
     "why_not_direct_reuse_unmodified": "No circular-import problem (lane-maximizer.ts never imported lane-start.ts before this change, so a one-way import would have been safe) -- the real obstacle was a type mismatch: checkConcurrencyLimits()'s activeManifests parameter required shared.ts's full LaneManifest shape (14+ required fields), while lane-maximizer.ts's own lightweight LaneManifest type and its synthetic per-candidate wave projections only carry the 5-6 fields the function actually reads.",
@@ -142,10 +142,10 @@
     "head_sha_note": "The branch HEAD at the moment this bundle was first authored, captured for provenance only -- NOT a claim about the PR's current live head (which changes on every push). The PR's actual live head is validated externally by GitHub itself and by the SHA-bound executor-result/v1 comment posted after each push.",
     "head_sha_after_codex_review_round_1": "86519566e19644ab1d913e5842a0aecf7150c7f8",
     "head_sha_after_codex_review_round_1_note": "The branch HEAD after fixing both Codex review round 1 findings, provenance only -- same caveat as head_sha_at_proof_authoring above.",
-    "merge_sha": null,
-    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main -- no manual append required per this repo's standard T1 closeout automation.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-15T00:42:06Z"
+    "merge_sha": "8c379cfd069d08080aa46406c04d8709e0d665f8",
+    "merge_sha_note": "PR #1220's real squash-merge commit on main (confirmed via gh pr view 1220 --json mergeCommit). Bound via this lane's own governed post-merge closeout repair (claude/utv2-1535-lane-close-repair), not the post-merge-lane-close.yml automation: that automation's ops:lane-close --repair-merged step requires manifest.pr_url to already be set, which it was not for this lane, so it had nothing to repair from. pr_url and files_changed were set manually via pnpm ops:lane-manifest update as part of this repair before running --repair-merged.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-15T16:53:00Z"
   },
   "scope": {
     "implementation_paths": [
@@ -176,8 +176,8 @@
     "ops_lane_start_remains_sole_fail_closed_authority": "PASS -- checkConcurrencyLimits()'s logic is byte-identical to before the move; lane-start.ts's own admission call site and behavior are unchanged",
     "twenty_required_tests_present": "PASS -- see static_proof.targeted_tests; all 20 present and passing, numbered 1-20 in scripts/ops/lane-maximizer.test.ts matching the required acceptance-criteria list exactly",
     "no_placeholders": "PASS -- every field is a real captured value from an actual command run",
-    "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
+    "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is bound to PR #1220's real GitHub-confirmed merge commit (8c379cfd069d08080aa46406c04d8709e0d665f8), not invented",
     "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, branch name, and (to be authored) PR title/body reference only UTV2-1535; other issues (the concurrency ramp issue, UTV2-920, UTV2-996, UTV2-883, UTV2-1327, UTV2-1136, UTV2-1459) that appear in pre-existing test names/comments elsewhere in the repo are not this diff's own commit text"
   },
-  "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- CODEX_REVIEW_ROUND_1_RESOLVED -- AWAITING_PM_VERDICT_AND_T1_APPROVED_LABEL"
+  "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- CODEX_REVIEW_ROUND_1_RESOLVED -- PM_APPROVED_AND_MERGED (PR #1220, merge SHA 8c379cfd069d08080aa46406c04d8709e0d665f8)"
 }

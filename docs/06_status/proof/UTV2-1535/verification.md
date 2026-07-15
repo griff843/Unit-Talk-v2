@@ -1,5 +1,5 @@
 # PROOF: UTV2-1535
-MERGE_SHA: 143ca309f1a13ce8beb64e11c06cd0fe1a37305f
+MERGE_SHA: 8c379cfd069d08080aa46406c04d8709e0d665f8
 
 ASSERTIONS:
 - [x] evaluateCandidates() forecasts total lane cap, Claude/Codex executor caps, singleton lane types, forbidden combinations, Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, and Verification<=1-per-target, all via one canonical checkConcurrencyLimits() call, not five separate hand-rolled checks
@@ -227,6 +227,15 @@ and resolved via GraphQL `resolveReviewThread`. No findings were left open.
 Branch: claude/utv2-1535-lane-maximizer-typecaps
 Head SHA (at authoring time): e9dfdeee065851aa14681defd406c9c823eda813
 Head SHA (after Codex review round 1): 86519566e19644ab1d913e5842a0aecf7150c7f8
-Merge SHA: not yet merged — will be bound by `post-merge-lane-close.yml`'s automated
-`ops:proof-generate --merge-sha` run after this PR merges, per this repo's standard T1
-closeout automation.
+Head SHA (final, after rebase onto post-#1219 main): 52b0de2c85bba3b9ae6bd13d85740ff36a497c95
+Merge SHA: 8c379cfd069d08080aa46406c04d8709e0d665f8 (PR #1220's real squash-merge commit
+on `main`, confirmed via `gh pr view 1220 --json mergeCommit`). Bound via this lane's own
+governed post-merge closeout repair (`claude/utv2-1535-lane-close-repair`) rather than the
+`post-merge-lane-close.yml` automation: that workflow's `ops:lane-close --repair-merged`
+step requires `manifest.pr_url` to already be set, which it was not for this lane, so the
+automated run had nothing to repair from and never populated `commit_sha`/`files_changed`.
+`pr_url` and `files_changed` (11 files, derived two independent ways — `gh pr view 1220
+--json files` and `git diff-tree` against the merge SHA, cross-verified identical — and
+matching this manifest's existing `file_scope_lock` plus the always-tolerated
+`docs/06_status/proof/` `.gitkeep`) were set via `pnpm ops:lane-manifest update` as part of
+this repair, before running `ops:lane-close --repair-merged`.
