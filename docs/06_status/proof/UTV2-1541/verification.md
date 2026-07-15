@@ -1,5 +1,5 @@
 # PROOF: UTV2-1541
-MERGE_SHA: 2dea463b4f84e4fd3b630d2f2e304a5f64ad967f
+MERGE_SHA: de98cf63add5c48d05ac59df8ef450d4742db161
 
 ASSERTIONS:
 - [x] `AGENTS.md` added to `.lane/lanes/governance.yml`'s `allowed_path_globs`
@@ -113,7 +113,7 @@ Authority failures on PR #1218 (UTV2-1536, editing `AGENTS.md`) and PR #1219
 ## SHA Binding
 
 Branch: claude/utv2-1541-lane-authority-allowlist-fix
-Head SHA (at authoring time): 2dea463b4f84e4fd3b630d2f2e304a5f64ad967f
+Head SHA (at authoring time): de98cf63add5c48d05ac59df8ef450d4742db161
 Merge SHA: not yet merged — will be bound by `post-merge-lane-close.yml`'s automated
 `ops:proof-generate --merge-sha` run after this PR merges, per this repo's standard T1
 closeout automation.

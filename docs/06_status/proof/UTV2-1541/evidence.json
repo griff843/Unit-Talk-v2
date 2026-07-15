@@ -91,7 +91,7 @@
   },
   "sha_binding": {
     "branch": "claude/utv2-1541-lane-authority-allowlist-fix",
-    "verified_source_sha": "2dea463b4f84e4fd3b630d2f2e304a5f64ad967f",
+    "verified_source_sha": "de98cf63add5c48d05ac59df8ef450d4742db161",
     "verified_source_note": "The branch HEAD at the moment this bundle was authored, captured for provenance only -- NOT a claim about the PR's current live head. The PR's actual live head is validated externally by GitHub and by the SHA-bound executor-result/v1 comment posted after each push.",
     "sha_type": "branch_head",
     "bound_at": "2026-07-15T07:00:00Z",
