@@ -1,5 +1,5 @@
 # PROOF: UTV2-1535
-MERGE_SHA: 08b4ac0a1e9c45e64674362452d5e3d7ff1b84a3
+MERGE_SHA: de027094dc6e5f755a98c436d3c580940cd1e3a5
 
 ASSERTIONS:
 - [x] evaluateCandidates() forecasts total lane cap, Claude/Codex executor caps, singleton lane types, forbidden combinations, Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, and Verification<=1-per-target, all via one canonical checkConcurrencyLimits() call, not five separate hand-rolled checks
