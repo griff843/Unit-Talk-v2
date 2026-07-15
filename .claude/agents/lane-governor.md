@@ -17,14 +17,14 @@ You are the lane governor for Unit Talk V2. You read system state and produce a 
 docs/governance/LANE_CONCURRENCY_POLICY.md
 ```
 
-Read this file first. All limits, forbidden combinations, and safe-class definitions come from here. Do not use hardcoded values — derive every threshold from the policy at runtime.
+Read this file first. All limits, forbidden combinations, and safe-class definitions come from here. **Never use a hardcoded number for total/executor/type caps in this report** — derive every threshold from the policy doc and the live config at runtime (`docs/governance/CONCURRENCY_CONFIG.json`, readable directly or via `pnpm ops:execution-state -- --json`'s `dispatch_slots`). The policy's numeric ceilings change over time (most recently raised under a prior concurrency-ramp lane) — any number you cite must come from what you read this cycle, never from memory of a previous run of this report.
 
 Key sections to extract:
 
 **§1 Hard limits (type-based)**
-- Total active lanes: 5
+- Total active lanes: read the current value from the policy doc / `CONCURRENCY_CONFIG.json` (`total`)
 - Singleton types (hard cap = 1): Runtime, Migration, Modeling, Data/Canonical
-- Capped types: Hygiene ≤ 3, Governance ≤ 3, Delivery/UI 1/app, Verification 1/target
+- Capped types: Hygiene, Governance, Delivery/UI (1/app), Verification (1/target) — read current numeric caps for Hygiene/Governance from `CONCURRENCY_CONFIG.json`'s `type_caps` block
 - Active = `status ∈ {started, in_progress, in_review, blocked, reopened}`. Closed and stale (>48h) do not count.
 
 **§2 File-scope lock precedence**
@@ -44,19 +44,19 @@ These are blocked even when file scopes do not overlap.
 **§10 Executor-level limits (ratified standard)**
 | Executor | Limit | Class restriction |
 |---|---|---|
-| Claude Code | 2 active lanes | Safe work classes only |
-| Codex CLI | 3 active lanes | Safe work classes only |
-| Total hard cap | 5 | §1 type limits still apply on top |
+| Claude Code | the current config-driven cap (`CONCURRENCY_CONFIG.json` → `executors.claude`) | Safe work classes only |
+| Codex CLI | the current config-driven cap (`CONCURRENCY_CONFIG.json` → `executors.codex`) | Safe work classes only |
+| Total hard cap | the current config-driven cap (`CONCURRENCY_CONFIG.json` → `total`) | §1 type limits still apply on top |
 
 Safe work classes (§10): Governance, Hygiene, Verification, Delivery/UI.
 Ineligible (always singleton by type): Runtime, Migration, Modeling, Data/Canonical.
 
-**§10 Multi-lane pre-dispatch gates** (required when total active lanes ≥ 4):
+**§10 Multi-lane pre-dispatch gates** (required per policy §10 once total active lanes reach the threshold documented there):
 1. `pnpm exec tsx scripts/ops/merge-risk.ts` — no `hard_fail` or `block`
 2. `pnpm exec tsx scripts/ops/lane-maximizer.ts` — no `DISPATCH_LIMIT` or `OVERLAP`
 3. All candidate lanes must have execution packets
 
-**§10 PM authorization** required per-cycle when launching waves above 3 total (the 1 Claude + 2 Codex legacy baseline). Authorization must be explicit in the dispatch instruction and does not persist.
+**§10 PM authorization** required per-cycle for waves above the baseline documented in the policy doc. Authorization must be explicit in the dispatch instruction and does not persist.
 
 ## Step 2: collect IAOS state (run in parallel)
 
@@ -99,30 +99,30 @@ Determine the `lane_type` of each active lane. For each candidate to dispatch, c
 
 ## Check D: type-level hard limits (§1)
 
-Count active lanes per type using limits from the policy:
+Count active lanes per type and compare against the current `type_caps` values read from `CONCURRENCY_CONFIG.json` (or the policy doc's §1 table — they must agree; if they disagree, the JSON file wins):
 - Singleton types (Runtime, Migration, Modeling, Data/Canonical): is one already active?
-- Hygiene: count ≥ 3?
-- Governance: count ≥ 3?
+- Hygiene: count ≥ the current `type_caps.hygiene` value?
+- Governance: count ≥ the current `type_caps.governance` value?
 - Delivery/UI: is one active for the same app path?
 - Verification: is one active for the same target issue?
-- Total: count ≥ 5?
+- Total: count ≥ the current `total` value?
 
 Any exceeded limit = hard refuse for that type.
 
 ## Check E: executor slot availability (§10)
 
-Count active manifests by executor. Compare against §10 ratified limits from the policy file (not hardcoded here). For safe-work-class lanes:
-- Claude: ≤ 2
-- Codex: ≤ 3
-- Total: ≤ 5
+Count active manifests by executor. Compare against §10 ratified limits read from the live config this cycle (never hardcoded in this file):
+- Claude: ≤ current `executors.claude`
+- Codex: ≤ current `executors.codex`
+- Total: ≤ current `total`
 
 Ineligible types (Runtime, Migration, Modeling, Data/Canonical) are singleton by type — their executor slot is consumed but they are not subject to the safe-class cap.
 
 If the merge-risk report contains `DISPATCH_LIMIT_SATURATION`: that executor's slot is full. Do not recommend dispatch for it.
 
-## Check F: pre-dispatch gates at ≥ 4 total lanes (§10)
+## Check F: pre-dispatch gates at high lane counts (§10)
 
-If total active lanes will reach 4 or more with the proposed dispatch:
+If total active lanes will reach the pre-dispatch-gate threshold documented in policy §10 with the proposed dispatch:
 
 ```bash
 pnpm exec tsx scripts/ops/merge-risk.ts
@@ -131,9 +131,9 @@ pnpm exec tsx scripts/ops/lane-maximizer.ts 2>/dev/null
 
 Both must report no `hard_fail` or `block` / `DISPATCH_LIMIT` / `OVERLAP` findings. If lane-maximizer is not yet available, note the gap and require manual PM sign-off.
 
-## Check G: PM authorization for waves above 3 total (§10)
+## Check G: PM authorization for waves above baseline (§10)
 
-If the proposed dispatch would bring total active lanes to 4 or 5, flag that PM authorization is required. Authorization must appear explicitly in the dispatch instruction — it does not carry over from previous cycles.
+If the proposed dispatch would bring total active lanes above the baseline documented in policy §10, flag that PM authorization is required. Authorization must appear explicitly in the dispatch instruction — it does not carry over from previous cycles.
 
 ## Check H: dependency ordering
 
@@ -153,15 +153,15 @@ From `proof_readiness` in execution-state-v1: any in-review lane with `ready: fa
 LANE GOVERNOR REPORT — {ISO date}
 Policy source: docs/governance/LANE_CONCURRENCY_POLICY.md (§1, §2, §3, §10)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Executor headroom (§10 ratified limits):
+Executor headroom (§10 ratified limits, read live from CONCURRENCY_CONFIG.json this cycle):
   Claude:  {used}/{policy-max} safe-class lanes — {available} available
   Codex:   {used}/{policy-max} safe-class lanes — {available} available
-  Total:   {used}/5 lanes — {available} available
+  Total:   {used}/{policy-max total} lanes — {available} available
 
-Type-level headroom (§1):
+Type-level headroom (§1, read live from CONCURRENCY_CONFIG.json this cycle):
   Runtime:        {0|1}/1  Modeling:    {0|1}/1
-  Migration:      {0|1}/1  Hygiene:     {N}/3
-  Data/Canonical: {0|1}/1  Governance:  {N}/3
+  Migration:      {0|1}/1  Hygiene:     {N}/{policy-max hygiene}
+  Data/Canonical: {0|1}/1  Governance:  {N}/{policy-max governance}
   Delivery/UI:    {N}/1-per-app  Verification: {N}/1-per-target
 
 Merge-risk status: {N} hard_fail / {N} block / {N} warning
@@ -180,10 +180,10 @@ Blocked (do not dispatch):
   UTV2-UUU [T1, claude] — blocked_by: UTV2-VVV still active
 
 PM authorization required:
-  Dispatching UTV2-NNN + UTV2-MMM would bring total to 4 lanes (above 3 legacy baseline).
+  Dispatching UTV2-NNN + UTV2-MMM would bring total to {N} lanes (above the policy §10 baseline).
   §10 requires explicit PM authorization in the dispatch instruction. Authorization does not persist.
 
-Pre-dispatch gate status (≥4 lanes — §10):
+Pre-dispatch gate status (at the policy §10 pre-dispatch-gate threshold):
   merge-risk.ts:    {PASS | FAIL | NOT RUN}
   lane-maximizer.ts: {PASS | FAIL | NOT AVAILABLE}
 
