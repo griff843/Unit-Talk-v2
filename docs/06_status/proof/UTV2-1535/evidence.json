@@ -126,14 +126,14 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 74398, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 110504, "status": "healthy" },
-      { "table": "submissions", "count": 76457, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 4990, "status": "healthy" },
-      { "table": "audit_log", "count": 195803, "status": "healthy" },
-      { "table": "settlement_records", "count": 24822, "status": "healthy" }
+      { "table": "picks", "count": 76115, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 112920, "status": "healthy" },
+      { "table": "submissions", "count": 77990, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 5256, "status": "healthy" },
+      { "table": "audit_log", "count": 199205, "status": "healthy" },
+      { "table": "settlement_records", "count": 25567, "status": "healthy" }
     ],
-    "row_counts_captured_at": "2026-07-15T00:41:00Z",
+    "row_counts_captured_at": "2026-07-15T15:24:00Z",
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) (mcp__Supabase__execute_sql) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts)."
   },
   "sha_binding": {
