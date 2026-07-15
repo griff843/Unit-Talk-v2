@@ -251,15 +251,15 @@ jobs:
             scaffold=$(pnpm ops:proof-repair scaffold "$ISSUE_ID" 2>&1 || echo "(scaffold generation failed -- run \`pnpm ops:proof-repair scaffold $ISSUE_ID\` locally)")
             body="${body}
 
-This looks like a missing T1 runtime-proof gap. Governed repair path (never edits \`main\` directly):
+          This looks like a missing T1 runtime-proof gap. Governed repair path (never edits \`main\` directly):
 
-\`\`\`
-${scaffold}
-\`\`\`"
+          \`\`\`
+          ${scaffold}
+          \`\`\`"
           else
             body="${body}
 
-Resolve the failing checks locally and open a normal PR with the fix, or re-run this workflow manually via workflow_dispatch once the merged state is corrected through a PR."
+          Resolve the failing checks locally and open a normal PR with the fix, or re-run this workflow manually via workflow_dispatch once the merged state is corrected through a PR."
           fi
 
           curl -sS -X POST \
