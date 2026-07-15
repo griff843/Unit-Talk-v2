@@ -1,12 +1,16 @@
 # PROOF: UTV2-1537
-MERGE_SHA: 2496ad4255744abbb5afc4fdc571e14df95fb2ed
+MERGE_SHA: b5a989d0c827b115be7871a134c8428eb17aa712
 
-Not yet merged -- the SHA above is this branch's own implementation commit (an
-ancestor of the current PR head), per the same implementation-commit-as-ancestor
-pattern `executor-result-validator.yml` documents for pre-merge proof. See
-`evidence.json`'s `sha_binding.verified_source_sha` for the same value. The real
-merge SHA will be populated post-merge via `ops:proof-generate --merge-sha`, per
-this repo's standard closeout automation.
+Merged. The SHA above is PR #1219's real merge commit on `main` (squash merge,
+confirmed via `gh pr view 1219 --json mergeCommit`). Prior to merge this line
+held the branch's own implementation commit (an ancestor of the PR head), per
+the pre-merge convention `executor-result-validator.yml` documents; it is now
+updated to the true merge SHA as part of this lane's governed post-merge
+closeout repair (`claude/utv2-1537-lane-close-repair`), since the automated
+`post-merge-lane-close.yml` binding step ran successfully in CI but its result
+was never committed -- the subsequent `ops:lane-close --repair-merged` step in
+that same run failed closed (`guardRepairAgainstMainCheckout()`, working as
+designed) before the workflow reached its commit-and-push step.
 
 ASSERTIONS:
 - [x] Truthful incident record created at `docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md`, every fact independently re-verified via `git`/`gh` before writing (no fact taken on trust from the task brief)
@@ -135,4 +139,4 @@ All 4 fixes shipped with tests (6 new/updated tests in `direct-main-push-guard.t
 
 ## Merge SHA reference
 
-Not applicable yet -- **the PR is not merged.** No merge SHA is invented here (`evidence.json`'s `sha_binding.merge_sha` stays `null`). Will be populated post-merge via `ops:proof-generate --merge-sha`, per this repo's standard closeout automation (the same narrowly-scoped, `SYNC_BOT_TOKEN`-authorized bot mechanism this lane's own incident record and `proof-repair.ts` explicitly do not attempt to replicate for evidentiary content).
+Bound post-merge: `b5a989d0c827b115be7871a134c8428eb17aa712` (PR #1219's real squash-merge commit on `main`, confirmed via `gh pr view 1219 --json mergeCommit`). `evidence.json`'s `sha_binding.merge_sha` is updated to match. Bound via this lane's own governed post-merge closeout repair rather than the `SYNC_BOT_TOKEN` automation, because that automation's `ops:lane-close --repair-merged` step failed closed on the shared-main-checkout guard this same PR introduced (`guardRepairAgainstMainCheckout()`) before it reached its commit-and-push step -- a real, expected interaction between this PR's own guard and the CI automation that normally closes out a merged lane, not a defect in either.

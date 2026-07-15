@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1537",
-  "status": "PRE-MERGE -- PR open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "status": "MERGED -- PR #1219 merged as b5a989d0c827b115be7871a134c8428eb17aa712. sha_binding.merge_sha bound below via governed post-merge closeout repair (claude/utv2-1537-lane-close-repair).",
   "verifier": {
     "identity": "claude/utv2-1537-direct-main-incident"
   },
@@ -92,13 +92,14 @@
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project (via the mcp__claude_ai_Supabase__execute_sql tool, a single UNION ALL SELECT COUNT(*) statement across all 6 monitored tables) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This lane's own diff (governance docs + TypeScript ops/ci tooling) does not itself touch any of these tables; this runtime proof exists because tier === 'T1' makes truth-check-lib.ts's runtime_proof_required gate unconditional, independent of whether the diff's own files touch DB code -- the same fact this incident's own root cause documents about the concurrency ramp lane's proof requirement."
   },
   "sha_binding": {
-    "verified_source_sha": "2496ad4255744abbb5afc4fdc571e14df95fb2ed",
-    "verified_source_note": "This branch's implementation commit (the only substantive commit on this branch at the time this proof was authored) -- an ancestor of the PR's head at every point checked.",
-    "merge_sha": null,
-    "merge_sha_note": "Not merged. This field is intentionally null. Will be populated post-merge via ops:proof-generate --merge-sha by post-merge-lane-close.yml's existing, bot-safe SYNC_BOT_TOKEN mechanism -- the same narrowly-scoped automation this lane's own incident record documents as the one pre-existing, ratified exception to DIRECT_MAIN_BYPASS_POLICY.md.",
+    "verified_source_sha": "b5a989d0c827b115be7871a134c8428eb17aa712",
+    "verified_source_note": "PR #1219's real squash-merge commit on main (confirmed via gh pr view 1219 --json mergeCommit). Prior to merge this held the branch's own implementation commit, an ancestor of the PR head at every point checked.",
+    "merge_sha": "b5a989d0c827b115be7871a134c8428eb17aa712",
+    "merge_sha_note": "Bound via this lane's own governed post-merge closeout repair (claude/utv2-1537-lane-close-repair), not the SYNC_BOT_TOKEN automation: that automation's ops:lane-close --repair-merged step ran and failed closed on the shared-main-checkout guard this same PR introduced (guardRepairAgainstMainCheckout()) before reaching its commit-and-push step, so the earlier successful ops:proof-generate --merge-sha run in that CI attempt was never committed. Value independently confirmed identical to the manifest's repaired commit_sha.",
     "proof_bundle_base_sha": "2496ad4255744abbb5afc4fdc571e14df95fb2ed",
-    "proof_bundle_base_note": "The commit this proof bundle document was authored against (its own parent, i.e. the implementation commit) -- not a claim about the PR's current live head. The PR's actual, live current head is validated externally by GitHub itself and by the SHA-bound executor-result/v1 comment posted after each push.",
-    "sha_type": "head_sha"
+    "proof_bundle_base_note": "The commit this proof bundle document was originally authored against (its own parent, i.e. the pre-merge implementation commit) -- preserved as a historical fact, not a claim about current state.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-15T16:46:17.757Z"
   },
   "scope": {
     "implementation_paths": [
