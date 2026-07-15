@@ -21,6 +21,12 @@ on:
 
 permissions:
   contents: read
+  # Required for gatherCommitInput()'s `commits/{sha}/pulls` call -- GitHub's REST
+  # docs list "Pull requests: read" as the required scope for that endpoint. Without
+  # it the call 403s, the catch path silently empties associatedPrNumbers, and every
+  # ordinary human-authored PR merge is misclassified as unauthorized_direct_push
+  # (Codex review finding, this lane's own PR).
+  pull-requests: read
 
 concurrency:
   group: direct-main-push-guard-${{ github.sha }}
@@ -35,7 +41,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          # Full history: the before..after push range can span an arbitrary number
+          # of commits, and git merge-base --is-ancestor / --since.. need it reachable.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -51,15 +59,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Classify head commit
+      - name: Classify every commit in this push
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
         run: |
-          npx tsx scripts/ci/direct-main-push-guard.ts --sha "${{ github.sha }}" --json | tee /tmp/direct-main-push-guard.json
-          code=$(jq -r '.results[0].code' /tmp/direct-main-push-guard.json)
-          reason=$(jq -r '.results[0].reason' /tmp/direct-main-push-guard.json)
-          echo "::notice title=direct-main-push-guard::${{ github.sha }} classified as ${code}: ${reason}"
-          if [ "$code" = "unauthorized_direct_push" ]; then
-            echo "::warning title=direct-main-push-guard::Unauthorized direct push detected on main (${{ github.sha }}). See docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md and docs/06_status/INCIDENTS/."
+          # A push can advance main by more than one commit; classifying only the
+          # head SHA would miss an unauthorized commit earlier in the same push
+          # (Codex review finding, this lane's own PR). Use the push's before..after
+          # range when `before` is a real ancestor SHA; a zero SHA (new-branch-style
+          # push, not expected for an existing branch like main, but guarded anyway)
+          # or a before-SHA that isn't actually an ancestor (a force-push or a
+          # history rewrite) falls back to classifying only the head commit rather
+          # than feeding the classifier a nonsensical or unbounded range.
+          if [ -n "$BEFORE_SHA" ] && [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ] \
+              && git merge-base --is-ancestor "$BEFORE_SHA" "$AFTER_SHA" 2>/dev/null; then
+            npx tsx scripts/ci/direct-main-push-guard.ts --since "$BEFORE_SHA" --until "$AFTER_SHA" --json \
+              | tee /tmp/direct-main-push-guard.json
+          else
+            echo "::notice title=direct-main-push-guard::before-SHA unavailable or not an ancestor of after-SHA; classifying only the head commit."
+            npx tsx scripts/ci/direct-main-push-guard.ts --sha "$AFTER_SHA" --json | tee /tmp/direct-main-push-guard.json
+          fi
+
+          unauthorized=0
+          while IFS=$'\t' read -r sha code reason; do
+            echo "::notice title=direct-main-push-guard::${sha} classified as ${code}: ${reason}"
+            if [ "$code" = "unauthorized_direct_push" ]; then
+              unauthorized=1
+            fi
+          done < <(jq -r '.results[] | [.sha, .code, .reason] | @tsv' /tmp/direct-main-push-guard.json)
+
+          if [ "$unauthorized" = "1" ]; then
+            echo "::warning title=direct-main-push-guard::Unauthorized direct push(es) detected on main in this push (before=${BEFORE_SHA}, after=${AFTER_SHA}). See docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md and docs/06_status/INCIDENTS/."
             exit 1
           fi

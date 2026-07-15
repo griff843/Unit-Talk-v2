@@ -31,12 +31,20 @@ test('classifyMainCommit: a commit with an associated PR is pr_merge, regardless
 
 // ── explicitly authorized automation ─────────────────────────────────────────────
 
-test('classifyMainCommit: github-actions[bot] with the allow-listed lane-close message is authorized_automation', () => {
+const LANE_CLOSE_MESSAGE = 'chore(lanes): close UTV2-9999 — lane closed, sync file removed';
+const LANE_CLOSE_SCOPED_FILES = [
+  'docs/06_status/lanes/UTV2-9999.json',
+  'docs/06_status/proof/UTV2-9999/evidence.json',
+  '.ops/sync/UTV2-9999.yml',
+];
+
+test('classifyMainCommit: github-actions[bot] with the allow-listed lane-close message AND only in-scope changed files is authorized_automation', () => {
   const result = classifyMainCommit(
     input({
       authorLogin: 'github-actions[bot]',
-      message: 'chore(lanes): close UTV2-9999 — lane closed, sync file removed',
+      message: LANE_CLOSE_MESSAGE,
       associatedPrNumbers: [],
+      changedFiles: LANE_CLOSE_SCOPED_FILES,
     }),
   );
   assert.strictEqual(result.code, 'authorized_automation');
@@ -48,6 +56,7 @@ test('classifyMainCommit: github-actions[bot] with an UNLISTED message pattern i
       authorLogin: 'github-actions[bot]',
       message: 'chore: some other automated change not on the allow-list',
       associatedPrNumbers: [],
+      changedFiles: LANE_CLOSE_SCOPED_FILES,
     }),
   );
   assert.strictEqual(result.code, 'unauthorized_direct_push');
@@ -57,8 +66,35 @@ test('classifyMainCommit: a human identity is never treated as automation even w
   const result = classifyMainCommit(
     input({
       authorLogin: 'griff843',
-      message: 'chore(lanes): close UTV2-9999 — lane closed, sync file removed',
+      message: LANE_CLOSE_MESSAGE,
       associatedPrNumbers: [],
+      changedFiles: LANE_CLOSE_SCOPED_FILES,
+    }),
+  );
+  assert.strictEqual(result.code, 'unauthorized_direct_push');
+});
+
+// ── message pattern alone is never sufficient -- changed files must also match ──
+
+test('classifyMainCommit: github-actions[bot] with the allow-listed message but a file OUTSIDE its known scope is NOT authorized_automation', () => {
+  const result = classifyMainCommit(
+    input({
+      authorLogin: 'github-actions[bot]',
+      message: LANE_CLOSE_MESSAGE,
+      associatedPrNumbers: [],
+      changedFiles: [...LANE_CLOSE_SCOPED_FILES, 'apps/api/src/server.ts'],
+    }),
+  );
+  assert.strictEqual(result.code, 'unauthorized_direct_push');
+});
+
+test('classifyMainCommit: github-actions[bot] with the allow-listed message but NO changedFiles evidence is NOT authorized (never authorizes on message text alone)', () => {
+  const result = classifyMainCommit(
+    input({
+      authorLogin: 'github-actions[bot]',
+      message: LANE_CLOSE_MESSAGE,
+      associatedPrNumbers: [],
+      // changedFiles intentionally omitted
     }),
   );
   assert.strictEqual(result.code, 'unauthorized_direct_push');

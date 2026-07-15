@@ -13,10 +13,14 @@
  *   1. Whether a commit on `main` has an associated merged PR
  *      (`gh api repos/{owner}/{repo}/commits/{sha}/pulls`).
  *   2. Whether the commit's author is a known, allow-listed automation identity
- *      making a change that matches an allow-listed commit-message pattern for that
- *      identity's known, narrowly-scoped operations (currently: the `SYNC_BOT_TOKEN`
- *      lane-closeout bookkeeping commits `post-merge-lane-close.yml` pushes as
- *      `github-actions[bot]`).
+ *      making a change that BOTH matches an allow-listed commit-message pattern AND
+ *      only touches the exact file-path globs that identity's known operation is
+ *      documented to touch (currently: the `SYNC_BOT_TOKEN` lane-closeout
+ *      bookkeeping commits `post-merge-lane-close.yml` pushes as
+ *      `github-actions[bot]`, scoped to `docs/06_status/lanes/*.json`,
+ *      `docs/06_status/proof/**`, and `.ops/sync/*.yml`). A message-pattern match
+ *      alone is never sufficient -- a commit whose changed files are not confirmed
+ *      to stay within that scope is not classified as authorized.
  *   3. Whether the commit message carries an `Emergency-Bypass-Record: <path>`
  *      trailer pointing at an existing `docs/06_status/INCIDENTS/*.md` file that
  *      itself references the commit SHA -- the mechanical convention this script
@@ -56,19 +60,35 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import micromatch from 'micromatch';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..', '..');
 const EMERGENCY_TRAILER = /^Emergency-Bypass-Record:\s*(\S+)\s*$/m;
 
 /**
- * Identities allowed to author unreviewed commits directly on `main`, and the
- * commit-message pattern each identity's known operation is allow-listed for.
- * Extending this list is itself a governance change and should land through a
- * normal PR against this file, not be silently widened.
+ * Identities allowed to author unreviewed commits directly on `main`, the
+ * commit-message pattern each identity's known operation is allow-listed for, AND
+ * the exact file-path globs that operation is known to touch. All three must match
+ * -- a commit matching the identity+message pattern but touching a file outside
+ * `changedPathGlobs` is NOT authorized_automation (Codex review finding, this
+ * lane's own PR: message-pattern matching alone would let a compromised or buggy
+ * automation stage arbitrary files under an allow-listed subject line). Extending
+ * this list is itself a governance change and should land through a normal PR
+ * against this file, not be silently widened.
  */
-const KNOWN_AUTOMATION_IDENTITIES: Record<string, RegExp[]> = {
-  'github-actions[bot]': [/^chore\(lanes\): close .+ — lane closed/],
+const KNOWN_AUTOMATION_IDENTITIES: Record<
+  string,
+  Array<{ messagePattern: RegExp; changedPathGlobs: string[] }>
+> = {
+  'github-actions[bot]': [
+    {
+      // post-merge-lane-close.yml's closeout commit: git add "$MANIFEST_PATH" +
+      // git add docs/06_status/proof/"$ISSUE_ID"/ + git rm .ops/sync/"$ISSUE_ID".yml.
+      messagePattern: /^chore\(lanes\): close .+ — lane closed/,
+      changedPathGlobs: ['docs/06_status/lanes/*.json', 'docs/06_status/proof/**', '.ops/sync/*.yml'],
+    },
+  ],
 };
 
 export interface CommitClassificationInput {
@@ -76,6 +96,13 @@ export interface CommitClassificationInput {
   authorLogin: string | null;
   message: string;
   associatedPrNumbers: number[];
+  /**
+   * Files this commit touched. Optional for backward compatibility with older
+   * callers, but required in practice to reach `authorized_automation` -- a commit
+   * with unknown changed files can never be verified as narrowly-scoped, so it
+   * falls through to the emergency-record / unauthorized checks instead.
+   */
+  changedFiles?: string[];
 }
 
 export type DirectMainPushClassificationCode =
@@ -122,7 +149,7 @@ export function classifyMainCommit(
   input: CommitClassificationInput,
   options: { checkEmergencyRecord?: (recordPath: string, sha: string) => boolean } = {},
 ): DirectMainPushClassification {
-  const { sha, authorLogin, message, associatedPrNumbers } = input;
+  const { sha, authorLogin, message, associatedPrNumbers, changedFiles } = input;
   const checkEmergencyRecord = options.checkEmergencyRecord ?? emergencyRecordReferencesSha;
 
   if (associatedPrNumbers.length > 0) {
@@ -134,13 +161,28 @@ export function classifyMainCommit(
   }
 
   if (authorLogin && authorLogin in KNOWN_AUTOMATION_IDENTITIES) {
-    const patterns = KNOWN_AUTOMATION_IDENTITIES[authorLogin] ?? [];
-    if (patterns.some((pattern) => pattern.test(message))) {
-      return {
-        sha,
-        code: 'authorized_automation',
-        reason: `known automation identity "${authorLogin}" with an allow-listed commit-message pattern`,
-      };
+    const operations = KNOWN_AUTOMATION_IDENTITIES[authorLogin] ?? [];
+    for (const operation of operations) {
+      if (!operation.messagePattern.test(message)) {
+        continue;
+      }
+      if (changedFiles === undefined) {
+        // Message pattern matched but we have no changed-files evidence to confirm
+        // the operation stayed within its known scope -- do not authorize on
+        // message text alone.
+        continue;
+      }
+      const allInScope = changedFiles.every((file) => micromatch.isMatch(file, operation.changedPathGlobs, { dot: true }));
+      if (allInScope) {
+        return {
+          sha,
+          code: 'authorized_automation',
+          reason: `known automation identity "${authorLogin}" with an allow-listed commit-message pattern, and every changed file (${changedFiles.join(', ') || 'none'}) matches its known scope (${operation.changedPathGlobs.join(', ')})`,
+        };
+      }
+      // Message matched but files did not -- fall through (do not authorize),
+      // rather than breaking out of the identity check entirely, in case a later
+      // operation entry for this identity also matches.
     }
   }
 
@@ -189,7 +231,10 @@ function gatherCommitInput(sha: string): CommitClassificationInput {
   } catch {
     associatedPrNumbers = [];
   }
-  return { sha, authorLogin, message, associatedPrNumbers };
+  const changedFiles = git(['show', '--format=', '--name-only', sha])
+    .split('\n')
+    .filter(Boolean);
+  return { sha, authorLogin, message, associatedPrNumbers, changedFiles };
 }
 
 function parseArgs(argv: string[]): { shas: string[]; json: boolean } {

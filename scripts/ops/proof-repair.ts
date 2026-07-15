@@ -119,15 +119,22 @@ export function buildProofRepairScaffold(issueId: string): ProofRepairScaffold {
   const normalizedIssue = issueId.toUpperCase();
   const slug = normalizedIssue.toLowerCase();
   const branch = `claude/${slug}-proof-repair`;
+  const proofPath = `docs/06_status/proof/${normalizedIssue}/evidence.json`;
   return {
     issue_id: normalizedIssue,
     branch,
     steps: [
-      `git worktree add .out/worktrees/${branch.replace(/\//g, '__')} -b ${branch} origin/main`,
-      `cd .out/worktrees/${branch.replace(/\//g, '__')} && pnpm install --frozen-lockfile`,
+      // AGENTS.md line 12: executable lanes must start through `pnpm ops:lane-start`,
+      // not a raw `git worktree add`, so worktree_path is recorded, the file-scope
+      // lock is reserved, and the lane cwd is verified -- never branch-switch or
+      // hand-roll a worktree for real lane work (Codex review finding, this lane's
+      // own PR). lane-start requires a preflight token to already exist.
+      `npx tsx scripts/ops/generate-preflight-token.ts --issue ${normalizedIssue} --tier T1 --branch ${branch}`,
+      `pnpm ops:lane-start ${normalizedIssue} --tier T1 --branch ${branch} --lane-type governance --files ${proofPath}`,
+      `cd .out/worktrees/${branch.replace(/\//g, '__')}   # the cwd lane-start records -- do not hand-roll a different worktree path`,
       `pnpm test:db   # run for real against live Supabase; capture the TAP output and any query/row-count evidence you print`,
       `# Hand-author a runtime-proof-file (e.g. /tmp/${slug}-runtime-proof.json) matching RuntimeProofFile's shape in scripts/ops/proof-repair.ts, from the ACTUAL command output above -- never copy an old lane's evidence`,
-      `pnpm ops:proof-repair apply --issue ${normalizedIssue} --merge-sha <the already-bound implementation merge SHA from docs/06_status/proof/${normalizedIssue}/evidence.json's sha_binding.merge_sha> --runtime-proof-file /tmp/${slug}-runtime-proof.json --verifier-identity ${branch}`,
+      `pnpm ops:proof-repair apply --issue ${normalizedIssue} --merge-sha <the already-bound implementation merge SHA from ${proofPath}'s sha_binding.merge_sha> --runtime-proof-file /tmp/${slug}-runtime-proof.json --verifier-identity ${branch}`,
       `git add docs/06_status/proof/${normalizedIssue}/ && git commit -m "chore(proof): ${normalizedIssue} add runtime proof via governed repair"`,
       `git push -u origin ${branch}`,
       `gh pr create --base main --title "${normalizedIssue}: add missing T1 runtime proof" --body "Adds runtime_proof/verifier to the already-merged lane's evidence bundle via the governed proof-repair path. Never edits main directly."`,

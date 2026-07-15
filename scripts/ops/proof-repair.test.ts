@@ -60,6 +60,11 @@ test('scaffold: produces a claude/ branch and steps that open a PR, never a dire
   assert.match(joined, /pnpm test:db/);
   assert.match(joined, /ops:proof-repair apply/);
   assert.match(joined, /gh pr create/);
+  // AGENTS.md requires executable lanes to start through pnpm ops:lane-start, not a
+  // hand-rolled `git worktree add -b` -- so worktree_path is recorded, the
+  // file-scope lock is reserved, and the lane cwd is verified (Codex review finding).
+  assert.match(joined, /pnpm ops:lane-start/);
+  assert.doesNotMatch(joined, /git worktree add .+ -b /);
   // Never a direct write-and-push to main anywhere in the scaffold's own instructions
   // (the scaffold's own explanatory prose is allowed to mention "--admin" as a
   // prohibition -- what must never appear is an actual invocation of it).
