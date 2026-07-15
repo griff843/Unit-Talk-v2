@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1497-atomic-outbox-claim",
   "branch": "claude/utv2-1497-atomic-outbox-claim",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1221",
   "files_changed": [],
   "file_scope_lock": [
     "apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts",
@@ -17,14 +17,48 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1497/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-15T00:25:37.853Z",
-  "heartbeat_at": "2026-07-15T00:25:37.853Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-15T05:27:29.447Z",
+  "closed_at": "2026-07-15T05:27:29.447Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1497-atomic-outbox-claim.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-15T05:18:42.421Z",
+      "verdict": "pass",
+      "merge_sha": "fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1221"
+    },
+    {
+      "checked_at": "2026-07-15T05:27:10.341Z",
+      "verdict": "pass",
+      "merge_sha": "fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1221",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-15T05:27:27.120Z",
+      "verdict": "pass",
+      "merge_sha": "fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1221",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
