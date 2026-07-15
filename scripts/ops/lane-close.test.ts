@@ -4,7 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  buildRepairRequiredViaPrPacket,
   ensureCloseoutMergeLock,
+  guardRepairAgainstMainCheckout,
   mapFailuresToCode,
   repairMergedLaneManifest,
   releaseCloseoutLocks,
@@ -588,6 +590,7 @@ const allFailureCodes: CloseoutFailureCode[] = [
   'registry_mismatch',
   'infra_error',
   'truth_check_failed',
+  'repair_required_via_pr',
 ];
 
 for (const code of allFailureCodes) {
@@ -612,4 +615,157 @@ test('post-merge lane close workflow delegates to repair-merged lane closeout', 
   assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID"/);
   assert.doesNotMatch(workflow, /manifest\.status = 'done'/);
   assert.match(workflow, /git add "\$MANIFEST_PATH"/);
+});
+
+// ── UTV2-1542: --repair-merged must never leave a commit-ready main checkout ──
+// Regression coverage reproducing the exact UTV2-1497 failure mode: an operator
+// ran `ops:lane-close --repair-merged` from the shared main checkout, got back a
+// manifest with real tracked-file changes and no warning, and committed +
+// pushed the result directly to `origin/main`. guardRepairAgainstMainCheckout()
+// must intercept that condition and block the normal write path.
+
+test('guard blocks and emits a repair packet when repair-merged produces changes on a main checkout (UTV2-1497 repro)', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({
+        issue_id: 'UTV2-1497',
+        status: 'started',
+        commit_sha: null,
+        pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+        preflight_token: tokenPath,
+      }),
+      {
+        repoRoot,
+        artifactRoot,
+        now: new Date('2026-07-15T05:27:10.000Z'),
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+        }),
+      },
+    );
+    assert.strictEqual(repair.ok, true);
+    assert.ok(repair.changed_fields.length > 0, 'precondition: repair must actually produce changes');
+
+    const guard = guardRepairAgainstMainCheckout(repair, {
+      currentBranch: 'main',
+      repoRoot,
+    });
+
+    assert.ok(guard, 'guard must not be null when repair-merged changed files on a main checkout');
+    assert.strictEqual(guard?.ok, false);
+    assert.strictEqual(guard?.code, 'repair_required_via_pr');
+    assert.strictEqual(guard?.outcome, 'blocked');
+    assert.strictEqual(guard?.issue_id, 'UTV2-1497');
+    assert.deepStrictEqual(guard?.changed_files, ['docs/06_status/lanes/UTV2-1497.json']);
+    assert.strictEqual(guard?.original_implementation_merge_sha, 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7');
+    assert.strictEqual(guard?.recommended_repair_branch, 'claude/utv2-1497-lane-close-repair');
+    assert.match(guard?.direct_main_prohibition ?? '', /DIRECT_MAIN_BYPASS_POLICY\.md/);
+    assert.match(guard?.direct_main_prohibition ?? '', /must NOT be committed or pushed directly to main/);
+
+    // The repair packet must exist and contain the full repaired manifest --
+    // this is the "patch or repair packet" the operator applies on the correct
+    // branch instead of hand-retyping the repaired content.
+    const packetAbsolutePath = path.join(repoRoot, guard?.repair_packet_path ?? '');
+    assert.ok(fs.existsSync(packetAbsolutePath), 'repair packet file must be written');
+    const packetContent = JSON.parse(fs.readFileSync(packetAbsolutePath, 'utf8')) as { commit_sha?: string };
+    assert.strictEqual(packetContent.commit_sha, 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7');
+  });
+});
+
+test('guard commands never suggest git push origin main and always route through a governed PR', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ issue_id: 'UTV2-1497', status: 'started', commit_sha: null, preflight_token: tokenPath }),
+      {
+        repoRoot,
+        artifactRoot,
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+        }),
+      },
+    );
+    const guard = guardRepairAgainstMainCheckout(repair, { currentBranch: 'main', repoRoot });
+
+    assert.ok(guard);
+    for (const command of guard?.commands ?? []) {
+      assert.doesNotMatch(command, /git push(\s+-u)?\s+origin\s+main\b/);
+    }
+    assert.ok(
+      guard?.commands.some((c) => /gh pr create --base main/.test(c)),
+      'commands must include opening a PR against main',
+    );
+    assert.ok(
+      guard?.commands.some((c) => /ops:lane-start/.test(c)),
+      'commands must route through the sanctioned ops:lane-start lane lifecycle',
+    );
+  });
+});
+
+test('guard is a no-op (returns null) when running from a dedicated lane branch, not main', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ issue_id: 'UTV2-1497', status: 'started', commit_sha: null, preflight_token: tokenPath }),
+      {
+        repoRoot,
+        artifactRoot,
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+        }),
+      },
+    );
+
+    const guard = guardRepairAgainstMainCheckout(repair, {
+      currentBranch: 'claude/utv2-1497-lane-close-repair',
+      repoRoot,
+    });
+
+    assert.strictEqual(guard, null);
+  });
+});
+
+test('guard is a no-op when repair-merged made no changes (already_closed)', () => {
+  const manifest = createManifest({ status: 'done' });
+  const repair = repairMergedLaneManifest(manifest, {
+    fetchPr: () => {
+      throw new Error('fetch should not be called for done lanes');
+    },
+  });
+
+  const guard = guardRepairAgainstMainCheckout(repair, { currentBranch: 'main', repoRoot: process.cwd() });
+
+  assert.strictEqual(guard, null);
+});
+
+test('buildRepairRequiredViaPrPacket names the exact preflight + lane-start commands for the repair branch', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const manifest = createManifest({ issue_id: 'UTV2-1497' });
+    const result = buildRepairRequiredViaPrPacket({
+      issueId: 'UTV2-1497',
+      manifest,
+      changedFields: ['commit_sha', 'status'],
+      pr: {
+        url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+        state: 'merged',
+        merged: true,
+        mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+      },
+      repoRoot,
+    });
+
+    assert.ok(
+      result.commands.some((c) => c.includes('generate-preflight-token.ts --issue UTV2-1497')),
+    );
+    assert.ok(
+      result.commands.some((c) => c.includes('ops:lane-start UTV2-1497') && c.includes('claude/utv2-1497-lane-close-repair')),
+    );
+  });
 });
