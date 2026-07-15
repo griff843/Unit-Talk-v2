@@ -1,5 +1,5 @@
 # PROOF: UTV2-1536
-MERGE_SHA: 8e3b3039816500ddd2cc71e41ff43493f78cbd37
+MERGE_SHA: 816f51d625328dfa296a79529c26d2b733b8ce55
 
 ASSERTIONS:
 - [x] Audited the repo for hard-coded stale concurrency ceilings presented as current policy (2 Claude / 4 Codex / 6 lanes / 2-4-6 / older 5-lane-2-Claude-3-Codex variants)
