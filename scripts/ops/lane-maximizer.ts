@@ -1,13 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
+import {
+  DEFAULT_TYPE_CAPS,
+  getEffectiveConfig,
+  loadConcurrencyConfig,
+  type ConcurrencyConfig,
+  type EffectiveConcurrencyConfig,
+  type TypeCapsConfig,
+} from './concurrency-config.js';
 import {
   ACTIVE_LOCK_STATUSES,
   readConfiguredEnvValue,
   requireVerificationTarget,
   resolveLaneExecutor,
+  type CanonicalLaneType,
 } from './shared.js';
+import {
+  checkConcurrencyLimits,
+  type ConcurrencyManifestLike,
+  type IncomingLaneScope,
+} from './concurrency-rules.js';
 import { linearQuery } from './linear-client.js';
 import {
   FULL_VERIFY_THROTTLE_DIR,
@@ -117,6 +130,24 @@ export interface EvaluateCandidateOptions {
   doneIssueIds?: Set<string>;
   singletonLaneTypes?: string[];
   forbiddenCombinations?: [string, string][];
+  /**
+   * Override for the hygiene/governance/delivery-ui/verification per-type caps
+   * forecast. Defaults to the real effective CONCURRENCY_CONFIG.json's type_caps,
+   * falling back to DEFAULT_TYPE_CAPS if the config file cannot be loaded.
+   */
+  typeCaps?: TypeCapsConfig;
+  /**
+   * Full override for the concurrency policy checkConcurrencyLimits() is evaluated
+   * against (total/executors/singleton_types/forbidden_combinations/type_caps, and
+   * optionally the trial governor fields). When supplied, this is used verbatim --
+   * intended for tests that need exact control over every cap simultaneously
+   * (mirrors concurrency-simulation.test.ts's own POLICY/PROD_POLICY fixtures).
+   * When omitted, a policy is synthesized from the real effective config (or safe
+   * fallbacks) with `executors`/`total` driven by the `limits` parameter, so this
+   * function's pre-existing `limits`-driven executor-cap behavior is unchanged for
+   * every existing caller/test that does not opt into this override.
+   */
+  concurrencyConfig?: ConcurrencyConfig | EffectiveConcurrencyConfig;
 }
 
 export interface MaximizationReport {
@@ -158,6 +189,24 @@ const REASON_MESSAGES: Record<string, string> = {
     'Candidate verification_target is already claimed by an active verification lane.',
   VERIFICATION_TARGET_ALREADY_PLANNED:
     'Candidate verification_target is already claimed by another candidate recommended earlier in this same wave.',
+  TOTAL_CAP_EXCEEDED:
+    'Candidate would exceed the total active-lane cap once the active board and this wave\'s already-planned candidates are counted together.',
+  TRIAL_UNSAFE_LANE_TYPE:
+    'Trial slots above the base cap are restricted to safe lane types; this candidate\'s lane type is not eligible for trial expansion.',
+  HYGIENE_TYPE_CAP_EXCEEDED:
+    'Hygiene lane type cap would be exceeded once the active board and this wave\'s already-planned candidates are counted together.',
+  GOVERNANCE_TYPE_CAP_EXCEEDED:
+    'Governance lane type cap would be exceeded once the active board and this wave\'s already-planned candidates are counted together.',
+  DELIVERY_UI_APP_UNDETERMINED:
+    'Delivery/UI candidate file scope does not map to exactly one canonical app root -- cannot admit a lane whose app cannot be determined from its declared file_scope, never inferred from title/branch/text.',
+  DELIVERY_UI_APP_UNDETERMINED_CONFLICT:
+    'An active or already-planned Delivery/UI lane has a file scope that cannot be reduced to one canonical app, so this candidate cannot be proven to target a different app. Fails closed until the ambiguous lane is resolved.',
+  DELIVERY_UI_APP_ACTIVE:
+    'Candidate Delivery/UI app is already claimed by an active Delivery/UI lane.',
+  DELIVERY_UI_APP_ALREADY_PLANNED:
+    'Candidate Delivery/UI app is already claimed by another candidate recommended earlier in this same wave.',
+  CONCURRENCY_LIMIT_EXCEEDED:
+    'Candidate fails the concurrency forecast for a reason not otherwise classified above -- fails closed.',
 };
 
 function isValidVerificationTarget(value: unknown): value is string {
@@ -169,6 +218,53 @@ function isValidVerificationTarget(value: unknown): value is string {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Maps a checkConcurrencyLimits() violation code to this planner's own reason-code
+ * vocabulary. `wasActiveBaseline` distinguishes an identity conflict (delivery-ui app /
+ * verification target) that already existed against the real active board from one that
+ * only arises once this same wave's already-accepted candidates are projected in --
+ * callers compute this by calling checkConcurrencyLimits() twice (once against real
+ * active lanes only, once against the growing wave-projected list) and checking whether
+ * the same violation code appears in both result sets. Count-based caps (total/executor/
+ * hygiene/governance/trial) and non-identity conflicts (singleton/forbidden) do not need
+ * this distinction -- the cap fires the same way regardless of which lane pushed the
+ * count over the line.
+ */
+function classifyViolation(code: string, wasActiveBaseline: boolean): keyof typeof REASON_MESSAGES {
+  switch (code) {
+    case 'total_cap_exceeded':
+      return 'TOTAL_CAP_EXCEEDED';
+    case 'claude_cap_exceeded':
+      return 'DISPATCH_LIMIT_CLAUDE';
+    case 'codex_cap_exceeded':
+      return 'DISPATCH_LIMIT_CODEX';
+    case 'trial_unsafe_lane_type':
+      return 'TRIAL_UNSAFE_LANE_TYPE';
+    case 'singleton_type_conflict':
+      return 'SINGLETON_ACTIVE';
+    case 'hygiene_type_cap_exceeded':
+      return 'HYGIENE_TYPE_CAP_EXCEEDED';
+    case 'governance_type_cap_exceeded':
+      return 'GOVERNANCE_TYPE_CAP_EXCEEDED';
+    case 'delivery_ui_app_undetermined':
+      return 'DELIVERY_UI_APP_UNDETERMINED';
+    case 'delivery_ui_app_undetermined_conflict':
+      return 'DELIVERY_UI_APP_UNDETERMINED_CONFLICT';
+    case 'delivery_ui_app_conflict':
+      return wasActiveBaseline ? 'DELIVERY_UI_APP_ACTIVE' : 'DELIVERY_UI_APP_ALREADY_PLANNED';
+    case 'verification_target_missing':
+      return 'MISSING_VERIFICATION_TARGET';
+    case 'verification_target_undetermined_conflict':
+      return 'VERIFICATION_TARGET_UNDETERMINED_CONFLICT';
+    case 'verification_target_conflict':
+      return wasActiveBaseline ? 'VERIFICATION_TARGET_ACTIVE' : 'VERIFICATION_TARGET_ALREADY_PLANNED';
+    case 'forbidden_combination':
+      return 'FORBIDDEN_COMBINATION';
+    default:
+      return 'CONCURRENCY_LIMIT_EXCEEDED';
   }
 }
 
@@ -343,16 +439,6 @@ function inferWorkClass(laneType: string, singletonLaneTypes: string[]): string 
 
 function activeLaneTypes(activeLanes: LaneManifest[]): string[] {
   return Array.from(new Set(activeLanes.map((lane) => lane.lane_type).filter(Boolean))).sort();
-}
-
-function hasForbiddenCombination(
-  laneType: string,
-  activeTypes: string[],
-  forbiddenCombinations: [string, string][],
-): boolean {
-  return forbiddenCombinations.some(([left, right]) =>
-    (left === laneType && activeTypes.includes(right)) || (right === laneType && activeTypes.includes(left)),
-  );
 }
 
 function activeForbiddenCombinations(
@@ -780,6 +866,35 @@ export function evaluateCandidates(
     'data-canonical',
   ];
   const forbiddenCombinations = options.forbiddenCombinations ?? cfg?.forbidden_combinations ?? [];
+  const typeCaps = options.typeCaps ?? cfg?.type_caps ?? DEFAULT_TYPE_CAPS;
+  // Single canonical concurrency policy this wave is forecast against --
+  // checkConcurrencyLimits() (imported from concurrency-rules.ts, the same module
+  // ops:lane-start's real, fail-closed admission check calls) is the ONLY place total/
+  // executor/singleton/forbidden-combination/type-cap rules are implemented; this
+  // function never re-derives them. `executors`/`total` are driven by the `limits`
+  // parameter (not the loaded cfg) so this function's pre-existing limits-driven
+  // executor-cap behavior is unchanged for every caller that does not opt into
+  // `options.concurrencyConfig`. A caller that needs full control over every cap at
+  // once (tests mirroring concurrency-simulation.test.ts's PROD_POLICY fixtures, or a
+  // trial-governor scenario) can supply `options.concurrencyConfig` verbatim.
+  const basePolicy: ConcurrencyConfig | EffectiveConcurrencyConfig = options.concurrencyConfig ?? (cfg
+    ? {
+        ...cfg,
+        executors: { claude: limits.maxClaude, codex: limits.maxCodex },
+        total: limits.maxClaude + limits.maxCodex,
+        singleton_types: singletonLaneTypes,
+        forbidden_combinations: forbiddenCombinations,
+        type_caps: typeCaps,
+      }
+    : {
+        version: 1,
+        total: limits.maxClaude + limits.maxCodex,
+        executors: { claude: limits.maxClaude, codex: limits.maxCodex },
+        merge_serialized_max: 1,
+        singleton_types: singletonLaneTypes,
+        forbidden_combinations: forbiddenCombinations,
+        type_caps: typeCaps,
+      });
   const activeClaude = activeLanes.filter((lane) => resolveLaneExecutor(lane) === 'claude').length;
   const activeCodex = activeLanes.filter((lane) => {
     const executor = resolveLaneExecutor(lane);
@@ -826,22 +941,16 @@ export function evaluateCandidates(
   };
   let plannedClaude = 0;
   let plannedCodex = 0;
-  const plannedLaneTypes = [...initialActiveTypes];
-  const plannedVerificationTargets = new Set<string>();
-  const activeVerificationLanes = activeLanes.filter((lane) => lane.lane_type === 'verification');
-  const undeterminedActiveVerificationLane = activeVerificationLanes.find(
-    (lane) => !isValidVerificationTarget(lane.verification_target),
-  );
-  const activeVerificationTargets = new Set(
-    activeVerificationLanes
-      .map((lane) => lane.verification_target)
-      .filter((target): target is string => isValidVerificationTarget(target)),
-  );
-
-  const remainingSlots = (executor: CandidateLane['executor']): number => {
-    if (executor === 'claude') return Math.max(0, limits.maxClaude - activeClaude - plannedClaude);
-    return Math.max(0, limits.maxCodex - activeCodex - plannedCodex);
-  };
+  // Wave-projected active-lane list: starts as the real active board and grows by one
+  // synthetic entry every time a candidate is accepted into fill_now (see pushPlan
+  // below). checkConcurrencyLimits() is called against this growing list for every
+  // subsequent candidate in the same wave -- this is what lets the planner forecast
+  // total/executor/singleton/forbidden/hygiene/governance/delivery-ui/verification caps
+  // across the WHOLE wave, not just against the lanes that were active before planning
+  // started (UTV2-1533's originally-shipped lane-maximizer P2 fix only did this
+  // wave-projection for verification_target; this generalizes it to every cap
+  // checkConcurrencyLimits() enforces).
+  const projectedActive: ConcurrencyManifestLike[] = [...activeLanes];
 
   const pushPlan = (candidate: CandidateLane, laneType: string, workClass: string): void => {
     const slotIndex = candidate.executor === 'claude'
@@ -895,10 +1004,14 @@ export function evaluateCandidates(
     });
     if (candidate.executor === 'claude') plannedClaude += 1;
     else plannedCodex += 1;
-    if (!plannedLaneTypes.includes(laneType)) plannedLaneTypes.push(laneType);
-    if (laneType === 'verification' && candidate.verification_target) {
-      plannedVerificationTargets.add(candidate.verification_target);
-    }
+    projectedActive.push({
+      issue_id: candidate.issue_id,
+      lane_type: laneType,
+      executor: candidate.executor,
+      status: 'in_progress',
+      file_scope_lock: candidate.file_scope.map(normalizePath),
+      verification_target: laneType === 'verification' ? candidate.verification_target : undefined,
+    });
   };
 
   for (const candidate of rankCandidates(candidates)) {
@@ -937,9 +1050,11 @@ export function evaluateCandidates(
     }
 
     // UTV2-1533 lane-maximizer P2 fix: a lane_type:"verification" candidate's real
-    // target is never guessed from its own issue_id. Explicit, validated, and
-    // conflict-checked here -- fail closed at every step rather than silently
-    // defaulting or silently allowing an unprovable per-target cap.
+    // target is never guessed from its own issue_id. Format/presence validation stays
+    // local (checkConcurrencyLimits below assumes a caller already rejected a missing
+    // or malformed target the way ops:lane-start's own CLI flag parsing does, before
+    // ever reaching the shared cap-evaluation logic) -- fail closed at every step
+    // rather than silently defaulting or silently allowing an unprovable per-target cap.
     if (laneType === 'verification') {
       if (!candidate.verification_target) {
         report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'MISSING_VERIFICATION_TARGET', ranking));
@@ -950,49 +1065,52 @@ export function evaluateCandidates(
         report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'MALFORMED_VERIFICATION_TARGET', ranking));
         continue;
       }
-
-      if (undeterminedActiveVerificationLane) {
-        report.blocked.push(
-          buildResult(candidate.issue_id, 'blocked', 'VERIFICATION_TARGET_UNDETERMINED_CONFLICT', ranking),
-        );
-        continue;
-      }
-
-      if (activeVerificationTargets.has(candidate.verification_target)) {
-        report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'VERIFICATION_TARGET_ACTIVE', ranking));
-        continue;
-      }
-
-      if (plannedVerificationTargets.has(candidate.verification_target)) {
-        report.blocked.push(
-          buildResult(candidate.issue_id, 'blocked', 'VERIFICATION_TARGET_ALREADY_PLANNED', ranking),
-        );
-        continue;
-      }
     }
 
-    if (candidate.executor === 'claude' && remainingSlots(candidate.executor) <= 0) {
-      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'DISPATCH_LIMIT_CLAUDE', ranking));
+    // Unified concurrency forecast. checkConcurrencyLimits() (imported from
+    // concurrency-rules.ts) is the single canonical implementation of total/executor/
+    // singleton/forbidden-combination/hygiene/governance/delivery-ui/verification-target
+    // admission rules -- the exact same function ops:lane-start's checkConcurrencyLimits()
+    // call site uses at real lane-creation time. Called twice per candidate:
+    //   - `baselineViolations` against the real active board only, to classify an
+    //     identity conflict (delivery-ui app / verification target) as one that already
+    //     existed against active lanes;
+    //   - `projectedViolations` against `projectedActive` (real active lanes PLUS every
+    //     candidate already accepted earlier in this same wave), which is the actual
+    //     admission decision for this candidate. `projectedActive` only grows, so
+    //     baselineViolations is always a subset of projectedViolations -- any code
+    //     present in projectedViolations but absent from baselineViolations arose purely
+    //     from this wave, and is classified as an "already planned" conflict rather than
+    //     an "active lane" conflict.
+    const incomingScope: IncomingLaneScope = {
+      fileScopeLock: fileScope,
+      verificationTarget: laneType === 'verification' ? candidate.verification_target : undefined,
+    };
+    const laneTypeForCheck = laneType as CanonicalLaneType;
+    const projectedViolations = checkConcurrencyLimits(
+      projectedActive,
+      laneTypeForCheck,
+      candidate.executor,
+      basePolicy,
+      incomingScope,
+    );
+    if (projectedViolations.length > 0) {
+      const baselineCodes = new Set(
+        checkConcurrencyLimits(activeLanes, laneTypeForCheck, candidate.executor, basePolicy, incomingScope).map(
+          (violation) => violation.code,
+        ),
+      );
+      const primary = projectedViolations[0]!;
+      const reasonKey = classifyViolation(primary.code, baselineCodes.has(primary.code));
+      report.blocked.push(buildResult(candidate.issue_id, 'blocked', reasonKey, ranking));
       continue;
     }
 
-    if (candidate.executor === 'codex-cli' && remainingSlots(candidate.executor) <= 0) {
-      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'DISPATCH_LIMIT_CODEX', ranking));
-      continue;
-    }
-
-    if (singletonLaneTypes.includes(laneType) && plannedLaneTypes.includes(laneType)) {
-      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'SINGLETON_ACTIVE', ranking));
-      continue;
-    }
-
-    if (hasForbiddenCombination(laneType, plannedLaneTypes, forbiddenCombinations)) {
-      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'FORBIDDEN_COMBINATION', ranking));
-      continue;
-    }
-
+    // File-scope overlap check against the real active board AND every candidate
+    // already accepted earlier in this same wave (projectedActive covers both, since it
+    // starts as activeLanes and grows per accepted candidate above).
     const overlaps = fileScope.some((candidatePath) =>
-      activeLanes.some((lane) => lane.file_scope_lock.some((lockedPath) => overlapsPath(candidatePath, lockedPath))),
+      projectedActive.some((lane) => lane.file_scope_lock.some((lockedPath) => overlapsPath(candidatePath, lockedPath))),
     );
     if (overlaps) {
       report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'OVERLAP', ranking));

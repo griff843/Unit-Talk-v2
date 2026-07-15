@@ -12,6 +12,9 @@ import {
   parseQueueCandidates,
 } from './lane-maximizer.js';
 import { buildPnpmStateEnv } from './lane-start.js';
+import { checkConcurrencyLimits, type ConcurrencyManifestLike } from './concurrency-rules.js';
+import type { ConcurrencyConfig, EffectiveConcurrencyConfig } from './concurrency-config.js';
+import type { CanonicalLaneType } from './shared.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LANE_DIR = path.join(ROOT, 'docs', '06_status', 'lanes');
@@ -711,4 +714,519 @@ test('UTV2-1533 P2: candidate issue_id is never silently substituted as the veri
     !report.dispatch_plan.fill_now.some((entry) => entry.dispatch_command.includes('--verification-target UTV2-96827')),
     'issue_id must never appear as a silently substituted --verification-target value',
   );
+});
+
+// ── Planning-accuracy follow-up: evaluateCandidates() forecasts the FULL
+// active-plus-already-planned-this-wave state against the same type caps
+// ops:lane-start's checkConcurrencyLimits() enforces (hygiene/governance maxima,
+// delivery-ui per-app, verification per-target, trial governor, total cap), not just
+// executor caps/singleton/forbidden-combination as before. PROD_POLICY below mirrors
+// the real shipped docs/governance/CONCURRENCY_CONFIG.json numbers exactly (same
+// fixture shape as concurrency-simulation.test.ts's own PROD_POLICY), passed via
+// evaluateCandidates()'s `concurrencyConfig` option so these tests are deterministic
+// and independent of whatever the live config file currently contains.
+
+const PROD_POLICY: ConcurrencyConfig = {
+  version: 3,
+  total: 10,
+  executors: { claude: 4, codex: 6 },
+  merge_serialized_max: 1,
+  singleton_types: ['runtime', 'migration', 'modeling', 'data-canonical'],
+  forbidden_combinations: [
+    ['migration', 'runtime'],
+    ['migration', 'migration'],
+    ['migration', 'data-canonical'],
+    ['runtime', 'runtime'],
+    ['modeling', 'modeling'],
+  ],
+  type_caps: {
+    hygiene: 4,
+    governance: 3,
+    'delivery-ui': { max_per_app: 1 },
+    verification: { max_per_target: 1 },
+  },
+};
+
+const PROD_LIMITS = { maxClaude: 4, maxCodex: 6 };
+
+test('1. lane 11 is not recommended (over total cap)', () => {
+  const active = [
+    makeManifest('UTV2-Q01', { executor: 'claude', lane_type: 'runtime', file_scope_lock: ['apps/worker/src/a.ts'] }),
+    makeManifest('UTV2-Q02', { executor: 'claude', lane_type: 'modeling', file_scope_lock: ['packages/domain/src/score.ts'] }),
+    makeManifest('UTV2-Q03', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/a.md'] }),
+    makeManifest('UTV2-Q04', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/b.md'] }),
+    makeManifest('UTV2-Q05', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q05.ts'] }),
+    makeManifest('UTV2-Q06', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q06.ts'] }),
+    makeManifest('UTV2-Q07', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q07.ts'] }),
+    makeManifest('UTV2-Q08', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q08.ts'] }),
+    makeManifest('UTV2-Q09', { executor: 'codex-cli', lane_type: 'delivery-ui', file_scope_lock: ['apps/command-center/page.tsx'] }),
+    {
+      ...makeManifest('UTV2-Q10', { executor: 'codex-cli', lane_type: 'verification', file_scope_lock: ['apps/api/src/x.test.ts'] }),
+      verification_target: 'UTV2-9001',
+    },
+  ];
+  assert.equal(active.length, 10, 'fixture must have exactly 10 active lanes to be at the PROD_POLICY total cap');
+
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-Q11', { executor: 'codex-cli', lane_type: 'hygiene', file_scope: ['scripts/ops/q11.ts'] })],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), []);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['TOTAL_CAP_EXCEEDED']);
+});
+
+test('2. fifth Claude lane is not recommended', () => {
+  const active = [
+    makeManifest('UTV2-Q20', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/c.md'] }),
+    makeManifest('UTV2-Q21', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/d.md'] }),
+    makeManifest('UTV2-Q22', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/e.md'] }),
+    makeManifest('UTV2-Q23', { executor: 'claude', lane_type: 'runtime', file_scope_lock: ['apps/worker/src/b.ts'] }),
+  ];
+
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-Q24', { executor: 'claude', lane_type: 'hygiene', file_scope: ['scripts/ops/q24.ts'] })],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['DISPATCH_LIMIT_CLAUDE']);
+});
+
+test('3. seventh Codex lane is not recommended', () => {
+  const active = [
+    makeManifest('UTV2-Q30', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q30.ts'] }),
+    makeManifest('UTV2-Q31', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q31.ts'] }),
+    makeManifest('UTV2-Q32', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q32.ts'] }),
+    makeManifest('UTV2-Q33', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q33.ts'] }),
+    makeManifest('UTV2-Q34', { executor: 'codex-cli', lane_type: 'delivery-ui', file_scope_lock: ['apps/command-center/page.tsx'] }),
+    {
+      ...makeManifest('UTV2-Q35', { executor: 'codex-cli', lane_type: 'verification', file_scope_lock: ['apps/api/src/y.test.ts'] }),
+      verification_target: 'UTV2-9001',
+    },
+  ];
+
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-Q36', {
+        executor: 'codex-cli',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9002',
+        file_scope: ['scripts/ops/q36.test.ts'],
+      }),
+    ],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['DISPATCH_LIMIT_CODEX']);
+});
+
+test('4. fifth Hygiene lane is not recommended (isolated: no other cap fires)', () => {
+  const active = [
+    makeManifest('UTV2-Q40', { executor: 'claude', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q40.ts'] }),
+    makeManifest('UTV2-Q41', { executor: 'claude', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q41.ts'] }),
+    makeManifest('UTV2-Q42', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q42.ts'] }),
+    makeManifest('UTV2-Q43', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/q43.ts'] }),
+  ];
+
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-Q44', { executor: 'claude', lane_type: 'hygiene', file_scope: ['scripts/ops/q44.ts'] })],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(
+    report.blocked[0]?.reason_codes,
+    ['HYGIENE_TYPE_CAP_EXCEEDED'],
+    `Expected exactly HYGIENE_TYPE_CAP_EXCEEDED (isolated), got: ${JSON.stringify(report.blocked)}`,
+  );
+});
+
+test('5. fourth Governance lane is not recommended (isolated: no other cap fires)', () => {
+  const active = [
+    makeManifest('UTV2-Q50', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/f.md'] }),
+    makeManifest('UTV2-Q51', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/g.md'] }),
+    makeManifest('UTV2-Q52', { executor: 'codex-cli', lane_type: 'governance', file_scope_lock: ['docs/gov/h.md'] }),
+  ];
+
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-Q53', { executor: 'claude', lane_type: 'governance', file_scope: ['docs/gov/i.md'] })],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(
+    report.blocked[0]?.reason_codes,
+    ['GOVERNANCE_TYPE_CAP_EXCEEDED'],
+    `Expected exactly GOVERNANCE_TYPE_CAP_EXCEEDED (isolated), got: ${JSON.stringify(report.blocked)}`,
+  );
+});
+
+test('6. same-app Delivery/UI conflict with an active lane is blocked', () => {
+  const active = [
+    makeManifest('UTV2-Q60', { executor: 'claude', lane_type: 'delivery-ui', file_scope_lock: ['apps/command-center/src/app/page.tsx'] }),
+  ];
+
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-Q61', {
+        executor: 'codex-cli',
+        lane_type: 'delivery-ui',
+        file_scope: ['apps/command-center/src/app/other.tsx'],
+      }),
+    ],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['DELIVERY_UI_APP_ACTIVE']);
+});
+
+test('7. same-app Delivery/UI conflict with an earlier planned candidate (same wave) is blocked', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-Q70A', { executor: 'claude', lane_type: 'delivery-ui', file_scope: ['apps/command-center/src/app/a.tsx'] }),
+      makeCandidate('UTV2-Q70B', { executor: 'codex-cli', lane_type: 'delivery-ui', file_scope: ['apps/command-center/src/app/b.tsx'] }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-Q70A']);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['DELIVERY_UI_APP_ALREADY_PLANNED']);
+  assert.equal(
+    report.dispatch_plan.fill_now.filter((entry) => entry.lane_type === 'delivery-ui').length,
+    1,
+    'only the first same-app Delivery/UI candidate may be planned into fill_now',
+  );
+});
+
+test('8. different Delivery/UI apps may both be planned', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-Q80A', { executor: 'claude', lane_type: 'delivery-ui', file_scope: ['apps/command-center/src/app/a.tsx'] }),
+      makeCandidate('UTV2-Q80B', { executor: 'codex-cli', lane_type: 'delivery-ui', file_scope: ['apps/discord-bot/src/formatter.ts'] }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended').sort(), ['UTV2-Q80A', 'UTV2-Q80B']);
+  assert.deepStrictEqual(report.blocked, []);
+});
+
+test('9. missing Delivery/UI app identity (undetermined from file_scope) fails closed', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-Q90', {
+        executor: 'claude',
+        lane_type: 'delivery-ui',
+        // Spans two canonical app roots -- deriveDeliveryUiApp() returns null.
+        file_scope: ['apps/command-center/src/app/page.tsx', 'apps/discord-bot/src/formatter.ts'],
+      }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), []);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['DELIVERY_UI_APP_UNDETERMINED']);
+});
+
+test('10. same Verification target as an active lane is blocked', () => {
+  const active = [
+    {
+      ...makeManifest('UTV2-QA0', { executor: 'claude', lane_type: 'verification', file_scope_lock: ['apps/api/src/z.test.ts'] }),
+      verification_target: 'UTV2-9010',
+    },
+  ];
+
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QA1', {
+        executor: 'codex-cli',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9010',
+        file_scope: ['scripts/ops/qa1.test.ts'],
+      }),
+    ],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['VERIFICATION_TARGET_ACTIVE']);
+});
+
+test('11. same Verification target as an earlier planned candidate (same wave) is blocked', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QB0', {
+        executor: 'claude',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9020',
+        file_scope: ['scripts/ops/qb0.test.ts'],
+      }),
+      makeCandidate('UTV2-QB1', {
+        executor: 'codex-cli',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9020',
+        file_scope: ['scripts/ops/qb1.test.ts'],
+      }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-QB0']);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['VERIFICATION_TARGET_ALREADY_PLANNED']);
+});
+
+test('12. different Verification targets may both be planned', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QC0', {
+        executor: 'claude',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9030',
+        file_scope: ['scripts/ops/qc0.test.ts'],
+      }),
+      makeCandidate('UTV2-QC1', {
+        executor: 'codex-cli',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9031',
+        file_scope: ['scripts/ops/qc1.test.ts'],
+      }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended').sort(), ['UTV2-QC0', 'UTV2-QC1']);
+  assert.deepStrictEqual(report.blocked, []);
+});
+
+test('13. missing Verification target is blocked', () => {
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-QD0', { executor: 'claude', lane_type: 'verification', file_scope: ['scripts/ops/qd0.test.ts'] })],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MISSING_VERIFICATION_TARGET']);
+});
+
+test('14. malformed Verification target is blocked', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QE0', {
+        executor: 'claude',
+        lane_type: 'verification',
+        verification_target: 'not-a-real-target',
+        file_scope: ['scripts/ops/qe0.test.ts'],
+      }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MALFORMED_VERIFICATION_TARGET']);
+});
+
+test('15. an active undetermined Verification target fails closed', () => {
+  const active = [
+    // Legacy active verification lane with no verification_target recorded at all.
+    makeManifest('UTV2-QF0', { executor: 'claude', lane_type: 'verification', file_scope_lock: ['apps/api/src/legacy.test.ts'] }),
+  ];
+
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QF1', {
+        executor: 'codex-cli',
+        lane_type: 'verification',
+        verification_target: 'UTV2-9040',
+        file_scope: ['scripts/ops/qf1.test.ts'],
+      }),
+    ],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['VERIFICATION_TARGET_UNDETERMINED_CONFLICT']);
+});
+
+test('16. existing singleton behavior remains intact under PROD_POLICY (regression)', () => {
+  const active = [
+    makeManifest('UTV2-QG0', { executor: 'claude', lane_type: 'runtime', file_scope_lock: ['apps/worker/src/c.ts'] }),
+  ];
+
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-QG1', { executor: 'codex-cli', lane_type: 'runtime', file_scope: ['apps/worker/src/d.ts'] })],
+    active,
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['SINGLETON_ACTIVE']);
+});
+
+test('17. forbidden combinations remain intact across active plus planned lanes (regression + wave extension)', () => {
+  // First candidate is lane_type:"migration" with a file scope that does NOT match
+  // isMigrationPath()'s path pattern (so it clears the earlier MIGRATION_PATH gate) --
+  // this proves the forbidden-combination check below is triggered purely by the
+  // planned lane_type, sourced from this same wave, not by any active manifest.
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QH0', { executor: 'claude', lane_type: 'migration', file_scope: ['docs/migration-notes.md'] }),
+      makeCandidate('UTV2-QH1', { executor: 'codex-cli', lane_type: 'runtime', file_scope: ['apps/worker/src/e.ts'] }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-QH0']);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['FORBIDDEN_COMBINATION']);
+});
+
+test('18. trial mode does not bypass type caps (adversarial: wide trial headroom, hygiene cap still fires)', () => {
+  const active = [
+    makeManifest('UTV2-QI0', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/qi0.ts'] }),
+    makeManifest('UTV2-QI1', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/qi1.ts'] }),
+    makeManifest('UTV2-QI2', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/qi2.ts'] }),
+    makeManifest('UTV2-QI3', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/qi3.ts'] }),
+  ];
+  const trialWideOpen: EffectiveConcurrencyConfig = {
+    ...PROD_POLICY,
+    total: 14,
+    executors: { claude: 5, codex: 9 },
+    trial_active: true,
+    trial_expires_at: null,
+    base_total: 10,
+    base_executors: { claude: 4, codex: 6 },
+    trial_safe_types_only: ['governance', 'hygiene', 'delivery-ui', 'verification'],
+  };
+
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-QI4', { executor: 'codex-cli', lane_type: 'hygiene', file_scope: ['scripts/ops/qi4.ts'] })],
+    active,
+    { maxClaude: 5, maxCodex: 9 },
+    { concurrencyConfig: trialWideOpen },
+  );
+
+  assert.deepStrictEqual(
+    findDecisionIssueIds(report, 'recommended'),
+    [],
+    'trial headroom (14 total / 9 codex) must not let a 5th hygiene lane through the hygiene type cap',
+  );
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['HYGIENE_TYPE_CAP_EXCEEDED']);
+});
+
+test('19. dispatch commands use the exact validated Delivery/UI file scope (no silent substitution)', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-QJ0', {
+        executor: 'claude',
+        lane_type: 'delivery-ui',
+        file_scope: ['apps/command-center/src/app/exact-path.tsx'],
+      }),
+    ],
+    [],
+    PROD_LIMITS,
+    { concurrencyConfig: PROD_POLICY },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-QJ0']);
+  assert.match(
+    report.dispatch_plan.fill_now[0]?.dispatch_command ?? '',
+    /--files apps\/command-center\/src\/app\/exact-path\.tsx\b/,
+    'dispatch_command must carry the candidate\'s own declared file_scope verbatim -- the app identity is derived downstream by ops:lane-start from these exact files, never overridden here',
+  );
+  assert.deepStrictEqual(report.dispatch_plan.fill_now[0]?.file_scope, ['apps/command-center/src/app/exact-path.tsx']);
+});
+
+test('20. the recommended wave, replayed candidate-by-candidate through the canonical concurrency evaluator, produces zero violations', () => {
+  const active = [
+    makeManifest('UTV2-QK0', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/wave-active.md'] }),
+  ];
+  const candidates = [
+    makeCandidate('UTV2-QK1', { executor: 'claude', lane_type: 'hygiene', file_scope: ['scripts/ops/wave-a.ts'] }),
+    makeCandidate('UTV2-QK2', { executor: 'codex-cli', lane_type: 'hygiene', file_scope: ['scripts/ops/wave-b.ts'] }),
+    makeCandidate('UTV2-QK3', { executor: 'codex-cli', lane_type: 'delivery-ui', file_scope: ['apps/command-center/src/app/wave.tsx'] }),
+    makeCandidate('UTV2-QK4', {
+      executor: 'codex-cli',
+      lane_type: 'verification',
+      verification_target: 'UTV2-9050',
+      file_scope: ['scripts/ops/wave-c.test.ts'],
+    }),
+    makeCandidate('UTV2-QK5', { executor: 'claude', lane_type: 'governance', file_scope: ['docs/gov/wave-planned.md'] }),
+  ];
+
+  const report = evaluateCandidates(candidates, active, PROD_LIMITS, { concurrencyConfig: PROD_POLICY });
+
+  assert.deepStrictEqual(
+    findDecisionIssueIds(report, 'recommended').sort(),
+    ['UTV2-QK1', 'UTV2-QK2', 'UTV2-QK3', 'UTV2-QK4', 'UTV2-QK5'],
+    'every candidate in this fixture is expected to clear every cap and be recommended',
+  );
+  assert.equal(report.dispatch_plan.fill_now.length, 5);
+
+  // Replay: feed the planner's own recommended wave, in the order it planned them,
+  // through checkConcurrencyLimits() one lane at a time -- exactly what would happen if
+  // an operator ran each fill_now.dispatch_command against ops:lane-start in sequence.
+  // A growing "replay board" starts as the real active manifests and gains one
+  // synthetic active entry per accepted lane, mirroring how ops:lane-start would leave
+  // the board after each real lane-start call.
+  const replayBoard: ConcurrencyManifestLike[] = active.map((manifest) => ({
+    issue_id: manifest.issue_id,
+    lane_type: manifest.lane_type,
+    executor: manifest.executor,
+    status: manifest.status,
+    file_scope_lock: manifest.file_scope_lock,
+    verification_target: manifest.verification_target,
+  }));
+
+  for (const entry of report.dispatch_plan.fill_now) {
+    const candidate = candidates.find((c) => c.issue_id === entry.issue_id);
+    assert.ok(candidate, `expected a source candidate for planned entry ${entry.issue_id}`);
+    const violations = checkConcurrencyLimits(
+      replayBoard,
+      entry.lane_type as CanonicalLaneType,
+      entry.executor,
+      PROD_POLICY,
+      {
+        fileScopeLock: entry.file_scope,
+        verificationTarget: entry.lane_type === 'verification' ? candidate!.verification_target : undefined,
+      },
+    );
+    assert.deepStrictEqual(
+      violations,
+      [],
+      `expected zero violations replaying planned lane ${entry.issue_id} (${entry.lane_type}), got: ${JSON.stringify(violations)}`,
+    );
+    replayBoard.push({
+      issue_id: entry.issue_id,
+      lane_type: entry.lane_type,
+      executor: entry.executor,
+      status: 'in_progress',
+      file_scope_lock: entry.file_scope,
+      verification_target: entry.lane_type === 'verification' ? candidate!.verification_target : undefined,
+    });
+  }
 });
