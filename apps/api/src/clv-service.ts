@@ -195,6 +195,25 @@ const PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS = new Set([
   '2h_total_ou',
 ]);
 
+function isEventScopedTotalPick(pick: PickRecord): boolean {
+  const canonicalMarketKey = pick.market_type_id ?? pick.market;
+  if (!PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(canonicalMarketKey)) {
+    return false;
+  }
+
+  // Historical data includes player props that were incorrectly tagged as game_total_ou.
+  // Do not reinterpret an explicitly player-scoped pick as an event total merely because
+  // its canonical market type drifted.
+  const metadata = asRecord(pick.metadata);
+  return !(
+    pick.market.startsWith('player_') ||
+    pick.participant_id ||
+    readString(metadata, 'player') ||
+    readString(metadata, 'playerId') ||
+    readString(metadata, 'providerParticipantId')
+  );
+}
+
 export async function computeCLVOutcome(
   pick: PickRecord,
   repositories: {
@@ -571,6 +590,13 @@ async function resolvePickEventContext(
     eventParticipants: EventParticipantRepository;
   },
 ): Promise<PickEventContext | null> {
+  // Game totals are event-scoped and intentionally have no participant linkage.
+  // Resolve their event directly from canonical pick metadata, then use the event's
+  // external_id to join verified provider offer history / market_universe closing data.
+  if (isEventScopedTotalPick(pick)) {
+    return resolveEventScopedTotalContext(pick, repositories.events);
+  }
+
   // Team moneyline picks carry metadata.teamId + metadata.eventId instead of
   // participant_id or metadata.player. Resolve via event ID directly, bypassing
   // the participant chain which only handles player names.
@@ -638,6 +664,138 @@ async function resolvePickEventContext(
     eventStartTime: readEventStartTime(matchedEvent),
     participantExternalId: participant.external_id,
     participantSide,
+  };
+}
+
+async function resolveEventScopedTotalContext(
+  pick: PickRecord,
+  events: EventRepository,
+): Promise<PickEventContext | null> {
+  const metadata = asRecord(pick.metadata);
+  const metadataEventId = readString(metadata, 'eventId');
+  const providerEventId = readString(metadata, 'providerEventId');
+  const eventName = readEventScopedTotalEventName(metadata);
+  const retainedEventStartTime = readRetainedEventStartTime(metadata);
+
+  if (metadataEventId) {
+    const event =
+      (await events.findById(metadataEventId)) ??
+      (await events.findByExternalId(metadataEventId));
+    const context = event
+      ? eventScopedContextFromEvent(pick, event, retainedEventStartTime)
+      : null;
+    if (context) {
+      return context;
+    }
+  }
+
+  if (providerEventId) {
+    if (retainedEventStartTime) {
+      return {
+        providerEventId,
+        eventStartTime: retainedEventStartTime,
+        participantExternalId: null,
+        participantSide: null,
+      };
+    }
+
+    const event = await events.findByExternalId(providerEventId);
+    const context = event ? eventScopedContextFromEvent(pick, event) : null;
+    if (context) {
+      return context;
+    }
+  }
+
+  if (!eventName) {
+    return null;
+  }
+
+  let namedEvents = (await events.listByName(eventName)).filter(
+    (event) =>
+      Boolean(event.external_id) &&
+      (!pick.sport_id || event.sport_id.toLowerCase() === pick.sport_id.toLowerCase()),
+  );
+
+  if (retainedEventStartTime) {
+    const expectedStartTimeMs = Date.parse(retainedEventStartTime);
+    namedEvents = namedEvents.filter(
+      (event) => Date.parse(readEventStartTime(event)) === expectedStartTimeMs,
+    );
+  } else if (namedEvents.length > 1) {
+    const pickCreatedAtMs = Date.parse(pick.created_at);
+    if (!Number.isFinite(pickCreatedAtMs)) {
+      return null;
+    }
+
+    const rankedEvents = namedEvents
+      .map((event) => ({
+        event,
+        distanceMs: Math.abs(Date.parse(readEventStartTime(event)) - pickCreatedAtMs),
+      }))
+      .filter(({ distanceMs }) => Number.isFinite(distanceMs))
+      .sort((left, right) => left.distanceMs - right.distanceMs);
+    const nearest = rankedEvents[0];
+    const runnerUp = rankedEvents[1];
+    const maximumLinkDistanceMs = 36 * 60 * 60 * 1000;
+    if (
+      !nearest ||
+      nearest.distanceMs > maximumLinkDistanceMs ||
+      (runnerUp && runnerUp.distanceMs === nearest.distanceMs)
+    ) {
+      return null;
+    }
+    namedEvents = [nearest.event];
+  }
+
+  return namedEvents.length === 1
+    ? eventScopedContextFromEvent(pick, namedEvents[0]!, retainedEventStartTime)
+    : null;
+}
+
+function readRetainedEventStartTime(metadata: Record<string, unknown>): string | null {
+  const eventStartTime =
+    readString(metadata, 'eventStartTime') ?? readString(metadata, 'eventTime');
+  return eventStartTime && Number.isFinite(Date.parse(eventStartTime))
+    ? eventStartTime
+    : null;
+}
+
+function readEventScopedTotalEventName(metadata: Record<string, unknown>): string | null {
+  const eventName = readString(metadata, 'eventName');
+  if (eventName) {
+    return eventName;
+  }
+
+  // Historical game-total submissions predate explicit event linkage. Their
+  // canonical thesis format begins "<away> vs. <home> totals over|under ...".
+  // Extract only that exact matchup; arbitrary prose remains unresolved.
+  const thesis = readString(metadata, 'thesis');
+  const match = thesis?.match(/^(.+?\s+vs\.\s+.+?)\s+totals?\s+(?:over|under)\b/i);
+  return match?.[1]?.trim() || null;
+}
+
+function eventScopedContextFromEvent(
+  pick: PickRecord,
+  event: {
+    sport_id: string;
+    external_id: string | null;
+    event_date: string;
+    metadata: Record<string, unknown>;
+  },
+  retainedEventStartTime: string | null = null,
+): PickEventContext | null {
+  if (
+    !event.external_id ||
+    (pick.sport_id && event.sport_id.toLowerCase() !== pick.sport_id.toLowerCase())
+  ) {
+    return null;
+  }
+
+  return {
+    providerEventId: event.external_id,
+    eventStartTime: retainedEventStartTime ?? readEventStartTime(event),
+    participantExternalId: null,
+    participantSide: null,
   };
 }
 

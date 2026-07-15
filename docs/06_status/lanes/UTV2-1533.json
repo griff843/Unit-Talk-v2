@@ -1,0 +1,73 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1533",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1533-concurrency-ramp-clean",
+  "branch": "claude/utv2-1533-concurrency-ramp-clean",
+  "base_branch": "main",
+  "commit_sha": "8ca5acf38a31fc1492961a0951a6af10029bc6c0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1216",
+  "files_changed": [
+    "docs/governance/CONCURRENCY_CONFIG.json",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ops/concurrency-config.ts",
+    "scripts/ops/concurrency-simulation.test.ts",
+    "scripts/ops/shared.ts",
+    "scripts/ops/shared.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts",
+    "scripts/codex-dispatch.ts",
+    "scripts/codex-dispatch.test.ts",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json"
+  ],
+  "file_scope_lock": [
+    "docs/governance/CONCURRENCY_CONFIG.json",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ops/concurrency-config.ts",
+    "scripts/ops/concurrency-simulation.test.ts",
+    "scripts/ops/shared.ts",
+    "scripts/ops/shared.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts",
+    "scripts/codex-dispatch.ts",
+    "scripts/codex-dispatch.test.ts",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1533/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-07-14T21:00:00.000Z",
+  "heartbeat_at": "2026-07-14T23:07:25.112Z",
+  "closed_at": "2026-07-14T23:07:25.112Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T23:07:21.905Z",
+      "verdict": "pass",
+      "merge_sha": "8ca5acf38a31fc1492961a0951a6af10029bc6c0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1216",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "notes": "Clean replacement lane created directly from origin/main per PM directive after GitHub reported PR #1215's merge-visible diff included unrelated lane and product files through contaminated merge ancestry. Carries only the accepted UTV2-1533 implementation content (14 files, byte-identical -- origin/main had not independently touched any of them since the lane began) plus a genuine fix for the lane-maximizer verification_target guess finding that PR #1215 had left deferred. No commit-history relationship to PR #1213 or PR #1215; their SHAs are recorded in evidence.json as provenance only."
+}

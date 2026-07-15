@@ -14,6 +14,36 @@ export interface TrialConfig {
   safe_types_only: string[];
 }
 
+/**
+ * Per-type distribution caps (UTV2-1533 PM review finding P2). These are
+ * independent of, and layered on top of, the total/executor caps above --
+ * a lane must pass both the total/executor check AND its type-specific check.
+ * `hygiene`/`governance` are simple counts; `delivery-ui`/`verification` are
+ * scoped caps (one active lane per app / per target issue), keyed on values
+ * derived from the incoming lane's own manifest fields -- see
+ * `deriveDeliveryUiApp()` and `verification_target` in shared.ts. Always
+ * sourced from base config, never overridden by trial (a trial widens total/
+ * executor headroom, not the per-type distribution safety rails).
+ */
+export interface TypeCapsConfig {
+  hygiene: number;
+  governance: number;
+  'delivery-ui': { max_per_app: number };
+  verification: { max_per_target: number };
+}
+
+/**
+ * Fallback used only if a loaded CONCURRENCY_CONFIG.json predates the
+ * `type_caps` field (defense in depth -- every config written by this repo
+ * going forward includes it). Matches the ratified §1 values.
+ */
+export const DEFAULT_TYPE_CAPS: TypeCapsConfig = {
+  hygiene: 4,
+  governance: 3,
+  'delivery-ui': { max_per_app: 1 },
+  verification: { max_per_target: 1 },
+};
+
 export interface ConcurrencyConfig {
   version: number;
   total: number;
@@ -24,6 +54,7 @@ export interface ConcurrencyConfig {
   merge_serialized_max: number;
   singleton_types: string[];
   forbidden_combinations: [string, string][];
+  type_caps: TypeCapsConfig;
   trial?: TrialConfig;
 }
 
@@ -56,7 +87,8 @@ let _cached: ConcurrencyConfig | null = null;
 export function loadConcurrencyConfig(): ConcurrencyConfig {
   if (_cached !== null) return _cached;
   try {
-    _cached = JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, 'utf8')) as ConcurrencyConfig;
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE_PATH, 'utf8')) as ConcurrencyConfig;
+    _cached = { ...parsed, type_caps: parsed.type_caps ?? DEFAULT_TYPE_CAPS };
     return _cached;
   } catch (error) {
     throw new Error(

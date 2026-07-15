@@ -1,10 +1,8 @@
 /**
  * Alert Builder types + validation. Pure module — no I/O.
  *
- * TODO(data-contract): No persistence surface exists for alert definitions.
- * Saving requires an `alert_definitions` table + an apps/api write endpoint
- * (mutations must go through apps/api with Bearer auth). Until then the
- * builder renders a live JSON preview only and the Save button is disabled.
+ * Saved definitions are deliberately browser-local. There is no database or
+ * API persistence contract, and these definitions cannot dispatch alerts.
  */
 
 export interface AlertDefinition {
@@ -32,6 +30,12 @@ export interface AlertDefinition {
 export interface AlertValidationResult {
   valid: boolean;
   errors: string[];
+}
+
+export interface SavedAlertDefinition {
+  id: string;
+  savedAt: string;
+  definition: AlertDefinition;
 }
 
 export function createEmptyAlertDefinition(): AlertDefinition {
@@ -102,4 +106,59 @@ export function validateAlertDefinition(def: AlertDefinition): AlertValidationRe
   }
 
   return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Parses browser storage defensively. Invalid or governance-tampered entries
+ * are discarded instead of becoming editable alert definitions.
+ */
+export function parseSavedAlertDefinitions(value: string | null): SavedAlertDefinition[] {
+  if (!value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.flatMap((entry): SavedAlertDefinition[] => {
+      if (!isSavedAlertDefinition(entry)) return [];
+      return validateAlertDefinition(entry.definition).valid ? [entry] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function isSavedAlertDefinition(value: unknown): value is SavedAlertDefinition {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.savedAt !== 'string') {
+    return false;
+  }
+
+  return isAlertDefinition(value.definition);
+}
+
+function isAlertDefinition(value: unknown): value is AlertDefinition {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.sport === 'string' &&
+    typeof value.league === 'string' &&
+    typeof value.market === 'string' &&
+    typeof value.book === 'string' &&
+    isNullableNumber(value.oddsThreshold) &&
+    isNullableNumber(value.evThreshold) &&
+    isNullableNumber(value.lineMoveThreshold) &&
+    typeof value.playerOrTeam === 'string' &&
+    isNullableNumber(value.startWindow) &&
+    value.destination === 'internal' &&
+    value.internalOnly === true &&
+    value.requiresApprovalBeforeDispatch === true
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || typeof value === 'number';
 }

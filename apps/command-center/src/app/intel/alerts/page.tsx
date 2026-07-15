@@ -1,12 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, InternalLabelBadge, UncertifiedBanner } from '@/components/ui';
 import {
   createEmptyAlertDefinition,
+  parseSavedAlertDefinitions,
   validateAlertDefinition,
   type AlertDefinition,
+  type SavedAlertDefinition,
 } from '@/lib/alert-builder';
+
+const savedDefinitionsStorageKey = 'unit-talk.command-center.alert-definitions.v1';
 
 function numOrNull(v: string): number | null {
   if (v.trim() === '') return null;
@@ -28,6 +32,8 @@ export default function AlertBuilderPage() {
   const [lineMoveThreshold, setLineMoveThreshold] = useState('');
   const [playerOrTeam, setPlayerOrTeam] = useState('');
   const [startWindow, setStartWindow] = useState('');
+  const [savedDefinitions, setSavedDefinitions] = useState<SavedAlertDefinition[]>([]);
+  const [storageLoaded, setStorageLoaded] = useState(false);
 
   const definition: AlertDefinition = useMemo(
     () => ({
@@ -46,6 +52,36 @@ export default function AlertBuilderPage() {
   );
 
   const validation = useMemo(() => validateAlertDefinition(definition), [definition]);
+
+  useEffect(() => {
+    setSavedDefinitions(parseSavedAlertDefinitions(window.localStorage.getItem(savedDefinitionsStorageKey)));
+    setStorageLoaded(true);
+  }, []);
+
+  function persistSavedDefinitions(next: SavedAlertDefinition[]) {
+    setSavedDefinitions(next);
+    window.localStorage.setItem(savedDefinitionsStorageKey, JSON.stringify(next));
+  }
+
+  function saveDefinition() {
+    if (!validation.valid) return;
+    persistSavedDefinitions([
+      ...savedDefinitions,
+      { id: crypto.randomUUID(), savedAt: new Date().toISOString(), definition },
+    ]);
+  }
+
+  function loadDefinition(saved: SavedAlertDefinition) {
+    setSport(saved.definition.sport);
+    setLeague(saved.definition.league);
+    setMarket(saved.definition.market);
+    setBook(saved.definition.book);
+    setOddsThreshold(stringOrEmpty(saved.definition.oddsThreshold));
+    setEvThreshold(stringOrEmpty(saved.definition.evThreshold));
+    setLineMoveThreshold(stringOrEmpty(saved.definition.lineMoveThreshold));
+    setPlayerOrTeam(saved.definition.playerOrTeam);
+    setStartWindow(stringOrEmpty(saved.definition.startWindow));
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -118,18 +154,19 @@ export default function AlertBuilderPage() {
             )}
           </div>
 
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              disabled
-              className="cursor-not-allowed rounded bg-gray-700 px-4 py-1.5 text-xs font-medium text-gray-400"
-              title="Persistence data contract needed"
+              disabled={!validation.valid || !storageLoaded}
+              onClick={saveDefinition}
+              className="rounded bg-blue-600 px-4 py-1.5 text-xs font-medium text-white disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400"
+              title="Save this internal-only definition in this browser"
             >
-              Save (disabled)
+              Save locally
             </button>
             <span className="cc-text-muted text-[11px]">
-              Persistence data contract needed — no alert_definitions table or apps/api endpoint
-              exists yet.
+              Saved in this browser only. No alert_definitions table, API persistence, or dispatch
+              path exists.
             </span>
           </div>
         </Card>
@@ -140,6 +177,43 @@ export default function AlertBuilderPage() {
           </pre>
         </Card>
       </div>
+
+      <Card title="Saved Definitions">
+        <p className="cc-text-muted text-xs">
+          Browser-local internal filters. Loading or saving one cannot create, approve, or dispatch an alert.
+        </p>
+        {storageLoaded && savedDefinitions.length === 0 ? (
+          <p className="cc-text-muted mt-3 text-xs">No saved definitions in this browser.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {savedDefinitions.map((saved) => (
+              <li key={saved.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-gray-800 bg-gray-900/50 p-3 text-xs">
+                <span className="text-gray-300">
+                  {saved.definition.sport} · {saved.definition.market}
+                  {saved.definition.book ? ` · ${saved.definition.book}` : ''}
+                </span>
+                <div className="flex items-center gap-3">
+                  <span className="cc-text-muted">{new Date(saved.savedAt).toLocaleString()}</span>
+                  <button type="button" onClick={() => loadDefinition(saved)} className="text-blue-400 hover:text-blue-300">
+                    Load
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => persistSavedDefinitions(savedDefinitions.filter(({ id }) => id !== saved.id))}
+                    className="text-red-400 hover:text-red-300"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
+}
+
+function stringOrEmpty(value: number | null): string {
+  return value === null ? '' : String(value);
 }

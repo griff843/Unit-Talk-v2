@@ -78,6 +78,31 @@ export function getDataClient(): SupabaseClient {
 
 export const OUTBOX_HISTORY_CUTOFF = '2026-03-20T00:00:00.000Z';
 
+/**
+ * Test and proof rows are intentionally retained for auditability, but must
+ * never contribute to operator-facing production metrics or queues.
+ */
+export function isTestFixturePick(row: Record<string, unknown>): boolean {
+  const metadata = asRecord(row['metadata']);
+  if (
+    metadata['testRun'] === true ||
+    metadata['proof_issue'] != null ||
+    metadata['proof_fixture_id'] != null ||
+    metadata['proof_script'] != null ||
+    metadata['test_key'] != null
+  ) {
+    return true;
+  }
+
+  return typeof row['selection'] === 'string' && /proof/i.test(row['selection']);
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 function toCommandCenterAuthEnv(env: AppEnv): NodeJS.ProcessEnv {
   return {
     ...process.env,

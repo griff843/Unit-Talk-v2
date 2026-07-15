@@ -19,6 +19,8 @@ import {
   createManifest,
   currentHeadSha,
   defaultProofPaths,
+  deriveDeliveryUiApp,
+  DELIVERY_UI_APP_ROOTS,
   emitJson,
   issueToManifestPath,
   manifestExists,
@@ -28,6 +30,7 @@ import {
   readManifest,
   relativeToRoot,
   requireIssueId,
+  requireVerificationTarget,
   validateBranchName,
   validatePreflightToken,
   validateTier,
@@ -47,11 +50,17 @@ export interface ConcurrencyViolation {
   message: string;
 }
 
+export interface IncomingLaneScope {
+  fileScopeLock?: string[];
+  verificationTarget?: string;
+}
+
 export function checkConcurrencyLimits(
   activeManifests: LaneManifest[],
   incomingLaneType: CanonicalLaneType,
   incomingExecutor: LaneExecutor,
   config: ConcurrencyConfig | EffectiveConcurrencyConfig,
+  incoming: IncomingLaneScope = {},
 ): ConcurrencyViolation[] {
   const active = activeManifests.filter((m) => ACTIVE_LOCK_STATUSES.has(m.status));
   const violations: ConcurrencyViolation[] = [];
@@ -110,6 +119,98 @@ export function checkConcurrencyLimits(
         code: 'singleton_type_conflict',
         message: `Lane type "${incomingLaneType}" is singleton. Active lane ${existing[0]!.issue_id} already holds this type. Close it before starting another ${incomingLaneType} lane.`,
       });
+    }
+  }
+
+  // Per-type distribution caps (UTV2-1533 P2 fix). Layered on top of the total/executor
+  // caps above -- a lane must pass both. Always read from config.type_caps, which is
+  // sourced from base config regardless of trial state (see concurrency-config.ts).
+  const typeCaps = config.type_caps;
+  if (typeCaps) {
+    if (incomingLaneType === 'hygiene') {
+      const hygieneActive = active.filter((m) => String(m.lane_type ?? '') === 'hygiene').length;
+      if (hygieneActive >= typeCaps.hygiene) {
+        violations.push({
+          code: 'hygiene_type_cap_exceeded',
+          message: `Hygiene active lanes (${hygieneActive}) is at the cap of ${typeCaps.hygiene}. Close a Hygiene lane before starting another.`,
+        });
+      }
+    }
+
+    if (incomingLaneType === 'governance') {
+      const governanceActive = active.filter((m) => String(m.lane_type ?? '') === 'governance').length;
+      if (governanceActive >= typeCaps.governance) {
+        violations.push({
+          code: 'governance_type_cap_exceeded',
+          message: `Governance active lanes (${governanceActive}) is at the cap of ${typeCaps.governance}. Close a Governance lane before starting another.`,
+        });
+      }
+    }
+
+    if (incomingLaneType === 'delivery-ui') {
+      const incomingApp = deriveDeliveryUiApp(incoming.fileScopeLock ?? []);
+      if (incomingApp === null) {
+        violations.push({
+          code: 'delivery_ui_app_undetermined',
+          message:
+            'Delivery/UI lane file_scope_lock does not map to exactly one canonical app root ' +
+            `(${Object.keys(DELIVERY_UI_APP_ROOTS).join(', ')}). ` +
+            'Cannot admit a Delivery/UI lane whose app cannot be determined from its declared scope.',
+        });
+      } else {
+        const activeDeliveryUi = active.filter((m) => String(m.lane_type ?? '') === 'delivery-ui');
+        // Fail closed (Codex review, PR #1215): an active Delivery/UI lane whose own scope
+        // cannot be reduced to one canonical app must never be treated as non-conflicting --
+        // deriveDeliveryUiApp() returning null for it is "cannot prove which app", not "proven
+        // to be a different app". Mirrors the identical fail-closed treatment already applied
+        // to undetermined active Verification lanes above.
+        const undeterminedActive = activeDeliveryUi.find(
+          (m) => deriveDeliveryUiApp(m.file_scope_lock ?? []) === null,
+        );
+        if (undeterminedActive) {
+          violations.push({
+            code: 'delivery_ui_app_undetermined_conflict',
+            message: `Active Delivery/UI lane ${undeterminedActive.issue_id} has a file_scope_lock that cannot be reduced to one canonical app -- cannot prove it targets a different app than "${incomingApp}". Fails closed: resolve or close ${undeterminedActive.issue_id} first.`,
+          });
+        } else {
+          const conflictingApp = activeDeliveryUi.find(
+            (m) => deriveDeliveryUiApp(m.file_scope_lock ?? []) === incomingApp,
+          );
+          if (conflictingApp) {
+            violations.push({
+              code: 'delivery_ui_app_conflict',
+              message: `Delivery/UI app "${incomingApp}" already has an active lane (${conflictingApp.issue_id}). Only one Delivery/UI lane per app at a time.`,
+            });
+          }
+        }
+      }
+    }
+
+    if (incomingLaneType === 'verification') {
+      const incomingTarget = incoming.verificationTarget;
+      if (!incomingTarget) {
+        violations.push({
+          code: 'verification_target_missing',
+          message: 'Verification lane requires a verification_target (the UTV2-### issue this lane produces proof for) to evaluate the per-target cap.',
+        });
+      } else {
+        const activeVerification = active.filter((m) => String(m.lane_type ?? '') === 'verification');
+        const undetermined = activeVerification.find((m) => !m.verification_target);
+        if (undetermined) {
+          violations.push({
+            code: 'verification_target_undetermined_conflict',
+            message: `Active verification lane ${undetermined.issue_id} has no verification_target recorded -- cannot prove it targets a different issue than "${incomingTarget}". Fails closed: resolve or close ${undetermined.issue_id} first.`,
+          });
+        } else {
+          const conflicting = activeVerification.find((m) => m.verification_target === incomingTarget);
+          if (conflicting) {
+            violations.push({
+              code: 'verification_target_conflict',
+              message: `Verification target "${incomingTarget}" already has an active lane (${conflicting.issue_id}). Only one Verification lane per target issue at a time.`,
+            });
+          }
+        }
+      }
     }
   }
 
@@ -420,6 +521,45 @@ function main(): void {
       process.exit(1);
     }
 
+    // Same resume-vs-new-lane reasoning as model-profile above: only required/consumed
+    // on the path that calls createManifest for a brand-new verification lane.
+    const isVerificationLaneType = canonicalLaneType === 'verification';
+    let verificationTargetFlag = flags.get('verification-target')?.at(-1);
+    if (!isVerificationLaneType && verificationTargetFlag) {
+      emitJson({
+        ok: false,
+        code: 'verification_target_not_applicable',
+        message: `--verification-target was supplied but --lane-type is "${laneType}", not verification. verification_target is verification-lane-only.`,
+      });
+      process.exit(1);
+    }
+    // Codex review fix (PR #1213): validate format immediately, before createBranchAndWorktree
+    // or reserveLease run below -- a malformed value must never leave orphaned branch/worktree/
+    // lease state behind it. (createManifest's own validation is defense-in-depth, not the
+    // first line of defense.)
+    if (verificationTargetFlag) {
+      try {
+        // Codex review fix (PR #1215, round 5): reassign to the normalized return value so
+        // every downstream consumer (checkConcurrencyLimits, createManifest, the
+        // resume-backfill comparison) sees the same canonical form -- a discarded return
+        // value previously let a lower-case input pass this check but still fail deep inside
+        // createManifest(), after branch/worktree/lease side effects had already run.
+        // Codex review fix (PR #1215, round 6): use requireVerificationTarget(), not the
+        // general requireIssueId() -- the latter also accepts UNI-### (ISSUE_PATTERN), but
+        // verification_target is documented UTV2-### only in the manifest schema and
+        // LANE_MANIFEST_SPEC.md §16; accepting UNI-### here would silently disagree with
+        // that documented contract.
+        verificationTargetFlag = requireVerificationTarget(verificationTargetFlag);
+      } catch {
+        emitJson({
+          ok: false,
+          code: 'verification_target_malformed',
+          message: `--verification-target must match UTV2-### (got "${verificationTargetFlag}").`,
+        });
+        process.exit(1);
+      }
+    }
+
     const singletonPaths = normalizedFiles.filter(isSingletonPath);
     const singletonApproved = flags.has('singleton-approved') || bools.has('singleton-approved');
     if (singletonPaths.length > 0 && !singletonApproved) {
@@ -432,12 +572,24 @@ function main(): void {
       process.exit(1);
     }
 
+    // Codex review fix (PR #1213): ops:lane:resume re-invokes ops:lane-start for an
+    // existing blocked lane without re-supplying --verification-target (mirrors how it
+    // doesn't re-supply --model-profile) -- backfill from the existing manifest so
+    // resuming a verification lane doesn't spuriously fail the per-target cap's
+    // "missing target" check. Also exclude the incoming issue's own active manifest from
+    // the conflict-search set below: a lane must never be treated as conflicting with
+    // itself on resume (this is a no-op for a genuinely new issue_id, since no manifest
+    // with that id exists yet).
+    const existingManifestForResume = manifestExists(issueId) ? readManifest(issueId) : null;
+    const effectiveVerificationTarget = verificationTargetFlag ?? existingManifestForResume?.verification_target;
+
     const concurrencyConfig = getEffectiveConfig(loadConcurrencyConfig());
     const concurrencyViolations = checkConcurrencyLimits(
-      readAllManifests(),
+      readAllManifests().filter((m) => m.issue_id !== issueId),
       canonicalLaneType,
       executor,
       concurrencyConfig,
+      { fileScopeLock: normalizedFiles, verificationTarget: effectiveVerificationTarget },
     );
     if (concurrencyViolations.length > 0) {
       emitJson({
@@ -613,6 +765,7 @@ function main(): void {
       now,
       requireExistingPreflightToken: true,
       model_routing: modelRouting,
+      ...(verificationTargetFlag ? { verification_target: verificationTargetFlag } : {}),
     });
 
     // UTV2-1492: declared-proof-path validation for T1 (formerly preflight's

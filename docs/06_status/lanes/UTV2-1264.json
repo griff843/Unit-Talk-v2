@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1264",
+  "lane_type": "modeling",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1264-clv-game-totals",
+  "branch": "codex/utv2-1264-clv-game-totals",
+  "base_branch": "main",
+  "commit_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1212",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/clv-service.test.ts",
+    "apps/api/src/clv-service.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1264/evidence.json",
+    "docs/06_status/proof/UTV2-1264/model-routing.json",
+    "docs/06_status/proof/UTV2-1264/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-14T12:25:07.080Z",
+  "heartbeat_at": "2026-07-14T23:27:55.000Z",
+  "closed_at": "2026-07-14T23:27:55.000Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1264-clv-game-totals.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-14T23:26:34.109Z",
+      "verdict": "pass",
+      "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1212"
+    },
+    {
+      "checked_at": "2026-07-14T23:26:36.195Z",
+      "verdict": "pass",
+      "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1212",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-14T23:26:36.202Z",
+      "verdict": "fail",
+      "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+      "failures": [
+        "P3",
+        "C4",
+        "P6"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-14T23:26:44.858Z",
+      "verdict": "fail",
+      "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+      "failures": [
+        "P3",
+        "C4",
+        "P6"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T23:27:41.579Z",
+      "verdict": "pass",
+      "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-14T23:27:52.519Z",
+      "verdict": "pass",
+      "merge_sha": "862106f527098b929cfe25d672eb8f95766a41f0",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1212",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1264-clv-game-totals",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

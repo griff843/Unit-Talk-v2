@@ -231,38 +231,40 @@ mcp__claude_ai_Linear__save_comment({
 ```
 Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
 
-- Execute the work directly in this conversation from the dedicated lane worktree reported by `ops:lane-start`
-- Follow the acceptance criteria from the issue description and the planning subagent's scope + approach
-- Before opening the PR, run local preflight (see `docs/05_operations/OPERATING_MODEL_SONNET5.md`) so CI confirms readiness rather than discovers gaps
-- Run `pnpm verify` after implementation
+**Execution — background subagent, orchestrator stays control-plane:**
 
-**T2/T3 Claude lanes:** No planning subagent. Execute directly.
+Every Claude lane (T1 after plan approval, T2, T3) implements via a background `Agent` call in the worktree `ops:lane-start` already created — the same pattern already used for Codex. The orchestrator session never edits lane implementation files, never runs `pnpm verify`/tests for the lane, and never pushes lane commits directly; it dispatches, waits for the completion notification, then reviews/merges/closes exactly like a returned Codex PR (Phase 5).
 
-**Before opening PR — required for all lanes:**
+```typescript
+Agent({
+  run_in_background: true,
+  model: "sonnet",
+  description: `Claude lane: ${issue_id}`,
+  prompt: `Implement ${issue_id} in the pre-created lane worktree at ${worktree_path}. This worktree already exists — cd into that exact path and work there; do not create a new worktree or touch the main checkout.
 
-**Batch A — run these two in parallel (single message, two Bash tool calls):**
-- `pnpm verify` — full pipeline (env:check + lint + type-check + build + test) — must exit 0
-- `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules
+Issue: ${issue_id}
+Title: ${issue_title}
+Acceptance criteria: ${acceptance_criteria}
+File scope (do not touch anything outside this — declared at lane-start, immutable): ${file_scope_lock}
+${tier === 'T1' ? 'Approved Outcome Contract:\n' + outcome_contract : 'Tier: ' + tier + ' — no planning phase required.'}
 
-If `pnpm verify` fails, fix and re-run. If R-level flags missing artifacts, generate them in **Batch B**:
+Do, in order:
+1. Implement the change within the declared file scope only.
+2. Run \`pnpm verify\` — must exit 0. Fix and re-run if it fails.
+3. Run \`tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD\`; generate any artifacts it flags as missing.
+${tier === 'T1' ? "4. Run `pnpm test:db` and include the last 30 lines of output in the PR body under \"## Live-DB proof\" — a T1 PR must not open without this.\n" : ''}5. Commit with message format \`fix|feat|chore(scope): ${issue_id} description\`.
+6. Push the branch and open the PR via \`gh pr create\`. Body must include \`## R-level compliance\` (paste the PASS output) and \`Closes ${issue_id}\`.
+7. Post an EXECUTOR_RESULT comment on the PR (schema: executor-result/v1) referencing the exact current head SHA and the proof artifact path.
 
-**Batch B — run in parallel only if needed (artifacts flagged by R-level):**
-- `r3-shadow-report`: `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (skip if file not found)
-- `qa-experience-report`: `pnpm qa:experience --regression --mode fast` (skip if file not found)
+Return the PR URL and final head SHA as the last line of your output — the orchestrator reads this to start Phase 5 review.`
+})
+```
 
-**Batch C — final confirmation:**
-Re-run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — must PASS.
-Paste the PASS output into PR body under `## R-level compliance`.
+Multiple Claude lanes may be dispatched this way concurrently — one `Agent` call per lane, up to the Claude executor slots `ops:execution-state` reports. Each must already have a distinct worktree path and a disjoint `file_scope_lock` (Phase 3's parallel dispatch guard is unconditional, not just for Codex). This is what produces overlapping execution windows across lanes; the orchestrator's own timeline is just dispatch calls plus completion notifications, not lane implementation work.
 
-**If lane tier is T1:**
-- Also run: `pnpm test:db`
-- Paste the last 30 lines of output into PR body under `## Live-DB proof`
-- A T1 PR must not be opened without pnpm test:db PASS
+**T2/T3 Claude lanes:** No planning subagent — go straight to the background execution step above.
 
-- Open PR via `gh pr create`
-- After `gh pr create` returns a PR URL/number, post executor-result comment on the PR.
-  Tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed. Verify CI picks up the label before merge.
-- Post executor-result comment on the PR
+The background agent's own instructions (steps 1–7 above) cover what used to be the separate "before opening PR" batch sequence for Claude lanes — `pnpm verify`, R-level check plus any flagged artifacts, `pnpm test:db` for T1, `gh pr create`, and the executor-result comment. Tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed; verify CI picks up the label before merge.
 
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
 - Execute via the canonical Codex entry point — never call `codex exec` or `codex run` directly:
@@ -291,27 +293,28 @@ Paste the PASS output into PR body under `## R-level compliance`.
 - After Codex opens the PR, tier label is auto-applied by `ops:lane-finalize` — no manual `gh pr edit --add-label` needed. Verify CI picks up the label before review.
 - Report that Codex lane is dispatched and will need review on return
 
-### Phase 5: Sequential execution for multiple lanes
+### Phase 5: Concurrent execution for multiple lanes
 
-When dispatching multiple lanes:
-1. Start Claude lane first (execute directly)
-2. Dispatch Codex lanes in background (they run in parallel) via `Agent({run_in_background: true})`
-3. After Claude lane PR is open, continue other work — you will be **automatically notified** when background Codex lanes complete
-4. On Codex completion notification, spawn a background review agent — do not review inline in the orchestrator session:
+Claude lanes are no longer single-threaded. Both executors run their implementation step as background agents, and the orchestrator's job for either is identical from here: dispatch, wait for a completion notification, review, merge, close. Never implement a lane directly in the orchestrator session, for either executor.
+
+1. Dispatch every validated Claude lane via Phase 4's background `Agent` call (one call per lane) — do not execute any of them directly.
+2. Dispatch every validated Codex lane via `npx tsx scripts/ops/codex-exec.ts --issue UTV2-{number}`, wrapped in a background call the same way.
+3. Continue other control-plane work (board reads, monitoring) — you will be **automatically notified** when each background lane completes, Claude or Codex.
+4. On any lane's completion notification, spawn a background review agent — do not review inline in the orchestrator session. The same reviewer works for a returned Claude-lane PR as for Codex; it inspects the diff, not who wrote it:
 
 ```typescript
 Agent({
   run_in_background: true,
   model: touchesTierC ? "opus" : "sonnet",  // tier C paths → opus critique
   subagent_type: "codex-return-reviewer",
-  description: `Codex return review: ${issue_id}`,
-  prompt: `Review the Codex-returned diff for ${issue_id}.
+  description: `Lane return review: ${issue_id}`,
+  prompt: `Review the returned diff for ${issue_id} (executor: ${executor}).
 PR: ${pr_url}
 Branch: ${branch}
 
 Steps:
 1. Read the diff via: gh pr diff ${pr_number}
-2. Run the codex-return-reviewer checks (file scope, Tier C paths, test existence, commit format, tier label, R-level)
+2. Run the codex-return-reviewer checks (file scope, Tier C paths, test existence, commit format, tier label, R-level) — these apply the same way regardless of which executor produced the diff
 3. Check if diff touches any Tier C path: packages/domain/, packages/contracts/, supabase/migrations/, packages/db/src/lifecycle.ts, apps/api/src/auth.ts
 4. Post review result as Linear comment on ${issue_id}
 5. If REJECT or Tier C violation found: post a blocking comment on the PR and set Linear state to Blocked
@@ -321,7 +324,9 @@ Return: APPROVE or REJECT with findings.`
 ```
 
 **Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
-5. If abandoning an active lane before work begins, release the lease explicitly:
+
+5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
+6. If abandoning an active lane before work begins, release the lease explicitly:
    ```bash
    pnpm ops:lease release --issue UTV2-{number} --actor claude --reason "abandoned before implementation"
    ```
