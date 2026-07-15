@@ -1,3 +1,58 @@
+# PROOF: UTV2-1536
+MERGE_SHA: 012fbf451416bf0c91d6a9c1381290eeeaf81c53
+
+ASSERTIONS:
+- [x] Audited the repo for hard-coded stale concurrency ceilings presented as current policy (2 Claude / 4 Codex / 6 lanes / 2-4-6 / older 5-lane-2-Claude-3-Codex variants)
+- [x] AGENTS.md executor-limits table and total-cap line no longer embed numbers; both defer to docs/governance/CONCURRENCY_CONFIG.json and pnpm ops:execution-state
+- [x] .claude/agents/lane-governor.md (found on audit, far more stale than AGENTS.md) fully rewritten to derive every threshold from the live policy/config at runtime, matching its own pre-existing "do not use hardcoded values" instruction
+- [x] .claude/commands/dispatch.md, dispatch-board.md, lane-management.md, loop-dispatch.md, three-brain.md audited and confirmed already fully config-driven -- no change needed
+- [x] Canonical historical records (CERT_BOARD.md, PROGRAM_5_ACTIVATION.md, STAGE2_ACTIVATION_CHECKLIST.md, UTV2-1504 proof) left untouched -- each is either explicitly banner-marked SUPERSEDED/HISTORICAL or an accurate dated record
+- [x] scripts/ci/concurrency-doc-drift-guard.ts added: narrow explicit allowlist (AGENTS.md, .claude/agents/lane-governor.md, .claude/commands/*.md), static stale-literal patterns plus a config-driven numeric-claim cross-check against the live CONCURRENCY_CONFIG.json base values
+- [x] Guard wired into verify:static and verify:quick (both part of pnpm verify, the required CI check) and into test:ops
+- [x] 19 new tests: stale-literal detection for every known variant, config-mismatch detection, canonical-reference/current-value acceptance, historical-provenance-framing exemption, and proof that the allowlist -- not content leniency -- protects docs/06_status/proof|lanes|INCIDENTS paths
+- [x] pnpm verify green end-to-end, including pnpm test:db (7/7 pass) and the full 14-file test:t1-proof:live chain against real Supabase (zfzdnfwdarxucxtaojxm)
+- [x] r-level-check PASS, no R-level artifacts required for this diff
+
+EVIDENCE:
+```text
+$ pnpm exec tsx scripts/ci/concurrency-doc-drift-guard.ts
+[concurrency-doc-drift-guard] verdict=PASS files_checked=21 findings=0
+[concurrency-doc-drift-guard] live base config: total=10 claude=4 codex=6
+
+$ npx tsx --test scripts/ci/concurrency-doc-drift-guard.test.ts
+1..19
+# tests 19
+# pass 19
+# fail 0
+
+$ pnpm test:db
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 7
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+```text
+$ pnpm verify
+(full gate: env:check, lint, type-check, build, test, smart-form verify,
+verify:commands, test:db, test:t1-proof:live -- exit code 0)
+```
+
+**Status: PR not merged.** No merge SHA is invented. The `MERGE_SHA:` field above references
+this branch's own implementation commit (an ancestor of the PR head), per
+`executor-result-validator.yml`'s documented implementation-commit-as-ancestor pattern.
+`evidence.json`'s `sha_binding.merge_sha` remains `null`.
+
+---
+
 # UTV2-1536 Verification
 
 ## Verification
