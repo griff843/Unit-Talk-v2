@@ -191,9 +191,19 @@ export function repairMergedLaneManifest(
     now?: Date;
     repoRoot?: string;
     artifactRoot?: string;
+    leaseRegistryDir?: string;
+    mergeLockPath?: string;
   } = {},
 ): RepairMergedManifestResult {
   if (manifest.status === 'done') {
+    // --repair-merged is intentionally safe to re-run. A previous closeout may
+    // have written the terminal manifest before releasing its coordination
+    // state, so an already-done manifest must still perform that cleanup.
+    releaseCloseoutLocks(manifest.issue_id, manifest.branch, {
+      leaseRegistryDir: options.leaseRegistryDir,
+      mergeLockPath: options.mergeLockPath,
+    });
+
     return {
       ok: true,
       code: 'already_closed',

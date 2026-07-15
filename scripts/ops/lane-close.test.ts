@@ -358,19 +358,48 @@ test('repair merged lane emits repair artifact and safe token when preflight tok
   });
 });
 
-test('repair merged lane no-ops already done lanes', () => {
-  const manifest = createManifest({ status: 'done', commit_sha: null });
-  const result = repairMergedLaneManifest(manifest, {
-    fetchPr: () => {
-      throw new Error('fetch should not be called for done lanes');
-    },
-  });
+test('repair merged lane releases an active lease for an already done lane and is idempotent', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', commit_sha: null });
+    const lease = reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1001,
+          session_id: 'lane-close-test',
+        },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+    assert.strictEqual(lease.ok, true);
 
-  assert.strictEqual(result.ok, true);
-  assert.strictEqual(result.code, 'already_closed');
-  assert.strictEqual(result.outcome, 'already_closed');
-  assert.strictEqual(result.manifest, manifest);
-  assert.deepStrictEqual(result.changed_fields, []);
+    const options = {
+      leaseRegistryDir,
+      mergeLockPath,
+      fetchPr: () => {
+        throw new Error('fetch should not be called for done lanes');
+      },
+    };
+    const result = repairMergedLaneManifest(manifest, options);
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.code, 'already_closed');
+    assert.strictEqual(result.outcome, 'already_closed');
+    assert.strictEqual(result.manifest, manifest);
+    assert.deepStrictEqual(result.changed_fields, []);
+    assert.strictEqual(
+      readAllLeases(leaseRegistryDir).find((entry) => entry.issue_id === manifest.issue_id)?.status,
+      'released',
+    );
+
+    assert.doesNotThrow(() => repairMergedLaneManifest(manifest, options));
+  });
 });
 
 test('repair merged lane refuses unmerged PRs without changing manifest', () => {
