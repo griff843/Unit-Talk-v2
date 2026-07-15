@@ -1,5 +1,5 @@
 # PROOF: UTV2-1541
-MERGE_SHA: de98cf63add5c48d05ac59df8ef450d4742db161
+MERGE_SHA: 4627a3bd6303074f1e19d744418e051c82804da3
 
 ASSERTIONS:
 - [x] `AGENTS.md` added to `.lane/lanes/governance.yml`'s `allowed_path_globs`
@@ -110,10 +110,79 @@ which predates this fix by three months and has always used the uppercase form.
 Authority failures on PR #1218 (UTV2-1536, editing `AGENTS.md`) and PR #1219
 (UTV2-1537, editing `docs/06_status/INCIDENTS/*.md`).
 
+## Post-merge correction: `files_changed` finalization (Codex P2 finding)
+
+Codex flagged (PR #1223 review thread, `docs/06_status/lanes/UTV2-1541.json:23`):
+manifest `files_changed` stayed empty (`[]`) through lane close, and
+`truth-check-lib.ts`'s S1/G5 checks both fall through to a not-applicable no-op
+branch when `files_changed` is empty — meaning the lane closed as `done` without S1
+(scope-diff) or G5 (post-merge-touch) ever actually running against real content.
+
+**Derivation of the finalized `files_changed` list** — two independent, cross-verified
+sources, both returning an identical 8-file list:
+
+```
+$ gh pr view 1222 --json files -q '.files[].path' | sort
+.lane/lanes/governance.yml
+.ops/sync/UTV2-1541.yml
+docs/06_status/lanes/UTV2-1541.json
+docs/06_status/proof/UTV2-1541/.gitkeep
+docs/06_status/proof/UTV2-1541/diff-summary.md
+docs/06_status/proof/UTV2-1541/evidence.json
+docs/06_status/proof/UTV2-1541/verification.md
+scripts/lane-contract.test.ts
+
+$ git diff-tree --no-commit-id --name-only -r 4627a3bd6303074f1e19d744418e051c82804da3 | sort
+.lane/lanes/governance.yml
+.ops/sync/UTV2-1541.yml
+docs/06_status/lanes/UTV2-1541.json
+docs/06_status/proof/UTV2-1541/.gitkeep
+docs/06_status/proof/UTV2-1541/diff-summary.md
+docs/06_status/proof/UTV2-1541/evidence.json
+docs/06_status/proof/UTV2-1541/verification.md
+scripts/lane-contract.test.ts
+```
+
+**Rule applied:** `LANE_MANIFEST_SPEC.md` §4.2 states `files_changed` is "finalized
+at merge from GitHub diff" — the full merge-visible diff, not a filtered
+implementation-only subset. This matches Codex's own framing ("the lane's
+implementation *and* control-plane files"). The full 8-file list was used.
+
+**`file_scope_lock` correction:** with `files_changed` populated, S1 checks every
+entry against `file_scope_lock ∪ expected_proof_paths ∪ docs/06_status/proof/**`.
+Two entries — `.ops/sync/UTV2-1541.yml` and `docs/06_status/lanes/UTV2-1541.json`
+(the manifest's own path) — were missing from the original `file_scope_lock`
+declaration. This is not scope creep: both are mandatory scaffolding every
+`ops:lane-start` invocation creates by construction, and their omission traces to a
+lane-start bootstrapping constraint (the manifest path cannot be pre-declared in
+`--files` before `ops:lane-start` creates the file). Both were added to
+`file_scope_lock` with that rationale documented inline in the manifest.
+
+**Re-run result** (`pnpm ops:truth-check UTV2-1541 --explain`, `checked_at`
+`2026-07-15T15:14:50.056Z`, appended as a new 5th entry in
+`docs/06_status/lanes/UTV2-1541.json`'s `truth_check_history` — the 4 prior entries
+are preserved unmodified, annotated as having run against `files_changed=[]`):
+
+```
+[PASS] S1 all files_changed are within file_scope_lock or proof paths
+[PASS] G5 no post-merge touches without linked follow-up issue detected
+```
+
+Overall verdict: `pass`, `exit_code: 0`, `failures: []`. Both checks now genuinely
+execute against the real 8-file list — this is the first truth-check run for this
+lane where S1/G5 were not silently skipped as not-applicable.
+
+`status: "done"` and `closed_at` are unchanged from the original close
+(`2026-07-15T08:07:27.883Z`); Linear remains `Done`. Landed via this governed
+follow-up PR (#1223), never a direct push to `main`.
+
 ## SHA Binding
 
 Branch: claude/utv2-1541-lane-authority-allowlist-fix
 Head SHA (at authoring time): de98cf63add5c48d05ac59df8ef450d4742db161
-Merge SHA: not yet merged — will be bound by `post-merge-lane-close.yml`'s automated
-`ops:proof-generate --merge-sha` run after this PR merges, per this repo's standard T1
-closeout automation.
+Merge SHA: 4627a3bd6303074f1e19d744418e051c82804da3 (PR #1222, squash merge). The
+automated `post-merge-lane-close.yml` closeout failed with `infra_error` ("Manifest
+has no pr_url to repair from" — the manifest's `pr_url` was never recorded before
+merge) and did not run `ops:proof-generate --merge-sha` automatically. Bound here via
+a governed follow-up repair PR (`claude/utv2-1541-post-merge-repair`) instead of a
+direct push to `main`.

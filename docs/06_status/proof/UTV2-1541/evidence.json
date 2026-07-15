@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1541",
-  "status": "PRE-MERGE -- PR open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "status": "MERGED -- PR #1222 squash-merged to main at commit 4627a3bd6303074f1e19d744418e051c82804da3. This bundle's sha_binding is now bound to that merge SHA.",
   "verifier": {
     "identity": "claude/utv2-1541-lane-authority-allowlist-fix"
   },
@@ -79,27 +79,51 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 75288, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 111800, "status": "healthy" },
-      { "table": "submissions", "count": 77248, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 5102, "status": "healthy" },
-      { "table": "audit_log", "count": 197616, "status": "healthy" },
-      { "table": "settlement_records", "count": 25220, "status": "healthy" }
+      {
+        "table": "picks",
+        "count": 75288,
+        "status": "healthy"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 111800,
+        "status": "healthy"
+      },
+      {
+        "table": "submissions",
+        "count": 77248,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 5102,
+        "status": "healthy"
+      },
+      {
+        "table": "audit_log",
+        "count": 197616,
+        "status": "healthy"
+      },
+      {
+        "table": "settlement_records",
+        "count": 25220,
+        "status": "healthy"
+      }
     ],
     "row_counts_captured_at": "2026-07-15T06:59:00Z",
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via mcp__claude_ai_Supabase__execute_sql immediately after the pnpm test:db run above. This diff's own scope (.lane/lanes/governance.yml + scripts/lane-contract.test.ts) has no DB dependency -- this runtime proof exists to satisfy the unconditional T1 runtime_proof_required gate, not because the diff itself touches database code."
   },
   "sha_binding": {
     "branch": "claude/utv2-1541-lane-authority-allowlist-fix",
-    "verified_source_sha": "de98cf63add5c48d05ac59df8ef450d4742db161",
-    "verified_source_note": "The branch HEAD at the moment this bundle was authored, captured for provenance only -- NOT a claim about the PR's current live head. The PR's actual live head is validated externally by GitHub and by the SHA-bound executor-result/v1 comment posted after each push.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-15T07:00:00Z",
+    "verified_source_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
+    "verified_source_note": "The real merge commit SHA for PR #1222 on main, bound via ops:proof-generate --merge-sha (rebindEvidenceJsonSha).",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-15T08:03:55.955Z",
     "ci_sentinels": {
       "merge_gate": "pending"
     },
-    "merge_sha": null,
-    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main."
+    "merge_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
+    "merge_sha_note": "PR #1222 merged to main (squash) at this SHA. post-merge-lane-close.yml's automated closeout failed with infra_error (manifest had no pr_url recorded pre-merge) so this binding was completed via a governed follow-up repair PR instead."
   },
   "scope": {
     "implementation_paths": [
@@ -121,7 +145,8 @@
     "lane_authority_tests_added": "PASS -- 5 new tests in scripts/lane-contract.test.ts against the real governance.yml manifest",
     "unrelated_paths_still_rejected": "PASS -- explicit regression test for an unrelated path and a mixed-case near-miss on the incidents path, both still rejected",
     "narrowly_scoped_no_other_governance_changes": "PASS -- diff touches only .lane/lanes/governance.yml (2 new allowlist entries + comments) and scripts/lane-contract.test.ts (new tests)",
-    "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, branch name, and PR title/body reference only UTV2-1541"
+    "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, branch name, and PR title/body reference only UTV2-1541",
+    "files_changed_finalized_before_close": "PASS (corrected, post-merge) -- Codex flagged that files_changed stayed empty at close time, disabling S1/G5. Fixed: files_changed populated with the actual PR #1222 diff, derived two independent ways (`gh pr view 1222 --json files` and `git diff-tree --no-commit-id --name-only -r 4627a3bd6303074f1e19d744418e051c82804da3`), both returning an identical, cross-verified 8-file list matching scope.implementation_paths + scope.control_plane_paths above. file_scope_lock corrected to include .ops/sync/UTV2-1541.yml and docs/06_status/lanes/UTV2-1541.json (mandatory ops:lane-start scaffolding, omitted originally only due to a lane-start bootstrapping constraint). Re-ran pnpm ops:truth-check UTV2-1541 --explain against the corrected manifest: S1 'all files_changed are within file_scope_lock or proof paths' (PASS, genuinely evaluated -- not the empty-scope not-applicable branch), G5 'no post-merge touches without linked follow-up issue detected' (PASS, genuinely evaluated). Overall verdict: pass, exit_code 0, failures: []. See docs/06_status/lanes/UTV2-1541.json's 5th truth_check_history entry (checked_at 2026-07-15T15:14:50.056Z) for the full record; the 4 prior entries are preserved unmodified and annotated as having run against files_changed=[] (S1/G5 not-applicable no-ops, not real evaluations)."
   },
   "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- AWAITING_PM_VERDICT_AND_T1_APPROVED_LABEL"
 }
