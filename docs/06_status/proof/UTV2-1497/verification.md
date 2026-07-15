@@ -51,12 +51,22 @@ ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a r
 
 ```text
 $ pnpm verify
-(full static + live-db verify pipeline green — see CI run on this PR for
-the complete log; this test file is a standalone T1 proof artifact run
+(exit code 0 — full static + live-db verify pipeline green on this branch,
+2026-07-14; this new test file is a standalone T1 proof artifact run
 manually and cited here, per the same pattern as
 apps/worker/src/t1-proof-automated-recovery.test.ts and
 apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts — neither of which is
 wired into package.json's test scripts either)
+```
+
+```text
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 6
+Rules matched: lifecycle-fsm
+
+Advisory (PM-gated) artifacts missing:
+  - r4-fault-report [PM-gated]
 ```
 
 ## Acceptance criteria mapping
