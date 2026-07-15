@@ -91,11 +91,15 @@
   },
   "sha_binding": {
     "branch": "claude/utv2-1541-lane-authority-allowlist-fix",
-    "head_sha_at_proof_authoring": "2dea463b4f84e4fd3b630d2f2e304a5f64ad967f",
-    "head_sha_note": "The branch HEAD at the moment this bundle was authored, captured for provenance only -- NOT a claim about the PR's current live head. The PR's actual live head is validated externally by GitHub and by the SHA-bound executor-result/v1 comment posted after each push.",
+    "verified_source_sha": "2dea463b4f84e4fd3b630d2f2e304a5f64ad967f",
+    "verified_source_note": "The branch HEAD at the moment this bundle was authored, captured for provenance only -- NOT a claim about the PR's current live head. The PR's actual live head is validated externally by GitHub and by the SHA-bound executor-result/v1 comment posted after each push.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-15T07:00:00Z",
+    "ci_sentinels": {
+      "merge_gate": "pending"
+    },
     "merge_sha": null,
-    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main.",
-    "sha_type": "branch_head"
+    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main."
   },
   "scope": {
     "implementation_paths": [

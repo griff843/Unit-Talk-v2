@@ -42,6 +42,14 @@ Environment files passed validation.
 (lint: exit 0, type-check: exit 0)
 ```
 
+## Verification
+
+All static and runtime verification for this diff is green: `pnpm exec tsc -b tsconfig.json`,
+`pnpm lint`, `scripts/lane-contract.test.ts` (10/10), `pnpm verify` (full), the
+R-level check, and `pnpm test:db` against the live Supabase project all pass.
+Details for each are in the EVIDENCE block above and the Runtime verification
+section below.
+
 ## Runtime verification (T1 — unconditional per `truth-check-lib.ts`'s `runtime_proof_required` gate)
 
 Command: `pnpm test:db` (`tsx --test apps/api/src/database-smoke.test.ts`) against the
