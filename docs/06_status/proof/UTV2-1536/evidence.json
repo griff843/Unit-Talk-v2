@@ -89,11 +89,11 @@
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This diff's scope (agent-instruction docs + a new TypeScript CI guard script) does not itself touch any of these tables or any DB code; this runtime proof exists because T1 tier requires it unconditionally per truth-check-lib.ts's runtime_proof_required gate (tier === 'T1'), independent of whether the diff's own files touch DB code -- same posture as the prior concurrency-ramp lane's own T1 proof.",
     "test_db_tap_output": "1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0"
   },
-  "status": "OPEN -- PR #1218, not yet merged. sha_binding.merge_sha is intentionally null and will be bound automatically by post-merge-lane-close.yml's ops:proof-generate --merge-sha after merge, per the repo's standard T1 proof-SHA-binding automation.",
+  "status": "MERGED -- PR #1218 merged as 504173fd39c545a8059f78f3a03c4ea4015ded97. sha_binding.merge_sha bound below via governed post-merge closeout repair (claude/utv2-1536-lane-close-repair).",
   "sha_binding": {
-    "head_sha": "bcc403dbdeedbd0241fca786ef28a2fe24316cfc",
-    "merge_sha": null,
-    "merge_sha_note": "PR not yet merged. Do not treat head_sha as merge truth -- GitHub main + the eventual merge commit are the authoritative source once merged. This field intentionally trails the true PR head SHA by one commit: any edit to this file to update the field is itself a new commit that advances the head SHA again. The executor-result/v1 comment's Head SHA field (validated mechanically by executor-result-validator.yml against the live PR head) is the operative binding, not this narrative field."
+    "head_sha": "504173fd39c545a8059f78f3a03c4ea4015ded97",
+    "merge_sha": "504173fd39c545a8059f78f3a03c4ea4015ded97",
+    "merge_sha_note": "PR #1218's real squash-merge commit on main (confirmed via gh pr view 1218 --json mergeCommit). Bound via this lane's own governed post-merge closeout repair (claude/utv2-1536-lane-close-repair): post-merge-lane-close.yml's ops:lane-close --repair-merged step failed closed with repair_required_via_pr (the same guard/interaction seen on UTV2-1537 and UTV2-1535), so this repair lands the same fix through a normal branch/PR instead."
   },
   "scope": {
     "implementation_paths": [
@@ -131,5 +131,5 @@
     "historical_proof_paths_not_rejected": "PASS -- 2 dedicated tests: the default allowlist never includes docs/06_status/proof|lanes|INCIDENTS paths, and a fixture mirroring real historical proof wording is proven to only escape detection because it is excluded from the allowlist (not because the content itself is lenient)",
     "config_driven_values_match_execution_state": "PASS -- 1 dedicated test asserts the guard's live_base_config equals both loadConcurrencyConfig()'s raw values and execution-state.ts's MAX_CLAUDE_LANES/MAX_CODEX_LANES (the same values pnpm ops:execution-state -- --json reports under dispatch_slots.*.max while no trial is active)"
   },
-  "verdict": "PENDING_MERGE"
+  "verdict": "PM_APPROVED_AND_MERGED (PR #1218, merge SHA 504173fd39c545a8059f78f3a03c4ea4015ded97)"
 }
