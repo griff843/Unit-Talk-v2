@@ -91,7 +91,7 @@
   },
   "status": "OPEN -- PR not yet created at the time this evidence.json was written. sha_binding.merge_sha is intentionally null and will be bound automatically by post-merge-lane-close.yml's ops:proof-generate --merge-sha after merge, per the repo's standard T1 proof-SHA-binding automation.",
   "sha_binding": {
-    "head_sha": "012fbf451416bf0c91d6a9c1381290eeeaf81c53",
+    "head_sha": "b80ea846247f6996c2ca67cd5945d7a02e0f87d9",
     "merge_sha": null,
     "merge_sha_note": "PR not yet merged. Do not treat head_sha as merge truth -- GitHub main + the eventual merge commit are the authoritative source once merged."
   },

@@ -132,15 +132,18 @@ active.
 
 ## Commit binding
 
-Evidence was captured for commit `012fbf451416bf0c91d6a9c1381290eeeaf81c53`, after rebasing onto
-a newer `origin/main` (which had independently picked up an unrelated `ci.yml` audit-step fix
-while this lane's live-DB proof suite was running). `pnpm exec tsc -b tsconfig.json` was re-run
-standalone post-rebase as a fast sanity check (exit 0); the full `pnpm verify` run captured above
-predates the rebase by content but is unaffected by it (the rebase touched only `.github/workflows/ci.yml`,
-which this lane does not modify).
+Evidence was captured for commit `012fbf451416bf0c91d6a9c1381290eeeaf81c53` (the implementation
++ proof-bundle content), after rebasing onto a newer `origin/main` (which had independently
+picked up an unrelated `ci.yml` audit-step fix while this lane's live-DB proof suite was
+running). `pnpm exec tsc -b tsconfig.json` was re-run standalone post-rebase as a fast sanity
+check (exit 0); the full `pnpm verify` run captured above predates the rebase by content but is
+unaffected by it (the rebase touched only `.github/workflows/ci.yml`, which this lane does not
+modify). The PR head SHA advanced once more to `b80ea846247f6996c2ca67cd5945d7a02e0f87d9` for a
+control-plane-only commit (recording the PR URL in the lane manifest) — no implementation or
+guard content changed between the two SHAs.
 
 ## SHA Binding
 
-Head SHA: 012fbf451416bf0c91d6a9c1381290eeeaf81c53
+Head SHA: b80ea846247f6996c2ca67cd5945d7a02e0f87d9
 Merge SHA: pending — will be bound automatically by `post-merge-lane-close.yml`'s
 `ops:proof-generate --merge-sha` after merge, per repo convention.
