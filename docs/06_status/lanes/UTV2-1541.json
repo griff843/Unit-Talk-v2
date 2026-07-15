@@ -9,9 +9,20 @@
   "base_branch": "main",
   "commit_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1222",
-  "files_changed": [],
+  "files_changed": [
+    ".lane/lanes/governance.yml",
+    ".ops/sync/UTV2-1541.yml",
+    "docs/06_status/lanes/UTV2-1541.json",
+    "docs/06_status/proof/UTV2-1541/.gitkeep",
+    "docs/06_status/proof/UTV2-1541/diff-summary.md",
+    "docs/06_status/proof/UTV2-1541/evidence.json",
+    "docs/06_status/proof/UTV2-1541/verification.md",
+    "scripts/lane-contract.test.ts"
+  ],
   "file_scope_lock": [
     ".lane/lanes/governance.yml",
+    ".ops/sync/UTV2-1541.yml",
+    "docs/06_status/lanes/UTV2-1541.json",
     "docs/06_status/proof/UTV2-1541/diff-summary.md",
     "docs/06_status/proof/UTV2-1541/evidence.json",
     "docs/06_status/proof/UTV2-1541/verification.md",
@@ -57,6 +68,15 @@
       "merge_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-15T15:14:50.056Z",
+      "verdict": "pass",
+      "merge_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
+      "failures": [],
+      "runner": "manual",
+      "source": "files_changed_correction",
+      "note": "The 4 prior entries above all passed with files_changed=[] (empty). Per truth-check-lib.ts, S1 and G5 both fall through to their empty-scope branch when files_changed is empty ('scope-diff check not applicable (empty files_changed or scope)' / 'no finalized implementation files_changed entries to inspect') -- neither check was ever actually evaluated against real content in those 4 prior passes; they were not-applicable no-ops, not genuine scope/post-merge-touch validations. This entry corrects that: files_changed was populated with the actual PR #1222 diff, derived two independent ways -- `gh pr view 1222 --json files` and `git diff-tree --no-commit-id --name-only -r 4627a3bd6303074f1e19d744418e051c82804da3` against origin/main -- which returned an identical, cross-verified 8-file list (per LANE_MANIFEST_SPEC.md 4.2's rule: files_changed is 'finalized at merge from GitHub diff', i.e. the full merge-visible diff, not a filtered implementation-only subset). file_scope_lock was also corrected to add .ops/sync/UTV2-1541.yml and docs/06_status/lanes/UTV2-1541.json -- the two mandatory control-plane files every ops:lane-start invocation creates by design, omitted from this lane's original file_scope_lock declaration only because of a lane-start bootstrapping constraint (the manifest path cannot be pre-declared before lane-start creates it; see diff-summary.md). With both corrections in place, S1 and G5 genuinely executed against the full 8-file list for the first time and both passed: S1 'all files_changed are within file_scope_lock or proof paths', G5 'no post-merge touches without linked follow-up issue detected'. Landed via a governed follow-up PR (#1223), never a direct push to main."
     }
   ],
   "reopen_history": [],
