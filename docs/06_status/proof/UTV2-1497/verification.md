@@ -52,11 +52,7 @@ ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a r
 ```text
 $ pnpm verify
 (exit code 0 — full static + live-db verify pipeline green on this branch,
-2026-07-14; this new test file is a standalone T1 proof artifact run
-manually and cited here, per the same pattern as
-apps/worker/src/t1-proof-automated-recovery.test.ts and
-apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts — neither of which is
-wired into package.json's test scripts either)
+2026-07-14)
 ```
 
 ```text
@@ -67,6 +63,39 @@ Rules matched: lifecycle-fsm
 
 Advisory (PM-gated) artifacts missing:
   - r4-fault-report [PM-gated]
+```
+
+## Round 2 — wire the test into the permanent regression suite
+
+The PR's advisory "Return Review Packet" check (`test_wiring`) correctly
+flagged that the new test file was not wired into any `pnpm` test script —
+it would never run again automatically after this lane closes. The issue's
+own plan-gate spec scopes this as a "`pnpm test:db` scope" test, so leaving
+it unwired left that criterion only partially met.
+
+Fixed by adding the test to `test:t1-proof:live` (consumed by
+`pnpm test:live-db` → `pnpm verify`), matching the wiring convention used by
+the other `apps/*/src/t1-proof-*.test.ts` files that already are wired in
+(e.g. `t1-proof-utv2-1327-promotion-enrichment.test.ts`). `package.json` was
+outside this lane's original `file_scope_lock`; authorized via a
+`scope-override/v1` PR comment.
+
+```text
+$ UNIT_TALK_APP_ENV=local pnpm test:t1-proof:live
+(...)
+TAP version 13
+# Subtest: [live-db] concurrent claimNextAtomic calls never double-claim or drop a row
+ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a row
+1..1
+# tests 1
+# pass 1
+# fail 0
+```
+
+```text
+$ pnpm verify
+(exit code 0 — full pipeline green with the new test wired into
+test:t1-proof:live)
 ```
 
 ## Acceptance criteria mapping
