@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   isLaneExecutorType,
   isLaneType,
+  loadLaneManifest,
   validateLaneAuthority,
   type LaneManifestContract,
 } from './lane-contract.js';
@@ -101,4 +102,72 @@ test('migration lane passes when active lock exists', () => {
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.violations, []);
+});
+
+// ── UTV2-1541: real governance.yml allowlist gaps ──────────────────────────────
+// Regression coverage against the ACTUAL .lane/lanes/governance.yml on disk, not
+// a synthetic manifest -- these two paths caused real Lane Authority failures on
+// PR #1218 (UTV2-1536, AGENTS.md) and PR #1219 (UTV2-1537,
+// docs/06_status/INCIDENTS/**, rejected because matchesAny()'s micromatch call has
+// no `nocase` option and the allowlist only had the lowercase `incidents/**` form).
+
+test('governance lane accepts AGENTS.md', () => {
+  const manifest = loadLaneManifest('governance');
+  const result = validateLaneAuthority({
+    manifest,
+    changedFiles: ['AGENTS.md'],
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.violations, []);
+});
+
+test('governance lane accepts docs/06_status/INCIDENTS/** (case-correct)', () => {
+  const manifest = loadLaneManifest('governance');
+  const result = validateLaneAuthority({
+    manifest,
+    changedFiles: ['docs/06_status/INCIDENTS/INC-2026-07-14-example.md'],
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.violations, []);
+});
+
+test('governance lane still accepts the legacy lowercase docs/06_status/incidents/** form', () => {
+  const manifest = loadLaneManifest('governance');
+  const result = validateLaneAuthority({
+    manifest,
+    changedFiles: ['docs/06_status/incidents/some-legacy-note.md'],
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.violations, []);
+});
+
+test('governance lane still rejects an unrelated path after the AGENTS.md/INCIDENTS additions', () => {
+  const manifest = loadLaneManifest('governance');
+  const result = validateLaneAuthority({
+    manifest,
+    changedFiles: ['apps/worker/src/something.ts'],
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.violations.map((violation) => violation.code),
+    ['outside_allowed_paths'],
+  );
+});
+
+test('governance lane still rejects a mixed-case near-miss on the incidents path (matching stays case-sensitive)', () => {
+  const manifest = loadLaneManifest('governance');
+  const result = validateLaneAuthority({
+    manifest,
+    changedFiles: ['docs/06_status/Incidents/wrong-case.md'],
+  });
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.violations.map((violation) => violation.code),
+    ['outside_allowed_paths'],
+  );
 });

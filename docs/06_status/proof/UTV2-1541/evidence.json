@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1541",
+  "status": "PRE-MERGE -- PR open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "verifier": {
+    "identity": "claude/utv2-1541-lane-authority-allowlist-fix"
+  },
+  "static_proof": {
+    "pnpm_type_check": {
+      "command": "pnpm exec tsc -b tsconfig.json",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "pnpm_lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "targeted_tests": {
+      "command": "npx tsx --test scripts/lane-contract.test.ts",
+      "status": "PASS",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "note": "5 pre-existing tests (unaffected regression) + 5 new tests loading the real .lane/lanes/governance.yml via loadLaneManifest('governance') and asserting AGENTS.md + docs/06_status/INCIDENTS/** are now accepted, the legacy lowercase form still works, and unrelated/near-miss paths remain rejected."
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "note": "Full env:check + lint + type-check + build + test (including live-DB-backed suites already present in the repo) ran green on this branch. Re-confirmed with a fast pnpm verify:quick pass immediately before this bundle was authored."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 3,
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts inserts and deletes a real submission row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts inserts and deletes a real pick row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts selects pick_lifecycle rows to verify no lifecycle event is written on an invalid atomic enqueue (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts selects distribution_outbox rows to verify status/receipt/lifecycle/audit rollback on an invalid atomic delivery confirmation (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts selects distribution_receipts rows as part of the same atomic-delivery rollback verification"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts selects audit_log rows to verify no audit row is written on an invalid atomic settlement (UTV2-920 rollback test) and that a re-settlement correction is additive (UTV2-996)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts inserts settlement_records rows to verify a correction chain is additive and the original settlement row is not mutated (UTV2-996)"
+      },
+      {
+        "table": "participants",
+        "description": "database-smoke.test.ts verifies no duplicate participants for the same external_id and sport (UTV2-883)"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 75288, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 111800, "status": "healthy" },
+      { "table": "submissions", "count": 77248, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 5102, "status": "healthy" },
+      { "table": "audit_log", "count": 197616, "status": "healthy" },
+      { "table": "settlement_records", "count": 25220, "status": "healthy" }
+    ],
+    "row_counts_captured_at": "2026-07-15T06:59:00Z",
+    "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via mcp__claude_ai_Supabase__execute_sql immediately after the pnpm test:db run above. This diff's own scope (.lane/lanes/governance.yml + scripts/lane-contract.test.ts) has no DB dependency -- this runtime proof exists to satisfy the unconditional T1 runtime_proof_required gate, not because the diff itself touches database code."
+  },
+  "sha_binding": {
+    "branch": "claude/utv2-1541-lane-authority-allowlist-fix",
+    "verified_source_sha": "de98cf63add5c48d05ac59df8ef450d4742db161",
+    "verified_source_note": "The branch HEAD at the moment this bundle was authored, captured for provenance only -- NOT a claim about the PR's current live head. The PR's actual live head is validated externally by GitHub and by the SHA-bound executor-result/v1 comment posted after each push.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-15T07:00:00Z",
+    "ci_sentinels": {
+      "merge_gate": "pending"
+    },
+    "merge_sha": null,
+    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".lane/lanes/governance.yml",
+      "scripts/lane-contract.test.ts"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1541.yml",
+      "docs/06_status/lanes/UTV2-1541.json",
+      "docs/06_status/proof/UTV2-1541/.gitkeep",
+      "docs/06_status/proof/UTV2-1541/diff-summary.md",
+      "docs/06_status/proof/UTV2-1541/evidence.json",
+      "docs/06_status/proof/UTV2-1541/verification.md"
+    ]
+  },
+  "acceptance_criteria": {
+    "agents_md_added_to_allowlist": "PASS -- AGENTS.md added to allowed_path_globs",
+    "incidents_case_corrected": "PASS -- docs/06_status/INCIDENTS/** (uppercase) added; legacy lowercase docs/06_status/incidents/** left in place, additive only",
+    "lane_authority_tests_added": "PASS -- 5 new tests in scripts/lane-contract.test.ts against the real governance.yml manifest",
+    "unrelated_paths_still_rejected": "PASS -- explicit regression test for an unrelated path and a mixed-case near-miss on the incidents path, both still rejected",
+    "narrowly_scoped_no_other_governance_changes": "PASS -- diff touches only .lane/lanes/governance.yml (2 new allowlist entries + comments) and scripts/lane-contract.test.ts (new tests)",
+    "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, branch name, and PR title/body reference only UTV2-1541"
+  },
+  "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- AWAITING_PM_VERDICT_AND_T1_APPROVED_LABEL"
+}
