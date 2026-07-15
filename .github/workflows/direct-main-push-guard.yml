@@ -1,0 +1,65 @@
+name: Direct Main Push Guard
+
+# Detection-only guard (UTV2-1537): runs after a commit lands on `main` and
+# classifies it using scripts/ci/direct-main-push-guard.ts. This CANNOT prevent a
+# direct push (branch protection is the only prevention mechanism, and it structurally
+# does not apply to a repo admin when `enforce_admins` is disabled -- see
+# docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md for the
+# verified facts on that boundary). What this workflow adds is a durable, mechanical,
+# after-the-fact record instead of relying on a manual audit to notice.
+#
+# A red run here does not mean CI "failed" in the usual sense -- the commit is already
+# on main by the time this runs. It means: go read
+# docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md and either open a
+# docs/06_status/INCIDENTS/ entry, or add an Emergency-Bypass-Record trailer pointing
+# at one that already exists and genuinely pre-authorized this push.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-main-push-guard-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Classify head commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Classify head commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx tsx scripts/ci/direct-main-push-guard.ts --sha "${{ github.sha }}" --json | tee /tmp/direct-main-push-guard.json
+          code=$(jq -r '.results[0].code' /tmp/direct-main-push-guard.json)
+          reason=$(jq -r '.results[0].reason' /tmp/direct-main-push-guard.json)
+          echo "::notice title=direct-main-push-guard::${{ github.sha }} classified as ${code}: ${reason}"
+          if [ "$code" = "unauthorized_direct_push" ]; then
+            echo "::warning title=direct-main-push-guard::Unauthorized direct push detected on main (${{ github.sha }}). See docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md and docs/06_status/INCIDENTS/."
+            exit 1
+          fi

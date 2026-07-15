@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
+  classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
   evaluateRequiredChecksWithHeadFallback,
   evaluateT2ProofEvidence,
@@ -13,8 +14,9 @@ import {
   isLinearStatePermittedForL3,
   parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
+  type EvidenceBundleV1,
 } from './truth-check-lib.js';
-import type { TruthCheckResult } from './shared.js';
+import type { CheckResult, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
   manifestStatus: 'merged' | 'done',
@@ -869,4 +871,125 @@ test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abando
 test('L3: rejects empty/unknown state', () => {
   assert.strictEqual(isLinearStatePermittedForL3(''), false);
   assert.strictEqual(isLinearStatePermittedForL3(undefined), false);
+});
+
+// ── classifyRuntimeProofGap (UTV2-1537) ─────────────────────────────────────────
+//
+// Regression coverage for docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md:
+// the exact failure shape a T1 lane produces when it merges to main without runtime
+// evidence -- C6/P7/P9/P10/R1/R2/R3 all fail together, nothing else does. This is the
+// precise pattern that, when it hit an ambiguous "push a new commit" remediation
+// message and no scripted repair path, led to an unauthorized direct-main push.
+
+function checkResult(id: string, status: CheckResult['status'], detail = ''): CheckResult {
+  return { id, status, detail };
+}
+
+/** Reproduces the exact check-result set observed in the real incident's CI log. */
+function originalIncidentFailureFixture(): CheckResult[] {
+  return [
+    checkResult('M1', 'pass'),
+    checkResult('M2', 'pass'),
+    checkResult('M3', 'pass'),
+    checkResult('L1', 'pass'),
+    checkResult('L2', 'pass'),
+    checkResult('G1', 'pass'),
+    checkResult('G2', 'pass'),
+    checkResult('P1', 'pass'),
+    checkResult('P2', 'pass'),
+    checkResult('P3', 'pass'),
+    checkResult('P4', 'pass'),
+    checkResult('P5', 'pass'),
+    checkResult('P6', 'pass'),
+    checkResult('C1', 'pass'),
+    checkResult('C2', 'pass'),
+    checkResult('C3', 'pass'),
+    checkResult('C4', 'pass'),
+    checkResult('C5', 'pass'),
+    checkResult('C7', 'pass'),
+    checkResult('C6', 'fail', 'runtime-proof closeout requires live/runtime evidence, not narrative-only proof'),
+    checkResult('P7', 'fail', 'evidence bundle must include populated static_proof and runtime_proof sections'),
+    checkResult('P9', 'fail', 'runtime_proof must reference live DB queries, row counts, or receipts'),
+    checkResult('P10', 'fail', 'verifier.identity must be set and not equal to manifest.created_by'),
+    checkResult('R1', 'fail', 'runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence'),
+    checkResult('R2', 'fail', 'runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db'),
+    checkResult('R3', 'fail', 'evidence bundle verifier.identity must be set for T1 phase-boundary-guard'),
+  ];
+}
+
+test('classifyRuntimeProofGap: reproduces the exact original incident failure mode as an isolated runtime-proof gap', () => {
+  const classification = classifyRuntimeProofGap(originalIncidentFailureFixture());
+  assert.strictEqual(classification.isRuntimeProofGap, true);
+  assert.deepStrictEqual(
+    [...classification.missingRuntimeProofCheckIds].sort(),
+    ['C6', 'P10', 'P7', 'P9', 'R1', 'R2', 'R3'].sort(),
+  );
+  assert.deepStrictEqual(classification.otherFailingCheckIds, []);
+  assert.match(classification.remediation, /pnpm ops:proof-repair scaffold/);
+  assert.match(classification.remediation, /Do NOT hand-edit proof files on main directly/);
+});
+
+test('classifyRuntimeProofGap: does not classify a mixed failure (non-runtime check also failing) as a pure runtime-proof gap', () => {
+  const mixed = [...originalIncidentFailureFixture(), checkResult('G4', 'fail', 'required GitHub checks are not green')];
+  const classification = classifyRuntimeProofGap(mixed);
+  assert.strictEqual(classification.isRuntimeProofGap, false);
+  assert.deepStrictEqual(classification.otherFailingCheckIds, ['G4']);
+  assert.strictEqual(classification.remediation, '');
+});
+
+test('classifyRuntimeProofGap: an all-pass check set is not a runtime-proof gap', () => {
+  const allPass = originalIncidentFailureFixture().map((check) =>
+    check.status === 'fail' ? { ...check, status: 'pass' as const, detail: 'ok' } : check,
+  );
+  const classification = classifyRuntimeProofGap(allPass);
+  assert.strictEqual(classification.isRuntimeProofGap, false);
+  assert.deepStrictEqual(classification.missingRuntimeProofCheckIds, []);
+});
+
+// ── integration-style: truth-check sees repaired evidence and now passes ───────
+
+test('integration: R1/R2/R3 fail against a pre-repair bundle and pass against the same bundle after an additive repair', () => {
+  const preRepairBundle: { bundle: EvidenceBundleV1 } = {
+    bundle: {
+      schema_version: 1,
+      // No verifier, no runtime_proof -- the exact pre-repair shape from the incident.
+    },
+  };
+
+  const preRepairChecks: CheckResult[] = [];
+  const addPre = (id: string, status: 'pass' | 'fail' | 'skip', detail: string): void => {
+    preRepairChecks.push({ id, status, detail });
+  };
+  addUnsupportedRuntimeChecks(addPre, false, 'T1', preRepairBundle);
+  assert.deepStrictEqual(
+    preRepairChecks.map((c) => c.status),
+    ['fail', 'fail', 'fail'],
+  );
+
+  // Simulate the additive repair: only verifier + runtime_proof are added, exactly
+  // as scripts/ops/proof-repair.ts's mergeRuntimeProofIntoEvidence does.
+  const postRepairBundle: { bundle: EvidenceBundleV1 } = {
+    bundle: {
+      ...preRepairBundle.bundle,
+      verifier: { identity: 'claude/utv2-9999-proof-repair' },
+      runtime_proof: {
+        queries: [{ table: 'picks', description: 'live query evidence' }],
+        row_counts: [{ table: 'picks', count: 100, status: 'healthy' }],
+      },
+    },
+  };
+
+  const postRepairChecks: CheckResult[] = [];
+  const addPost = (id: string, status: 'pass' | 'fail' | 'skip', detail: string): void => {
+    postRepairChecks.push({ id, status, detail });
+  };
+  addUnsupportedRuntimeChecks(addPost, false, 'T1', postRepairBundle);
+  assert.deepStrictEqual(
+    postRepairChecks.map((c) => c.status),
+    ['pass', 'pass', 'pass'],
+  );
+
+  const postClassification = classifyRuntimeProofGap(postRepairChecks);
+  assert.strictEqual(postClassification.isRuntimeProofGap, false);
+  assert.strictEqual(hasRuntimeReferences(postRepairBundle.bundle.runtime_proof), true);
 });

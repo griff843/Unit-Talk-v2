@@ -1522,6 +1522,42 @@ export function hasRuntimeReferences(runtimeProof: EvidenceBundleV1['runtime_pro
   );
 }
 
+/**
+ * Check IDs that only ever fail together as the specific "T1 lane merged without
+ * live runtime evidence" shape (UTV2-1537, see
+ * docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md). Used to
+ * give the post-merge-lane-close failure comment a precise, actionable remediation
+ * message instead of a generic "push a new commit" hint -- the exact gap whose
+ * ambiguity contributed to that incident's direct-main bypass.
+ */
+const RUNTIME_PROOF_GAP_CHECK_IDS = new Set(['C6', 'P7', 'P9', 'P10', 'R1', 'R2', 'R3']);
+
+export interface RuntimeProofGapClassification {
+  /** True only when every failing check belongs to the runtime-proof-gap set above. */
+  isRuntimeProofGap: boolean;
+  missingRuntimeProofCheckIds: string[];
+  otherFailingCheckIds: string[];
+  remediation: string;
+}
+
+export function classifyRuntimeProofGap(checks: CheckResult[]): RuntimeProofGapClassification {
+  const failing = checks.filter((check) => check.status === 'fail');
+  const runtimeFailing = failing.filter((check) => RUNTIME_PROOF_GAP_CHECK_IDS.has(check.id));
+  const otherFailing = failing.filter((check) => !RUNTIME_PROOF_GAP_CHECK_IDS.has(check.id));
+  const isRuntimeProofGap = runtimeFailing.length > 0 && otherFailing.length === 0;
+
+  return {
+    isRuntimeProofGap,
+    missingRuntimeProofCheckIds: runtimeFailing.map((check) => check.id),
+    otherFailingCheckIds: otherFailing.map((check) => check.id),
+    remediation: isRuntimeProofGap
+      ? 'Runtime proof is missing for a T1 lane. Do NOT hand-edit proof files on main directly ' +
+        '(see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md). Run `pnpm ops:proof-repair scaffold <ISSUE_ID>` ' +
+        'for the exact governed repair steps: a real `pnpm test:db` run, `pnpm ops:proof-repair apply`, and a normal PR.'
+      : '',
+  };
+}
+
 export function findPostMergeTouches(input: {
   mergeSha: string;
   filesChanged: string[];

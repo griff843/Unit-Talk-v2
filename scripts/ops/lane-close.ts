@@ -106,7 +106,9 @@ export function remediationForCode(code: CloseoutFailureCode): string {
     case 'stale_proof':
       return 'Proof files do not reference the merge SHA or predate the merge commit. Regenerate proof after merge.';
     case 'runtime_proof_required':
-      return 'This issue requires live/runtime proof. Attach structured runtime evidence with queries, row counts, or receipts tied to the closeout SHA.';
+      return 'This issue requires live/runtime proof. Do NOT hand-edit proof files on main directly ' +
+        '(see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md). Run `pnpm ops:proof-repair scaffold <ISSUE_ID>` ' +
+        'for the exact governed repair steps: a real `pnpm test:db` run, `pnpm ops:proof-repair apply`, and a normal PR.';
     case 'state_drift':
       return 'PR, manifest, proof, and Linear state disagree beyond the allowed transition window. Reconcile the lane before closeout.';
     case 'pr_not_merged':

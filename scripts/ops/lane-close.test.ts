@@ -473,6 +473,19 @@ test('runtime proof: C6 narrative-only runtime proof maps to runtime_proof_requi
   assert.strictEqual(code, 'runtime_proof_required');
 });
 
+// UTV2-1537: this exact remediation message is what post-merge-lane-close.yml
+// surfaces to the operator when a T1 lane merges without runtime proof -- the
+// precise moment that, worded ambiguously ("push a new commit"), previously led to
+// an unauthorized direct-main push (see
+// docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md). It must
+// name the governed repair path and must never suggest editing main directly.
+test('runtime_proof_required remediation names the governed proof-repair path and never suggests editing main directly', () => {
+  const message = remediationForCode('runtime_proof_required');
+  assert.match(message, /ops:proof-repair scaffold/);
+  assert.match(message, /Do NOT hand-edit proof files on main directly/);
+  assert.doesNotMatch(message, /push a new commit/i);
+});
+
 test('state drift: C7 drift maps to state_drift', () => {
   const code = mapFailuresToCode(['C7'], 'fail');
   assert.strictEqual(code, 'state_drift');
