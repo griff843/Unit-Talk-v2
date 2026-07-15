@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "merge_sha": "set-by-ci",
+  "issue_id": "UTV2-1497",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "description": "Live-DB proof that DatabaseOutboxRepository.claimNextAtomic (SELECT ... FOR UPDATE SKIP LOCKED) never double-claims or drops a distribution_outbox row under real concurrent load. No production code change — scoped proof-only lane per the issue's plan-gate spec.",
+  "status": "COMPLETE",
+  "sha_binding": {
+    "verified_source_sha": "811b86a59fd610ef9041cfff1e8f66558ce1a973",
+    "verified_source_note": "Proof-only lane — no production source changed; verified_source_sha binds to the commit introducing the test file itself.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-15T00:45:00.000Z",
+    "ci_sentinels": {"merge_gate": "pending"},
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1497-atomic-outbox-claim",
+    "role": "implementation-lane"
+  },
+  "static_proof": {
+    "pnpm_verify": {"status": "PASS", "exit_code": 0},
+    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "note": "Live-DB concurrent-claim proof run against real Supabase (project zfzdnfwdarxucxtaojxm). Creates real picks + distribution_outbox rows, then races claimNextAtomic concurrently.",
+    "command": "UNIT_TALK_APP_ENV=local npx tsx --test apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts",
+    "status": "PASS",
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "queries": [
+      "INSERT submissions + picks + distribution_outbox (enqueue) x8, one row per synthetic pick, same target",
+      "RPC claim_next_outbox (claimNextAtomic, SELECT ... FOR UPDATE SKIP LOCKED) x12 called concurrently via Promise.all against the same target"
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_outbox",
+        "note": "8 rows enqueued for one synthetic target (utv2-1497-canary-<runId>), all 8 claimed exactly once across 12 concurrent claimNextAtomic callers; 4 excess callers received null.",
+        "rows_enqueued": 8,
+        "rows_claimed": 8,
+        "concurrent_callers": 12
+      }
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "note": "Live Supabase run. No production code touched — proof-only lane confirming existing claim_next_outbox RPC is race-safe."
+      }
+    ]
+  },
+  "acceptance_criteria": {
+    "n_concurrent_claims_against_real_rows": "PASS — 12 concurrent claimNextAtomic callers against 8 real Postgres rows for one target",
+    "no_row_claimed_twice": "PASS — claimed-id set size equals row count (8), no duplicates",
+    "no_row_dropped": "PASS — claimed set exactly equals enqueued set",
+    "no_production_code_change_unless_race_surfaced": "PASS — zero races surfaced; claim_next_outbox / claimNextAtomic untouched"
+  },
+  "verdict": "PASS"
+}
