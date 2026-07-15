@@ -13,7 +13,12 @@ import {
 } from './lane-maximizer.js';
 import { buildPnpmStateEnv } from './lane-start.js';
 import { checkConcurrencyLimits, type ConcurrencyManifestLike } from './concurrency-rules.js';
-import type { ConcurrencyConfig, EffectiveConcurrencyConfig } from './concurrency-config.js';
+import {
+  CONFIG_FILE_PATH,
+  clearConcurrencyConfigCache,
+  type ConcurrencyConfig,
+  type EffectiveConcurrencyConfig,
+} from './concurrency-config.js';
 import type { CanonicalLaneType } from './shared.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -1229,4 +1234,61 @@ test('20. the recommended wave, replayed candidate-by-candidate through the cano
       verification_target: entry.lane_type === 'verification' ? candidate!.verification_target : undefined,
     });
   }
+});
+
+// Codex review fix (PR #1220): when the real CONCURRENCY_CONFIG.json sets a hard
+// `total` cap below the sum of the executor caps, the synthesized default policy
+// must respect the smaller configured total, not silently widen it to
+// maxClaude + maxCodex -- otherwise this planner could recommend a lane in the gap
+// that ops:lane-start's checkConcurrencyLimits() (which enforces cfg.total directly)
+// would then reject.
+
+function withTempConcurrencyConfig(overrides: Partial<ConcurrencyConfig>, run: () => void): void {
+  const original = fs.readFileSync(CONFIG_FILE_PATH, 'utf8');
+  const parsed = JSON.parse(original) as ConcurrencyConfig;
+  const patched: ConcurrencyConfig = { ...parsed, ...overrides };
+  fs.writeFileSync(CONFIG_FILE_PATH, `${JSON.stringify(patched, null, 2)}\n`, 'utf8');
+  clearConcurrencyConfigCache();
+  try {
+    run();
+  } finally {
+    fs.writeFileSync(CONFIG_FILE_PATH, original, 'utf8');
+    clearConcurrencyConfigCache();
+  }
+}
+
+test('21. synthesized policy clamps total to the configured total, not maxClaude + maxCodex, when config total is smaller', () => {
+  withTempConcurrencyConfig(
+    {
+      total: 5, // deliberately below executors.claude(4) + executors.codex(4) = 8
+      executors: { claude: 4, codex: 4 },
+    },
+    () => {
+      // 5 active lanes -- exactly at the configured (smaller) total cap of 5, but
+      // well under the executor-sum-derived 8 this bug would have used instead.
+      const active = [
+        makeManifest('UTV2-QL0', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/ql0.md'] }),
+        makeManifest('UTV2-QL1', { executor: 'claude', lane_type: 'governance', file_scope_lock: ['docs/gov/ql1.md'] }),
+        makeManifest('UTV2-QL2', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/ql2.ts'] }),
+        makeManifest('UTV2-QL3', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/ql3.ts'] }),
+        makeManifest('UTV2-QL4', { executor: 'codex-cli', lane_type: 'hygiene', file_scope_lock: ['scripts/ops/ql4.ts'] }),
+      ];
+
+      const report = evaluateCandidates(
+        [makeCandidate('UTV2-QL5', { executor: 'claude', lane_type: 'governance', file_scope: ['docs/gov/ql5.md'] })],
+        active,
+        { maxClaude: 4, maxCodex: 4 },
+        // Deliberately NOT passing concurrencyConfig -- this exercises the default
+        // synthesis path (the one with the bug), reading the real (temporarily
+        // patched) CONCURRENCY_CONFIG.json via the module's own cfg loader.
+      );
+
+      assert.deepStrictEqual(
+        findDecisionIssueIds(report, 'recommended'),
+        [],
+        'a 6th lane must not be recommended once the configured total cap of 5 is reached, even though executors.claude+executors.codex=8 is not',
+      );
+      assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['TOTAL_CAP_EXCEEDED']);
+    },
+  );
 });

@@ -12,12 +12,12 @@ import {
 import {
   ACTIVE_LOCK_STATUSES,
   readConfiguredEnvValue,
-  requireVerificationTarget,
   resolveLaneExecutor,
   type CanonicalLaneType,
 } from './shared.js';
 import {
   checkConcurrencyLimits,
+  isValidVerificationTarget,
   type ConcurrencyManifestLike,
   type IncomingLaneScope,
 } from './concurrency-rules.js';
@@ -208,18 +208,6 @@ const REASON_MESSAGES: Record<string, string> = {
   CONCURRENCY_LIMIT_EXCEEDED:
     'Candidate fails the concurrency forecast for a reason not otherwise classified above -- fails closed.',
 };
-
-function isValidVerificationTarget(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length === 0) {
-    return false;
-  }
-  try {
-    requireVerificationTarget(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Maps a checkConcurrencyLimits() violation code to this planner's own reason-code
@@ -881,7 +869,16 @@ export function evaluateCandidates(
     ? {
         ...cfg,
         executors: { claude: limits.maxClaude, codex: limits.maxCodex },
-        total: limits.maxClaude + limits.maxCodex,
+        // Codex review (PR #1220): never let the synthesized total exceed the
+        // REAL configured total cap. If CONCURRENCY_CONFIG.json ever sets a hard
+        // `total` below the sum of the executor caps (a tighter overall ceiling
+        // than the per-executor caps alone would imply), widening it here to
+        // `maxClaude + maxCodex` would let this planner recommend lanes in the
+        // gap that ops:lane-start's checkConcurrencyLimits() -- which enforces
+        // cfg.total directly -- would then reject. Clamping to the smaller of
+        // the two keeps the planner at least as conservative as the real
+        // admission check, never more permissive.
+        total: Math.min(cfg.total, limits.maxClaude + limits.maxCodex),
         singleton_types: singletonLaneTypes,
         forbidden_combinations: forbiddenCombinations,
         type_caps: typeCaps,

@@ -2,6 +2,7 @@ import {
   ACTIVE_LOCK_STATUSES,
   DELIVERY_UI_APP_ROOTS,
   deriveDeliveryUiApp,
+  requireVerificationTarget,
   type CanonicalLaneType,
   type LaneExecutor,
   type LaneManifestStatus,
@@ -39,6 +40,30 @@ export interface ConcurrencyManifestLike {
 export interface ConcurrencyViolation {
   code: string;
   message: string;
+}
+
+/**
+ * Format-validates a verification_target: non-empty AND matches UTV2-###
+ * (requireVerificationTarget()'s exact contract). Used, not just presence-checked,
+ * when deciding whether an ACTIVE verification manifest's own target can be trusted
+ * (Codex review, PR #1220): a non-empty but malformed value (a stray `UNI-123`, a
+ * typo, hand-edited manifest state) must fail closed the same way a genuinely
+ * missing target does -- a presence-only check would let it silently pass as
+ * "determined" and never trigger the undetermined-conflict guard below, while also
+ * never legitimately matching a validly-formatted incoming target (which is always
+ * pre-validated to UTV2-### before reaching this function), silently defeating the
+ * fail-closed intent for that active lane.
+ */
+export function isValidVerificationTarget(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0) {
+    return false;
+  }
+  try {
+    requireVerificationTarget(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface IncomingLaneScope {
@@ -186,7 +211,7 @@ export function checkConcurrencyLimits(
         });
       } else {
         const activeVerification = active.filter((m) => String(m.lane_type ?? '') === 'verification');
-        const undetermined = activeVerification.find((m) => !m.verification_target);
+        const undetermined = activeVerification.find((m) => !isValidVerificationTarget(m.verification_target));
         if (undetermined) {
           violations.push({
             code: 'verification_target_undetermined_conflict',
