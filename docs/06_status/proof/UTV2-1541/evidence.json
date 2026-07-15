@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1541",
-  "status": "PRE-MERGE -- PR open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "status": "MERGED -- PR #1222 squash-merged to main at commit 4627a3bd6303074f1e19d744418e051c82804da3. This bundle's sha_binding is now bound to that merge SHA.",
   "verifier": {
     "identity": "claude/utv2-1541-lane-authority-allowlist-fix"
   },
@@ -79,27 +79,51 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 75288, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 111800, "status": "healthy" },
-      { "table": "submissions", "count": 77248, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 5102, "status": "healthy" },
-      { "table": "audit_log", "count": 197616, "status": "healthy" },
-      { "table": "settlement_records", "count": 25220, "status": "healthy" }
+      {
+        "table": "picks",
+        "count": 75288,
+        "status": "healthy"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 111800,
+        "status": "healthy"
+      },
+      {
+        "table": "submissions",
+        "count": 77248,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 5102,
+        "status": "healthy"
+      },
+      {
+        "table": "audit_log",
+        "count": 197616,
+        "status": "healthy"
+      },
+      {
+        "table": "settlement_records",
+        "count": 25220,
+        "status": "healthy"
+      }
     ],
     "row_counts_captured_at": "2026-07-15T06:59:00Z",
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via mcp__claude_ai_Supabase__execute_sql immediately after the pnpm test:db run above. This diff's own scope (.lane/lanes/governance.yml + scripts/lane-contract.test.ts) has no DB dependency -- this runtime proof exists to satisfy the unconditional T1 runtime_proof_required gate, not because the diff itself touches database code."
   },
   "sha_binding": {
     "branch": "claude/utv2-1541-lane-authority-allowlist-fix",
-    "verified_source_sha": "de98cf63add5c48d05ac59df8ef450d4742db161",
-    "verified_source_note": "The branch HEAD at the moment this bundle was authored, captured for provenance only -- NOT a claim about the PR's current live head. The PR's actual live head is validated externally by GitHub and by the SHA-bound executor-result/v1 comment posted after each push.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-15T07:00:00Z",
+    "verified_source_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
+    "verified_source_note": "The real merge commit SHA for PR #1222 on main, bound via ops:proof-generate --merge-sha (rebindEvidenceJsonSha).",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-15T08:03:55.955Z",
     "ci_sentinels": {
       "merge_gate": "pending"
     },
-    "merge_sha": null,
-    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main."
+    "merge_sha": "4627a3bd6303074f1e19d744418e051c82804da3",
+    "merge_sha_note": "PR #1222 merged to main (squash) at this SHA. post-merge-lane-close.yml's automated closeout failed with infra_error (manifest had no pr_url recorded pre-merge) so this binding was completed via a governed follow-up repair PR instead."
   },
   "scope": {
     "implementation_paths": [

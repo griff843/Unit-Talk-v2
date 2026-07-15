@@ -1,5 +1,5 @@
 # PROOF: UTV2-1541
-MERGE_SHA: de98cf63add5c48d05ac59df8ef450d4742db161
+MERGE_SHA: 4627a3bd6303074f1e19d744418e051c82804da3
 
 ASSERTIONS:
 - [x] `AGENTS.md` added to `.lane/lanes/governance.yml`'s `allowed_path_globs`
@@ -114,6 +114,9 @@ Authority failures on PR #1218 (UTV2-1536, editing `AGENTS.md`) and PR #1219
 
 Branch: claude/utv2-1541-lane-authority-allowlist-fix
 Head SHA (at authoring time): de98cf63add5c48d05ac59df8ef450d4742db161
-Merge SHA: not yet merged — will be bound by `post-merge-lane-close.yml`'s automated
-`ops:proof-generate --merge-sha` run after this PR merges, per this repo's standard T1
-closeout automation.
+Merge SHA: 4627a3bd6303074f1e19d744418e051c82804da3 (PR #1222, squash merge). The
+automated `post-merge-lane-close.yml` closeout failed with `infra_error` ("Manifest
+has no pr_url to repair from" — the manifest's `pr_url` was never recorded before
+merge) and did not run `ops:proof-generate --merge-sha` automatically. Bound here via
+a governed follow-up repair PR (`claude/utv2-1541-post-merge-repair`) instead of a
+direct push to `main`.
