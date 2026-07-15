@@ -1,17 +1,19 @@
 {
   "schema_version": 1,
-  "merge_sha": "set-by-ci",
+  "merge_sha": "fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7",
   "issue_id": "UTV2-1497",
   "tier": "T1",
   "lane_type": "runtime",
   "description": "Live-DB proof that DatabaseOutboxRepository.claimNextAtomic (SELECT ... FOR UPDATE SKIP LOCKED) never double-claims or drops a distribution_outbox row under real concurrent load. No production code change — scoped proof-only lane per the issue's plan-gate spec.",
   "status": "COMPLETE",
   "sha_binding": {
-    "verified_source_sha": "811b86a59fd610ef9041cfff1e8f66558ce1a973",
+    "verified_source_sha": "fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7",
     "verified_source_note": "Proof-only lane — no production source changed; verified_source_sha binds to the commit introducing the test file itself.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-15T00:45:00.000Z",
-    "ci_sentinels": {"merge_gate": "pending"},
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-15T01:56:38.242Z",
+    "ci_sentinels": {
+      "merge_gate": "pending"
+    },
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -20,8 +22,14 @@
     "role": "implementation-lane"
   },
   "static_proof": {
-    "pnpm_verify": {"status": "PASS", "exit_code": 0},
-    "type_check": {"command": "pnpm type-check", "status": "PASS"},
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS"

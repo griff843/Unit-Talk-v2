@@ -1,5 +1,5 @@
 # PROOF: UTV2-1497
-MERGE_SHA: 811b86a59fd610ef9041cfff1e8f66558ce1a973
+MERGE_SHA: fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7
 
 ## Verification
 
@@ -106,3 +106,8 @@ test:t1-proof:live)
 | No row claimed twice | PASS — claimed-id set size equals row count, no duplicates |
 | No row dropped | PASS — claimed set exactly equals enqueued set |
 | No production code change unless a race surfaced | PASS — no race surfaced, `claim_next_outbox` / `claimNextAtomic` untouched |
+
+## Merge SHA binding
+
+Merged via PR #1221, squash merge commit `fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7`.
+Head SHA at merge: `fd7794cce7cc741d2474eec7542af1ead3af5ed9`.
