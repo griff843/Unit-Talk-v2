@@ -1,5 +1,5 @@
 # PROOF: UTV2-1536
-MERGE_SHA: 5f427e6b0f737a79c5b0313437cf79923a1c8b36
+MERGE_SHA: 504173fd39c545a8059f78f3a03c4ea4015ded97
 
 ASSERTIONS:
 - [x] Audited the repo for hard-coded stale concurrency ceilings presented as current policy (2 Claude / 4 Codex / 6 lanes / 2-4-6 / older 5-lane-2-Claude-3-Codex variants)
@@ -46,10 +46,11 @@ $ pnpm verify
 verify:commands, test:db, test:t1-proof:live -- exit code 0)
 ```
 
-**Status: PR not merged.** No merge SHA is invented. The `MERGE_SHA:` field above references
-this branch's own implementation commit (an ancestor of the PR head), per
-`executor-result-validator.yml`'s documented implementation-commit-as-ancestor pattern.
-`evidence.json`'s `sha_binding.merge_sha` remains `null`.
+**Status: Merged.** PR #1218 merged as `504173fd39c545a8059f78f3a03c4ea4015ded97` (confirmed
+via `gh pr view 1218 --json mergeCommit`). The `MERGE_SHA:` field above is updated from the
+branch's own implementation commit to this real merge SHA as part of the governed post-merge
+closeout repair (`claude/utv2-1536-lane-close-repair`). `evidence.json`'s `sha_binding.merge_sha`
+is updated to match.
 
 ---
 
@@ -208,5 +209,9 @@ time (`gh pr view 1218 --json headRefOid`) and the exact SHA embedded in the mos
 `executor-result/v1` comment -- not a value hand-copied into this narrative section, which would
 go stale the moment another commit lands (as happened twice already during this review). See
 `evidence.json`'s `sha_binding` block for the same caveat.
-Merge SHA: pending — will be bound automatically by `post-merge-lane-close.yml`'s
-`ops:proof-generate --merge-sha` after merge, per repo convention.
+Merge SHA: `504173fd39c545a8059f78f3a03c4ea4015ded97` (PR #1218's real squash-merge commit on
+`main`). Bound via this lane's own governed post-merge closeout repair
+(`claude/utv2-1536-lane-close-repair`) rather than the `post-merge-lane-close.yml` automation,
+since the same interaction seen on UTV2-1537/UTV2-1535 recurred here: `ops:lane-close
+--repair-merged`'s guard against writing tracked manifest changes on a `main` checkout requires
+landing the repair through a normal branch/PR.

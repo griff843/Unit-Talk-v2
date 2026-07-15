@@ -7,9 +7,19 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1536-dispatch-docs-driftguard",
   "branch": "claude/utv2-1536-dispatch-docs-driftguard",
   "base_branch": "main",
-  "commit_sha": "6e32a2a3a4af4be953fff56dd8f83bb8f11c5194",
+  "commit_sha": "504173fd39c545a8059f78f3a03c4ea4015ded97",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1218",
-  "files_changed": [],
+  "files_changed": [
+    ".claude/agents/lane-governor.md",
+    ".ops/sync/UTV2-1536.yml",
+    "AGENTS.md",
+    "docs/06_status/lanes/UTV2-1536.json",
+    "docs/06_status/proof/UTV2-1536/evidence.json",
+    "docs/06_status/proof/UTV2-1536/verification.md",
+    "package.json",
+    "scripts/ci/concurrency-doc-drift-guard.test.ts",
+    "scripts/ci/concurrency-doc-drift-guard.ts"
+  ],
   "file_scope_lock": [
     "AGENTS.md",
     ".claude/agents/lane-governor.md",
@@ -24,14 +34,28 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1536/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-14T23:50:00.000Z",
-  "heartbeat_at": "2026-07-15T00:19:54.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-15T18:07:09.510Z",
+  "closed_at": "2026-07-15T18:07:09.510Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1536-dispatch-docs-driftguard.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-15T18:07:06.983Z",
+      "verdict": "pass",
+      "merge_sha": "504173fd39c545a8059f78f3a03c4ea4015ded97",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1218",
+      "repaired_fields": [
+        "status",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
