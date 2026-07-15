@@ -1,3 +1,56 @@
+# PROOF: UTV2-1535
+MERGE_SHA: e9dfdeee065851aa14681defd406c9c823eda813
+
+ASSERTIONS:
+- [x] evaluateCandidates() forecasts total lane cap, Claude/Codex executor caps, singleton lane types, forbidden combinations, Hygiene<=4, Governance<=3, Delivery/UI<=1-per-app, and Verification<=1-per-target, all via one canonical checkConcurrencyLimits() call, not five separate hand-rolled checks
+- [x] checkConcurrencyLimits() (byte-identical logic, moved from scripts/ops/lane-start.ts) extracted into a new shared module scripts/ops/concurrency-rules.ts, so both lane-start.ts (real fail-closed authority) and lane-maximizer.ts (advisory planner) call the exact same implementation -- no third, divergent copy
+- [x] Delivery/UI app identity derived deterministically from file_scope_lock only (deriveDeliveryUiApp(), scripts/ops/shared.ts) -- never title/branch/text; undetermined app fails closed
+- [x] Verification target identity remains explicit-only (never inferred from issue_id/title/branch/purpose/file scope) -- missing/malformed target blocks; an active legacy Verification lane with no trustworthy target fails closed
+- [x] Wave projection: each accepted candidate is appended as a synthetic active-shaped entry to a growing projectedActive list, and every subsequent candidate in the same wave is evaluated against it -- mirroring what ops:lane-start would enforce if each dispatch_command ran in sequence
+- [x] Trial-mode total/executor headroom never bypasses type_caps, proven adversarially with a wide-open trial config still rejecting a 5th hygiene lane
+- [x] File-scope overlap checked against active lanes AND already-planned candidates in the same wave
+- [x] 20 new deterministic tests added (numbered 1-20, matching the required acceptance criteria exactly) plus all 137 pre-existing tests in the touched suites retained and passing unchanged (157/157 total)
+- [x] Test 20 replays the planner's own recommended wave candidate-by-candidate through checkConcurrencyLimits() directly, proving lane-start/lane-maximizer decision parity with zero violations
+- [x] pnpm exec tsc -b tsconfig.json, pnpm lint, pnpm verify (full), and the R-level check all pass clean
+- [x] pnpm test:db passes against the live zfzdnfwdarxucxtaojxm Supabase project (7/7), satisfying the unconditional T1 runtime_proof_required gate
+- [x] file_scope_lock in the lane manifest declares every touched path upfront -- File Scope Lock passes with no override needed
+- [x] No cross-issue UTV2-### references in commit subjects/bodies, PR title, or PR body -- only UTV2-1535 appears
+
+EVIDENCE:
+```text
+$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
+...
+1..157
+# tests 157
+# suites 0
+# pass 157
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 7
+Rules matched: (none) — no R-level artifacts required for this diff
+
+$ pnpm exec tsc -b tsconfig.json
+(exit 0, no diagnostics)
+
+$ pnpm test:db
+...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+---
+
 # UTV2-1535 Verification
 
 Issue: UTV2-1535
@@ -6,6 +59,12 @@ Lane type: governance
 Branch: claude/utv2-1535-lane-maximizer-typecaps
 Head SHA (at authoring time): e9dfdeee065851aa14681defd406c9c823eda813
 Generated at: 2026-07-15T00:42:06Z
+
+## Verification
+
+All static and runtime verification for this diff is green: `pnpm exec tsc -b tsconfig.json`,
+`pnpm lint`, the targeted test suite (157/157), `pnpm verify` (full), the R-level check, and
+`pnpm test:db` against the live Supabase project all pass. Details for each are below.
 
 ## Static verification
 
