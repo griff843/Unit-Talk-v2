@@ -91,9 +91,10 @@
   },
   "status": "MERGED -- PR #1218 merged as 504173fd39c545a8059f78f3a03c4ea4015ded97. sha_binding.merge_sha bound below via governed post-merge closeout repair (claude/utv2-1536-lane-close-repair).",
   "sha_binding": {
-    "head_sha": "504173fd39c545a8059f78f3a03c4ea4015ded97",
+    "head_sha": "edac1a64966f02396933f9fc02e1b9d89706d965",
+    "head_sha_note": "The PR's actual final commit before merge (confirmed via gh pr view 1218 --json commits), retained here as the reviewed-code provenance record -- distinct from merge_sha below, since a squash merge produces a new commit SHA that is not identical to what was reviewed.",
     "merge_sha": "504173fd39c545a8059f78f3a03c4ea4015ded97",
-    "merge_sha_note": "PR #1218's real squash-merge commit on main (confirmed via gh pr view 1218 --json mergeCommit). Bound via this lane's own governed post-merge closeout repair (claude/utv2-1536-lane-close-repair): post-merge-lane-close.yml's ops:lane-close --repair-merged step failed closed with repair_required_via_pr (the same guard/interaction seen on UTV2-1537 and UTV2-1535), so this repair lands the same fix through a normal branch/PR instead."
+    "merge_sha_note": "PR #1218's real squash-merge commit on main (confirmed via gh pr view 1218 --json mergeCommit). Bound via this lane's own governed post-merge closeout repair (claude/utv2-1536-lane-close-repair): post-merge-lane-close.yml's ops:lane-close --repair-merged step failed closed with repair_required_via_pr (the same interaction seen on this session's other lane-close repairs), so this repair lands the same fix through a normal branch/PR instead."
   },
   "scope": {
     "implementation_paths": [
