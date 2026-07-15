@@ -9,7 +9,7 @@ ASSERTIONS:
 - [x] Wave projection: each accepted candidate is appended as a synthetic active-shaped entry to a growing projectedActive list, and every subsequent candidate in the same wave is evaluated against it -- mirroring what ops:lane-start would enforce if each dispatch_command ran in sequence
 - [x] Trial-mode total/executor headroom never bypasses type_caps, proven adversarially with a wide-open trial config still rejecting a 5th hygiene lane
 - [x] File-scope overlap checked against active lanes AND already-planned candidates in the same wave
-- [x] 20 new deterministic tests added (numbered 1-20, matching the required acceptance criteria exactly) plus all 137 pre-existing tests in the touched suites retained and passing unchanged (157/157 total)
+- [x] 20 new deterministic tests added (numbered 1-20, matching the required acceptance criteria exactly) plus all 137 pre-existing tests in the touched suites retained and passing unchanged, plus 8 more added after Codex review round 1 (165/165 total)
 - [x] Test 20 replays the planner's own recommended wave candidate-by-candidate through checkConcurrencyLimits() directly, proving lane-start/lane-maximizer decision parity with zero violations
 - [x] pnpm exec tsc -b tsconfig.json, pnpm lint, pnpm verify (full), and the R-level check all pass clean
 - [x] pnpm test:db passes against the live zfzdnfwdarxucxtaojxm Supabase project (7/7), satisfying the unconditional T1 runtime_proof_required gate
@@ -18,12 +18,12 @@ ASSERTIONS:
 
 EVIDENCE:
 ```text
-$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
+$ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/concurrency-rules.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
 ...
-1..157
-# tests 157
+1..165
+# tests 165
 # suites 0
-# pass 157
+# pass 165
 # fail 0
 # cancelled 0
 # skipped 0
@@ -31,7 +31,7 @@ $ npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.t
 
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 7
+Changed files: 11
 Rules matched: (none) — no R-level artifacts required for this diff
 
 $ pnpm exec tsc -b tsconfig.json
