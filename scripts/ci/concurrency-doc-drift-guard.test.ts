@@ -13,7 +13,7 @@ import {
   resolveAllowlist,
   resolveCommandDocs,
 } from './concurrency-doc-drift-guard.js';
-import { loadConcurrencyConfig } from '../ops/concurrency-config.js';
+import { getEffectiveConfig, loadConcurrencyConfig } from '../ops/concurrency-config.js';
 import { MAX_CLAUDE_LANES, MAX_CODEX_LANES } from '../ops/execution-state.js';
 
 const LIVE = (() => {
@@ -216,11 +216,22 @@ test("the guard's live base config matches loadConcurrencyConfig() and execution
   // execution-state.ts's MAX_CLAUDE_LANES/MAX_CODEX_LANES back
   // dispatch_slots.claude.max / dispatch_slots.codex.max in
   // `pnpm ops:execution-state -- --json`. They are getEffectiveConfig()
-  // (trial-aware) values; with no trial active they must equal the guard's
-  // base-config values, so the two can never silently diverge while the
-  // trial governor is disabled.
-  assert.equal(MAX_CLAUDE_LANES, report.live_base_config.claude);
-  assert.equal(MAX_CODEX_LANES, report.live_base_config.codex);
+  // (trial-aware) values, so comparing them against the guard's raw
+  // *base*-config values would only hold while no trial is active -- a
+  // valid PM-authorized trial activation would then fail this test even
+  // though execution-state is behaving correctly (Codex review finding).
+  // Compare against the effective config instead, which is correct in
+  // both the base and trial-active cases.
+  const effective = getEffectiveConfig(loadConcurrencyConfig());
+  assert.equal(MAX_CLAUDE_LANES, effective.executors.claude);
+  assert.equal(MAX_CODEX_LANES, effective.executors.codex);
+
+  // Base (non-trial) values must still match what this guard treats as
+  // "current" -- these two never diverge regardless of trial state, since
+  // the guard intentionally reads base config (see buildDriftReport), not
+  // the effective/trial-aware config.
+  assert.equal(report.live_base_config.claude, LIVE.claude);
+  assert.equal(report.live_base_config.codex, LIVE.codex);
 });
 
 // ── resolveCommandDocs / resolveAllowlist shape ──────────────────────────
