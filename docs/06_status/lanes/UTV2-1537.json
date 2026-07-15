@@ -12,6 +12,7 @@
   "files_changed": [
     ".github/workflows/direct-main-push-guard.yml",
     ".github/workflows/post-merge-lane-close.yml",
+    ".lane/lanes/governance.yml",
     "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md",
     "docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md",
     "docs/06_status/INCIDENTS/README.md",
@@ -29,6 +30,7 @@
   "file_scope_lock": [
     ".github/workflows/direct-main-push-guard.yml",
     ".github/workflows/post-merge-lane-close.yml",
+    ".lane/lanes/governance.yml",
     "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md",
     "docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md",
     "docs/06_status/INCIDENTS/README.md",

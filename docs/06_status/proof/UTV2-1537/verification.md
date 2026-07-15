@@ -1,5 +1,5 @@
 # PROOF: UTV2-1537
-MERGE_SHA: not-yet-merged (see evidence.json's sha_binding for the pre-merge HEAD SHA)
+MERGE_SHA: not-yet-merged. This branch's implementation commit at proof-authoring time: `0d84666f26d95dab10d9498ad0f78f4fea0a44ca` (see evidence.json's `sha_binding.verified_source_sha`). The real merge SHA will be populated post-merge via `ops:proof-generate --merge-sha`, per this repo's standard closeout automation.
 
 ASSERTIONS:
 - [x] Truthful incident record created at `docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md`, every fact independently re-verified via `git`/`gh` before writing (no fact taken on trust from the task brief)
