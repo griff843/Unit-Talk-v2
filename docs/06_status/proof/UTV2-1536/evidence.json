@@ -77,15 +77,15 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 73956, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 109867, "status": "healthy" },
-      { "table": "submissions", "count": 76058, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 4958, "status": "healthy" },
-      { "table": "audit_log", "count": 194955, "status": "healthy" },
-      { "table": "settlement_records", "count": 24621, "status": "healthy" },
-      { "table": "distribution_receipts", "count": 2289, "status": "healthy" }
+      { "table": "picks", "count": 76114, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 112911, "status": "healthy" },
+      { "table": "submissions", "count": 77991, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 5256, "status": "healthy" },
+      { "table": "audit_log", "count": 199189, "status": "healthy" },
+      { "table": "settlement_records", "count": 25563, "status": "healthy" },
+      { "table": "distribution_receipts", "count": 2327, "status": "healthy" }
     ],
-    "row_counts_captured_at": "2026-07-15T00:20:00Z",
+    "row_counts_captured_at": "2026-07-15T15:23:00Z",
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This diff's scope (agent-instruction docs + a new TypeScript CI guard script) does not itself touch any of these tables or any DB code; this runtime proof exists because T1 tier requires it unconditionally per truth-check-lib.ts's runtime_proof_required gate (tier === 'T1'), independent of whether the diff's own files touch DB code -- same posture as the prior concurrency-ramp lane's own T1 proof.",
     "test_db_tap_output": "1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0"
   },
