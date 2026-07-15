@@ -164,14 +164,14 @@ Codex is the **implementation lane**. You own:
 
 ## Executor Concurrency Limits
 
-These limits are set by PM and enforced by the orchestrator from `docs/governance/CONCURRENCY_CONFIG.json`. Codex does not self-authorize lane expansion.
+These limits are set by PM and enforced mechanically by `ops:lane-start` reading `docs/governance/CONCURRENCY_CONFIG.json`. Codex does not self-authorize lane expansion. **Do not hard-code numeric caps here or anywhere else in prose** — the config file is the only source of truth and it has already changed once (a prior concurrency-ramp lane raised it above its original stabilization-era ceiling; see `docs/governance/LANE_CONCURRENCY_POLICY.md`'s provenance note for the historical values). Any number shown below is illustrative of the mechanism only, not authoritative.
 
 | Executor | Default limit | Notes |
 |---|---|---|
-| Claude Code | 2 active lanes | Governed by config and lane-start enforcement |
-| Codex CLI | 4 active lanes | Governed by config and lane-start enforcement |
+| Claude Code | the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `executors.claude`) | Governed by config and lane-start enforcement |
+| Codex CLI | the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `executors.codex`) | Governed by config and lane-start enforcement |
 
-**Current total cap:** 6 active execution lanes.
+**Current total cap:** the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `total`). To read the live values, run `pnpm ops:execution-state -- --json` (`.dispatch_slots`) or `pnpm exec tsx scripts/ops/lane-maximizer.ts`.
 
 **Hard singleton work classes:** runtime, migration, modeling, data-canonical.
 
