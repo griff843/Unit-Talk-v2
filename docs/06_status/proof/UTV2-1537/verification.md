@@ -1,5 +1,5 @@
 # PROOF: UTV2-1537
-MERGE_SHA: db4c7226df52412971abcc6421f0935413561111
+MERGE_SHA: 2496ad4255744abbb5afc4fdc571e14df95fb2ed
 
 Not yet merged -- the SHA above is this branch's own implementation commit (an
 ancestor of the current PR head), per the same implementation-commit-as-ancestor

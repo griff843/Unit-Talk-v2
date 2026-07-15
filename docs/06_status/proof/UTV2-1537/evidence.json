@@ -92,11 +92,11 @@
     "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project (via the mcp__claude_ai_Supabase__execute_sql tool, a single UNION ALL SELECT COUNT(*) statement across all 6 monitored tables) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This lane's own diff (governance docs + TypeScript ops/ci tooling) does not itself touch any of these tables; this runtime proof exists because tier === 'T1' makes truth-check-lib.ts's runtime_proof_required gate unconditional, independent of whether the diff's own files touch DB code -- the same fact this incident's own root cause documents about the concurrency ramp lane's proof requirement."
   },
   "sha_binding": {
-    "verified_source_sha": "db4c7226df52412971abcc6421f0935413561111",
+    "verified_source_sha": "2496ad4255744abbb5afc4fdc571e14df95fb2ed",
     "verified_source_note": "This branch's implementation commit (the only substantive commit on this branch at the time this proof was authored) -- an ancestor of the PR's head at every point checked.",
     "merge_sha": null,
     "merge_sha_note": "Not merged. This field is intentionally null. Will be populated post-merge via ops:proof-generate --merge-sha by post-merge-lane-close.yml's existing, bot-safe SYNC_BOT_TOKEN mechanism -- the same narrowly-scoped automation this lane's own incident record documents as the one pre-existing, ratified exception to DIRECT_MAIN_BYPASS_POLICY.md.",
-    "proof_bundle_base_sha": "db4c7226df52412971abcc6421f0935413561111",
+    "proof_bundle_base_sha": "2496ad4255744abbb5afc4fdc571e14df95fb2ed",
     "proof_bundle_base_note": "The commit this proof bundle document was authored against (its own parent, i.e. the implementation commit) -- not a claim about the PR's current live head. The PR's actual, live current head is validated externally by GitHub itself and by the SHA-bound executor-result/v1 comment posted after each push.",
     "sha_type": "head_sha"
   },
