@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1536",
+  "verifier": {
+    "identity": "claude/utv2-1536-dispatch-docs-driftguard"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "command": "pnpm verify",
+      "note": "Full gate: env:check, lint, type-check, build, test (aggregate 950 tests / 0 fail in test:ops alone, plus all app/domain/verification suites), smart-form verify, verify:commands, then test:live-db (test:db + test:t1-proof:live). All green, exit code 0."
+    },
+    "concurrency_doc_drift_guard": {
+      "status": "PASS",
+      "command": "pnpm exec tsx scripts/ci/concurrency-doc-drift-guard.ts",
+      "files_checked": 21,
+      "findings": 0,
+      "live_base_config": { "total": 10, "claude": 4, "codex": 6 }
+    },
+    "concurrency_doc_drift_guard_tests": {
+      "status": "PASS",
+      "command": "npx tsx --test scripts/ci/concurrency-doc-drift-guard.test.ts",
+      "tests": 19,
+      "pass": 19,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 7,
+      "rules_matched": "none",
+      "note": "Re-run after rebasing onto a newer origin/main (which had picked up an unrelated ci.yml audit-step fix while this lane was running its live-DB proof suite). No R-level rule matches AGENTS.md, .claude/agents/*.md, or scripts/ci/* paths in docs/05_operations/r1-r5-rules.json."
+    },
+    "pnpm_type_check": {
+      "status": "PASS",
+      "command": "pnpm exec tsc -b tsconfig.json",
+      "exit_code": 0,
+      "note": "Re-run standalone after the origin/main rebase as a fast sanity check; the full pnpm verify run above (which also includes type-check) completed green before the rebase, and the rebase only picked up an unrelated ci.yml change."
+    }
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts inserts and deletes a real submission row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts inserts and deletes a real pick row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts selects pick_lifecycle rows to verify no lifecycle event is written on an invalid atomic enqueue (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts selects distribution_outbox rows to verify status/receipt/lifecycle/audit rollback on an invalid atomic delivery confirmation (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts selects distribution_receipts rows as part of the same atomic-delivery rollback verification"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts selects audit_log rows to verify no audit row is written on an invalid atomic settlement (UTV2-920 rollback test) and that a re-settlement correction is additive (UTV2-996)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts inserts settlement_records rows to verify a correction chain is additive and the original settlement row is not mutated (UTV2-996)"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 73956, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 109867, "status": "healthy" },
+      { "table": "submissions", "count": 76058, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 4958, "status": "healthy" },
+      { "table": "audit_log", "count": 194955, "status": "healthy" },
+      { "table": "settlement_records", "count": 24621, "status": "healthy" },
+      { "table": "distribution_receipts", "count": 2289, "status": "healthy" }
+    ],
+    "row_counts_captured_at": "2026-07-15T00:20:00Z",
+    "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This diff's scope (agent-instruction docs + a new TypeScript CI guard script) does not itself touch any of these tables or any DB code; this runtime proof exists because T1 tier requires it unconditionally per truth-check-lib.ts's runtime_proof_required gate (tier === 'T1'), independent of whether the diff's own files touch DB code -- same posture as the prior concurrency-ramp lane's own T1 proof.",
+    "test_db_tap_output": "1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0"
+  },
+  "status": "OPEN -- PR not yet created at the time this evidence.json was written. sha_binding.merge_sha is intentionally null and will be bound automatically by post-merge-lane-close.yml's ops:proof-generate --merge-sha after merge, per the repo's standard T1 proof-SHA-binding automation.",
+  "sha_binding": {
+    "head_sha": "012fbf451416bf0c91d6a9c1381290eeeaf81c53",
+    "merge_sha": null,
+    "merge_sha_note": "PR not yet merged. Do not treat head_sha as merge truth -- GitHub main + the eventual merge commit are the authoritative source once merged."
+  },
+  "scope": {
+    "implementation_paths": [
+      "AGENTS.md",
+      ".claude/agents/lane-governor.md",
+      "package.json",
+      "scripts/ci/concurrency-doc-drift-guard.ts",
+      "scripts/ci/concurrency-doc-drift-guard.test.ts"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1536.yml",
+      "docs/06_status/lanes/UTV2-1536.json",
+      "docs/06_status/proof/UTV2-1536/evidence.json",
+      "docs/06_status/proof/UTV2-1536/verification.md"
+    ],
+    "audit_scope_note": "The task also required auditing .claude/commands/dispatch.md, dispatch-board.md, lane-management.md, loop-dispatch.md, and three-brain.md for stale concurrency literals. All five were found already fully config-driven (deferring to CONCURRENCY_CONFIG.json / ops:execution-state, with explicit 'do not copy numeric caps into this command' language) and required no edit -- they are read-only audit findings, not part of the diff.",
+    "historical_records_left_untouched": [
+      "docs/06_status/CERT_BOARD.md (explicitly marked SUPERSEDED/HISTORICAL)",
+      "docs/06_status/programs/PROGRAM_5_ACTIVATION.md (explicitly marked SUPERSEDED/HISTORICAL)",
+      "docs/06_status/STAGE2_ACTIVATION_CHECKLIST.md (explicitly marked SUPERSEDED/HISTORICAL)",
+      "docs/06_status/proof/UTV2-1504/verification.md (accurate historical record of the base config at the time it was written)",
+      "scripts/ops/concurrency-simulation.test.ts (POLICY fixture intentionally uses arbitrary smaller constants to test the generic mechanism; PROD_POLICY fixture in the same file already mirrors the real 10/4/6 config)"
+    ]
+  },
+  "acceptance_criteria": {
+    "audit_repo_for_stale_concurrency_literals": "PASS -- grep sweep for 2 Claude/4 Codex/6 lanes/2\\/4\\/6/etc. plus a broader active-lanes-count sweep; findings classified below",
+    "fix_agents_md": "PASS -- AGENTS.md executor-limits table and total-cap line now defer to CONCURRENCY_CONFIG.json / ops:execution-state instead of embedding numbers",
+    "fix_dispatch_md_if_stale": "N/A -- already config-driven on audit, no change needed (see scope.audit_scope_note)",
+    "fix_other_current_instruction_surfaces_found": "PASS -- .claude/agents/lane-governor.md was severely stale (5-lane/2-Claude/3-Codex baseline from an even older trial) and is now fully config-driven with no embedded numbers",
+    "preserve_historical_records": "PASS -- see scope.historical_records_left_untouched; none of those files were edited",
+    "mechanical_ci_guard_added": "PASS -- scripts/ci/concurrency-doc-drift-guard.ts, narrow explicit allowlist (AGENTS.md, .claude/agents/lane-governor.md, .claude/commands/*.md), two-layer check (static stale-literal patterns + config-driven numeric-claim cross-check against live CONCURRENCY_CONFIG.json base values)",
+    "guard_wired_into_real_ci": "PASS -- added to verify:static and verify:quick (both consumed by pnpm verify, which runs in .github/workflows/ci.yml) and to test:ops",
+    "guard_detects_injected_stale_claim": "PASS -- 10 dedicated tests inject each known-stale literal variant plus a config-mismatch numeric claim and assert detection",
+    "canonical_references_accepted": "PASS -- 2 dedicated tests assert CONCURRENCY_CONFIG.json references and the current correct numeric values produce zero findings",
+    "historical_proof_paths_not_rejected": "PASS -- 2 dedicated tests: the default allowlist never includes docs/06_status/proof|lanes|INCIDENTS paths, and a fixture mirroring real historical proof wording is proven to only escape detection because it is excluded from the allowlist (not because the content itself is lenient)",
+    "config_driven_values_match_execution_state": "PASS -- 1 dedicated test asserts the guard's live_base_config equals both loadConcurrencyConfig()'s raw values and execution-state.ts's MAX_CLAUDE_LANES/MAX_CODEX_LANES (the same values pnpm ops:execution-state -- --json reports under dispatch_slots.*.max while no trial is active)"
+  },
+  "verdict": "PENDING_MERGE"
+}
