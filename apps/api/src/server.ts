@@ -80,6 +80,8 @@ import {
   handleModelPerformance,
   handleQaSeedPick,
   handleQaPickStatus,
+  handleKillSwitchSet,
+  handleKillSwitchList,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import {
@@ -121,6 +123,8 @@ export interface ApiRuntimeDependencies {
   repositories: RepositoryBundle;
   persistenceMode: 'database' | 'in_memory';
   runtimeMode: ApiRuntimeMode;
+  /** Loaded, validated runtime environment (UTV2-1427) — read this, not raw process.env, for any environment-dependent runtime decision (e.g. health-check production-like checks). Optional only because a small number of pre-existing test files construct a minimal runtime stub without it; always populated by createApiRuntimeDependencies. */
+  environment?: AppEnv;
   authConfig: AuthConfig;
   bodyLimitBytes: number;
   submissionRateLimit: ApiSubmissionRateLimit;
@@ -254,6 +258,7 @@ export function createApiRuntimeDependencies(
       repositories: options.repositories,
       persistenceMode: 'in_memory',
       runtimeMode,
+      environment,
       authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit,
@@ -273,6 +278,7 @@ export function createApiRuntimeDependencies(
       repositories: createDatabaseRepositoryBundle(connection),
       persistenceMode: 'database',
       runtimeMode,
+      environment,
       authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit,
@@ -302,6 +308,7 @@ export function createApiRuntimeDependencies(
       repositories: createInMemoryRepositoryBundle(),
       persistenceMode: 'in_memory',
       runtimeMode,
+      environment,
       authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit,
@@ -590,8 +597,11 @@ export async function routeRequest(
     );
   }
 
-  // --- Auth gate: all POST routes require authentication ---
-  if (method === 'POST') {
+  // --- Auth gate: all POST routes require authentication. UTV2-1427: the
+  // kill-switch GET is also gated — its response reveals staff-only
+  // operational state (who killed a target and why), not public delivery
+  // truth like the other unauthenticated GET routes. ---
+  if (method === 'POST' || url.pathname === '/api/discord/kill-switch') {
     const auth = await authenticateRequest(request, runtime.authConfig);
     if (!auth) {
       requestLogger.warn('api auth denied', {
@@ -638,6 +648,14 @@ export async function routeRequest(
 
   if (method === 'POST' && url.pathname === '/api/qa/seed-pick') {
     return handleQaSeedPick(request, response, runtime);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/discord/kill-switch') {
+    return handleKillSwitchSet(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/discord/kill-switch') {
+    return handleKillSwitchList(request, response, runtime);
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {

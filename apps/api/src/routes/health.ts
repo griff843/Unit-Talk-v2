@@ -3,6 +3,7 @@ import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from 
 import { writeJson } from '../http-utils.js';
 import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
 import { recordQueueHealthMetrics } from '@unit-talk/observability';
+import { isProductionLikeRuntime } from '@unit-talk/config';
 import type { PickLifecycleState } from '@unit-talk/contracts';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
@@ -156,22 +157,42 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
   }
   const queueUnhealthy = queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
   const zombiePickUnhealthy = zombiePicks.status === 'down';
+  // UTV2-1427: the ops alert webhook must fail loud when unset in a production-like
+  // environment where Discord delivery is active — previously it silently
+  // dropped alerts (DEVOPS_PRODUCTION_POSTURE_AUDIT.md:186,234). Reads the
+  // already-loaded, validated runtime environment (not raw process.env) via
+  // the same isProductionLikeRuntime helper server.ts uses elsewhere, so
+  // local dev, CI, and unit tests that construct a custom environment are
+  // unaffected.
+  // environment is always populated by createApiRuntimeDependencies; a small
+  // number of pre-existing test files construct a minimal runtime stub
+  // without it, so treat "no loaded environment" as "not production-like"
+  // rather than throwing on those stubs.
+  const opsAlertWebhookMissing =
+    runtime.environment !== undefined &&
+    isProductionLikeRuntime(runtime.environment) &&
+    !runtime.environment.UNIT_TALK_OPS_ALERT_WEBHOOK_URL?.trim();
   const status: ApiHealthStatus = !isDurable
     ? 'degraded'
     : zombiePickUnhealthy
       ? 'down'
     : queueHealth?.status === 'down'
       ? 'down'
-      : queueHealth?.status === 'degraded'
+      : queueHealth?.status === 'degraded' || opsAlertWebhookMissing
         ? 'degraded'
         : 'healthy';
-  const httpStatus = isDurable && !queueUnhealthy && !zombiePickUnhealthy ? 200 : 503;
+  const httpStatus = isDurable && !queueUnhealthy && !zombiePickUnhealthy && !opsAlertWebhookMissing ? 200 : 503;
   const warnings = [
     ...(schemaDrift?.warnings ?? []),
     ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ?? []),
     ...(zombiePicks.status === 'down'
       ? [
           `zombie picks detected: count=${zombiePicks.count} [remediation=${zombiePicks.remediation}]`,
+        ]
+      : []),
+    ...(opsAlertWebhookMissing
+      ? [
+          'UNIT_TALK_OPS_ALERT_WEBHOOK_URL is unset in a non-local environment — ops alerts are silently dropping. Set the webhook or this health check will keep reporting degraded.',
         ]
       : []),
   ];

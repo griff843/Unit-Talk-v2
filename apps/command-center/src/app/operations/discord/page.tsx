@@ -1,8 +1,14 @@
 import Link from 'next/link';
 import { InternalLabelBadge, Table, TableHead, TableBody, Th, Td, EmptyState, SeverityBadge } from '@/components/ui';
-import { getDiscordOpsSnapshot, type DiscordOpsSnapshot } from '@/lib/data/discord-ops';
+import {
+  getDiscordOpsSnapshot,
+  getDeliveryKillSwitchStatuses,
+  type DiscordOpsSnapshot,
+  type DeliveryKillSwitchStatus,
+} from '@/lib/data/discord-ops';
 import { formatRelativeAge } from '@/lib/fire-board-model';
 import { describeThrown } from '@/lib/describe-error';
+import { KillSwitchPanel } from './KillSwitchPanel';
 
 export const metadata = { title: 'Discord Control — Unit Talk Command Center' };
 
@@ -32,6 +38,14 @@ export default async function DiscordOpsPage() {
     loadError = describeThrown(error);
   }
 
+  let killSwitchStatuses: DeliveryKillSwitchStatus[] = [];
+  let killSwitchLoadError: string | null = null;
+  try {
+    killSwitchStatuses = await getDeliveryKillSwitchStatuses();
+  } catch (error) {
+    killSwitchLoadError = describeThrown(error);
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
@@ -39,6 +53,18 @@ export default async function DiscordOpsPage() {
           Delivery truth derived from distribution_outbox + distribution_receipts. Observed {observedAt}.
         </p>
       </div>
+
+      {killSwitchLoadError ? (
+        <div className="cc-surface p-5 border border-red-500/30">
+          <div className="flex items-center gap-2">
+            <SeverityBadge severity="critical" label="Load Failed" />
+            <span className="text-sm text-gray-200">Delivery kill switch state could not be loaded.</span>
+          </div>
+          <p className="mt-2 text-xs cc-text-muted font-mono">{killSwitchLoadError}</p>
+        </div>
+      ) : (
+        <KillSwitchPanel statuses={killSwitchStatuses} />
+      )}
 
       {loadError ? (
         <div className="cc-surface p-5 border border-red-500/30">

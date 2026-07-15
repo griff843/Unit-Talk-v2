@@ -93,6 +93,12 @@ export interface WorkerProcessTargetDisabledResult {
   workerId: string;
 }
 
+export interface WorkerProcessKillSwitchEngagedResult {
+  status: 'kill-switch-engaged';
+  target: string;
+  workerId: string;
+}
+
 export interface WorkerProcessRolloutSkipResult {
   status: 'rollout-skip';
   target: string;
@@ -110,6 +116,7 @@ export type WorkerProcessResult =
   | WorkerProcessFailureResult
   | WorkerProcessCircuitOpenResult
   | WorkerProcessTargetDisabledResult
+  | WorkerProcessKillSwitchEngagedResult
   | WorkerProcessRolloutSkipResult;
 
 export async function processNextDistributionWork(

@@ -15,6 +15,8 @@ Promotion targets (`best-bets`, `trader-insights`, `exclusive-insights`) are act
 
 Neither option is fast or observable. The current "BLOCKED" status in `CLAUDE.md` is a docs-level control, not a machine-enforceable one. An operator who sets `UNIT_TALK_WORKER_TARGETS=best-bets,trader-insights,exclusive-insights` without checking docs would activate a blocked target.
 
+**UTV2-1427 update:** a live, DB-backed, no-deploy kill switch now exists as an *additional* control layered on top of this registry — it does not replace the env-var/code-deploy mechanism above, which remains the way to change a target's default `enabled`/`rolloutPct` posture. See `DELIVERY_KILL_SWITCH.md` for the operational toggle (staff-authorized, auditable, fail-closed, checked by the worker on every cycle).
+
 ---
 
 ## Design

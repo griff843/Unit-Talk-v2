@@ -13,6 +13,7 @@ import {
   type WorkerProcessResult,
   type WorkerProcessIdleResult,
   type WorkerProcessTargetDisabledResult,
+  type WorkerProcessKillSwitchEngagedResult,
 } from './distribution-worker.js';
 import { DeliveryCircuitBreaker } from './circuit-breaker.js';
 import { readCircuitBreakerThreshold, readCircuitBreakerCooldownMs } from './runtime.js';
@@ -250,6 +251,26 @@ export async function runWorkerCycles(
         };
         results.push(disabledResult);
         continue;
+      }
+
+      // UTV2-1427: live, DB-backed kill switch — distinct from the enabled/rolloutPct
+      // registry above. Both real repository bundles (createInMemoryRepositoryBundle,
+      // createDatabaseRepositoryBundle) always provide `killSwitch`; a bundle built
+      // without it (partial fakes in older tests) is treated as "not wired" and skips
+      // this check rather than fail-closing, to avoid silently breaking pre-existing
+      // callers. `DeliveryKillSwitchRepository.isKilled()` itself is fail-closed for
+      // any target it does know about (missing row or read error → true).
+      if (isGoverned && options.repositories.killSwitch) {
+        const killed = await options.repositories.killSwitch.isKilled(promotionTarget);
+        if (killed) {
+          const killSwitchResult: WorkerProcessKillSwitchEngagedResult = {
+            status: 'kill-switch-engaged',
+            target,
+            workerId: options.workerId,
+          };
+          results.push(killSwitchResult);
+          continue;
+        }
       }
 
       // Transient network errors during claim/delivery are non-fatal — log and treat

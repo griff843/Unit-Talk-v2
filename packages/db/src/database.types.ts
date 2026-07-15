@@ -388,6 +388,30 @@ export type Database = {
           },
         ]
       }
+      delivery_kill_switch: {
+        Row: {
+          actor: string | null
+          killed: boolean
+          reason: string | null
+          target: string
+          updated_at: string
+        }
+        Insert: {
+          actor?: string | null
+          killed?: boolean
+          reason?: string | null
+          target: string
+          updated_at?: string
+        }
+        Update: {
+          actor?: string | null
+          killed?: boolean
+          reason?: string | null
+          target?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       distribution_outbox: {
         Row: {
           attempt_count: number

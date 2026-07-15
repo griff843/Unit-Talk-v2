@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1427",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1427-delivery-kill-switch",
+  "branch": "claude/utv2-1427-delivery-kill-switch",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/auth.ts",
+    "apps/api/src/distribution-service.ts",
+    "apps/api/src/routes/**",
+    "apps/api/src/server.ts",
+    "apps/command-center/src/app/operations/discord/**",
+    "apps/command-center/src/lib/data/discord-ops.ts",
+    "apps/worker/src/**",
+    "docs/05_operations/DELIVERY_KILL_SWITCH.md",
+    "docs/05_operations/PROMOTION_TARGET_REGISTRY_CONTRACT.md",
+    "packages/contracts/src/promotion.ts",
+    "packages/db/src/database.types.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "supabase/migrations/**",
+    "db/migrations-rollback/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1427/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-14T12:38:41.303Z",
+  "heartbeat_at": "2026-07-14T12:38:41.303Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1427-delivery-kill-switch.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1427-delivery-kill-switch",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
