@@ -27,6 +27,19 @@ allowed_path_globs:
   - docs/06_status/UTV2-*-EVIDENCE-BUNDLE.md
   - docs/06_status/KNOWN_DEBT.md
   - docs/06_status/incidents/**
+  # UTV2-1541: docs/06_status/incidents/** (lowercase, added UTV2-1524) never
+  # matched this repo's actual incident-log directory, docs/06_status/INCIDENTS/**
+  # (uppercase, in use since INC-2026-04-10) -- matchesAny() in lane-contract.ts
+  # uses micromatch.isMatch() with no `nocase` option, so the match is
+  # case-sensitive. Every governance lane touching a real incident doc failed
+  # Lane Authority. Added case-correct entry below; the lowercase entry above is
+  # left in place in case any historical tooling still references it.
+  - docs/06_status/INCIDENTS/**
+  # UTV2-1541: AGENTS.md was never in this allowlist at all, so any governance
+  # lane updating agent-facing dispatch docs (e.g. after a concurrency-ceiling
+  # change) failed Lane Authority with no override available (a File Scope Lock
+  # override cannot resolve Lane Authority -- they are separate controls).
+  - AGENTS.md
   - docs/06_status/readiness/**
   - docs/06_status/gap-map/**
   - docs/06_status/SYSTEM_STATE.md
