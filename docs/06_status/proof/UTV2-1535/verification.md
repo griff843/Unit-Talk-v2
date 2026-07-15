@@ -63,8 +63,9 @@ Generated at: 2026-07-15T00:42:06Z
 ## Verification
 
 All static and runtime verification for this diff is green: `pnpm exec tsc -b tsconfig.json`,
-`pnpm lint`, the targeted test suite (157/157), `pnpm verify` (full), the R-level check, and
-`pnpm test:db` against the live Supabase project all pass. Details for each are below.
+`pnpm lint`, the targeted test suite (165/165, after the Codex review round below added 8
+more), `pnpm verify` (full), the R-level check, and `pnpm test:db` against the live
+Supabase project all pass. Details for each are below.
 
 ## Static verification
 
@@ -77,20 +78,20 @@ Status: PASS (exit code 0), `eslint . --cache --cache-location .cache/eslint/` �
 ### Targeted tests
 Command:
 ```
-npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
+npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/concurrency-rules.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts
 ```
-Output (TAP summary):
+Output (TAP summary, final, after the Codex review round):
 ```
-1..157
-# tests 157
+1..165
+# tests 165
 # suites 0
-# pass 157
+# pass 165
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
 ```
-137 pre-existing tests across these 5 files pass unchanged (regression proof that
+137 pre-existing tests across the original 5 files pass unchanged (regression proof that
 `checkConcurrencyLimits()`'s extraction into `concurrency-rules.ts` and re-export from
 `lane-start.ts` did not change its behavior, and that `lane-maximizer.ts`'s pre-existing
 tests are unaffected by the new wave-projected forecast). 20 new tests in
@@ -117,6 +118,12 @@ criteria exactly:
 18. Trial mode does not bypass type caps (adversarial: wide trial headroom, hygiene cap still fires) — `HYGIENE_TYPE_CAP_EXCEEDED`
 19. Dispatch commands use the exact validated Delivery/UI file scope (no silent substitution)
 20. The recommended wave, replayed candidate-by-candidate through the canonical concurrency evaluator (`checkConcurrencyLimits()`), produces zero violations — full lane-start-vs-lane-maximizer parity integration test
+21. (added after Codex review round 1) synthesized policy clamps total to the configured total, not maxClaude + maxCodex, when config total is smaller — `scripts/ops/lane-maximizer.test.ts`
+
+Plus 7 tests added after Codex review round 1 in the new `scripts/ops/concurrency-rules.test.ts`
+covering `isValidVerificationTarget()` directly and the fixed undetermined-active-target
+behavior (malformed active target now fails closed; genuinely missing active target still
+fails closed; a distinct valid active target still allows the incoming lane).
 
 ### `pnpm verify`
 Status: PASS (exit code 0). Full `env:check + lint + type-check + build + test` run,
@@ -126,7 +133,7 @@ including every pre-existing live-DB-backed suite in the repo. No failures.
 Command: `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
 ```
 Verdict: PASS
-Changed files: 7
+Changed files: 11
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
@@ -191,10 +198,35 @@ real lane-creation time — building a growing "replay board" exactly as `ops:la
 would leave the board after each real `ops:lane-start` invocation. Assertion: zero
 violations at every step. Result: PASS.
 
+## Codex review round 1
+
+Triggered via `@codex review` after CI first went green (excluding the PM-gated Merge
+Gate). 2 findings, both real and material, both fixed in commit `86519566`:
+
+1. **Total cap clamp** (`scripts/ops/lane-maximizer.ts`) — the synthesized default
+   policy always set `total: limits.maxClaude + limits.maxCodex`, ignoring a real
+   `CONCURRENCY_CONFIG.json` total set below the sum of the executor caps. Fixed to
+   `total: Math.min(cfg.total, limits.maxClaude + limits.maxCodex)`. Regression test 21
+   (`lane-maximizer.test.ts`) temporarily patches the real config file to
+   total=5/executors={claude:4,codex:4} and proves a 6th lane is blocked at the smaller
+   configured total.
+2. **Malformed verification target** (`scripts/ops/concurrency-rules.ts`) — the
+   undetermined-active check for verification lanes was presence-only, so a non-empty
+   but malformed active target (e.g. a stray `UNI-###` id) was silently treated as
+   trustworthy instead of failing closed. Fixed by adding `isValidVerificationTarget()`
+   (format-validated via `requireVerificationTarget()`) and using it for the
+   undetermined check; also removed `lane-maximizer.ts`'s own duplicate copy of this
+   helper. New dedicated test file `scripts/ops/concurrency-rules.test.ts` (7 tests)
+   covers the fix plus regression coverage.
+
+Both review threads were replied to with file:line evidence citing commit `86519566`
+and resolved via GraphQL `resolveReviewThread`. No findings were left open.
+
 ## SHA Binding
 
 Branch: claude/utv2-1535-lane-maximizer-typecaps
 Head SHA (at authoring time): e9dfdeee065851aa14681defd406c9c823eda813
+Head SHA (after Codex review round 1): 86519566e19644ab1d913e5842a0aecf7150c7f8
 Merge SHA: not yet merged — will be bound by `post-merge-lane-close.yml`'s automated
 `ops:proof-generate --merge-sha` run after this PR merges, per this repo's standard T1
 closeout automation.

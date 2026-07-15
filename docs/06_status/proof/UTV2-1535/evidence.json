@@ -27,6 +27,23 @@
       "forbidden_combination (previously hand-rolled via plannedLaneTypes array, now routed through checkConcurrencyLimits, same reason code FORBIDDEN_COMBINATION preserved, now also correctly triggered by a wave-planned-only lane type, not just an active one -- see test 17)"
     ]
   },
+  "codex_review_round_1": {
+    "trigger": "A fresh Codex review requested via '@codex review' comment on this PR after CI first went green (excluding Merge Gate, which stays PM-gated by design).",
+    "findings": 2,
+    "finding_1_total_cap_clamp": {
+      "location": "scripts/ops/lane-maximizer.ts (default policy synthesis)",
+      "problem": "REAL, FIXED -- the synthesized default policy always set total: limits.maxClaude + limits.maxCodex, ignoring a real CONCURRENCY_CONFIG.json total set below the sum of the executor caps. This could let evaluateCandidates() recommend a lane in the gap that ops:lane-start's checkConcurrencyLimits() (which enforces cfg.total directly) would then reject -- the exact planner/enforcer divergence this whole lane exists to close.",
+      "fix": "total: Math.min(cfg.total, limits.maxClaude + limits.maxCodex). Regression test 21 in lane-maximizer.test.ts temporarily patches the real config file to total=5/executors={claude:4,codex:4} (sum=8) and proves a 6th lane is blocked at the smaller configured total.",
+      "commit": "86519566"
+    },
+    "finding_2_malformed_verification_target": {
+      "location": "scripts/ops/concurrency-rules.ts (verification undetermined-active check)",
+      "problem": "REAL, FIXED -- the undetermined-active check for verification lanes was presence-only (!m.verification_target), so a non-empty but malformed active target (e.g. a stray UNI-### id or typo) was silently treated as trustworthy instead of failing closed the same way a genuinely missing target does.",
+      "fix": "Added isValidVerificationTarget() (format-validates via requireVerificationTarget(), UTV2-### only) and used it for the undetermined check. Also removed lane-maximizer.ts's own duplicate copy of this helper in favor of importing the shared one -- an additional de-duplication found via this review. New dedicated test file scripts/ops/concurrency-rules.test.ts (7 tests) covers the helper and the fixed behavior plus regression coverage for missing-target and distinct-valid-target cases.",
+      "commit": "86519566"
+    },
+    "net_result": "2 of 2 findings were real and material; both fixed with code + tests in this PR; both review threads replied to with file:line evidence citing the fix commit and resolved via GraphQL resolveReviewThread. No findings were left open."
+  },
   "lane_start_vs_lane_maximizer_parity": {
     "how_proven": "Test 20 in scripts/ops/lane-maximizer.test.ts takes evaluateCandidates()'s own recommended dispatch_plan.fill_now wave (5 candidates: hygiene x2 on both executors, one delivery-ui, one verification, one governance, against a mixed active board including a pre-existing active governance lane) and replays it candidate-by-candidate through checkConcurrencyLimits() directly -- the same function ops:lane-start calls at real lane-creation time -- building up a growing 'replay board' exactly as ops:lane-start would leave the board after each real lane-start invocation. Asserts zero violations at every step.",
     "result": "PASS -- see static_proof.targeted_tests below; test name: '20. the recommended wave, replayed candidate-by-candidate through the canonical concurrency evaluator, produces zero violations'."
@@ -43,12 +60,12 @@
       "exit_code": 0
     },
     "targeted_tests": {
-      "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
+      "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/concurrency-rules.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
       "status": "PASS",
-      "tests": 157,
-      "pass": 157,
+      "tests": 165,
+      "pass": 165,
       "fail": 0,
-      "note": "137 pre-existing tests (all regression-verified passing unchanged under the new implementation) + 20 new tests covering every required acceptance-criteria scenario (lane-11 total cap, 5th Claude, 7th Codex, 5th Hygiene, 4th Governance, Delivery/UI active + wave conflicts, Delivery/UI different apps, Delivery/UI undetermined app fail-closed, Verification active + wave conflicts, Verification different targets, missing/malformed Verification target, undetermined active Verification target fail-closed, singleton regression, forbidden-combination wave extension, trial-mode adversarial non-bypass, anti-substitution for Delivery/UI file scope, and the full wave-replay parity integration test)."
+      "note": "137 pre-existing tests (all regression-verified passing unchanged under the new implementation) + 20 new tests covering every required acceptance-criteria scenario (lane-11 total cap, 5th Claude, 7th Codex, 5th Hygiene, 4th Governance, Delivery/UI active + wave conflicts, Delivery/UI different apps, Delivery/UI undetermined app fail-closed, Verification active + wave conflicts, Verification different targets, missing/malformed Verification target, undetermined active Verification target fail-closed, singleton regression, forbidden-combination wave extension, trial-mode adversarial non-bypass, anti-substitution for Delivery/UI file scope, and the full wave-replay parity integration test) + 8 new tests added after a fresh Codex review round (7 in the new scripts/ops/concurrency-rules.test.ts covering isValidVerificationTarget() and the fixed undetermined-check behavior, 1 in lane-maximizer.test.ts proving the total-cap clamp)."
     },
     "pnpm_verify": {
       "command": "pnpm verify",
@@ -59,8 +76,9 @@
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "changed_files": 7,
-      "rules_matched": "none"
+      "changed_files": 11,
+      "rules_matched": "none",
+      "note": "11 files after the Codex-review-fix commit (86519566) added scripts/ops/concurrency-rules.test.ts as a new file; 7 files was the count before that round."
     }
   },
   "runtime_proof": {
@@ -122,6 +140,8 @@
     "branch": "claude/utv2-1535-lane-maximizer-typecaps",
     "head_sha_at_proof_authoring": "e9dfdeee065851aa14681defd406c9c823eda813",
     "head_sha_note": "The branch HEAD at the moment this bundle was first authored, captured for provenance only -- NOT a claim about the PR's current live head (which changes on every push). The PR's actual live head is validated externally by GitHub itself and by the SHA-bound executor-result/v1 comment posted after each push.",
+    "head_sha_after_codex_review_round_1": "86519566e19644ab1d913e5842a0aecf7150c7f8",
+    "head_sha_after_codex_review_round_1_note": "The branch HEAD after fixing both Codex review round 1 findings, provenance only -- same caveat as head_sha_at_proof_authoring above.",
     "merge_sha": null,
     "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main -- no manual append required per this repo's standard T1 closeout automation.",
     "sha_type": "branch_head",
@@ -159,5 +179,5 @@
     "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
     "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, branch name, and (to be authored) PR title/body reference only UTV2-1535; other issues (the concurrency ramp issue, UTV2-920, UTV2-996, UTV2-883, UTV2-1327, UTV2-1136, UTV2-1459) that appear in pre-existing test names/comments elsewhere in the repo are not this diff's own commit text"
   },
-  "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- AWAITING_PR_OPEN_AND_CI"
+  "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- CODEX_REVIEW_ROUND_1_RESOLVED -- AWAITING_PM_VERDICT_AND_T1_APPROVED_LABEL"
 }
