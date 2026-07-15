@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   emitJson,
+  git,
   parseArgs,
   type LaneManifest,
   readConfiguredEnvValue,
@@ -40,7 +41,8 @@ export type CloseoutFailureCode =
   | 'pr_sha_mismatch'     // PR merge SHA doesn't match manifest (G2)
   | 'registry_mismatch'   // Linear attachment doesn't include the PR URL (L4)
   | 'truth_check_failed'  // general truth-check failure (catch-all)
-  | 'infra_error';        // missing token, manifest, or schema error
+  | 'infra_error'         // missing token, manifest, or schema error
+  | 'repair_required_via_pr'; // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
 
 export type CloseoutOutcome = 'closed' | 'already_closed' | 'closed_with_warnings' | 'blocked';
 
@@ -106,7 +108,9 @@ export function remediationForCode(code: CloseoutFailureCode): string {
     case 'stale_proof':
       return 'Proof files do not reference the merge SHA or predate the merge commit. Regenerate proof after merge.';
     case 'runtime_proof_required':
-      return 'This issue requires live/runtime proof. Attach structured runtime evidence with queries, row counts, or receipts tied to the closeout SHA.';
+      return 'This issue requires live/runtime proof. Do NOT hand-edit proof files on main directly ' +
+        '(see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md). Run `pnpm ops:proof-repair scaffold <ISSUE_ID>` ' +
+        'for the exact governed repair steps: a real `pnpm test:db` run, `pnpm ops:proof-repair apply`, and a normal PR.';
     case 'state_drift':
       return 'PR, manifest, proof, and Linear state disagree beyond the allowed transition window. Reconcile the lane before closeout.';
     case 'pr_not_merged':
@@ -119,6 +123,10 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'Required token (LINEAR_API_TOKEN or GITHUB_TOKEN) is missing, or the manifest is absent or invalid. Check environment and manifest.';
     case 'truth_check_failed':
       return 'One or more truth-check gates failed. Run `pnpm ops:truth-check <issue-id> --explain` for details.';
+    case 'repair_required_via_pr':
+      return 'ops:lane-close --repair-merged produced tracked-file changes while running from a checkout on main. ' +
+        'These changes must NOT be committed or pushed directly to main (see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md) -- ' +
+        'a repair packet was written instead. See the repair_packet_path and commands fields for the governed branch/PR repair path.';
     case 'lane_closed':
       return '';
   }
@@ -287,6 +295,121 @@ export function repairMergedLaneManifest(
   };
 }
 
+export interface RepairRequiredViaPrResult {
+  ok: false;
+  code: 'repair_required_via_pr';
+  outcome: 'blocked';
+  issue_id: string;
+  changed_files: string[];
+  original_implementation_merge_sha: string | null;
+  recommended_repair_branch: string;
+  repair_packet_path: string;
+  direct_main_prohibition: string;
+  commands: string[];
+  remediation: string;
+}
+
+/**
+ * Built in response to a real incident (UTV2-1542, the third occurrence of this
+ * repo's direct-main-push control failure -- see
+ * docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md): an
+ * operator ran `ops:lane-close --repair-merged` from the shared main checkout,
+ * got back a manifest with tracked-file changes sitting in that checkout's
+ * working tree, and -- because nothing in this tool's output said otherwise --
+ * committed and pushed the result directly to `origin/main`, bypassing branch
+ * protection (`enforce_admins: false` on this repo lets an admin identity's
+ * direct push through).
+ *
+ * `proof-repair.ts` already solves the analogous problem for missing T1 runtime
+ * evidence: it never writes to `main`, and its `scaffold` command prints the
+ * exact governed branch/PR steps. This function gives `--repair-merged` the same
+ * contract for manifest/truth-check reconciliation. It never runs `git push` or
+ * `git commit` itself -- it only writes a repair packet (the full repaired
+ * manifest content) to `.out/ops/lane-close-repair/<ISSUE_ID>.repair-packet.json`
+ * (gitignored) and returns a machine-readable `repair_required_via_pr` result
+ * naming the exact next steps. Landing the result is still the operator's job,
+ * via a normal PR -- this function's job is to make that the objectively-easiest
+ * next action instead of "just commit the file that's already sitting here."
+ */
+export function buildRepairRequiredViaPrPacket(input: {
+  issueId: string;
+  manifest: LaneManifest;
+  changedFields: string[];
+  pr: RepairMergedPrInfo | null;
+  repoRoot: string;
+  artifactRoot?: string;
+}): RepairRequiredViaPrResult {
+  const normalizedIssue = input.issueId.toUpperCase();
+  const slug = normalizedIssue.toLowerCase();
+  const branch = `claude/${slug}-lane-close-repair`;
+  const manifestRelativePath = `docs/06_status/lanes/${normalizedIssue}.json`;
+  const artifactRoot =
+    input.artifactRoot ?? path.join(input.repoRoot, '.out', 'ops', 'lane-close-repair');
+  fs.mkdirSync(artifactRoot, { recursive: true });
+  const packetPath = path.join(artifactRoot, `${normalizedIssue}.repair-packet.json`);
+  fs.writeFileSync(packetPath, `${JSON.stringify(input.manifest, null, 2)}\n`);
+  const packetRelativePath = path.relative(input.repoRoot, packetPath).replaceAll('\\', '/');
+
+  return {
+    ok: false,
+    code: 'repair_required_via_pr',
+    outcome: 'blocked',
+    issue_id: normalizedIssue,
+    // repairMergedLaneManifest() only ever writes the lane manifest itself;
+    // input.changedFields lists the manifest's changed *keys* (status,
+    // commit_sha, ...), not file paths, so the tracked-file list is always
+    // exactly this one path.
+    changed_files: [manifestRelativePath],
+    original_implementation_merge_sha: input.pr?.mergeSha ?? null,
+    recommended_repair_branch: branch,
+    repair_packet_path: packetRelativePath,
+    direct_main_prohibition:
+      'These changes must NOT be committed or pushed directly to main -- `git push origin main` is never the next step. ' +
+      'See docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md.',
+    commands: [
+      `npx tsx scripts/ops/generate-preflight-token.ts --issue ${normalizedIssue} --tier T1 --branch ${branch}`,
+      `pnpm ops:lane-start ${normalizedIssue} --tier T1 --branch ${branch} --lane-type governance --files ${manifestRelativePath}`,
+      `cd .out/worktrees/${branch.replace(/\//g, '__')}   # the cwd lane-start records -- never hand-roll a different worktree path`,
+      `cp <repo-root>/${packetRelativePath} ${manifestRelativePath}   # apply the repaired manifest content from the packet -- never hand-retype it`,
+      `git add ${manifestRelativePath} && git commit -m "chore(lanes): ${normalizedIssue} record lane-close truth-check result"`,
+      `git push -u origin ${branch}`,
+      `gh pr create --base main --title "${normalizedIssue}: lane-close manifest repair" --body "Reconciles the lane manifest from authoritative GitHub merge state via the governed lane-close repair path. Never edits main directly."`,
+      `# Wait for CI green, then merge through the normal PR path -- never --admin, never a direct push.`,
+    ],
+    remediation:
+      `ops:lane-close --repair-merged produced tracked-file changes (${manifestRelativePath}) while running from a checkout on ` +
+      'main. This is blocked -- see repair_packet_path and commands for the governed repair path.',
+  };
+}
+
+/**
+ * Returns a blocking `repair_required_via_pr` result when `--repair-merged`
+ * produced real tracked-file changes AND the caller is standing in a checkout on
+ * `main` -- the exact shared-checkout condition that produced UTV2-1542. Returns
+ * `null` (proceed as normal) for every other case: no changes to repair, the lane
+ * was already closed, or the caller is in a dedicated lane worktree/branch, which
+ * is always safe to write to directly since landing it still requires a PR merge.
+ */
+export function guardRepairAgainstMainCheckout(
+  repair: RepairMergedManifestResult,
+  options: { currentBranch: string; repoRoot: string; artifactRoot?: string },
+): RepairRequiredViaPrResult | null {
+  if (!repair.ok || repair.code !== 'repaired' || repair.changed_fields.length === 0) {
+    return null;
+  }
+  if (options.currentBranch !== 'main') {
+    return null;
+  }
+  return buildRepairRequiredViaPrPacket({
+    issueId: repair.manifest.issue_id,
+    manifest: repair.manifest,
+    changedFields: repair.changed_fields,
+    pr: repair.pr,
+    repoRoot: options.repoRoot,
+    artifactRoot: options.artifactRoot,
+  });
+}
+
 export function ensureCloseoutMergeLock(
   manifest: LaneManifest,
   options: {
@@ -374,6 +497,21 @@ async function main(): Promise<void> {
         });
         process.exit(0);
       }
+
+      // UTV2-1542: refuse to write repaired tracked-file changes directly into a
+      // checkout on `main` -- that shared-checkout condition is exactly how the
+      // third direct-main-push incident happened. Emit a repair packet + governed
+      // branch/PR steps instead of leaving an ordinary commit-ready working tree.
+      const currentBranchResult = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+      const guard = guardRepairAgainstMainCheckout(repair, {
+        currentBranch: currentBranchResult.ok ? currentBranchResult.stdout : '',
+        repoRoot: process.cwd(),
+      });
+      if (guard) {
+        emitJson(guard);
+        process.exit(1);
+      }
+
       writeManifest(repair.manifest);
       manifest = repair.manifest;
     }

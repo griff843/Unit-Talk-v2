@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1537",
+  "status": "PRE-MERGE -- PR open, not merged. This bundle documents the state at the commit SHA below, not a completed lane.",
+  "verifier": {
+    "identity": "claude/utv2-1537-direct-main-incident"
+  },
+  "static_proof": {
+    "pnpm_type_check": {
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "scripts/ are not part of tsconfig.json's project-reference build graph (tsc -b only covers packages/apps), so pnpm type-check does not itself type-check scripts/ops/proof-repair.ts or scripts/ci/direct-main-push-guard.ts -- this is pre-existing repo posture (confirmed: no scripts/* file is reachable from tsconfig.json's references), not something this lane introduced. Both new files were additionally verified with a standalone strict tsc pass (--strict --noUncheckedIndexedAccess --exactOptionalPropertyTypes, matching tsconfig.base.json's settings) with zero genuine errors -- see verification.md."
+    },
+    "targeted_tests": {
+      "command": "npx tsx --test scripts/ops/proof-repair.test.ts scripts/ci/direct-main-push-guard.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts",
+      "status": "PASS",
+      "tests": 138,
+      "pass": 138,
+      "fail": 0,
+      "note": "Up from 130: 3 tests added by a Codex review round (total cap / malformed-target-class fixes on the detection guard + repair scaffold) plus 6 runtime tests added for occurrence 3 (5 new guardRepairAgainstMainCheckout/buildRepairRequiredViaPrPacket tests + 1 more remediationForCode('repair_required_via_pr') loop iteration)."
+    },
+    "full_ops_suite": {
+      "command": "pnpm test:ops",
+      "status": "PASS",
+      "tests": 964,
+      "pass": 964,
+      "fail": 0,
+      "note": "Includes the 138 targeted tests above plus every other scripts/ops + scripts/ci test file in the repo -- confirms no regression from the truth-check-lib.ts / lane-close.ts changes, including the occurrence-3 guardRepairAgainstMainCheckout() addition."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 18,
+      "rules_matched": "none"
+    },
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "Full pnpm verify (env:check, lint, type-check, build, test -- including live-DB-touching suites inside pnpm test such as UTV2-1136/UTV2-1327/UTV2-1459) ran green on this branch prior to the runtime_proof run captured below. See verification.md for the captured summary."
+    }
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts inserts and deletes a real submission row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts inserts and deletes a real pick row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts selects pick_lifecycle rows to verify no lifecycle event is written on an invalid atomic enqueue (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts selects distribution_outbox rows to verify status/receipt/lifecycle/audit rollback on an invalid atomic delivery confirmation (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts selects distribution_receipts rows as part of the same atomic-delivery rollback verification"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts selects audit_log rows to verify no audit row is written on an invalid atomic settlement (UTV2-920 rollback test) and that a re-settlement correction is additive (UTV2-996)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts inserts settlement_records rows to verify a correction chain is additive and the original settlement row is not mutated (UTV2-996)"
+      },
+      {
+        "table": "participants",
+        "description": "database-smoke.test.ts verifies no duplicate participants for the same external_id and sport (UTV2-883)"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 75409, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 111969, "status": "healthy" },
+      { "table": "submissions", "count": 77355, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 5124, "status": "healthy" },
+      { "table": "audit_log", "count": 197860, "status": "healthy" },
+      { "table": "settlement_records", "count": 25272, "status": "healthy" }
+    ],
+    "row_counts_captured_at": "2026-07-15T06:59:30Z",
+    "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project (via the mcp__claude_ai_Supabase__execute_sql tool, a single UNION ALL SELECT COUNT(*) statement across all 6 monitored tables) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts). This lane's own diff (governance docs + TypeScript ops/ci tooling) does not itself touch any of these tables; this runtime proof exists because tier === 'T1' makes truth-check-lib.ts's runtime_proof_required gate unconditional, independent of whether the diff's own files touch DB code -- the same fact this incident's own root cause documents about the concurrency ramp lane's proof requirement."
+  },
+  "sha_binding": {
+    "verified_source_sha": "2496ad4255744abbb5afc4fdc571e14df95fb2ed",
+    "verified_source_note": "This branch's implementation commit (the only substantive commit on this branch at the time this proof was authored) -- an ancestor of the PR's head at every point checked.",
+    "merge_sha": null,
+    "merge_sha_note": "Not merged. This field is intentionally null. Will be populated post-merge via ops:proof-generate --merge-sha by post-merge-lane-close.yml's existing, bot-safe SYNC_BOT_TOKEN mechanism -- the same narrowly-scoped automation this lane's own incident record documents as the one pre-existing, ratified exception to DIRECT_MAIN_BYPASS_POLICY.md.",
+    "proof_bundle_base_sha": "2496ad4255744abbb5afc4fdc571e14df95fb2ed",
+    "proof_bundle_base_note": "The commit this proof bundle document was authored against (its own parent, i.e. the implementation commit) -- not a claim about the PR's current live head. The PR's actual, live current head is validated externally by GitHub itself and by the SHA-bound executor-result/v1 comment posted after each push.",
+    "sha_type": "head_sha"
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/direct-main-push-guard.yml",
+      ".github/workflows/post-merge-lane-close.yml",
+      "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md",
+      "docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md",
+      "docs/06_status/INCIDENTS/README.md",
+      "package.json",
+      "scripts/ci/direct-main-push-guard.test.ts",
+      "scripts/ci/direct-main-push-guard.ts",
+      "scripts/ops/lane-close.test.ts",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/proof-repair.test.ts",
+      "scripts/ops/proof-repair.ts",
+      "scripts/ops/truth-check-lib.test.ts",
+      "scripts/ops/truth-check-lib.ts"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1537.yml",
+      "docs/06_status/lanes/UTV2-1537.json",
+      "docs/06_status/proof/UTV2-1537/evidence.json",
+      "docs/06_status/proof/UTV2-1537/verification.md"
+    ]
+  },
+  "acceptance_criteria": {
+    "truthful_incident_record_created": "PASS -- docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md, every fact independently verified via git/gh before writing (see the record's own Detection Path section)",
+    "no_invented_pre_authorization": "PASS -- the record states plainly that no emergency exception was recorded before the push",
+    "readme_index_updated": "PASS -- docs/06_status/INCIDENTS/README.md, newest first",
+    "root_cause_identified": "PASS -- immediate cause (fail-closed gate correctly rejecting missing runtime proof) + 4 contributing causes (no governed repair path, enforce_admins:false verified via gh api, unlogged recurrence of the July 10 precedent, and lane-close.ts's --repair-merged lacking proof-repair.ts's governed-landing contract -- the exact mechanism that produced occurrence 3)",
+    "compliant_repair_path_built": "PASS -- scripts/ops/proof-repair.ts, additive-only, never writes to main, never fabricates evidence, never overwrites an already-bound merge SHA",
+    "merge_sha_preserved_never_overwritten": "PASS -- mergeRuntimeProofIntoEvidence never touches sha_binding.merge_sha; apply refuses to proceed if --merge-sha does not match the already-bound value",
+    "hand_authored_content_not_clobbered": "PASS -- additive top-level merge only sets verifier + runtime_proof; test asserts a hand-authored continuation section survives byte-identical",
+    "real_t1_runtime_evidence_required": "PASS -- validateRuntimeProofFile fails closed on missing/failing/inconsistent runtime-proof-file input",
+    "fails_clearly_not_silently": "PASS -- every failure path returns a distinct machine-readable code + human-readable remediation string, never a silent no-op",
+    "no_fabricated_evidence_in_repair_path_code": "PASS -- proof-repair.ts never runs pnpm test:db itself and never invents SHAs or query/row-count data",
+    "no_infinite_workflow_loop": "PASS by design -- a repair PR's merge lands real runtime_proof through the normal PR gate, so the next post-merge-lane-close.yml run's truth-check now passes; post-merge-lane-close.yml already guards against re-triggering on its own bot commits (github-actions[bot] actor check)",
+    "detection_guard_built": "PASS -- scripts/ci/direct-main-push-guard.ts, with an explicit, honest capability-boundary statement in its own module header and in the incident record",
+    "detection_guard_honest_about_limits": "PASS -- documented inability to verify GitHub's private audit log or literal admin-bypass-flag usage; documented that 'mentioned in an incident doc' alone is not treated as authorization (requires a structured Emergency-Bypass-Record trailer resolving to a real, matching doc)",
+    "repair_path_never_uses_admin_or_direct_push": "PASS -- design-invariant test asserts proof-repair.ts never imports node:child_process at all",
+    "occurrence_3_incorporated": "PASS -- incident record expanded with Occurrence 1 (UTV2-1519, commit 4fe0107551dfc67f09e4c954fa7edb6693d4367f), Occurrence 2 (UTV2-1533, this record's original scope), and Occurrence 3 (UTV2-1542, commit 5c1a3eda68896cd0f1c09ed144f882c7235196a3, push range f4a86c21757570b9eb16ec103bc1397e3a81589f..5c1a3eda68896cd0f1c09ed144f882c7235196a3), with actor/timestamp, explicit statement it occurred while this PR was already open, updated severity (High governance-control risk / Low production impact), and explicit statement the detector's classification logic was correct but had no deployed coverage",
+    "lane_close_repair_merged_gap_closed": "PASS -- scripts/ops/lane-close.ts's guardRepairAgainstMainCheckout()/buildRepairRequiredViaPrPacket() block the write and emit a repair_required_via_pr result whenever --repair-merged would leave tracked manifest changes on a main checkout; never suggests git push origin main (asserted by a dedicated test); references DIRECT_MAIN_BYPASS_POLICY.md; regression test reproduces the exact UTV2-1497 failure mode",
+    "prevention_evidence_demonstrates_both_paths_distinctly": "PASS -- verification.md's Prevention evidence section tabulates proof-repair.ts vs lane-close.ts's guard side-by-side: distinct problems solved, both never write to main, both land only via a normal PR, neither leaves push-this-commit ambiguity",
+    "enforce_admins_not_enabled_today": "PASS by design (no code change attempted) -- PM decision documented in the incident record's Prevention section: prepare (replace owner-PAT admin bypass, root-cause the stale check-run condition, prove the full merge/closeout/repair/rejection/rollback matrix via staging), then enable; not flipped in this PR"
+  },
+  "verdict": "IMPLEMENTATION_CLEAN_COMPLETE -- AWAITING_PM_APPROVAL"
+}

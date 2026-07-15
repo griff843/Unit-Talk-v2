@@ -50,6 +50,8 @@ When the goal is speed but there is no production emergency, use one of these pa
 - Use the tier-appropriate expedited review path.
 - Split the work into a docs-only or verification-only lane.
 - Ask PM to reshape the issue or approve a narrower execution packet.
+- When a T1 lane merged without the runtime evidence `truth-check-lib.ts`'s `runtime_proof_required` gate needs to close it, run `pnpm ops:proof-repair scaffold <ISSUE_ID>` (see `scripts/ops/proof-repair.ts`) to generate the exact branch/commands for a small, additive-only proof-repair PR — never hand-edit `docs/06_status/proof/<ISSUE_ID>/*` on `main` directly to force a lane closed. See `docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md` for the incident this specific alternative was built to close.
+- When `pnpm ops:lane-close <ISSUE_ID> --repair-merged` reports `repair_required_via_pr`, do not commit or push its repaired manifest directly — follow the exact `commands` it prints (preflight token, `ops:lane-start` on the named repair branch, apply the repair packet at `repair_packet_path`, then a normal PR). `git push origin main` is never the next step after this tool's output. See `docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md`'s Occurrence 3 for the incident this alternative was built to close.
 
 ## Relationship To Other Policies
 

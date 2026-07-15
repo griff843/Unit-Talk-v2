@@ -229,6 +229,12 @@ jobs:
         # was resolved. Warns the author why lane closure was blocked and what
         # to do next. This step must run BEFORE the re-raise step below so the
         # comment lands even when the workflow ultimately fails.
+        #
+        # UTV2-1537: the prior version of this message ("...push a new commit")
+        # was ambiguous about *where* -- a direct-main-push incident traced back to
+        # exactly that ambiguity (docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md).
+        # It now names the governed repair path explicitly and never suggests
+        # touching main directly.
         if: >-
           steps.lane_close.outcome == 'failure' &&
           steps.extract.outputs.pr_number != ''
@@ -237,8 +243,24 @@ jobs:
           PR_NUMBER: ${{ steps.extract.outputs.pr_number }}
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           LC_EXIT: ${{ steps.lane_close.outputs.exit_code }}
+          CLOSE_OUTPUT: ${{ steps.lane_close.outputs.close_output }}
         run: |
-          body="Lane closure blocked — \`ops:lane-close --repair-merged\` returned exit code ${LC_EXIT} for ${ISSUE_ID}. Resolve the failing checks and re-run the workflow manually or push a new commit."
+          body="Lane closure blocked — \`ops:lane-close --repair-merged\` returned exit code ${LC_EXIT} for ${ISSUE_ID}. Do NOT hand-edit proof or lane files on \`main\` directly to force this closed — see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md."
+
+          if echo "$CLOSE_OUTPUT" | grep -qE '"id": *"(C6|P7|P9|P10|R1|R2|R3)"'; then
+            scaffold=$(pnpm ops:proof-repair scaffold "$ISSUE_ID" 2>&1 || echo "(scaffold generation failed -- run \`pnpm ops:proof-repair scaffold $ISSUE_ID\` locally)")
+            body="${body}
+
+          This looks like a missing T1 runtime-proof gap. Governed repair path (never edits \`main\` directly):
+
+          \`\`\`
+          ${scaffold}
+          \`\`\`"
+          else
+            body="${body}
+
+          Resolve the failing checks locally and open a normal PR with the fix, or re-run this workflow manually via workflow_dispatch once the merged state is corrected through a PR."
+          fi
 
           curl -sS -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \

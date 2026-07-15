@@ -50,4 +50,5 @@ Do not silently rewrite facts, timestamps, root cause wording, or remediation te
 
 | ID | Date Detected | Severity | Title | Primary Linear | Status |
 |---|---|---|---|---|---|
+| [INC-2026-07-14-utv2-1533-direct-main-push](./INC-2026-07-14-utv2-1533-direct-main-push.md) | 2026-07-14 | Medium | Unauthorized direct push to `main` during a lane's post-merge proof-binding closeout | [UTV2-1537](https://linear.app/unit-talk-v2/issue/UTV2-1537/) | Open |
 | [INC-2026-04-10-utv2-519](./INC-2026-04-10-utv2-519-awaiting-approval-constraint-gap.md) | 2026-04-10 | High | `awaiting_approval` lifecycle CHECK constraint gap + non-atomic transition | [UTV2-519](https://linear.app/unit-talk-v2/issue/UTV2-519/) | Resolved |
