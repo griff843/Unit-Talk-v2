@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1536-dispatch-docs-driftguard",
   "branch": "claude/utv2-1536-dispatch-docs-driftguard",
   "base_branch": "main",
-  "commit_sha": "165c6d91fd24f980d1f729bb1280058d61a113da",
+  "commit_sha": "6e32a2a3a4af4be953fff56dd8f83bb8f11c5194",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1218",
   "files_changed": [],
   "file_scope_lock": [
