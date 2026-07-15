@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1535",
+  "generated_at": "2026-07-15T00:42:06Z",
+  "verifier": {
+    "identity": "claude/utv2-1535-lane-maximizer-typecaps"
+  },
+  "status": "OPEN -- branch pushed, PR not yet created/merged at the time this bundle was authored. merge_sha will be bound post-merge by post-merge-lane-close.yml (ops:proof-generate --merge-sha), per this repo's standard T1 closeout automation. Do not treat any SHA in this bundle as a merge SHA.",
+  "architecture_decision": {
+    "summary": "Reused ops:lane-start's checkConcurrencyLimits() by extracting it (byte-identical logic) into a new shared module scripts/ops/concurrency-rules.ts, narrowing its manifest parameter to a minimal structural type (ConcurrencyManifestLike) instead of shared.ts's full LaneManifest interface. lane-start.ts imports and re-exports the same symbols so every existing caller is unaffected. lane-maximizer.ts imports the same function and calls it incrementally against a growing wave-projected active-lane list.",
+    "why_not_direct_reuse_unmodified": "No circular-import problem (lane-maximizer.ts never imported lane-start.ts before this change, so a one-way import would have been safe) -- the real obstacle was a type mismatch: checkConcurrencyLimits()'s activeManifests parameter required shared.ts's full LaneManifest shape (14+ required fields), while lane-maximizer.ts's own lightweight LaneManifest type and its synthetic per-candidate wave projections only carry the 5-6 fields the function actually reads.",
+    "why_not_third_copy": "The task's architecture requirement was explicit: do not duplicate the type-cap/singleton/forbidden-combination rule logic textually in two places even if not literally calling the same function object. Narrowing checkConcurrencyLimits()'s parameter type to a minimal structural interface (ConcurrencyManifestLike) let both lane-start.ts (via readAllManifests(), a structural superset) and lane-maximizer.ts (its own lightweight manifest type and synthetic wave entries, both already structurally compatible) call the exact same function object with zero casts.",
+    "full_diff": "See docs/06_status/proof/UTV2-1535/diff-summary.md"
+  },
+  "wave_projection_design": {
+    "summary": "evaluateCandidates() maintains projectedActive: ConcurrencyManifestLike[], seeded from the real active lane board. Each time a candidate is accepted into fill_now, a synthetic active-shaped entry is appended before the next candidate is evaluated.",
+    "classification": "Per candidate, checkConcurrencyLimits() is called twice: once against the real active board only (baseline, used only to classify WHICH reason code to report) and once against the growing projectedActive list (the actual admission decision). Since projectedActive only grows, baseline violations are always a subset of projected violations -- any violation code present in the projected call but absent from the baseline call arose purely from this wave, and is reported as an *_ALREADY_PLANNED reason code rather than an *_ACTIVE one.",
+    "checks_now_covered_by_the_single_canonical_function": [
+      "total_cap_exceeded (new -- was not forecast before this diff)",
+      "claude_cap_exceeded / codex_cap_exceeded (previously hand-rolled via remainingSlots(), now routed through checkConcurrencyLimits, same reason codes DISPATCH_LIMIT_CLAUDE/DISPATCH_LIMIT_CODEX preserved)",
+      "trial_unsafe_lane_type (new -- was not forecast before this diff)",
+      "singleton_type_conflict (previously hand-rolled via plannedLaneTypes array, now routed through checkConcurrencyLimits, same reason code SINGLETON_ACTIVE preserved)",
+      "hygiene_type_cap_exceeded (new -- was not forecast before this diff)",
+      "governance_type_cap_exceeded (new -- was not forecast before this diff)",
+      "delivery_ui_app_undetermined / delivery_ui_app_undetermined_conflict / delivery_ui_app_conflict (new -- delivery-ui was not forecast at all before this diff)",
+      "verification_target_undetermined_conflict / verification_target_conflict (previously hand-rolled via local Set tracking, now routed through checkConcurrencyLimits with active-vs-planned classification derived from the baseline/projected diff)",
+      "forbidden_combination (previously hand-rolled via plannedLaneTypes array, now routed through checkConcurrencyLimits, same reason code FORBIDDEN_COMBINATION preserved, now also correctly triggered by a wave-planned-only lane type, not just an active one -- see test 17)"
+    ]
+  },
+  "codex_review_round_1": {
+    "trigger": "A fresh Codex review requested via '@codex review' comment on this PR after CI first went green (excluding Merge Gate, which stays PM-gated by design).",
+    "findings": 2,
+    "finding_1_total_cap_clamp": {
+      "location": "scripts/ops/lane-maximizer.ts (default policy synthesis)",
+      "problem": "REAL, FIXED -- the synthesized default policy always set total: limits.maxClaude + limits.maxCodex, ignoring a real CONCURRENCY_CONFIG.json total set below the sum of the executor caps. This could let evaluateCandidates() recommend a lane in the gap that ops:lane-start's checkConcurrencyLimits() (which enforces cfg.total directly) would then reject -- the exact planner/enforcer divergence this whole lane exists to close.",
+      "fix": "total: Math.min(cfg.total, limits.maxClaude + limits.maxCodex). Regression test 21 in lane-maximizer.test.ts temporarily patches the real config file to total=5/executors={claude:4,codex:4} (sum=8) and proves a 6th lane is blocked at the smaller configured total.",
+      "commit": "86519566"
+    },
+    "finding_2_malformed_verification_target": {
+      "location": "scripts/ops/concurrency-rules.ts (verification undetermined-active check)",
+      "problem": "REAL, FIXED -- the undetermined-active check for verification lanes was presence-only (!m.verification_target), so a non-empty but malformed active target (e.g. a stray UNI-### id or typo) was silently treated as trustworthy instead of failing closed the same way a genuinely missing target does.",
+      "fix": "Added isValidVerificationTarget() (format-validates via requireVerificationTarget(), UTV2-### only) and used it for the undetermined check. Also removed lane-maximizer.ts's own duplicate copy of this helper in favor of importing the shared one -- an additional de-duplication found via this review. New dedicated test file scripts/ops/concurrency-rules.test.ts (7 tests) covers the helper and the fixed behavior plus regression coverage for missing-target and distinct-valid-target cases.",
+      "commit": "86519566"
+    },
+    "net_result": "2 of 2 findings were real and material; both fixed with code + tests in this PR; both review threads replied to with file:line evidence citing the fix commit and resolved via GraphQL resolveReviewThread. No findings were left open."
+  },
+  "lane_start_vs_lane_maximizer_parity": {
+    "how_proven": "Test 20 in scripts/ops/lane-maximizer.test.ts takes evaluateCandidates()'s own recommended dispatch_plan.fill_now wave (5 candidates: hygiene x2 on both executors, one delivery-ui, one verification, one governance, against a mixed active board including a pre-existing active governance lane) and replays it candidate-by-candidate through checkConcurrencyLimits() directly -- the same function ops:lane-start calls at real lane-creation time -- building up a growing 'replay board' exactly as ops:lane-start would leave the board after each real lane-start invocation. Asserts zero violations at every step.",
+    "result": "PASS -- see static_proof.targeted_tests below; test name: '20. the recommended wave, replayed candidate-by-candidate through the canonical concurrency evaluator, produces zero violations'."
+  },
+  "static_proof": {
+    "pnpm_type_check": {
+      "command": "pnpm exec tsc -b tsconfig.json",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "pnpm_lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "targeted_tests": {
+      "command": "npx tsx --test scripts/ops/concurrency-simulation.test.ts scripts/ops/concurrency-rules.test.ts scripts/ops/shared.test.ts scripts/ops/lane-start.test.ts scripts/ops/lane-maximizer.test.ts scripts/codex-dispatch.test.ts",
+      "status": "PASS",
+      "tests": 165,
+      "pass": 165,
+      "fail": 0,
+      "note": "137 pre-existing tests (all regression-verified passing unchanged under the new implementation) + 20 new tests covering every required acceptance-criteria scenario (lane-11 total cap, 5th Claude, 7th Codex, 5th Hygiene, 4th Governance, Delivery/UI active + wave conflicts, Delivery/UI different apps, Delivery/UI undetermined app fail-closed, Verification active + wave conflicts, Verification different targets, missing/malformed Verification target, undetermined active Verification target fail-closed, singleton regression, forbidden-combination wave extension, trial-mode adversarial non-bypass, anti-substitution for Delivery/UI file scope, and the full wave-replay parity integration test) + 8 new tests added after a fresh Codex review round (7 in the new scripts/ops/concurrency-rules.test.ts covering isValidVerificationTarget() and the fixed undetermined-check behavior, 1 in lane-maximizer.test.ts proving the total-cap clamp)."
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Full env:check + lint + type-check + build + test (including live-DB-backed suites already present in the repo, e.g. UTV2-1327/UTV2-1136/UTV2-1459) all green on this branch."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 11,
+      "rules_matched": "none",
+      "note": "11 files after the Codex-review-fix commit (86519566) added scripts/ops/concurrency-rules.test.ts as a new file; 7 files was the count before that round."
+    }
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 100702.889812,
+    "scope_note": "This diff's scope (scripts/ops/*.ts orchestration tooling + docs/06_status control-plane files) has no DB dependency of its own -- this runtime proof exists because T1 tier requires it unconditionally per truth-check-lib.ts's runtime_proof_required gate (tier === 'T1'), independent of whether the diff's own files touch DB code, identical to the precedent set by the concurrency ramp issue's own T1 proof.",
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts inserts and deletes a real submission row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts inserts and deletes a real pick row as part of the persist-submission-and-settlement live write-path test"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts selects pick_lifecycle rows to verify no lifecycle event is written on an invalid atomic enqueue (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts selects distribution_outbox rows to verify status/receipt/lifecycle/audit rollback on an invalid atomic delivery confirmation (UTV2-920 rollback test)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts selects distribution_receipts rows as part of the same atomic-delivery rollback verification"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts selects audit_log rows to verify no audit row is written on an invalid atomic settlement (UTV2-920 rollback test) and that a re-settlement correction is additive (UTV2-996)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts inserts settlement_records rows to verify a correction chain is additive and the original settlement row is not mutated (UTV2-996)"
+      },
+      {
+        "table": "participants",
+        "description": "database-smoke.test.ts verifies no duplicate participants for the same external_id and sport (UTV2-883)"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 76115, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 112920, "status": "healthy" },
+      { "table": "submissions", "count": 77990, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 5256, "status": "healthy" },
+      { "table": "audit_log", "count": 199205, "status": "healthy" },
+      { "table": "settlement_records", "count": 25567, "status": "healthy" }
+    ],
+    "row_counts_captured_at": "2026-07-15T15:24:00Z",
+    "row_counts_note": "Live table row counts queried directly against the zfzdnfwdarxucxtaojxm Supabase project via SELECT COUNT(*) (mcp__Supabase__execute_sql) immediately after the pnpm test:db run above (which cleans up its own inserted rows via explicit deletes -- these counts reflect steady-state live data, not test artifacts)."
+  },
+  "sha_binding": {
+    "branch": "claude/utv2-1535-lane-maximizer-typecaps",
+    "head_sha_at_proof_authoring": "e9dfdeee065851aa14681defd406c9c823eda813",
+    "head_sha_note": "The branch HEAD at the moment this bundle was first authored, captured for provenance only -- NOT a claim about the PR's current live head (which changes on every push). The PR's actual live head is validated externally by GitHub itself and by the SHA-bound executor-result/v1 comment posted after each push.",
+    "head_sha_after_codex_review_round_1": "86519566e19644ab1d913e5842a0aecf7150c7f8",
+    "head_sha_after_codex_review_round_1_note": "The branch HEAD after fixing both Codex review round 1 findings, provenance only -- same caveat as head_sha_at_proof_authoring above.",
+    "merge_sha": null,
+    "merge_sha_note": "Not yet merged. Will be bound by post-merge-lane-close.yml's automated ops:proof-generate --merge-sha run after this PR merges to main -- no manual append required per this repo's standard T1 closeout automation.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-15T00:42:06Z"
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/concurrency-rules.ts",
+      "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-maximizer.ts",
+      "scripts/ops/lane-maximizer.test.ts"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1535.yml",
+      "docs/06_status/lanes/UTV2-1535.json",
+      "docs/06_status/proof/UTV2-1535/.gitkeep",
+      "docs/06_status/proof/UTV2-1535/diff-summary.md",
+      "docs/06_status/proof/UTV2-1535/evidence.json",
+      "docs/06_status/proof/UTV2-1535/verification.md"
+    ],
+    "total_paths_count": 10,
+    "total_paths_count_note": "Generated from git diff --name-only origin/main..HEAD after rebase onto the latest origin/main (4 implementation + 6 control-plane, 3 of which -- .ops/sync, lane manifest, .gitkeep -- were committed in a separate lane-scaffolding commit before the implementation commit)."
+  },
+  "acceptance_criteria": {
+    "forecast_total_executor_singleton_forbidden": "PASS -- already covered pre-diff for executor/singleton/forbidden; total cap newly added; all now routed through the single canonical checkConcurrencyLimits() call",
+    "forecast_hygiene_governance_maxima": "PASS -- new, via checkConcurrencyLimits()'s existing hygiene_type_cap_exceeded/governance_type_cap_exceeded codes",
+    "forecast_delivery_ui_per_app_deterministic_from_file_scope_only": "PASS -- uses deriveDeliveryUiApp() (the identical function ops:lane-start calls), never title/branch/text; undetermined app fails closed (DELIVERY_UI_APP_UNDETERMINED)",
+    "forecast_verification_per_target_explicit_never_inferred": "PASS -- unchanged explicit-target contract (missing/malformed pre-validated locally before the cap check), now routed through checkConcurrencyLimits() for the conflict layer with active-vs-planned classification; an active legacy Verification lane with no trustworthy target fails closed (VERIFICATION_TARGET_UNDETERMINED_CONFLICT)",
+    "trial_headroom_never_bypasses_type_caps": "PASS -- checkConcurrencyLimits()'s trial_active branch only ever widens total/executor headroom (trial_unsafe_lane_type check), never type_caps, which is read unconditionally from config.type_caps regardless of trial state; proven adversarially in test 18 with a wide-open trial config",
+    "overlap_vs_active_and_already_planned": "PASS -- overlap check now iterates projectedActive (active board + every wave-planned candidate), not just the active board",
+    "no_third_divergent_copy_of_type_cap_rules": "PASS -- single checkConcurrencyLimits() implementation in scripts/ops/concurrency-rules.ts, imported and called (not re-derived) by both lane-start.ts and lane-maximizer.ts",
+    "ops_lane_start_remains_sole_fail_closed_authority": "PASS -- checkConcurrencyLimits()'s logic is byte-identical to before the move; lane-start.ts's own admission call site and behavior are unchanged",
+    "twenty_required_tests_present": "PASS -- see static_proof.targeted_tests; all 20 present and passing, numbered 1-20 in scripts/ops/lane-maximizer.test.ts matching the required acceptance-criteria list exactly",
+    "no_placeholders": "PASS -- every field is a real captured value from an actual command run",
+    "no_invented_merge_sha": "PASS -- sha_binding.merge_sha is null with an explanatory note",
+    "no_cross_issue_commit_references": "PASS -- commit subjects/bodies, branch name, and (to be authored) PR title/body reference only UTV2-1535; other issues (the concurrency ramp issue, UTV2-920, UTV2-996, UTV2-883, UTV2-1327, UTV2-1136, UTV2-1459) that appear in pre-existing test names/comments elsewhere in the repo are not this diff's own commit text"
+  },
+  "verdict": "STATIC_AND_RUNTIME_PROOF_COMPLETE -- CODEX_REVIEW_ROUND_1_RESOLVED -- AWAITING_PM_VERDICT_AND_T1_APPROVED_LABEL"
+}

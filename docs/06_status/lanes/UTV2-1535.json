@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1535",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1535-lane-maximizer-typecaps",
+  "branch": "claude/utv2-1535-lane-maximizer-typecaps",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/concurrency-rules.ts",
+    "scripts/ops/concurrency-rules.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts",
+    "docs/06_status/lanes/UTV2-1535.json",
+    "docs/06_status/proof/UTV2-1535/evidence.json",
+    "docs/06_status/proof/UTV2-1535/verification.md",
+    "docs/06_status/proof/UTV2-1535/diff-summary.md",
+    ".ops/sync/UTV2-1535.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1535/evidence.json"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-07-14T23:57:06.000Z",
+  "heartbeat_at": "2026-07-14T23:57:06.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1535-lane-maximizer-typecaps.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "lane-maximizer.ts's evaluateCandidates() planning-accuracy gap tracked as a follow-up from the concurrency ramp issue (raised total cap to 10 + mechanical per-type caps). Makes the advisory planner forecast the same hygiene/governance/delivery-ui/verification type caps that ops:lane-start's checkConcurrencyLimits() enforces, including wave-projected state across already-accepted candidates. ops:lane-start remains the sole fail-closed authority."
+}
