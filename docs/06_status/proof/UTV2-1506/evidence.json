@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1506",
+  "pr_number": 1231,
+  "tier": "T1",
+  "lane_type": "governance",
+  "source_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
+  "reviewed_head_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
+    "verified_source_note": "Substantive charter and manifest repair commit. Commits after this SHA are limited to lane/proof artifacts.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "gate_results": [
+    {
+      "gate": "pnpm verify",
+      "verdict": "PASS",
+      "detail": "Full static gate, DB smoke (7/7), and live T1 proof suite completed with exit code 0 on substantive SHA 6153af325f228b0679b91abdb3b35c4bf9a03d9b."
+    },
+    {
+      "gate": "pnpm test:db",
+      "verdict": "PASS",
+      "detail": "7 tests passed, 0 failed, 0 skipped; standalone run completed with exit code 0."
+    },
+    {
+      "gate": "R-level compliance",
+      "verdict": "PASS",
+      "detail": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD: Verdict PASS; no rules matched."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "generated_at": "2026-07-16T05:30:18Z",
+  "runtime_proof": {
+    "classification": "documentation-only governance change",
+    "note": "No application, worker, API, migration, deployment, paging, or monitoring behavior changed. The unconditional T1 live-DB and live-proof gates were nevertheless executed by pnpm verify.",
+    "production_mutation_by_repair": false
+  },
+  "acceptance_criteria": {
+    "diagnostic_logging_is_non_authoritative_guidance": "PASS",
+    "two_ratified_evidence_forms_remain_exclusive": "PASS",
+    "missing_restart_capture_is_evidence_incomplete_not_unauthorized": "PASS",
+    "draft_incident_runbook_boundary_preserved": "PASS",
+    "no_new_role_capability_or_owner_approval_artifact": "PASS"
+  },
+  "verdict": "PASS"
+}
