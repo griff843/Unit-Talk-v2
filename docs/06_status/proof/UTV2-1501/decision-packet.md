@@ -87,6 +87,14 @@ and enforcement at ~lines 230–260):
 `.github/CODEOWNERS`. There is structurally no second identity in this repo
 today that could produce an approval distinct from the PR's own author.
 
+An `executor-result/v1` artifact is the implementer's readiness statement.
+Validation can establish its shape, authorization, and current-head binding;
+it cannot turn that statement into independent review or owner approval.
+Likewise, commits and comments made through the shared `griff843` credential
+do not prove that Griff personally reviewed the work. This packet and its
+proof bundle are executor-produced evidence only, not independent
+certification and not a substitute for the T1 owner artifacts.
+
 **`docs/05_operations/DELEGATION_POLICY.md`** (Tier B, line ~78):
 
 > In practice: the orchestrator diff-reviews, applies `gh pr review
@@ -113,42 +121,46 @@ contradiction rather than a bug to quietly patch.
 
 ---
 
-## 2. What is already settled (out of scope here)
+## 2. Related live policy contradiction (not resolved by this packet)
 
-The T2 merge-authority **definition** — which document is authoritative, and
-what the mechanical gate requires — was already reconciled by the ratified
-merge-authority spec work (the merge-gate ratification of 2026-05-18, later
-extended by the canonical merge-authority spec lane and the self-attestation
-extension lane). Those lanes made `merge-gate.yml` the single mechanical
-authority and rewrote `CLAUDE.md`, `DELEGATION_POLICY.md`,
-`OPERATING_MODEL_SONNET5.md`, and `three-brain.md` to agree with it. That
-question is **not** reopened here.
+The mechanical T2 gate is defined by `.github/workflows/merge-gate.yml`, but
+the surrounding policy prose is **not fully reconciled**. In particular,
+`docs/05_operations/DELEGATION_POLICY.md` currently says both:
 
-This packet is only the residual, narrower question those lanes did not
-touch: whether the now-internally-consistent T2 self-approval workflow is
-compatible with the Constitution's no-self-certification clauses — and if
-not, which side moves.
+- in its Tier B opening paragraph, that the orchestrator may diff-review,
+  approve, and merge a T2 PR on green CI without PM presence; and
+- in the Tier B **Merge policy** paragraph, that the PR body must say
+  "awaiting PM merge approval" and that the orchestrator must not merge until
+  PM explicitly approves in the session.
+
+Those statements cannot both govern the same T2 merge. This packet does not
+edit the Tier C `DELEGATION_POLICY.md` path and therefore does not resolve that
+separate policy defect. Any implementation of the decision in this packet
+must also reconcile that contradiction through an owner-ratified governance
+change. Until then, the stricter PM-approval statement must not be described
+as having been superseded merely because the workflow admits another path.
+
+The narrower constitutional question remains: whether the mechanically
+accepted T2 self-attestation path is compatible with the Constitution's
+no-self-certification clauses, and, if not, which side moves.
 
 ---
 
-## 3. Throughput data (grounding for the tradeoffs)
+## 3. Throughput implications (limitations stated)
 
-From lane manifests (`docs/06_status/lanes/*.json`, `status: done`,
-`closed_at >= 2026-06-15` — last 30 days, counted at drafting time):
+This packet does not claim a verified 30-day tier distribution or merge
+outcome rate. Lane-manifest counts alone are not sufficient evidence for
+those claims: manifests can be stale, a `done` lane is not itself proof of a
+merge path, and determining which approval artifact satisfied a historical
+merge requires a PR-by-PR audit of comments, reviews, checks, head SHAs, and
+merge commits.
 
-| Tier | Done lanes (30d) | Share |
-|---|---|---|
-| T2 | 108 | 62% |
-| T1 | 38 | 22% |
-| T3 | 27 | 16% |
-| **Total** | **173** | |
-
-Every one of those 108 T2 merges passed the merge gate via the
-self-approval/self-attestation path or a PM verdict; since
-`AUTHORIZED_REVIEWERS` contains a single identity, none had a structurally
-independent approver. T2 is the **majority of all merge volume**. Any option
-that adds a blocking human step to T2 is a change to the primary merge path,
-not a marginal adjustment.
+The defensible conclusion is qualitative: T2 is designed as the normal path
+for bounded service and integration work, so adding a mandatory PM step would
+reduce autonomy and may add queue latency. The size of that effect is
+**unmeasured by this lane**. Likewise, this packet makes no claim that all
+historical T2 lanes had valid self-attestation, independent approval, or
+owner verdict evidence.
 
 ---
 
@@ -163,12 +175,10 @@ way T1 does.
 
 - **Safety:** Highest. Restores literal compliance with §2.8/§2.14 — no actor
   certifies its own T2 work.
-- **Throughput:** Severe and quantified: 108 of 173 merges (62%) in the last
-  30 days would move from orchestrator-paced to PM-paced. This recreates the
-  exact PM-wait bottleneck the ratified T2 authority work was built to
-  eliminate (its problem statement identified multi-hour cycle-time outliers
-  as "all PM-wait"). With `AUTHORIZED_REVIEWERS` a single human identity,
-  Tier B functionally collapses into Tier C.
+- **Throughput:** Potentially material but not quantified by this packet.
+  The bounded T2 path would move from orchestrator-paced to independent-review
+  paced. With `AUTHORIZED_REVIEWERS` containing a single shared identity,
+  owner review is the only currently distinguishable approval identity.
 - **Infrastructure:** None new — but it unwinds a ratified design rather than
   reconciling with it.
 
@@ -176,27 +186,37 @@ way T1 does.
 
 Amend the Constitution (a qualifier under §2.8/§2.14, anchored on §9.3's
 existing "T2/T3 lanes may use lighter governance but must remain auditable")
-to permit orchestrator self-approval **only for T2**, and only when all of
-the following hold, mechanically:
+to permit orchestrator self-approval **only for T2**, subject to explicitly
+specified controls. The current repository provides relevant mechanisms, but
+it does **not** prove the four-condition package below as a single existing,
+end-to-end enforcement invariant:
 
-1. green CI on the merge SHA (not just branch CI);
-2. a valid `executor-result/v1` artifact on the PR;
-3. file-scope-lock compliance (scope CI green, no scope bleed);
-4. the PR touches no Tier C sensitive paths (per the Delegation Policy
-   sensitive-path matrix — Tier C always escalates to PM).
+1. PR-head CI and, where the merge queue is used, merge-group checks;
+2. an `executor-result/v1` comment validated against the current PR head SHA;
+3. file-scope-lock CI for the evaluated PR head and issue scope;
+4. tier/path classification that escalates Tier C-sensitive changes.
 
-- **Safety:** Resolves the textual contradiction without weakening any
-  existing control; the four conditions above are all already mechanically
-  enforced today, so the amendment codifies — and freezes — the current
-  bounded practice rather than inventing a new permission. Honest cost: it
-  adds no *new* control, and a carve-out written to bless existing behavior
+Post-merge proof binding is a distinct closeout control: the actual merge
+commit SHA does not exist until after merge. It must not be conflated with
+PR-head review evidence or merge-group CI. If Griff chooses B, the
+implementing plan must define which of these checks are required branch
+protection contexts, what event/SHA each check evaluates, and how the actual
+merge commit is bound during truth-close.
+
+- **Safety:** Could resolve the textual contradiction without weakening the
+  intended controls, but only after the implementation lane verifies and
+  closes the enforcement gaps above. The present workflow contains pieces of
+  the proposed control set; this packet does not certify that they are all
+  required, evaluate the same SHA, or jointly fail closed. Honest cost: a
+  carve-out written to bless existing behavior
   brushes against §2.8's "no workflow may self-authorize" — which is exactly
   why the amendment must be made by Griff, not by any agent (see §6 note on
   amendment authority). Compensating controls remain intact: Tier C
   escalation, Rule 9 stop conditions, `ops:truth-check` done-gate, and the
   auditable trail (PR reviews/comments + lane manifests) satisfying §9.3's
   "must remain auditable."
-- **Throughput:** Zero impact. The 108-merges/30d T2 path is unchanged.
+- **Throughput:** Intended to preserve the current T2 operating model; exact
+  impact depends on any enforcement repairs required by the implementation.
 - **Infrastructure:** None. Documentation-level constitutional amendment only.
 
 ### Option C — Cross-executor review for T2 (implementer ≠ approver), no constitution change
@@ -209,9 +229,9 @@ Model as the T2 gate.
 - **Safety:** Second-highest. Closes the literal self-certification gap with
   no human bottleneck; most aligned with constitutional text that already
   exists.
-- **Throughput:** Moderate — machine-speed second-pass latency plus a second
-  executor slot per T2 merge (real at 108 T2 merges/30d, but bounded by
-  compute, not PM availability).
+- **Throughput:** Moderate in design — machine-speed second-pass latency plus
+  a second executor slot per T2 merge, bounded by compute and review capacity
+  rather than PM availability. This lane does not quantify that load.
 - **Infrastructure — the decisive gap:** Both executors act as the single
   `griff843` GitHub identity today. The merge gate cannot mechanically
   distinguish "Codex reviewed Claude's PR" from "the author attested its own
@@ -225,10 +245,10 @@ Model as the T2 gate.
 
 ## 5. Summary table
 
-| Option | Safety vs §2.8/§2.14 | Throughput cost (108 T2 merges/30d) | New infrastructure |
+| Option | Safety vs §2.8/§2.14 | Throughput cost | New infrastructure |
 |---|---|---|---|
-| A — Repeal self-approval | Highest (literal compliance) | Severe — 62% of merge volume becomes PM-paced | None |
-| B — Constitutional T2 carve-out | Textual reconciliation; existing mechanical conditions frozen into constitutional law | None | None |
+| A — Repeal self-approval | Highest (literal compliance) | Potentially material; not quantified here | None |
+| B — Constitutional T2 carve-out | Textual reconciliation after control verification | Intended to preserve current flow | None necessarily; enforcement repair may be required |
 | C — Cross-executor review | Second-highest, if verifiable | Moderate (machine-speed) | Second authorized GitHub identity — does not exist today |
 
 ---
@@ -237,24 +257,22 @@ Model as the T2 gate.
 
 **Option B**, for these reasons:
 
-1. **A's cost is disproportionate to its demonstrated risk.** 62% of merge
-   volume would re-acquire a single-human bottleneck to fix a textual
-   contradiction, with no evidence in the last 30 days of a bad T2
-   self-approved merge that independent review would have caught (the tier
-   system, scope locks, Tier C path escalation, and truth-check exist
-   precisely to bound T2 blast radius).
+1. **A changes the intended bounded-work operating model.** It would add an
+   independent-approval dependency to every T2 merge. This lane has not
+   audited enough historical PR evidence to quantify the latency impact or
+   claim an absence of bad self-approved merges.
 2. **C is the best end-state but is not honest today.** Without a second
    verifiable identity, "cross-executor review" is unverifiable theater —
    itself a §22 anti-pattern ("advisory-only governance presented as
    enforcement"). C is best treated as a possible future upgrade *after* a
    second identity is provisioned, layered on top of B's carve-out, not as
    the resolution of the contradiction now.
-3. **B makes the Constitution true again without weakening anything.** The
-   four carve-out conditions are already mechanically enforced; the amendment
-   converts an undocumented divergence into a bounded, ratified exception —
-   which is what invariant 11 ("if a rule can be enforced mechanically, it
-   must not live only in prose") and §9.3's "lighter governance but
-   auditable" language already gesture at.
+3. **B can make the Constitution and intended operating model agree, but it
+   is conditional.** Before amendment, the implementation packet must map
+   each promised control to a required check, its trigger event, and its SHA;
+   reconcile the live Delegation Policy contradiction; and preserve
+   post-merge truth-close as distinct from pre-merge approval. Griff would
+   then ratify a bounded exception with its actual enforcement surface known.
 
 **Authority note:** a constitutional amendment is **Griff-reserved
 authority** (§2.8 "no automation may replace PM authority"; per the
@@ -270,12 +288,13 @@ lane's scope.
 ## 7. PM decision required
 
 **Single decision for Griff:** choose the reconciliation direction —
-**A** (repeal T2 self-approval and accept the 62%-of-volume PM-paced merge
-path), **B** (ratify a constitutional amendment permitting orchestrator
-self-approval for T2 only, conditioned on green CI on the merge SHA, a valid
-executor-result artifact, file-scope-lock compliance, and no Tier C paths —
-recommended), or **C** (fund a second authorized GitHub identity and require
+**A** (repeal T2 self-approval and accept a PM/independent-review-paced merge
+path), **B** (recommended direction: first reconcile the Delegation Policy
+and verify exact PR-head, merge-group, tier/path, and post-merge controls;
+then ratify a bounded constitutional T2 exception), or **C** (fund a second
+authorized GitHub identity and require
 cross-executor review for T2, deferring the constitutional text question
 until that identity exists).
 
-No other decision is requested by this packet.
+Approval of this analysis packet does not itself select B, amend the
+Constitution, repair the Delegation Policy, or authorize a workflow change.
