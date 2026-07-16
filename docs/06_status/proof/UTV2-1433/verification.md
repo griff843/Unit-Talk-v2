@@ -1,3 +1,32 @@
+# PROOF: UTV2-1433
+MERGE_SHA: 55af542309836cc4c20c2ba8e3c7966891e1b77c
+
+ASSERTIONS:
+- [x] repairMergedLaneManifest's already-done early return also releases the lease if it's still marked active
+- [x] Regression test: call repair-merged twice against an already-done manifest with an active lease; assert the lease is released after either call
+- [x] pnpm verify green end-to-end
+- [x] pnpm test:db green (7/7 pass, live Supabase)
+- [x] r-level-check PASS, no artifacts required for this diff
+
+EVIDENCE:
+```text
+$ npx tsx --test scripts/ops/lane-close.test.ts
+1..63
+# pass 63
+# fail 0
+
+$ pnpm test:db
+1..7
+# tests 7
+# pass 7
+# fail 0
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 6
+Rules matched: (none)
+```
+
 # UTV2-1433 Verification
 
 ## Verification
