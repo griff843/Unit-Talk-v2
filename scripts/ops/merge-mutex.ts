@@ -22,6 +22,8 @@ export interface MergeLockOwner {
   session_id: string;
 }
 
+export type MergeLockStaleReason = 'expired' | 'orphaned_pid';
+
 export interface MergeLock {
   schema_version: 1;
   issue_id: string;
@@ -33,6 +35,13 @@ export interface MergeLock {
   expires_at: string;
   owner: MergeLockOwner;
   status: MergeLockStatus;
+  /**
+   * Set when `status` transitions to `stale_reclaim_required`. Distinguishes a
+   * time-based expiry from a lock whose owning PID was confirmed dead on the
+   * same host before its TTL expired (an orphaned lock). Absent on locks that
+   * have never been marked stale.
+   */
+  stale_reason?: MergeLockStaleReason;
 }
 
 export interface MergeLockInput {
@@ -78,8 +87,68 @@ const VALID_STATUSES = new Set<MergeLockStatus>([
   'stale_reclaim_required',
   'released',
 ]);
+const VALID_STALE_REASONS = new Set<MergeLockStaleReason>(['expired', 'orphaned_pid']);
 
 export const MERGE_LOCK_PATH = path.join(ROOT, '.ops', 'merge-lock.json');
+
+/**
+ * Liveness + host-matching options threaded through the lock-mutation entry
+ * points (`acquireMergeLock`, `reclaimMergeLock`, `requireMergeLockHeld`) so
+ * a held-but-not-yet-expired lock owned by a dead PID on this host is
+ * detected as orphaned instead of silently blocking until its TTL expires.
+ *
+ * Both are injectable (rather than always reading `os.hostname()` /
+ * `process.kill`) so tests can simulate dead/alive PIDs deterministically
+ * without depending on real OS process table state.
+ */
+export interface MergeLockLivenessOptions {
+  hostname?: string;
+  isProcessAlive?: (pid: number) => boolean;
+}
+
+/**
+ * Same-host liveness probe for a lock owner PID. Uses the POSIX convention of
+ * signal 0 (no-op signal, existence check only). ESRCH means the process is
+ * confirmed gone. Any other error (e.g. EPERM, meaning a process with that
+ * PID exists but is owned by another user) is treated as "alive" — fail
+ * closed so a legitimately in-progress lock is never wrongly reaped.
+ */
+export function isProcessAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return !isMissingProcessError(error);
+  }
+}
+
+function isMissingProcessError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as NodeJS.ErrnoException).code === 'ESRCH'
+  );
+}
+
+/**
+ * A held lock is orphaned only when it was acquired on *this* host (liveness
+ * cannot be verified for a remote host, so cross-host locks are never
+ * reclassified here — they stay `held` until they expire, preserving
+ * legitimate cross-host lock behavior) and the recorded owner PID is
+ * confirmed dead.
+ */
+function isOrphanedByDeadPid(lock: MergeLock, options: MergeLockLivenessOptions): boolean {
+  const currentHost = options.hostname ?? os.hostname() ?? 'unknown';
+  if (!lock.owner || lock.owner.host !== currentHost) {
+    return false;
+  }
+  const checkAlive = options.isProcessAlive ?? isProcessAlive;
+  return !checkAlive(lock.owner.pid);
+}
 
 function requireSupportedMergeSerialization(): MergeLockResult | null {
   const max = loadConcurrencyConfig().merge_serialized_max;
@@ -104,7 +173,7 @@ export function defaultMergeLockOwner(sessionId = process.env.CODEX_SESSION_ID):
 
 export function acquireMergeLock(
   input: Partial<MergeLockInput>,
-  options: { lockPath?: string; now?: Date } = {},
+  options: { lockPath?: string; now?: Date } & MergeLockLivenessOptions = {},
 ): MergeLockResult {
   const lockPath = options.lockPath ?? MERGE_LOCK_PATH;
   const now = options.now ?? new Date();
@@ -129,7 +198,7 @@ export function acquireMergeLock(
   }
 
   if (existingResult.ok) {
-    const existing = markExpiredLock(existingResult.lock, now, lockPath);
+    const existing = markExpiredLock(existingResult.lock, now, lockPath, options);
     if (existing.status === 'held') {
       return {
         ok: false,
@@ -209,7 +278,7 @@ export function releaseMergeLock(
 
 export function reclaimMergeLock(
   input: Partial<MergeLockInput>,
-  options: { lockPath?: string; now?: Date } = {},
+  options: { lockPath?: string; now?: Date } & MergeLockLivenessOptions = {},
 ): MergeLockResult {
   const lockPath = options.lockPath ?? MERGE_LOCK_PATH;
   const now = options.now ?? new Date();
@@ -218,7 +287,7 @@ export function reclaimMergeLock(
     return existingResult;
   }
 
-  const existing = markExpiredLock(existingResult.lock, now, lockPath);
+  const existing = markExpiredLock(existingResult.lock, now, lockPath, options);
   if (existing.status !== 'stale_reclaim_required') {
     return {
       ok: false,
@@ -252,7 +321,7 @@ export function reclaimMergeLock(
 
 export function requireMergeLockHeld(
   input: { issue_id: string; branch?: string; reason?: string },
-  options: { lockPath?: string; now?: Date } = {},
+  options: { lockPath?: string; now?: Date } & MergeLockLivenessOptions = {},
 ): MergeLockResult {
   const lockPath = options.lockPath ?? MERGE_LOCK_PATH;
   const issueId = requireIssueId(input.issue_id);
@@ -261,7 +330,7 @@ export function requireMergeLockHeld(
     return existingResult;
   }
 
-  const lock = markExpiredLock(existingResult.lock, options.now ?? new Date(), lockPath);
+  const lock = markExpiredLock(existingResult.lock, options.now ?? new Date(), lockPath, options);
   if (lock.status === 'stale_reclaim_required') {
     return {
       ok: false,
@@ -371,6 +440,12 @@ export function validateMergeLock(input: unknown): string[] {
   if (typeof input.status !== 'string' || !VALID_STATUSES.has(input.status as MergeLockStatus)) {
     errors.push('status is required and must be valid');
   }
+  if (
+    input.stale_reason !== undefined &&
+    !VALID_STALE_REASONS.has(input.stale_reason as MergeLockStaleReason)
+  ) {
+    errors.push('stale_reason must be expired or orphaned_pid when present');
+  }
   if (!isRecord(input.owner)) {
     errors.push('owner is required');
   } else {
@@ -452,15 +527,24 @@ function writeNewLockExclusive(lockPath: string, lock: MergeLock): MergeLockResu
   };
 }
 
-function markExpiredLock(lock: MergeLock, now: Date, lockPath: string): MergeLock {
+function markExpiredLock(
+  lock: MergeLock,
+  now: Date,
+  lockPath: string,
+  livenessOptions: MergeLockLivenessOptions = {},
+): MergeLock {
   if (lock.status !== 'held') {
     return lock;
   }
-  if (new Date(lock.expires_at).getTime() > now.getTime()) {
+
+  const isExpired = new Date(lock.expires_at).getTime() <= now.getTime();
+  const isOrphaned = !isExpired && isOrphanedByDeadPid(lock, livenessOptions);
+  if (!isExpired && !isOrphaned) {
     return lock;
   }
 
   lock.status = 'stale_reclaim_required';
+  lock.stale_reason = isOrphaned ? 'orphaned_pid' : 'expired';
   writeLockAtomic(lockPath, lock);
   return lock;
 }
