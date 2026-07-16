@@ -1,5 +1,5 @@
 # PROOF: UTV2-1460
-MERGE_SHA: d481950382f1b87bdfa3cfeac4a2d5e14f33c4f8
+MERGE_SHA: 78578d5899edf3f31d7030c2b336b8631636941b
 
 ASSERTIONS:
 - [x] ops:proof-generate (pre-merge, no --merge-sha) writes verification.md in rebind-compatible format
