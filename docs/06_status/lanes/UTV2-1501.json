@@ -17,7 +17,9 @@
     "docs/06_status/proof/UTV2-1501/verification.md"
   ],
   "file_scope_lock": [
-    "docs/06_status/proof/UTV2-1501/decision-packet.md"
+    "docs/06_status/proof/UTV2-1501/.gitkeep",
+    "docs/06_status/proof/UTV2-1501/decision-packet.md",
+    "docs/06_status/proof/UTV2-1501/verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1501/evidence.json"
