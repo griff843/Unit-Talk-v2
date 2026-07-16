@@ -8,7 +8,9 @@
 - Honest regeneration: readiness remains `RED`, with deploy alignment, ingestion, outbox health, and dead-letter health blocking.
 - Findings: the continuing ingestion/deploy incident remains tracked by UTV2-1477. The true delivery failure and fresh-settlement/stale-result contradiction are explicitly recorded for UTV2-1549 closeout; no repair or restart was attempted.
 
-## Commands
+## Verification
+
+Substantive runtime-truth snapshot commit: `a3475a3d2782db08174fd422d828df1321054f60`.
 
 - `pnpm ops:brief` — completed; supplied an independent product-truth and queue overview.
 - `pnpm pipeline:health` — returned CRITICAL, identifying one true dead-letter failure. Its raw list queries are capped at 1,000 rows, so exact counts in `runtime-health.json` come from separate `Prefer: count=exact` read-only PostgREST requests.
