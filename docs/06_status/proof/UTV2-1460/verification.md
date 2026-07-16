@@ -1,3 +1,24 @@
+# PROOF: UTV2-1460
+MERGE_SHA: d481950382f1b87bdfa3cfeac4a2d5e14f33c4f8
+
+ASSERTIONS:
+- [x] ops:proof-generate (pre-merge, no --merge-sha) writes verification.md in rebind-compatible format
+- [x] Confirmed the underlying bug already fixed on origin/main by UTV2-1464
+- [x] pnpm type-check/test/verify all passed
+- [x] Focused proof-generate tests: 21/21 passed
+- [x] r-level-check PASS
+
+EVIDENCE:
+```text
+$ npx tsx --test scripts/ops/proof-generate.test.ts
+1..21
+# pass 21
+# fail 0
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+```
+
 # UTV2-1460 Runtime Verification
 
 Generated at: 2026-07-15T19:34:10.652Z
