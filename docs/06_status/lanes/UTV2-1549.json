@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1549-pilot-r1-runtime-truth-refresh",
   "base_branch": "main",
   "commit_sha": "a3475a3d2782db08174fd422d828df1321054f60",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1235",
   "files_changed": [
     "docs/06_status/proof/UTV2-1549/diff-summary.md",
     "docs/06_status/proof/UTV2-1549/runtime-health.json",
