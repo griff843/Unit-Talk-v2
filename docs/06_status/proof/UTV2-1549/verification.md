@@ -17,6 +17,17 @@ Substantive runtime-truth snapshot commit: `a3475a3d2782db08174fd422d828df132105
 - `pnpm exec tsx scripts/worker-alert-check.ts` — PASS at observation time; latest heartbeat was within its 120-minute threshold.
 - `pnpm exec tsx scripts/ops/ingestor-health-check.ts` — inconclusive because its query references nonexistent `provider_offers.updated_at`; direct live queries provide the issue-required evidence instead.
 - `pnpm test:db` — PASS; database smoke suite completed with 7 passing tests, zero failures, and zero skips.
+
+```text
+> pnpm test:db
+1..7
+# tests 7
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+```
+
 - `pnpm verify` — PASS; static verification, DB smoke (7/7), and the complete live T1 proof suite completed with zero failures. The bounded-dedup content assertion had one expected skip because the latest provider snapshot is outside the 72-hour window; that skip is runtime outage evidence and is recorded in `runtime-health.json`, not treated as a code pass for ingestion freshness.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; no R-level rules matched the readiness/proof-only changed paths.
 
