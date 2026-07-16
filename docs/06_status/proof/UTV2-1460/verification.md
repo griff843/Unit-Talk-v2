@@ -3,7 +3,8 @@ MERGE_SHA: d481950382f1b87bdfa3cfeac4a2d5e14f33c4f8
 
 ASSERTIONS:
 - [x] ops:proof-generate (pre-merge, no --merge-sha) writes verification.md in rebind-compatible format
-- [x] Confirmed the underlying bug already fixed on origin/main by UTV2-1464
+- [x] Confirmed the underlying bug already fixed on origin/main by a prior lane
+- [x] pnpm test:db passed against live Supabase (7/7)
 - [x] pnpm type-check/test/verify all passed
 - [x] Focused proof-generate tests: 21/21 passed
 - [x] r-level-check PASS
@@ -17,6 +18,29 @@ $ npx tsx --test scripts/ops/proof-generate.test.ts
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
+
+$ pnpm test:db
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+  ---
+  duration_ms: 17672.936174
+  type: 'test'
+  ...
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+  ---
+  duration_ms: 22952.742968
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 113643.651091
 ```
 
 # UTV2-1460 Runtime Verification
@@ -40,7 +64,8 @@ result: pass
 ## Runtime Verification
 - `npx tsx --test scripts/ops/proof-generate.test.ts`: 21 passed, 0 failed.
 - `pnpm ops:proof-generate -- --issue UTV2-1460 --current --json`: generated the required Markdown artifacts.
-- The requested behavior was already present on `origin/main` (UTV2-1464); this lane confirms it and records the required proof bundle.
+- `pnpm test:db`: 7 passed, 0 failed against live Supabase (executed output embedded above).
+- The requested behavior was already present on `origin/main` (landed via a prior lane); this lane confirms it and records the required proof bundle.
 
 ## SHA Binding
 Head SHA: 71f39c6d5e4099bde9ec32467055fab7a65b1bc3
