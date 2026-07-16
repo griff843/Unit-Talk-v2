@@ -1,4 +1,20 @@
+# PROOF: UTV2-1549
+
+MERGE_SHA: 810046e413b5b90e3d8339774c157a829f277f08
+
+Pre-merge proof, bound to the current PR head SHA above (not yet an actual
+merge commit — the merge SHA does not exist until governed post-merge
+truth-close binds it, per `EXECUTION_TRUTH_MODEL.md`).
+
 # UTV2-1549 Verification
+
+## ASSERTIONS:
+
+- [x] Live Supabase verification captured for `ingestor.cycle`, `worker.heartbeat`, `provider_offer_history`, `game_results`, and settled picks in `runtime-health.json`
+- [x] Queue readiness counts captured and classified per `QUEUE_READINESS_SEMANTICS.md` v1.0
+- [x] Readiness ledger honestly regenerated as `RED` (no readiness claim made)
+- [x] `pnpm verify` PASS, `pnpm test:db` PASS (7/7), R-level check PASS
+- [x] No restart, mutation, deploy, or beta-activation action taken by this lane
 
 ## Acceptance criteria
 
@@ -8,9 +24,9 @@
 - Honest regeneration: readiness remains `RED`, with deploy alignment, ingestion, outbox health, and dead-letter health blocking.
 - Findings: the continuing ingestion/deploy incident remains tracked by UTV2-1477. The true delivery failure and fresh-settlement/stale-result contradiction are explicitly recorded for UTV2-1549 closeout; no repair or restart was attempted.
 
-## Verification
+## EVIDENCE:
 
-Substantive runtime-truth snapshot commit: `a3475a3d2782db08174fd422d828df1321054f60`.
+Substantive runtime-truth snapshot commit (pre-rebase original): `a3475a3d2782db08174fd422d828df1321054f60`.
 
 - `pnpm ops:brief` — completed; supplied an independent product-truth and queue overview.
 - `pnpm pipeline:health` — returned CRITICAL, identifying one true dead-letter failure. Its raw list queries are capped at 1,000 rows, so exact counts in `runtime-health.json` come from separate `Prefer: count=exact` read-only PostgREST requests.
