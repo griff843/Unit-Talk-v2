@@ -1,5 +1,5 @@
 # PROOF: UTV2-1433
-MERGE_SHA: 55af542309836cc4c20c2ba8e3c7966891e1b77c
+MERGE_SHA: aa48d55cca7b39309de39932a474b0065b02da1b
 
 ASSERTIONS:
 - [x] repairMergedLaneManifest's already-done early return also releases the lease if it's still marked active
