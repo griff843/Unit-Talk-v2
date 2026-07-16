@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1501",
   "tier": "T1",
   "status": "PRE_MERGE_VERIFIED",
-  "produced_at": "2026-07-16T05:10:45Z",
+  "produced_at": "2026-07-16T05:39:25Z",
   "verifier": {
     "identity": "codex/repair_1230",
     "role": "repair-implementation-lane",
@@ -33,7 +33,8 @@
     "pnpm_verify": {
       "command": "pnpm verify",
       "status": "PASS",
-      "exit_code": 0
+      "exit_code": 0,
+      "note": "Serialized full gate completed on the proof-bearing branch head: static verification, DB smoke, and live T1 proof all passed; the live suite reported one expected stale-provider skip and zero failures."
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -45,10 +46,10 @@
   "runtime_proof": {
     "command": "pnpm test:db",
     "status": "PASS",
-    "tests": 1,
-    "pass": 1,
+    "tests": 7,
+    "pass": 7,
     "fail": 0,
-    "note": "T1 live-DB smoke gate was run even though this lane changes only governance analysis and control-plane evidence. The smoke test completed successfully and cleaned up its test data; this lane performed no production mutation."
+    "note": "T1 live-DB smoke gate was run even though this lane changes only governance analysis and control-plane evidence. All 7 smoke tests passed and cleaned up their test data; the full live T1 proof suite also completed with one expected stale-provider skip and zero failures. This lane performed no production mutation."
   },
   "acceptance_criteria": {
     "delegation_policy_contradiction_reported": "PASS",
