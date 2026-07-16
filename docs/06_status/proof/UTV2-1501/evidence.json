@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1501",
+  "tier": "T1",
+  "status": "PRE_MERGE_VERIFIED",
+  "produced_at": "2026-07-16T05:10:45Z",
+  "verifier": {
+    "identity": "codex/repair_1230",
+    "role": "repair-implementation-lane",
+    "independence_note": "This is executor-produced mechanical evidence. It is not independent certification, Griff review, t1-approved, or a pm-verdict/v1 artifact."
+  },
+  "sha_binding": {
+    "head_sha": "ac0f6f537f1e77822f9c8226450b3fe92b7db988",
+    "head_sha_note": "Implementation commit containing the corrected decision packet. Proof and manifest commits follow this commit, so the immutable implementation SHA is retained as the pre-merge review anchor.",
+    "merge_sha": null,
+    "merge_sha_note": "Pre-merge proof cannot bind an actual merge commit. Governed truth-close must bind the final merge SHA after owner-approved merge."
+  },
+  "scope": {
+    "implementation_paths": [
+      "docs/06_status/proof/UTV2-1501/decision-packet.md"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1501.yml",
+      "docs/06_status/lanes/UTV2-1501.json",
+      "docs/06_status/proof/UTV2-1501/evidence.json",
+      "docs/06_status/proof/UTV2-1501/verification.md"
+    ],
+    "runtime_change": false,
+    "constitutional_change": false,
+    "workflow_change": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifact_requirements": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "note": "T1 live-DB smoke gate was run even though this lane changes only governance analysis and control-plane evidence. The smoke test completed successfully and cleaned up its test data; this lane performed no production mutation."
+  },
+  "acceptance_criteria": {
+    "delegation_policy_contradiction_reported": "PASS",
+    "mechanical_enforcement_claims_bounded": "PASS",
+    "pr_head_merge_group_and_merge_sha_distinguished": "PASS",
+    "unsupported_historical_counts_and_outcome_claims_removed": "PASS",
+    "executor_result_not_claimed_as_independent_approval": "PASS",
+    "owner_boundary_preserved": "PASS"
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}

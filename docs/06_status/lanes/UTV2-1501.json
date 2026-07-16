@@ -8,8 +8,14 @@
   "branch": "claude/utv2-1501-constitution-t2-self-approval-reconciliation",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1230",
+  "files_changed": [
+    ".ops/sync/UTV2-1501.yml",
+    "docs/06_status/lanes/UTV2-1501.json",
+    "docs/06_status/proof/UTV2-1501/decision-packet.md",
+    "docs/06_status/proof/UTV2-1501/evidence.json",
+    "docs/06_status/proof/UTV2-1501/verification.md"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1501/decision-packet.md"
   ],
@@ -18,7 +24,7 @@
   ],
   "status": "started",
   "started_at": "2026-07-16T01:24:23.208Z",
-  "heartbeat_at": "2026-07-16T01:24:23.208Z",
+  "heartbeat_at": "2026-07-16T05:10:45.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1501-constitution-t2-self-approval-reconciliation.json",
