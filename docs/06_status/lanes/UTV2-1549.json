@@ -28,11 +28,13 @@
     "docs/06_status/proof/UTV2-1549/verification.md",
     "docs/06_status/proof/UTV2-1549/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "blocked",
   "started_at": "2026-07-16T03:33:17.168Z",
-  "heartbeat_at": "2026-07-16T06:02:14.546Z",
+  "heartbeat_at": "2026-07-16T06:22:28.038Z",
   "closed_at": null,
-  "blocked_by": [],
+  "blocked_by": [
+    "Readiness Regression Gate requires GREEN; fresh ledger is correctly RED pending owner-authorized production recovery UTV2-1477"
+  ],
   "preflight_token": ".out/ops/preflight/codex/utv2-1549-pilot-r1-runtime-truth-refresh.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
