@@ -1,0 +1,121 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1503",
+  "title": "Orchestrator standing-authority audit repair proof",
+  "tier": "T1",
+  "lane_type": "governance",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1232",
+  "generated_at": "2026-07-16T05:52:06Z",
+  "status": "PASS",
+  "sha_binding": {
+    "verified_source_sha": "128eb99b4df830977803aa1b72c95db4300dba79",
+    "verified_source_note": "Substantive audit repair commit; all later commits are restricted to this lane's proof and manifest paths.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-16T05:52:06Z",
+    "ci_sentinels": {
+      "pnpm_verify": "pass",
+      "pnpm_test_db": "pass",
+      "r_level_check": "pass",
+      "owner_t1_gate": "pending_owner_action"
+    }
+  },
+  "verifier": {
+    "identity": "codex-cli/repair-1232",
+    "role": "mechanical-repair-executor",
+    "independent_owner_certifier": false,
+    "note": "This bundle records mechanical checks only. It is not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Static checks, unit suites, live DB smoke, and the live T1 proof command completed successfully. One unrelated bounded-dedup assertion was explicitly skipped because provider data is stale; the full gate exited 0."
+    },
+    "type_check": "pass (within pnpm verify)",
+    "tests": "pass (node:test suites within pnpm verify; full command exit 0)",
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    },
+    "scope_assertions": [
+      "Lane path eligibility is explicitly distinguished from Delegation Policy authority.",
+      "Every recommendation preserves both t1-approved and a valid Griff-authored head-bound pm-verdict/v1.",
+      "No override-label or single-artifact T1 approval route is recommended.",
+      "Branch-protection claims are a dated point-in-time snapshot.",
+      "Shared Griff and Claude identity is explicitly non-independent."
+    ]
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "note": "Required T1 smoke evidence only; this audit changes no runtime or database behavior and performs no production mutation outside the existing self-cleaning test suite.",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "Created and read a smoke pick through repository abstractions, transitioned it through queued, posted, and settled, then removed the test rows."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "Asserted invalid enqueue and settlement paths leave zero forbidden lifecycle rows."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "Asserted invalid enqueue creates no row and invalid delivery preserves processing state atomically."
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "Asserted invalid delivery creates zero receipt rows."
+      },
+      {
+        "table": "settlement_records",
+        "description": "Asserted invalid settlement creates zero rows and correction chains remain additive."
+      },
+      {
+        "table": "audit_log",
+        "description": "Asserted rejected atomic delivery and settlement paths create zero audit rows."
+      },
+      {
+        "table": "participants",
+        "description": "Checked that external_id, sport, and participant_type keys contain no duplicate player rows."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "pick_lifecycle",
+        "count": 0,
+        "status": "forbidden enqueue and settlement transitions absent"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "rejected delivery produced no receipt"
+      },
+      {
+        "table": "settlement_records",
+        "count": 0,
+        "status": "rejected settlement produced no settlement record"
+      },
+      {
+        "table": "audit_log",
+        "count": 0,
+        "status": "rejected atomic operations produced no audit rows"
+      }
+    ]
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_MECHANICAL_CHECKS_OWNER_APPROVAL_PENDING"
+}
