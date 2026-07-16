@@ -7,9 +7,14 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1549-pilot-r1-runtime-truth-refresh",
   "branch": "codex/utv2-1549-pilot-r1-runtime-truth-refresh",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "a3475a3d2782db08174fd422d828df1321054f60",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1549/diff-summary.md",
+    "docs/06_status/proof/UTV2-1549/runtime-health.json",
+    "docs/06_status/proof/UTV2-1549/verification.md",
+    "docs/06_status/readiness/readiness-score.json"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1549/diff-summary.md",
     "docs/06_status/proof/UTV2-1549/runtime-health.json",
@@ -21,9 +26,9 @@
     "docs/06_status/proof/UTV2-1549/verification.md",
     "docs/06_status/proof/UTV2-1549/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-16T03:33:17.168Z",
-  "heartbeat_at": "2026-07-16T03:33:17.168Z",
+  "heartbeat_at": "2026-07-16T06:02:14.546Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1549-pilot-r1-runtime-truth-refresh.json",
