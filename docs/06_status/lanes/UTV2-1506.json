@@ -21,7 +21,8 @@
     "docs/05_operations/RUNTIME_RELIABILITY_AGENT_CHARTER.md"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1506/evidence.json"
+    "docs/06_status/proof/UTV2-1506/evidence.json",
+    "docs/06_status/proof/UTV2-1506/verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-07-16T01:25:01.588Z",
