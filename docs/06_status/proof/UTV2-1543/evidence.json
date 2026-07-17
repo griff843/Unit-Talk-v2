@@ -11,7 +11,7 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "adba1ea1182dce1c23afd9d0261a0a6a2c0e03d1",
+    "verified_source_sha": "73e3cd71b988bf48b826c6a910caccebd6d325df",
     "verified_source_note": "Second commit fixes Codex P1 (missing checkout before require, base-SHA-pinned for the same privilege-boundary reason as UTV2-1550). Canonical fix for the gap independently rediscovered as UTV2-1552 (duplicate) while rebasing #1230/#1231/#1232 during this session.",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-17T15:25:00.000Z",
