@@ -1,5 +1,9 @@
 # PROOF: UTV2-1460
-MERGE_SHA: a8afd8850ab2087fb35dbd1775491440776f0847
+MERGE_SHA: a081e88adef5d88bcc7af3f6f7ecadfed7fdd52f
+
+Post-merge proof, rebound to the actual PR #1229 merge commit SHA above via
+the governed lane-close proof repair path, per `EXECUTION_TRUTH_MODEL.md`.
+(Pre-merge PR head SHA was `a8afd8850ab2087fb35dbd1775491440776f0847`.)
 
 ASSERTIONS:
 - [x] ops:proof-generate (pre-merge, no --merge-sha) writes verification.md in rebind-compatible format
@@ -52,7 +56,7 @@ Lane type: hygiene
 Branch: codex/utv2-1460-proof-generate-verification-md
 PR URL: N/A
 Head SHA: a8afd8850ab2087fb35dbd1775491440776f0847
-Merge SHA: N/A
+Merge SHA: a081e88adef5d88bcc7af3f6f7ecadfed7fdd52f (PR #1229)
 result: pass
 
 ## Verification
@@ -69,6 +73,6 @@ result: pass
 
 ## SHA Binding
 Head SHA: a8afd8850ab2087fb35dbd1775491440776f0847
-Merge SHA: N/A
+Merge SHA: a081e88adef5d88bcc7af3f6f7ecadfed7fdd52f (PR #1229)
 Rebind note: re-bound after a main-sync rebase performed on 2026-07-17; no
 code or proof content changed, only the branch's position relative to main.
