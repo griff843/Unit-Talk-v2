@@ -1,6 +1,22 @@
 # PROOF: UTV2-1550
 
-MERGE_SHA: db39a349e950d25995ec7008e1d044e78ed93eb8
+MERGE_SHA: 1d555828eed109bfe3d33f8e9cc5caa1aa202db8
+
+Approved head (PR #1239, pm-verdict/v1 APPROVED by griff843): 88693ae3d03e0202692838db678c5d5a7e372f40
+Squash-merged to main as: 1d555828eed109bfe3d33f8e9cc5caa1aa202db8
+
+Known gap: the pull_request-triggered "Executor Result Validation"/"Executor
+Result Validator" check never went green on this PR's own commits. The
+Codex P1 checkout-ref-pin fix (below) pins checkout to the PR base SHA for
+privilege-boundary reasons, but `scripts/ops/executor-result-validate.ts` is
+itself a new file introduced by this same PR — it does not exist at the base
+ref, so the workflow's "Resolve check name" step fails with
+`ERR_MODULE_NOT_FOUND` on every pull_request-triggered run of this specific
+PR. This is a one-time self-referential bootstrap gap: future PRs will not
+hit it, since main will already contain the file at their base SHA once this
+PR merges. PM (griff843) merged with full repo-owner authority notwithstanding
+this gap; P0 Protocol also has no result on the merge commit since it only
+runs on pull_request, not push.
 
 ## Verification
 
