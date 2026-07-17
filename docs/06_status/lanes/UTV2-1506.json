@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1506",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1506-reliability-runtime-agent-charter",
+  "branch": "claude/utv2-1506-reliability-runtime-agent-charter",
+  "base_branch": "main",
+  "commit_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1231",
+  "files_changed": [
+    ".ops/sync/UTV2-1506.yml",
+    "docs/05_operations/RUNTIME_RELIABILITY_AGENT_CHARTER.md",
+    "docs/06_status/lanes/UTV2-1506.json",
+    "docs/06_status/proof/UTV2-1506/evidence.json",
+    "docs/06_status/proof/UTV2-1506/verification.md"
+  ],
+  "file_scope_lock": [
+    "docs/05_operations/INCIDENT_RUNBOOK.md",
+    "docs/05_operations/RUNTIME_RELIABILITY_AGENT_CHARTER.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1506/evidence.json",
+    "docs/06_status/proof/UTV2-1506/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-16T01:25:01.588Z",
+  "heartbeat_at": "2026-07-16T05:30:18.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1506-reliability-runtime-agent-charter.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1506-reliability-runtime-agent-charter",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
