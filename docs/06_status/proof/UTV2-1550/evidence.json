@@ -65,36 +65,22 @@
     "skipped": 0,
     "note": "This lane changes only CI workflow logic and pure TS modules; no production code path or migration touched. Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy.",
     "queries": [
-      "INSERT submissions + picks via processSubmission x7 (one synthetic pick per test)",
-      "UPDATE picks lifecycle_state via transitionPickLifecycle (queued, posted) against real pick_lifecycle-triggering RPC path",
-      "INSERT/attempted-INSERT distribution_outbox rows via enqueueDistributionAtomic (one valid-path test, two invalid-transition tests expecting rejection)",
-      "UPDATE settlement_records + pick status via recordPickSettlement / settlePickAtomic, including a correction-chain re-settlement",
-      "SELECT COUNT(*) against pick_lifecycle, distribution_receipts, audit_log, settlement_records for each invariant assertion",
-      "SELECT participants (listByType('player')) for the UTV2-883 duplicate-participant invariant check",
-      "DELETE picks + submissions in each test's cleanup path (synthetic rows only)"
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 tests that create a pick (all except the read-only UTV2-883 participants test)" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests (UTV2-920 invalid enqueue/delivery/settlement) to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call (UTV2-920 invalid-delivery test setup); UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt (UTV2-920 invalid-enqueue test) is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call — no receipt row is created anywhere in this test run" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call (UTV2-920 invalid settlement) is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record (corrects_id null) and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation (enqueue/delivery/settlement), and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the UTV2-883 duplicate (external_id, sport, participant_type) invariant — no writes" }
     ],
     "row_counts": [
-      {
-        "table": "picks",
-        "note": "7 synthetic picks created (one per test), each deleted in the test's own cleanup",
-        "rows_created": 7,
-        "rows_deleted": 7
-      },
-      {
-        "table": "settlement_records",
-        "note": "3 settlement rows created across the smoke test + two UTV2-996 correction-chain tests (2 base + 1 correction, or base+correction per test); each test asserts exact base/correction counts before relying on ambient row counts",
-        "rows_created": 5
-      },
-      {
-        "table": "distribution_outbox",
-        "note": "1 successful enqueue (delivery test) + 1 rejected enqueue attempt (UTV2-920 invalid-enqueue test, asserted to write zero rows)",
-        "rows_created": 1
-      },
-      {
-        "table": "participants",
-        "note": "read-only invariant scan, no writes; asserts zero duplicate (external_id, sport, participant_type) tuples across the live table",
-        "rows_created": 0
-      }
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
     ]
   },
   "scope": {
