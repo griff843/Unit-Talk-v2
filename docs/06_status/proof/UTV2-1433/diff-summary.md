@@ -5,9 +5,9 @@ Issue: UTV2-1433
 Tier: T2
 Lane type: hygiene
 Branch: codex/utv2-1433-lane-close-lease-release
-PR URL: N/A
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1227
 Head SHA: 728a41725a8df6bee5fa2b62ee36810ed2ed7a15
-Merge SHA: N/A
+Merge SHA: 8922cf74e59e87ad494f05dca28666d0843b5f8b
 Diff base: 6b6ac71cd6e243ce9469d2e09cb6f61a68c0eec7
 Diff target: 728a41725a8df6bee5fa2b62ee36810ed2ed7a15
 
