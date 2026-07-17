@@ -26,6 +26,8 @@ truth-close binds it, per `EXECUTION_TRUTH_MODEL.md`).
 
 ## EVIDENCE:
 
+## Verification
+
 Substantive runtime-truth snapshot commit (pre-rebase original): `a3475a3d2782db08174fd422d828df1321054f60`.
 
 - `pnpm ops:brief` — completed; supplied an independent product-truth and queue overview.
