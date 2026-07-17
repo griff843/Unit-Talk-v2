@@ -1,6 +1,6 @@
 # PROOF: UTV2-1549
 
-MERGE_SHA: 810046e413b5b90e3d8339774c157a829f277f08
+MERGE_SHA: 4a279235b08cdd2bd07facce3b59bd65587867ee
 
 Pre-merge proof, bound to the current PR head SHA above (not yet an actual
 merge commit — the merge SHA does not exist until governed post-merge
