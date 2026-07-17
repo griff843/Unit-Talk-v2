@@ -1,5 +1,5 @@
 # PROOF: UTV2-1460
-MERGE_SHA: 78578d5899edf3f31d7030c2b336b8631636941b
+MERGE_SHA: a8afd8850ab2087fb35dbd1775491440776f0847
 
 ASSERTIONS:
 - [x] ops:proof-generate (pre-merge, no --merge-sha) writes verification.md in rebind-compatible format
@@ -51,7 +51,7 @@ Tier: T2
 Lane type: hygiene
 Branch: codex/utv2-1460-proof-generate-verification-md
 PR URL: N/A
-Head SHA: 71f39c6d5e4099bde9ec32467055fab7a65b1bc3
+Head SHA: a8afd8850ab2087fb35dbd1775491440776f0847
 Merge SHA: N/A
 result: pass
 
@@ -68,5 +68,7 @@ result: pass
 - The requested behavior was already present on `origin/main` (landed via a prior lane); this lane confirms it and records the required proof bundle.
 
 ## SHA Binding
-Head SHA: 71f39c6d5e4099bde9ec32467055fab7a65b1bc3
+Head SHA: a8afd8850ab2087fb35dbd1775491440776f0847
 Merge SHA: N/A
+Rebind note: re-bound after a main-sync rebase performed on 2026-07-17; no
+code or proof content changed, only the branch's position relative to main.
