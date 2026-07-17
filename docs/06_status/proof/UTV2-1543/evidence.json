@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1543",
+  "title": "Bind T1 PM verdicts to the exact PR head SHA in Merge Gate",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "set-by-ci",
+  "reviewed_head_sha": "set-by-ci",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "adba1ea1182dce1c23afd9d0261a0a6a2c0e03d1",
+    "verified_source_note": "Second commit fixes Codex P1 (missing checkout before require, base-SHA-pinned for the same privilege-boundary reason as UTV2-1550). Canonical fix for the gap independently rediscovered as UTV2-1552 (duplicate) while rebasing #1230/#1231/#1232 during this session.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-17T15:25:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1543",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_new": {
+      "command": "tsx --test scripts/ops/merge-gate-verdict.test.ts",
+      "status": "PASS",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0
+    },
+    "unit_tests_updated": {
+      "command": "tsx --test scripts/ops/workflow-hardening.test.ts",
+      "status": "PASS",
+      "tests": 29,
+      "pass": 29,
+      "fail": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "note": "Added a **/*.cjs eslint.config.mjs override (Node globals, CommonJS source type) for this repo's first .cjs file."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "This lane changes only Merge Gate workflow logic and a pure CommonJS module; no production code path or migration touched. Live smoke run regardless per T1 policy."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/merge-gate.yml",
+      "scripts/ops/merge-gate-verdict.cjs",
+      "scripts/ops/merge-gate-verdict.test.ts",
+      "scripts/ops/workflow-hardening.test.ts",
+      "docs/05_operations/schemas/pm-verdict-v1.md",
+      "eslint.config.mjs"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "ac1_exact_issue_pr_head_approved_passes": "PASS",
+    "ac2_stale_head_after_rebase_fails": "PASS",
+    "ac3_wrong_pr_number_fails": "PASS",
+    "ac4_missing_head_sha_fails": "PASS",
+    "ac5_changes_required_remains_authoritative": "PASS",
+    "ac6_no_content_based_inference": "PASS",
+    "ac7_t2_behavior_unchanged": "PASS",
+    "schema_doc_updated": "PASS",
+    "parsing_extracted_to_tested_module_not_duplicated": "PASS",
+    "no_admin_merge_used_as_fix": "PASS",
+    "no_required_check_weakened": "PASS"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}

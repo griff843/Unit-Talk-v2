@@ -522,3 +522,70 @@ test('active dispatch docs do not reference stale lane files or reconcile comman
     assert.doesNotMatch(command, /codex-health-check\.ts/);
   }
 });
+
+test('UTV2-1543: merge-gate.yml validates T1 pm-verdict/v1 PR + Head SHA via the tested module, not inline logic', async () => {
+  const { validateT1Verdicts } = await import('./merge-gate-verdict.cjs');
+
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const gate = objectField(jobs, 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+  const evalStep = steps.find(
+    (s) => typeof s.with === 'object' && s.with && typeof (s.with as Record<string, unknown>).script === 'string',
+  );
+  assert.ok(evalStep, 'merge-gate.yml gate job must have the Evaluate merge gate script step');
+  const script = ((evalStep as Record<string, unknown>).with as Record<string, unknown>).script as string;
+
+  assert.match(
+    script,
+    /require\(['"]\.\/scripts\/ops\/merge-gate-verdict\.cjs['"]\)/,
+    'merge-gate.yml must resolve T1 verdict validation via the tested merge-gate-verdict.cjs module, not a duplicated inline implementation',
+  );
+  assert.doesNotMatch(
+    script,
+    /function parseVerdict/,
+    'merge-gate.yml must not hand-duplicate parseVerdict inline once the tested module exists',
+  );
+
+  // The module itself must actually enforce PR/Head SHA freshness for T1 —
+  // covered exhaustively in merge-gate-verdict.test.ts; this asserts the
+  // exact shape the workflow depends on hasn't drifted.
+  assert.equal(typeof validateT1Verdicts, 'function');
+  const staleErrors = validateT1Verdicts(
+    [{ user: 'griff843', userType: 'User', parsed: { verdict: 'APPROVED', issueId: 'UTV2-1', prNumber: 1, headSha: 'a'.repeat(40) }, createdAt: '2026-01-01' }],
+    { prNumber: 1, headSha: 'b'.repeat(40), authorizedReviewers: new Set(['griff843']) },
+  );
+  assert.ok(staleErrors.some((e) => /stale/i.test(e)), 'a verdict bound to a different head SHA must fail closed');
+});
+
+test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trusted ref, before requiring the verdict helper', () => {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const gate = objectField(jobs, 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+
+  const checkoutIndex = steps.findIndex(
+    (s) => typeof s.uses === 'string' && (s.uses as string).startsWith('actions/checkout@'),
+  );
+  const evalIndex = steps.findIndex(
+    (s) => typeof s.with === 'object' && s.with && typeof (s.with as Record<string, unknown>).script === 'string',
+  );
+  assert.notStrictEqual(checkoutIndex, -1, 'merge-gate.yml gate job must have a Checkout step');
+  assert.ok(
+    checkoutIndex < evalIndex,
+    'Checkout must run before the Evaluate merge gate step, or require(\'./scripts/ops/merge-gate-verdict.cjs\') throws before the check run is even created',
+  );
+
+  // Same privilege-boundary requirement as the Executor Result Validator fix
+  // (UTV2-1550): this job holds checks/pull-requests/issues: write, so the
+  // checkout must never resolve to PR-controlled content for pull_request(_
+  // review) events, or a PR could modify merge-gate-verdict.cjs to defeat
+  // its own T1 freshness check.
+  const checkoutStep = steps[checkoutIndex] as Record<string, unknown>;
+  const withBlock = objectField(checkoutStep, 'with');
+  assert.strictEqual(
+    withBlock.ref,
+    "${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && github.event.pull_request.base.sha || github.sha }}",
+    'Checkout must pin ref to the PR base SHA on pull_request(_review) so a PR can never make this privileged job execute its own modified verdict-validation module',
+  );
+});
