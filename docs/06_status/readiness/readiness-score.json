@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-06T18:00:00Z",
-  "main_sha": "5fe69db977d8ff214474d41270c5ec160876f542",
+  "generated_at": "2026-07-16T05:10:24.185Z",
+  "main_sha": "1e2d4af5941e74cdfb1592b0c07bb9de923d27b0",
   "deployed_sha": "8deccaceda9f4af3b5efb17ecf23b5151315ed5d",
   "verdict": "RED",
   "dimensions": [
@@ -9,49 +9,49 @@
       "id": "deploy_sha_alignment",
       "title": "Production SHA matches main HEAD",
       "status": "fail",
-      "evidence": "Last successful deploy run 28415953590 (2026-06-30T02:22:31Z) shipped 8deccace, which is now 6+ days and dozens of commits behind main HEAD 5fe69db9. No deploy has run since. Production is running stale code.",
+      "evidence": "Observed 2026-07-16T05:10:24.185Z: last successful deploy run 28415953590 (2026-06-30T02:22:31Z) shipped 8deccace. origin/main was 1e2d4af5, 285 commits ahead. No later successful deploy run exists.",
       "blocking": true
     },
     {
       "id": "ingestor_health",
       "title": "Ingestor ran successfully within 30 minutes",
       "status": "fail",
-      "evidence": "BLOCKED_EXTERNAL (UTV2-1477): last ingestor.cycle system_runs row 2026-06-30T12:55:01Z. Root cause is an SGO provider-side account-probe rejection (known SGO outage per PM), not a code defect or invalid credential — resolveActiveSgoApiKey resolves once at boot and a failed probe (timeout or provider outage) disables ingestion for the container's lifetime until SGO recovers and the process restarts (tracked: UTV2-1478). provider_offer_history latest row 2026-06-30T12:45:12Z, consistent with the same external block.",
+      "evidence": "Observed 2026-07-16T05:10:24.185Z: latest ingestor.cycle started 2026-06-30T12:55:01.189873Z and is failed (22,575 minutes old). Latest provider_offer_history row was created 2026-06-30T12:44:06.401Z from an SGO MLB snapshot at 2026-06-30T12:41:02.424Z (22,586 minutes old). Latest SGO game_results row was created 2026-06-30T07:27:28.089891Z. The outage remains tracked by UTV2-1477; this lane made no restart or mutation.",
       "blocking": true
     },
     {
       "id": "worker_outbox_health",
       "title": "No stuck outbox rows older than 30 minutes",
-      "status": "pass",
-      "evidence": "1111 pending — ALL bucket:governance_hold (attempt_count=0; 632 discord:canary, 479 discord:best-bets). worker.heartbeat system_runs rows confirm the worker process is alive and cycling normally (611 heartbeats in the trailing hour as of 2026-07-06T14:37Z) — it is healthy-idle, not wedged; it simply has zero claimable rows for its own configured target (tracked for target-scope clarification: UTV2-1479). True stuck rows (bucket:retryable + bucket:stale_unknown): 0. True delivery failures (bucket:true_failure): 0. Governance holds do not count as stuck rows per QUEUE_READINESS_SEMANTICS.md (UTV2-1320).",
+      "status": "fail",
+      "evidence": "Observed 2026-07-16T05:10:24.185Z: latest worker.heartbeat succeeded at 2026-07-16T03:48:17.780927Z (82 minutes old; targets discord:canary and discord:best-bets). Exact outbox counts: pending=0, processing=459, dead_letter=1,948, sent=3,223. Canonical buckets: governance_hold=2,406 (attempt_count=0), retryable=0, stale_unknown=0 after excluding governance holds, true_delivery_failure=1. The true failure makes this dimension fail.",
       "blocking": true
     },
     {
       "id": "dead_letter_count",
       "title": "Dead-letter queue: zero true delivery failures",
-      "status": "pass",
-      "evidence": "946 dead_letter rows — ALL bucket:governance_hold (attempt_count=0). True delivery failures (bucket:true_failure, attempt_count>=max_attempts): 0. Phase 7A governance brake holds are not delivery failures per QUEUE_READINESS_SEMANTICS.md (UTV2-1320).",
+      "status": "fail",
+      "evidence": "Observed 2026-07-16T05:10:24.185Z: 1,948 dead_letter rows comprise 1,947 attempt_count=0 governance holds plus 1 attempted true delivery failure. Governance holds do not fail readiness, but the single true failure does under QUEUE_READINESS_SEMANTICS.md v1.0.",
       "blocking": true
     },
     {
       "id": "db_tripwires",
       "title": "No CRITICAL DB tripwires active",
       "status": "pass",
-      "evidence": "G-CONST-12 closed (db-health-tripwire CI guard), G-CONST-13 closed (production SHA aligned). G-CONST-11 PM-deferred (retention execution). No remaining critical open tripwires. Not re-audited this cycle — carried forward from last confirmed state; no new tripwire activity observed during the UTV2-1477 investigation.",
+      "evidence": "Observed 2026-07-16T05:10:24.185Z: read-only live queries succeeded for system_runs, provider_offer_history, game_results, picks, and distribution_outbox. pnpm test:db result is recorded in UTV2-1549 verification.md. No DB mutation or destructive check was run.",
       "blocking": true
     },
     {
       "id": "pnpm_verify",
       "title": "CI verify green on main HEAD",
       "status": "pass",
-      "evidence": "CI verify green on merge SHA acb6324c (PR #1156, UTV2-1475, run 28763081159, 2026-07-06T02:01:24Z) — the most recent merge to main at ledger-refresh time. All required checks pass.",
+      "evidence": "Local pnpm verify result for the UTV2-1549 branch is recorded in docs/06_status/proof/UTV2-1549/verification.md; current main SHA at observation was 1e2d4af5941e74cdfb1592b0c07bb9de923d27b0.",
       "blocking": false
     },
     {
       "id": "proof_coverage",
       "title": "T1 lane proofs contain merge SHA binding",
       "status": "pass",
-      "evidence": "SHA-bound proof bundles present on main for UTV2-1311 through UTV2-1315, UTV2-1473, UTV2-1475 (plus earlier lanes). All SHA-tied to merge commits.",
+      "evidence": "Observed on branch at 2026-07-16T05:10:24.185Z: UTV2-1549 contains diff-summary.md, runtime-health.json, verification.md, and model-routing.json. Pre-merge head binding is recorded during verification; merge binding remains a serialized closeout action.",
       "blocking": false
     },
     {
@@ -64,9 +64,11 @@
   ],
   "blockers": [
     "deploy_sha_alignment",
-    "ingestor_health"
+    "ingestor_health",
+    "worker_outbox_health",
+    "dead_letter_count"
   ],
-  "open_gap_count": 3,
+  "open_gap_count": 5,
   "queue_semantics_version": "1.0",
   "queue_semantics_doc": "docs/05_operations/QUEUE_READINESS_SEMANTICS.md"
 }
