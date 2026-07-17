@@ -3,8 +3,40 @@
 # Validates executor completion claims independently. Does NOT trust comment
 # content — verifies CI, proof files, and SHA binding via GitHub API.
 #
-# Creates a check run "Executor Result Validation" that branch protection
-# requires. Fail-closed: no valid executor result = no merge.
+# UTV2-1550: pull_request-triggered evaluation (opened/synchronize/reopened)
+# NEVER creates the required "Executor Result Validation" check. GitHub's
+# merge-eligibility computation for a required status-check context is
+# anchored to the check-suite/run associated with the *original* triggering
+# event for a given SHA — a later run with the same context name from a
+# different trigger (issue_comment) does not reliably supersede an earlier
+# failing pull_request-triggered run under that name. Concretely: pushing a
+# new commit re-evaluates any existing (now-stale) executor-result comment
+# and can create a *failing* run under the required name before a corrected
+# comment is ever posted, and a later successful issue_comment-triggered run
+# under the same name did not clear that for merge purposes (root-caused via
+# UTV2-1550 on PRs #1227/#1229/#1235: the original pull_request-triggered
+# runs stayed the effective blocker even after superseding issue_comment
+# runs succeeded; re-running the *original* run's failed jobs is what
+# actually cleared the merge block).
+#
+# Fix: only issue_comment (posting/editing an EXECUTOR_RESULT comment) and
+# workflow_dispatch (manual re-run/recovery) ever create the required
+# "Executor Result Validation" context. pull_request-triggered runs always
+# use the distinct, non-required "Executor Result Preflight" name — so a
+# push can never leave a stale failure sitting under the required identity.
+# The check-name mapping lives in scripts/ops/executor-result-validate.ts
+# (resolveCheckName), covered by scripts/ops/executor-result-validate.test.ts,
+# and is looked up here rather than hand-duplicated so the workflow can never
+# drift from the tested definition.
+#
+# Temporary recovery procedure (until this fix is live on a given PR): if a
+# PR shows all required checks green but remains merge-blocked, the original
+# pull_request-triggered "Executor Result Validation" run for that head may
+# still hold a stale failure. Re-run that specific run's failed jobs (Actions
+# UI → the run → "Re-run failed jobs" — NOT a new comment/push, which creates
+# a separate run under the same pre-fix ambiguity). Once this fix is merged,
+# pull_request-triggered runs never touch the required name and this
+# procedure is no longer needed.
 #
 # Spec: docs/05_operations/GOVERNED_LOOP_SPEC.md (sections 2B, 3A, 3D, 3E)
 
@@ -13,6 +45,12 @@ name: Executor Result Validator
 on:
   issue_comment:
     types: [created, edited]
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: 'PR number to re-validate (recovery/manual re-run path)'
+        required: true
+        type: number
   pull_request:
     types: [opened, synchronize, reopened]
 
@@ -23,20 +61,58 @@ permissions:
 
 jobs:
   validate:
-    name: Executor Result Validation
+    name: Executor Result Validator
     if: >-
       github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request &&
        contains(github.event.comment.body, 'EXECUTOR_RESULT:'))
     runs-on: ubuntu-latest
     steps:
+      # UTV2-1550 follow-up (Codex P1): pin to the base ref on pull_request
+      # events. actions/checkout defaults to the PR's own head/merge ref,
+      # which is attacker-controlled -- the "Resolve check name" step below
+      # executes scripts/ops/executor-result-validate.ts from whatever gets
+      # checked out here, in a job holding checks: write. Pinning the ref to
+      # the PR's base SHA (immutable, reachable from main, never PR-supplied)
+      # means that script is always the trusted main-branch version regardless
+      # of what the PR itself contains. issue_comment/workflow_dispatch runs
+      # keep the default github.sha, which already resolves to the base
+      # repo's default-branch HEAD for those event types.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve check name (UTV2-1550)
+        id: check_name
+        run: |
+          NAME=$(pnpm exec tsx scripts/ops/executor-result-validate.ts resolve-check-name "${{ github.event_name }}")
+          echo "Resolved check name: $NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
       - name: Validate executor result
         uses: actions/github-script@v7
+        env:
+          CHECK_NAME: ${{ steps.check_name.outputs.name }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
+            const checkName = process.env.CHECK_NAME;
             let prNumber, headSha, headRef, prLabels;
 
             // ── 1. Resolve PR ──────────────────────────────────────────
@@ -47,7 +123,9 @@ jobs:
               headRef = pr.head.ref;
               prLabels = (pr.labels || []).map(l => l.name);
             } else {
-              prNumber = context.payload.issue.number;
+              prNumber = context.eventName === 'workflow_dispatch'
+                ? parseInt(context.payload.inputs.pull_number, 10)
+                : context.payload.issue.number;
               const { data: pr } = await github.rest.pulls.get({
                 owner, repo, pull_number: prNumber
               });
@@ -98,7 +176,8 @@ jobs:
               .filter(Boolean);
 
             // On pull_request with no executor result yet: exit silently.
-            // Branch protection keeps the PR blocked via absent check.
+            // Branch protection keeps the PR blocked via the absent required
+            // check (which pull_request never creates anyway — see header).
             if (parsed.length === 0 && context.eventName === 'pull_request') {
               core.info('No executor result comment found. Check stays pending.');
               return;
@@ -107,7 +186,7 @@ jobs:
             // ── 4. Create pending check run on PR HEAD SHA ─────────────
             const { data: check } = await github.rest.checks.create({
               owner, repo,
-              name: 'Executor Result Validation',
+              name: checkName,
               head_sha: headSha,
               status: 'in_progress',
               started_at: new Date().toISOString()
@@ -291,6 +370,7 @@ jobs:
 
             // ── 9. Complete check run ──────────────────────────────────
             const passed = errors.length === 0;
+            const isRequired = checkName !== 'Executor Result Preflight';
 
             await github.rest.checks.update({
               owner, repo,
@@ -300,16 +380,21 @@ jobs:
               completed_at: new Date().toISOString(),
               output: {
                 title: passed
-                  ? 'Executor Result: VALID'
-                  : 'Executor Result: INVALID',
+                  ? `${checkName}: VALID`
+                  : `${checkName}: INVALID`,
                 summary: passed
                   ? 'All independent checks passed. Proof verified, CI green on exact HEAD SHA.'
-                  : `**Validation failed:**\n\n${errors.map(e => '- ' + e).join('\n')}`
+                  : `**Validation failed:**\n\n${errors.map(e => '- ' + e).join('\n')}` +
+                    (isRequired ? '' : '\n\n_This is the non-required preflight check (pull_request-triggered). It never blocks merge — post a corrected executor-result comment to re-run the required validation._')
               }
             });
 
-            // Post failure comment for visibility (fail loud)
-            if (!passed) {
+            // Post failure comment for visibility (fail loud) — only for the
+            // required check. The preflight already surfaces its findings on
+            // the check run itself; commenting on every push before an
+            // executor-result comment even exists would be noisy and, per
+            // UTV2-1550, silence at parsed.length===0 is intentional above.
+            if (!passed && isRequired) {
               await github.rest.issues.createComment({
                 owner, repo,
                 issue_number: prNumber,
@@ -321,5 +406,9 @@ jobs:
                   'Fix the above and re-post the executor result comment.'
                 ].join('\n')
               });
+            }
+            if (!passed && isRequired) {
               core.setFailed('Executor result validation failed.');
+            } else if (!passed) {
+              core.warning(`Executor Result Preflight failed (non-blocking): ${errors.join('; ')}`);
             }

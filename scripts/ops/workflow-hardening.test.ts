@@ -285,7 +285,12 @@ test('merge gate is structurally wired for PM verdict comments without opened PR
 
 test('required pull-request gates are wired to executable blocking jobs', () => {
   const requiredGateJobs = [
-    ['executor-result-validator.yml', 'validate', 'Executor Result Validation'],
+    // executor-result-validator.yml is intentionally excluded here and checked
+    // separately below: UTV2-1550 makes its check name dynamic (resolved from
+    // the triggering event, not a static job.name), specifically so that
+    // pull_request-triggered runs never expose the required "Executor Result
+    // Validation" name in the first place. See the dedicated test after this
+    // one for what it asserts instead.
     ['file-scope-lock-check.yml', 'check', 'File scope lock'],
     ['r-level-compliance-check.yml', 'r-level-compliance-check', 'R-Level Compliance Check'],
     ['return-review-packet.yml', 'return-review-packet', 'Return review packet'],
@@ -307,6 +312,78 @@ test('required pull-request gates are wired to executable blocking jobs', () => 
     assert.strictEqual(job.name, jobName, `${workflowName} must expose the required check name`);
     assert.ok(Array.isArray(job.steps), `${workflowName} job ${jobId} must have executable steps`);
   }
+});
+
+test('UTV2-1550: executor-result-validator.yml never exposes the required check name on pull_request', async () => {
+  const { resolveCheckName, isRequiredCheckName, REQUIRED_CHECK_NAME, PREFLIGHT_CHECK_NAME } = await import(
+    './executor-result-validate.ts'
+  );
+
+  const workflow = readWorkflowYaml('executor-result-validator.yml');
+  const pullRequest = objectField(objectField(workflow, 'on'), 'pull_request');
+  const jobs = objectField(workflow, 'jobs');
+  const job = objectField(jobs, 'validate');
+
+  assert.ok(
+    stringArrayField(pullRequest, 'types').includes('synchronize'),
+    'executor-result-validator.yml must rerun on synchronize',
+  );
+  assert.ok(Array.isArray(job.steps), 'executor-result-validator.yml job validate must have executable steps');
+
+  // The job's own static name must NOT be the required context — otherwise
+  // GitHub's own native per-job check run would recreate the exact bug this
+  // lane fixes, regardless of the dynamic custom check name logic below.
+  assert.notStrictEqual(
+    job.name,
+    REQUIRED_CHECK_NAME,
+    'the job-level name must not equal the required check name, or every pull_request-triggered run would still create a native check under that identity',
+  );
+
+  // The dynamic check-name resolution itself, which the workflow looks up
+  // via `tsx scripts/ops/executor-result-validate.ts resolve-check-name`
+  // rather than hand-duplicating.
+  assert.strictEqual(resolveCheckName('pull_request'), PREFLIGHT_CHECK_NAME);
+  assert.strictEqual(resolveCheckName('issue_comment'), REQUIRED_CHECK_NAME);
+  assert.strictEqual(resolveCheckName('workflow_dispatch'), REQUIRED_CHECK_NAME);
+  assert.strictEqual(isRequiredCheckName('pull_request'), false);
+  assert.strictEqual(isRequiredCheckName('issue_comment'), true);
+
+  // The workflow step that performs this resolution must exist and must
+  // call the same script the assertions above imported from, so the
+  // workflow can never hand-duplicate a diverging literal.
+  const steps = job.steps as Array<Record<string, unknown>>;
+  const resolveStep = steps.find(
+    (s) => typeof s.run === 'string' && (s.run as string).includes('executor-result-validate.ts resolve-check-name'),
+  );
+  assert.ok(resolveStep, 'executor-result-validator.yml must resolve its check name via the tested script, not a duplicated literal');
+});
+
+test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-controlled code to resolve the check name', () => {
+  // Codex P1: the "Resolve check name" step runs the checked-out copy of
+  // scripts/ops/executor-result-validate.ts in a job holding checks: write.
+  // actions/checkout defaults to the PR's own head/merge ref on pull_request
+  // events -- a PR could alter that script to defeat the identity fix above.
+  // The checkout must instead pin to the PR's base SHA (immutable, reachable
+  // from main, never PR-supplied) on pull_request; other event types keep
+  // the default github.sha, which already resolves to the base repo's
+  // default-branch HEAD for those triggers.
+  const workflow = readWorkflowYaml('executor-result-validator.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const job = objectField(jobs, 'validate');
+  const steps = job.steps as Array<Record<string, unknown>>;
+
+  const checkoutStep = steps.find(
+    (s) => typeof s.uses === 'string' && (s.uses as string).startsWith('actions/checkout@'),
+  );
+  assert.ok(checkoutStep, 'executor-result-validator.yml must have a Checkout step');
+
+  const withBlock = objectField(checkoutStep as Record<string, unknown>, 'with');
+  const ref = withBlock.ref;
+  assert.strictEqual(
+    ref,
+    "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}",
+    'Checkout must pin ref to the PR base SHA on pull_request so a PR can never make the privileged job execute its own modified check-name-resolution script',
+  );
 });
 
 test('codex return review extracts issue IDs without sed delimiter traps', () => {

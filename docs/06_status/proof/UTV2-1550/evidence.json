@@ -1,0 +1,104 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1550",
+  "title": "Give pull_request preflight a non-required Executor Result Validation identity",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "db39a349e950d25995ec7008e1d044e78ed93eb8",
+  "reviewed_head_sha": "db39a349e950d25995ec7008e1d044e78ed93eb8",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "db39a349e950d25995ec7008e1d044e78ed93eb8",
+    "verified_source_note": "Rebased onto final main after the T1 governance batch (#1230/#1235/#1229 and their repair PRs) drained; adds the Codex P1 checkout-ref-pin fix on top of the original authoring.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-17T17:20:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1550",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_new": {
+      "command": "tsx --test scripts/ops/executor-result-validate.test.ts",
+      "status": "PASS",
+      "tests": 21,
+      "pass": 21,
+      "fail": 0
+    },
+    "unit_tests_updated": {
+      "command": "tsx --test scripts/ops/workflow-hardening.test.ts",
+      "status": "PASS",
+      "tests": 28,
+      "pass": 28,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "note": "This lane changes only CI workflow logic and pure TS modules; no production code path or migration touched. Live smoke run regardless per T1 policy."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/executor-result-validator.yml",
+      "scripts/ops/executor-result-validate.ts",
+      "scripts/ops/executor-result-validate.test.ts",
+      "scripts/ops/workflow-hardening.test.ts",
+      "docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md"
+    ],
+    "followup_paths": [
+      ".github/workflows/executor-result-validator.yml (Checkout ref pin, Codex P1)",
+      "scripts/ops/workflow-hardening.test.ts (adversarial ref-pin regression test)",
+      "docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md (follow-up section)"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "single_authoritative_required_identity_per_head": "PASS",
+    "pull_request_preflight_never_emits_required_context": "PASS",
+    "check_name_resolved_from_tested_module_not_duplicated": "PASS",
+    "regression_tests_missing_valid_corrected_headchange": "PASS",
+    "recovery_procedure_documented": "PASS",
+    "no_third_party_app_removed": "PASS",
+    "no_required_check_weakened": "PASS",
+    "no_admin_merge_used_as_fix": "PASS",
+    "privileged_job_never_executes_pr_controlled_code": "PASS",
+    "checkout_pinned_to_base_ref_on_pull_request": "PASS",
+    "adversarial_ref_pin_regression_test_added": "PASS"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}

@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1550",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1550-executor-result-required-check-identity",
+  "branch": "claude/utv2-1550-executor-result-required-check-identity",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1239",
+  "files_changed": [
+    ".github/workflows/executor-result-validator.yml",
+    ".ops/sync/UTV2-1550.yml",
+    "docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md",
+    "docs/06_status/lanes/UTV2-1550.json",
+    "docs/06_status/proof/UTV2-1550/.gitkeep",
+    "docs/06_status/proof/UTV2-1550/diff-summary.md",
+    "docs/06_status/proof/UTV2-1550/evidence.json",
+    "docs/06_status/proof/UTV2-1550/verification.md",
+    "package.json",
+    "scripts/ops/executor-result-validate.test.ts",
+    "scripts/ops/executor-result-validate.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/executor-result-validator.yml",
+    ".ops/sync/UTV2-1550.yml",
+    "docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md",
+    "docs/06_status/lanes/UTV2-1550.json",
+    "docs/06_status/proof/UTV2-1550/.gitkeep",
+    "docs/06_status/proof/UTV2-1550/diff-summary.md",
+    "docs/06_status/proof/UTV2-1550/evidence.json",
+    "docs/06_status/proof/UTV2-1550/verification.md",
+    "package.json",
+    "scripts/ops/executor-result-validate.test.ts",
+    "scripts/ops/executor-result-validate.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1550/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-17T03:18:14.806Z",
+  "heartbeat_at": "2026-07-17T16:15:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1550-executor-result-required-check-identity.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1550-executor-result-required-check-identity",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
