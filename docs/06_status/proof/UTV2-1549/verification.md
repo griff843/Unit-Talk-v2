@@ -1,10 +1,10 @@
 # PROOF: UTV2-1549
 
-MERGE_SHA: 4a279235b08cdd2bd07facce3b59bd65587867ee
+MERGE_SHA: ab1f02c33fe5f2aca10c582df8cd1c037894b4dc
 
-Pre-merge proof, bound to the current PR head SHA above (not yet an actual
-merge commit — the merge SHA does not exist until governed post-merge
-truth-close binds it, per `EXECUTION_TRUTH_MODEL.md`).
+Post-merge proof, rebound to the actual PR #1235 merge commit SHA above via
+the governed lane-close proof repair path, per `EXECUTION_TRUTH_MODEL.md`.
+(Pre-merge PR head SHA was `4a279235b08cdd2bd07facce3b59bd65587867ee`.)
 
 # UTV2-1549 Verification
 
@@ -46,7 +46,7 @@ Substantive runtime-truth snapshot commit (pre-rebase original): `a3475a3d2782db
 # skipped 0
 ```
 
-- `pnpm verify` — PASS; static verification, DB smoke (7/7), and the complete live T1 proof suite completed with zero failures. The bounded-dedup content assertion had one expected skip because the latest provider snapshot is outside the 72-hour window; that skip is runtime outage evidence and is recorded in `runtime-health.json`, not treated as a code pass for ingestion freshness.
+- `pnpm verify` — PASS; static verification, DB smoke (7/7), and the complete live T1 proof suite completed with zero failures. `pnpm verify` includes `pnpm type-check` (TypeScript project-references build check) and `pnpm test` (all unit tests) as constituent steps; both passed with zero failures as part of this run. The bounded-dedup content assertion had one expected skip because the latest provider snapshot is outside the 72-hour window; that skip is runtime outage evidence and is recorded in `runtime-health.json`, not treated as a code pass for ingestion freshness.
 - `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; no R-level rules matched the readiness/proof-only changed paths.
 
 ## Scope and authority
