@@ -1,0 +1,78 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1549",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1549-pilot-r1-runtime-truth-refresh",
+  "branch": "codex/utv2-1549-pilot-r1-runtime-truth-refresh",
+  "base_branch": "main",
+  "commit_sha": "ab1f02c33fe5f2aca10c582df8cd1c037894b4dc",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1235",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1549/.gitkeep",
+    "docs/06_status/proof/UTV2-1549/diff-summary.md",
+    "docs/06_status/proof/UTV2-1549/runtime-health.json",
+    "docs/06_status/proof/UTV2-1549/verification.md",
+    "docs/06_status/readiness/readiness-score.json"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1549/.gitkeep",
+    "docs/06_status/proof/UTV2-1549/diff-summary.md",
+    "docs/06_status/proof/UTV2-1549/runtime-health.json",
+    "docs/06_status/proof/UTV2-1549/verification.md",
+    "docs/06_status/readiness/readiness-score.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1549/diff-summary.md",
+    "docs/06_status/proof/UTV2-1549/verification.md",
+    "docs/06_status/proof/UTV2-1549/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-07-16T03:33:17.168Z",
+  "heartbeat_at": "2026-07-17T04:32:56.543Z",
+  "closed_at": "2026-07-17T04:32:56.543Z",
+  "blocked_by": [
+    "Readiness Regression Gate requires GREEN; fresh ledger is correctly RED pending owner-authorized production recovery UTV2-1477"
+  ],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1549-pilot-r1-runtime-truth-refresh.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-17T03:22:12.927Z",
+      "verdict": "pass",
+      "merge_sha": "ab1f02c33fe5f2aca10c582df8cd1c037894b4dc",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1235"
+    },
+    {
+      "checked_at": "2026-07-17T03:22:45.011Z",
+      "verdict": "pass",
+      "merge_sha": "ab1f02c33fe5f2aca10c582df8cd1c037894b4dc",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1235",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1549-pilot-r1-runtime-truth-refresh",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

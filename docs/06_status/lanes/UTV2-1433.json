@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1433",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1433-lane-close-lease-release",
+  "branch": "codex/utv2-1433-lane-close-lease-release",
+  "base_branch": "main",
+  "commit_sha": "8922cf74e59e87ad494f05dca28666d0843b5f8b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1227",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1433/diff-summary.md",
+    "docs/06_status/proof/UTV2-1433/verification.md",
+    "docs/06_status/proof/UTV2-1433/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-07-15T19:14:57.293Z",
+  "heartbeat_at": "2026-07-17T05:22:23.087Z",
+  "closed_at": "2026-07-17T05:22:23.087Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1433-lane-close-lease-release.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-17T03:10:19.395Z",
+      "verdict": "pass",
+      "merge_sha": "8922cf74e59e87ad494f05dca28666d0843b5f8b",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1227"
+    },
+    {
+      "checked_at": "2026-07-17T03:11:29.333Z",
+      "verdict": "pass",
+      "merge_sha": "8922cf74e59e87ad494f05dca28666d0843b5f8b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1227",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-terra-medium",
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "medium",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1433-lane-close-lease-release",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
