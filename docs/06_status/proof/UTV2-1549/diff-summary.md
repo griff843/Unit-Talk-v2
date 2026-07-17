@@ -3,7 +3,8 @@
 Issue: UTV2-1549  
 Tier: T2  
 Lane type: runtime  
-Branch: `codex/utv2-1549-pilot-r1-runtime-truth-refresh`
+Branch: `codex/utv2-1549-pilot-r1-runtime-truth-refresh`  
+Merge SHA: `ab1f02c33fe5f2aca10c582df8cd1c037894b4dc` (PR #1235)
 
 ## Changes
 
