@@ -28,10 +28,10 @@
     "docs/06_status/proof/UTV2-1549/verification.md",
     "docs/06_status/proof/UTV2-1549/model-routing.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-16T03:33:17.168Z",
-  "heartbeat_at": "2026-07-17T03:22:45.011Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-17T04:32:56.543Z",
+  "closed_at": "2026-07-17T04:32:56.543Z",
   "blocked_by": [
     "Readiness Regression Gate requires GREEN; fresh ledger is correctly RED pending owner-authorized production recovery UTV2-1477"
   ],
