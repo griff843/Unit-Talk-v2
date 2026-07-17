@@ -52,7 +52,7 @@ The "Self-amendment" section repeats the exclusion for `DELEGATION_POLICY.md` on
 - `packages/contracts/**`, `packages/db/src/**`, `packages/domain/src/**`
 - `package.json`, `pnpm-lock.yaml`, `tsconfig*.json`, `Dockerfile`
 
-Only `supabase/migrations/**` is in `forbidden_path_globs`.
+`forbidden_path_globs` contains three entries: `supabase/migrations/**`, `database/migrations/**`, and `packages/**/database.types.ts`.
 
 This eligibility allowlist is broader than Delegation Policy Tier A in three verified ways: (a) it does not exclude `DELEGATION_POLICY.md` — a governance-lane PR editing it can pass Lane Authority Check, but still lacks autonomous merge authority; (b) it includes `.lane/**`, so the allowlist file can make a PR that edits itself path-eligible; (c) it includes `packages/contracts/**` and `packages/domain/src/**`, which `DELEGATION_POLICY.md`'s sensitive-path matrix names **Tier C — no autonomous edits**. The mechanisms therefore disagree on path classification, while the Delegation Policy and tier gates remain the authority controls.
 
@@ -118,7 +118,7 @@ Built strictly on the Observed facts above. "Standing-editable" means the Delega
 Define a single canonical, machine-readable list (e.g. `docs/05_operations/governance-critical-paths.json`) of paths that **require an owner-ratified T1 lane** and are **never editable under standing authority**, regardless of the PR's tier label or lane type. "Owner-ratified" must preserve the existing exact dual-artifact gate: the `t1-approved` label **and** a valid Griff-authored `pm-verdict/v1` APPROVED artifact bound to the reviewed head. Chat, implementer output, shared-account authorship, or either artifact alone is insufficient.
 
 1. `.github/workflows/merge-gate.yml`
-2. The other gate/guard workflows: `lane-check.yml`, `r-level-compliance-check.yml`, `proof-auditor-gate.yml`, `proof-coverage-guard.yml`, `file-scope-lock-check.yml`, `branch-discipline-guard.yml`, `direct-main-push-guard.yml`, `p0-protocol.yml`, `executor-result-validator.yml`, `post-merge-lane-close.yml`
+2. The other gate/guard workflows: `lane-check.yml`, `r-level-compliance-check.yml`, `proof-gate.yml`, `proof-coverage-guard.yml`, `file-scope-lock-check.yml`, `branch-discipline-guard.yml`, `direct-main-push-guard.yml`, `p0-protocol.yml`, `executor-result-validator.yml`, `post-merge-lane-close.yml` (`proof-gate.yml` is the active, PR-triggered consolidated Proof Gate; `proof-auditor-gate.yml` is disabled to `workflow_dispatch` only and protecting it instead would leave the active T1 proof gate editable under the same standing-authority surface this list is trying to narrow)
 3. `scripts/ci/r-level-check.ts`, `scripts/ci/file-scope-guard.ts`, `scripts/lane-contract.ts`, and any script a gate workflow invokes
 4. `scripts/ops/truth-check-lib.ts`, `scripts/ops/lane-start.ts`, `scripts/ops/lane-close*.ts`, `scripts/ops/apply-branch-protection.sh`
 5. `docs/05_operations/r1-r5-rules.json` and `R1_R5_OPERATING_RULE.md`
