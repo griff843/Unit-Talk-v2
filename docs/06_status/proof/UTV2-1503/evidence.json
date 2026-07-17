@@ -8,12 +8,12 @@
   "generated_at": "2026-07-16T05:52:06Z",
   "status": "PASS",
   "sha_binding": {
-    "verified_source_sha": "128eb99b4df830977803aa1b72c95db4300dba79",
-    "verified_source_note": "Substantive audit repair commit; all later commits are restricted to this lane's proof and manifest paths.",
+    "verified_source_sha": "acd1228414f60bf0528294f642137b40394daf01",
+    "verified_source_note": "Second substantive audit repair commit, fixing two Codex P2 findings (forbidden-glob count, retired proof-auditor-gate.yml reference). All later commits are restricted to this lane's proof and manifest paths.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-16T05:52:06Z",
+    "bound_at": "2026-07-17T15:20:00.000Z",
     "ci_sentinels": {
       "pnpm_verify": "pass",
       "pnpm_test_db": "pass",
