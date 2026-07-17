@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1550-executor-result-required-check-identity",
   "branch": "claude/utv2-1550-executor-result-required-check-identity",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1239",
   "files_changed": [
     ".github/workflows/executor-result-validator.yml",
@@ -40,14 +40,130 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1550/evidence.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-07-17T03:18:14.806Z",
-  "heartbeat_at": "2026-07-17T16:15:00.000Z",
+  "heartbeat_at": "2026-07-17T21:40:10.449Z",
   "closed_at": null,
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1550-executor-result-required-check-identity.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-17T21:34:20.849Z",
+      "verdict": "pass",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1239",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-17T21:34:20.863Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4",
+        "P3",
+        "P4",
+        "C4",
+        "C5",
+        "P6",
+        "R1",
+        "R2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-17T21:34:41.086Z",
+      "verdict": "pass",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1239",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-17T21:34:41.097Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4",
+        "P3",
+        "P4",
+        "C4",
+        "C5",
+        "P6",
+        "R1",
+        "R2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-17T21:35:26.611Z",
+      "verdict": "pass",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1239",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-17T21:35:26.620Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4",
+        "P3",
+        "P4",
+        "C4",
+        "C5",
+        "P6",
+        "R1",
+        "R2"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-17T21:40:10.440Z",
+      "verdict": "pass",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1239",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-17T21:40:10.449Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

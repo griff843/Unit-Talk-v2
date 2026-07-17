@@ -1,25 +1,25 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1550",
   "title": "Give pull_request preflight a non-required Executor Result Validation identity",
   "tier": "T1",
   "lane_type": "governance",
-  "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "db39a349e950d25995ec7008e1d044e78ed93eb8",
-  "reviewed_head_sha": "db39a349e950d25995ec7008e1d044e78ed93eb8",
+  "status": "MERGED_VERIFIED",
+  "source_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+  "reviewed_head_sha": "88693ae3d03e0202692838db678c5d5a7e372f40",
   "evidence_commit_sha": null,
   "current_head_sha": null,
-  "merge_sha": null,
+  "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
   "sha_binding": {
-    "verified_source_sha": "db39a349e950d25995ec7008e1d044e78ed93eb8",
-    "verified_source_note": "Rebased onto final main after the T1 governance batch (#1230/#1235/#1229 and their repair PRs) drained; adds the Codex P1 checkout-ref-pin fix on top of the original authoring.",
-    "sha_type": "implementation_sha",
-    "bound_at": "2026-07-17T17:20:00.000Z",
+    "verified_source_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+    "verified_source_note": "PR #1239 approved at head 88693ae3d03e0202692838db678c5d5a7e372f40 by griff843 pm-verdict/v1 APPROVED, then squash-merged to main as 1d555828eed109bfe3d33f8e9cc5caa1aa202db8. Rebound to the merge SHA during post-merge lane-close reconciliation.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-17T21:40:00.000Z",
     "ci_sentinels": {
       "verify": "pass",
-      "merge_gate": "pending",
-      "executor_result_validation": "pending",
-      "p0_protocol": "pending"
+      "merge_gate": "pass",
+      "executor_result_validation": "fail_bootstrap_self_reference",
+      "p0_protocol": "not_run_on_direct_main_push"
     },
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
@@ -63,7 +63,25 @@
     "pass": 7,
     "fail": 0,
     "skipped": 0,
-    "note": "This lane changes only CI workflow logic and pure TS modules; no production code path or migration touched. Live smoke run regardless per T1 policy."
+    "note": "This lane changes only CI workflow logic and pure TS modules; no production code path or migration touched. Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy.",
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 tests that create a pick (all except the read-only UTV2-883 participants test)" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests (UTV2-920 invalid enqueue/delivery/settlement) to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call (UTV2-920 invalid-delivery test setup); UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt (UTV2-920 invalid-enqueue test) is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call — no receipt row is created anywhere in this test run" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call (UTV2-920 invalid settlement) is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record (corrects_id null) and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation (enqueue/delivery/settlement), and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the UTV2-883 duplicate (external_id, sport, participant_type) invariant — no writes" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
   },
   "scope": {
     "implementation_paths": [
@@ -96,9 +114,13 @@
     "adversarial_ref_pin_regression_test_added": "PASS"
   },
   "owner_boundary": {
-    "t1_approved_label": "absent_and_not_created_by_this_lane",
-    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
-    "merge_authorized": false
+    "t1_approved_label": "present_on_pr_1239",
+    "pm_verdict_v1": "griff843_APPROVED_at_88693ae3d03e0202692838db678c5d5a7e372f40",
+    "merge_authorized": true
   },
-  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+  "known_gaps": [
+    "The pull_request-triggered Executor Result Validation/Validator check never went green on PR #1239's own commits: the Codex P1 checkout-ref-pin fix pins checkout to the PR base SHA, but scripts/ops/executor-result-validate.ts is itself a new file introduced by this same PR, so it does not exist at the base ref and the workflow's resolve-check-name step fails with ERR_MODULE_NOT_FOUND on every pull_request-triggered run of this PR. This is a one-time self-referential bootstrap gap specific to the PR that introduces the file — future PRs will not hit it, since main will already contain the file at their base SHA. PM merged with full repo-owner authority notwithstanding this gap.",
+    "P0 Protocol does not run on a direct push to main (only on pull_request), so it has no result on the merge commit itself."
+  ],
+  "verdict": "MERGED_PM_APPROVED_WITH_DOCUMENTED_BOOTSTRAP_GAP"
 }
