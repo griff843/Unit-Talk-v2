@@ -14,9 +14,30 @@ jobs:
     name: Sync tier label
     runs-on: ubuntu-latest
     steps:
+      # UTV2-1551: labels added via the default GITHUB_TOKEN do not trigger
+      # other workflows' `labeled` events (documented GitHub Actions
+      # behavior for GITHUB_TOKEN-authored events) -- so a fresh PR's
+      # tier-label sync could never cascade into Merge Gate's own
+      # `pull_request: labeled` trigger, leaving Merge Gate never evaluated
+      # until some other push/comment happened to fire it. SYNC_BOT_TOKEN
+      # (an existing PAT, already used by post-merge-lane-close.yml for the
+      # same reason) makes this a real user action GitHub will cascade from.
+      #
+      # Fail-closed, no GITHUB_TOKEN fallback: a silent fallback would
+      # silently reintroduce the exact non-cascading-event bug this secret
+      # exists to fix, with no visible signal that tier-label sync had
+      # quietly stopped triggering Merge Gate again.
+      - name: Require SYNC_BOT_TOKEN
+        run: |
+          if [ -z "${{ secrets.SYNC_BOT_TOKEN }}" ]; then
+            echo "::error::SYNC_BOT_TOKEN is required for tier-label-check.yml (UTV2-1551) -- the default GITHUB_TOKEN's labeled event does not cascade to trigger Merge Gate. See docs/05_operations/REQUIRED_SECRETS.md."
+            exit 1
+          fi
+
       - name: Sync PR tier label from lane manifest
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.SYNC_BOT_TOKEN }}
           script: |
             const pr = context.payload.pull_request;
             const labels = pr.labels.map(l => l.name).filter(Boolean);

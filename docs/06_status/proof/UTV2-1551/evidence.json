@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1551",
+  "title": "Merge Gate never evaluates on fresh PRs: missing 'opened' trigger + bot-token label-sync doesn't cascade",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "set-by-ci",
+  "reviewed_head_sha": "set-by-ci",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "6117c922089986235023fdcbad0575f65acb70b5",
+    "verified_source_note": "Part 1 of 2 (bot-token cascade fix), now fail-closed per PM review (no GITHUB_TOKEN fallback) with SYNC_BOT_TOKEN inventoried in REQUIRED_SECRETS.md. Part 2 (merge-gate.yml opened trigger) deferred to a follow-up commit on this branch once the concurrent UTV2-1543 lane (PR #1246) merges and releases the file-scope lock on merge-gate.yml.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-17T15:35:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1551",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_updated": {
+      "command": "tsx --test scripts/ops/workflow-hardening.test.ts",
+      "status": "PASS",
+      "tests": 28,
+      "pass": 28,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "This lane changes only CI workflow authentication config; no production code path or migration touched. Live smoke run regardless per T1 policy."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/tier-label-check.yml",
+      "docs/05_operations/REQUIRED_SECRETS.md",
+      "scripts/ops/workflow-hardening.test.ts"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "tier_label_sync_uses_cascading_token": "PASS",
+    "fail_closed_no_github_token_fallback": "PASS",
+    "sync_bot_token_inventoried_in_required_secrets": "PASS",
+    "regression_test_asserts_token_expression": "PASS",
+    "merge_gate_opened_trigger_added": "DEFERRED_TO_FOLLOWUP_COMMIT",
+    "no_admin_merge_used_as_fix": "PASS",
+    "no_required_check_weakened": "PASS"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}

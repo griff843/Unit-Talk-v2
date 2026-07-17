@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1551",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1551-merge-gate-opened-trigger-bot-token",
+  "branch": "claude/utv2-1551-merge-gate-opened-trigger-bot-token",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1247",
+  "files_changed": [
+    ".github/workflows/tier-label-check.yml",
+    ".ops/sync/UTV2-1551.yml",
+    "docs/05_operations/REQUIRED_SECRETS.md",
+    "docs/06_status/lanes/UTV2-1551.json",
+    "docs/06_status/proof/UTV2-1551/.gitkeep",
+    "docs/06_status/proof/UTV2-1551/diff-summary.md",
+    "docs/06_status/proof/UTV2-1551/evidence.json",
+    "docs/06_status/proof/UTV2-1551/verification.md",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/tier-label-check.yml",
+    ".ops/sync/UTV2-1551.yml",
+    "docs/05_operations/REQUIRED_SECRETS.md",
+    "docs/06_status/lanes/UTV2-1551.json",
+    "docs/06_status/proof/UTV2-1551/.gitkeep",
+    "docs/06_status/proof/UTV2-1551/diff-summary.md",
+    "docs/06_status/proof/UTV2-1551/evidence.json",
+    "docs/06_status/proof/UTV2-1551/verification.md",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1551/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-17T13:54:32.882Z",
+  "heartbeat_at": "2026-07-17T16:10:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1551-merge-gate-opened-trigger-bot-token.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1551-merge-gate-opened-trigger-bot-token",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -445,3 +445,39 @@ test('active dispatch docs do not reference stale lane files or reconcile comman
     assert.doesNotMatch(command, /codex-health-check\.ts/);
   }
 });
+
+test('UTV2-1551: tier-label-check.yml syncs labels with a token that cascades to other workflows, fail-closed', () => {
+  // Labels added via the default GITHUB_TOKEN don't trigger other
+  // workflows' `labeled` events (documented GitHub Actions behavior), so a
+  // fresh PR's tier-label sync could never cascade into Merge Gate's own
+  // `pull_request: labeled` trigger. SYNC_BOT_TOKEN (already used by
+  // post-merge-lane-close.yml for the same class of problem) fixes this.
+  // No GITHUB_TOKEN fallback: a silent fallback would silently reintroduce
+  // the exact non-cascading-event bug this secret exists to fix.
+  const workflow = readWorkflowYaml('tier-label-check.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const job = objectField(jobs, 'check-tier-label');
+  const steps = job.steps as Array<Record<string, unknown>>;
+
+  const guardStep = steps.find(
+    (s) => typeof s.name === 'string' && (s.name as string).includes('Require SYNC_BOT_TOKEN'),
+  );
+  assert.ok(guardStep, 'tier-label-check.yml must fail closed if SYNC_BOT_TOKEN is not configured');
+  assert.match(
+    (guardStep as Record<string, unknown>).run as string,
+    /secrets\.SYNC_BOT_TOKEN.*exit 1/s,
+    'the SYNC_BOT_TOKEN guard must actually exit non-zero when the secret is unset',
+  );
+
+  const syncStep = steps.find(
+    (s) => typeof s.name === 'string' && (s.name as string).includes('Sync PR tier label'),
+  );
+  assert.ok(syncStep, 'tier-label-check.yml must have the tier-label sync step');
+
+  const withBlock = objectField(syncStep as Record<string, unknown>, 'with');
+  assert.strictEqual(
+    withBlock['github-token'],
+    '${{ secrets.SYNC_BOT_TOKEN }}',
+    'tier label sync must use SYNC_BOT_TOKEN with no GITHUB_TOKEN fallback -- a fallback would silently reintroduce the non-cascading-event bug',
+  );
+});
