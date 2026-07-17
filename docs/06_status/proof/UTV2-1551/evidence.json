@@ -11,7 +11,7 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "6117c922089986235023fdcbad0575f65acb70b5",
+    "verified_source_sha": "f593fb7c6efece9755611316b36a1b54cdf394bb",
     "verified_source_note": "Part 1 of 2 (bot-token cascade fix), now fail-closed per PM review (no GITHUB_TOKEN fallback) with SYNC_BOT_TOKEN inventoried in REQUIRED_SECRETS.md. Part 2 (merge-gate.yml opened trigger) deferred to a follow-up commit on this branch once the concurrent UTV2-1543 lane (PR #1246) merges and releases the file-scope lock on merge-gate.yml.",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-17T15:35:00.000Z",
