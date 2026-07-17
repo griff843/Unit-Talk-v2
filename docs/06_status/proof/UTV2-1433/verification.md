@@ -1,5 +1,9 @@
 # PROOF: UTV2-1433
-MERGE_SHA: 728a41725a8df6bee5fa2b62ee36810ed2ed7a15
+MERGE_SHA: 8922cf74e59e87ad494f05dca28666d0843b5f8b
+
+Post-merge proof, rebound to the actual PR #1227 merge commit SHA above via
+the governed lane-close proof repair path, per `EXECUTION_TRUTH_MODEL.md`.
+(Pre-merge PR head SHA was `728a41725a8df6bee5fa2b62ee36810ed2ed7a15`.)
 
 ASSERTIONS:
 - [x] repairMergedLaneManifest's already-done early return also releases the lease if it's still marked active, but only when the caller opts in via releaseLocksIfAlreadyDone
@@ -68,4 +72,7 @@ A second Codex finding claimed `model-routing.json` was missing (only `.gitkeep`
 ## Commit binding
 
 Head SHA: 728a41725a8df6bee5fa2b62ee36810ed2ed7a15
-Merge SHA: pending — will be bound automatically by `post-merge-lane-close.yml`'s `ops:proof-generate --merge-sha` after merge, per repo convention.
+Merge SHA: 8922cf74e59e87ad494f05dca28666d0843b5f8b (PR #1227, bound via this
+governed proof-repair PR — the automated `post-merge-lane-close.yml`
+`--repair-merged` binder cannot commit this itself because it always
+produces a tracked-file diff and refuses to push directly to `main`).

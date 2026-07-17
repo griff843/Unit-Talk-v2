@@ -10,5 +10,6 @@
   "override_used": false,
   "override_authorized_by": null,
   "codex_exit_code": 0,
-  "generated_at": "2026-07-15T19:38:04.996Z"
+  "generated_at": "2026-07-15T19:38:04.996Z",
+  "merge_sha": "8922cf74e59e87ad494f05dca28666d0843b5f8b"
 }
