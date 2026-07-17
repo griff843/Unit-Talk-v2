@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1549",
+  "observed_at": "2026-07-16T05:10:24.185Z",
+  "read_only": true,
+  "supabase": {
+    "latest_ingestor_cycle": {
+      "status": "failed",
+      "started_at": "2026-06-30T12:55:01.189873+00:00",
+      "finished_at": "2026-07-06T10:27:34.022194+00:00",
+      "age_minutes": 22575,
+      "provider": "sgo",
+      "league": "MLB"
+    },
+    "latest_worker_heartbeat": {
+      "status": "succeeded",
+      "started_at": "2026-07-16T03:48:17.780927+00:00",
+      "finished_at": "2026-07-16T03:48:18.419482+00:00",
+      "age_minutes": 82,
+      "targets": ["discord:canary", "discord:best-bets"]
+    },
+    "latest_provider_offer_history": {
+      "snapshot_at": "2026-06-30T12:41:02.424+00:00",
+      "created_at": "2026-06-30T12:44:06.401+00:00",
+      "created_age_minutes": 22586,
+      "provider_key": "sgo",
+      "sport_key": "MLB"
+    },
+    "latest_game_result": {
+      "created_at": "2026-06-30T07:27:28.089891+00:00",
+      "sourced_at": "2026-06-30T07:21:43.163+00:00",
+      "age_minutes": 22903,
+      "source": "sgo"
+    },
+    "latest_settled_pick": {
+      "id": "1e0c9da5-2346-4228-8752-2c4fb39a06e5",
+      "settled_at": "2026-07-16T05:10:14.116248+00:00",
+      "updated_at": "2026-07-16T05:10:15.39593+00:00",
+      "age_minutes": 0,
+      "source": "api"
+    },
+    "outbox": {
+      "pending": 0,
+      "processing": 459,
+      "dead_letter": 1948,
+      "sent": 3223,
+      "bucket_governance_hold": 2406,
+      "bucket_retryable": 0,
+      "bucket_stale_unknown": 0,
+      "bucket_true_delivery_failure": 1,
+      "unclaimed_processing": 0,
+      "pending_over_30_minutes": 0,
+      "classification": "QUEUE_READINESS_SEMANTICS.md v1.0; governance_hold is attempt_count=0 across pending/processing/dead_letter, stale_unknown excludes governance-held rows"
+    }
+  },
+  "deploy_alignment": {
+    "main_sha": "1e2d4af5941e74cdfb1592b0c07bb9de923d27b0",
+    "main_commit_at": "2026-07-16T03:14:45Z",
+    "deployed_sha": "8deccaceda9f4af3b5efb17ecf23b5151315ed5d",
+    "deploy_run_id": 28415953590,
+    "deploy_run_created_at": "2026-06-30T02:22:31Z",
+    "deploy_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/28415953590",
+    "commits_behind_main": 285,
+    "aligned": false
+  },
+  "findings": [
+    {
+      "severity": "blocking",
+      "summary": "Ingestor and provider-offer truth remain stale since June 30",
+      "tracked_by": "UTV2-1477"
+    },
+    {
+      "severity": "blocking",
+      "summary": "Production deploy is 285 commits behind current main",
+      "tracked_by": "UTV2-1477"
+    },
+    {
+      "severity": "blocking",
+      "summary": "One attempted dead-letter row is a true delivery failure and requires operator review",
+      "tracked_by": "UTV2-1549"
+    },
+    {
+      "severity": "warning",
+      "summary": "Fresh settled picks coexist with stale SGO game_results; settlement freshness does not prove ingestion recovery",
+      "tracked_by": "UTV2-1549"
+    }
+  ]
+}

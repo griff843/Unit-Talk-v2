@@ -191,9 +191,27 @@ export function repairMergedLaneManifest(
     now?: Date;
     repoRoot?: string;
     artifactRoot?: string;
+    leaseRegistryDir?: string;
+    mergeLockPath?: string;
+    releaseLocksIfAlreadyDone?: boolean;
   } = {},
 ): RepairMergedManifestResult {
   if (manifest.status === 'done') {
+    // --repair-merged is intentionally safe to re-run. A previous closeout may
+    // have written the terminal manifest before releasing its coordination
+    // state, so an already-done manifest must still perform that cleanup —
+    // but only when the caller explicitly opts in. Without this flag, this
+    // function stays a pure read-only check: any caller that doesn't ask for
+    // cleanup (a test, a future helper, a status check) must never touch the
+    // real `.ops/leases`/`.ops/merge-lock.json` state or throw on an
+    // unrelated live lock.
+    if (options.releaseLocksIfAlreadyDone) {
+      releaseCloseoutLocks(manifest.issue_id, manifest.branch, {
+        leaseRegistryDir: options.leaseRegistryDir,
+        mergeLockPath: options.mergeLockPath,
+      });
+    }
+
     return {
       ok: true,
       code: 'already_closed',
@@ -474,7 +492,7 @@ async function main(): Promise<void> {
     }
 
     if (bools.has('repair-merged')) {
-      const repair = repairMergedLaneManifest(manifest);
+      const repair = repairMergedLaneManifest(manifest, { releaseLocksIfAlreadyDone: true });
       if (!repair.ok) {
         emitJson({
           ok: false,
