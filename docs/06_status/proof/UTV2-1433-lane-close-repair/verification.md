@@ -1,6 +1,6 @@
 # PROOF: UTV2-1433
 
-MERGE_SHA: 6e0033bc068222a4e85d49adfe13014867ae1df3
+MERGE_SHA: a1f0ee5daa4cb84624c15acd03cbb0805e589d59
 
 ASSERTIONS:
 - [x] Lane manifest reconciled from authoritative GitHub merge state (PR #1227, merge SHA 8922cf74e59e87ad494f05dca28666d0843b5f8b)
