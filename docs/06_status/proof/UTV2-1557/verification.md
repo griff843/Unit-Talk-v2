@@ -153,3 +153,48 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 `pnpm test:db` command: `tsx --test apps/api/src/database-smoke.test.ts`, run directly against real Supabase
 (live-DB smoke gate, no in-memory repos). This lane performed no production data mutation — the smoke suite
 creates and cleans up its own test rows.
+
+# PROOF: UTV2-1557
+
+MERGE_SHA: 125e82def5cb3710a156654f43b8bca3eef668ef
+
+This references the substantive implementation commit (the same SHA bound in
+`docs/06_status/proof/UTV2-1557/evidence.json`'s `sha_binding.verified_source_sha`), not this proof file's
+own commit SHA, to avoid the SHA preimage circular dependency — this is not yet a real merge SHA (no merge
+has occurred). Pre-merge, that field records the exact-head implementation commit this proof is bound to,
+per the same exact-head-binding principle the T1-M design packet in this same PR argues for.
+
+ASSERTIONS:
+- [x] Three planning documents added at the exact paths the PM specified
+- [x] `.lane/lanes/governance.yml` modified to add exactly the three named filenames — no wildcard, no
+      directory glob, no neighboring path, no broader governance-lane authority expansion
+- [x] Repair-bounce cap stated as 2 consistently across every operative summary; Revision 1 body
+      unmistakably labeled SUPERSEDED — NON-OPERATIVE
+- [x] PR body and this proof file state the true nine-file diff — no "docs-only" claim
+- [x] File Scope Lock's authoritative CI verdict recorded truthfully as FAIL, not misreported PASS
+- [x] No Merge Gate, GitHub Actions workflow, runtime code, deploy tooling, secret, credential, or GitHub
+      App permission change occurs anywhere in this diff
+- [x] `pnpm verify` passed (exit code 0) on this branch
+- [ ] Griff-authored `scope-override/v1` PR comment authorizing `.lane/lanes/governance.yml` for this exact
+      head — not yet posted
+- [ ] Griff T1 approval (`t1-approved` label or `pm-verdict/v1` APPROVED) — not yet posted
+
+EVIDENCE:
+
+```text
+$ npx tsx scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1557 --json
+{
+  "schema_version": 2,
+  "gate": "proof-binding-v2",
+  "issue_id": "UTV2-1557",
+  "verified_source_sha": "125e82def5cb3710a156654f43b8bca3eef668ef",
+  "placeholder_fields_resolved": true,
+  "violations": [],
+  "ok": true
+}
+```
+
+```text
+$ npx tsx scripts/lane-check.ts --lane governance --base 15c78512dea9d2fdd249d1b06ff9fabb6e47dd0f --head HEAD
+lane:check PASS lane=governance files=9
+```
