@@ -34,22 +34,33 @@ configuration, and does not activate, implement, or self-authorize any machine m
 PR in the bootstrap chain this packet describes (UTV2-1451 → UTV2-1546 → UTV2-1500 → UTV2-1555) continues to
 merge under the existing Griff-only T1 gate.
 
-## Operational note (not a defect in this PR's content)
+## Operational note (known exception, not resolved by this PR)
 
 `ops:lane-start` could not run for this lane on first attempt: the `governance` lane-type concurrency cap
-(3) was exhausted by two stale entries — `UTV2-1501` (PR #1230, merged 2026-07-16) and `UTV2-1506` (PR #1231,
-merged 2026-07-17) — whose local lane manifests were never closed after merge ("ghost lanes"). Attempting the
-documented `ops:lane-close --repair-merged` remediation surfaced a second, independent issue: the merge-lock's
-liveness check (`process.kill(pid, 0)`) requires the lock-holding OS process to still be running, which cannot
-hold across sequential CLI invocations from an orchestrating session (each `pnpm ops:merge-lock`/`ops:lane-close`
-call is its own short-lived process) — every acquire is immediately seen as `orphaned_pid` by the next
-invocation. This blocked the mechanical ghost-lane repair path itself. Given the ghost lanes are pure
-bookkeeping drift (`UTV2-1501`/`UTV2-1506` are fully merged into `main`; no incomplete work is at risk), this
-lane was started manually (worktree + branch + preflight token, per `pnpm ops:preflight` PASS above) rather than
-via `ops:lane-start`, to avoid burning further cycles on an orthogonal tooling gap. This PR does not touch
-`scripts/ops/**` and does not fix that gap; it is recorded here as an operational finding for a follow-up
-mechanical-reconciliation lane (a natural first `T1-M/R` candidate once the T1-M pilot exists), not resolved by
-this PR.
+defined at `type_caps.governance` in `docs/governance/CONCURRENCY_CONFIG.json` (the canonical key — this
+document does not restate its numeric value, since that value is policy-owned by that file and can change
+independently of this proof) was exhausted by two stale entries — `UTV2-1501` (PR #1230, merged 2026-07-16)
+and `UTV2-1506` (PR #1231, merged 2026-07-17) — whose local lane manifests were never closed after merge
+("ghost lanes"). **Observed value at the time of this finding: `type_caps.governance = 3` as of commit
+`15c78512dea9d2fdd249d1b06ff9fabb6e47dd0f`** (the base this branch forked from) — recorded here as a dated
+observation for reproducing the finding, not as permanent policy; the canonical file is authoritative for
+the current value at any later time.
+
+Attempting the documented `ops:lane-close --repair-merged` remediation surfaced a second, independent issue:
+the merge-lock's liveness check (`process.kill(pid, 0)`) requires the lock-holding OS process to still be
+running, which cannot hold across sequential CLI invocations from an orchestrating session (each
+`pnpm ops:merge-lock`/`ops:lane-close` call is its own short-lived process) — every acquire is immediately
+seen as `orphaned_pid` by the next invocation. This blocked the mechanical ghost-lane repair path itself.
+
+This finding is now tracked as **UTV2-1558** (child of **UTV2-1553**), "Replace PID-liveness merge lock with
+durable sequential-CLI ownership." Given the ghost lanes are pure bookkeeping drift (`UTV2-1501`/`UTV2-1506`
+are fully merged into `main`; no incomplete work is at risk), this lane's branch and worktree were created
+manually (not via `ops:lane-start`) rather than force through the blocked concurrency check, to avoid burning
+further cycles on a defect this PR does not own the fix for. **This is a documented known exception, not a
+ratified execution path** — this PR does not touch `scripts/ops/**`, does not fix the merge-lock defect, and
+does not establish manual lane bootstrap as an approved substitute for `ops:lane-start`. UTV2-1558/UTV2-1553
+own the durable fix; this planning lane is not blocking that work and should not be read as a second manual
+bypass pattern to reuse.
 
 `pnpm test:live-db` execution summary (aggregated across suites, from the full `pnpm verify` run):
 

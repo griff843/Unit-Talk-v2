@@ -1,9 +1,12 @@
 # T1-M / T1-H Delegation Redesign — Design Packet (DRAFT, for adversarial review)
 
-Status: DRAFT r2 — not ratified, not implemented. Authored by Claude (Fable 5) architecture review, 2026-07-17.
+Status: DRAFT r3 — not ratified, not implemented. Authored by Claude (Fable 5) architecture review, 2026-07-17.
 Revision 2 (2026-07-17): reconciled with Codex adversarial review
-(`docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md`, verdict REVISE). See "Revision 2 —
-Codex reconciliation" at the end of this document; where r2 and the r1 body below conflict, **r2 wins**.
+(`docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md`, verdict REVISE). Revision 3 (2026-07-18): PM
+pilot-timing amendment plus a PM correctness fix to the repair-bounce cap. See "Revision 2 — Codex
+reconciliation" and "Revision 3 — PM timing amendment" at the end of this document. **Revision 3 is
+authoritative; where r3, r2, and the r1 body below conflict, r3 wins, then r2, then r1.**
+
 Purpose: redesign the final-authorization model so reversible, technically decidable T1 changes ("T1-M")
 can be reviewed, repaired, certified, and merged by an independent multi-model quorum without ceremonial
 human technical approval, while human-reserved authority ("T1-H") stays with Griff.
@@ -13,7 +16,19 @@ Per standing rule: governance/gating/routing changes take effect only via a gove
 
 ---
 
-## 1. Executive verdict: ADOPT WITH MODIFICATIONS
+> **⚠ SUPERSEDED — NON-OPERATIVE.** Everything from here through the end of the "Open questions for
+> adversarial review" section (i.e., the entire original Revision 1 body, sections 1–20) is the historical
+> first-draft architecture and is **not current policy**. It is retained only for provenance and to show what
+> Codex's review and the PM's synthesis corrected. In particular, **the repair-bounce cap of 3 stated
+> throughout this Revision 1 body is WRONG and superseded — the current, operative cap is 2** (Revision 2
+> §R2.2, reaffirmed in Revision 3 and in `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md` §11). For
+> current, authoritative policy, read **Revision 3** (bottom of this document) together with
+> `T1M_DELEGATION_FINAL_PM_DECISION.md`, which is the binding synthesis document for this entire redesign.
+> Do not implement against anything below this banner without cross-checking Revision 3 first.
+
+---
+
+## 1. Executive verdict: ADOPT WITH MODIFICATIONS (Revision 1 — SUPERSEDED, see banner above)
 
 The core insight is correct: Griff's T1 approvals are already laundered machine judgment — he reads model
 summaries and stamps them. Removing the stamp removes latency without removing assurance, *provided* the
@@ -86,7 +101,7 @@ MERGE iff:
   AND all deterministic gates green on head (verify, proof, branch-discipline, P0, scope)
   AND |votes| == 3 AND all APPROVE AND all head_sha == current head
   AND veto == NO_AUTHORITY_EXPANSION
-  AND repair_bounces <= 3
+  AND repair_bounces <= 2   # SUPERSEDED r1 value was 3 — operative cap is 2, see Revision 3
   AND no unresolved P1/P2 findings from any reviewer
   AND kill_switch == armed-off AND delegation charter valid + unexpired
 ELSE on any REJECT or veto → repair loop (bounce++) or immediate escalation
@@ -136,12 +151,15 @@ injection/persuasion channel — denied entirely; reviewers form their own summa
 - Replay defense: verdicts also carry PR number + a nonce issued by the classifier run for that SHA; Merge Gate
   checks the (PR, SHA, nonce) triple, so a verdict copied from another PR or an earlier round is invalid.
 
-## 7. Repair bounce cap
+## 7. Repair bounce cap (SUPERSEDED — this section's "3" is wrong; operative cap is 2, see Revision 3)
 
 **3 automatic bounces.** Bounce = new head pushed after any REJECT/veto. On the 4th, the lane freezes and
 escalates to Griff with the full objection ledger. Rationale: repair loops empirically converge in 1–2 rounds;
 3 catches stragglers without letting a model grind a dissenter down through attrition (repeated slightly-reworded
 pushes until the reviewer's sampling flips).
+
+*(Historical Revision 1 text, non-operative. Corrected to a cap of 2 in Revision 2 §R2.2 and reaffirmed in
+Revision 3 and in `T1M_DELEGATION_FINAL_PM_DECISION.md` §11.)*
 
 ## 8. Immediate-escalation conditions (no repair attempt)
 
@@ -308,7 +326,10 @@ monthly charter renewal — less frequent, more meaningful.
 
 ## Open questions for adversarial review (Codex/Grok/Fable)
 
-1. Is the 3-bounce cap right, or should classification-dispute escalation subsume it?
+1. ~~Is the 3-bounce cap right, or should classification-dispute escalation subsume it?~~ **Resolved:**
+   Codex's review answered this directly — the cap is 2, with classification disputes and the other
+   zero-bounce categories handled by immediate escalation rather than folded into the ordinary bounce budget
+   (see Revision 2 §R2.2, Revision 3, and `T1M_DELEGATION_FINAL_PM_DECISION.md` §11/§16.1).
 2. Can the nonce scheme be simplified to SHA-only without opening replay across PRs?
 3. Is check-run creator App-ID validation actually spoof-proof under GITHUB_TOKEN permission models?
 4. Does the frozen-acceptance-criteria hash survive Linear issue edits and lane-manifest repair paths?
@@ -449,8 +470,13 @@ supersedes **only** the calendar-based pilot timing described in r1 §17 / r2's 
 - Full count-gated widening schedule (pre-pilot sweep → 3 → 2-concurrent → 10 → 15 → 20-merge stages, with the
   20-merge threshold split ≥5 T1-M/R + ≥5 T1-M/T) is specified in
   `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md` §21, which is the binding synthesis document for this
-  entire redesign and resolves the one substantive Design-Packet/Codex disagreement (repair bounce cap: 3,
-  not 2, for ordinary REJECT verdicts only — see that document §11).
+  entire redesign.
+- **Repair bounce cap: 2**, for ordinary REJECT verdicts, matching Codex's original recommendation exactly
+  (see `T1M_DELEGATION_FINAL_PM_DECISION.md` §11). An earlier pass of this document and of that section
+  incorrectly recorded a widened cap of 3 as a deliberate PM divergence from Codex; that was a drafting error,
+  corrected 2026-07-18, not an intended policy choice. There is no remaining Design-Packet/Codex disagreement
+  on this point. Classification disputes, authority vetoes, injection findings, identity anomalies, and ledger
+  anomalies remain zero-bounce immediate escalations regardless (never consume or reset the 2-bounce budget).
 
 See `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md` for the complete, authoritative synthesis of this
 packet and the Codex adversarial review.

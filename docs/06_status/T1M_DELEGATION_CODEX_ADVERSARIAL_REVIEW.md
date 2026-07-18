@@ -8,14 +8,17 @@
 ---
 
 **PM disposition note (2026-07-18, added by orchestrator per PM instruction — Codex's findings below are
-unaltered).** All P0 and P1 findings in this review are accepted as mandatory and are incorporated into
-`T1M_DELEGATION_DESIGN_PACKET.md` Revision 2 (§"Revision 2 — Codex reconciliation") and further synthesized in
+unaltered; corrected 2026-07-18 per PM changes-required review of PR #1252).** All P0 and P1 findings in this
+review are accepted as mandatory and are incorporated into `T1M_DELEGATION_DESIGN_PACKET.md` Revision 2
+(§"Revision 2 — Codex reconciliation") and further synthesized in
 `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md`, the binding decision document for this redesign. The
-sole point of PM-adjudicated disagreement between this review and the Design Packet — the repair bounce cap
-(this review's §"Repair bounces" recommends 2; the Design Packet r1 proposed 3) — is resolved in the Final PM
-Decision §11: the cap is 3 for ordinary REJECT verdicts, while this review's tighter zero-bounce immediate
-escalation for classification disputes, authority vetoes, injection findings, and identity anomalies is
-preserved in full. No other finding in this document was overridden.
+repair bounce cap — this review's §"Repair bounces" recommends 2; the Design Packet's original (superseded)
+Revision 1 draft proposed 3 — is settled in the Final PM Decision §11: **the cap is 2**, exactly matching this
+review's recommendation. There is no remaining disagreement between this review and the Design Packet on this
+point; an earlier drafting pass incorrectly recorded a widened cap of 3 as a deliberate PM divergence from this
+review, which was a drafting error, not an intended policy choice. This review's tighter zero-bounce immediate
+escalation for classification disputes, authority vetoes, injection findings, identity anomalies, and ledger
+anomalies is preserved in full and was never in question. No other finding in this document was overridden.
 
 ---
 

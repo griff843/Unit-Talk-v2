@@ -8,29 +8,34 @@
   "branch": "claude/utv2-1557-t1m-delegation-planning-packet",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1252",
   "files_changed": [
+    ".ops/sync/UTV2-1557.yml",
+    "docs/06_status/lanes/UTV2-1557.json",
+    "docs/06_status/proof/UTV2-1557/.gitkeep",
+    "docs/06_status/proof/UTV2-1557/evidence.json",
+    "docs/06_status/proof/UTV2-1557/verification.md",
+    "docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md",
+    "docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md",
+    "docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md"
+  ],
+  "file_scope_lock": [
     "docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md",
     "docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md",
     "docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md",
     ".ops/sync/UTV2-1557.yml",
     "docs/06_status/lanes/UTV2-1557.json",
     "docs/06_status/proof/UTV2-1557/.gitkeep",
-    "docs/06_status/proof/UTV2-1557/verification.md"
-  ],
-  "file_scope_lock": [
-    "docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md",
-    "docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md",
-    "docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md",
-    "docs/06_status/proof/UTV2-1557/.gitkeep",
-    "docs/06_status/proof/UTV2-1557/verification.md"
+    "docs/06_status/proof/UTV2-1557/verification.md",
+    "docs/06_status/proof/UTV2-1557/evidence.json"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1557/verification.md"
+    "docs/06_status/proof/UTV2-1557/verification.md",
+    "docs/06_status/proof/UTV2-1557/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-18T04:16:35.408Z",
-  "heartbeat_at": "2026-07-18T04:30:00.000Z",
+  "heartbeat_at": "2026-07-18T05:00:13.394Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1557-t1m-delegation-planning-packet.json",
