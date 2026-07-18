@@ -43,6 +43,35 @@
   "reviewer_verdict": null,
   "pm_verdict": null,
   "generated_at": "2026-07-16T05:30:18Z",
+  "verifier": {
+    "identity": "claude/utv2-1506-lane-close-repair",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only, run directly against this repair branch's own commit f35be885c9e008095a99cfee43563b966c430561. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Run on this repair branch's own commit (f35be885). Full static gate (sync-check, system-alignment-check, automation-coverage-check, env:check, lint, type-check, build, test suite, smart-form verify, verify:commands) plus live DB smoke and the live T1 proof suite, all under pnpm verify:static && pnpm test:live-db."
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "note": "eslint . --cache, run as part of the pnpm verify invocation above; no findings."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "note": "pnpm exec tsc -b tsconfig.json, run as part of the pnpm verify invocation above; project-references build check clean."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Verdict: PASS. Changed files: 3. Rules matched: (none) — no R-level artifacts required for this diff."
+    }
+  },
   "runtime_proof": {
     "command": "pnpm test:db",
     "status": "PASS",
