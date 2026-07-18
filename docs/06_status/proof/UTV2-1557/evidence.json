@@ -2,13 +2,15 @@
   "schema_version": 2,
   "issue_id": "UTV2-1557",
   "tier": "T1",
-  "status": "PRE_MERGE_BLOCKED_ON_FILE_SCOPE_OVERRIDE",
+  "status": "MERGED_TRUTH_CLOSED",
   "sha_binding": {
-    "verified_source_sha": "125e82def5cb3710a156654f43b8bca3eef668ef",
-    "verified_source_note": "The substantive implementation commit (design packet + Codex review + PM decision doc corrections, lane manifest status/pr-url/files-changed/file-scope-lock/expected-proof-paths repair, the .lane/lanes/governance.yml allowlist addition, and the verification.md literal pnpm test:db TAP embed). This evidence.json and any further proof-only commits land after it, per scripts/ci/proof-binding-validator.ts's schema-v2 binding rules (rule 4: only docs/06_status/proof/** and docs/06_status/lanes/** may change after this SHA).",
+    "verified_source_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+    "verified_source_note": "Post-merge rebind: this is the actual GitHub squash-merge commit SHA on main (approved head f171c67ec0e73c1446983701e79547b833a42a20 -> squash-merged as 9026bb1a744570bef2488a8a4acce44d26f19d82). Pre-merge this field held the substantive implementation commit; per post-merge truth-close it is rebound to the real merge SHA, matching docs/06_status/lanes/UTV2-1557.json's commit_sha.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "ci_sentinels": ["evidence_commit_sha", "current_pr_head_sha"]
+    "ci_sentinels": ["evidence_commit_sha", "current_pr_head_sha"],
+    "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+    "approved_head_sha": "f171c67ec0e73c1446983701e79547b833a42a20"
   },
   "verifier": {
     "identity": "claude/utv2-1557-t1m-delegation-planning-packet",
@@ -60,14 +62,9 @@
       "note": "Initial PR body referenced other UTV2-### IDs and failed this check (multiple_issue_references); body was rewritten via the REST API (gh pr edit hit an unrelated Projects-classic GraphQL error) to remove cross-issue references, and the check now passes."
     },
     "file_scope_lock": {
-      "authoritative_ci_status": "FAIL",
-      "authoritative_ci_command": "npx tsx .out/trusted-file-scope-guard.ts --changed-files-file ... --base origin/main --head HEAD --manifest-source git --override-file .out/scope-overrides.json --pr-number 1252 --head-sha <this-head>",
-      "authoritative_ci_failure": ".lane/lanes/governance.yml is not declared by UTV2-1557 (claude/utv2-1557-t1m-delegation-planning-packet)",
-      "authoritative_ci_reason": "CI's --manifest-source git resolves this lane's file_scope_lock from the IMMUTABLE initial baseline -- the content of docs/06_status/lanes/UTV2-1557.json as it existed in the first commit that added that file (a538b41e708fbaca2d7b3d44fa1dd343d74de3d4). That baseline never included .lane/lanes/governance.yml. Later commits in this PR edited file_scope_lock to include it, but CI does not trust anything a PR's own diff writes into its own manifest (UTV2-1521 anti-self-widening design) -- so that edit has no effect on the authoritative verdict.",
-      "authoritative_resolution": "A SCOPE_OVERRIDE: APPROVED / schema: scope-override/v1 PR comment from an authorized reviewer (griff843 only), naming this exact head SHA and exactly .lane/lanes/governance.yml -- no wildcard, no broader path. Does not exist as of this evidence file.",
-      "local_prospective_command": "npx tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch claude/utv2-1557-t1m-delegation-planning-packet",
-      "local_prospective_status": "PASS (advisory only, not the authoritative verdict)",
-      "local_prospective_note": "This local run reads the worktree's current manifest state (post-edit), which CI does not trust. It is recorded for reproducibility, not as evidence that File Scope Lock is satisfied."
+      "authoritative_ci_status": "PASS",
+      "resolution": "Griff posted SCOPE_OVERRIDE: APPROVED (schema: scope-override/v1) on PR #1252, bound to exact head f171c67ec0e73c1446983701e79547b833a42a20, naming exactly .lane/lanes/governance.yml -- no wildcard, no broader path. The File Scope Lock Check job was re-run (run 29635330462) and passed, consuming the override. This resolved before merge; CI was green on the merged head.",
+      "history_note": "An earlier evidence.json revision at this same PR recorded this check as authoritatively FAIL pending the override -- that was true at the time and is superseded by this resolution, not a retroactive correction of a false claim."
     },
     "lane_manifest_schema": {
       "command": "npx tsx scripts/ops/lane-manifest.ts validate UTV2-1557 --json",
@@ -94,16 +91,26 @@
     "pr_body_and_proof_narrative_do_not_claim_docs_only": "PASS — corrected 2026-07-18 per second PM changes-required review; PR body, verification.md, and this file now state the true nine-file diff and the .lane/lanes/governance.yml config change explicitly",
     "manual_lane_bootstrap_documented_as_known_exception_not_ratified_path": "PASS",
     "merge_lock_defect_not_fixed_inside_this_pr": "PASS — tracked separately (UTV2-1558/UTV2-1553), not implemented here",
-    "file_scope_lock_not_falsely_claimed_pass": "PASS — corrected 2026-07-18; the authoritative CI verdict (FAIL, pending Griff scope-override) is recorded distinctly from the non-authoritative local prospective result",
-    "grok_fable_handoff_deferred_until_head_stable_and_checks_green": "PASS — not yet sent; File Scope Lock is not yet green, so this remains withheld per explicit PM instruction",
+    "file_scope_lock_not_falsely_claimed_pass": "PASS — resolved before merge: Griff posted the exact-head scope-override and the authoritative CI check went green",
+    "grok_fable_handoff_deferred_until_head_stable_and_checks_green": "WAIVED — Griff issued a formal, scoped pm-verdict/v1 waiver for this specific non-implementing planning PR only (see post_merge_truth_close_summary.preserved_truths below); an isolated Claude/Fable architecture-review pass was additionally run as a substitute and returned REVISE with findings resolved separately (Linear text corrections on UTV2-1555/UTV2-1556); a Codex CLI adversarial-pass attempt was abandoned after repeated tooling failures, by explicit PM decision to treat the substitute review as sufficient",
     "executor_result_not_claimed_as_independent_approval": "PASS",
-    "owner_boundary_preserved": "PASS — no t1-approved label or pm-verdict/v1 APPROVED exists for this head"
+    "owner_boundary_preserved": "PASS — t1-approved label and pm-verdict/v1 APPROVED comment (exact-head-bound to f171c67e) exist for the approved head; merge SHA 9026bb1a744570bef2488a8a4acce44d26f19d82 confirmed on main"
   },
   "known_limitations": [
-    "File Scope Lock is authoritatively FAIL on this head: .lane/lanes/governance.yml falls outside this lane's immutable initial file-scope baseline, and only a Griff-authored exact-head scope-override/v1 PR comment can resolve it. Not resolved by this PR's own commits.",
-    "Merge-type/governance-lane concurrency cap and merge-lock PID-liveness defect (tracked as UTV2-1558, child of UTV2-1553) blocked the standard ops:lane-start / ops:lane-close --repair-merged paths; this lane's branch and worktree were created manually as a documented exception, not resolved by this PR.",
-    "No Codex mechanical/technical review of this specific diff has been triggered by this session; an automated review bot (chatgpt-codex-connector) independently commented on an earlier head and both findings are addressed in this head, but its threads remain programmatically unresolved.",
-    "No Grok or Fable review exists for any head of this PR yet, per explicit PM instruction to withhold that handoff until File Scope Lock is green and all deterministic/governed checks pass."
+    "Merge-type/governance-lane concurrency cap and merge-lock PID-liveness defect (tracked as UTV2-1558, child of UTV2-1553) blocked the standard ops:lane-start / ops:lane-close --repair-merged paths for both this lane's original PR and this post-merge truth-close repair; both were bootstrapped via manually-created worktrees as a documented exception, not resolved by this repair.",
+    "No Codex mechanical/technical review of the final diff was completed via CLI (three attempts failed); an automated review bot (chatgpt-codex-connector) independently commented on an earlier head and both findings are addressed in the merged content, with those review threads resolved.",
+    "No Grok review occurred at any point (no tool access exists); Fable-equivalent review occurred via an isolated Claude subagent, not a genuine cross-vendor pass. Explicitly disclosed, not held out as equivalent to real cross-vendor independence."
   ],
-  "verdict": "BLOCKED_PENDING_FILE_SCOPE_OVERRIDE_AND_T1_OWNER_APPROVAL"
+  "post_merge_truth_close_summary": {
+    "approved_head_sha": "f171c67ec0e73c1446983701e79547b833a42a20",
+    "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+    "pm_verdict_comment": "PM_VERDICT: APPROVED, schema: pm-verdict/v1, posted by griff843, bound to approved head f171c67e",
+    "preserved_truths": [
+      "The planning-review waiver (Grok/Gemini/Fable) applied only to UTV2-1557 as a non-implementing planning packet. It is not precedent and does not satisfy any future binding T1-M reviewer seat.",
+      "The waiver does not apply to implementation (UTV2-1555), bootstrap (UTV2-1451/1546/1500), pilot (UTV2-1556), or activation of machine-authorized T1-M authority -- independent cross-vendor and architecture review remains mandatory before any of those may implement, enable, pilot, or activate.",
+      "Ordinary correctness repair limit is two automatic repair rounds (corrected 2026-07-18 in T1M_DELEGATION_FINAL_PM_DECISION.md sec.11 and in live Linear UTV2-1555/UTV2-1556, which previously said three).",
+      "Classification disputes, authority vetoes, injection findings, identity anomalies, ledger anomalies, and authority ambiguity escalate immediately with zero automatic repair rounds -- these never consume or reset the two-bounce budget because they never enter the ordinary repair loop."
+    ]
+  },
+  "verdict": "MERGED_AND_TRUTH_CLOSED"
 }
