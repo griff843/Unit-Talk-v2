@@ -50,6 +50,12 @@ allowed_path_globs:
   # same DEBT-025-class gap: no lane allowed a top-level docs/06_status/*.md
   # ratification doc).
   - docs/06_status/OS_V1_LOCK.md
+  # T1-M/T1-H delegation redesign planning packet — added UTV2-1557 (PR #1252
+  # hit the same DEBT-025-class gap: no lane allowed these top-level
+  # docs/06_status/*.md decision-packet docs).
+  - docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md
+  - docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md
+  - docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md
   # Certification authority documents — governance lanes author/reconcile these
   # (P1–P5 certification records and the certification board). Added UTV2-1195.
   - docs/06_status/programs/**
