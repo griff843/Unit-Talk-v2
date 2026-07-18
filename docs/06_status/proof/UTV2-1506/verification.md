@@ -1,7 +1,7 @@
 # UTV2-1506 pre-merge proof
 
-SOURCE_SHA: `b2994b8116e54473dd67d23d40294c474833a228`
-MERGE_SHA: `b2994b8116e54473dd67d23d40294c474833a228`
+SOURCE_SHA: b2994b8116e54473dd67d23d40294c474833a228
+MERGE_SHA: b2994b8116e54473dd67d23d40294c474833a228
 PR: #1231
 Generated: 2026-07-16T05:30:18Z
 
@@ -70,3 +70,40 @@ The changed behavior is governance text only. No runtime path, database implemen
 ## Owner boundary
 
 PR #1231 remains T1 and requires Griff's independent owner action through the existing constitutional artifacts. This proof supplies no `t1-approved` label, no `pm-verdict/v1`, no review approval, and no merge authorization.
+
+# PROOF: UTV2-1506
+
+MERGE_SHA: b2994b8116e54473dd67d23d40294c474833a228
+
+This is the real GitHub squash-merge commit SHA on `main` for PR #1231 (confirmed present on `origin/main`).
+This lane-close repair PR (#1249) reconciles the lane manifest and this proof bundle to that authoritative
+merge SHA; it introduces no new implementation content.
+
+ASSERTIONS:
+- [x] Lane manifest `commit_sha` and `status` rebound to the actual merge SHA and `merged`/`done` state
+- [x] `pnpm verify` passed on the merge SHA per the original PR #1231's CI history
+- [x] `pnpm test:db` passed 7/7 (TAP output above) as part of the original T1 proof
+- [x] R-level check passed, no rules matched
+- [x] No implementation, workflow, runtime, deploy, secret, or GitHub App content is introduced by this
+      repair PR — it is lane-manifest and proof-bundle reconciliation only
+- [x] No new owner approval is claimed by this repair; PR #1231's original `t1-approved`/`pm-verdict/v1`
+      approval remains the binding owner action for the implementation itself
+
+EVIDENCE:
+
+```text
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+```text
+$ pnpm test:db (from original PR #1231 T1 proof, reproduced above)
+TAP version 13
+1..7
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+```
