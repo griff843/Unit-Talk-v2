@@ -35,10 +35,10 @@
     "docs/06_status/proof/UTV2-1557/verification.md",
     "docs/06_status/proof/UTV2-1557/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-18T04:16:35.408Z",
-  "heartbeat_at": "2026-07-18T16:38:05.446Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-18T18:00:32.111Z",
+  "closed_at": "2026-07-18T18:00:32.111Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1557-t1m-delegation-planning-packet.json",
   "created_by": "claude",
@@ -56,6 +56,24 @@
         "commit_sha",
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-18T17:55:51.429Z",
+      "verdict": "fail",
+      "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+      "failures": [
+        "P6",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-18T17:59:36.725Z",
+      "verdict": "pass",
+      "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

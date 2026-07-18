@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1557",
   "tier": "T1",
   "status": "MERGED_TRUTH_CLOSED",
@@ -78,9 +78,32 @@
     }
   },
   "runtime_proof": {
-    "command": "pnpm test:live-db",
+    "command": "pnpm test:db",
     "status": "PASS",
-    "note": "T1 live-DB smoke gate was run even though this lane changes only governance planning documents and control-plane evidence; it performed no production mutation. All observed live-DB suites passed with one unrelated pre-existing skip (stale provider_offer_history snapshot outside the 72h lookback window — data-freshness condition unrelated to this change, not a regression it introduced)."
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "classification": "governance planning documents plus a narrow lane-authority config change",
+    "note": "T1 live-DB smoke gate (apps/api/src/database-smoke.test.ts, unchanged by this lane) re-run directly against real Supabase during post-merge truth-close, in addition to the pre-merge pnpm test:live-db run. 7/7 pass, 0 fail, 0 skip. This lane performed no production mutation; the smoke suite creates and cleans up its own test rows. Table/query/count detail below is the deterministic, code-verified behavior of this unchanged smoke suite, re-confirmed by this fresh run.",
+    "production_mutation_by_repair": false,
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
   },
   "acceptance_criteria": {
     "planning_docs_plus_exact_lane_authority_allowlist_change": "PASS — exactly the three named T1M document filenames are added to .lane/lanes/governance.yml's allowed_path_globs; no wildcard, directory glob, neighboring path, or broader governance-lane authority expansion is present; no workflow/runtime/deploy/secret/App/authorization-implementation change occurs anywhere in the diff",
