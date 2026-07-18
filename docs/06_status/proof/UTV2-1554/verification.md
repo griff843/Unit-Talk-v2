@@ -1,6 +1,6 @@
 # PROOF: UTV2-1554
 
-MERGE_SHA: 15c78512dea9d2fdd249d1b06ff9fabb6e47dd0f (placeholder, pre-implementation-commit — rebound to the actual implementation SHA in a follow-up commit)
+MERGE_SHA: 238d08b207345ccf05fff4f3b0d4a4531f07f702
 
 ## Verification
 
