@@ -11,7 +11,7 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "156d61d2a11a503e5115ca03a9dd2dbc38aa61b9",
+    "verified_source_sha": "a67e5e531da211f85a75772c78f212e73db25a86",
     "verified_source_note": "Second commit fixes Codex P1 (missing checkout before require, base-SHA-pinned for the same privilege-boundary reason as UTV2-1550). Canonical fix for the gap independently rediscovered as UTV2-1552 (duplicate) while rebasing #1230/#1231/#1232 during this session. Third commit fixes a live Merge Gate self-referential bootstrap gap discovered during this PR's own merge attempt: base.sha never has merge-gate-verdict.cjs since this PR introduces it, so require() threw MODULE_NOT_FOUND on every evaluation. Fixed by recovering the file from the PR's own head SHA only when absent at the base-pinned checkout, preserving the base-pin for every subsequent PR that merely edits the file.",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-17T15:25:00.000Z",
