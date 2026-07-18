@@ -1,0 +1,97 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1557",
+  "tier": "T1",
+  "status": "PRE_MERGE_VERIFIED",
+  "sha_binding": {
+    "verified_source_sha": "8fb1fa846fac5ace560095520d372ded423a11d4",
+    "verified_source_note": "The substantive implementation commit (design packet + Codex review + PM decision doc corrections, plus lane manifest status/pr-url/files-changed/file-scope-lock/expected-proof-paths repair). This evidence.json and any further proof-only commits land after it, per scripts/ci/proof-binding-validator.ts's schema-v2 binding rules (rule 4: only docs/06_status/proof/** and docs/06_status/lanes/** may change after this SHA).",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": ["evidence_commit_sha", "current_pr_head_sha"]
+  },
+  "verifier": {
+    "identity": "claude/utv2-1557-t1m-delegation-planning-packet",
+    "role": "implementation-lane",
+    "independence_note": "This is executor-produced mechanical evidence. It is not independent certification, Griff review, t1-approved, or a pm-verdict/v1 artifact. Grok and Fable independent review has not yet occurred (deferred until this head is stable and all deterministic/governed checks are green, per PM instruction)."
+  },
+  "scope": {
+    "implementation_paths": [
+      "docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md",
+      "docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md",
+      "docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1557.yml",
+      "docs/06_status/lanes/UTV2-1557.json",
+      "docs/06_status/proof/UTV2-1557/.gitkeep",
+      "docs/06_status/proof/UTV2-1557/evidence.json",
+      "docs/06_status/proof/UTV2-1557/verification.md"
+    ],
+    "runtime_change": false,
+    "constitutional_change": false,
+    "workflow_change": false,
+    "merge_gate_change": false,
+    "github_app_or_secret_change": false,
+    "machine_merge_authority_activated": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "verify:static (sync-check, system-alignment-check, automation-coverage-check, env:check, lint, type-check, build, test, smart-form verify, verify:commands) and pnpm test:live-db both passed."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifact_requirements": "none",
+      "note": "Docs-only diff under docs/06_status/**; no R1-R5 rule paths touched."
+    },
+    "branch_discipline": {
+      "command": "npx tsx scripts/ops/branch-discipline-guard.ts --branch claude/utv2-1557-t1m-delegation-planning-packet --title <pr-title> --body <pr-body> --commits <commit-subjects>",
+      "status": "PASS",
+      "code": "single_issue_reference",
+      "note": "Initial PR body referenced other UTV2-### IDs and failed this check (multiple_issue_references); body was rewritten via the REST API (gh pr edit hit an unrelated Projects-classic GraphQL error) to remove cross-issue references, and the check now passes."
+    },
+    "file_scope_lock": {
+      "command": "npx tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch claude/utv2-1557-t1m-delegation-planning-packet",
+      "status": "PASS",
+      "note": "No file scope lock conflicts or scope violations detected against the repaired manifest's file_scope_lock."
+    },
+    "lane_manifest_schema": {
+      "command": "npx tsx scripts/ops/lane-manifest.ts validate UTV2-1557 --json",
+      "status": "PASS",
+      "code": "manifest_valid"
+    },
+    "proof_binding": {
+      "command": "npx tsx scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1557 --json",
+      "status": "PASS",
+      "note": "Verified after the follow-up proof-only commit set verified_source_sha to the substantive implementation commit."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:live-db",
+    "status": "PASS",
+    "note": "T1 live-DB smoke gate was run even though this lane changes only governance planning documents and control-plane evidence; it performed no production mutation. All observed live-DB suites passed with one unrelated pre-existing skip (stale provider_offer_history snapshot outside the 72h lookback window — data-freshness condition unrelated to this change, not a regression it introduced)."
+  },
+  "acceptance_criteria": {
+    "docs_only_no_workflow_config_secret_deploy_change": "PASS",
+    "does_not_activate_or_self_authorize_machine_merge_authority": "PASS",
+    "repair_bounce_cap_consistently_stated_as_2_across_all_operative_summaries": "PASS — corrected 2026-07-18 per PM changes-required review",
+    "revision_1_body_unmistakably_labeled_superseded_non_operative": "PASS",
+    "pr_title_and_body_do_not_reference_other_UTV2_issue_ids": "PASS — corrected 2026-07-18",
+    "manual_lane_bootstrap_documented_as_known_exception_not_ratified_path": "PASS",
+    "merge_lock_defect_not_fixed_inside_this_docs_only_pr": "PASS — tracked separately (UTV2-1558/UTV2-1553), not implemented here",
+    "grok_fable_handoff_deferred_until_head_stable_and_checks_green": "PASS — not yet sent, per explicit PM instruction",
+    "executor_result_not_claimed_as_independent_approval": "PASS",
+    "owner_boundary_preserved": "PASS — no t1-approved label or pm-verdict/v1 exists for this head"
+  },
+  "known_limitations": [
+    "Merge-type/governance-lane concurrency cap and merge-lock PID-liveness defect (tracked as UTV2-1558, child of UTV2-1553) blocked the standard ops:lane-start / ops:lane-close --repair-merged paths; this lane's branch and worktree were created manually as a documented exception, not resolved by this PR.",
+    "No Codex mechanical/technical review of this specific docs-only diff has been triggered by this session; only GitHub-required CI checks and the locally-runnable governed scripts listed above have been verified locally.",
+    "No Grok or Fable review exists for any head of this PR yet, per explicit PM instruction to withhold that handoff until this head is stable and all deterministic/governed checks are green."
+  ],
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL_AND_INDEPENDENT_REVIEW"
+}
