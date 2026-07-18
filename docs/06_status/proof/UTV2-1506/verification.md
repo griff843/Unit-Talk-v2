@@ -71,6 +71,23 @@ The changed behavior is governance text only. No runtime path, database implemen
 
 PR #1231 remains T1 and requires Griff's independent owner action through the existing constitutional artifacts. This proof supplies no `t1-approved` label, no `pm-verdict/v1`, no review approval, and no merge authorization.
 
+## Post-merge truth-close
+
+`pnpm ops:lane-close UTV2-1506` was run directly in this repair branch's worktree (`claude/utv2-1506-lane-close-repair`), referencing already-merged PR #1231. Result:
+
+```text
+ok: true
+code: lane_closed
+outcome: closed_with_warnings
+status: done
+closed_at: 2026-07-18T20:49:36.646Z
+truth_check.verdict: pass
+truth_check.exit_code: 0
+truth_check.checked_at: 2026-07-18T20:49:34.029Z
+```
+
+All applicable checks passed (M1-M7, L1-L5, G1-G5, P1-P10 except skipped P8, C1-C7, R1-R3, S1); P8 and H1-H5 skipped as not applicable (non-P0, flexible proof format). `docs/06_status/lanes/UTV2-1506.json` now records `status: "done"` and `closed_at: "2026-07-18T20:49:36.646Z"`. The Linear issue transitioned to `Done` at `2026-07-18T20:49:38.024Z`. This is the mechanical governed close event; it does not itself constitute PM approval of this repair PR's own head — that remains a separate, head-bound act per the owner boundary above.
+
 # PROOF: UTV2-1506
 
 MERGE_SHA: b2994b8116e54473dd67d23d40294c474833a228
@@ -80,7 +97,9 @@ This lane-close repair PR (#1249) reconciles the lane manifest and this proof bu
 merge SHA; it introduces no new implementation content.
 
 ASSERTIONS:
-- [x] Lane manifest `commit_sha` and `status` rebound to the actual merge SHA and `merged`/`done` state
+- [x] Lane manifest `commit_sha` and `status` rebound to the actual merge SHA; `status` is `done` with
+      `closed_at` populated from the real `pnpm ops:lane-close UTV2-1506` close event (see Post-merge
+      truth-close section above)
 - [x] `pnpm verify` passed on the merge SHA per the original PR #1231's CI history
 - [x] `pnpm test:db` passed 7/7 (TAP output above) as part of the original T1 proof
 - [x] R-level check passed, no rules matched

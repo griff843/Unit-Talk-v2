@@ -28,10 +28,10 @@
     "docs/06_status/proof/UTV2-1506/evidence.json",
     "docs/06_status/proof/UTV2-1506/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-16T01:25:01.588Z",
-  "heartbeat_at": "2026-07-18T00:05:54.899Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-18T20:49:36.646Z",
+  "closed_at": "2026-07-18T20:49:36.646Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1506-reliability-runtime-agent-charter.json",
   "created_by": "claude",
@@ -49,6 +49,15 @@
         "commit_sha",
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-18T18:01:47.585Z",
+      "verdict": "fail",
+      "merge_sha": "b2994b8116e54473dd67d23d40294c474833a228",
+      "failures": [
+        "L3"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
