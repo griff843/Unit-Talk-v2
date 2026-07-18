@@ -14,25 +14,71 @@
 | `pnpm build` | PASS |
 | `pnpm test` | PASS |
 | `pnpm test:live-db` (test:db) | PASS across all live-DB suites; 1 unrelated pre-existing skip (stale `provider_offer_history` snapshot outside the 72h lookback window — data-freshness condition, not a code regression) |
-| R-level check | Not applicable — docs-only change, no code/schema/workflow paths touched |
-| Runtime behavior changed | No — this PR adds three documents under `docs/06_status/` only |
-| Merge Gate / deploy workflow changed | No |
-| GitHub App / secret changes | No |
+| R-level check | PASS — no R1-R5 rule paths matched (`.lane/lanes/governance.yml` is a lane-authority allowlist entry, not an R-level path) |
+| Runtime behavior changed | No — this PR adds three planning documents plus three exact filename entries in `.lane/lanes/governance.yml`'s `allowed_path_globs`; no runtime code path is touched or executed differently |
+| Merge Gate / deploy workflow / GitHub Actions workflow changed | No |
+| GitHub App / secret / credential changed | No |
+| Machine-authorization implementation activated | No — this PR does not implement, activate, or self-authorize any T1-M quorum, classifier, or merge authority |
 | Constitution changed | No |
+| **File Scope Lock (CI-authoritative)** | **FAIL — see "File Scope Lock" section below; this is not resolved by anything in this proof file** |
 | Independent owner approval | Not supplied; still required for this T1 PR (`t1-approved` label or `pm-verdict/v1`) |
 
 ## Scope
 
-This lane adds three governance planning documents (no source, schema, workflow, or config changes):
+**This lane is planning documents plus three exact lane-authority allowlist entries — not docs-only.**
+Nine files change in total:
 
-* `docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md`
-* `docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md`
-* `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md`
+* `docs/06_status/T1M_DELEGATION_DESIGN_PACKET.md` — planning document (content)
+* `docs/06_status/T1M_DELEGATION_CODEX_ADVERSARIAL_REVIEW.md` — planning document (content)
+* `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md` — planning document (content)
+* `.lane/lanes/governance.yml` — **configuration change.** Adds exactly three filename entries to
+  `allowed_path_globs` (the three documents above, listed by exact filename — no wildcard, no directory
+  glob, no neighboring path, no broader governance-lane authority expansion). This is the same recurring,
+  precedented DEBT-025-class fix already applied eight times in this same file's history for other
+  top-level `docs/06_status/*.md` documents (e.g. `OS_V1_LOCK.md`). It does not touch, and has no effect
+  on, `.github/workflows/**`, Merge Gate logic, deploy tooling, runtime code, secrets, GitHub App
+  permissions, credentials, or any T1-M/T1-H machine-authorization implementation.
+* `.ops/sync/UTV2-1557.yml`, `docs/06_status/lanes/UTV2-1557.json`, `docs/06_status/proof/UTV2-1557/{.gitkeep,evidence.json,verification.md}`
+  — lane control-plane and proof bookkeeping (standard for every lane, not specific to this one).
 
-The PR does not modify `.github/workflows/**`, `scripts/ops/**`, deploy tooling, or any GitHub App/secret
-configuration, and does not activate, implement, or self-authorize any machine merge authority. Every future
-PR in the bootstrap chain this packet describes (UTV2-1451 → UTV2-1546 → UTV2-1500 → UTV2-1555) continues to
-merge under the existing Griff-only T1 gate.
+No Merge Gate, GitHub Actions workflow, runtime code, deploy tooling, secret, credential, GitHub App
+permission, or machine-authorization implementation changes occur anywhere in this diff. Every future PR
+in the bootstrap chain this packet describes continues to merge under the existing Griff-only T1 gate; this
+PR cannot and does not activate or self-authorize any machine merge authority.
+
+## File Scope Lock — currently FAIL, not resolved by any manifest edit in this PR
+
+**File Scope Lock is red on this PR and stays red until Griff posts an authorized override. Nothing in this
+proof file, the lane manifest, or any local check result changes that.**
+
+`scripts/ci/file-scope-guard.ts`, run in CI with `--manifest-source git`, resolves this lane's authoritative
+`file_scope_lock` from the **immutable initial baseline** — specifically, the content of
+`docs/06_status/lanes/UTV2-1557.json` as it existed in the **first commit that added that file**
+(`a538b41e708fbaca2d7b3d44fa1dd343d74de3d4`), not any later commit. That baseline's `file_scope_lock` does
+**not** include `.lane/lanes/governance.yml`. This is deliberate, hardened anti-self-widening design
+(shipped as UTV2-1521): "Scope widening beyond the baseline is authorized exclusively through an
+externally-validated `scope-override/v1` PR comment... never by trusting anything the PR's own diff wrote
+into the manifest file itself" (`scripts/ci/file-scope-guard.ts` code comment). A lane cannot expand its own
+authorized scope by editing its own manifest partway through the PR — that would defeat the entire point of
+the control.
+
+Later commits in this PR *did* edit `docs/06_status/lanes/UTV2-1557.json`'s `file_scope_lock` to include
+`.lane/lanes/governance.yml` (to keep the manifest internally consistent with the real diff). **That edit is
+not trusted by CI and does not — and must not — make File Scope Lock pass.** A local, prospective run of
+`file-scope-guard.ts` against the worktree's current (untrusted-for-CI) manifest state does pass, and is
+recorded below for reproducibility, but it is explicitly **not** the authoritative verdict:
+
+```text
+$ npx tsx scripts/ci/file-scope-guard.ts --base origin/main --head HEAD --branch claude/utv2-1557-t1m-delegation-planning-packet
+No file scope lock conflicts or scope violations detected.
+```
+
+This local, prospective result is advisory only. **The authoritative File Scope Lock verdict is CI's,
+using `--manifest-source git` against the immutable baseline, and it is FAIL.** The only sanctioned
+resolution is a `SCOPE_OVERRIDE: APPROVED` / `schema: scope-override/v1` comment posted by an authorized
+reviewer (`AUTHORIZED_REVIEWERS = {griff843}` in `.github/workflows/file-scope-lock-check.yml`) naming this
+exact head SHA and exactly `.lane/lanes/governance.yml` as the widened path — no wildcard, no broader
+governance-lane authority expansion. No such override exists as of this proof.
 
 ## Operational note (known exception, not resolved by this PR)
 
