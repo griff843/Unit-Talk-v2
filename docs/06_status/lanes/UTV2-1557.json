@@ -7,9 +7,10 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1557-t1m-delegation-planning-packet",
   "branch": "claude/utv2-1557-t1m-delegation-planning-packet",
   "base_branch": "main",
-  "commit_sha": "8fb1fa846fac5ace560095520d372ded423a11d4",
+  "commit_sha": "125e82def5cb3710a156654f43b8bca3eef668ef",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1252",
   "files_changed": [
+    ".lane/lanes/governance.yml",
     ".ops/sync/UTV2-1557.yml",
     "docs/06_status/lanes/UTV2-1557.json",
     "docs/06_status/proof/UTV2-1557/.gitkeep",
@@ -27,7 +28,8 @@
     "docs/06_status/lanes/UTV2-1557.json",
     "docs/06_status/proof/UTV2-1557/.gitkeep",
     "docs/06_status/proof/UTV2-1557/verification.md",
-    "docs/06_status/proof/UTV2-1557/evidence.json"
+    "docs/06_status/proof/UTV2-1557/evidence.json",
+    ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1557/verification.md",
@@ -35,7 +37,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-07-18T04:16:35.408Z",
-  "heartbeat_at": "2026-07-18T05:03:09.201Z",
+  "heartbeat_at": "2026-07-18T05:24:43.323Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1557-t1m-delegation-planning-packet.json",

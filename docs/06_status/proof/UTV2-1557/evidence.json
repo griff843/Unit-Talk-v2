@@ -4,8 +4,8 @@
   "tier": "T1",
   "status": "PRE_MERGE_VERIFIED",
   "sha_binding": {
-    "verified_source_sha": "8fb1fa846fac5ace560095520d372ded423a11d4",
-    "verified_source_note": "The substantive implementation commit (design packet + Codex review + PM decision doc corrections, plus lane manifest status/pr-url/files-changed/file-scope-lock/expected-proof-paths repair). This evidence.json and any further proof-only commits land after it, per scripts/ci/proof-binding-validator.ts's schema-v2 binding rules (rule 4: only docs/06_status/proof/** and docs/06_status/lanes/** may change after this SHA).",
+    "verified_source_sha": "125e82def5cb3710a156654f43b8bca3eef668ef",
+    "verified_source_note": "The substantive implementation commit (design packet + Codex review + PM decision doc corrections, lane manifest status/pr-url/files-changed/file-scope-lock/expected-proof-paths repair, the .lane/lanes/governance.yml allowlist addition, and the verification.md literal pnpm test:db TAP embed). This evidence.json and any further proof-only commits land after it, per scripts/ci/proof-binding-validator.ts's schema-v2 binding rules (rule 4: only docs/06_status/proof/** and docs/06_status/lanes/** may change after this SHA).",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": ["evidence_commit_sha", "current_pr_head_sha"]
