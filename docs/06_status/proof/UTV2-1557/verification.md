@@ -72,4 +72,38 @@ UTV2-1327 (promotion-time enrichment):    6 pass, 0 fail
 Atomic outbox claim (concurrency):        1 pass, 0 fail
 ```
 
-Full `pnpm verify` exited 0 (`verify:static && pnpm test:live-db`, no failures at any stage).
+Full `pnpm verify` exited 0 (`verify:static && pnpm test:live-db`, no failures at any stage). `pnpm test:live-db`
+runs `pnpm test:db && pnpm test:t1-proof:live`; the `pnpm test:db` component's own literal TAP output
+(`tsx --test apps/api/src/database-smoke.test.ts`, run standalone against the same branch head to capture
+clean output) was:
+
+```text
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 111416.875663
+```
+
+`pnpm test:db` command: `tsx --test apps/api/src/database-smoke.test.ts`, run directly against real Supabase
+(live-DB smoke gate, no in-memory repos). This lane performed no production data mutation — the smoke suite
+creates and cleans up its own test rows.
