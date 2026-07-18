@@ -1,8 +1,14 @@
 # UTV2-1506 pre-merge proof
 
-SOURCE_SHA: `6153af325f228b0679b91abdb3b35c4bf9a03d9b`
+SOURCE_SHA: `b2994b8116e54473dd67d23d40294c474833a228`
+MERGE_SHA: `b2994b8116e54473dd67d23d40294c474833a228`
 PR: #1231
 Generated: 2026-07-16T05:30:18Z
+
+Rebound from the stale pre-merge SHA (`6153af325f228b0679b91abdb3b35c4bf9a03d9b`)
+to the authoritative merge SHA during post-merge lane-close reconciliation.
+Runtime proof below now also carries canonical `queries[]`/`row_counts[]`
+detail in `evidence.json` (previously present only as a pass/fail summary).
 
 ## Summary
 
@@ -19,7 +25,7 @@ This proof covers the documentation-only repair to the runtime reliability chart
 
 ## Verification
 
-Substantive revision verified: `6153af325f228b0679b91abdb3b35c4bf9a03d9b`
+Substantive revision verified: `b2994b8116e54473dd67d23d40294c474833a228`
 
 ### `pnpm verify`
 
