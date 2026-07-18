@@ -1,5 +1,13 @@
 # UTV2-1557 proof
 
+## Post-merge status
+
+**MERGED AND TRUTH-CLOSED.** PR #1252 approved head `f171c67ec0e73c1446983701e79547b833a42a20` squash-merged
+to `main` as `9026bb1a744570bef2488a8a4acce44d26f19d82`, confirmed present on `origin/main` at post-merge
+truth-close time. `PM_VERDICT: APPROVED` (`schema: pm-verdict/v1`) posted by `griff843`, bound to the
+approved head, with `t1-approved` label applied. This section and the corresponding rebinds below are the
+post-merge repair; the rest of this document is preserved pre-merge history and is not rewritten.
+
 ## Verification
 
 | Field | Result |
@@ -20,8 +28,8 @@
 | GitHub App / secret / credential changed | No |
 | Machine-authorization implementation activated | No — this PR does not implement, activate, or self-authorize any T1-M quorum, classifier, or merge authority |
 | Constitution changed | No |
-| **File Scope Lock (CI-authoritative)** | **FAIL — see "File Scope Lock" section below; this is not resolved by anything in this proof file** |
-| Independent owner approval | Not supplied; still required for this T1 PR (`t1-approved` label or `pm-verdict/v1`) |
+| **File Scope Lock (CI-authoritative)** | **PASS — resolved pre-merge; see "File Scope Lock" section below for how** |
+| Independent owner approval | `t1-approved` label + `pm-verdict/v1` APPROVED comment, bound to approved head `f171c67e`, posted by `griff843` |
 
 ## Scope
 
@@ -46,10 +54,16 @@ permission, or machine-authorization implementation changes occur anywhere in th
 in the bootstrap chain this packet describes continues to merge under the existing Griff-only T1 gate; this
 PR cannot and does not activate or self-authorize any machine merge authority.
 
-## File Scope Lock — currently FAIL, not resolved by any manifest edit in this PR
+## File Scope Lock — RESOLVED pre-merge via Griff-authored scope-override (history preserved below)
 
-**File Scope Lock is red on this PR and stays red until Griff posts an authorized override. Nothing in this
-proof file, the lane manifest, or any local check result changes that.**
+**Resolution: Griff posted `SCOPE_OVERRIDE: APPROVED` / `schema: scope-override/v1` on PR #1252, bound to
+exact head `f171c67ec0e73c1446983701e79547b833a42a20`, naming exactly `.lane/lanes/governance.yml` — no
+wildcard, no broader path. The File Scope Lock Check job was re-run and passed, consuming the override. This
+is the only sanctioned resolution path described below, and it is what actually happened; nothing was
+bypassed.**
+
+The paragraphs immediately below are preserved from the pre-override state of this proof, explaining why the
+check was correctly red before that override existed:
 
 `scripts/ci/file-scope-guard.ts`, run in CI with `--manifest-source git`, resolves this lane's authoritative
 `file_scope_lock` from the **immutable initial baseline** — specifically, the content of
@@ -156,28 +170,40 @@ creates and cleans up its own test rows.
 
 # PROOF: UTV2-1557
 
-MERGE_SHA: 125e82def5cb3710a156654f43b8bca3eef668ef
+MERGE_SHA: 9026bb1a744570bef2488a8a4acce44d26f19d82
 
-This references the substantive implementation commit (the same SHA bound in
-`docs/06_status/proof/UTV2-1557/evidence.json`'s `sha_binding.verified_source_sha`), not this proof file's
-own commit SHA, to avoid the SHA preimage circular dependency — this is not yet a real merge SHA (no merge
-has occurred). Pre-merge, that field records the exact-head implementation commit this proof is bound to,
-per the same exact-head-binding principle the T1-M design packet in this same PR argues for.
+Post-merge rebind: this is the real GitHub squash-merge commit SHA on `main` for approved head
+`f171c67ec0e73c1446983701e79547b833a42a20`. Prior to merge, this field held the substantive implementation
+commit (`125e82def5cb3710a156654f43b8bca3eef668ef`) to avoid the SHA preimage circular dependency, per the
+same exact-head-binding principle the T1-M design packet in this same PR argues for. That pre-merge value is
+preserved in `docs/06_status/proof/UTV2-1557/evidence.json`'s `sha_binding` history for reference.
 
 ASSERTIONS:
 - [x] Three planning documents added at the exact paths the PM specified
 - [x] `.lane/lanes/governance.yml` modified to add exactly the three named filenames — no wildcard, no
       directory glob, no neighboring path, no broader governance-lane authority expansion
-- [x] Repair-bounce cap stated as 2 consistently across every operative summary; Revision 1 body
-      unmistakably labeled SUPERSEDED — NON-OPERATIVE
+- [x] Repair-bounce cap stated as 2 consistently across every operative summary in this PR's documents;
+      Revision 1 body unmistakably labeled SUPERSEDED — NON-OPERATIVE; live Linear `UTV2-1555`/`UTV2-1556`
+      text also corrected post-merge to say 2 (was 3), per the isolated architecture review's finding
 - [x] PR body and this proof file state the true nine-file diff — no "docs-only" claim
-- [x] File Scope Lock's authoritative CI verdict recorded truthfully as FAIL, not misreported PASS
+- [x] File Scope Lock's authoritative CI verdict recorded truthfully throughout — FAIL while unresolved,
+      PASS after Griff's scope-override was consumed; never misreported
 - [x] No Merge Gate, GitHub Actions workflow, runtime code, deploy tooling, secret, credential, or GitHub
       App permission change occurs anywhere in this diff
 - [x] `pnpm verify` passed (exit code 0) on this branch
-- [ ] Griff-authored `scope-override/v1` PR comment authorizing `.lane/lanes/governance.yml` for this exact
-      head — not yet posted
-- [ ] Griff T1 approval (`t1-approved` label or `pm-verdict/v1` APPROVED) — not yet posted
+- [x] Griff-authored `scope-override/v1` PR comment authorizing `.lane/lanes/governance.yml` for exact head
+      `f171c67e` — posted and consumed
+- [x] Griff T1 approval (`t1-approved` label and `pm-verdict/v1` APPROVED) — posted, bound to approved head
+      `f171c67e`, merge SHA `9026bb1a` confirmed on `main`
+
+POST-MERGE PRESERVED TRUTHS (per PM instruction at truth-close):
+- [x] The Grok/Gemini/Fable review waiver applies only to UTV2-1557 as a non-implementing planning packet;
+      it is not precedent and does not satisfy any future binding T1-M reviewer seat
+- [x] The waiver does not apply to implementation (UTV2-1555), bootstrap (UTV2-1451/1546/1500), pilot
+      (UTV2-1556), or activation — independent cross-vendor and architecture review remains mandatory there
+- [x] Ordinary correctness repair limit is two automatic repair rounds
+- [x] Classification disputes, authority vetoes, injection findings, identity anomalies, ledger anomalies,
+      and authority ambiguity escalate immediately with zero automatic repair rounds
 
 EVIDENCE:
 

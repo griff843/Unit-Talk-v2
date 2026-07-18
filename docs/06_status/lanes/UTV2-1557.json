@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1557-t1m-delegation-planning-packet",
   "branch": "claude/utv2-1557-t1m-delegation-planning-packet",
   "base_branch": "main",
-  "commit_sha": "125e82def5cb3710a156654f43b8bca3eef668ef",
+  "commit_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1252",
   "files_changed": [
     ".lane/lanes/governance.yml",
@@ -35,14 +35,47 @@
     "docs/06_status/proof/UTV2-1557/verification.md",
     "docs/06_status/proof/UTV2-1557/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-18T04:16:35.408Z",
-  "heartbeat_at": "2026-07-18T05:24:43.323Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-18T18:00:32.111Z",
+  "closed_at": "2026-07-18T18:00:32.111Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1557-t1m-delegation-planning-packet.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-18T16:38:05.446Z",
+      "verdict": "pass",
+      "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1252",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-18T17:55:51.429Z",
+      "verdict": "fail",
+      "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+      "failures": [
+        "P6",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-18T17:59:36.725Z",
+      "verdict": "pass",
+      "merge_sha": "9026bb1a744570bef2488a8a4acce44d26f19d82",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
