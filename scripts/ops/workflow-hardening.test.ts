@@ -589,3 +589,56 @@ test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trus
     'Checkout must pin ref to the PR base SHA on pull_request(_review) so a PR can never make this privileged job execute its own modified verdict-validation module',
   );
 });
+
+test('UTV2-1543 bootstrap: merge-gate.yml recovers merge-gate-verdict.cjs from the PR head only when absent at the pinned base checkout', () => {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const gate = objectField(jobs, 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+
+  const checkoutIndex = steps.findIndex(
+    (s) => typeof s.uses === 'string' && (s.uses as string).startsWith('actions/checkout@'),
+  );
+  const evalIndex = steps.findIndex(
+    (s) => typeof s.with === 'object' && s.with && typeof (s.with as Record<string, unknown>).script === 'string',
+  );
+  const bootstrapIndex = steps.findIndex(
+    (s) => typeof s.run === 'string' && (s.run as string).includes('merge-gate-verdict.cjs'),
+  );
+
+  assert.notStrictEqual(bootstrapIndex, -1, 'merge-gate.yml gate job must have a bootstrap-recovery step for merge-gate-verdict.cjs');
+  assert.ok(
+    checkoutIndex < bootstrapIndex && bootstrapIndex < evalIndex,
+    'the bootstrap step must run after Checkout and before Evaluate merge gate',
+  );
+
+  const bootstrapStep = steps[bootstrapIndex] as Record<string, unknown>;
+
+  // Must be scoped to pull_request(_review) only -- issue_comment/workflow_dispatch
+  // already checkout github.sha (main HEAD), which by definition has the file
+  // for any PR already merged, so the bootstrap path is meaningless there.
+  assert.match(
+    String(bootstrapStep.if),
+    /pull_request/,
+    'the bootstrap step must be scoped to pull_request(_review) events',
+  );
+
+  // Must only run when the file is genuinely absent at the pinned base
+  // checkout -- for every PR that merely edits (not introduces) the file,
+  // base.sha already has last-merged trusted content and this must stay a
+  // no-op, or a malicious PR could force the bootstrap path unconditionally
+  // and defeat the base-pin entirely.
+  assert.match(
+    String(bootstrapStep.if),
+    /hashFiles\('scripts\/ops\/merge-gate-verdict\.cjs'\)\s*==\s*''/,
+    'the bootstrap step must be gated on the file being absent from the base-pinned checkout, not run unconditionally',
+  );
+
+  // Must source content from the PR's own head SHA, not any other ref, and
+  // must not silently fall back to trusting an unrelated/attacker-chosen ref.
+  assert.match(
+    String(bootstrapStep.run),
+    /github\.event\.pull_request\.head\.sha/,
+    'the bootstrap step must fetch and read the file from the PR head SHA specifically',
+  );
+});

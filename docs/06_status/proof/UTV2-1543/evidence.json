@@ -11,8 +11,8 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "73e3cd71b988bf48b826c6a910caccebd6d325df",
-    "verified_source_note": "Second commit fixes Codex P1 (missing checkout before require, base-SHA-pinned for the same privilege-boundary reason as UTV2-1550). Canonical fix for the gap independently rediscovered as UTV2-1552 (duplicate) while rebasing #1230/#1231/#1232 during this session.",
+    "verified_source_sha": "156d61d2a11a503e5115ca03a9dd2dbc38aa61b9",
+    "verified_source_note": "Second commit fixes Codex P1 (missing checkout before require, base-SHA-pinned for the same privilege-boundary reason as UTV2-1550). Canonical fix for the gap independently rediscovered as UTV2-1552 (duplicate) while rebasing #1230/#1231/#1232 during this session. Third commit fixes a live Merge Gate self-referential bootstrap gap discovered during this PR's own merge attempt: base.sha never has merge-gate-verdict.cjs since this PR introduces it, so require() threw MODULE_NOT_FOUND on every evaluation. Fixed by recovering the file from the PR's own head SHA only when absent at the base-pinned checkout, preserving the base-pin for every subsequent PR that merely edits the file.",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-17T15:25:00.000Z",
     "ci_sentinels": {
@@ -46,8 +46,8 @@
     "unit_tests_updated": {
       "command": "tsx --test scripts/ops/workflow-hardening.test.ts",
       "status": "PASS",
-      "tests": 29,
-      "pass": 29,
+      "tests": 32,
+      "pass": 32,
       "fail": 0
     },
     "lint": {
@@ -93,7 +93,8 @@
     "schema_doc_updated": "PASS",
     "parsing_extracted_to_tested_module_not_duplicated": "PASS",
     "no_admin_merge_used_as_fix": "PASS",
-    "no_required_check_weakened": "PASS"
+    "no_required_check_weakened": "PASS",
+    "self_referential_bootstrap_gap_fixed_not_documented": "PASS"
   },
   "owner_boundary": {
     "t1_approved_label": "absent_and_not_created_by_this_lane",

@@ -75,6 +75,25 @@ jobs:
         with:
           ref: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && github.event.pull_request.base.sha || github.sha }}
 
+      # UTV2-1543 bootstrap: a PR that introduces merge-gate-verdict.cjs for
+      # the first time (this PR, and any future replacement/rename of it)
+      # will never find it at base.sha, since base never has a file this PR
+      # hasn't merged yet -- require() would throw on every evaluation of
+      # that PR forever, not just once. This does NOT reopen the privilege
+      # boundary above: for every OTHER PR (the overwhelming majority, any
+      # PR that merely edits the existing file), base.sha already has last
+      # month's trusted copy and this step is a no-op. It only ever pulls
+      # PR-controlled content for the one PR that is, by definition, the
+      # human-reviewed introduction of that trusted content in the first
+      # place -- identical in kind to any other new file's first CI run.
+      - name: Bootstrap merge-gate-verdict.cjs from PR head if absent at base
+        if: >-
+          (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') &&
+          hashFiles('scripts/ops/merge-gate-verdict.cjs') == ''
+        run: |
+          git fetch origin "${{ github.event.pull_request.head.sha }}" --depth=1
+          git show "${{ github.event.pull_request.head.sha }}:scripts/ops/merge-gate-verdict.cjs" > scripts/ops/merge-gate-verdict.cjs
+
       - name: Evaluate merge gate
         uses: actions/github-script@v7
         with:
