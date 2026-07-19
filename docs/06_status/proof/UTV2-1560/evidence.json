@@ -5,13 +5,13 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "4fdd98ef2806580b038e7336b345ad31ab4dfec1",
-  "reviewed_head_sha": "4fdd98ef2806580b038e7336b345ad31ab4dfec1",
+  "source_sha": "06b60eda192d363c65c9167c8f33e0705ca68b86",
+  "reviewed_head_sha": "06b60eda192d363c65c9167c8f33e0705ca68b86",
   "evidence_commit_sha": "set-by-ci",
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "4fdd98ef2806580b038e7336b345ad31ab4dfec1",
+    "verified_source_sha": "06b60eda192d363c65c9167c8f33e0705ca68b86",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-19T04:40:00Z",
     "ci_sentinels": {
@@ -48,7 +48,17 @@
         { "check": "UNIT_TALK_DISCORD_TARGET_MAP is never read or written by this workflow", "result": "PASS" },
         { "check": "Workflow trigger is workflow_dispatch only -- no automatic/scheduled execution, no trigger on push/PR events", "result": "PASS" }
       ]
-    }
+    },
+    "codex_review_fixes": [
+      {
+        "finding": "HTTPS reachability checks probed the bare host root (https://$REST_HOST/) instead of the actual PostgREST route (/rest/v1/) the failing outbox claim calls use, which could pass while the real route still 502s",
+        "fix": "Steps 3-4 now probe https://$REST_HOST/rest/v1/ on host (IPv4/IPv6) and inside the worker container"
+      },
+      {
+        "finding": "The worker's configured target was read via `grep -m1 worker.startup`, which returns the OLDEST match if the container restarted more than once, misreporting a stale pre-restart target as current",
+        "fix": "Step 10 now uses `grep worker.startup | tail -1` to read the most recent startup line"
+      }
+    ]
   },
   "runtime_proof": {
     "command": "pnpm test:db",
