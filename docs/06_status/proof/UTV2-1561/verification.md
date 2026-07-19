@@ -1,10 +1,11 @@
 # PROOF: UTV2-1561
 
-MERGE_SHA: 0c9110c864bedca08a59c63a4f179fc3ce59c621
+MERGE_SHA: 42d44054c6b2b478d2c12098d2724adb452728f4
 
 (This PR has not merged yet -- this is the current pre-merge implementation
 SHA, an ancestor of whatever the eventual merge commit will be, not a
-placeholder.)
+placeholder. Per the accepted pre-merge convention, this field is rebound
+to the exact head on every push rather than left stale.)
 
 ## Summary
 
