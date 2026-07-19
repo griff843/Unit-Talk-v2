@@ -1,6 +1,10 @@
 # PROOF: UTV2-1561
 
-MERGE_SHA: set-by-ci
+MERGE_SHA: 0c9110c864bedca08a59c63a4f179fc3ce59c621
+
+(This PR has not merged yet -- this is the current pre-merge implementation
+SHA, an ancestor of whatever the eventual merge commit will be, not a
+placeholder.)
 
 ## Summary
 
