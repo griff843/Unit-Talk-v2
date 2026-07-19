@@ -1,0 +1,130 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1554",
+  "title": "Bootstrap trusted Merge Gate verdict helper before privileged workflow consumption",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+  "reviewed_head_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+    "verified_source_note": "Stage 1 of the two-stage bootstrap: lands the final scripts/ops/merge-gate-verdict.cjs implementation, its full unit test suite, and lint/test:ops wiring on main, WITHOUT touching .github/workflows/merge-gate.yml at all. This closes the self-referential bootstrap gap the UTV2-1543 lane hit: once this merges, main (and therefore every future PR's base SHA) already contains the file, so #1246's own subsequent rebase can consume it from the trusted base checkout with no PR-head fetch fallback. This head additionally applies the PM's 2026-07-18T20:07:51Z CHANGES_REQUIRED trust-boundary repair (see pm_changes_required_repair below) and rebases cleanly onto main@1588c590 (post UTV2-1506 close).",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-19T01:18:01.302Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1554",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_new": {
+      "command": "tsx --test scripts/ops/merge-gate-verdict.test.ts",
+      "status": "PASS",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "note": "16 pre-existing plus 4 new UTV2-1554 trust-boundary regressions (unauthorized CHANGES_REQUIRED cannot override valid owner APPROVED; unauthorized APPROVED cannot override valid owner CHANGES_REQUIRED; fail-closed when every parsed verdict is unauthorized; bounce limit counts authorized verdicts only)."
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "note": "eslint.config.mjs carries the **/*.cjs override (Node globals, CommonJS source type) needed for this repo's first .cjs file, ported unchanged from the UTV2-1543 lane."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "note": "This lane adds only a pure CommonJS module, its test suite, a lint override, and doc/schema updates -- no production code path, migration, or workflow file touched. Live smoke run regardless per T1 policy.",
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/merge-gate-verdict.cjs",
+      "scripts/ops/merge-gate-verdict.test.ts",
+      "eslint.config.mjs",
+      "docs/05_operations/schemas/pm-verdict-v1.md",
+      "package.json"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false,
+    "merge_gate_yml_changed": false
+  },
+  "acceptance_criteria": {
+    "merge_gate_verdict_cjs_final_content_on_main": "PASS",
+    "unit_test_suite_wired_into_test_ops": "PASS",
+    "lint_wiring_for_cjs_source_type": "PASS",
+    "merge_gate_yml_not_modified": "PASS",
+    "no_pr_head_code_execution_in_this_lane": "PASS",
+    "no_admin_merge_used_as_fix": "PASS",
+    "cannot_self_authorize_uses_existing_t1_rules": "PASS",
+    "unauthorized_comments_filtered_before_latest_verdict_selection": "PASS",
+    "latest_authorized_verdict_and_bounce_limit_semantics_preserved": "PASS",
+    "fail_closed_when_no_authorized_verdict_exists": "PASS"
+  },
+  "pm_changes_required_repair": {
+    "responds_to_pm_verdict_at": "2026-07-18T20:07:51Z",
+    "prior_head_reviewed_and_rejected": "562e148958a2bbe5b910b5a82c20ae8a42166637",
+    "required_changes": [
+      "Filter comments to authorized verdict authors before choosing the controlling latest verdict.",
+      "An unauthorized outsider or bot comment must not override or block a valid authorized owner verdict.",
+      "Add regression tests for both directions: unauthorized later CHANGES_REQUIRED cannot supersede valid approval, and unauthorized later APPROVED cannot supersede valid changes-required.",
+      "Preserve fail-closed behavior when no valid authorized verdict exists."
+    ],
+    "how_addressed": "scripts/ops/merge-gate-verdict.cjs now filters verdicts to ctx.authorizedReviewers (excluding Bot userType) BEFORE selecting the latest one, in validateT1Verdicts. If the authorized subset is empty, the function falls back to a diagnostic on the raw latest comment (preserving prior bot/non-CODEOWNERS messaging) and still fails closed with the generic missing-verdict message. Bounce-limit counting was also scoped to the authorized subset for the same trust boundary. Four new tests cover both override directions, the all-unauthorized fail-closed case, and authorized-only bounce counting; all 20 tests (16 pre-existing + 4 new) pass."
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "This bootstrap PR intentionally does not modify .github/workflows/merge-gate.yml. Stage 2 (rebasing PR #1246/UTV2-1543 onto this main, removing its PR-head bootstrap fallback, and proving Merge Gate never fetches or executes pull_request.head.sha content) is separate follow-up work on the UTV2-1543 lane after this merges."
+  ],
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}

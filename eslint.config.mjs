@@ -28,6 +28,19 @@ export default tseslint.config(
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  // .cjs files (e.g. scripts/ops/merge-gate-verdict.cjs) are required
+  // directly by actions/github-script from a checked-out workspace, which
+  // runs plain Node -- they must stay CommonJS, not transpiled/ESM.
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
   {
     files: ['**/*.ts'],
     languageOptions: {

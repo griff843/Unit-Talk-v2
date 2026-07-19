@@ -10,6 +10,8 @@
 PM_VERDICT: APPROVED
 schema: pm-verdict/v1
 Issue: UTV2-###
+PR: NNN
+Head SHA: <exact 40-char SHA of the reviewed PR head>
 
 Checks:
 - [x] Scope aligned with issue
@@ -19,6 +21,11 @@ Checks:
 - [x] No governance drift
 - [x] No out-of-scope changes
 ```
+
+`PR:` and `Head SHA:` are **required for T1** (UTV2-1543) — an APPROVED
+verdict binds the PM's review to one exact, immutable head. `PR:` and
+`Head SHA:` may appear anywhere after the `Issue:` line, not only
+immediately following it.
 
 ## Format: CHANGES_REQUIRED
 
@@ -45,6 +52,14 @@ Next Steps:
 4. Author must be in `.github/CODEOWNERS` (currently: `griff843`)
 5. Author must NOT be a bot account
 6. If `CHANGES_REQUIRED`: `Bounce:` field required with numeric value
+7. If the **latest** verdict on the PR is `APPROVED` (T1 only, UTV2-1543):
+   `PR:` must be present and equal the evaluated PR number; `Head SHA:`
+   must be present and equal the PR's current head SHA exactly. A verdict
+   approved before a rebase, push, or any other head change no longer
+   satisfies the gate — no content-based inference (e.g. "the diff didn't
+   actually change") exempts this; a fresh verdict bound to the new head
+   is always required. `CHANGES_REQUIRED` verdicts are not subject to this
+   check (they already block merge on their own).
 
 ## Authorization
 
