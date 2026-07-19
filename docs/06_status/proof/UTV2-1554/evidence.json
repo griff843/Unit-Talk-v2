@@ -5,16 +5,16 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "238d08b207345ccf05fff4f3b0d4a4531f07f702",
-  "reviewed_head_sha": "238d08b207345ccf05fff4f3b0d4a4531f07f702",
+  "source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+  "reviewed_head_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
   "evidence_commit_sha": "set-by-ci",
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "238d08b207345ccf05fff4f3b0d4a4531f07f702",
-    "verified_source_note": "Stage 1 of the two-stage bootstrap: lands the final scripts/ops/merge-gate-verdict.cjs implementation, its full unit test suite, and lint/test:ops wiring on main, WITHOUT touching .github/workflows/merge-gate.yml at all. This closes the self-referential bootstrap gap the UTV2-1543 lane hit: once this merges, main (and therefore every future PR's base SHA) already contains the file, so #1246's own subsequent rebase can consume it from the trusted base checkout with no PR-head fetch fallback.",
+    "verified_source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+    "verified_source_note": "Stage 1 of the two-stage bootstrap: lands the final scripts/ops/merge-gate-verdict.cjs implementation, its full unit test suite, and lint/test:ops wiring on main, WITHOUT touching .github/workflows/merge-gate.yml at all. This closes the self-referential bootstrap gap the UTV2-1543 lane hit: once this merges, main (and therefore every future PR's base SHA) already contains the file, so #1246's own subsequent rebase can consume it from the trusted base checkout with no PR-head fetch fallback. This head additionally applies the PM's 2026-07-18T20:07:51Z CHANGES_REQUIRED trust-boundary repair (see pm_changes_required_repair below) and rebases cleanly onto main@1588c590 (post UTV2-1506 close).",
     "sha_type": "implementation_sha",
-    "bound_at": "2026-07-18T00:55:00.000Z",
+    "bound_at": "2026-07-19T01:18:01.302Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "pending",
@@ -39,9 +39,10 @@
     "unit_tests_new": {
       "command": "tsx --test scripts/ops/merge-gate-verdict.test.ts",
       "status": "PASS",
-      "tests": 16,
-      "pass": 16,
-      "fail": 0
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "note": "16 pre-existing plus 4 new UTV2-1554 trust-boundary regressions (unauthorized CHANGES_REQUIRED cannot override valid owner APPROVED; unauthorized APPROVED cannot override valid owner CHANGES_REQUIRED; fail-closed when every parsed verdict is unauthorized; bounce limit counts authorized verdicts only)."
     },
     "lint": {
       "command": "pnpm lint",
@@ -101,7 +102,21 @@
     "merge_gate_yml_not_modified": "PASS",
     "no_pr_head_code_execution_in_this_lane": "PASS",
     "no_admin_merge_used_as_fix": "PASS",
-    "cannot_self_authorize_uses_existing_t1_rules": "PASS"
+    "cannot_self_authorize_uses_existing_t1_rules": "PASS",
+    "unauthorized_comments_filtered_before_latest_verdict_selection": "PASS",
+    "latest_authorized_verdict_and_bounce_limit_semantics_preserved": "PASS",
+    "fail_closed_when_no_authorized_verdict_exists": "PASS"
+  },
+  "pm_changes_required_repair": {
+    "responds_to_pm_verdict_at": "2026-07-18T20:07:51Z",
+    "prior_head_reviewed_and_rejected": "562e148958a2bbe5b910b5a82c20ae8a42166637",
+    "required_changes": [
+      "Filter comments to authorized verdict authors before choosing the controlling latest verdict.",
+      "An unauthorized outsider or bot comment must not override or block a valid authorized owner verdict.",
+      "Add regression tests for both directions: unauthorized later CHANGES_REQUIRED cannot supersede valid approval, and unauthorized later APPROVED cannot supersede valid changes-required.",
+      "Preserve fail-closed behavior when no valid authorized verdict exists."
+    ],
+    "how_addressed": "scripts/ops/merge-gate-verdict.cjs now filters verdicts to ctx.authorizedReviewers (excluding Bot userType) BEFORE selecting the latest one, in validateT1Verdicts. If the authorized subset is empty, the function falls back to a diagnostic on the raw latest comment (preserving prior bot/non-CODEOWNERS messaging) and still fails closed with the generic missing-verdict message. Bounce-limit counting was also scoped to the authorized subset for the same trust boundary. Four new tests cover both override directions, the all-unauthorized fail-closed case, and authorized-only bounce counting; all 20 tests (16 pre-existing + 4 new) pass."
   },
   "owner_boundary": {
     "t1_approved_label": "absent_and_not_created_by_this_lane",

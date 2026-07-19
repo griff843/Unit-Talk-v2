@@ -1,6 +1,6 @@
 # PROOF: UTV2-1554
 
-MERGE_SHA: 238d08b207345ccf05fff4f3b0d4a4531f07f702
+MERGE_SHA: 8912f619ae71f6e626afb82b331a9b28721716e9
 
 ## Verification
 
@@ -23,7 +23,7 @@ rather than by fetching PR-controlled content into a privileged job.
 ## ASSERTIONS:
 
 - [x] `scripts/ops/merge-gate-verdict.cjs` is the final, reviewed implementation (ported byte-for-byte from the UTV2-1543 lane's already-verified content)
-- [x] `scripts/ops/merge-gate-verdict.test.ts` (16 tests) is wired into `test:ops`
+- [x] `scripts/ops/merge-gate-verdict.test.ts` (20 tests) is wired into `test:ops`
 - [x] `eslint.config.mjs` carries the `**/*.cjs` override needed for this repo's first `.cjs` source file
 - [x] `docs/05_operations/schemas/pm-verdict-v1.md` updated with the PR/Head-SHA freshness fields the helper validates
 - [x] `.github/workflows/merge-gate.yml` is NOT part of this diff -- no privileged workflow behavior changes in this lane
@@ -31,30 +31,46 @@ rather than by fetching PR-controlled content into a privileged job.
 - [x] pnpm verify PASS (full local run, exit code 0)
 - [x] pnpm test:db PASS (7/7, live Supabase)
 - [x] r-level-check PASS, no artifacts required for this diff
+- [x] PM's 2026-07-18T20:07:51Z CHANGES_REQUIRED trust-boundary repair applied: authorization filtering now happens before latest-verdict selection, not after; unauthorized/bot comments can no longer block a valid owner APPROVED or supersede a valid owner CHANGES_REQUIRED, in either direction; fail-closed preserved when no authorized verdict exists
 
 ## EVIDENCE:
 
 ```text
 $ pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts
-1..16
-# tests 16
-# pass 16
+1..20
+# tests 20
+# pass 20
 # fail 0
 # cancelled 0
 # skipped 0
 ```
 
 ```text
-$ pnpm lint
-(clean, exit 0)
+$ pnpm verify
+(exit 0 -- full static gate, live DB smoke 7/7, live T1 proof suite)
 ```
 
 ```text
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 3
+Changed files: 10
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
+
+## PM CHANGES_REQUIRED repair (this head)
+
+The prior head (`562e148958a2bbe5b910b5a82c20ae8a42166637`) received PM_VERDICT: CHANGES_REQUIRED at 2026-07-18T20:07:51Z:
+
+> Filter comments to authorized verdict authors before choosing the controlling latest verdict. An unauthorized outsider or bot comment must not override or block a valid authorized owner verdict. Add regression tests for both directions... Preserve fail-closed behavior when no valid authorized verdict exists.
+
+`validateT1Verdicts` in `scripts/ops/merge-gate-verdict.cjs` now filters `verdicts` to `ctx.authorizedReviewers` (excluding bot userType) *before* picking the latest one, instead of authorizing only after selection. Concretely:
+
+- Owner `APPROVED` followed by a later unauthorized/bot `CHANGES_REQUIRED` (same PR/head): the unauthorized comment is filtered out entirely; the owner `APPROVED` remains controlling; `errors` is empty.
+- Owner `CHANGES_REQUIRED` followed by a later unauthorized/bot `APPROVED`: same filtering; the owner `CHANGES_REQUIRED` remains controlling; merge stays blocked.
+- If every parsed verdict is unauthorized, the function still fails closed with the same generic "T1 requires a valid pm-verdict/v1 comment" message (plus the specific bot/non-CODEOWNERS diagnostic for the raw latest comment, preserving prior single-comment messaging).
+- The bounce-limit count (`changesRequested`) is now computed over the authorized subset only, so an outsider cannot force a false bounce-limit trip by spamming fake `CHANGES_REQUIRED` comments.
+
+Four new tests cover all four cases above; all 16 pre-existing tests are unaffected (they all use the single authorized `griff843` reviewer already in `REVIEWERS`).
 
 ## Stage 2 (separate follow-up, not in this PR)
 
