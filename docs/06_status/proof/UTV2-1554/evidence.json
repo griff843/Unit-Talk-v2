@@ -4,22 +4,23 @@
   "title": "Bootstrap trusted Merge Gate verdict helper before privileged workflow consumption",
   "tier": "T1",
   "lane_type": "governance",
-  "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
-  "reviewed_head_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+  "status": "MERGED_TRUTH_CLOSED",
+  "source_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+  "reviewed_head_sha": "c52ba30fe358bbfa611767fdc91c195583c9e0fb",
   "evidence_commit_sha": "set-by-ci",
   "current_head_sha": null,
-  "merge_sha": null,
+  "merge_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
   "sha_binding": {
-    "verified_source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
-    "verified_source_note": "Stage 1 of the two-stage bootstrap: lands the final scripts/ops/merge-gate-verdict.cjs implementation, its full unit test suite, and lint/test:ops wiring on main, WITHOUT touching .github/workflows/merge-gate.yml at all. This closes the self-referential bootstrap gap the UTV2-1543 lane hit: once this merges, main (and therefore every future PR's base SHA) already contains the file, so #1246's own subsequent rebase can consume it from the trusted base checkout with no PR-head fetch fallback. This head additionally applies the PM's 2026-07-18T20:07:51Z CHANGES_REQUIRED trust-boundary repair (see pm_changes_required_repair below) and rebases cleanly onto main@1588c590 (post UTV2-1506 close).",
-    "sha_type": "implementation_sha",
-    "bound_at": "2026-07-19T01:18:01.302Z",
+    "verified_source_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+    "verified_source_note": "PR #1250 squash-merged to main as c16054ba2a1806b733c033c773479abd99b76c74 (approved head c52ba30fe358bbfa611767fdc91c195583c9e0fb). Stage 1 of the two-stage bootstrap: lands the final scripts/ops/merge-gate-verdict.cjs implementation, its full unit test suite, and lint/test:ops wiring on main, WITHOUT touching .github/workflows/merge-gate.yml at all. This closes the self-referential bootstrap gap the UTV2-1543 lane hit: once this merges, main (and therefore every future PR's base SHA) already contains the file, so #1246's own subsequent rebase can consume it from the trusted base checkout with no PR-head fetch fallback. This head applied the PM's 2026-07-18T20:07:51Z CHANGES_REQUIRED trust-boundary repair (see pm_changes_required_repair below).",
+    "sha_type": "merge_sha",
+    "approved_head_sha": "c52ba30fe358bbfa611767fdc91c195583c9e0fb",
+    "bound_at": "2026-07-19T01:55:02Z",
     "ci_sentinels": {
       "verify": "pass",
-      "merge_gate": "pending",
-      "executor_result_validation": "pending",
-      "p0_protocol": "pending"
+      "merge_gate": "pass",
+      "executor_result_validation": "pass",
+      "p0_protocol": "pass"
     },
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
@@ -119,12 +120,30 @@
     "how_addressed": "scripts/ops/merge-gate-verdict.cjs now filters verdicts to ctx.authorizedReviewers (excluding Bot userType) BEFORE selecting the latest one, in validateT1Verdicts. If the authorized subset is empty, the function falls back to a diagnostic on the raw latest comment (preserving prior bot/non-CODEOWNERS messaging) and still fails closed with the generic missing-verdict message. Bounce-limit counting was also scoped to the authorized subset for the same trust boundary. Four new tests cover both override directions, the all-unauthorized fail-closed case, and authorized-only bounce counting; all 20 tests (16 pre-existing + 4 new) pass."
   },
   "owner_boundary": {
-    "t1_approved_label": "absent_and_not_created_by_this_lane",
-    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
-    "merge_authorized": false
+    "t1_approved_label": "present",
+    "pm_verdict_v1": "present",
+    "merge_authorized": true
+  },
+  "post_merge_truth_close_summary": {
+    "approved_head_sha": "c52ba30fe358bbfa611767fdc91c195583c9e0fb",
+    "merge_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1250",
+    "merged_at": "2026-07-19T01:55:02Z",
+    "ci_on_approved_head": {
+      "verify": "pass",
+      "merge_gate": "pass",
+      "executor_result_validator": "pass",
+      "p0_protocol": "pass",
+      "r_level": "pass",
+      "proof_auditor_gate": "pass",
+      "t1_proof_gate": "pass",
+      "readiness_regression_gate": "fail_preexisting_unrelated",
+      "live_schema_parity": "fail_preexisting_unrelated"
+    },
+    "note": "readiness_regression_gate and live_schema_parity were already failing on this branch before any UTV2-1554 change touched anything (repo-wide stale readiness ledger; unrelated command_center_delivery_mappings/command_center_game_threads schema drift) -- this lane changes no migrations, DB code, or deploy config, and neither check gates T1 merge authority."
   },
   "known_gaps": [
-    "This bootstrap PR intentionally does not modify .github/workflows/merge-gate.yml. Stage 2 (rebasing PR #1246/UTV2-1543 onto this main, removing its PR-head bootstrap fallback, and proving Merge Gate never fetches or executes pull_request.head.sha content) is separate follow-up work on the UTV2-1543 lane after this merges."
+    "This bootstrap PR intentionally does not modify .github/workflows/merge-gate.yml. Stage 2 (rebasing PR #1246/UTV2-1543 onto this main, removing its PR-head bootstrap fallback, and proving Merge Gate never fetches or executes pull_request.head.sha content) is separate follow-up work on the UTV2-1543 lane, now proceeding immediately after this merge per PM direction."
   ],
-  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+  "verdict": "MERGED_AND_TRUTH_CLOSED"
 }

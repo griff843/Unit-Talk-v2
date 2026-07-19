@@ -1,6 +1,6 @@
 # PROOF: UTV2-1554
 
-MERGE_SHA: 8912f619ae71f6e626afb82b331a9b28721716e9
+MERGE_SHA: c16054ba2a1806b733c033c773479abd99b76c74
 
 ## Verification
 
@@ -84,6 +84,26 @@ Merge Gate consumption change in separate, independently reviewable PRs.
 ## Owner boundary
 
 T1 governance-critical bootstrap. Must merge under the existing human-approved
-T1 rules; it cannot use the authority it is preparing to create. Requires the
-`t1-approved` label and a valid Griff-authored `pm-verdict/v1` APPROVED comment
-bound to the reviewed head. This proof supplies neither.
+T1 rules; it cannot use the authority it is preparing to create. PR #1250 carries
+the `t1-approved` label and a Griff-authored `pm-verdict/v1` APPROVED comment
+bound to approved head `c52ba30fe358bbfa611767fdc91c195583c9e0fb`, which is the
+binding owner action for this merge.
+
+## Post-merge truth-close
+
+PR #1250 squash-merged to `main` as `c16054ba2a1806b733c033c773479abd99b76c74`
+at `2026-07-19T01:55:02Z` (approved head `c52ba30fe358bbfa611767fdc91c195583c9e0fb`).
+On the approved head, all governed checks relevant to T1 merge authority passed:
+`verify`, `Merge Gate`, `Executor Result Validator`, `P0 Protocol`, `R-Level
+Compliance`, `Proof Auditor Gate`, `T1 Proof Gate`. `Readiness Regression Gate`
+and `Live Schema Parity` were red, but both are pre-existing, unrelated
+repo-wide failures (stale readiness ledger; schema drift on
+`command_center_delivery_mappings`/`command_center_game_threads`) present
+before this lane touched anything -- this lane changes no migrations, DB code,
+or deploy config, and neither check gates T1 merge authority.
+
+`docs/06_status/lanes/UTV2-1554.json` is rebound to `status: "merged"`,
+`commit_sha: "c16054ba2a1806b733c033c773479abd99b76c74"` via
+`pnpm ops:lane-close UTV2-1554 --repair-merged`, followed by a plain
+`pnpm ops:lane-close UTV2-1554` to reach `status: "done"` with a real
+`closed_at` from the governed close event (see manifest for the exact value).
