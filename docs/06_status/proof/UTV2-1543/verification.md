@@ -1,6 +1,12 @@
 # PROOF: UTV2-1543 (continuation)
 
-MERGE_SHA: 11d1b8cb9571ec4095ef65ccfd740db4d8914f5b
+MERGE_SHA: c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6
+
+PR #1255 merged to main as `c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6`. This
+supersedes the pre-merge implementation SHA `11d1b8cb9571ec4095ef65ccfd740db4d8914f5b`
+referenced below (the byte-identical carry-forward from PR #1246's approved
+head `33d1bba3cd1843bce5807f48b8d0a146ce26e156`); rebound during post-merge
+lane-close reconciliation (`ops:lane-close --repair-merged`).
 
 ## Summary
 

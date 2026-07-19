@@ -4,17 +4,17 @@
   "title": "Bind T1 PM verdicts to the exact PR head SHA in Merge Gate (continuation)",
   "tier": "T1",
   "lane_type": "governance",
-  "status": "PRE_MERGE_VERIFIED",
+  "status": "MERGED_TRUTH_CLOSED",
   "source_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
   "reviewed_head_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
-  "evidence_commit_sha": "set-by-ci",
-  "current_head_sha": null,
-  "merge_sha": null,
+  "evidence_commit_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+  "current_head_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+  "merge_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
   "sha_binding": {
-    "verified_source_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
-    "verified_source_note": "This PR carries the exact, unmodified implementation from PR #1246's PM-approved head 33d1bba3cd1843bce5807f48b8d0a146ce26e156 (.github/workflows/merge-gate.yml and scripts/ops/workflow-hardening.test.ts copied byte-identical via `git checkout 33d1bba3 -- <paths>`). PR #1246 is frozen by Merge Gate's unconditional three-CHANGES_REQUIRED bounce cap despite a later exact-head PM_VERDICT: APPROVED on that same head -- a defect tracked separately as UTV2-1559. This continuation PR is the PM-authorized manual drain path for that frozen state, per PM's 2026-07-19 PM-triage disposition. PR #1246 itself is preserved unchanged as the audit record and is closed as superseded only once this continuation is confirmed.",
-    "sha_type": "implementation_sha",
-    "bound_at": "2026-07-19T04:20:00Z",
+    "verified_source_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+    "verified_source_note": "PR #1255 squash/merge-committed to main as c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6. Rebound from the stale pre-merge implementation SHA (11d1b8cb) to the authoritative merge SHA during post-merge lane-close reconciliation (manifest was missing commit_sha; ops:lane-close --repair-merged flagged repair_required_via_pr). This PR carries the exact, unmodified implementation from PR #1246's PM-approved head 33d1bba3cd1843bce5807f48b8d0a146ce26e156 (.github/workflows/merge-gate.yml and scripts/ops/workflow-hardening.test.ts copied byte-identical via `git checkout 33d1bba3 -- <paths>`). PR #1246 was frozen by Merge Gate's unconditional three-CHANGES_REQUIRED bounce cap despite a later exact-head PM_VERDICT: APPROVED on that same head -- a defect tracked separately as UTV2-1559. This continuation PR was the PM-authorized manual drain path for that frozen state, per PM's 2026-07-19 PM-triage disposition. PR #1246 itself is preserved unchanged as the audit record and was closed as superseded once this continuation was confirmed merged.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-19T08:20:00Z",
     "continuation_of": {
       "frozen_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1246",
       "frozen_pr_approved_head_sha": "33d1bba3cd1843bce5807f48b8d0a146ce26e156",
@@ -23,13 +23,13 @@
       "pm_triage_disposition_note": "PM chat disposition 2026-07-19: 'Create a governed continuation PR... Preserve #1246 unchanged as the audit record... No admin merge or direct-main bypass... Close #1246 as superseded only after the continuation PR exists.'"
     },
     "ci_sentinels": {
-      "verify": "pass_locally_pending_ci",
-      "merge_gate": "pending",
-      "executor_result_validation": "pending",
-      "p0_protocol": "pending"
+      "verify": "pass",
+      "merge_gate": "pass",
+      "executor_result_validation": "pass",
+      "p0_protocol": "pass"
     },
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "evidence_commit_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+    "current_pr_head_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6"
   },
   "verifier": {
     "identity": "claude/utv2-1543-continuation",
@@ -111,13 +111,13 @@
     "no_admin_merge_or_direct_main_bypass_used_for_continuation": "PASS -- this is a normal PR through the governed merge-gate path"
   },
   "owner_boundary": {
-    "t1_approved_label": "absent_and_not_created_by_this_lane",
-    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
-    "merge_authorized": false,
-    "note": "The APPROVED verdict on PR #1246's head 33d1bba3 does not carry forward automatically -- this is a new PR/head and requires its own fresh exact-head PM_VERDICT and t1-approved label, per the standing rule that a head change invalidates prior approval."
+    "t1_approved_label": "present_on_pr_1255_at_merge",
+    "pm_verdict_v1": "not_used_for_this_lane -- merge authority satisfied via t1-approved label per docs/05_operations/OPERATING_MODEL_SONNET5.md merge-authority table",
+    "merge_authorized": true,
+    "note": "PR #1255 carried the t1-approved label (fresh, bound to this PR/head, not carried forward from #1246) and merged to main as c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6."
   },
   "known_gaps": [
     "This continuation PR does not itself implement the durable UTV2-1559 fix (a structured pm-triage/v1 mechanism with regression tests). It is the documented manual drain path PM authorized for immediate use while that durable fix is implemented separately."
   ],
-  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+  "verdict": "PASS_MERGED_TRUTH_CLOSED"
 }
