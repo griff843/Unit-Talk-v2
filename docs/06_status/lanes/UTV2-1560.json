@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1560-hetzner-supabase-502-diagnosis",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": "PR_URL_PLACEHOLDER",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1256",
   "files_changed": [
     ".github/workflows/ops-network-diagnose.yml",
     ".ops/sync/UTV2-1560.yml",
