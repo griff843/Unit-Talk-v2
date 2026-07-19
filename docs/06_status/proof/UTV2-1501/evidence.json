@@ -81,7 +81,7 @@
     "merge_sha": "1674924fc3b09bb53f5fbca45834113d4be048dd",
     "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1230",
     "merged_at": "2026-07-17T12:43:44Z",
-    "repair_pr_url": "TBD -- set to this repair PR once opened",
+    "repair_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1254",
     "note": "This is a ghost-lane bookkeeping repair, not new implementation content: PR #1230 merged 2026-07-17T12:43:44Z but docs/06_status/lanes/UTV2-1501.json was never updated to status=done, leaving it occupying an active Claude dispatch slot and counting against the governance lane-type cap. Reconciled via pnpm ops:lane-close --repair-merged (binds status/commit_sha to the actual GitHub merge state) followed by pnpm ops:lane-close (binds status=done with a real closed_at)."
   },
   "verdict": "MERGED_AND_TRUTH_CLOSED"
