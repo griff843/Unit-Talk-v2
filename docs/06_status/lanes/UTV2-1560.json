@@ -16,7 +16,8 @@
     "docs/06_status/lanes/UTV2-1560.json",
     "docs/06_status/proof/UTV2-1560/.gitkeep",
     "docs/06_status/proof/UTV2-1560/evidence.json",
-    "docs/06_status/proof/UTV2-1560/verification.md"
+    "docs/06_status/proof/UTV2-1560/verification.md",
+    "scripts/ops/worker-recovery-workflow.test.ts"
   ],
   "file_scope_lock": [
     ".github/workflows/ops-network-diagnose.yml",
@@ -25,7 +26,8 @@
     "docs/06_status/lanes/UTV2-1560.json",
     "docs/06_status/proof/UTV2-1560/.gitkeep",
     "docs/06_status/proof/UTV2-1560/evidence.json",
-    "docs/06_status/proof/UTV2-1560/verification.md"
+    "docs/06_status/proof/UTV2-1560/verification.md",
+    "scripts/ops/worker-recovery-workflow.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1560/evidence.json"

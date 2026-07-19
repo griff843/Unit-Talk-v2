@@ -77,9 +77,13 @@ jobs:
             echo \"\$PRE_LINE\"
             PRE_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
             PRE_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
-            echo '--- configured target (most recent worker.startup line) ---'
+            PRE_HEALTH=\$(docker inspect \"\$TARGET\" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            echo \"Pre-restart health: \$PRE_HEALTH (none = no healthcheck configured on this container)\"
+            echo '--- configured target (most recent worker.startup line, canonical targets field) ---'
             PRE_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
             echo \"\$PRE_TARGET_LINE\"
+            PRE_TARGETS=\$(echo \"\$PRE_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get("targets"), sort_keys=True))' 2>&1) || PRE_TARGETS=\"PARSE_ERROR: \$PRE_TARGETS\"
+            echo \"Parsed pre-restart targets: \$PRE_TARGETS\"
             echo '--- last 30 log lines ---'
             docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
 
@@ -106,13 +110,19 @@ jobs:
             fi
 
             echo ''
-            echo '=== waiting up to 30s for the container to report healthy/running ==='
+            echo '=== waiting up to 60s for the container to report running AND (healthy or no-healthcheck) ==='
+            echo '(status alone is NOT sufficient when a healthcheck is configured on this container -- a running-but-unhealthy container is a failed recovery, not a successful one)'
             STATUS=unknown
-            for i in \$(seq 1 6); do
+            HEALTH=unknown
+            for i in \$(seq 1 12); do
               sleep 5
               STATUS=\$(docker inspect \"\$TARGET\" --format '{{.State.Status}}' 2>&1)
-              echo \"check \$i: Status=\$STATUS\"
-              if [ \"\$STATUS\" = 'running' ]; then break; fi
+              HEALTH=\$(docker inspect \"\$TARGET\" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+              echo \"check \$i: Status=\$STATUS Health=\$HEALTH\"
+              if [ \"\$STATUS\" = 'running' ] && { [ \"\$HEALTH\" = 'healthy' ] || [ \"\$HEALTH\" = 'none' ]; }; then break; fi
+              if [ \"\$HEALTH\" = 'unhealthy' ]; then
+                echo 'Health reported unhealthy -- continuing to poll within the bounded window in case it recovers, but this will fail closed if the window expires in this state.'
+              fi
             done
 
             echo ''
@@ -122,9 +132,11 @@ jobs:
             echo \"\$POST_LINE\"
             POST_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
             POST_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
-            echo '--- configured target after restart ---'
+            echo '--- configured target after restart (canonical targets field) ---'
             POST_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
             echo \"\$POST_TARGET_LINE\"
+            POST_TARGETS=\$(echo \"\$POST_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get("targets"), sort_keys=True))' 2>&1) || POST_TARGETS=\"PARSE_ERROR: \$POST_TARGETS\"
+            echo \"Parsed post-restart targets: \$POST_TARGETS\"
             echo '--- last 30 log lines post-restart ---'
             docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
 
@@ -132,10 +144,19 @@ jobs:
             echo '=== POST-RESTART VERIFICATION (any failure here marks this run FAILED, not just informational) ==='
 
             if [ \"\$STATUS\" != 'running' ]; then
-              echo \"::error::Container did not reach 'running' status within 30s of restart (last observed: \$STATUS).\"
+              echo \"::error::Container did not reach 'running' status within the 60s wait window (last observed: \$STATUS).\"
+              FAILED=1
+            elif [ \"\$HEALTH\" = 'unhealthy' ]; then
+              echo \"::error::Container is running but Docker reports Health=unhealthy. Status=running alone does not mean recovery succeeded when a healthcheck is configured -- FAILING closed.\"
+              FAILED=1
+            elif [ \"\$HEALTH\" = 'starting' ]; then
+              echo \"::error::Container health never left 'starting' within the 60s wait window -- cannot verify recovery succeeded. FAILING closed rather than treating an unverified state as success.\"
+              FAILED=1
+            elif [ \"\$HEALTH\" != 'healthy' ] && [ \"\$HEALTH\" != 'none' ]; then
+              echo \"::error::Container health is in an unrecognized/unverifiable state (\$HEALTH). FAILING closed.\"
               FAILED=1
             else
-              echo \"PASS: container status is running\"
+              echo \"PASS: container status is running and health is \$HEALTH (healthy, or no healthcheck configured)\"
             fi
 
             if [ -n \"\$PRE_IMAGE\" ] && [ \"\$PRE_IMAGE\" = \"\$POST_IMAGE\" ]; then
@@ -145,10 +166,12 @@ jobs:
               FAILED=1
             fi
 
-            if [ -n \"\$PRE_TARGET_LINE\" ] && [ \"\$PRE_TARGET_LINE\" = \"\$POST_TARGET_LINE\" ]; then
-              echo \"PASS: configured worker target unchanged across restart\"
+            case \"\$PRE_TARGETS\" in PARSE_ERROR*) echo \"::error::Could not parse pre-restart targets JSON: \$PRE_TARGETS\"; FAILED=1 ;; esac
+            case \"\$POST_TARGETS\" in PARSE_ERROR*) echo \"::error::Could not parse post-restart targets JSON: \$POST_TARGETS\"; FAILED=1 ;; esac
+            if [ -n \"\$PRE_TARGETS\" ] && [ \"\$PRE_TARGETS\" = \"\$POST_TARGETS\" ]; then
+              echo \"PASS: configured worker target(s) unchanged across restart (\$POST_TARGETS) -- compared canonically via the parsed targets field, not the raw log line\"
             else
-              echo \"::error::Configured worker target changed across restart (pre=[\$PRE_TARGET_LINE] post=[\$POST_TARGET_LINE]).\"
+              echo \"::error::Configured worker target changed across restart (pre=[\$PRE_TARGETS] post=[\$POST_TARGETS]).\"
               FAILED=1
             fi
 

@@ -83,10 +83,17 @@ env var not discovered) are fixed in this continuation.
    `docker restart` (no image pull, no `compose up`, no env/target change,
    no queue/DB mutation) and then verifies, before reporting success: the
    restart's own exit code was zero, the container reached `running`
-   status, the image is byte-identical pre/post (proving a restart, not a
-   recreation), the configured worker target is unchanged, and
-   `RestartCount` advanced by exactly 1 (proving exactly one restart
-   transition, not zero or a crash loop). Any single failed check marks the
+   status **and** -- since the production worker has a configured Docker
+   healthcheck -- `Health` is `healthy` (or `none` for a container with no
+   healthcheck configured); `Health=unhealthy` or `Health` still `starting`
+   after a 60-second bounded wait both fail closed, since `Status=running`
+   alone is never treated as a successful outcome. The image is
+   byte-identical pre/post (proving a restart, not a recreation), the
+   configured worker target is compared via the canonically-parsed JSON
+   `targets` field (not the raw log line, so unrelated log metadata cannot
+   cause a false failure), and `RestartCount` advanced by exactly 1
+   (proving exactly one restart transition, not zero or a crash loop). Any
+   single failed check marks the
    whole run FAILED and the workflow step exits non-zero -- there is no
    `set +e` masking an unsuccessful or unverifiable recovery as green. This
    lane does **not** dispatch it -- it is returned here for PM review first.

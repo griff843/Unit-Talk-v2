@@ -11,9 +11,9 @@
   "current_head_sha": "set-by-ci",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "set-by-ci",
+    "verified_source_sha": "5b37e6ff1e766d28b9a578ed761e15ff9c1b2b84",
     "sha_type": "implementation_sha",
-    "bound_at": "set-by-ci",
+    "bound_at": "2026-07-19T17:35:00Z",
     "ci_sentinels": {
       "verify": "pass_locally_pending_ci",
       "merge_gate": "pending",
@@ -57,13 +57,34 @@
     "workflow_safety_review": {
       "note": "Self-review of both workflow files against the issue's explicit guardrails (do not mutate queues/delivery targets/env; never print secret values; recovery workflow may only restart unit-talk-worker-1 and only under a verified condition):",
       "checks": [
-        { "check": "ops-network-diagnose.yml: only SSH commands executed are read-only", "result": "PASS" },
-        { "check": "ops-worker-recovery.yml: the ONLY mutating command in the entire file is a single `docker restart unit-talk-worker-1`; no compose up, no image pull, no env/target write", "result": "PASS" },
-        { "check": "ops-worker-recovery.yml: restart predicate requires claim_next_outbox failed CO-LOCATED with an actual 502/Bad-Gateway signature on the same log line, within a 15-minute time window -- a generic claim_next_outbox failure (e.g. statement-timeout) does NOT satisfy the predicate", "result": "PASS" },
-        { "check": "ops-worker-recovery.yml: docker restart's own exit code is captured and marks the run FAILED if nonzero", "result": "PASS" },
-        { "check": "ops-worker-recovery.yml: post-restart verification requires status=running, image unchanged, configured target unchanged, and RestartCount advanced by exactly 1 -- any single failure marks FAILED and the step/job exits nonzero (no `set +e` suppressing the final exit code)", "result": "PASS" },
-        { "check": "Secret values are never echoed anywhere in either workflow", "result": "PASS" },
-        { "check": "Both workflows are workflow_dispatch-only -- no automatic/scheduled trigger, no trigger on push/PR events", "result": "PASS" }
+        {
+          "check": "ops-network-diagnose.yml: only SSH commands executed are read-only",
+          "result": "PASS"
+        },
+        {
+          "check": "ops-worker-recovery.yml: the ONLY mutating command in the entire file is a single `docker restart unit-talk-worker-1`; no compose up, no image pull, no env/target write",
+          "result": "PASS"
+        },
+        {
+          "check": "ops-worker-recovery.yml: restart predicate requires claim_next_outbox failed CO-LOCATED with an actual 502/Bad-Gateway signature on the same log line, within a 15-minute time window -- a generic claim_next_outbox failure (e.g. statement-timeout) does NOT satisfy the predicate",
+          "result": "PASS"
+        },
+        {
+          "check": "ops-worker-recovery.yml: docker restart's own exit code is captured and marks the run FAILED if nonzero",
+          "result": "PASS"
+        },
+        {
+          "check": "ops-worker-recovery.yml: post-restart verification requires status=running, image unchanged, configured target unchanged, and RestartCount advanced by exactly 1 -- any single failure marks FAILED and the step/job exits nonzero (no `set +e` suppressing the final exit code)",
+          "result": "PASS"
+        },
+        {
+          "check": "Secret values are never echoed anywhere in either workflow",
+          "result": "PASS"
+        },
+        {
+          "check": "Both workflows are workflow_dispatch-only -- no automatic/scheduled trigger, no trigger on push/PR events",
+          "result": "PASS"
+        }
       ]
     },
     "codex_review_fixes": [
@@ -86,6 +107,16 @@
         "pr": 1258,
         "finding": "A failed `docker restart` or a container that never returned to running could still leave the workflow run green, since `set +e` suppressed the script's own exit code",
         "fix": "Removed the blanket `set +e`; the restart exit code and every post-restart verification (running status, unchanged image, unchanged configured target, RestartCount advanced by exactly 1) now set an explicit FAILED flag whose value is the script's real exit code, propagated to the job via PIPESTATUS"
+      },
+      {
+        "pr": 1258,
+        "finding": "Production Compose defines a Docker healthcheck for the worker, but the workflow treated Status=running alone as success -- an unhealthy worker could be reported as a successful recovery",
+        "fix": "Pre/post state now also captures .State.Health.Status. The wait loop polls both Status and Health for up to 60s. Post-restart verification requires Status=running AND (Health=healthy OR Health=none for containers with no healthcheck); Health=unhealthy or Health=starting-past-the-window both FAIL closed with an explicit error. Status=running is never labeled healthy anywhere in code, comments, evidence, or acceptance criteria."
+      },
+      {
+        "pr": 1258,
+        "finding": "Configured worker target was compared as the raw docker-logs line text (PRE_TARGET_LINE = POST_TARGET_LINE), which could false-fail on unrelated log metadata differences even when the actual target is unchanged",
+        "fix": "Both pre and post captures now parse the worker.startup JSON line with python3 and compare only the `targets` field's canonical JSON serialization; a JSON parse failure on either side also fails closed rather than comparing empty/garbage strings as equal"
       }
     ]
   },
@@ -97,28 +128,71 @@
     "fail": 0,
     "note": "Live smoke run per T1 policy; this lane changes only GitHub Actions workflow files and its own proof bundle, no production code path or migration.",
     "queries": [
-      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
-      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
-      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
-      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
-      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
-      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
-      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
-      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+      {
+        "table": "submissions",
+        "description": "INSERT via processSubmission \u2014 one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick"
+      },
+      {
+        "table": "picks",
+        "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call"
+      },
+      {
+        "table": "settlement_records",
+        "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row"
+      },
+      {
+        "table": "audit_log",
+        "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction"
+      },
+      {
+        "table": "participants",
+        "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant"
+      }
     ],
     "row_counts": [
-      { "table": "picks", "count": 6 },
-      { "table": "submissions", "count": 6 },
-      { "table": "settlement_records", "count": 5 },
-      { "table": "distribution_outbox", "count": 1 },
-      { "table": "distribution_receipts", "count": 0 },
-      { "table": "participants", "count": 0 }
+      {
+        "table": "picks",
+        "count": 6
+      },
+      {
+        "table": "submissions",
+        "count": 6
+      },
+      {
+        "table": "settlement_records",
+        "count": 5
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 1
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0
+      },
+      {
+        "table": "participants",
+        "count": 0
+      }
     ]
   },
   "scope": {
     "implementation_paths": [
       ".github/workflows/ops-network-diagnose.yml",
-      ".github/workflows/ops-worker-recovery.yml"
+      ".github/workflows/ops-worker-recovery.yml",
+      "scripts/ops/worker-recovery-workflow.test.ts"
     ],
     "branch_protection_changed": false,
     "required_status_check_contexts_changed": false,
@@ -148,13 +222,14 @@
     "recovery_workflow_requires_actual_502_not_generic_claim_failure": "PASS -- predicate is `claim_next_outbox failed:.*(502[^0-9]|bad gateway)` on the same line; a statement-timeout or other non-502 claim failure does not match",
     "recovery_workflow_bounded_time_window_not_historical_text": "PASS -- `docker logs --since 15m`, not an unbounded tail",
     "recovery_workflow_propagates_restart_failure": "PASS -- nonzero `docker restart` exit sets FAILED=1",
-    "recovery_workflow_requires_running_healthy_post_state": "PASS -- FAILED=1 if status is not 'running' after the poll window",
-    "recovery_workflow_requires_unchanged_image_and_target": "PASS -- FAILED=1 if pre/post image or pre/post configured-target line differ",
+    "recovery_workflow_requires_running_and_healthy_post_state": "PASS -- since the production worker has a configured Docker healthcheck, success requires BOTH Status=running AND (Health=healthy OR Health=none for containers with no healthcheck); Health=unhealthy or Health=starting-past-the-60s-window both FAIL closed -- Status=running alone is never treated as success in code, comments, evidence, or acceptance criteria",
+    "recovery_workflow_requires_unchanged_image_and_target": "PASS -- FAILED=1 if pre/post image differ; target compared via the canonically-parsed JSON `targets` field (not the raw log line, so timestamps/unrelated log metadata cannot cause a false failure)",
     "recovery_workflow_proves_exactly_one_restart_transition": "PASS -- FAILED=1 unless post RestartCount == pre RestartCount + 1 exactly",
     "recovery_workflow_fails_red_on_any_unverifiable_outcome": "PASS -- `set +e` removed; FAILED is propagated as the real step/job exit code via PIPESTATUS, so GitHub Actions shows red on any of the above failures",
     "recovery_workflow_one_restart_attempt_maximum": "PASS -- exactly one `docker restart` call in the whole script, no retry loop around it",
     "recovery_workflow_not_dispatched_by_this_lane": "PASS -- prepared and committed only; returned for PM review before any dispatch",
-    "current_pr_state_separated_from_prior_merged_history": "PASS -- prior_merged_history is now a dedicated, clearly-labeled sub-object; all top-level status/sha/ci fields describe PR #1258's own pre-merge state only"
+    "current_pr_state_separated_from_prior_merged_history": "PASS -- prior_merged_history is now a dedicated, clearly-labeled sub-object; all top-level status/sha/ci fields describe PR #1258's own pre-merge state only",
+    "regression_static_assertions_cover_the_six_required_cases": "PASS -- scripts/ops/worker-recovery-workflow.test.ts (12 tests, all passing) statically asserts against the checked-in script text: running+unhealthy=>FAIL, running+starting-past-timeout=>FAIL, running+healthy(or none)=>PASS is the only passing branch, changed-image=>FAIL, changed-target(canonical JSON comparison)=>FAIL, RestartCount-not-exactly-+1=>FAIL -- plus predicate/trigger/mutation-surface/set+e-removal coverage"
   },
   "owner_boundary": {
     "t1_approved_label": "absent_and_not_created_by_this_lane",
