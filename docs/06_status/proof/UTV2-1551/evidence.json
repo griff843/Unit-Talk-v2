@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1551",
+  "title": "Merge Gate never evaluates on fresh PRs: missing 'opened' trigger + bot-token label-sync doesn't cascade",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "set-by-ci",
+  "reviewed_head_sha": "set-by-ci",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "86132abd6edd815d8e0bb542f1fd1f3f3f25756b",
+    "verified_source_note": "Fresh continuation lane opened directly from current main. Carries forward root cause #1 (bot-token cascade fix, previously implemented and PM-reviewed on PR #1247) re-applied cleanly, and adds root cause #2 (merge-gate.yml opened trigger) as new work in this same commit -- the prior PR deferred root cause #2 only because merge-gate.yml was held in a concurrent lane's file-scope lock, and is now stuck at its T1 bounce cap and CONFLICTING against current main, which is why this is a new PR rather than a rebase.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-19T23:29:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1551-continuation",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify:parallel",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_updated": {
+      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+      "status": "PASS",
+      "tests": 33,
+      "pass": 33,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "This lane changes only CI workflow trigger/authentication configuration; no production code path or migration touched. Live smoke run (against real Supabase, apps/api/src/database-smoke.test.ts) executed regardless per T1 policy."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/tier-label-check.yml",
+      ".github/workflows/merge-gate.yml",
+      "docs/05_operations/REQUIRED_SECRETS.md",
+      "docs/05_operations/REQUIRED_CI_CHECKS.md",
+      "scripts/ops/workflow-hardening.test.ts"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "tier_label_sync_uses_cascading_token": "PASS",
+    "fail_closed_no_github_token_fallback": "PASS",
+    "sync_bot_token_inventoried_in_required_secrets": "PASS",
+    "regression_test_asserts_token_expression": "PASS",
+    "merge_gate_opened_trigger_added": "PASS",
+    "merge_gate_gate_job_evaluates_unconditionally_on_pull_request": "PASS",
+    "regression_test_asserts_opened_trigger_present": "PASS",
+    "superseded_stale_regression_test_updated": "PASS",
+    "required_ci_checks_doc_corrected": "PASS",
+    "no_admin_merge_used_as_fix": "PASS",
+    "no_required_check_weakened": "PASS"
+  },
+  "supersedes": {
+    "pr_number": 1247,
+    "reason": "Prior branch hit the T1 3-CHANGES_REQUIRED bounce cap and is CONFLICTING against current main after an unrelated concurrent lane (which held merge-gate.yml's file-scope lock) merged. Per instruction, this lane does not resolve those conflicts -- it reimplements both fixes cleanly from current main in a new branch/PR, carrying forward the prior PR's accepted part-1 content and completing the previously deferred part 2 (the opened trigger) on top."
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}
