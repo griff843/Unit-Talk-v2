@@ -53,7 +53,7 @@ test('worker recovery: restart predicate requires an actual 502/Bad-Gateway sign
 
 test('worker recovery: running + unhealthy fails closed', () => {
   const script = readWorkerRecoveryScript();
-  const unhealthyIdx = script.indexOf(`elif [ \\"\\\$HEALTH\\" = 'unhealthy' ]`);
+  const unhealthyIdx = script.indexOf(`elif [ \\"\\$HEALTH\\" = 'unhealthy' ]`);
   assert.ok(unhealthyIdx >= 0, 'must have an explicit branch for Health=unhealthy');
   const branch = script.slice(unhealthyIdx, unhealthyIdx + 400);
   assert.match(branch, /FAILED=1/, 'running+unhealthy must set FAILED=1');
@@ -62,7 +62,7 @@ test('worker recovery: running + unhealthy fails closed', () => {
 
 test('worker recovery: running + starting past the wait window fails closed, is not treated as success', () => {
   const script = readWorkerRecoveryScript();
-  const startingIdx = script.indexOf(`elif [ \\"\\\$HEALTH\\" = 'starting' ]`);
+  const startingIdx = script.indexOf(`elif [ \\"\\$HEALTH\\" = 'starting' ]`);
   assert.ok(startingIdx >= 0, 'must have an explicit branch for Health=starting after the wait loop');
   const branch = script.slice(startingIdx, startingIdx + 400);
   assert.match(branch, /FAILED=1/, 'running+starting-past-timeout must set FAILED=1');
@@ -75,7 +75,7 @@ test('worker recovery: running + healthy (or no healthcheck configured) is the o
   assert.ok(passIdx >= 0, 'must have an explicit PASS branch for running+healthy/none');
   // The PASS branch must be the final `else` in the health if/elif chain, meaning every
   // other branch (not running / unhealthy / starting / any other value) is handled first.
-  const chainStart = script.indexOf(`if [ \\"\\\$STATUS\\" != 'running' ]`);
+  const chainStart = script.indexOf(`if [ \\"\\$STATUS\\" != 'running' ]`);
   const chainSlice = script.slice(chainStart, passIdx);
   assert.match(chainSlice, /elif \[ \\"\\\$HEALTH\\" = 'unhealthy' \]/);
   assert.match(chainSlice, /elif \[ \\"\\\$HEALTH\\" = 'starting' \]/);
