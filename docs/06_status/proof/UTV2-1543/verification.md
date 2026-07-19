@@ -44,6 +44,16 @@ standing rule that a head change invalidates prior approval, it requires
 its own fresh exact-head `pm-verdict/v1` APPROVED comment and `t1-approved`
 label before merge.
 
+**Post-merge record of actual authority satisfied:** a fresh Griff-authored
+`PM_VERDICT: APPROVED` was posted 2026-07-19T07:56:59Z on PR #1255, bound to
+the exact head that merged (`1ca56b8b811072f0469b5800b6a3e05435d98d43`),
+independently re-verifying the `merge-gate.yml`/`workflow-hardening.test.ts`
+blob SHAs against #1246's approved head and confirming zero unresolved
+review threads. The `t1-approved` label was applied after that verdict.
+`.github/workflows/merge-gate.yml`'s `validateT1Verdicts(...)` required and
+consumed both artifacts before Merge Gate reported green -- the label was
+never sufficient on its own.
+
 ## Verification
 
 ## ASSERTIONS:

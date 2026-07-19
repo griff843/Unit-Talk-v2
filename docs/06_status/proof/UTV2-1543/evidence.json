@@ -4,7 +4,7 @@
   "title": "Bind T1 PM verdicts to the exact PR head SHA in Merge Gate (continuation)",
   "tier": "T1",
   "lane_type": "governance",
-  "status": "MERGED_TRUTH_CLOSED",
+  "status": "MERGED_PENDING_GOVERNED_CLOSEOUT",
   "source_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
   "reviewed_head_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
   "evidence_commit_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
@@ -112,12 +112,12 @@
   },
   "owner_boundary": {
     "t1_approved_label": "present_on_pr_1255_at_merge",
-    "pm_verdict_v1": "not_used_for_this_lane -- merge authority satisfied via t1-approved label per docs/05_operations/OPERATING_MODEL_SONNET5.md merge-authority table",
+    "pm_verdict_v1": "present_and_consumed -- fresh Griff-authored PM_VERDICT: APPROVED posted 2026-07-19T07:56:59Z on PR #1255, exact head 1ca56b8b811072f0469b5800b6a3e05435d98d43 (this PR's actual merged head)",
     "merge_authorized": true,
-    "note": "PR #1255 carried the t1-approved label (fresh, bound to this PR/head, not carried forward from #1246) and merged to main as c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6."
+    "note": "PR #1255 merge authority was satisfied by BOTH required T1 artifacts, not the label alone: (1) a fresh exact-head pm-verdict/v1 APPROVED comment from griff843 bound to head 1ca56b8b811072f0469b5800b6a3e05435d98d43 -- explicitly re-verifying #1246's frozen approval was NOT carried forward, and independently confirming the merge-gate.yml/workflow-hardening.test.ts blob SHAs matched #1246's approved head byte-for-byte -- and (2) the t1-approved label applied after that verdict. `.github/workflows/merge-gate.yml`'s `validateT1Verdicts(...)` requires and consumed both before Merge Gate reported green; the label was never sufficient on its own."
   },
   "known_gaps": [
     "This continuation PR does not itself implement the durable UTV2-1559 fix (a structured pm-triage/v1 mechanism with regression tests). It is the documented manual drain path PM authorized for immediate use while that durable fix is implemented separately."
   ],
-  "verdict": "PASS_MERGED_TRUTH_CLOSED"
+  "verdict": "PASS_PENDING_GOVERNED_CLOSEOUT"
 }
