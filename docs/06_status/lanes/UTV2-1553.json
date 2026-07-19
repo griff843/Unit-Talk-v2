@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1553",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1553-lane-close-history-persist-fix",
+  "branch": "claude/utv2-1553-lane-close-history-persist-fix",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1553/evidence.json",
+    "docs/06_status/proof/UTV2-1553/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1553/diff-summary.md",
+    "docs/06_status/proof/UTV2-1553/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-19T17:19:07.789Z",
+  "heartbeat_at": "2026-07-19T17:19:07.789Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1553-lane-close-history-persist-fix.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1553-lane-close-history-persist-fix",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
