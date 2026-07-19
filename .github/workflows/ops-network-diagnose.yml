@@ -75,16 +75,18 @@ jobs:
 
             echo ''
             echo '=== 3. HOST HTTPS REACHABILITY: IPv4 vs IPv6 ==='
+            echo '(probing the actual REST route /rest/v1/ used by the failing outbox claim calls, not the bare host root -- a bare-root probe can pass while the PostgREST route itself still 502s)'
             echo '--- curl -4 (IPv4 forced) ---'
-            curl -4 -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/\" 2>&1 | grep -E 'Connected to|SSL connection|HTTP/|< HTTP|< cf-ray|< server|Could not resolve|Connection refused|timed out' || echo 'curl -4 produced no matched lines'
+            curl -4 -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/rest/v1/\" 2>&1 | grep -E 'Connected to|SSL connection|HTTP/|< HTTP|< cf-ray|< server|Could not resolve|Connection refused|timed out' || echo 'curl -4 produced no matched lines'
             echo '--- curl -6 (IPv6 forced) ---'
-            curl -6 -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/\" 2>&1 | grep -E 'Connected to|SSL connection|HTTP/|< HTTP|< cf-ray|< server|Could not resolve|Connection refused|timed out|Network is unreachable' || echo 'curl -6 produced no matched lines'
+            curl -6 -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/rest/v1/\" 2>&1 | grep -E 'Connected to|SSL connection|HTTP/|< HTTP|< cf-ray|< server|Could not resolve|Connection refused|timed out|Network is unreachable' || echo 'curl -6 produced no matched lines'
             echo '--- curl default (whichever the system prefers) with cf-ray header ---'
-            curl -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/\" 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'
+            curl -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/rest/v1/\" 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'
 
             echo ''
             echo '=== 4. WORKER CONTAINER HTTPS REACHABILITY ==='
-            docker exec unit-talk-worker-1 sh -c \"curl -sv --max-time 12 -o /dev/null 'https://\$REST_HOST/' 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'\" 2>&1 || echo 'container curl check failed (curl may not be installed in the worker image)'
+            echo '(same /rest/v1/ route, probed from inside the worker container)'
+            docker exec unit-talk-worker-1 sh -c \"curl -sv --max-time 12 -o /dev/null 'https://\$REST_HOST/rest/v1/' 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'\" 2>&1 || echo 'container curl check failed (curl may not be installed in the worker image)'
 
             echo ''
             echo '=== 5. TLS HANDSHAKE (openssl s_client, host) ==='
@@ -125,7 +127,8 @@ jobs:
 
             echo ''
             echo '=== 10. WORKER ACTUAL CONFIGURED TARGET (from live startup log, not assumed) ==='
-            docker logs unit-talk-worker-1 2>&1 | grep -m1 'worker.startup' || echo 'no worker.startup log line found in current buffer'
+            echo '(using the MOST RECENT worker.startup line -- if the container restarted more than once, docker logs contains every prior startup too, and the oldest match would misreport config changes made between restarts)'
+            docker logs unit-talk-worker-1 2>&1 | grep 'worker.startup' | tail -1 || echo 'no worker.startup log line found in current buffer'
 
             echo ''
             echo '=== 11. WORKER RECENT CLAIM ATTEMPTS (last 10 delivery-skipped-transient lines, truncated) ==='
