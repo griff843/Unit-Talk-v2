@@ -4,29 +4,44 @@
   "title": "P0 child: isolate Hetzner-Supabase 502 and add safe worker-only restart path",
   "tier": "T1",
   "lane_type": "governance",
-  "status": "MERGED_PENDING_GOVERNED_CLOSEOUT",
-  "source_sha": "06b60eda192d363c65c9167c8f33e0705ca68b86",
-  "reviewed_head_sha": "6f142c9483823c969b52e446b8f4824cdaad6553",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "set-by-ci",
+  "reviewed_head_sha": "set-by-ci",
   "evidence_commit_sha": "set-by-ci",
   "current_head_sha": "set-by-ci",
-  "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+  "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
-    "sha_type": "merge_sha",
+    "verified_source_sha": "set-by-ci",
+    "sha_type": "implementation_sha",
     "bound_at": "set-by-ci",
     "ci_sentinels": {
-      "verify": "pass",
-      "merge_gate": "pass",
-      "executor_result_validation": "pass",
-      "p0_protocol": "pass"
+      "verify": "pass_locally_pending_ci",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
     },
-    "verified_source_note": "PR #1256 (read-only diagnostic, head 6f142c94) merged to main as e2e3fa14. This continuation, still on the same branch/lane, adds: (1) two diagnostic gap fixes to ops-network-diagnose.yml (DB/pooler variable-name discovery by pattern instead of a fixed legacy name list; an in-container Node https fallback probe for when curl is unavailable in the worker image, sending no authorization header so the real claim_next_outbox RPC is never invoked with production credentials), and (2) a new manual-dispatch-only ops-worker-recovery.yml, prepared for PM review and NOT dispatched by this lane. No production code, migration, or delivery-target config touched."
+    "verified_source_note": "This is PR #1258's OWN pre-merge implementation SHA -- NOT the same fact as the already-merged PR #1256 (see prior_merged_history below). #1258 adds: (1) two diagnostic gap fixes to ops-network-diagnose.yml, and (2) a new manual-dispatch-only ops-worker-recovery.yml, hardened per PM_VERDICT: CHANGES_REQUIRED on the prior head (34595446) to require an actual bounded-window 502/Bad-Gateway signature (not any claim_next_outbox failure), propagate restart failure, and verify a single clean restart transition before reporting success."
+  },
+  "prior_merged_history": {
+    "note": "PR #1256 (read-only diagnostic only) already merged to main BEFORE this PR existed. This is a frozen, already-shipped fact (GitHub main is rank-1 truth) -- it is NOT part of #1258's own pre-merge verification and must not be conflated with it.",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1256",
+    "merged_head_sha": "6f142c9483823c969b52e446b8f4824cdaad6553",
+    "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+    "owner_boundary": {
+      "t1_approved_label": "present_on_pr_1256_at_merge",
+      "pm_verdict_v1": "present_and_consumed -- fresh Griff-authored PM_VERDICT: APPROVED posted 2026-07-19T07:57:24Z on PR #1256, exact head 6f142c9483823c969b52e446b8f4824cdaad6553 (the merged head), explicitly scoping approval to the workflow-dispatch read-only diagnostic and its lane/proof metadata only -- not authorizing restart/deploy/env mutation/target remap/queue replay/DB write",
+      "merge_authorized": true
+    },
+    "post_merge_findings": {
+      "dispatched_run": "ops-network-diagnose.yml, dispatched against main after PR #1256 merged",
+      "summary": "Host DNS, container DNS, IPv4 REST GET /rest/v1/ (HTTP/2 401, cloudflare, cf-ray present), TLS handshake, Docker network state, and route/MTU/firewall all healthy. IPv6 REST unavailable only because no AAAA record exists for the domain (not a fault). Container curl probe and DB/pooler TCP test were both gaps in the original workflow -- fixed in PR #1258 (see acceptance_criteria). Worker log tail shows a real Cloudflare 502 HTML error page and a separate 'canceling statement due to statement timeout' error on the claim_next_outbox RPC path. Bounded conclusion: intermittent Cloudflare-edge/PostgREST RPC-path failure, not a Hetzner-side DNS/TLS/routing/firewall/Docker fault -- every host-level network primitive checked out healthy at diagnostic time."
+    }
   },
   "verifier": {
     "identity": "claude/utv2-1560-hetzner-supabase-502-diagnosis",
     "role": "implementer",
     "independent_owner_certifier": false,
-    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact -- a fresh exact-head PM_VERDICT is required for PR #1258's own head before merge."
   },
   "static_proof": {
     "pnpm_verify": {
@@ -40,23 +55,37 @@
       "rules_matched": "none"
     },
     "workflow_safety_review": {
-      "note": "Self-review of ops-network-diagnose.yml against the issue's explicit guardrails (do not mutate queues/delivery targets/env/containers; never print secret values):",
+      "note": "Self-review of both workflow files against the issue's explicit guardrails (do not mutate queues/delivery targets/env; never print secret values; recovery workflow may only restart unit-talk-worker-1 and only under a verified condition):",
       "checks": [
-        { "check": "Only SSH commands executed are read-only: getent, dig, curl, openssl s_client, docker network ls/inspect, docker logs, ip route/link, sudo iptables -L / ufw status (best-effort, read-only flags only)", "result": "PASS" },
-        { "check": "No docker restart/stop/rm/exec-with-write, no sed/tee/> against .env.production or any config file, no queue/DB write commands", "result": "PASS" },
-        { "check": "Secret values (SUPABASE_SERVICE_ROLE_KEY, DB passwords) are never echoed -- only hostnames/ports are parsed out of SUPABASE_URL/DATABASE_URL-style values via sed/cut, and the DB test is a bare TCP connect (/dev/tcp) with no credentials sent", "result": "PASS" },
-        { "check": "UNIT_TALK_DISCORD_TARGET_MAP is never read or written by this workflow", "result": "PASS" },
-        { "check": "Workflow trigger is workflow_dispatch only -- no automatic/scheduled execution, no trigger on push/PR events", "result": "PASS" }
+        { "check": "ops-network-diagnose.yml: only SSH commands executed are read-only", "result": "PASS" },
+        { "check": "ops-worker-recovery.yml: the ONLY mutating command in the entire file is a single `docker restart unit-talk-worker-1`; no compose up, no image pull, no env/target write", "result": "PASS" },
+        { "check": "ops-worker-recovery.yml: restart predicate requires claim_next_outbox failed CO-LOCATED with an actual 502/Bad-Gateway signature on the same log line, within a 15-minute time window -- a generic claim_next_outbox failure (e.g. statement-timeout) does NOT satisfy the predicate", "result": "PASS" },
+        { "check": "ops-worker-recovery.yml: docker restart's own exit code is captured and marks the run FAILED if nonzero", "result": "PASS" },
+        { "check": "ops-worker-recovery.yml: post-restart verification requires status=running, image unchanged, configured target unchanged, and RestartCount advanced by exactly 1 -- any single failure marks FAILED and the step/job exits nonzero (no `set +e` suppressing the final exit code)", "result": "PASS" },
+        { "check": "Secret values are never echoed anywhere in either workflow", "result": "PASS" },
+        { "check": "Both workflows are workflow_dispatch-only -- no automatic/scheduled trigger, no trigger on push/PR events", "result": "PASS" }
       ]
     },
     "codex_review_fixes": [
       {
-        "finding": "HTTPS reachability checks probed the bare host root (https://$REST_HOST/) instead of the actual PostgREST route (/rest/v1/) the failing outbox claim calls use, which could pass while the real route still 502s",
-        "fix": "Steps 3-4 now probe https://$REST_HOST/rest/v1/ on host (IPv4/IPv6) and inside the worker container"
+        "pr": 1256,
+        "finding": "HTTPS reachability checks probed the bare host root instead of /rest/v1/",
+        "fix": "Steps 3-4 probe https://$REST_HOST/rest/v1/ on host (IPv4/IPv6) and inside the worker container"
       },
       {
-        "finding": "The worker's configured target was read via `grep -m1 worker.startup`, which returns the OLDEST match if the container restarted more than once, misreporting a stale pre-restart target as current",
-        "fix": "Step 10 now uses `grep worker.startup | tail -1` to read the most recent startup line"
+        "pr": 1256,
+        "finding": "worker.startup log line read via grep -m1 (oldest match), misreporting stale target after multiple restarts",
+        "fix": "Step 10 uses `grep worker.startup | tail -1` for the most recent line"
+      },
+      {
+        "pr": 1258,
+        "finding": "Restart predicate (`claim_next_outbox failed\\|502: Bad gateway`) let a non-502 claim failure (e.g. statement-timeout) authorize a production restart, and scanned an unbounded 'last 200 lines' rather than a bounded recent time window",
+        "fix": "Predicate now requires `claim_next_outbox failed:.*(502[^0-9]|bad gateway)` on the SAME line, within `docker logs --since 15m` -- a bounded, recent, 502-specific window"
+      },
+      {
+        "pr": 1258,
+        "finding": "A failed `docker restart` or a container that never returned to running could still leave the workflow run green, since `set +e` suppressed the script's own exit code",
+        "fix": "Removed the blanket `set +e`; the restart exit code and every post-restart verification (running status, unchanged image, unchanged configured target, RestartCount advanced by exactly 1) now set an explicit FAILED flag whose value is the script's real exit code, propagated to the job via PIPESTATUS"
       }
     ]
   },
@@ -66,7 +95,7 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "note": "Live smoke run per T1 policy; this lane changes only a new GitHub Actions workflow file and its own proof bundle, no production code path or migration.",
+    "note": "Live smoke run per T1 policy; this lane changes only GitHub Actions workflow files and its own proof bundle, no production code path or migration.",
     "queries": [
       { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
       { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
@@ -96,13 +125,9 @@
     "other_workflow_files_changed": false,
     "merge_gate_yml_changed": false
   },
-  "post_merge_findings": {
-    "dispatched_run": "https://github.com/griff843/Unit-Talk-v2/actions (ops-network-diagnose.yml, run against main after PR #1256 merged)",
-    "summary": "Host DNS, container DNS, IPv4 REST GET /rest/v1/ (HTTP/2 401, cloudflare, cf-ray present), TLS handshake, Docker network state, and route/MTU/firewall all healthy. IPv6 REST unavailable only because no AAAA record exists for the domain (not a fault). Container curl probe and DB/pooler TCP test were both gaps in the original workflow -- fixed in this continuation (see acceptance_criteria). Worker log tail shows a real Cloudflare 502 HTML error page and a separate 'canceling statement due to statement timeout' error on the claim_next_outbox RPC path. Bounded conclusion: intermittent Cloudflare-edge/PostgREST RPC-path failure, not a Hetzner-side DNS/TLS/routing/firewall/Docker fault -- every host-level network primitive checked out healthy at diagnostic time."
-  },
   "known_limitations": [
-    "The safe worker-only restart mechanism is now added (ops-worker-recovery.yml) but is manual-dispatch-only and has NOT been dispatched by this lane -- PM review of the workflow file is required before any dispatch, per the issue's explicit instruction not to restart production yet.",
-    "docker events window in the diagnostic workflows generally is bounded (host-dependent daemon log retention); this does not affect the worker-recovery workflow's own pre/post state capture, which reads live .State/.RestartCount directly."
+    "ops-worker-recovery.yml is manual-dispatch-only and has NOT been dispatched by this lane -- PM review is required before any dispatch, per the issue's explicit instruction not to restart production yet.",
+    "The 15-minute abort-check window is a deliberate tradeoff: narrow enough that stale/historical log text cannot authorize a current restart, wide enough to catch a condition that was present when the operator decided to dispatch this workflow moments earlier."
   ],
   "acceptance_criteria": {
     "read_only_diagnostic_added_no_mutation": "PASS",
@@ -114,21 +139,28 @@
     "host_firewall_egress_state_captured": "PASS (best-effort, non-root SSH user may lack sudo) -- step 9",
     "worker_actual_configured_target_confirmed_live_not_assumed": "PASS -- step 10, reads the live worker.startup log line rather than assuming discord:canary/discord:best-bets",
     "no_env_edit_no_target_remap_no_queue_mutation": "PASS",
-    "db_pooler_variable_name_discovered_by_pattern_not_guessed": "PASS -- step 0 now pattern-matches *DB*URL*/*POOL*/*CONNECTION* key NAMES only, falls back to the legacy fixed list only if no pattern match",
+    "db_pooler_variable_name_discovered_by_pattern_not_guessed": "PASS -- step 0 pattern-matches *DB*URL*/*POOL*/*CONNECTION* key NAMES only, falls back to the legacy fixed list only if no pattern match",
     "in_container_probe_works_when_curl_absent": "PASS -- step 4 falls back to a Node https.request GET with no authorization header when curl is not on the worker image's PATH",
     "no_production_claim_rpc_invoked_with_real_authorization": "PASS -- both the curl and Node fallback probes are unauthenticated GET requests against the same route; no Authorization/apikey header is ever sent",
     "narrow_worker_only_recovery_workflow_added": "PASS -- ops-worker-recovery.yml touches unit-talk-worker-1 only, workflow_dispatch-only with an explicit typed confirmation input",
     "recovery_workflow_no_env_target_deploy_pull_composeup_queue_or_db_mutation": "PASS -- the only mutating command in the entire file is a single `docker restart unit-talk-worker-1`",
     "recovery_workflow_captures_pre_post_state": "PASS -- image/restart-count/target/health/logs captured both before and after",
-    "recovery_workflow_aborts_if_502_condition_absent": "PASS -- greps the last 200 log lines for the 502/claim-failure signature and exits 0 with no restart if the count is zero",
+    "recovery_workflow_requires_actual_502_not_generic_claim_failure": "PASS -- predicate is `claim_next_outbox failed:.*(502[^0-9]|bad gateway)` on the same line; a statement-timeout or other non-502 claim failure does not match",
+    "recovery_workflow_bounded_time_window_not_historical_text": "PASS -- `docker logs --since 15m`, not an unbounded tail",
+    "recovery_workflow_propagates_restart_failure": "PASS -- nonzero `docker restart` exit sets FAILED=1",
+    "recovery_workflow_requires_running_healthy_post_state": "PASS -- FAILED=1 if status is not 'running' after the poll window",
+    "recovery_workflow_requires_unchanged_image_and_target": "PASS -- FAILED=1 if pre/post image or pre/post configured-target line differ",
+    "recovery_workflow_proves_exactly_one_restart_transition": "PASS -- FAILED=1 unless post RestartCount == pre RestartCount + 1 exactly",
+    "recovery_workflow_fails_red_on_any_unverifiable_outcome": "PASS -- `set +e` removed; FAILED is propagated as the real step/job exit code via PIPESTATUS, so GitHub Actions shows red on any of the above failures",
     "recovery_workflow_one_restart_attempt_maximum": "PASS -- exactly one `docker restart` call in the whole script, no retry loop around it",
-    "recovery_workflow_not_dispatched_by_this_lane": "PASS -- prepared and committed only; returned for PM review before any dispatch"
+    "recovery_workflow_not_dispatched_by_this_lane": "PASS -- prepared and committed only; returned for PM review before any dispatch",
+    "current_pr_state_separated_from_prior_merged_history": "PASS -- prior_merged_history is now a dedicated, clearly-labeled sub-object; all top-level status/sha/ci fields describe PR #1258's own pre-merge state only"
   },
   "owner_boundary": {
-    "t1_approved_label": "present_on_pr_1256_at_merge",
-    "pm_verdict_v1": "present_and_consumed -- fresh Griff-authored PM_VERDICT: APPROVED posted 2026-07-19T07:57:24Z on PR #1256, exact head 6f142c9483823c969b52e446b8f4824cdaad6553 (the merged head), explicitly scoping approval to the workflow-dispatch read-only diagnostic and its lane/proof metadata only -- not authorizing restart/deploy/env mutation/target remap/queue replay/DB write",
-    "merge_authorized": true,
-    "note": "PR #1256's merge authority was satisfied by both required T1 artifacts: the exact-head pm-verdict/v1 APPROVED comment and the t1-approved label. This continuation (network-diagnose gap fixes + the new worker-recovery workflow) is a SEPARATE change requiring its own fresh exact-head verdict before merge -- the #1256 verdict does not carry forward."
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false,
+    "note": "This is PR #1258's OWN merge authority state -- absent and pending, distinct from PR #1256's already-satisfied authority recorded in prior_merged_history above. Requires a fresh exact-head PM_VERDICT and t1-approved label bound to this PR's own head before merge."
   },
   "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
 }

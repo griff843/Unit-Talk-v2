@@ -1,11 +1,20 @@
-# PROOF: UTV2-1560
+# PROOF: UTV2-1560 (PR #1258)
 
-MERGE_SHA: e2e3fa143049227da1d7d1c0b57075dcdbf64db6
+MERGE_SHA: set-by-ci (PR #1258 has not merged yet -- this proof describes
+its own pre-merge state; see "Prior merged history" below for the
+already-shipped, separate PR #1256 fact)
 
-PR #1256 (read-only diagnostic) merged to main as `e2e3fa14`. This
-continuation, on the same branch/lane, adds two diagnostic gap fixes and a
-new manual-dispatch-only worker-recovery workflow -- see "Continuation:
-diagnostic gaps closed + narrow recovery workflow" below.
+This PR (#1258), on the same branch/lane, adds two diagnostic gap fixes and
+a new manual-dispatch-only worker-recovery workflow -- see "Continuation:
+diagnostic gaps closed + narrow recovery workflow" below. It is **not
+merged**; do not read anything below as terminal/closed truth for #1258
+itself.
+
+## Prior merged history (PR #1256 -- separate, already-shipped fact)
+
+PR #1256 (read-only diagnostic only) merged to main as `e2e3fa14` before
+this PR existed. This is frozen, already-shipped history, kept here for
+audit continuity, and is not part of #1258's own pre-merge verification.
 
 ## Verification
 
@@ -65,11 +74,21 @@ env var not discovered) are fixed in this continuation.
    probe it replaces.
 3. **`ops-worker-recovery.yml`** (new file) -- a narrow, manual-dispatch-only
    recovery workflow, touching `unit-talk-worker-1` only. It aborts with no
-   action if the last 200 worker log lines contain no 502/claim-failure
-   evidence; otherwise it performs exactly one `docker restart` (no image
-   pull, no `compose up`, no env/target change, no queue/DB mutation) and
-   captures pre- and post-state (image, restart count, live target, health,
-   logs) so the action is fully auditable from the artifact alone. This
+   action unless `docker logs --since 15m` contains a line matching
+   `claim_next_outbox failed:.*(502[^0-9]|bad gateway)` -- a bounded
+   15-minute window, and a real 502/Bad-Gateway signature co-located with
+   the claim failure, not any `claim_next_outbox failed` line (a
+   statement-timeout error, for example, does not qualify) and not stale
+   historical log text. If the condition holds, it performs exactly one
+   `docker restart` (no image pull, no `compose up`, no env/target change,
+   no queue/DB mutation) and then verifies, before reporting success: the
+   restart's own exit code was zero, the container reached `running`
+   status, the image is byte-identical pre/post (proving a restart, not a
+   recreation), the configured worker target is unchanged, and
+   `RestartCount` advanced by exactly 1 (proving exactly one restart
+   transition, not zero or a crash loop). Any single failed check marks the
+   whole run FAILED and the workflow step exits non-zero -- there is no
+   `set +e` masking an unsuccessful or unverifiable recovery as green. This
    lane does **not** dispatch it -- it is returned here for PM review first.
 
 ## ASSERTIONS:
@@ -108,20 +127,21 @@ TAP version 13
 # skipped 0
 ```
 
-## Owner boundary
+## Owner boundary (PR #1258's own, current state)
 
 T1 -- adds a new privileged-adjacent SSH-capable GitHub Actions workflow
 (uses the same `UNIT_TALK_DEPLOY_*` / `UNIT_TALK_DEPLOY_SSH_KEY` secrets as
 the existing `ops-*-diagnose.yml` jobs). Requires the `t1-approved` label
-and a valid Griff `pm-verdict/v1` APPROVED comment bound to the reviewed
-head. This proof supplies neither.
+and a valid Griff `pm-verdict/v1` APPROVED comment bound to **this PR's own
+exact head**. This proof supplies neither -- absent and pending, not
+carried forward from #1256.
 
-**Record of PR #1256's actual merge authority (already merged, for audit
-continuity):** a fresh Griff-authored `PM_VERDICT: APPROVED` was posted
-2026-07-19T07:57:24Z on PR #1256, bound to the exact merged head
+## Prior merged history's owner boundary (PR #1256 -- separate, already-shipped fact)
+
+A fresh Griff-authored `PM_VERDICT: APPROVED` was posted 2026-07-19T07:57:24Z
+on PR #1256, bound to the exact merged head
 `6f142c9483823c969b52e446b8f4824cdaad6553`, explicitly scoping approval to
 the read-only diagnostic and its lane/proof metadata only -- not
 authorizing restart/deploy/env mutation/target remap/queue replay/DB
-write. The `t1-approved` label was applied after that verdict. This
-continuation (gap fixes + the new recovery workflow) is a separate change
-and requires its own fresh exact-head verdict before merge.
+write. The `t1-approved` label was applied after that verdict. This is
+historical record only; it does not authorize any part of #1258.

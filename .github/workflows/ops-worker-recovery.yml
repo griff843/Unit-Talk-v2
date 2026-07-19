@@ -68,12 +68,15 @@ jobs:
       - name: Capture pre-state, conditionally restart, capture post-state
         run: |
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "
-            set +e
             TARGET=unit-talk-worker-1
+            FAILED=0
 
             echo '=== PRE-STATE ==='
             echo '--- image / config ---'
-            docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1
+            PRE_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            echo \"\$PRE_LINE\"
+            PRE_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
+            PRE_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
             echo '--- configured target (most recent worker.startup line) ---'
             PRE_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
             echo \"\$PRE_TARGET_LINE\"
@@ -81,14 +84,14 @@ jobs:
             docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
 
             echo ''
-            echo '=== ABORT CHECK: is the recent-502 condition actually present? ==='
-            echo '(scanning only the last 200 log lines / most recent activity -- this is a bounded, recent-evidence check, not a historical scan)'
-            RECENT_502=\$(docker logs \"\$TARGET\" --tail 200 2>&1 | grep -c '502: Bad gateway\|claim_next_outbox failed')
-            echo \"Recent 502/claim-failure line count in last 200 log lines: \$RECENT_502\"
+            echo '=== ABORT CHECK: is an ACTUAL recent 502/Bad-Gateway condition on the claim path present? ==='
+            echo '(bounded to the last 15 minutes of logs by timestamp -- old log text, and generic claim_next_outbox failures with no 502 signature (e.g. statement-timeout errors), do not authorize a restart)'
+            RECENT_502=\$(docker logs \"\$TARGET\" --since 15m 2>&1 | grep -icE 'claim_next_outbox failed:.*(502[^0-9]|bad gateway)')
+            echo \"Recent claim_next_outbox+502 line count in the last 15 minutes: \$RECENT_502\"
 
             if [ \"\$RECENT_502\" -eq 0 ]; then
               echo ''
-              echo '=== ABORT: no recent 502/claim-failure evidence found. Taking NO action. ==='
+              echo '=== ABORT: no recent (last 15m) 502/Bad-Gateway evidence on the claim path found. Taking NO action. ==='
               exit 0
             fi
 
@@ -97,9 +100,14 @@ jobs:
             docker restart \"\$TARGET\"
             RESTART_EXIT=\$?
             echo \"docker restart exit code: \$RESTART_EXIT\"
+            if [ \"\$RESTART_EXIT\" -ne 0 ]; then
+              echo '::error::docker restart returned a nonzero exit code -- recovery did NOT succeed.'
+              FAILED=1
+            fi
 
             echo ''
             echo '=== waiting up to 30s for the container to report healthy/running ==='
+            STATUS=unknown
             for i in \$(seq 1 6); do
               sleep 5
               STATUS=\$(docker inspect \"\$TARGET\" --format '{{.State.Status}}' 2>&1)
@@ -109,13 +117,58 @@ jobs:
 
             echo ''
             echo '=== POST-STATE ==='
-            echo '--- image / config (image must be IDENTICAL to pre-state -- no pull occurred) ---'
-            docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1
-            echo '--- configured target after restart (must be unchanged) ---'
-            docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1
+            echo '--- image / config ---'
+            POST_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            echo \"\$POST_LINE\"
+            POST_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
+            POST_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
+            echo '--- configured target after restart ---'
+            POST_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
+            echo \"\$POST_TARGET_LINE\"
             echo '--- last 30 log lines post-restart ---'
             docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
+
+            echo ''
+            echo '=== POST-RESTART VERIFICATION (any failure here marks this run FAILED, not just informational) ==='
+
+            if [ \"\$STATUS\" != 'running' ]; then
+              echo \"::error::Container did not reach 'running' status within 30s of restart (last observed: \$STATUS).\"
+              FAILED=1
+            else
+              echo \"PASS: container status is running\"
+            fi
+
+            if [ -n \"\$PRE_IMAGE\" ] && [ \"\$PRE_IMAGE\" = \"\$POST_IMAGE\" ]; then
+              echo \"PASS: image unchanged (\$POST_IMAGE) -- confirms a restart, not a recreation/pull\"
+            else
+              echo \"::error::Image changed across restart (pre=\$PRE_IMAGE post=\$POST_IMAGE) -- this must never happen for a plain docker restart.\"
+              FAILED=1
+            fi
+
+            if [ -n \"\$PRE_TARGET_LINE\" ] && [ \"\$PRE_TARGET_LINE\" = \"\$POST_TARGET_LINE\" ]; then
+              echo \"PASS: configured worker target unchanged across restart\"
+            else
+              echo \"::error::Configured worker target changed across restart (pre=[\$PRE_TARGET_LINE] post=[\$POST_TARGET_LINE]).\"
+              FAILED=1
+            fi
+
+            EXPECTED_RESTART_COUNT=\$((PRE_RESTART_COUNT + 1))
+            if [ \"\$POST_RESTART_COUNT\" = \"\$EXPECTED_RESTART_COUNT\" ]; then
+              echo \"PASS: RestartCount advanced by exactly 1 (\$PRE_RESTART_COUNT -> \$POST_RESTART_COUNT), proving exactly one restart transition occurred\"
+            else
+              echo \"::error::RestartCount did not advance by exactly 1 (pre=\$PRE_RESTART_COUNT post=\$POST_RESTART_COUNT, expected=\$EXPECTED_RESTART_COUNT) -- either no restart registered or more than one occurred (e.g. a crash loop).\"
+              FAILED=1
+            fi
+
+            echo ''
+            if [ \"\$FAILED\" -ne 0 ]; then
+              echo '=== RESULT: FAILED -- one or more post-restart verifications did not pass. Treat this recovery as unverified/unsuccessful. ==='
+            else
+              echo '=== RESULT: PASS -- single verified restart transition, image and target unchanged, container running. ==='
+            fi
+            exit \"\$FAILED\"
           " | tee worker-recovery-${{ github.run_id }}.txt
+          exit "${PIPESTATUS[0]}"
 
       - name: Upload recovery artifact
         if: always()

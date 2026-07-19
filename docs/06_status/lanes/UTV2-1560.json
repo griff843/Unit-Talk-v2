@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1560-hetzner-supabase-502-diagnosis",
   "branch": "claude/utv2-1560-hetzner-supabase-502-diagnosis",
   "base_branch": "main",
-  "commit_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+  "commit_sha": null,
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1258",
   "files_changed": [
     ".github/workflows/ops-network-diagnose.yml",
@@ -30,7 +30,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1560/evidence.json"
   ],
-  "status": "merged",
+  "status": "in_review",
   "started_at": "2026-07-19T04:38:00.000Z",
   "heartbeat_at": "2026-07-19T04:38:00.000Z",
   "closed_at": null,
