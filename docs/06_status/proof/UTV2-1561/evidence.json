@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1561",
+  "title": "Read-only diagnostic workflow for unit-talk-api-1 restart-history investigation",
+  "tier": "T1",
+  "lane_type": "hygiene",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "set-by-ci",
+  "reviewed_head_sha": "set-by-ci",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "set-by-ci",
+    "verified_source_note": "New file only: .github/workflows/ops-container-diagnose.yml. Strictly read-only -- no restart, deploy, or env mutation. Mirrors the existing ops-network-diagnose.yml (UTV2-1560) and ops-api-diagnose.yml patterns already merged to main; reuses their existing UNIT_TALK_DEPLOY_HOST/USER/PATH/SSH_KEY secrets, no new secret introduced.",
+    "sha_type": "implementation_sha",
+    "bound_at": "set-by-ci",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1561-container-restart-diagnose",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Requires t1-approved label and a Griff-authored pm-verdict/v1 APPROVED comment bound to the exact head before merge."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "note": "This lane adds only a new read-only CI workflow file; no production code path or migration touched. Live smoke run regardless per T1 policy."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/ops-container-diagnose.yml"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "captures_container_creation_time": "PASS -- docker inspect .Created",
+    "captures_restart_count_and_policy": "PASS -- docker inspect .RestartCount and .HostConfig.RestartPolicy",
+    "captures_image_deployed_sha": "PASS -- docker inspect .Image/.Config.Image + /health endpoint version block",
+    "captures_full_state_history": "PASS -- docker inspect .State (Status/ExitCode/OOMKilled/Error/StartedAt/FinishedAt)",
+    "captures_health_check_status_and_failures": "PASS -- docker inspect .State.Health",
+    "captures_docker_daemon_events": "PASS -- docker events --since 168h --until now, container-scoped and die/oom/restart/health_status-scoped",
+    "captures_kernel_oom_events": "PASS -- journalctl -k grep oom, dmesg fallback",
+    "captures_docker_daemon_service_log": "PASS -- journalctl -u docker",
+    "captures_host_reboot_history": "PASS -- last reboot -F, who -b",
+    "captures_cpu_memory_disk_pressure": "PASS -- free -h, df -h, docker stats --no-stream, /proc/loadavg, /proc/pressure/*",
+    "captures_deploy_correlation_evidence": "PASS -- .env.production mtime; deploy-timestamp correlation itself is done at the analysis layer against gh run history for deploy.yml, not inside the SSH probe",
+    "no_api_restart_deploy_or_env_mutation": "PASS -- every command is a read-only inspect/logs/events/journalctl/df/free/stats call",
+    "no_admin_merge_used_as_fix": "PASS",
+    "no_required_check_weakened": "PASS"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "docker events --since 168h only covers a 7-day window; if the 314-restart count accumulated over a longer period, older events will already have rotated out of the daemon's event log and won't appear here -- the RestartCount/State fields still give the current lifetime total regardless.",
+    "journalctl/dmesg access depends on the deploy user's permissions on the host; the workflow reports 'unavailable or permission denied' rather than failing if these are restricted, so absence of OOM evidence in the output is not proof of absence."
+  ],
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}
