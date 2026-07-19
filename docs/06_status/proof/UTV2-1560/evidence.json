@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1560",
+  "title": "P0 child: isolate Hetzner-Supabase 502 and add safe worker-only restart path",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "4fdd98ef2806580b038e7336b345ad31ab4dfec1",
+  "reviewed_head_sha": "4fdd98ef2806580b038e7336b345ad31ab4dfec1",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "4fdd98ef2806580b038e7336b345ad31ab4dfec1",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-19T04:40:00Z",
+    "ci_sentinels": {
+      "verify": "pass_locally_pending_ci",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "verified_source_note": "This lane adds only a new, read-only diagnostic GitHub Actions workflow (ops-network-diagnose.yml) plus its own lane manifest/proof bundle. No production code, migration, delivery-target config, or the existing Merge Gate / Executor Result workflows are touched."
+  },
+  "verifier": {
+    "identity": "claude/utv2-1560-hetzner-supabase-502-diagnosis",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    },
+    "workflow_safety_review": {
+      "note": "Self-review of ops-network-diagnose.yml against the issue's explicit guardrails (do not mutate queues/delivery targets/env/containers; never print secret values):",
+      "checks": [
+        { "check": "Only SSH commands executed are read-only: getent, dig, curl, openssl s_client, docker network ls/inspect, docker logs, ip route/link, sudo iptables -L / ufw status (best-effort, read-only flags only)", "result": "PASS" },
+        { "check": "No docker restart/stop/rm/exec-with-write, no sed/tee/> against .env.production or any config file, no queue/DB write commands", "result": "PASS" },
+        { "check": "Secret values (SUPABASE_SERVICE_ROLE_KEY, DB passwords) are never echoed -- only hostnames/ports are parsed out of SUPABASE_URL/DATABASE_URL-style values via sed/cut, and the DB test is a bare TCP connect (/dev/tcp) with no credentials sent", "result": "PASS" },
+        { "check": "UNIT_TALK_DISCORD_TARGET_MAP is never read or written by this workflow", "result": "PASS" },
+        { "check": "Workflow trigger is workflow_dispatch only -- no automatic/scheduled execution, no trigger on push/PR events", "result": "PASS" }
+      ]
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "Live smoke run per T1 policy; this lane changes only a new GitHub Actions workflow file and its own proof bundle, no production code path or migration.",
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/ops-network-diagnose.yml"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false,
+    "merge_gate_yml_changed": false
+  },
+  "known_limitations": [
+    "GitHub Actions does not allow workflow_dispatch on a brand-new workflow file until it exists on the default branch -- this workflow cannot be live-tested against production from this PR's own branch. The plan is to dispatch it immediately once merged to main and report real findings as an immediate follow-up, per the issue's read-only-first requirement.",
+    "The safe worker-only restart mechanism (the issue's second acceptance criterion) is deliberately not included in this PR -- per the issue's own ordering ('Read-only first... Build/use a worker-only restart path only after diagnosis'), it is scoped to a follow-up once the read-only findings identify the actual root cause."
+  ],
+  "acceptance_criteria": {
+    "read_only_diagnostic_added_no_mutation": "PASS",
+    "dns_a_aaaa_from_host_and_container": "PASS -- steps 1-2",
+    "ipv4_vs_ipv6_https_reachability_compared": "PASS -- step 3",
+    "tls_handshake_captured": "PASS -- step 5",
+    "db_pooler_endpoint_tested": "PASS -- step 6, TCP-connect only, no credentials",
+    "docker_dns_network_state_captured": "PASS -- step 7",
+    "host_firewall_egress_state_captured": "PASS (best-effort, non-root SSH user may lack sudo) -- step 9",
+    "worker_actual_configured_target_confirmed_live_not_assumed": "PASS -- step 10, reads the live worker.startup log line rather than assuming discord:canary/discord:best-bets",
+    "no_env_edit_no_target_remap_no_queue_mutation": "PASS",
+    "safe_restart_path_deferred_to_follow_up_per_issue_ordering": "PASS"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}
