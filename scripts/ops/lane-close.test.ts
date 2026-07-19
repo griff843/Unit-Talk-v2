@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   buildRepairRequiredViaPrPacket,
   ensureCloseoutMergeLock,
+  finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
   mapFailuresToCode,
   repairMergedLaneManifest,
@@ -16,7 +17,7 @@ import {
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import { readAllLeases, reserveLease } from './lease-registry.js';
-import type { LaneManifest } from './shared.js';
+import { MANIFEST_DIR, readManifest, writeManifest, type LaneManifest } from './shared.js';
 
 function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
   return {
@@ -125,6 +126,54 @@ test('lane close commit guard: already done lane is not retroactively failed', (
   assert.doesNotThrow(() =>
     requireCloseCommitSha(createManifest({ commit_sha: null, status: 'done' })),
   );
+});
+
+test('finalizeLaneCloseManifest preserves a truth_check_history entry written by a concurrent runTruthCheck side effect', () => {
+  // Regression for the exact bug found reconciling UTV2-1543: runTruthCheck()
+  // persists its own updated manifest (with a fresh truth_check_history entry)
+  // as a side effect. A caller holding a manifest snapshot from BEFORE that
+  // call must not write it back verbatim afterward -- that would silently
+  // revert the just-persisted history entry even though the close succeeded.
+  const issueId = 'UTV2-9999999';
+  const manifestPath = path.join(MANIFEST_DIR, `${issueId}.json`);
+  try {
+    // Stale in-memory snapshot a caller might hold from before truth-check ran.
+    const staleSnapshot = createManifest({
+      issue_id: issueId,
+      status: 'merged',
+      truth_check_history: [],
+    });
+    writeManifest(staleSnapshot);
+
+    // Simulate runTruthCheck()'s side effect: it writes ITS OWN updated
+    // manifest to disk, independent of any caller-held in-memory copy.
+    const afterTruthCheck = readManifest(issueId);
+    afterTruthCheck.truth_check_history = [
+      {
+        checked_at: '2026-07-19T16:33:59.885Z',
+        verdict: 'pass',
+        merge_sha: 'c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6',
+        failures: [],
+        runner: 'ops:lane-close',
+      },
+    ];
+    writeManifest(afterTruthCheck);
+
+    const finalized = finalizeLaneCloseManifest(issueId);
+
+    assert.strictEqual(finalized.status, 'done');
+    assert.strictEqual(finalized.truth_check_history.length, 1);
+    assert.strictEqual(finalized.truth_check_history[0].verdict, 'pass');
+    assert.strictEqual(finalized.truth_check_history[0].runner, 'ops:lane-close');
+
+    // What's actually persisted on disk must match -- not just the return value.
+    const onDisk = readManifest(issueId);
+    assert.strictEqual(onDisk.status, 'done');
+    assert.strictEqual(onDisk.truth_check_history.length, 1);
+    assert.strictEqual(onDisk.truth_check_history[0].verdict, 'pass');
+  } finally {
+    fs.rmSync(manifestPath, { force: true });
+  }
 });
 
 test('lane close releases dispatch lease and merge lock after successful closeout', () => {

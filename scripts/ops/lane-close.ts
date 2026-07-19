@@ -152,6 +152,29 @@ export function requireCloseCommitSha(manifest: LaneManifest): void {
   }
 }
 
+/**
+ * Applies the terminal `status: 'done'` transition after a passing
+ * `runTruthCheck()` call and persists it.
+ *
+ * `runTruthCheck()` writes its own updated manifest to disk (with the
+ * passing `truth_check_history` entry appended) as a side effect of
+ * running. A caller holding an in-memory manifest snapshot taken *before*
+ * that call is now stale; writing it back verbatim would silently clobber
+ * the just-persisted history entry, leaving the terminal manifest's last
+ * `truth_check_history` record as whatever preceded this run (often a
+ * prior failure) even though the close itself succeeded. This function
+ * re-reads from disk first so the fresh history entry survives the final
+ * write.
+ */
+export function finalizeLaneCloseManifest(issueId: string): LaneManifest {
+  const manifest = readManifest(issueId);
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  manifest.heartbeat_at = manifest.closed_at;
+  writeManifest(manifest);
+  return manifest;
+}
+
 export function releaseCloseoutLocks(
   issueId: string,
   branch: string,
@@ -556,10 +579,7 @@ async function main(): Promise<void> {
       process.exit(result.exit_code);
     }
 
-    manifest.status = 'done';
-    manifest.closed_at = new Date().toISOString();
-    manifest.heartbeat_at = manifest.closed_at;
-    writeManifest(manifest);
+    manifest = finalizeLaneCloseManifest(issueId);
 
     await transitionLinearIssueToDone(issueId);
     const closeoutLocks = releaseCloseoutLocks(issueId, manifest.branch);
