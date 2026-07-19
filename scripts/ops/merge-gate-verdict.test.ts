@@ -172,3 +172,47 @@ test('a later APPROVED verdict supersedes an earlier CHANGES_REQUIRED one', () =
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.deepEqual(errors, []);
 });
+
+// UTV2-1554: trust-boundary regressions. Any GitHub user can post a comment
+// that structurally parses as pm-verdict/v1; only CODEOWNERS membership
+// (checked before latest-verdict selection) makes it authoritative.
+
+test('UTV2-1554: unauthorized bot CHANGES_REQUIRED cannot override an earlier valid owner APPROVED', () => {
+  const outsiderChangesRequired = ['PM_VERDICT: CHANGES_REQUIRED', 'schema: pm-verdict/v1', 'Issue: UTV2-1501'].join(
+    '\n',
+  );
+  const verdicts = [
+    verdictRecord(approvedComment()), // authorized owner APPROVED, current head
+    verdictRecord(outsiderChangesRequired, { user: 'github-actions[bot]', userType: 'Bot' }),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.deepEqual(errors, []);
+});
+
+test('UTV2-1554: unauthorized outsider APPROVED cannot override an earlier valid owner CHANGES_REQUIRED', () => {
+  const changesRequiredBody = ['PM_VERDICT: CHANGES_REQUIRED', 'schema: pm-verdict/v1', 'Issue: UTV2-1501'].join('\n');
+  const verdicts = [
+    verdictRecord(changesRequiredBody), // authorized owner CHANGES_REQUIRED
+    verdictRecord(approvedComment(), { user: 'some-random-user', userType: 'User' }),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /not "APPROVED"/);
+});
+
+test('UTV2-1554: fails closed when every parsed verdict is unauthorized, even a later-looking APPROVED', () => {
+  const verdicts = [verdictRecord(approvedComment(), { user: 'some-random-user', userType: 'User' })];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(errors.some((e) => /requires a valid pm-verdict\/v1 comment/i.test(e)));
+});
+
+test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts', () => {
+  const changesRequiredBody = ['PM_VERDICT: CHANGES_REQUIRED', 'schema: pm-verdict/v1', 'Issue: UTV2-1501'].join('\n');
+  const verdicts = [
+    verdictRecord(changesRequiredBody), // 1 authorized
+    verdictRecord(changesRequiredBody, { user: 'some-random-user', userType: 'User' }), // unauthorized, doesn't count
+    verdictRecord(changesRequiredBody, { user: 'some-random-user', userType: 'User' }), // unauthorized, doesn't count
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
+});

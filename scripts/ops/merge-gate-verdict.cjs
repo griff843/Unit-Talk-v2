@@ -67,15 +67,35 @@ function validateT1Verdicts(verdicts, ctx) {
     return errors;
   }
 
-  const latest = verdicts[verdicts.length - 1];
+  // UTV2-1554: authorization filtering happens BEFORE latest-verdict
+  // selection, not after. Any GitHub user can post a comment that
+  // structurally parses as a pm-verdict/v1 verdict -- CODEOWNERS membership
+  // is what makes it count, not comment recency. An unauthorized or
+  // bot-authored comment must never be treated as "the latest verdict" in
+  // either direction: it must not block a valid owner APPROVED, and it must
+  // not supersede a valid owner CHANGES_REQUIRED.
+  const isAuthorized = (v) => v.userType !== 'Bot' && ctx.authorizedReviewers.has(v.user);
+  const authorized = verdicts.filter(isAuthorized);
 
-  if (latest.userType === 'Bot') {
-    errors.push(`PM verdict from bot account "${latest.user}" is not authorized. Must be a human CODEOWNERS member.`);
-  } else if (!ctx.authorizedReviewers.has(latest.user)) {
-    errors.push(
-      `PM verdict author "${latest.user}" is not in CODEOWNERS. Authorized: ${[...ctx.authorizedReviewers].join(', ')}.`,
-    );
+  if (authorized.length === 0) {
+    // No authorized verdict exists. Report why the most recent raw comment
+    // doesn't count (preserves prior single-comment diagnostics), then fail
+    // closed exactly as the no-comments-at-all case above.
+    const rawLatest = verdicts[verdicts.length - 1];
+    if (rawLatest.userType === 'Bot') {
+      errors.push(
+        `PM verdict from bot account "${rawLatest.user}" is not authorized. Must be a human CODEOWNERS member.`,
+      );
+    } else {
+      errors.push(
+        `PM verdict author "${rawLatest.user}" is not in CODEOWNERS. Authorized: ${[...ctx.authorizedReviewers].join(', ')}.`,
+      );
+    }
+    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+    return errors;
   }
+
+  const latest = authorized[authorized.length - 1];
 
   if (latest.parsed.verdict !== 'APPROVED') {
     errors.push(`Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`);
@@ -99,8 +119,10 @@ function validateT1Verdicts(verdicts, ctx) {
     }
   }
 
-  // Bounce limit check -- unchanged from the pre-existing behavior.
-  const changesRequested = verdicts.filter((v) => v.parsed.verdict === 'CHANGES_REQUIRED');
+  // Bounce limit check -- counted over authorized verdicts only. Otherwise
+  // an unauthorized commenter could spam CHANGES_REQUIRED-shaped comments to
+  // force a false bounce-limit trip, the same trust boundary as above.
+  const changesRequested = authorized.filter((v) => v.parsed.verdict === 'CHANGES_REQUIRED');
   if (changesRequested.length >= 3) {
     errors.push(
       `Bounce limit exceeded (${changesRequested.length} CHANGES_REQUIRED verdicts). Issue should be moved to Failed for PM triage.`,
