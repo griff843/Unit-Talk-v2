@@ -54,9 +54,19 @@ jobs:
             SUPABASE_URL_VAL=\$(grep '^SUPABASE_URL=' \"\$ENV_FILE\" 2>/dev/null | cut -d= -f2-)
             REST_HOST=\$(echo \"\$SUPABASE_URL_VAL\" | sed -E 's#^https?://##; s#/.*##')
             echo \"REST host (from SUPABASE_URL): \$REST_HOST\"
-            DATABASE_URL_VAL=\$(grep -E '^(DATABASE_URL|SUPABASE_DB_URL|POOLER_URL)=' \"\$ENV_FILE\" 2>/dev/null | head -1 | cut -d= -f2-)
+            echo '--- discovering the real DB/pooler variable NAME (names only, no values) ---'
+            echo 'Candidate key names present in .env.production matching *DB*URL*, *POOL*, or *CONNECTION*:'
+            grep -oE '^[A-Z0-9_]*(DB[A-Z0-9_]*URL|POOL[A-Z0-9_]*|[A-Z0-9_]*CONNECTION[A-Z0-9_]*)=' \"\$ENV_FILE\" 2>/dev/null | sed 's/=\$//' | sort -u || echo 'no candidate key names found'
+            DATABASE_URL_KEY=\$(grep -oE '^[A-Z0-9_]*(DB[A-Z0-9_]*URL|POOL[A-Z0-9_]*URL|POOLER_URL|CONNECTION_STRING)=' \"\$ENV_FILE\" 2>/dev/null | sed 's/=\$//' | head -1)
+            if [ -n \"\$DATABASE_URL_KEY\" ]; then
+              echo \"Using discovered key: \$DATABASE_URL_KEY\"
+              DATABASE_URL_VAL=\$(grep \"^\$DATABASE_URL_KEY=\" \"\$ENV_FILE\" 2>/dev/null | head -1 | cut -d= -f2-)
+            else
+              echo 'No DB/pooler-shaped key discovered by pattern match; falling back to the fixed legacy name list'
+              DATABASE_URL_VAL=\$(grep -E '^(DATABASE_URL|SUPABASE_DB_URL|POOLER_URL)=' \"\$ENV_FILE\" 2>/dev/null | head -1 | cut -d= -f2-)
+            fi
             DB_HOSTPORT=\$(echo \"\$DATABASE_URL_VAL\" | sed -E 's#.*@##; s#/.*##')
-            echo \"DB/pooler host:port (from DATABASE_URL-style var, host:port only): \$DB_HOSTPORT\"
+            echo \"DB/pooler host:port (host:port only, credentials never printed): \$DB_HOSTPORT\"
 
             echo ''
             echo '=== 1. HOST DNS RESOLUTION (A + AAAA) ==='
@@ -85,8 +95,25 @@ jobs:
 
             echo ''
             echo '=== 4. WORKER CONTAINER HTTPS REACHABILITY ==='
-            echo '(same /rest/v1/ route, probed from inside the worker container)'
-            docker exec unit-talk-worker-1 sh -c \"curl -sv --max-time 12 -o /dev/null 'https://\$REST_HOST/rest/v1/' 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'\" 2>&1 || echo 'container curl check failed (curl may not be installed in the worker image)'
+            echo '(same /rest/v1/ route, probed from inside the worker container -- NO authorization header is ever sent, so this never invokes the real claim_next_outbox RPC with production credentials, only an unauthenticated GET against the same route/host/TLS path)'
+            if docker exec unit-talk-worker-1 sh -c 'command -v curl' >/dev/null 2>&1; then
+              docker exec unit-talk-worker-1 sh -c \"curl -sv --max-time 12 -o /dev/null 'https://\$REST_HOST/rest/v1/' 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'\" 2>&1 || echo 'container curl probe produced no matched lines'
+            else
+              echo 'curl not installed in the worker image -- falling back to an in-container Node https probe (no auth header, GET only)'
+              docker exec unit-talk-worker-1 node -e \"
+                const https = require('https');
+                const host = '\$REST_HOST';
+                const req = https.request({ host, path: '/rest/v1/', method: 'GET', timeout: 12000 }, (res) => {
+                  console.log('statusCode=' + res.statusCode);
+                  console.log('server=' + res.headers['server']);
+                  console.log('cf-ray=' + res.headers['cf-ray']);
+                  res.resume();
+                });
+                req.on('timeout', () => { console.log('TIMEOUT'); req.destroy(); });
+                req.on('error', (e) => console.log('ERROR=' + e.message));
+                req.end();
+              \" 2>&1 || echo 'in-container Node https probe failed (node may not be on PATH as expected)'
+            fi
 
             echo ''
             echo '=== 5. TLS HANDSHAKE (openssl s_client, host) ==='

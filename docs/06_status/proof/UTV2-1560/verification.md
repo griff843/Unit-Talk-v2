@@ -1,6 +1,11 @@
 # PROOF: UTV2-1560
 
-MERGE_SHA: 06b60eda192d363c65c9167c8f33e0705ca68b86
+MERGE_SHA: e2e3fa143049227da1d7d1c0b57075dcdbf64db6
+
+PR #1256 (read-only diagnostic) merged to main as `e2e3fa14`. This
+continuation, on the same branch/lane, adds two diagnostic gap fixes and a
+new manual-dispatch-only worker-recovery workflow -- see "Continuation:
+diagnostic gaps closed + narrow recovery workflow" below.
 
 ## Verification
 
@@ -30,15 +35,42 @@ issue's own explicit ordering ("Read-only first... Build/use a worker-only
 restart path only after diagnosis"), that is scoped to a follow-up once
 this diagnostic's findings identify the actual root cause.
 
-## Known limitation: cannot be live-tested from this branch
+## Post-merge findings (ops-network-diagnose.yml dispatched against main)
 
-GitHub Actions does not allow `workflow_dispatch` on a brand-new workflow
-file until it exists on the default branch -- there is no way to dispatch
-it against `origin/main` before merge. The plan is to dispatch it
-immediately once this PR merges and report the real findings (DNS results,
-IPv4/IPv6 status codes, TLS handshake result, DB/pooler TCP result, Docker
-network state, route/MTU, firewall state, and the live-confirmed worker
-target) as an immediate follow-up comment on this issue.
+Host DNS, container DNS, IPv4 REST `GET /rest/v1/` (HTTP/2 401, `server:
+cloudflare`, cf-ray present), TLS handshake, Docker network state, and
+route/MTU/firewall all came back healthy. IPv6 REST is unavailable only
+because the domain has no AAAA record at all (not a routing fault -- the
+host has working IPv6 elsewhere). The worker's log tail contains a real
+Cloudflare 502 HTML error page on a `claim_next_outbox` call, and a
+separate `canceling statement due to statement timeout` error on the same
+RPC path. **Bounded conclusion:** an intermittent Cloudflare-edge/PostgREST
+RPC-path failure, not a Hetzner-side DNS/TLS/routing/firewall/Docker fault
+-- every host-level network primitive checked out healthy at diagnostic
+time. Two gaps in the original diagnostic (container curl absent; DB/pooler
+env var not discovered) are fixed in this continuation.
+
+## Continuation: diagnostic gaps closed + narrow recovery workflow
+
+1. **DB/pooler variable-name discovery** -- step 0 now pattern-matches env
+   *key names* (`*DB*URL*`, `*POOL*`, `*CONNECTION*`) instead of a fixed
+   `DATABASE_URL|SUPABASE_DB_URL|POOLER_URL` list, so it finds the real
+   variable regardless of its exact name. Values are still never printed --
+   only the discovered key name and the parsed host:port.
+2. **In-container HTTPS probe when curl is absent** -- step 4 now checks
+   `command -v curl` first and falls back to a Node `https.request` GET
+   against the same `/rest/v1/` route with no `Authorization`/`apikey`
+   header, so it never invokes the real `claim_next_outbox` RPC with
+   production credentials -- same unauthenticated-GET shape as the curl
+   probe it replaces.
+3. **`ops-worker-recovery.yml`** (new file) -- a narrow, manual-dispatch-only
+   recovery workflow, touching `unit-talk-worker-1` only. It aborts with no
+   action if the last 200 worker log lines contain no 502/claim-failure
+   evidence; otherwise it performs exactly one `docker restart` (no image
+   pull, no `compose up`, no env/target change, no queue/DB mutation) and
+   captures pre- and post-state (image, restart count, live target, health,
+   logs) so the action is fully auditable from the artifact alone. This
+   lane does **not** dispatch it -- it is returned here for PM review first.
 
 ## ASSERTIONS:
 
@@ -83,3 +115,13 @@ T1 -- adds a new privileged-adjacent SSH-capable GitHub Actions workflow
 the existing `ops-*-diagnose.yml` jobs). Requires the `t1-approved` label
 and a valid Griff `pm-verdict/v1` APPROVED comment bound to the reviewed
 head. This proof supplies neither.
+
+**Record of PR #1256's actual merge authority (already merged, for audit
+continuity):** a fresh Griff-authored `PM_VERDICT: APPROVED` was posted
+2026-07-19T07:57:24Z on PR #1256, bound to the exact merged head
+`6f142c9483823c969b52e446b8f4824cdaad6553`, explicitly scoping approval to
+the read-only diagnostic and its lane/proof metadata only -- not
+authorizing restart/deploy/env mutation/target remap/queue replay/DB
+write. The `t1-approved` label was applied after that verdict. This
+continuation (gap fixes + the new recovery workflow) is a separate change
+and requires its own fresh exact-head verdict before merge.
