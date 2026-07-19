@@ -1,0 +1,144 @@
+name: Ops — Network Diagnose (Hetzner to Supabase)
+
+# UTV2-1560: read-only diagnostic for the confirmed Hetzner-to-Supabase
+# Cloudflare 502 affecting the production worker's outbox claim path.
+# Never mutates queues, delivery targets, env files, or containers.
+# Never prints secret values -- only hostnames/ports parsed from config,
+# and presence/absence checks.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  diagnose:
+    name: Diagnose Hetzner-to-Supabase network path (read-only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run read-only network diagnostics
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set +e
+            DEPLOY_PATH='$DEPLOY_PATH'
+            ENV_FILE=\"\$DEPLOY_PATH/.env.production\"
+
+            echo '=== 0. RESOLVE CONFIGURED ENDPOINTS (hostnames/ports only, no credentials) ==='
+            SUPABASE_URL_VAL=\$(grep '^SUPABASE_URL=' \"\$ENV_FILE\" 2>/dev/null | cut -d= -f2-)
+            REST_HOST=\$(echo \"\$SUPABASE_URL_VAL\" | sed -E 's#^https?://##; s#/.*##')
+            echo \"REST host (from SUPABASE_URL): \$REST_HOST\"
+            DATABASE_URL_VAL=\$(grep -E '^(DATABASE_URL|SUPABASE_DB_URL|POOLER_URL)=' \"\$ENV_FILE\" 2>/dev/null | head -1 | cut -d= -f2-)
+            DB_HOSTPORT=\$(echo \"\$DATABASE_URL_VAL\" | sed -E 's#.*@##; s#/.*##')
+            echo \"DB/pooler host:port (from DATABASE_URL-style var, host:port only): \$DB_HOSTPORT\"
+
+            echo ''
+            echo '=== 1. HOST DNS RESOLUTION (A + AAAA) ==='
+            echo '--- getent hosts (system resolver) ---'
+            getent hosts \"\$REST_HOST\" 2>&1 || echo 'getent failed'
+            echo '--- dig A ---'
+            dig +short \"\$REST_HOST\" A 2>&1 || echo 'dig A failed or dig not installed'
+            echo '--- dig AAAA ---'
+            dig +short \"\$REST_HOST\" AAAA 2>&1 || echo 'dig AAAA failed or dig not installed'
+            echo '--- /etc/resolv.conf ---'
+            cat /etc/resolv.conf 2>&1
+
+            echo ''
+            echo '=== 2. WORKER CONTAINER DNS RESOLUTION ==='
+            docker exec unit-talk-worker-1 sh -c \"getent hosts '\$REST_HOST' 2>&1 || node -e \\\"require('dns').lookup('\$REST_HOST',{all:true},(e,a)=>console.log(e?String(e):JSON.stringify(a)))\\\"\" 2>&1 || echo 'container DNS check failed'
+
+            echo ''
+            echo '=== 3. HOST HTTPS REACHABILITY: IPv4 vs IPv6 ==='
+            echo '(probing the actual REST route /rest/v1/ used by the failing outbox claim calls, not the bare host root -- a bare-root probe can pass while the PostgREST route itself still 502s)'
+            echo '--- curl -4 (IPv4 forced) ---'
+            curl -4 -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/rest/v1/\" 2>&1 | grep -E 'Connected to|SSL connection|HTTP/|< HTTP|< cf-ray|< server|Could not resolve|Connection refused|timed out' || echo 'curl -4 produced no matched lines'
+            echo '--- curl -6 (IPv6 forced) ---'
+            curl -6 -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/rest/v1/\" 2>&1 | grep -E 'Connected to|SSL connection|HTTP/|< HTTP|< cf-ray|< server|Could not resolve|Connection refused|timed out|Network is unreachable' || echo 'curl -6 produced no matched lines'
+            echo '--- curl default (whichever the system prefers) with cf-ray header ---'
+            curl -sv --max-time 12 -o /dev/null \"https://\$REST_HOST/rest/v1/\" 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'
+
+            echo ''
+            echo '=== 4. WORKER CONTAINER HTTPS REACHABILITY ==='
+            echo '(same /rest/v1/ route, probed from inside the worker container)'
+            docker exec unit-talk-worker-1 sh -c \"curl -sv --max-time 12 -o /dev/null 'https://\$REST_HOST/rest/v1/' 2>&1 | grep -iE 'Connected to|HTTP/|< HTTP|cf-ray|server:|Could not resolve|refused|timed out'\" 2>&1 || echo 'container curl check failed (curl may not be installed in the worker image)'
+
+            echo ''
+            echo '=== 5. TLS HANDSHAKE (openssl s_client, host) ==='
+            timeout 10 openssl s_client -connect \"\$REST_HOST:443\" -servername \"\$REST_HOST\" </dev/null 2>&1 | grep -E 'CONNECTED|subject=|issuer=|Verify return code|error' | head -10
+
+            echo ''
+            echo '=== 6. DB/POOLER TCP REACHABILITY (host, port-only test, no auth attempted) ==='
+            if [ -n \"\$DB_HOSTPORT\" ]; then
+              DB_HOST=\$(echo \"\$DB_HOSTPORT\" | cut -d: -f1)
+              DB_PORT=\$(echo \"\$DB_HOSTPORT\" | cut -d: -f2)
+              echo \"Testing TCP connect to \$DB_HOST:\$DB_PORT\"
+              timeout 8 bash -c \"echo > /dev/tcp/\$DB_HOST/\$DB_PORT\" 2>&1 && echo 'TCP connect: SUCCESS' || echo 'TCP connect: FAILED'
+            else
+              echo 'No DATABASE_URL/SUPABASE_DB_URL/POOLER_URL found in .env.production -- skipping DB/pooler test'
+            fi
+
+            echo ''
+            echo '=== 7. DOCKER NETWORK STATE ==='
+            docker network ls 2>&1
+            echo '--- worker container network settings ---'
+            docker inspect unit-talk-worker-1 --format '{{json .NetworkSettings.Networks}}' 2>&1
+            echo '--- worker container DNS config ---'
+            docker inspect unit-talk-worker-1 --format 'DNS={{.HostConfig.Dns}} DNSSearch={{.HostConfig.DnsSearch}} NetworkMode={{.HostConfig.NetworkMode}}' 2>&1
+
+            echo ''
+            echo '=== 8. HOST ROUTE / MTU ==='
+            echo '--- ip route (v4) ---'
+            ip route 2>&1
+            echo '--- ip -6 route (v6) ---'
+            ip -6 route 2>&1
+            echo '--- ip link (MTU) ---'
+            ip link show 2>&1 | grep -E '^[0-9]+:|mtu'
+
+            echo ''
+            echo '=== 9. HOST FIREWALL / EGRESS STATE ==='
+            (sudo -n iptables -L -n 2>&1 | head -60) || echo 'iptables check skipped (no passwordless sudo) or unavailable'
+            (sudo -n ufw status verbose 2>&1) || echo 'ufw check skipped (no passwordless sudo) or unavailable'
+
+            echo ''
+            echo '=== 10. WORKER ACTUAL CONFIGURED TARGET (from live startup log, not assumed) ==='
+            echo '(using the MOST RECENT worker.startup line -- if the container restarted more than once, docker logs contains every prior startup too, and the oldest match would misreport config changes made between restarts)'
+            docker logs unit-talk-worker-1 2>&1 | grep 'worker.startup' | tail -1 || echo 'no worker.startup log line found in current buffer'
+
+            echo ''
+            echo '=== 11. WORKER RECENT CLAIM ATTEMPTS (last 10 delivery-skipped-transient lines, truncated) ==='
+            docker logs unit-talk-worker-1 --tail 500 2>&1 | grep 'delivery-skipped-transient' | tail -10 | cut -c1-300
+          " | tee network-diagnose-${{ github.run_id }}.txt
+
+      - name: Upload diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-diagnose-${{ github.run_id }}.txt
+          path: network-diagnose-${{ github.run_id }}.txt
+          retention-days: 30
