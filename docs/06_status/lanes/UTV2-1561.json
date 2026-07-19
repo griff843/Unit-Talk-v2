@@ -19,6 +19,7 @@
   ],
   "file_scope_lock": [
     ".github/workflows/ops-container-diagnose.yml",
+    "docs/06_status/proof/UTV2-1561/.gitkeep",
     "docs/06_status/proof/UTV2-1561/evidence.json",
     "docs/06_status/proof/UTV2-1561/verification.md"
   ],

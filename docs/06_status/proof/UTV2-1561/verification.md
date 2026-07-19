@@ -1,11 +1,30 @@
 # PROOF: UTV2-1561
 
-MERGE_SHA: 5f55d9fddd0d09db28b50ea912c82418a6faead5
+MERGE_SHA: e6df0ca59c8bd29da5c41274542ca16471033daa
 
 (This PR has not merged yet -- this is the current pre-merge implementation
 SHA, an ancestor of whatever the eventual merge commit will be, not a
 placeholder. Per the accepted pre-merge convention, this field is rebound
-to the exact head on every push rather than left stale.)
+to the exact head on every push rather than left stale. No implementation
+code changed after this SHA -- only this proof update follows it.)
+
+## Verification
+
+### pnpm test:db (live Supabase)
+
+```
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+All 7 live-DB tests pass. This lane adds a read-only diagnostic workflow only
+(no schema, query, or write-path changes), so this run is the pre-existing
+suite exercised against real Supabase, confirming no regression.
 
 ## Summary
 

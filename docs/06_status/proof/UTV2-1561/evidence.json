@@ -5,13 +5,13 @@
   "tier": "T1",
   "lane_type": "hygiene",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "5f55d9fddd0d09db28b50ea912c82418a6faead5",
-  "reviewed_head_sha": "5f55d9fddd0d09db28b50ea912c82418a6faead5",
-  "evidence_commit_sha": "5f55d9fddd0d09db28b50ea912c82418a6faead5",
-  "current_head_sha": "5f55d9fddd0d09db28b50ea912c82418a6faead5",
+  "source_sha": "e6df0ca59c8bd29da5c41274542ca16471033daa",
+  "reviewed_head_sha": "e6df0ca59c8bd29da5c41274542ca16471033daa",
+  "evidence_commit_sha": "e6df0ca59c8bd29da5c41274542ca16471033daa",
+  "current_head_sha": "e6df0ca59c8bd29da5c41274542ca16471033daa",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "5f55d9fddd0d09db28b50ea912c82418a6faead5",
+    "verified_source_sha": "e6df0ca59c8bd29da5c41274542ca16471033daa",
     "verified_source_note": "New file only: .github/workflows/ops-container-diagnose.yml. Strictly read-only -- no restart, deploy, or env mutation. Mirrors the existing ops-network-diagnose.yml (UTV2-1560) and ops-api-diagnose.yml patterns already merged to main; reuses their existing UNIT_TALK_DEPLOY_HOST/USER/PATH/SSH_KEY secrets, no new secret introduced. Hardened per PM_VERDICT: CHANGES_REQUIRED: docker events now uses a generated Unix timestamp instead of the unsupported 'now' literal, and both docker-events collection and journalctl/dmesg calls now distinguish an actual command failure (permission denied, unsupported flag) from a genuine zero-matches result.",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-19T17:37:00Z",
@@ -43,7 +43,8 @@
   "runtime_proof": {
     "command": "pnpm test:db",
     "status": "PASS",
-    "note": "This lane adds only a new read-only CI workflow file; no production code path or migration touched. Live smoke run regardless per T1 policy."
+    "note": "This lane adds only a new read-only CI workflow file; no production code path or migration touched. Live smoke run regardless per T1 policy.",
+    "tap_output": "# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0"
   },
   "scope": {
     "implementation_paths": [
