@@ -1,17 +1,25 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1506",
   "pr_number": 1231,
   "tier": "T1",
   "lane_type": "governance",
-  "source_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
-  "reviewed_head_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
+  "status": "MERGED_TRUTH_CLOSED",
+  "source_sha": "b2994b8116e54473dd67d23d40294c474833a228",
+  "reviewed_head_sha": "b2994b8116e54473dd67d23d40294c474833a228",
   "evidence_commit_sha": null,
   "current_head_sha": null,
-  "merge_sha": null,
+  "merge_sha": "b2994b8116e54473dd67d23d40294c474833a228",
   "sha_binding": {
-    "verified_source_sha": "6153af325f228b0679b91abdb3b35c4bf9a03d9b",
-    "verified_source_note": "Substantive charter and manifest repair commit. Commits after this SHA are limited to lane/proof artifacts.",
+    "verified_source_sha": "b2994b8116e54473dd67d23d40294c474833a228",
+    "verified_source_note": "PR #1231 squash-merged to main as b2994b8116e54473dd67d23d40294c474833a228. Rebound from the stale pre-merge implementation SHA to the authoritative merge SHA during post-merge lane-close reconciliation.",
+    "sha_type": "merge_sha",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pass",
+      "test_db": "pass",
+      "r_level": "pass"
+    },
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
@@ -19,7 +27,7 @@
     {
       "gate": "pnpm verify",
       "verdict": "PASS",
-      "detail": "Full static gate, DB smoke (7/7), and live T1 proof suite completed with exit code 0 on substantive SHA 6153af325f228b0679b91abdb3b35c4bf9a03d9b."
+      "detail": "Full static gate, DB smoke (7/7), and live T1 proof suite completed with exit code 0 on the substantive implementation commit, prior to squash-merge as b2994b8116e54473dd67d23d40294c474833a228."
     },
     {
       "gate": "pnpm test:db",
@@ -35,10 +43,62 @@
   "reviewer_verdict": null,
   "pm_verdict": null,
   "generated_at": "2026-07-16T05:30:18Z",
+  "verifier": {
+    "identity": "claude/utv2-1506-lane-close-repair",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only, run directly against this repair branch's own commit f35be885c9e008095a99cfee43563b966c430561. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Run on this repair branch's own commit (f35be885). Full static gate (sync-check, system-alignment-check, automation-coverage-check, env:check, lint, type-check, build, test suite, smart-form verify, verify:commands) plus live DB smoke and the live T1 proof suite, all under pnpm verify:static && pnpm test:live-db."
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "note": "eslint . --cache, run as part of the pnpm verify invocation above; no findings."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "note": "pnpm exec tsc -b tsconfig.json, run as part of the pnpm verify invocation above; project-references build check clean."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Verdict: PASS. Changed files: 3. Rules matched: (none) — no R-level artifacts required for this diff."
+    }
+  },
   "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
     "classification": "documentation-only governance change",
-    "note": "No application, worker, API, migration, deployment, paging, or monitoring behavior changed. The unconditional T1 live-DB and live-proof gates were nevertheless executed by pnpm verify.",
-    "production_mutation_by_repair": false
+    "note": "No application, worker, API, migration, deployment, paging, or monitoring behavior changed. The unconditional T1 live-DB proof suite (apps/api/src/database-smoke.test.ts) was nevertheless executed by pnpm test:db per T1 policy.",
+    "production_mutation_by_repair": false,
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
   },
   "acceptance_criteria": {
     "diagnostic_logging_is_non_authoritative_guidance": "PASS",
@@ -47,5 +107,18 @@
     "draft_incident_runbook_boundary_preserved": "PASS",
     "no_new_role_capability_or_owner_approval_artifact": "PASS"
   },
-  "verdict": "PASS"
+  "post_merge_truth_close_summary": {
+    "merge_sha": "b2994b8116e54473dd67d23d40294c474833a228",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1231",
+    "repair_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1249",
+    "lane_manifest_status": "done",
+    "closed_at": "2026-07-18T20:49:36.646Z",
+    "ops_truth_check_verdict": "pass",
+    "ops_truth_check_exit_code": 0,
+    "ops_truth_check_checked_at": "2026-07-18T20:49:34.029Z",
+    "linear_status": "Done",
+    "linear_completed_at": "2026-07-18T20:49:38.024Z",
+    "note": "Generated by the actual `pnpm ops:lane-close UTV2-1506` run in this repair branch's worktree, referencing the already-merged PR #1231. All 40 applicable truth-check assertions (M1-M7, L1-L5, G1-G5, P1-P10, C1-C7, R1-R3, S1) passed; P8 and H1-H5 skipped as not applicable to this non-P0 lane. This is executor-produced mechanical evidence of the governed close event, not an independent owner certification."
+  },
+  "verdict": "MERGED_AND_TRUTH_CLOSED"
 }
