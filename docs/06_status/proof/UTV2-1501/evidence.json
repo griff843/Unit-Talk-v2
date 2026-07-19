@@ -13,7 +13,14 @@
     "head_sha": "ac0f6f537f1e77822f9c8226450b3fe92b7db988",
     "head_sha_note": "Implementation commit containing the corrected decision packet, superseded below by the actual GitHub squash-merge commit for post-merge truth-close.",
     "merge_sha": "1674924fc3b09bb53f5fbca45834113d4be048dd",
-    "merge_sha_note": "PR #1230 squash-merged to main as 1674924fc3b09bb53f5fbca45834113d4be048dd. Bound during governed post-merge truth-close reconciliation (this PR was merged 2026-07-17T12:43:44Z but its lane manifest was never closed out -- a ghost-lane repair, not new implementation content)."
+    "merge_sha_note": "PR #1230 squash-merged to main as 1674924fc3b09bb53f5fbca45834113d4be048dd. Bound during governed post-merge truth-close reconciliation (this PR was merged 2026-07-17T12:43:44Z but its lane manifest was never closed out -- a ghost-lane repair, not new implementation content).",
+    "verified_source_sha": "1674924fc3b09bb53f5fbca45834113d4be048dd",
+    "sha_type": "merge_sha",
+    "ci_sentinels": {
+      "verify": "pass",
+      "test_db": "pass",
+      "r_level": "pass"
+    }
   },
   "scope": {
     "implementation_paths": [
@@ -82,7 +89,11 @@
     "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1230",
     "merged_at": "2026-07-17T12:43:44Z",
     "repair_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1254",
-    "note": "This is a ghost-lane bookkeeping repair, not new implementation content: PR #1230 merged 2026-07-17T12:43:44Z but docs/06_status/lanes/UTV2-1501.json was never updated to status=done, leaving it occupying an active Claude dispatch slot and counting against the governance lane-type cap. Reconciled via pnpm ops:lane-close --repair-merged (binds status/commit_sha to the actual GitHub merge state) followed by pnpm ops:lane-close (binds status=done with a real closed_at)."
+    "lane_manifest_status": "done",
+    "closed_at": "2026-07-19T04:28:27.211Z",
+    "ops_truth_check_verdict": "pass",
+    "ops_truth_check_checked_at": "2026-07-19T04:28:24.547Z",
+    "note": "This is a ghost-lane bookkeeping repair, not new implementation content: PR #1230 merged 2026-07-17T12:43:44Z but docs/06_status/lanes/UTV2-1501.json was never updated to status=done, leaving it occupying an active Claude dispatch slot and counting against the governance lane-type cap. Reconciled via pnpm ops:lane-close --repair-merged (bound status/commit_sha to the actual GitHub merge state), followed by a plain pnpm ops:lane-close UTV2-1501 which produced the real close event above: status=done, closed_at populated, truth-check verdict pass (43/43 checks)."
   },
   "verdict": "MERGED_AND_TRUTH_CLOSED"
 }

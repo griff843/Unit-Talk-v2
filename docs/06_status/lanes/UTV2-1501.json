@@ -26,10 +26,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1501/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-16T01:24:23.208Z",
-  "heartbeat_at": "2026-07-19T04:00:27.307Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-19T04:28:27.211Z",
+  "closed_at": "2026-07-19T04:28:27.211Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1501-constitution-t2-self-approval-reconciliation.json",
   "created_by": "claude",
