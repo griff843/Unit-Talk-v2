@@ -34,8 +34,8 @@
   ],
   "status": "done",
   "started_at": "2026-07-19T04:18:00.000Z",
-  "heartbeat_at": "2026-07-19T16:34:45.981Z",
-  "closed_at": "2026-07-19T16:34:45.981Z",
+  "heartbeat_at": "2026-07-19T17:24:19.497Z",
+  "closed_at": "2026-07-19T17:24:19.497Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -95,6 +95,13 @@
       "failures": [
         "L3"
       ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-19T17:24:17.177Z",
+      "verdict": "pass",
+      "merge_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+      "failures": [],
       "runner": "ops:lane-close"
     }
   ],
