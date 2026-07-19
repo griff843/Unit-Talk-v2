@@ -27,6 +27,7 @@
     "docs/06_status/proof/UTV2-1560/.gitkeep",
     "docs/06_status/proof/UTV2-1560/evidence.json",
     "docs/06_status/proof/UTV2-1560/verification.md",
+    "package.json",
     "scripts/ops/worker-recovery-workflow.test.ts"
   ],
   "expected_proof_paths": [

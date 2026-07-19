@@ -5,13 +5,13 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "60fbd862b592d809b0e7d39bc2d1a42a58f85192",
-  "reviewed_head_sha": "60fbd862b592d809b0e7d39bc2d1a42a58f85192",
-  "evidence_commit_sha": "60fbd862b592d809b0e7d39bc2d1a42a58f85192",
-  "current_head_sha": "60fbd862b592d809b0e7d39bc2d1a42a58f85192",
+  "source_sha": "a8eec49bc2ef23c569861de066413e21c00ed202",
+  "reviewed_head_sha": "a8eec49bc2ef23c569861de066413e21c00ed202",
+  "evidence_commit_sha": "a8eec49bc2ef23c569861de066413e21c00ed202",
+  "current_head_sha": "a8eec49bc2ef23c569861de066413e21c00ed202",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "60fbd862b592d809b0e7d39bc2d1a42a58f85192",
+    "verified_source_sha": "a8eec49bc2ef23c569861de066413e21c00ed202",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-19T17:35:00Z",
     "ci_sentinels": {
