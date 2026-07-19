@@ -34,7 +34,7 @@
   ],
   "status": "merged",
   "started_at": "2026-07-19T04:18:00.000Z",
-  "heartbeat_at": "2026-07-19T15:44:20.866Z",
+  "heartbeat_at": "2026-07-19T15:44:50.314Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
@@ -79,6 +79,13 @@
       "failures": [
         "L3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-19T15:44:50.314Z",
+      "verdict": "pass",
+      "merge_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+      "failures": [],
       "runner": "manual"
     }
   ],
