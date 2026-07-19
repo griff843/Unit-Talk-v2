@@ -1,6 +1,12 @@
 # PROOF: UTV2-1543 (continuation)
 
-MERGE_SHA: 11d1b8cb9571ec4095ef65ccfd740db4d8914f5b
+MERGE_SHA: c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6
+
+PR #1255 merged to main as `c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6`. This
+supersedes the pre-merge implementation SHA `11d1b8cb9571ec4095ef65ccfd740db4d8914f5b`
+referenced below (the byte-identical carry-forward from PR #1246's approved
+head `33d1bba3cd1843bce5807f48b8d0a146ce26e156`); rebound during post-merge
+lane-close reconciliation (`ops:lane-close --repair-merged`).
 
 ## Summary
 
@@ -37,6 +43,16 @@ carry forward automatically: this is a new PR with a new head, and per the
 standing rule that a head change invalidates prior approval, it requires
 its own fresh exact-head `pm-verdict/v1` APPROVED comment and `t1-approved`
 label before merge.
+
+**Post-merge record of actual authority satisfied:** a fresh Griff-authored
+`PM_VERDICT: APPROVED` was posted 2026-07-19T07:56:59Z on PR #1255, bound to
+the exact head that merged (`1ca56b8b811072f0469b5800b6a3e05435d98d43`),
+independently re-verifying the `merge-gate.yml`/`workflow-hardening.test.ts`
+blob SHAs against #1246's approved head and confirming zero unresolved
+review threads. The `t1-approved` label was applied after that verdict.
+`.github/workflows/merge-gate.yml`'s `validateT1Verdicts(...)` required and
+consumed both artifacts before Merge Gate reported green -- the label was
+never sufficient on its own.
 
 ## Verification
 
