@@ -1,6 +1,6 @@
 # PROOF: UTV2-1543
 
-MERGE_SHA: a67e5e531da211f85a75772c78f212e73db25a86
+MERGE_SHA: 37dfb6617491df68066fa3f20f5621efcf612a84
 
 ## Summary
 
@@ -26,6 +26,21 @@ the PR's own content on those event types — a PR could otherwise modify
 safe. Regression test asserts the Checkout step exists, runs before the
 Evaluate merge gate step, and is pinned to the exact base-SHA expression.
 
+## Stage 2 rebase (UTV2-1554 landed the trusted helper on main first)
+
+Rebased onto `main@c16054ba` (the UTV2-1554 bootstrap merge). This removed
+`scripts/ops/merge-gate-verdict.cjs`, `scripts/ops/merge-gate-verdict.test.ts`,
+`eslint.config.mjs`, `package.json`, and `docs/05_operations/schemas/pm-verdict-v1.md`
+from this PR's diff entirely -- main's copies (landed by UTV2-1554, a strict
+superset that additionally includes the trust-boundary fix: authorization
+filtering happens before latest-verdict selection, not after) are used
+unchanged. The PR-head bootstrap-fetch fallback step this PR previously
+needed for its own first-introduction case has been **deleted entirely**
+from `.github/workflows/merge-gate.yml` -- base.sha always has the trusted
+file now, so there is no first-introduction case left. See
+`docs/06_status/proof/UTV2-1543/diff-summary.md` for the full file-by-file
+accounting.
+
 ## Verification
 
 ## ASSERTIONS (issue acceptance tests):
@@ -41,26 +56,32 @@ Evaluate merge gate step, and is pinned to the exact base-SHA expression.
 - [x] Bot-authored and non-CODEOWNERS verdicts still rejected
 - [x] Bounce-limit behavior (3 CHANGES_REQUIRED trips it) preserved
 - [x] Parsing/validation extracted into a tested module (scripts/ops/merge-gate-verdict.cjs), not duplicated inline in the workflow — regression test asserts the workflow requires it rather than hand-duplicating parseVerdict
-- [x] pnpm verify PASS (3727/3727, full local run, exit code 0)
-- [x] r-level-check PASS, no artifacts required for this diff
+- [x] pnpm verify PASS (full local run, exit code 0)
+- [x] r-level-check PASS, no artifacts required for this diff (8 changed files)
+- [x] merge-gate.yml gate job never fetches or executes content keyed on
+      pull_request.head.sha, and carries no PR-head bootstrap-recovery step
+      (new regression assertion, replacing the now-obsolete bootstrap test)
 
 ## EVIDENCE:
 
 ```text
 $ pnpm exec tsx --test scripts/ops/merge-gate-verdict.test.ts
-1..16
-# tests 16
-# pass 16
+1..20
+# tests 20
+# pass 20
 # fail 0
 # cancelled 0
 # skipped 0
 ```
+(Not part of this PR's diff -- supplied unchanged by UTV2-1554 on main: 16
+original tests + 4 UTV2-1554 trust-boundary regression tests. Confirmed
+passing on this branch.)
 
 ```text
 $ pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts
-1..29
-# tests 29
-# pass 29
+1..32
+# tests 32
+# pass 32
 # fail 0
 # cancelled 0
 # skipped 0

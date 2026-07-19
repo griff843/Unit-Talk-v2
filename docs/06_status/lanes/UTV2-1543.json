@@ -12,16 +12,11 @@
   "files_changed": [
     ".github/workflows/merge-gate.yml",
     ".ops/sync/UTV2-1543.yml",
-    "docs/05_operations/schemas/pm-verdict-v1.md",
     "docs/06_status/lanes/UTV2-1543.json",
     "docs/06_status/proof/UTV2-1543/.gitkeep",
     "docs/06_status/proof/UTV2-1543/diff-summary.md",
     "docs/06_status/proof/UTV2-1543/evidence.json",
     "docs/06_status/proof/UTV2-1543/verification.md",
-    "eslint.config.mjs",
-    "package.json",
-    "scripts/ops/merge-gate-verdict.cjs",
-    "scripts/ops/merge-gate-verdict.test.ts",
     "scripts/ops/workflow-hardening.test.ts"
   ],
   "file_scope_lock": [

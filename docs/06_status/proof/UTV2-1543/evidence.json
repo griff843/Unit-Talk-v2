@@ -11,10 +11,10 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "a67e5e531da211f85a75772c78f212e73db25a86",
-    "verified_source_note": "Second commit fixes Codex P1 (missing checkout before require, base-SHA-pinned for the same privilege-boundary reason as UTV2-1550). Canonical fix for the gap independently rediscovered as UTV2-1552 (duplicate) while rebasing #1230/#1231/#1232 during this session. Third commit fixes a live Merge Gate self-referential bootstrap gap discovered during this PR's own merge attempt: base.sha never has merge-gate-verdict.cjs since this PR introduces it, so require() threw MODULE_NOT_FOUND on every evaluation. Fixed by recovering the file from the PR's own head SHA only when absent at the base-pinned checkout, preserving the base-pin for every subsequent PR that merely edits the file.",
+    "verified_source_sha": "37dfb6617491df68066fa3f20f5621efcf612a84",
+    "verified_source_note": "Rebased onto main@c16054ba (post UTV2-1554 bootstrap merge). scripts/ops/merge-gate-verdict.cjs, scripts/ops/merge-gate-verdict.test.ts, eslint.config.mjs, package.json, and docs/05_operations/schemas/pm-verdict-v1.md are no longer part of this PR's diff -- UTV2-1554 landed the canonical (superset, includes the trust-boundary fix) versions of all five on main first, specifically so this PR never needs to introduce them. The self-referential bootstrap-recovery step this PR previously needed (recovering merge-gate-verdict.cjs from the PR's own head SHA when absent at base) has been removed entirely, since base.sha now always has the trusted file. See docs/06_status/proof/UTV2-1543/diff-summary.md for the full accounting.",
     "sha_type": "implementation_sha",
-    "bound_at": "2026-07-17T15:25:00.000Z",
+    "bound_at": "2026-07-19T02:20:00.000Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "pending",
@@ -36,24 +36,26 @@
       "status": "PASS",
       "exit_code": 0
     },
-    "unit_tests_new": {
+    "unit_tests_inherited_from_main": {
       "command": "tsx --test scripts/ops/merge-gate-verdict.test.ts",
       "status": "PASS",
-      "tests": 16,
-      "pass": 16,
-      "fail": 0
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "note": "Not part of this PR's diff -- supplied unchanged by UTV2-1554 on main (16 original + 4 UTV2-1554 trust-boundary regression tests). Confirmed passing on this branch since main's copy is used unchanged."
     },
     "unit_tests_updated": {
       "command": "tsx --test scripts/ops/workflow-hardening.test.ts",
       "status": "PASS",
       "tests": 32,
       "pass": 32,
-      "fail": 0
+      "fail": 0,
+      "note": "The prior 'UTV2-1543 bootstrap: merge-gate.yml recovers merge-gate-verdict.cjs from the PR head' test was replaced with a new regression assertion that the gate job never fetches or executes content keyed on pull_request.head.sha, and carries no PR-head bootstrap-recovery step at all."
     },
     "lint": {
       "command": "pnpm lint",
       "status": "PASS",
-      "note": "Added a **/*.cjs eslint.config.mjs override (Node globals, CommonJS source type) for this repo's first .cjs file."
+      "note": "No eslint.config.mjs change in this PR's diff -- the **/*.cjs override was supplied unchanged by UTV2-1554 on main."
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -72,11 +74,14 @@
   "scope": {
     "implementation_paths": [
       ".github/workflows/merge-gate.yml",
+      "scripts/ops/workflow-hardening.test.ts"
+    ],
+    "supplied_unchanged_by_utv2_1554_on_main": [
       "scripts/ops/merge-gate-verdict.cjs",
       "scripts/ops/merge-gate-verdict.test.ts",
-      "scripts/ops/workflow-hardening.test.ts",
-      "docs/05_operations/schemas/pm-verdict-v1.md",
-      "eslint.config.mjs"
+      "eslint.config.mjs",
+      "package.json",
+      "docs/05_operations/schemas/pm-verdict-v1.md"
     ],
     "branch_protection_changed": false,
     "required_status_check_contexts_changed": false,
@@ -94,7 +99,10 @@
     "parsing_extracted_to_tested_module_not_duplicated": "PASS",
     "no_admin_merge_used_as_fix": "PASS",
     "no_required_check_weakened": "PASS",
-    "self_referential_bootstrap_gap_fixed_not_documented": "PASS"
+    "self_referential_bootstrap_gap_fixed_not_documented": "PASS",
+    "utv2_1554_rebase_stage2_complete": "PASS -- rebased onto main containing the trusted helper; own copy of merge-gate-verdict.cjs/.test.ts/eslint/package.json/pm-verdict-v1.md removed from this PR's diff",
+    "pr_head_bootstrap_fallback_removed_entirely": "PASS -- the Bootstrap step is deleted from merge-gate.yml; base.sha always has the trusted file post-UTV2-1554",
+    "regression_assertion_pr_head_sha_never_fetched_or_executed": "PASS -- scripts/ops/workflow-hardening.test.ts new test asserts no checkout/run/script step in the gate job resolves or materializes content keyed on pull_request.head.sha, and no bootstrap-recovery step exists"
   },
   "owner_boundary": {
     "t1_approved_label": "absent_and_not_created_by_this_lane",

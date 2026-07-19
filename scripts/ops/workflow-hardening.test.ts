@@ -590,55 +590,67 @@ test('UTV2-1543 (Codex P1): merge-gate.yml checks out the repo, pinned to a trus
   );
 });
 
-test('UTV2-1543 bootstrap: merge-gate.yml recovers merge-gate-verdict.cjs from the PR head only when absent at the pinned base checkout', () => {
+test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes content keyed on pull_request.head.sha', () => {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const jobs = objectField(workflow, 'jobs');
   const gate = objectField(jobs, 'gate');
   const steps = gate.steps as Array<Record<string, unknown>>;
 
-  const checkoutIndex = steps.findIndex(
-    (s) => typeof s.uses === 'string' && (s.uses as string).startsWith('actions/checkout@'),
-  );
-  const evalIndex = steps.findIndex(
-    (s) => typeof s.with === 'object' && s.with && typeof (s.with as Record<string, unknown>).script === 'string',
-  );
-  const bootstrapIndex = steps.findIndex(
-    (s) => typeof s.run === 'string' && (s.run as string).includes('merge-gate-verdict.cjs'),
-  );
+  for (const step of steps) {
+    const stepName = typeof step.name === 'string' ? step.name : '(unnamed step)';
 
-  assert.notStrictEqual(bootstrapIndex, -1, 'merge-gate.yml gate job must have a bootstrap-recovery step for merge-gate-verdict.cjs');
-  assert.ok(
-    checkoutIndex < bootstrapIndex && bootstrapIndex < evalIndex,
-    'the bootstrap step must run after Checkout and before Evaluate merge gate',
+    // 1. No checkout (or any other) step may pin `ref` to the PR head SHA.
+    //    Only base.sha / github.sha (main HEAD) are trusted refs for this
+    //    privileged job (checks/pull-requests/issues: write).
+    if (typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@')) {
+      const withBlock = (step.with ?? {}) as Record<string, unknown>;
+      if (typeof withBlock.ref === 'string') {
+        assert.doesNotMatch(
+          withBlock.ref,
+          /pull_request\.head\.sha/,
+          `${stepName}: checkout ref must never resolve to pull_request.head.sha (PR-controlled)`,
+        );
+      }
+    }
+
+    // 2. No `run:` step may materialize file content by combining
+    //    pull_request.head.sha with a fetch/read/write verb. This is the
+    //    "PR-head bootstrap fetch fallback" shape that must never exist:
+    //    it would let a PR overwrite the trusted verdict-validation module
+    //    before this privileged job requires it.
+    if (typeof step.run === 'string') {
+      const referencesHeadSha = /pull_request\.head\.sha/.test(step.run);
+      const materializesContent = /git\s+(fetch|show|checkout)|curl\s|wget\s|>\s*scripts\//.test(step.run);
+      assert.ok(
+        !(referencesHeadSha && materializesContent),
+        `${stepName}: run step must not fetch/materialize content keyed on pull_request.head.sha -- found a bootstrap-style fallback:\n${step.run}`,
+      );
+    }
+
+    // 3. The github-script step's require() must resolve the committed,
+    //    base-checked-out copy of merge-gate-verdict.cjs -- never a path
+    //    the workflow wrote from head-sha content in a prior step.
+    const withBlock = (step.with ?? {}) as Record<string, unknown>;
+    if (typeof withBlock.script === 'string') {
+      assert.doesNotMatch(
+        withBlock.script,
+        /pull_request\.head\.sha/,
+        `${stepName}: evaluate-merge-gate script must not reference pull_request.head.sha directly for content trust decisions`,
+      );
+    }
+  }
+
+  // 4. No step in this job may be a "bootstrap"/"recover from PR head" step
+  //    at all -- main unconditionally carries the trusted
+  //    scripts/ops/merge-gate-verdict.cjs as of UTV2-1554, so no
+  //    absence-triggered fallback should exist to bootstrap it from
+  //    untrusted PR content.
+  const bootstrapLike = steps.find(
+    (s) => typeof s.name === 'string' && /bootstrap/i.test(s.name) && /merge-gate-verdict\.cjs/.test(s.name),
   );
-
-  const bootstrapStep = steps[bootstrapIndex] as Record<string, unknown>;
-
-  // Must be scoped to pull_request(_review) only -- issue_comment/workflow_dispatch
-  // already checkout github.sha (main HEAD), which by definition has the file
-  // for any PR already merged, so the bootstrap path is meaningless there.
-  assert.match(
-    String(bootstrapStep.if),
-    /pull_request/,
-    'the bootstrap step must be scoped to pull_request(_review) events',
-  );
-
-  // Must only run when the file is genuinely absent at the pinned base
-  // checkout -- for every PR that merely edits (not introduces) the file,
-  // base.sha already has last-merged trusted content and this must stay a
-  // no-op, or a malicious PR could force the bootstrap path unconditionally
-  // and defeat the base-pin entirely.
-  assert.match(
-    String(bootstrapStep.if),
-    /hashFiles\('scripts\/ops\/merge-gate-verdict\.cjs'\)\s*==\s*''/,
-    'the bootstrap step must be gated on the file being absent from the base-pinned checkout, not run unconditionally',
-  );
-
-  // Must source content from the PR's own head SHA, not any other ref, and
-  // must not silently fall back to trusting an unrelated/attacker-chosen ref.
-  assert.match(
-    String(bootstrapStep.run),
-    /github\.event\.pull_request\.head\.sha/,
-    'the bootstrap step must fetch and read the file from the PR head SHA specifically',
+  assert.strictEqual(
+    bootstrapLike,
+    undefined,
+    'merge-gate.yml must not carry a PR-head bootstrap-recovery step for merge-gate-verdict.cjs; main always has the trusted file post-UTV2-1554',
   );
 });
