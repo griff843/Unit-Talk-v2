@@ -94,7 +94,7 @@ Use the workflow's job id as the `name` — GitHub's branch protection UI lists 
 
 - **Owning workflow:** `.github/workflows/merge-gate.yml`
 - **Job:** `gate`
-- **Trigger:** `pull_request` (synchronize, reopened, labeled), `pull_request_review` (submitted), `issue_comment` containing `PM_VERDICT:`, `workflow_dispatch`
+- **Trigger:** `pull_request` (opened, synchronize, reopened, labeled, unlabeled, ready_for_review), `pull_request_review` (submitted), `issue_comment` containing `PM_VERDICT:`, `workflow_dispatch`. `opened` was added under UTV2-1551 so a brand-new PR gets an immediate Merge Gate evaluation (reporting BLOCKED if tier/verdict evidence doesn't exist yet) instead of the required check never running at all until some other event fired it.
 - **Required on main:** yes, always.
 - **Merge relevance:** tier-aware authorization gate. Enforces approval policy per tier before merge is allowed.
 

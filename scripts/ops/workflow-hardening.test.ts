@@ -242,15 +242,30 @@ test('governance lane authority covers Claude hook orchestration files', () => {
   );
 });
 
-test('required PR check workflows do not create stale merge-gate contexts on opened events', () => {
+test('UTV2-1551: merge-gate.yml intentionally runs required checks on pull_request.opened (reversing UTV2-1157)', () => {
+  // UTV2-1157 originally kept Merge Gate off `opened`, on the theory that
+  // running before GitHub tier labels "settle" would be premature. That
+  // theory doesn't hold: Merge Gate resolves its authoritative tier by
+  // reading the lane manifest directly via the Contents API (see the
+  // `readManifest`/`authoritativeTier` logic in merge-gate.yml) -- it never
+  // depends on tier-label-check.yml's label sync having run first, and it
+  // already self-applies the matching `tier:T*` label as evidence when none
+  // exists yet. The real-world effect of omitting `opened` was worse than
+  // "premature": a brand-new PR got zero Merge Gate evaluation from PR
+  // creation itself, so the required "Merge Gate" check could sit
+  // never-having-run (not failed) until some later push/label/review/comment
+  // event happened to fire it (UTV2-1551). Running on `opened` now just
+  // means the fail-closed BLOCKED status appears immediately instead of
+  // silently later -- see the "evaluates fresh (opened) PRs" test above for
+  // the structural assertion that `opened` is present.
   const mergeGate = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'merge-gate.yml'), 'utf8');
-  const mergeGatePullRequestBlock = mergeGate.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
+  const mergeGatePullRequestBlock = mergeGate.match(/pull_request:[\s\S]*?\n\s+types:\s*\[([^\]]+)\]/);
 
   assert.ok(mergeGatePullRequestBlock, 'merge-gate.yml must declare explicit pull_request types');
-  assert.doesNotMatch(
+  assert.match(
     mergeGatePullRequestBlock[1] ?? '',
     /(^|,\s*)opened(\s*,|$)/,
-    'merge-gate.yml must not run required checks on pull_request.opened before labels settle',
+    'merge-gate.yml must run on pull_request.opened so a fresh PR gets an immediate Merge Gate evaluation',
   );
 });
 
@@ -266,13 +281,24 @@ test('tier label sync runs on opened so PM does not manually apply GitHub tier l
   );
 });
 
-test('merge gate is structurally wired for PM verdict comments without opened PR races', () => {
+test('UTV2-1551: merge gate is structurally wired for PM verdict comments and evaluates fresh (opened) PRs', () => {
+  // Prior to UTV2-1551 this list deliberately omitted `opened` -- a fresh PR
+  // got zero Merge Gate evaluation from PR creation itself, only from a
+  // later push/label/review/comment event, which could leave a brand-new
+  // T1/T2 PR sitting `mergeStateStatus: BLOCKED` with the required check
+  // never having run at all. `opened` is included now: the gate job's own
+  // per-tier logic already fails closed (reports BLOCKED, does not approve)
+  // when no tier label / lane manifest / PM verdict exists yet, which is
+  // exactly the correct status for a truly fresh PR -- so evaluating on
+  // `opened` cannot cause a premature approval, only an earlier, visible
+  // BLOCKED status instead of silence.
   const pullRequest = workflowEvent('merge-gate.yml', 'pull_request');
   const issueComment = workflowEvent('merge-gate.yml', 'issue_comment');
   const jobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
   const gateIf = stringField(objectField(jobs, 'gate'), 'if');
 
   assert.deepStrictEqual(stringArrayField(pullRequest, 'types'), [
+    'opened',
     'synchronize',
     'reopened',
     'labeled',
@@ -281,6 +307,51 @@ test('merge gate is structurally wired for PM verdict comments without opened PR
   ]);
   assert.deepStrictEqual(stringArrayField(issueComment, 'types'), ['created', 'edited']);
   assert.match(gateIf, /PM_VERDICT:/, 'merge gate must respond to PM verdict comments');
+  // The gate job's own `if:` already runs unconditionally for every
+  // pull_request event type (no per-type restriction beyond the trigger
+  // list above), so adding `opened` to the trigger is sufficient by itself
+  // -- no separate `if:` change is needed for the gate to evaluate on it.
+  assert.match(
+    gateIf,
+    /github\.event_name == 'pull_request'/,
+    'merge gate job condition must run unconditionally for pull_request events (including opened) without a narrower per-type restriction',
+  );
+});
+
+test('UTV2-1551: tier-label-check.yml syncs labels with a token that cascades to other workflows, fail-closed', () => {
+  // Labels added via the default GITHUB_TOKEN don't trigger other
+  // workflows' `labeled` events (documented GitHub Actions behavior), so a
+  // fresh PR's tier-label sync could never cascade into Merge Gate's own
+  // `pull_request: labeled` trigger. SYNC_BOT_TOKEN (already used by
+  // post-merge-lane-close.yml for the same class of problem) fixes this.
+  // No GITHUB_TOKEN fallback: a silent fallback would silently reintroduce
+  // the exact non-cascading-event bug this secret exists to fix.
+  const workflow = readWorkflowYaml('tier-label-check.yml');
+  const jobs = objectField(workflow, 'jobs');
+  const job = objectField(jobs, 'check-tier-label');
+  const steps = job.steps as Array<Record<string, unknown>>;
+
+  const guardStep = steps.find(
+    (s) => typeof s.name === 'string' && (s.name as string).includes('Require SYNC_BOT_TOKEN'),
+  );
+  assert.ok(guardStep, 'tier-label-check.yml must fail closed if SYNC_BOT_TOKEN is not configured');
+  assert.match(
+    (guardStep as Record<string, unknown>).run as string,
+    /secrets\.SYNC_BOT_TOKEN.*exit 1/s,
+    'the SYNC_BOT_TOKEN guard must actually exit non-zero when the secret is unset',
+  );
+
+  const syncStep = steps.find(
+    (s) => typeof s.name === 'string' && (s.name as string).includes('Sync PR tier label'),
+  );
+  assert.ok(syncStep, 'tier-label-check.yml must have the tier-label sync step');
+
+  const withBlock = objectField(syncStep as Record<string, unknown>, 'with');
+  assert.strictEqual(
+    withBlock['github-token'],
+    '${{ secrets.SYNC_BOT_TOKEN }}',
+    'tier label sync must use SYNC_BOT_TOKEN with no GITHUB_TOKEN fallback -- a fallback would silently reintroduce the non-cascading-event bug',
+  );
 });
 
 test('required pull-request gates are wired to executable blocking jobs', () => {
