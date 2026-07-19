@@ -1,9 +1,10 @@
 # PROOF: UTV2-1560 (PR #1258)
 
-MERGE_SHA: a8eec49bc2ef23c569861de066413e21c00ed202 (pre-merge implementation
-SHA -- PR #1258 has not merged yet; this proof describes its own pre-merge
-state; see "Prior merged history" below for the already-shipped, separate
-PR #1256 fact)
+MERGE_SHA: b7ee0c0aea576733e074765b23e7991bee5e00c6
+
+(This is the current pre-merge implementation SHA -- PR #1258 has not merged
+yet; this proof describes its own pre-merge state; see "Prior merged history"
+below for the already-shipped, separate PR #1256 fact.)
 
 This PR (#1258), on the same branch/lane, adds two diagnostic gap fixes and
 a new manual-dispatch-only worker-recovery workflow -- see "Continuation:
