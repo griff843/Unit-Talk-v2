@@ -69,11 +69,27 @@ jobs:
 
             echo ''
             echo '=== 5. DOCKER DAEMON EVENTS FOR THIS CONTAINER (last 7 days, non-blocking) ==='
-            docker events --since 168h --until now --filter \"container=\$TARGET\" 2>&1 | tail -200
+            NOW_TS=\$(date +%s)
+            SINCE_TS=\$((NOW_TS - 604800))
+            EVENTS_OUT=\$(docker events --since \"\$SINCE_TS\" --until \"\$NOW_TS\" --filter \"container=\$TARGET\" 2>&1)
+            EVENTS_EXIT=\$?
+            if [ \"\$EVENTS_EXIT\" -ne 0 ]; then
+              echo \"DOCKER EVENTS COLLECTION FAILED (exit \$EVENTS_EXIT) -- the section below is NOT evidence of zero events, the command itself errored:\"
+              echo \"\$EVENTS_OUT\"
+            else
+              echo \"\$EVENTS_OUT\" | tail -200
+            fi
 
             echo ''
             echo '=== 6. DOCKER DAEMON EVENTS: ALL CONTAINER DIE/OOM/RESTART/HEALTH_STATUS EVENTS (last 7 days) ==='
-            docker events --since 168h --until now --filter 'event=die' --filter 'event=oom' --filter 'event=restart' --filter 'event=health_status' 2>&1 | tail -300
+            EVENTS2_OUT=\$(docker events --since \"\$SINCE_TS\" --until \"\$NOW_TS\" --filter 'event=die' --filter 'event=oom' --filter 'event=restart' --filter 'event=health_status' 2>&1)
+            EVENTS2_EXIT=\$?
+            if [ \"\$EVENTS2_EXIT\" -ne 0 ]; then
+              echo \"DOCKER EVENTS COLLECTION FAILED (exit \$EVENTS2_EXIT) -- the section below is NOT evidence of zero events, the command itself errored:\"
+              echo \"\$EVENTS2_OUT\"
+            else
+              echo \"\$EVENTS2_OUT\" | tail -300
+            fi
 
             echo ''
             echo '=== 7. CONTAINER LOG TAIL AROUND STARTUP (last 300 lines, for crash context) ==='
@@ -81,13 +97,44 @@ jobs:
 
             echo ''
             echo '=== 8. HOST KERNEL / OOM EVENTS (last 7 days) ==='
-            (journalctl -k --since '7 days ago' --no-pager 2>&1 | grep -iE 'oom|killed process|out of memory' | tail -100) || echo 'journalctl -k unavailable or no matches'
+            JOURNAL_K_OUT=\$(journalctl -k --since '7 days ago' --no-pager 2>&1)
+            JOURNAL_K_EXIT=\$?
+            if [ \"\$JOURNAL_K_EXIT\" -ne 0 ]; then
+              echo \"journalctl -k FAILED (exit \$JOURNAL_K_EXIT) -- likely a permission failure, NOT evidence of zero OOM events:\"
+              echo \"\$JOURNAL_K_OUT\"
+            else
+              OOM_MATCHES=\$(echo \"\$JOURNAL_K_OUT\" | grep -iE 'oom|killed process|out of memory' | tail -100)
+              if [ -z \"\$OOM_MATCHES\" ]; then
+                echo 'journalctl -k succeeded, zero OOM/killed-process matches in the last 7 days'
+              else
+                echo \"\$OOM_MATCHES\"
+              fi
+            fi
             echo '--- dmesg fallback ---'
-            (dmesg -T 2>&1 | grep -iE 'oom|killed process' | tail -50) || echo 'dmesg unavailable or permission denied'
+            DMESG_OUT=\$(dmesg -T 2>&1)
+            DMESG_EXIT=\$?
+            if [ \"\$DMESG_EXIT\" -ne 0 ]; then
+              echo \"dmesg FAILED (exit \$DMESG_EXIT) -- likely a permission failure, NOT evidence of zero OOM events:\"
+              echo \"\$DMESG_OUT\"
+            else
+              DMESG_MATCHES=\$(echo \"\$DMESG_OUT\" | grep -iE 'oom|killed process' | tail -50)
+              if [ -z \"\$DMESG_MATCHES\" ]; then
+                echo 'dmesg succeeded, zero OOM/killed-process matches'
+              else
+                echo \"\$DMESG_MATCHES\"
+              fi
+            fi
 
             echo ''
             echo '=== 9. DOCKER DAEMON LOG / SERVICE EVENTS (last 7 days) ==='
-            (journalctl -u docker --since '7 days ago' --no-pager 2>&1 | tail -150) || echo 'journalctl -u docker unavailable'
+            JOURNAL_DOCKER_OUT=\$(journalctl -u docker --since '7 days ago' --no-pager 2>&1)
+            JOURNAL_DOCKER_EXIT=\$?
+            if [ \"\$JOURNAL_DOCKER_EXIT\" -ne 0 ]; then
+              echo \"journalctl -u docker FAILED (exit \$JOURNAL_DOCKER_EXIT) -- likely a permission failure, NOT evidence the docker daemon log is empty:\"
+              echo \"\$JOURNAL_DOCKER_OUT\"
+            else
+              echo \"\$JOURNAL_DOCKER_OUT\" | tail -150
+            fi
 
             echo ''
             echo '=== 10. HOST REBOOT HISTORY ==='
