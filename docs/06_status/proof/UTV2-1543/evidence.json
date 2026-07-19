@@ -1,0 +1,123 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1543",
+  "title": "Bind T1 PM verdicts to the exact PR head SHA in Merge Gate (continuation)",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
+  "reviewed_head_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "11d1b8cb9571ec4095ef65ccfd740db4d8914f5b",
+    "verified_source_note": "This PR carries the exact, unmodified implementation from PR #1246's PM-approved head 33d1bba3cd1843bce5807f48b8d0a146ce26e156 (.github/workflows/merge-gate.yml and scripts/ops/workflow-hardening.test.ts copied byte-identical via `git checkout 33d1bba3 -- <paths>`). PR #1246 is frozen by Merge Gate's unconditional three-CHANGES_REQUIRED bounce cap despite a later exact-head PM_VERDICT: APPROVED on that same head -- a defect tracked separately as UTV2-1559. This continuation PR is the PM-authorized manual drain path for that frozen state, per PM's 2026-07-19 PM-triage disposition. PR #1246 itself is preserved unchanged as the audit record and is closed as superseded only once this continuation is confirmed.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-19T04:20:00Z",
+    "continuation_of": {
+      "frozen_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1246",
+      "frozen_pr_approved_head_sha": "33d1bba3cd1843bce5807f48b8d0a146ce26e156",
+      "frozen_pr_approved_head_pm_verdict_comment_at": "2026-07-19T03:39:11Z",
+      "freeze_reason": "Merge Gate bounce-limit trips unconditionally at 3 authorized CHANGES_REQUIRED verdicts, regardless of a later APPROVED verdict on the same or a later head",
+      "pm_triage_disposition_note": "PM chat disposition 2026-07-19: 'Create a governed continuation PR... Preserve #1246 unchanged as the audit record... No admin merge or direct-main bypass... Close #1246 as superseded only after the continuation PR exists.'"
+    },
+    "ci_sentinels": {
+      "verify": "pass_locally_pending_ci",
+      "merge_gate": "pending",
+      "executor_result_validation": "pending",
+      "p0_protocol": "pending"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1543-continuation",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact -- a fresh exact-head PM_VERDICT is required for this new PR/head per the standing T1 rule that a head change invalidates prior approval."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "note": "Live smoke run per T1 policy; this PR changes only Merge Gate workflow logic and a test file, no production code path or migration.",
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/merge-gate.yml",
+      "scripts/ops/workflow-hardening.test.ts"
+    ],
+    "supplied_unchanged_by_utv2_1554_on_main": [
+      "scripts/ops/merge-gate-verdict.cjs",
+      "scripts/ops/merge-gate-verdict.test.ts",
+      "eslint.config.mjs",
+      "package.json",
+      "docs/05_operations/schemas/pm-verdict-v1.md"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "ac1_exact_issue_pr_head_approved_passes": "PASS",
+    "ac2_stale_head_after_rebase_fails": "PASS",
+    "ac3_wrong_pr_number_fails": "PASS",
+    "ac4_missing_head_sha_fails": "PASS",
+    "ac5_changes_required_remains_authoritative": "PASS",
+    "ac6_no_content_based_inference": "PASS",
+    "ac7_t2_behavior_unchanged": "PASS",
+    "schema_doc_updated": "PASS -- supplied unchanged via UTV2-1554",
+    "parsing_extracted_to_tested_module_not_duplicated": "PASS",
+    "no_admin_merge_used_as_fix": "PASS",
+    "no_required_check_weakened": "PASS",
+    "self_referential_bootstrap_gap_fixed_not_documented": "PASS",
+    "pr_head_bootstrap_fallback_removed_entirely": "PASS",
+    "regression_assertion_pr_head_sha_never_fetched_or_executed": "PASS",
+    "continuation_carries_identical_code_no_substantive_change": "PASS -- .github/workflows/merge-gate.yml and scripts/ops/workflow-hardening.test.ts are byte-identical to PR #1246 approved head 33d1bba3",
+    "frozen_pr_1246_preserved_unchanged_as_audit_record": "PASS -- no comments edited or deleted on #1246; #1246 to be closed as superseded only after this continuation is confirmed",
+    "no_admin_merge_or_direct_main_bypass_used_for_continuation": "PASS -- this is a normal PR through the governed merge-gate path"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false,
+    "note": "The APPROVED verdict on PR #1246's head 33d1bba3 does not carry forward automatically -- this is a new PR/head and requires its own fresh exact-head PM_VERDICT and t1-approved label, per the standing rule that a head change invalidates prior approval."
+  },
+  "known_gaps": [
+    "This continuation PR does not itself implement the durable UTV2-1559 fix (a structured pm-triage/v1 mechanism with regression tests). It is the documented manual drain path PM authorized for immediate use while that durable fix is implemented separately."
+  ],
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}

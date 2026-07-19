@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue_id": "UTV2-1501",
   "tier": "T1",
-  "status": "PRE_MERGE_VERIFIED",
+  "status": "MERGED_TRUTH_CLOSED",
   "produced_at": "2026-07-16T05:39:25Z",
   "verifier": {
     "identity": "codex/repair_1230",
@@ -11,9 +11,16 @@
   },
   "sha_binding": {
     "head_sha": "ac0f6f537f1e77822f9c8226450b3fe92b7db988",
-    "head_sha_note": "Implementation commit containing the corrected decision packet. Proof and manifest commits follow this commit, so the immutable implementation SHA is retained as the pre-merge review anchor.",
-    "merge_sha": null,
-    "merge_sha_note": "Pre-merge proof cannot bind an actual merge commit. Governed truth-close must bind the final merge SHA after owner-approved merge."
+    "head_sha_note": "Implementation commit containing the corrected decision packet, superseded below by the actual GitHub squash-merge commit for post-merge truth-close.",
+    "merge_sha": "1674924fc3b09bb53f5fbca45834113d4be048dd",
+    "merge_sha_note": "PR #1230 squash-merged to main as 1674924fc3b09bb53f5fbca45834113d4be048dd. Bound during governed post-merge truth-close reconciliation (this PR was merged 2026-07-17T12:43:44Z but its lane manifest was never closed out -- a ghost-lane repair, not new implementation content).",
+    "verified_source_sha": "1674924fc3b09bb53f5fbca45834113d4be048dd",
+    "sha_type": "merge_sha",
+    "ci_sentinels": {
+      "verify": "pass",
+      "test_db": "pass",
+      "r_level": "pass"
+    }
   },
   "scope": {
     "implementation_paths": [
@@ -49,7 +56,25 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "note": "T1 live-DB smoke gate was run even though this lane changes only governance analysis and control-plane evidence. All 7 smoke tests passed and cleaned up their test data; the full live T1 proof suite also completed with one expected stale-provider skip and zero failures. This lane performed no production mutation."
+    "note": "T1 live-DB smoke gate was run even though this lane changes only governance analysis and control-plane evidence. All 7 smoke tests passed and cleaned up their test data; the full live T1 proof suite also completed with one expected stale-provider skip and zero failures. This lane performed no production mutation.",
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
+      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
+      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
+      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
+      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
   },
   "acceptance_criteria": {
     "delegation_policy_contradiction_reported": "PASS",
@@ -59,5 +84,16 @@
     "executor_result_not_claimed_as_independent_approval": "PASS",
     "owner_boundary_preserved": "PASS"
   },
-  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+  "post_merge_truth_close_summary": {
+    "merge_sha": "1674924fc3b09bb53f5fbca45834113d4be048dd",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1230",
+    "merged_at": "2026-07-17T12:43:44Z",
+    "repair_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1254",
+    "lane_manifest_status": "done",
+    "closed_at": "2026-07-19T04:28:27.211Z",
+    "ops_truth_check_verdict": "pass",
+    "ops_truth_check_checked_at": "2026-07-19T04:28:24.547Z",
+    "note": "This is a ghost-lane bookkeeping repair, not new implementation content: PR #1230 merged 2026-07-17T12:43:44Z but docs/06_status/lanes/UTV2-1501.json was never updated to status=done, leaving it occupying an active Claude dispatch slot and counting against the governance lane-type cap. Reconciled via pnpm ops:lane-close --repair-merged (bound status/commit_sha to the actual GitHub merge state), followed by a plain pnpm ops:lane-close UTV2-1501 which produced the real close event above: status=done, closed_at populated, truth-check verdict pass (43/43 checks)."
+  },
+  "verdict": "MERGED_AND_TRUTH_CLOSED"
 }
