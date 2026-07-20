@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1446",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "codex-cli",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1446-db-architecture-decision-packet",
@@ -18,8 +18,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1446/diff-summary.md",
-    "docs/06_status/proof/UTV2-1446/verification.md",
-    "docs/06_status/proof/UTV2-1446/model-routing.json"
+    "docs/06_status/proof/UTV2-1446/verification.md"
   ],
   "status": "started",
   "started_at": "2026-07-19T23:23:13.565Z",

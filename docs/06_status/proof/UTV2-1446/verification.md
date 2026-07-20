@@ -59,6 +59,25 @@ Only `docs/05_operations/DB_ARCHITECTURE_DECISION_PACKET.md` and this issue's
 proof artifacts are modified. No runtime, schema, contract, domain, or
 delivery files are changed.
 
+## Verification
+
+T2 docs-only decision packet — no runtime, DB, or migration code touched.
+`pnpm test:db` was still run for real against live Supabase to satisfy this
+repo's proof-auditor-gate requirement (`--require-executed-command "pnpm
+test:db"` applies unconditionally regardless of lane content), as a
+smoke-test confirmation rather than issue-specific evidence.
+
+```text
+$ pnpm test:db
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
 ## PM gate
 
 Required — infra spend + production data movement, per the issue's own
