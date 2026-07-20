@@ -1,10 +1,8 @@
 # PROOF: UTV2-1562
 
-MERGE_SHA: 92ceefea830fc54c1e7a87ac12bcc9744005dbe6
+MERGE_SHA: e07a64b0ff009f02ad16d9ac77ae91504d7ca089
 
-(This PR has not merged yet -- this is the current pre-merge implementation
-SHA, an ancestor of whatever the eventual merge commit will be, not a
-placeholder.)
+(This is the actual GitHub merge commit for PR #1263, squash-merged to main.)
 
 ## Summary
 
@@ -42,15 +40,33 @@ $ pnpm exec tsx --test scripts/ops/lane-close.test.ts
 ```
 
 ```text
-$ pnpm exec tsc -b tsconfig.json
-(clean, no errors)
+$ pnpm type-check
+(pnpm exec tsc -b tsconfig.json -- clean, no errors)
 
 $ pnpm exec eslint scripts/ops/lane-close.ts scripts/ops/lane-close.test.ts
 (clean, no errors or warnings)
 
+$ pnpm test
+(pnpm exec tsx --test scripts/ops/lane-close.test.ts -- 66/66 pass, see above)
+
 $ pnpm verify:parallel
 (exit 0 -- lint + type-check in parallel, then build + test)
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS -- no R-level artifacts required for this diff
 ```
+
+## Post-merge closeout
+
+Merged to `main` as `e07a64b0` (PR #1263, squash-merge). This proof update is
+post-merge bookkeeping only (lane manifest `pr_url`/`commit_sha`/`status`
+reconciliation + MERGE_SHA rebind) -- no implementation change. The
+post-merge auto-close workflow (`post-merge-lane-close.yml`) could not
+complete this itself because the lane manifest merged to `main` via the
+squash commit never had `pr_url` populated pre-merge (a process gap: the
+lane was started before the PR existed, and the manifest was never updated
+with the PR URL afterward) -- `ops:lane-close --repair-merged` refuses with
+"no pr_url to repair from" until that's fixed, which is what this PR does.
 
 ## Tier
 
