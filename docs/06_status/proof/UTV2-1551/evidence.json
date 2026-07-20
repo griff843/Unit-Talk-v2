@@ -63,7 +63,6 @@
       ".github/workflows/tier-label-apply.yml",
       ".github/workflows/merge-gate.yml",
       "docs/05_operations/REQUIRED_SECRETS.md",
-      "docs/05_operations/REQUIRED_CI_CHECKS.md",
       "scripts/ops/workflow-hardening.test.ts"
     ],
     "branch_protection_changed": false,
@@ -79,7 +78,6 @@
     "merge_gate_gate_job_evaluates_unconditionally_on_pull_request": "PASS",
     "regression_test_asserts_opened_trigger_present": "PASS",
     "superseded_stale_regression_test_updated": "PASS",
-    "required_ci_checks_doc_corrected": "PASS",
     "no_admin_merge_used_as_fix": "PASS",
     "no_required_check_weakened": "PASS",
     "p1_privilege_boundary_corrected_sync_bot_token_removed_from_pull_request_job": "PASS",

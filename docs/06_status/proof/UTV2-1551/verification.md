@@ -49,13 +49,11 @@ itself either.
 - [x] Added a new regression test asserting `merge-gate.yml`'s
   `pull_request.types` includes `opened` and that the gate job's own `if:`
   has no narrower per-type restriction
-- [x] Corrected `docs/05_operations/REQUIRED_CI_CHECKS.md`'s stale Merge Gate
-  trigger-list prose to match the actual (and now updated) trigger types
 - [x] No branch-protection setting, required-status-check context, or
   repository ruleset touched
 - [x] `pnpm verify:parallel` PASS (full local run, exit code 0)
 - [x] `pnpm test:db` PASS (7/7, live Supabase)
-- [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts` PASS (33/33)
+- [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts` PASS (34/34 -- see the P1 addendum below; `docs/05_operations/REQUIRED_CI_CHECKS.md`'s stale Merge Gate trigger-list prose is a known, separate, out-of-scope gap, not corrected by this PR (see addendum's "Known gap" note))
 - [x] `r-level-check` PASS, no artifacts required for this diff
 
 ## EVIDENCE:
@@ -220,6 +218,40 @@ $ pnpm verify
 
 The live P1 thread on this PR should be resolved only after this addendum's
 commit is visible on the PR and CI confirms green -- not before.
+
+### Known gap (out of scope, not fixed by this PR)
+
+`docs/05_operations/REQUIRED_CI_CHECKS.md`'s Merge Gate trigger prose is
+still stale (missing `opened`) as of this update. An earlier commit on this
+branch's history (`0b3fe1cdcaa8e8a00d99186cf604e337f36f5d16`) intended to
+correct it but its diff inverted the change instead of applying it, so the
+file's content is now byte-identical to current `main` and produces no diff
+at all against it. Per instruction, this PR does not broaden its scope to
+re-attempt that doc correction -- it is tracked here as a known, separate
+follow-up rather than silently dropped.
+
+## Update onto current main (2026-07-20)
+
+This PR was updated once onto current protected `main` at commit
+`b1a8cebdb8d268d6d26d3a47096e0d4ecc7e6e36` (merge commit of #1273, itself
+downstream of #1265/#1266/#1269). The merge was clean (no conflicts) and
+did not touch, broaden, or redesign the accepted P1 implementation --
+`tier-label-check.yml`, `tier-label-apply.yml`, `REQUIRED_SECRETS.md`, and
+`workflow-hardening.test.ts` are unchanged in substance from the addendum
+above. `docs/05_operations/REQUIRED_CI_CHECKS.md` was reconciled out of
+this PR's declared scope (lane manifest `files_changed`/`file_scope_lock`
+and this evidence bundle's `scope.implementation_paths`), since it is
+genuinely absent from `git diff origin/main...HEAD` -- it was never
+actually part of this PR's real diff once corrected against current main's
+own copy of the file.
+
+New exact head after this update: see the accompanying executor-result/v1
+comment's `Head SHA:` line, bound to this exact commit. Full governed
+packet (verify, test:db, workflow-hardening tests) rerun and green on this
+head. Any scope override or PM verdict bound to the prior head
+(`da38e5099ca19b922fb9b80443035970ddfeee23`) is stale and must not be
+reused -- a fresh scope override and PM verdict are required against the
+new head.
 
 ## Owner boundary
 

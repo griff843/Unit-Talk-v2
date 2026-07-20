@@ -80,10 +80,49 @@ root causes; this PR supersedes it.
   never depended on the label sync in the first place) and why the real
   effect of omitting `opened` was strictly worse (silent non-evaluation, not
   a race).
-- Corrected `docs/05_operations/REQUIRED_CI_CHECKS.md`'s Merge Gate trigger
-  prose, which was already stale (missing `unlabeled`/`ready_for_review`
-  independent of this change) and is now accurate and includes `opened`
-  with a note on why it was added.
+## P1 privilege-boundary correction (this revision)
+
+Root cause #1's original fix (above) added `secrets.SYNC_BOT_TOKEN` to the
+same `actions/github-script@v7` step in `tier-label-check.yml` whose
+`script:` content is PR-influenced under the `pull_request` trigger.
+GitHub Actions executes a `pull_request`-triggered job using the PR's OWN
+copy of the workflow file — not main's — so a malicious same-repo PR could
+have rewritten that script to exfiltrate or misuse the PAT before any
+review happened. This revision corrects that:
+
+- **`tier-label-check.yml`** (unchanged trigger, `pull_request`) is now
+  **unprivileged**: it holds only the default `GITHUB_TOKEN` and its job
+  only computes the label plan (a read-only manifest lookup, diffed
+  against the PR's current labels, every field validated against a strict
+  allowlist) and uploads it as an artifact. It never mutates labels.
+- **`tier-label-apply.yml`** (new) is the **privileged** consumer. It
+  triggers on `workflow_run` completion of Tier Label Check — a trigger
+  GitHub always evaluates using the protected base branch's own copy of
+  the workflow file, never the triggering PR's — and performs **no
+  checkout of any ref**. It downloads only the label-plan artifact,
+  independently re-validates every field (schema, PR number, head SHA,
+  and label shape) against `github.event.workflow_run.pull_requests[0]`
+  (populated by GitHub server-side; not forgeable by the PR), and only
+  then performs the bounded label mutation using `SYNC_BOT_TOKEN`.
+- `docs/05_operations/REQUIRED_SECRETS.md`'s `SYNC_BOT_TOKEN` entry
+  updated: `used_by` now points at `tier-label-apply.yml` (not
+  `tier-label-check.yml`), with the boundary rationale in `purpose`.
+- New regression coverage in `scripts/ops/workflow-hardening.test.ts`
+  proves `tier-label-check.yml` never references `secrets.SYNC_BOT_TOKEN`
+  anywhere, and that `tier-label-apply.yml` has no checkout step and
+  triggers only on `workflow_run` (never also `pull_request`).
+- Verification: `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`
+  is 34/34.
+
+### Known gap carried forward (not touched by this PR, not this PR's scope)
+
+`docs/05_operations/REQUIRED_CI_CHECKS.md`'s Merge Gate trigger prose is
+still stale (missing `opened`) — an earlier commit on this same branch
+history intended to correct it but its diff inverted the change instead
+of applying it, so the file is currently byte-identical to current `main`
+and shows no diff at all in this PR. Per instruction not to broaden this
+PR's scope beyond the accepted P1 security fix, that doc correction is
+left for separate follow-up rather than re-attempted here.
 
 ## Explicitly not changed
 
