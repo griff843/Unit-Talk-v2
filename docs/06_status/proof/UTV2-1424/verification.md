@@ -1,78 +1,36 @@
-# PROOF: UTV2-1424
+# UTV2-1424 Runtime Verification
 
-MERGE_SHA: cf04801e5545d81697b9f3719cd7a6156bc764f0
-
-(Pre-merge implementation SHA -- an ancestor of the eventual merge commit,
-not a placeholder. A file cannot contain its own commit hash, so this binds
-to the prior content commit per repo convention.)
-
-## Summary
-
-Prepares the reviewable amendment diff for PM ratification of
-`MODEL_EDGE_ACCEPTANCE_STANDARD.md`, cross-checked against the current live
-settled-pick corpus (via `scripts/roi-by-sport.ts --real-edge-only`) rather
-than assumed. The corpus is far below every labeled tier's minimums today, so
-no threshold numbers needed loosening -- the amendment instead closes gaps in
-the ratification/evidence-boundary language (missing/stale evidence must
-fail closed to `UNPROVEN`; ratifying the standard is not P3/P4/launch
-authority) and cross-references it from `LAUNCH_GATE_DEFINITION.md`. PM
-ratifies or amends; this diff does not self-ratify.
-
-## ASSERTIONS:
-
-- [x] Amendment diff prepared against `docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md` and `docs/05_operations/LAUNCH_GATE_DEFINITION.md` only
-- [x] Thresholds cross-checked against the live settled-pick corpus (real measurement below, not assumed)
-- [x] Cross-referenced from `LAUNCH_GATE_DEFINITION.md`'s claim-discipline table so there is one standard, not two
-- [x] No runtime code, schema, or delivery path changed
-- [x] `pnpm verify` PASS
-
-## EVIDENCE:
-
-```text
-$ pnpm type-check
-(clean, no errors)
-```
-
-```text
-$ pnpm test
-# tests 19
-# suites 0
-# pass 19
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-(final sub-suite shown; full aggregate `pnpm test` run exited 0)
-```
-
-```text
-$ pnpm exec tsx scripts/roi-by-sport.ts --real-edge-only --after=1970-01-01 --monitor-json
-tier: "UNPROVEN"
-settledRows: 5
-stakeKnownRows: 0
-clvCoveragePercent: 0
-notes:
-  - "Sample below DEVELOPING minimum of 50 real-edge-backed settled bets"
-  - "CLV coverage below 60% minimum for positive edge labels"
-  - "ROI is not positive"
-```
-
-```text
-$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
-Verdict: PASS
-Rules matched: (none) -- no R-level artifacts required for this diff
-```
+Generated at: 2026-07-20T23:56:38.317Z
+Issue: UTV2-1424
+Tier: T2
+Lane type: governance
+Branch: codex/utv2-1424-ratify-model-edge-acceptance-standard
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1265
+Head SHA: 047e3942a647f8e73259d3ddd4fca0d7dae76603
+Merge SHA: 7e80bd40d2d1d4f7b7a53874930f6568f2505c8c
+result: not_run
 
 ## Verification
+- [ ] `pnpm type-check`: not run by proof-generate
+- [ ] `pnpm test`: not run by proof-generate
+- [ ] `pnpm verify`: not run by proof-generate
+- [ ] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: not run by proof-generate
 
-T2 docs/standard-only lane — no runtime or DB code touched. `pnpm test:db` was
-still run for real against live Supabase to satisfy this repo's proof-auditor-gate
-requirement (`--require-executed-command "pnpm test:db"` applies unconditionally
-regardless of lane content), as a smoke-test confirmation rather than issue-specific
-evidence.
+## Runtime Verification
+- Generated foundation artifact. Replace or append command output when runtime proof is executed.
+
+## SHA Binding
+Head SHA: 047e3942a647f8e73259d3ddd4fca0d7dae76603
+Merge SHA: 7e80bd40d2d1d4f7b7a53874930f6568f2505c8c
+
+## Live-DB proof (T2 docs-only lane, no runtime/DB code touched)
+
+This lane's proof directories are audited by `pnpm exec tsx scripts/ops/proof-auditor-gate.ts --require-executed-command "pnpm test:db"`, which applies unconditionally to every changed proof directory regardless of tier. `pnpm test:db` was run against live Supabase solely to satisfy this gate.
 
 ```text
 $ pnpm test:db
+TAP version 13
+1..7
 # tests 7
 # suites 0
 # pass 7
@@ -81,12 +39,3 @@ $ pnpm test:db
 # skipped 0
 # todo 0
 ```
-
-## PM gate
-
-Required — PM is the ratifying authority, not Claude/Codex. This diff is the
-reviewable amendment only; ratification happens at PM-approved merge.
-
-## Tier
-
-T2 — docs/standard only, no runtime code.
