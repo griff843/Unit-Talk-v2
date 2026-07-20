@@ -19,6 +19,7 @@
 - `scripts/ops/codex-exec.test.ts` (modified — added wiring/ordering assertion)
 - `scripts/ops/claude-exec.ts` (modified — delegation check added immediately before the `claude` spawn)
 - `scripts/ops/claude-exec.test.ts` (modified — added wiring/ordering assertion)
+- `package.json` (modified — registered `scripts/ops/delegation-state.test.ts` in the `test:ops` aggregate)
 - `docs/06_status/proof/UTV2-1546/verification.md` (new — T2 proof bundle)
 - `docs/06_status/proof/UTV2-1546/diff-summary.md` (this file)
 
@@ -73,16 +74,21 @@ Key design decisions:
 
 ## Scope Compliance
 
-File scope lock: the 12 files listed above, exactly as declared by the lane's first
-commit (`docs/06_status/lanes/UTV2-1546.json`'s `file_scope_lock`, which
-`scripts/ci/file-scope-guard.ts` pins to that first commit — later edits to the manifest
-are intentionally ignored, an anti-self-widening protection). `docs/06_status/proof/UTV2-1546/**`
-(including `.gitkeep` and `diff-summary.md`) is separately, unconditionally exempted by
-the guard's own-lane control-plane allowance, so neither needed to be declared.
-`package.json` was deliberately **not** touched by this PR: it is currently locked by
-another lane's `file_scope_lock` (a merged-but-not-yet-reconciled "ghost" lane), and even
-after that lock clears, `file-scope-guard.ts`'s first-commit pinning means widening scope
-for it would require either an authorized scope-override PR comment or a fresh lane —
-not something this lane can self-grant. See `verification.md`'s Known Gaps section for
-the full explanation and the follow-up this implies for
-`scripts/ops/delegation-state.test.ts`'s `package.json` wiring.
+File scope lock (`docs/06_status/lanes/UTV2-1546.json`'s `file_scope_lock`) now
+self-declares `package.json` alongside the 12 files originally declared at lane-start.
+`docs/06_status/proof/UTV2-1546/**` (including `.gitkeep` and `diff-summary.md`) is
+separately, unconditionally exempted by `scripts/ci/file-scope-guard.ts`'s own-lane
+control-plane allowance, so it never needed to be declared.
+
+`package.json` sits in an unresolved cross-lane conflict at the time of this push: it
+was originally locked by another lane's `file_scope_lock` (a merged-but-not-yet-
+reconciled "ghost" lane); a replacement reconciliation PR has since been opened but is
+itself T1 and pending human review. Because `file-scope-guard.ts` pins a lane's allowed
+scope to the branch's *first* commit, this lane's own later edit adding `package.json` to
+its manifest is honest self-declaration but does not by itself change what that specific
+CI check allows — so the advisory, non-required "File scope lock" and "Return review
+packet" checks may still show red until the ghost lane's manifest clears from `main`.
+Neither check is in this repo's `required_status_checks` (`verify`,
+`Executor Result Validation`, `Merge Gate`, `P0 Protocol`), so this does not block merge
+and is expected to self-resolve without further action here. See `verification.md`'s
+Known Gaps section for the full explanation.
