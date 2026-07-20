@@ -41,6 +41,7 @@ export type CloseoutFailureCode =
   | 'pr_sha_mismatch'     // PR merge SHA doesn't match manifest (G2)
   | 'registry_mismatch'   // Linear attachment doesn't include the PR URL (L4)
   | 'truth_check_failed'  // general truth-check failure (catch-all)
+  | 'truth_check_drift'   // manifest's persisted truth-check moved past the result that authorized this close
   | 'infra_error'         // missing token, manifest, or schema error
   | 'repair_required_via_pr'; // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
 
@@ -123,6 +124,10 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'Required token (LINEAR_API_TOKEN or GITHUB_TOKEN) is missing, or the manifest is absent or invalid. Check environment and manifest.';
     case 'truth_check_failed':
       return 'One or more truth-check gates failed. Run `pnpm ops:truth-check <issue-id> --explain` for details.';
+    case 'truth_check_drift':
+      return 'The manifest\'s persisted truth-check history changed, failed, or advanced after the passing ' +
+        'result that authorized this close was computed (a concurrent run likely wrote a newer entry). ' +
+        'Refused to close. Re-run ops:lane-close from a clean state.';
     case 'repair_required_via_pr':
       return 'ops:lane-close --repair-merged produced tracked-file changes while running from a checkout on main. ' +
         'These changes must NOT be committed or pushed directly to main (see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md) -- ' +
@@ -135,6 +140,18 @@ export function remediationForCode(code: CloseoutFailureCode): string {
 const MISSING_COMMIT_SHA_MESSAGE =
   'ERROR: Lane close requires commit_sha — run ops:truth-check first';
 const REPAIR_PREFLIGHT_TOKEN = 'dispatch-auto';
+
+/**
+ * Thrown by finalizeLaneCloseManifest() when the manifest's persisted
+ * truth_check_history no longer matches the passing TruthCheckResult that
+ * authorized this close -- see finalizeLaneCloseManifest's doc comment.
+ */
+export class TruthCheckDriftError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TruthCheckDriftError';
+  }
+}
 
 export function requireCloseCommitSha(manifest: LaneManifest): void {
   if (manifest.status === 'done') {
@@ -150,6 +167,63 @@ export function requireCloseCommitSha(manifest: LaneManifest): void {
   ) {
     throw new Error(MISSING_COMMIT_SHA_MESSAGE);
   }
+}
+
+/**
+ * Applies the terminal `status: 'done'` transition after a passing
+ * `runTruthCheck()` call and persists it.
+ *
+ * `runTruthCheck()` writes its own updated manifest to disk (with the
+ * passing `truth_check_history` entry appended) as a side effect of
+ * running. A caller holding an in-memory manifest snapshot taken *before*
+ * that call is now stale; writing it back verbatim would silently clobber
+ * the just-persisted history entry, leaving the terminal manifest's last
+ * `truth_check_history` record as whatever preceded this run (often a
+ * prior failure) even though the close itself succeeded. This function
+ * re-reads from disk first so the fresh history entry survives the final
+ * write.
+ *
+ * `authorizedTruthCheck` is the passing `TruthCheckResult` that `main()` just
+ * received from `runTruthCheck()`. Re-reading the manifest closes one drift
+ * window but opens another: nothing stops a second process from running its
+ * own truth-check (or a heartbeat re-run) between that call returning and
+ * this function's read, appending a newer entry that failed, differs, or
+ * belongs to a different merge SHA. Writing `status: 'done'` on top of that
+ * would certify a close no operator actually authorized. So this function
+ * verifies the manifest's *last* history entry is still exactly the one
+ * `authorizedTruthCheck` represents (same checked_at, verdict, merge_sha)
+ * before flipping status -- if it isn't, it refuses and throws rather than
+ * silently closing on stale authorization.
+ */
+export function finalizeLaneCloseManifest(
+  issueId: string,
+  authorizedTruthCheck: TruthCheckResult,
+): LaneManifest {
+  const manifest = readManifest(issueId);
+  const history = manifest.truth_check_history ?? [];
+  const latest = history[history.length - 1];
+
+  const matchesAuthorization =
+    latest !== undefined &&
+    latest.verdict === 'pass' &&
+    latest.checked_at === authorizedTruthCheck.checked_at &&
+    latest.merge_sha === authorizedTruthCheck.merge_sha;
+
+  if (!matchesAuthorization) {
+    throw new TruthCheckDriftError(
+      `Refusing to close ${issueId}: manifest's latest truth-check ` +
+        `(${latest ? `${latest.verdict} at ${latest.checked_at}, merge_sha ${latest.merge_sha}` : 'none'}) ` +
+        `no longer matches the passing result that authorized this close ` +
+        `(pass at ${authorizedTruthCheck.checked_at}, merge_sha ${authorizedTruthCheck.merge_sha}). ` +
+        'A concurrent truth-check run must have changed, failed, or advanced it since authorization.',
+    );
+  }
+
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  manifest.heartbeat_at = manifest.closed_at;
+  writeManifest(manifest);
+  return manifest;
 }
 
 export function releaseCloseoutLocks(
@@ -556,10 +630,7 @@ async function main(): Promise<void> {
       process.exit(result.exit_code);
     }
 
-    manifest.status = 'done';
-    manifest.closed_at = new Date().toISOString();
-    manifest.heartbeat_at = manifest.closed_at;
-    writeManifest(manifest);
+    manifest = finalizeLaneCloseManifest(issueId, result);
 
     await transitionLinearIssueToDone(issueId);
     const closeoutLocks = releaseCloseoutLocks(issueId, manifest.branch);
@@ -582,6 +653,18 @@ async function main(): Promise<void> {
       error.message === MISSING_COMMIT_SHA_MESSAGE
     ) {
       console.error(error.message);
+      process.exit(1);
+    }
+
+    if (error instanceof TruthCheckDriftError) {
+      emitJson({
+        ok: false,
+        code: 'truth_check_drift' as CloseoutFailureCode,
+        outcome: 'blocked' satisfies CloseoutOutcome,
+        remediation: remediationForCode('truth_check_drift'),
+        issue_id: issueId,
+        message: error.message,
+      });
       process.exit(1);
     }
 
