@@ -5,13 +5,13 @@
   "tier": "T1",
   "lane_type": "hygiene",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
-  "reviewed_head_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
-  "evidence_commit_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
+  "source_sha": "f24d352d6db8a2a383e222ef6cf770fc6950f92f",
+  "reviewed_head_sha": "f24d352d6db8a2a383e222ef6cf770fc6950f92f",
+  "evidence_commit_sha": "f24d352d6db8a2a383e222ef6cf770fc6950f92f",
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
+    "verified_source_sha": "f24d352d6db8a2a383e222ef6cf770fc6950f92f",
     "verified_source_note": "Continuation of PR #1259, frozen at the T1 bounce limit (5 CHANGES_REQUIRED verdicts) per PM direction. Same already-reviewed content carried forward on a fresh branch from current main.",
     "sha_type": "implementation_sha",
     "ci_sentinels": {
