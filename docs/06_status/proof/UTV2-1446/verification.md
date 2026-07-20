@@ -1,6 +1,10 @@
 # PROOF: UTV2-1446
 
-MERGE_SHA: PLACEHOLDER_REBIND_BEFORE_COMMIT
+MERGE_SHA: 4b22ba65cf2c8687766260b096923de9ac73e109
+
+(Pre-merge implementation SHA -- an ancestor of the eventual merge commit,
+not a placeholder. A file cannot contain its own commit hash, so this binds
+to the prior content commit per repo convention.)
 
 ## Summary
 
