@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a4aa7360948cb417e/.out/worktrees/claude__utv2-1546-delegation-kill-switch",
   "branch": "claude/utv2-1546-delegation-kill-switch",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "f0c3bda609399d3e323b128db0c08ce4f0b86cce",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1269",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DELEGATION_STATE.json",
@@ -29,14 +29,36 @@
     "docs/06_status/proof/UTV2-1546/diff-summary.md",
     "docs/06_status/proof/UTV2-1546/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-20T02:52:53.129Z",
-  "heartbeat_at": "2026-07-20T02:52:53.129Z",
+  "heartbeat_at": "2026-07-20T19:42:30.380Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1546-delegation-kill-switch.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-20T19:42:29.178Z",
+      "verdict": "pass",
+      "merge_sha": "f0c3bda609399d3e323b128db0c08ce4f0b86cce",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1269"
+    },
+    {
+      "checked_at": "2026-07-20T19:42:30.380Z",
+      "verdict": "pass",
+      "merge_sha": "f0c3bda609399d3e323b128db0c08ce4f0b86cce",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1269",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

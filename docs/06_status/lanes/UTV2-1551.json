@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a417329cd2c26eee3/.out/worktrees/claude__utv2-1551-merge-gate-continuation",
   "branch": "claude/utv2-1551-merge-gate-continuation",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1264",
   "files_changed": [
     ".github/workflows/merge-gate.yml",
@@ -36,14 +36,37 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1551/evidence.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-07-19T23:16:17.312Z",
-  "heartbeat_at": "2026-07-19T23:39:05.115Z",
+  "heartbeat_at": "2026-07-20T19:42:36.831Z",
   "closed_at": null,
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1551-merge-gate-continuation.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-20T19:42:35.560Z",
+      "verdict": "pass",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1264"
+    },
+    {
+      "checked_at": "2026-07-20T19:42:36.831Z",
+      "verdict": "pass",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1264",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

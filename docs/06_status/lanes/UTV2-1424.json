@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1424-ratify-model-edge-acceptance-standard",
   "branch": "codex/utv2-1424-ratify-model-edge-acceptance-standard",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "7e80bd40d2d1d4f7b7a53874930f6568f2505c8c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1265",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/LAUNCH_GATE_DEFINITION.md",
@@ -22,14 +22,36 @@
     "docs/06_status/proof/UTV2-1424/verification.md",
     "docs/06_status/proof/UTV2-1424/model-routing.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-19T23:22:33.773Z",
-  "heartbeat_at": "2026-07-19T23:22:33.773Z",
+  "heartbeat_at": "2026-07-20T19:40:23.950Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1424-ratify-model-edge-acceptance-standard.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-20T19:40:18.889Z",
+      "verdict": "pass",
+      "merge_sha": "7e80bd40d2d1d4f7b7a53874930f6568f2505c8c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1265"
+    },
+    {
+      "checked_at": "2026-07-20T19:40:23.950Z",
+      "verdict": "pass",
+      "merge_sha": "7e80bd40d2d1d4f7b7a53874930f6568f2505c8c",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1265",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-terra-medium",

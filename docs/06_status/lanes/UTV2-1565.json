@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1565",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "claude/utv2-1565-ghost-lane-reconciliation",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    ".ops/sync/UTV2-1565.yml",
+    "docs/06_status/lanes/UTV2-1424.json",
+    "docs/06_status/lanes/UTV2-1446.json",
+    "docs/06_status/lanes/UTV2-1546.json",
+    "docs/06_status/lanes/UTV2-1551.json",
+    "docs/06_status/lanes/UTV2-1565.json",
+    "docs/06_status/proof/UTV2-1565/.gitkeep",
+    "docs/06_status/proof/UTV2-1565/diff-summary.md",
+    "docs/06_status/proof/UTV2-1565/verification.md"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1565.yml",
+    "docs/06_status/lanes/UTV2-1424.json",
+    "docs/06_status/lanes/UTV2-1446.json",
+    "docs/06_status/lanes/UTV2-1546.json",
+    "docs/06_status/lanes/UTV2-1551.json",
+    "docs/06_status/lanes/UTV2-1565.json",
+    "docs/06_status/proof/UTV2-1565/.gitkeep",
+    "docs/06_status/proof/UTV2-1565/diff-summary.md",
+    "docs/06_status/proof/UTV2-1565/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1565/diff-summary.md",
+    "docs/06_status/proof/UTV2-1565/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-20T19:44:19.000Z",
+  "heartbeat_at": "2026-07-20T19:44:19.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1565-ghost-lane-reconciliation.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": false
+  }
+}
