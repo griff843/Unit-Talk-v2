@@ -1,5 +1,6 @@
 {
   "issue_id": "UTV2-1424",
+  "merge_sha": "7e80bd40d2d1d4f7b7a53874930f6568f2505c8c",
   "manifest_schema_version": 2,
   "model_profile": "codex-terra-medium",
   "model": "gpt-5.6-terra",

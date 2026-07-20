@@ -42,7 +42,7 @@
   ],
   "status": "merged",
   "started_at": "2026-07-17T03:18:14.806Z",
-  "heartbeat_at": "2026-07-17T21:40:10.449Z",
+  "heartbeat_at": "2026-07-20T23:20:49.529Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
@@ -162,6 +162,24 @@
         "G4"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-20T23:20:15.910Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "G4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-20T23:20:49.529Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

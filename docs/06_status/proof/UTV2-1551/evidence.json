@@ -11,10 +11,10 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "86132abd6edd815d8e0bb542f1fd1f3f3f25756b",
+    "verified_source_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
     "verified_source_note": "Fresh continuation lane opened directly from current main. Carries forward root cause #1 (bot-token cascade fix, previously implemented and PM-reviewed on PR #1247) re-applied cleanly, and adds root cause #2 (merge-gate.yml opened trigger) as new work in this same commit -- the prior PR deferred root cause #2 only because merge-gate.yml was held in a concurrent lane's file-scope lock, and is now stuck at its T1 bounce cap and CONFLICTING against current main, which is why this is a new PR rather than a rebase.",
-    "sha_type": "implementation_sha",
-    "bound_at": "2026-07-19T23:29:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-20T23:18:33.903Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "pending",

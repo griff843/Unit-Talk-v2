@@ -20,12 +20,12 @@
     "docs/06_status/proof/UTV2-1446/diff-summary.md",
     "docs/06_status/proof/UTV2-1446/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-19T23:23:13.565Z",
-  "heartbeat_at": "2026-07-20T19:42:24.080Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-20T23:19:48.121Z",
+  "closed_at": "2026-07-20T23:19:48.121Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1446-db-architecture-decision-packet.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
   "truth_check_history": [
     {
@@ -48,6 +48,26 @@
       "repaired_fields": [
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-20T23:19:45.626Z",
+      "verdict": "pass",
+      "merge_sha": "0ee3e63c35f488f665325ced397425d743ade64d",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1266",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-20T23:19:45.635Z",
+      "verdict": "pass",
+      "merge_sha": "0ee3e63c35f488f665325ced397425d743ade64d",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],

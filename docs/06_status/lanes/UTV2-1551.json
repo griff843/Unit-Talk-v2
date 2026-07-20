@@ -38,7 +38,7 @@
   ],
   "status": "merged",
   "started_at": "2026-07-19T23:16:17.312Z",
-  "heartbeat_at": "2026-07-20T19:42:36.831Z",
+  "heartbeat_at": "2026-07-20T23:20:32.469Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
@@ -65,6 +65,42 @@
         "preflight_token",
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-20T23:19:57.673Z",
+      "verdict": "fail",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [
+        "L3",
+        "R1",
+        "R2",
+        "S1"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-20T23:20:27.899Z",
+      "verdict": "fail",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [
+        "L3",
+        "R1",
+        "R2",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-20T23:20:32.469Z",
+      "verdict": "fail",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [
+        "L3",
+        "R1",
+        "R2",
+        "S1"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],

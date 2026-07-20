@@ -1,26 +1,44 @@
-# Diff Summary — UTV2-1424 Model Edge Acceptance Standard Ratification
+# UTV2-1424 Diff Summary
 
-## Scope
+Generated at: 2026-07-20T23:18:29.196Z
+Issue: UTV2-1424
+Tier: T2
+Lane type: governance
+Branch: codex/utv2-1424-ratify-model-edge-acceptance-standard
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1265
+Head SHA: 047e3942a647f8e73259d3ddd4fca0d7dae76603
+Merge SHA: 7e80bd40d2d1d4f7b7a53874930f6568f2505c8c
+Diff base: 7e80bd40d2d1d4f7b7a53874930f6568f2505c8c^1
+Diff target: 7e80bd40d2d1d4f7b7a53874930f6568f2505c8c
 
-This documentation-only T2 lane ratifies the evidence threshold used for model-edge
-labels. It does not change runtime code, database state, delivery configuration, or
-any constitutional program state.
+## Git Diff Stat
+```
+.ops/sync/UTV2-1424.yml                            | 10 +++
+ docs/05_operations/LAUNCH_GATE_DEFINITION.md       |  8 +-
+ .../MODEL_EDGE_ACCEPTANCE_STANDARD.md              | 31 ++++++--
+ docs/06_status/lanes/UTV2-1424.json                | 48 +++++++++++
+ docs/06_status/proof/UTV2-1424/.gitkeep            |  0
+ docs/06_status/proof/UTV2-1424/diff-summary.md     | 26 ++++++
+ docs/06_status/proof/UTV2-1424/model-routing.json  | 14 ++++
+ docs/06_status/proof/UTV2-1424/verification.md     | 92 ++++++++++++++++++++++
+ 8 files changed, 220 insertions(+), 9 deletions(-)
+```
 
-## Changes
+## Git Name Status
+```
+A	.ops/sync/UTV2-1424.yml
+M	docs/05_operations/LAUNCH_GATE_DEFINITION.md
+M	docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md
+A	docs/06_status/lanes/UTV2-1424.json
+A	docs/06_status/proof/UTV2-1424/.gitkeep
+A	docs/06_status/proof/UTV2-1424/diff-summary.md
+A	docs/06_status/proof/UTV2-1424/model-routing.json
+A	docs/06_status/proof/UTV2-1424/verification.md
+```
 
-- `docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md`
-  - replaces the draft UTV2-999 header with the UTV2-1424 PM-approved-merge
-    ratification boundary;
-  - makes `UNPROVEN` the outcome when the required evidence bundle is missing,
-    stale, or unverifiable; and
-  - makes clear that a model label is not P3/P4 certification or launch authority.
-- `docs/05_operations/LAUNCH_GATE_DEFINITION.md`
-  - requires the Tier B P3 verdict to be evaluated against the active Model Edge
-    Acceptance Standard; and
-  - records that ratifying the standard does not satisfy P3, P4, or a launch tier.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Safety
-
-The ratified threshold is fail-closed. It creates no edge, ROI, CLV, P-state, or
-launch claim. The issue-specific read-only measurement remains `UNPROVEN`: five
-real-edge-backed settled rows, zero CLV coverage, and no stake-based ROI result.
+## SHA Binding
+Head SHA: 047e3942a647f8e73259d3ddd4fca0d7dae76603
+Merge SHA: 7e80bd40d2d1d4f7b7a53874930f6568f2505c8c
