@@ -56,8 +56,8 @@ export interface RepairMergedPrInfo {
 
 export interface RepairMergedManifestResult {
   ok: boolean;
-  code: CloseoutFailureCode | 'already_closed' | 'repaired';
-  outcome: CloseoutOutcome | 'repaired';
+  code: CloseoutFailureCode | 'already_closed' | 'already_repaired' | 'repaired';
+  outcome: CloseoutOutcome | 'already_repaired' | 'repaired';
   manifest: LaneManifest;
   artifact_path: string | null;
   changed_fields: string[];
@@ -332,9 +332,43 @@ export function repairMergedLaneManifest(
   recordChanged(changedFields, manifest.commit_sha, next.commit_sha, 'commit_sha');
   recordChanged(changedFields, manifest.pr_url, next.pr_url, 'pr_url');
 
+  // repairPreflightToken() re-derives its `changed` flag from whether its own
+  // validation threw, not from whether the persisted value actually differs
+  // -- a manifest already resting at the REPAIR_PREFLIGHT_TOKEN sentinel
+  // ('dispatch-auto', which never passes requireExistingFile validation)
+  // reports `changed: true` on every single call even though
+  // next.preflight_token ends up exactly where it started. Comparing values
+  // directly is what actually determines whether this field changed
+  // (UTV2-1564).
+  const previousPreflightToken = manifest.preflight_token;
   const preflightRepair = repairPreflightToken(next, options.repoRoot ?? process.cwd());
-  if (preflightRepair.changed) {
+  if (preflightRepair.changed && next.preflight_token !== previousPreflightToken) {
     changedFields.push('preflight_token');
+  }
+
+  // UTV2-1564: a genuine no-op re-run (e.g. post-merge-lane-close.yml's CI
+  // auto-closer re-triggering --repair-merged against a manifest that was
+  // already correctly repaired) must not append another truth_check_history
+  // entry. Every prior call unconditionally appended one below regardless of
+  // whether status/commit_sha/pr_url/preflight_token actually changed, which
+  // permanently tripped guardRepairAgainstMainCheckout's tracked-file-change
+  // detection on every subsequent call -- once a manifest was correctly
+  // repaired, every future automated repair attempt (including harmless
+  // no-op ones) hit the same main-checkout block forever. If nothing above
+  // actually changed, skip the append and return the manifest exactly as it
+  // already was -- a true no-op, matching the `status === 'done'` early
+  // return above.
+  if (changedFields.length === 0) {
+    return {
+      ok: true,
+      code: 'already_repaired',
+      outcome: 'already_repaired',
+      manifest,
+      artifact_path: null,
+      changed_fields: [],
+      remediation: 'Manifest already reflects this PR\'s authoritative merge state; repair mode made no changes.',
+      pr,
+    };
   }
 
   const historyEntry = {
