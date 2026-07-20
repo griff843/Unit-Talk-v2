@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1424",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "codex-cli",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1424-ratify-model-edge-acceptance-standard",

@@ -63,6 +63,25 @@ Verdict: PASS
 Rules matched: (none) -- no R-level artifacts required for this diff
 ```
 
+## Verification
+
+T2 docs/standard-only lane — no runtime or DB code touched. `pnpm test:db` was
+still run for real against live Supabase to satisfy this repo's proof-auditor-gate
+requirement (`--require-executed-command "pnpm test:db"` applies unconditionally
+regardless of lane content), as a smoke-test confirmation rather than issue-specific
+evidence.
+
+```text
+$ pnpm test:db
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
 ## PM gate
 
 Required — PM is the ratifying authority, not Claude/Codex. This diff is the
