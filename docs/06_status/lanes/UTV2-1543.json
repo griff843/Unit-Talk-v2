@@ -32,10 +32,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1543/evidence.json"
   ],
-  "status": "done",
+  "status": "merged",
   "started_at": "2026-07-19T04:18:00.000Z",
-  "heartbeat_at": "2026-07-19T17:24:19.497Z",
-  "closed_at": "2026-07-19T17:24:19.497Z",
+  "heartbeat_at": "2026-07-20T01:11:41.267Z",
+  "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -103,6 +103,22 @@
       "merge_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
       "failures": [],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-20T01:10:44.907Z",
+      "verdict": "fail",
+      "merge_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+      "failures": [
+        "L3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-20T01:11:41.267Z",
+      "verdict": "pass",
+      "merge_sha": "c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
