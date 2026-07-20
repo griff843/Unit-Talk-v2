@@ -11,7 +11,6 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1263",
   "files_changed": [
     ".ops/sync/UTV2-1562.yml",
-    "docs/06_status/lanes/UTV2-1562.json",
     "docs/06_status/proof/UTV2-1562/.gitkeep",
     "docs/06_status/proof/UTV2-1562/diff-summary.md",
     "docs/06_status/proof/UTV2-1562/verification.md",
@@ -32,12 +31,31 @@
   ],
   "status": "merged",
   "started_at": "2026-07-19T22:40:23.523Z",
-  "heartbeat_at": "2026-07-19T22:40:23.523Z",
+  "heartbeat_at": "2026-07-20T01:07:44.916Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1562-lane-close-finalization-guard.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-20T01:07:17.452Z",
+      "verdict": "fail",
+      "merge_sha": "e07a64b0ff009f02ad16d9ac77ae91504d7ca089",
+      "failures": [
+        "P3",
+        "C4",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-20T01:07:44.916Z",
+      "verdict": "pass",
+      "merge_sha": "e07a64b0ff009f02ad16d9ac77ae91504d7ca089",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

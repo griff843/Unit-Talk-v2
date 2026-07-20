@@ -1,5 +1,7 @@
 # UTV2-1562 — Diff Summary
 
+MERGE_SHA: e07a64b0ff009f02ad16d9ac77ae91504d7ca089
+
 ## Scope
 
 Child issue of UTV2-1553 (T1). Narrow fix to `scripts/ops/lane-close.ts`, split out at PM's direction because the parent issue's tier (T1) cannot be inherited by a narrower fragment without full T1 rigor — see PM verdict on PR #1261.
