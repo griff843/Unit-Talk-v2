@@ -1,0 +1,121 @@
+name: Tier Label Apply
+
+on:
+  workflow_run:
+    workflows: ["Tier Label Check"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  apply-tier-label:
+    name: Apply validated tier label plan
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.event == 'pull_request'
+    steps:
+      # This job holds SYNC_BOT_TOKEN (a repo-scope PAT) because a label
+      # mutation authored by the default GITHUB_TOKEN does not cascade to
+      # trigger other workflows' `labeled`/`unlabeled` events (documented
+      # GitHub Actions behavior), and Merge Gate's own `pull_request:
+      # labeled` trigger depends on that cascade. `workflow_run` is the safe
+      # trigger for this: GitHub always resolves it using the base branch's
+      # own copy of this workflow file, never the triggering PR's, and this
+      # job never checks out any ref -- PR-controlled or otherwise -- so
+      # there is no privileged step here whose behavior a PR can influence.
+      # The only untrusted input is the label-plan artifact produced by
+      # tier-label-check.yml (which DOES run the PR's own script), so every
+      # field is re-validated below independently before being used.
+      - name: Download label plan
+        id: download
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          name: tier-label-plan-${{ github.event.workflow_run.pull_requests[0].number }}
+          path: .tier-label-plan
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Require SYNC_BOT_TOKEN
+        run: |
+          if [ -z "${{ secrets.SYNC_BOT_TOKEN }}" ]; then
+            echo "::error::SYNC_BOT_TOKEN is required for tier-label-apply.yml (UTV2-1551) -- the default GITHUB_TOKEN's label-add event does not cascade to trigger Merge Gate. See docs/05_operations/REQUIRED_SECRETS.md."
+            exit 1
+          fi
+
+      - name: Validate plan and apply labels
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.SYNC_BOT_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const run = context.payload.workflow_run;
+            const associatedPr = (run.pull_requests || [])[0];
+            if (!associatedPr) {
+              core.info('No associated PR on this workflow_run event; nothing to apply.');
+              return;
+            }
+
+            let raw;
+            try {
+              raw = fs.readFileSync('.tier-label-plan/plan.json', 'utf8');
+            } catch (error) {
+              core.info('No label plan artifact found (upstream run produced none); nothing to apply.');
+              return;
+            }
+
+            const plan = JSON.parse(raw);
+
+            // Defense in depth: this artifact was produced by a job that ran
+            // the PR's own (potentially modified) script content. Never
+            // trust its shape -- re-validate every field independently of
+            // whatever the upstream step claimed, and cross-check identity
+            // against the workflow_run event's own record of the associated
+            // PR (populated by GitHub server-side; a PR cannot forge it).
+            if (plan.schema !== 'tier-label-plan/v1') {
+              core.setFailed('Label plan failed schema check.');
+              return;
+            }
+            if (plan.pr_number !== associatedPr.number) {
+              core.setFailed(`Label plan PR number ${plan.pr_number} does not match workflow_run PR ${associatedPr.number}.`);
+              return;
+            }
+            if (plan.head_sha !== associatedPr.head.sha) {
+              core.info(`Label plan head_sha ${plan.head_sha} is stale against current PR head ${associatedPr.head.sha}; skipping (a newer run will supersede this).`);
+              return;
+            }
+            if (!/^(?:UTV2|UNI)-\d+$/.test(String(plan.issue_id))) {
+              core.setFailed('Label plan issue_id failed strict format validation.');
+              return;
+            }
+            const validLabel = (l) => typeof l === 'string' && /^tier:T[123]$/.test(l);
+            const labelsToAdd = Array.isArray(plan.labels_to_add) ? plan.labels_to_add.filter(validLabel) : [];
+            const labelsToRemove = Array.isArray(plan.labels_to_remove) ? plan.labels_to_remove.filter(validLabel) : [];
+
+            if (labelsToAdd.length === 0 && labelsToRemove.length === 0) {
+              core.notice('Label plan requires no changes.');
+              return;
+            }
+
+            for (const label of labelsToRemove) {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: plan.pr_number,
+                name: label,
+              }).catch(error => {
+                if (error.status !== 404) throw error;
+              });
+            }
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: plan.pr_number,
+                labels: labelsToAdd,
+              });
+            }
+            core.notice(`Applied tier label plan for ${plan.issue_id}: +${labelsToAdd.join(',') || '(none)'} -${labelsToRemove.join(',') || '(none)'}`);

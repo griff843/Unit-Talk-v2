@@ -7,38 +7,31 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: write
 
 jobs:
   check-tier-label:
     name: Sync tier label
     runs-on: ubuntu-latest
     steps:
-      # UTV2-1551: labels added via the default GITHUB_TOKEN do not trigger
-      # other workflows' `labeled` events (documented GitHub Actions
-      # behavior for GITHUB_TOKEN-authored events) -- so a fresh PR's
-      # tier-label sync could never cascade into Merge Gate's own
-      # `pull_request: labeled` trigger, leaving Merge Gate never evaluated
-      # until some other push/comment happened to fire it. SYNC_BOT_TOKEN
-      # (an existing PAT, already used by post-merge-lane-close.yml for the
-      # same reason) makes this a real user action GitHub will cascade from.
-      #
-      # Fail-closed, no GITHUB_TOKEN fallback: a silent fallback would
-      # silently reintroduce the exact non-cascading-event bug this secret
-      # exists to fix, with no visible signal that tier-label sync had
-      # quietly stopped triggering Merge Gate again.
-      - name: Require SYNC_BOT_TOKEN
-        run: |
-          if [ -z "${{ secrets.SYNC_BOT_TOKEN }}" ]; then
-            echo "::error::SYNC_BOT_TOKEN is required for tier-label-check.yml (UTV2-1551) -- the default GITHUB_TOKEN's labeled event does not cascade to trigger Merge Gate. See docs/05_operations/REQUIRED_SECRETS.md."
-            exit 1
-          fi
-
-      - name: Sync PR tier label from lane manifest
+      # P1 fix (UTV2-1551 follow-up): this job runs on `pull_request`, which
+      # means GitHub Actions executes this job using the PR's OWN copy of
+      # this workflow file -- not main's. A privileged secret must never be
+      # reachable from a step in this job, because a malicious same-repo PR
+      # could rewrite the step's `script:` to exfiltrate or misuse it before
+      # any review happens. This job therefore holds only the default
+      # GITHUB_TOKEN and never references SYNC_BOT_TOKEN. It only computes
+      # the label plan (read-only) and uploads it as an artifact. The actual
+      # label mutation -- which needs SYNC_BOT_TOKEN so its
+      # `labeled`/`unlabeled` event cascades to trigger Merge Gate -- is
+      # applied by the separate tier-label-apply.yml workflow, which runs on
+      # `workflow_run`: a trigger GitHub always evaluates using the base
+      # branch's own copy of that workflow file (never the PR's), and which
+      # never checks out or executes any PR-controlled code.
+      - name: Resolve authoritative tier and compute label plan
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.SYNC_BOT_TOKEN }}
           script: |
+            const fs = require('fs');
             const pr = context.payload.pull_request;
             const labels = pr.labels.map(l => l.name).filter(Boolean);
             const issueMatch = pr.head.ref.match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
@@ -91,50 +84,74 @@ jobs:
               return `tier:${match[1].toUpperCase()}`;
             }))];
 
+            const labelsToAdd = [];
+            const labelsToRemove = [];
+            let mismatchOnly = false;
+
             if (normalizedTierLabels.length === 0) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                labels: [expected],
-              });
-              core.notice(`Applied ${expected} from authoritative lane manifest for ${issueId}.`);
-              return;
+              labelsToAdd.push(expected);
+            } else {
+              const unexpected = normalizedTierLabels.filter(l => l !== expected);
+              if (unexpected.length > 0 || normalizedTierLabels.length > 1) {
+                labelsToRemove.push(...unexpected);
+                if (!normalizedTierLabels.includes(expected)) {
+                  labelsToAdd.push(expected);
+                }
+              } else if (normalizedTierLabels[0] !== expected) {
+                mismatchOnly = true;
+              }
             }
 
-            const unexpected = normalizedTierLabels.filter(l => l !== expected);
-            if (unexpected.length > 0 || normalizedTierLabels.length > 1) {
-              for (const label of unexpected) {
-                await github.rest.issues.removeLabel({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: pr.number,
-                  name: label,
-                }).catch(error => {
-                  if (error.status !== 404) throw error;
-                });
-              }
-              if (!normalizedTierLabels.includes(expected)) {
-                await github.rest.issues.addLabels({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: pr.number,
-                  labels: [expected],
-                });
-              }
-              core.setFailed(
-                `Tier drift corrected but this run fails closed: authoritative ${expected}, ` +
-                `PR had ${normalizedTierLabels.join(', ')}. Re-run after label sync completes.`
-              );
-              return;
-            }
-
-            if (normalizedTierLabels[0] !== expected) {
+            if (mismatchOnly) {
               core.setFailed(`Tier mismatch: authoritative ${expected}, PR has ${normalizedTierLabels[0]}.`);
               return;
             }
 
+            // Strict allowlist validation before this plan ever leaves this
+            // job. The privileged consumer re-validates independently too
+            // (defense in depth), but nothing invalid should even be
+            // written to the artifact.
+            const validLabel = (l) => /^tier:T[123]$/.test(l);
+            if (!labelsToAdd.every(validLabel) || !labelsToRemove.every(validLabel)) {
+              core.setFailed('Internal error: computed a non-tier label. Refusing to emit label plan.');
+              return;
+            }
+            if (!/^(?:UTV2|UNI)-\d+$/.test(issueId)) {
+              core.setFailed('Internal error: issueId failed strict format validation.');
+              return;
+            }
+
+            const plan = {
+              schema: 'tier-label-plan/v1',
+              pr_number: pr.number,
+              head_sha: pr.head.sha,
+              issue_id: issueId,
+              tier,
+              labels_to_add: labelsToAdd,
+              labels_to_remove: labelsToRemove,
+            };
+            fs.mkdirSync('.tier-label-plan', { recursive: true });
+            fs.writeFileSync('.tier-label-plan/plan.json', JSON.stringify(plan, null, 2));
+
+            if (labelsToAdd.length > 0 || labelsToRemove.length > 0) {
+              core.setFailed(
+                `Tier label drift detected for ${issueId}: authoritative ${expected}, ` +
+                `PR has ${normalizedTierLabels.join(', ') || '(none)'}. ` +
+                'tier-label-apply.yml will apply the correction once this run completes; re-check after it does.'
+              );
+              return;
+            }
+
             core.notice(`Tier label consistent: ${expected} mirrors lane manifest for ${issueId}.`);
+
+      - name: Upload label plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tier-label-plan-${{ github.event.pull_request.number }}
+          path: .tier-label-plan/plan.json
+          retention-days: 1
+          if-no-files-found: ignore
 
       - name: Comment on blocked tier state
         if: failure()

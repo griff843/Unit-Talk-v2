@@ -318,39 +318,109 @@ test('UTV2-1551: merge gate is structurally wired for PM verdict comments and ev
   );
 });
 
-test('UTV2-1551: tier-label-check.yml syncs labels with a token that cascades to other workflows, fail-closed', () => {
-  // Labels added via the default GITHUB_TOKEN don't trigger other
-  // workflows' `labeled` events (documented GitHub Actions behavior), so a
-  // fresh PR's tier-label sync could never cascade into Merge Gate's own
-  // `pull_request: labeled` trigger. SYNC_BOT_TOKEN (already used by
-  // post-merge-lane-close.yml for the same class of problem) fixes this.
-  // No GITHUB_TOKEN fallback: a silent fallback would silently reintroduce
-  // the exact non-cascading-event bug this secret exists to fix.
-  const workflow = readWorkflowYaml('tier-label-check.yml');
-  const jobs = objectField(workflow, 'jobs');
+test('P1 fix (UTV2-1551 follow-up): tier-label-check.yml never references SYNC_BOT_TOKEN anywhere', () => {
+  // tier-label-check.yml runs on `pull_request`, which means GitHub Actions
+  // executes it using the PR's OWN copy of this workflow file -- not
+  // main's. A malicious same-repo PR could rewrite any step's `script:` or
+  // `run:` to exfiltrate or misuse a privileged secret before any review
+  // happens, so this workflow must never reference SYNC_BOT_TOKEN (or any
+  // other privileged secret) in any step, anywhere.
+  const workflow = readWorkflow('tier-label-check.yml');
+  assert.doesNotMatch(
+    workflow,
+    /secrets\.SYNC_BOT_TOKEN/,
+    'tier-label-check.yml (pull_request-triggered) must never actually reference secrets.SYNC_BOT_TOKEN -- label mutation belongs in tier-label-apply.yml (workflow_run-triggered)',
+  );
+
+  const parsed = readWorkflowYaml('tier-label-check.yml');
+  const jobs = objectField(parsed, 'jobs');
   const job = objectField(jobs, 'check-tier-label');
   const steps = job.steps as Array<Record<string, unknown>>;
+
+  for (const step of steps) {
+    const withBlock = (step.with ?? {}) as Record<string, unknown>;
+    assert.strictEqual(
+      withBlock['github-token'],
+      undefined,
+      `${String(step.name)}: no step in tier-label-check.yml may set an explicit github-token -- this job must run with only the default GITHUB_TOKEN`,
+    );
+  }
+});
+
+test('P1 fix (UTV2-1551 follow-up): tier-label-apply.yml applies the label mutation from a privileged, PR-code-free context', () => {
+  // Companion to the test above: the actual label mutation (which needs
+  // SYNC_BOT_TOKEN so its labeled/unlabeled event cascades to trigger
+  // Merge Gate) must live in a workflow that (a) triggers on `workflow_run`
+  // -- always evaluated using the base branch's own copy of the file, never
+  // a PR's -- and (b) never checks out any ref, so no PR content is ever
+  // executed by this privileged job.
+  const raw = readWorkflow('tier-label-apply.yml');
+  const workflow = readWorkflowYaml('tier-label-apply.yml');
+
+  const workflowRun = objectField(objectField(workflow, 'on'), 'workflow_run');
+  assert.deepStrictEqual(
+    stringArrayField(workflowRun, 'workflows'),
+    ['Tier Label Check'],
+    'tier-label-apply.yml must trigger off Tier Label Check completing',
+  );
+  assert.deepStrictEqual(stringArrayField(workflowRun, 'types'), ['completed']);
+  assert.strictEqual(
+    (workflow.on as Record<string, unknown>).pull_request,
+    undefined,
+    'tier-label-apply.yml must not also trigger on pull_request -- that would reintroduce the P1 finding',
+  );
+
+  const jobs = objectField(workflow, 'jobs');
+  const job = objectField(jobs, 'apply-tier-label');
+  const steps = job.steps as Array<Record<string, unknown>>;
+
+  assert.ok(
+    !steps.some((s) => typeof s.uses === 'string' && (s.uses as string).startsWith('actions/checkout@')),
+    'tier-label-apply.yml must not check out any ref -- it holds SYNC_BOT_TOKEN and must never execute PR-controlled code',
+  );
+  assert.doesNotMatch(
+    raw,
+    /pull_request\.head\.sha/,
+    'tier-label-apply.yml must never reference pull_request.head.sha as a trust decision -- the only trusted PR identity here is github.event.workflow_run.pull_requests[0], which GitHub populates server-side',
+  );
 
   const guardStep = steps.find(
     (s) => typeof s.name === 'string' && (s.name as string).includes('Require SYNC_BOT_TOKEN'),
   );
-  assert.ok(guardStep, 'tier-label-check.yml must fail closed if SYNC_BOT_TOKEN is not configured');
+  assert.ok(guardStep, 'tier-label-apply.yml must fail closed if SYNC_BOT_TOKEN is not configured');
   assert.match(
     (guardStep as Record<string, unknown>).run as string,
     /secrets\.SYNC_BOT_TOKEN.*exit 1/s,
     'the SYNC_BOT_TOKEN guard must actually exit non-zero when the secret is unset',
   );
 
-  const syncStep = steps.find(
-    (s) => typeof s.name === 'string' && (s.name as string).includes('Sync PR tier label'),
+  const applyStep = steps.find(
+    (s) => typeof s.name === 'string' && (s.name as string).includes('Validate plan and apply labels'),
   );
-  assert.ok(syncStep, 'tier-label-check.yml must have the tier-label sync step');
-
-  const withBlock = objectField(syncStep as Record<string, unknown>, 'with');
+  assert.ok(applyStep, 'tier-label-apply.yml must have the label-apply step');
+  const withBlock = objectField(applyStep as Record<string, unknown>, 'with');
   assert.strictEqual(
     withBlock['github-token'],
     '${{ secrets.SYNC_BOT_TOKEN }}',
-    'tier label sync must use SYNC_BOT_TOKEN with no GITHUB_TOKEN fallback -- a fallback would silently reintroduce the non-cascading-event bug',
+    'label apply must use SYNC_BOT_TOKEN with no GITHUB_TOKEN fallback -- a fallback would silently reintroduce the non-cascading-event bug',
+  );
+
+  const script = withBlock.script as string;
+  assert.match(script, /plan\.schema !== 'tier-label-plan\/v1'/, 'apply step must validate the artifact schema before trusting it');
+  assert.match(
+    script,
+    /plan\.pr_number !== associatedPr\.number/,
+    'apply step must cross-check the artifact PR number against workflow_run.pull_requests (server-populated, not PR-forgeable)',
+  );
+  assert.match(
+    script,
+    /plan\.head_sha !== associatedPr\.head\.sha/,
+    'apply step must reject a label plan that is stale against the current PR head',
+  );
+  assert.match(
+    script,
+    /\/\^tier:T\[123\]\$\//,
+    'apply step must re-validate every label against the strict tier-label allowlist independently of what the artifact claims',
   );
 });
 

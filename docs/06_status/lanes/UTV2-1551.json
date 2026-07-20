@@ -11,6 +11,7 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1264",
   "files_changed": [
     ".github/workflows/merge-gate.yml",
+    ".github/workflows/tier-label-apply.yml",
     ".github/workflows/tier-label-check.yml",
     ".ops/sync/UTV2-1551.yml",
     "docs/05_operations/REQUIRED_CI_CHECKS.md",
@@ -24,6 +25,7 @@
   ],
   "file_scope_lock": [
     ".github/workflows/merge-gate.yml",
+    ".github/workflows/tier-label-apply.yml",
     ".github/workflows/tier-label-check.yml",
     "docs/05_operations/REQUIRED_CI_CHECKS.md",
     "docs/05_operations/REQUIRED_SECRETS.md",
