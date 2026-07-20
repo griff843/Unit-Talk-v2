@@ -5,12 +5,20 @@ plus a shared strict reader (`scripts/ops/delegation-state.ts`) consulted fail-c
 every autonomous dispatch/execution entry point (`preflight.ts`, `lane-start.ts`,
 `codex-exec.ts`, `claude-exec.ts`).
 
-MERGE_SHA: e9cc7a0e94164c139ae91170965b3bccdcdeb568
+MERGE_SHA: f0c3bda609399d3e323b128db0c08ce4f0b86cce
 
-The SHA above is this lane's pre-merge implementation commit
-(`claude/utv2-1546-delegation-kill-switch`), an ancestor of the eventual PR merge commit
-— per this repo's accepted proof-binding convention, a commit cannot embed the hash of
-the merge commit it will later become part of.
+The SHA above is the squash-merge commit of #1269 (the PR that shipped this
+kill switch), which is an ancestor of this addendum PR's branch (opened
+fresh from `origin/main` after #1269 merged). The original pre-merge
+implementation commit (`e9cc7a0e94164c139ae91170965b3bccdcdeb568`, on the
+now-deleted `claude/utv2-1546-delegation-kill-switch` branch) is NOT an
+ancestor of this branch -- a squash merge does not preserve source-branch
+commits in the target branch's history -- so it cannot bind here even
+though it was the correct binding for PR #1269 itself. Per this repo's
+accepted proof-binding convention, a commit cannot embed the hash of a
+merge commit it will later become part of, and this addendum's own commit
+is not yet merged, so f0c3bda6 (the nearest actual ancestor) is the correct
+binding.
 
 ## Verification
 
