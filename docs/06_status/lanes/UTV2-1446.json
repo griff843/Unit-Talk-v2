@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1446",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1446-db-architecture-decision-packet",
+  "branch": "codex/utv2-1446-db-architecture-decision-packet",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/DB_ARCHITECTURE_DECISION_PACKET.md",
+    "docs/06_status/proof/UTV2-1446/.gitkeep",
+    "docs/06_status/proof/UTV2-1446/diff-summary.md",
+    "docs/06_status/proof/UTV2-1446/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1446/diff-summary.md",
+    "docs/06_status/proof/UTV2-1446/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-19T23:23:13.565Z",
+  "heartbeat_at": "2026-07-19T23:23:13.565Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1446-db-architecture-decision-packet.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1446-db-architecture-decision-packet",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

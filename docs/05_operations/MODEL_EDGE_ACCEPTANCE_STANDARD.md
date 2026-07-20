@@ -1,8 +1,9 @@
-# Model Edge Acceptance Standard — UTV2-999
+# Model Edge Acceptance Standard — UTV2-1424
 
-**Status:** Draft for PM ratification  
-**Owner:** Claude (draft) + PM (ratification)  
-**Effective:** Upon PM merge approval  
+**Status:** ACTIVE upon PM-approved merge
+**Authority:** PM-ratified governance standard (UTV2-1424)
+**Owner:** PM
+**Effective:** The merge commit of the PM-approved UTV2-1424 pull request
 **Supersedes:** All informal "Strong/Elite" edge claims
 
 ---
@@ -10,6 +11,20 @@
 ## Purpose
 
 This document defines the minimum statistical standards that any model, cohort, or pick set must satisfy before an edge label (`Unproven`, `Developing`, `Strong`, `Elite`) or syndicate-readiness claim may be asserted. It is a hard gate — the system must not self-ratify using narrative confidence.
+
+## Ratification Boundary
+
+This standard governs evidence labels only. Its ratification does **not** certify a
+cohort, change any constitutional P-state, authorize delivery, or permit a public
+claim. A cohort remains `UNPROVEN` unless a measurement run demonstrates every
+requirement for the asserted label. P3 certification, P4 economic-truth
+certification, and launch authorization remain separate gates governed by the
+constitution and [Launch Gate Definition](LAUNCH_GATE_DEFINITION.md).
+
+For every non-`UNPROVEN` label, the evidence bundle must identify the cohort,
+measurement window, data-extraction/query version, calculation method, and the
+production commit SHA evaluated. A missing, stale, or unverifiable evidence bundle
+is a failed gate and produces `UNPROVEN`.
 
 ---
 
@@ -208,7 +223,9 @@ ELITE claims require automated monitoring. Manual re-validation alone is not suf
 
 ## Ratification
 
-This standard takes effect upon PM merge approval of the UTV2-999 PR. All prior narrative edge claims are superseded. A measurement run against this standard must be completed within 30 days of ratification.
+This standard takes effect only with the PM-approved merge of UTV2-1424. All prior
+narrative edge claims are superseded. The first measurement run against this
+standard must be completed within 30 days after that merge.
 
-**Draft author:** Claude Sonnet 4.6 (UTV2-999)  
-**PM ratification:** _(signature required at merge)_
+The merge approval is the ratification record; no prose signature, chat statement,
+or self-authored evidence can substitute for it.
