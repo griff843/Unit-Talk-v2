@@ -22,3 +22,20 @@ result: not_run
 ## SHA Binding
 Head SHA: 023c3dc47f107a90c24f592d4add3b4c71ad3265
 Merge SHA: 09f08701848f21cb7949b912134868bb3a5d88b5
+
+## Live-DB proof (T2 docs-only lane, no runtime/DB code touched)
+
+This lane's proof directories are audited by `pnpm exec tsx scripts/ops/proof-auditor-gate.ts --require-executed-command "pnpm test:db"`, which applies unconditionally to every changed proof directory regardless of tier. `pnpm test:db` was run against live Supabase solely to satisfy this gate.
+
+```text
+$ pnpm test:db
+TAP version 13
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
