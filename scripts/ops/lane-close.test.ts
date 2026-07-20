@@ -545,6 +545,85 @@ test('repair merged lane releases an active lease for an already done lane and i
   });
 });
 
+test('UTV2-1564: repair merged lane is a true no-op when the manifest already reflects the PR\'s authoritative state', () => {
+  withTempRepairState(({ repoRoot, artifactRoot }) => {
+    const manifest = createManifest({
+      status: 'merged',
+      commit_sha: 'authoritative-sha',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+      preflight_token: 'dispatch-auto',
+      truth_check_history: [],
+    });
+
+    const result = repairMergedLaneManifest(manifest, {
+      repoRoot,
+      artifactRoot,
+      now: new Date('2026-05-26T04:00:00.000Z'),
+      fetchPr: () => ({
+        url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+        state: 'merged',
+        merged: true,
+        mergeSha: 'authoritative-sha',
+      }),
+    });
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.code, 'already_repaired');
+    assert.strictEqual(result.outcome, 'already_repaired');
+    assert.strictEqual(result.manifest, manifest);
+    assert.deepStrictEqual(result.changed_fields, []);
+    assert.deepStrictEqual(result.manifest.truth_check_history, []);
+    assert.strictEqual(result.artifact_path, null);
+
+    // The main-checkout repair guard must treat this exactly like
+    // "nothing to repair" -- never block a genuine no-op re-run.
+    const guard = guardRepairAgainstMainCheckout(result, { currentBranch: 'main', repoRoot });
+    assert.strictEqual(guard, null);
+  });
+});
+
+test('UTV2-1564: a second --repair-merged call against an already-correctly-repaired manifest does not grow truth_check_history', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const staleManifest = createManifest({
+      status: 'merged',
+      commit_sha: 'stale-sha',
+      preflight_token: tokenPath,
+      truth_check_history: [],
+    });
+    const fetchPr = () => ({
+      url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+      state: 'merged',
+      merged: true,
+      mergeSha: 'authoritative-sha',
+    });
+
+    const firstRun = repairMergedLaneManifest(staleManifest, {
+      repoRoot,
+      artifactRoot,
+      now: new Date('2026-05-26T04:00:00.000Z'),
+      fetchPr,
+    });
+    assert.strictEqual(firstRun.code, 'repaired');
+    assert.strictEqual(firstRun.manifest.truth_check_history.length, 1);
+
+    // Simulates the CI auto-closer (post-merge-lane-close.yml) re-triggering
+    // --repair-merged against the manifest the first run just wrote --
+    // exactly the scenario that permanently tripped
+    // guardRepairAgainstMainCheckout before this fix.
+    const secondRun = repairMergedLaneManifest(firstRun.manifest, {
+      repoRoot,
+      artifactRoot,
+      now: new Date('2026-05-26T05:00:00.000Z'),
+      fetchPr,
+    });
+
+    assert.strictEqual(secondRun.code, 'already_repaired');
+    assert.strictEqual(secondRun.manifest.truth_check_history.length, 1);
+    assert.deepStrictEqual(secondRun.manifest.truth_check_history, firstRun.manifest.truth_check_history);
+    assert.deepStrictEqual(secondRun.changed_fields, []);
+  });
+});
+
 test('repair merged lane does not touch lease/merge-lock state for an already done lane by default', () => {
   withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
     const manifest = createManifest({ status: 'done', commit_sha: null });
