@@ -126,6 +126,56 @@ test('own lane rejects files outside file scope and expected proofs', () => {
   ]);
 });
 
+test('UTV2-1563: a manifest reset to status "merged" is still resolved as the trusted own-lane manifest', () => {
+  // A lane manifest legitimately sits at status "merged" between a PR
+  // merging and ops:lane-close finishing full closure (or after a
+  // deliberate reset from "done" back to "merged" to allow a genuine
+  // re-run of the close). ACTIVE_STATUSES previously excluded "merged",
+  // so the manifest -- and its own file_scope_lock -- became invisible to
+  // this guard during that window, and no scope-override could compensate
+  // either, since overrides only ever apply to an already-active manifest.
+  const result = evaluateFileScopeGuard({
+    prBranch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
+    changedFiles: ['scripts/ci/file-scope-guard.ts'],
+    manifests: [
+      {
+        issue_id: 'UTV2-1495',
+        branch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
+        status: 'merged',
+        file_scope_lock: ['scripts/ci/file-scope-guard.ts'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.outside_scope, []);
+  assert.deepEqual(result.errors, []);
+});
+
+test('UTV2-1563: a manifest at status "merged" still enforces its file_scope_lock, not just passively resolved', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
+    changedFiles: ['apps/api/src/index.ts'],
+    manifests: [
+      {
+        issue_id: 'UTV2-1495',
+        branch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
+        status: 'merged',
+        file_scope_lock: ['scripts/ci/file-scope-guard.ts'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.deepEqual(result.outside_scope, [
+    {
+      file: 'apps/api/src/index.ts',
+      branch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
+      issue_id: 'UTV2-1495',
+    },
+  ]);
+});
+
 test('lane branch without an active own manifest fails closed', () => {
   const result = evaluateFileScopeGuard({
     prBranch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
