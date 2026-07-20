@@ -6,17 +6,43 @@ import path from 'node:path';
 import {
   buildRepairRequiredViaPrPacket,
   ensureCloseoutMergeLock,
+  finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
   mapFailuresToCode,
   repairMergedLaneManifest,
   releaseCloseoutLocks,
   remediationForCode,
   requireCloseCommitSha,
+  TruthCheckDriftError,
   type CloseoutFailureCode,
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import { readAllLeases, reserveLease } from './lease-registry.js';
-import type { LaneManifest } from './shared.js';
+import {
+  MANIFEST_DIR,
+  readManifest,
+  writeManifest,
+  type LaneManifest,
+  type TruthCheckResult,
+} from './shared.js';
+
+function createTruthCheckResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
+  return {
+    schema_version: 1,
+    issue_id: 'UTV2-1001',
+    tier: 'T3',
+    verdict: 'pass',
+    exit_code: 0,
+    merge_sha: 'c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6',
+    pr_url: null,
+    checked_at: '2026-07-19T16:33:59.885Z',
+    checks: [],
+    failures: [],
+    reopen_reasons: [],
+    manifest_path: '',
+    ...overrides,
+  };
+}
 
 function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
   return {
@@ -125,6 +151,122 @@ test('lane close commit guard: already done lane is not retroactively failed', (
   assert.doesNotThrow(() =>
     requireCloseCommitSha(createManifest({ commit_sha: null, status: 'done' })),
   );
+});
+
+test('finalizeLaneCloseManifest preserves a truth_check_history entry written by a concurrent runTruthCheck side effect', () => {
+  // Regression for the exact bug found reconciling UTV2-1543: runTruthCheck()
+  // persists its own updated manifest (with a fresh truth_check_history entry)
+  // as a side effect. A caller holding a manifest snapshot from BEFORE that
+  // call must not write it back verbatim afterward -- that would silently
+  // revert the just-persisted history entry even though the close succeeded.
+  const issueId = 'UTV2-9999999';
+  const manifestPath = path.join(MANIFEST_DIR, `${issueId}.json`);
+  try {
+    // Stale in-memory snapshot a caller might hold from before truth-check ran.
+    const staleSnapshot = createManifest({
+      issue_id: issueId,
+      status: 'merged',
+      truth_check_history: [],
+    });
+    writeManifest(staleSnapshot);
+
+    // Simulate runTruthCheck()'s side effect: it writes ITS OWN updated
+    // manifest to disk, independent of any caller-held in-memory copy.
+    const afterTruthCheck = readManifest(issueId);
+    afterTruthCheck.truth_check_history = [
+      {
+        checked_at: '2026-07-19T16:33:59.885Z',
+        verdict: 'pass',
+        merge_sha: 'c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6',
+        failures: [],
+        runner: 'ops:lane-close',
+      },
+    ];
+    writeManifest(afterTruthCheck);
+
+    const authorizedTruthCheck = createTruthCheckResult({
+      issue_id: issueId,
+      checked_at: '2026-07-19T16:33:59.885Z',
+      merge_sha: 'c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6',
+    });
+    const finalized = finalizeLaneCloseManifest(issueId, authorizedTruthCheck);
+
+    assert.strictEqual(finalized.status, 'done');
+    assert.strictEqual(finalized.truth_check_history.length, 1);
+    assert.strictEqual(finalized.truth_check_history[0].verdict, 'pass');
+    assert.strictEqual(finalized.truth_check_history[0].runner, 'ops:lane-close');
+
+    // What's actually persisted on disk must match -- not just the return value.
+    const onDisk = readManifest(issueId);
+    assert.strictEqual(onDisk.status, 'done');
+    assert.strictEqual(onDisk.truth_check_history.length, 1);
+    assert.strictEqual(onDisk.truth_check_history[0].verdict, 'pass');
+  } finally {
+    fs.rmSync(manifestPath, { force: true });
+  }
+});
+
+test('finalizeLaneCloseManifest refuses to close when the manifest truth-check advanced past the authorized result', () => {
+  // Regression for the PM-flagged Codex P2 on UTV2-1553/PR #1261: a concurrent
+  // truth-check run landing between runTruthCheck() returning a passing result
+  // and finalizeLaneCloseManifest() reading the manifest must not be silently
+  // overwritten by an unconditional status:'done' write. If the manifest's
+  // latest history entry no longer matches the result that authorized this
+  // close (different timestamp, different merge_sha, or a later fail), closing
+  // must be refused rather than certifying a close nobody actually authorized.
+  const issueId = 'UTV2-9999998';
+  const manifestPath = path.join(MANIFEST_DIR, `${issueId}.json`);
+  try {
+    const authorizedTruthCheck = createTruthCheckResult({
+      issue_id: issueId,
+      checked_at: '2026-07-19T16:33:59.885Z',
+      merge_sha: 'c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6',
+    });
+
+    // The manifest this authorization was based on.
+    const beforeConcurrentRun = createManifest({
+      issue_id: issueId,
+      status: 'merged',
+      truth_check_history: [
+        {
+          checked_at: authorizedTruthCheck.checked_at,
+          verdict: 'pass',
+          merge_sha: authorizedTruthCheck.merge_sha,
+          failures: [],
+          runner: 'ops:lane-close',
+        },
+      ],
+    });
+    writeManifest(beforeConcurrentRun);
+
+    // A second truth-check run lands after authorization but before
+    // finalization -- and this one fails.
+    const afterConcurrentRun = readManifest(issueId);
+    afterConcurrentRun.truth_check_history = [
+      ...afterConcurrentRun.truth_check_history,
+      {
+        checked_at: '2026-07-19T16:40:00.000Z',
+        verdict: 'fail',
+        merge_sha: authorizedTruthCheck.merge_sha,
+        failures: ['L3'],
+        runner: 'ops:lane-close',
+      },
+    ];
+    writeManifest(afterConcurrentRun);
+
+    assert.throws(
+      () => finalizeLaneCloseManifest(issueId, authorizedTruthCheck),
+      (error) => error instanceof TruthCheckDriftError,
+    );
+
+    // The manifest must remain exactly as the concurrent run left it -- not done.
+    const onDisk = readManifest(issueId);
+    assert.strictEqual(onDisk.status, 'merged');
+    assert.strictEqual(onDisk.truth_check_history.length, 2);
+    assert.strictEqual(onDisk.truth_check_history[1].verdict, 'fail');
+  } finally {
+    fs.rmSync(manifestPath, { force: true });
+  }
 });
 
 test('lane close releases dispatch lease and merge lock after successful closeout', () => {

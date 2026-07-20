@@ -225,3 +225,20 @@ test('releaseFullVerifyThrottle is idempotent (safe to call when the slot is alr
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// UTV2-1546: delegation kill switch is the very first check preflight performs --
+// before validatePreflightSchemaDependencies(), before any Linear call, and before
+// any baseline verify/test run or preflight-token write. See delegation-state.ts's
+// full behavioral coverage (delegation-state.test.ts) for missing/malformed/
+// suspended/active state handling.
+test('preflight checks delegation before validatePreflightSchemaDependencies and before any token write', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  const delegationCallIndex = source.indexOf("requireDelegationActive('preflight')");
+  const schemaDepsCallIndex = source.indexOf('validatePreflightSchemaDependencies();');
+  assert.ok(delegationCallIndex >= 0, 'preflight.ts must call requireDelegationActive');
+  assert.ok(schemaDepsCallIndex >= 0, 'preflight.ts must still call validatePreflightSchemaDependencies');
+  assert.ok(
+    delegationCallIndex < schemaDepsCallIndex,
+    'delegation kill switch must run before every other preflight check',
+  );
+});

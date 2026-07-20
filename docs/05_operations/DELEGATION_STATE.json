@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "delegation": "suspended",
+  "updated_at": "2026-07-19T00:00:00.000Z",
+  "updated_by": "UTV2-1546",
+  "reason": "Default suspended state pending human ratification of autonomous delegation activation. See Delegation & Accountability v1."
+}
