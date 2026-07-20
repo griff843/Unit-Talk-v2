@@ -1,0 +1,202 @@
+name: Ops — Worker Recovery (narrow, single-attempt)
+
+# UTV2-1560: narrow governed recovery action for the confirmed intermittent
+# Cloudflare/PostgREST RPC-path 502 on the production worker's outbox claim
+# path. This workflow is manual-dispatch ONLY and must never be triggered
+# automatically. PM review of this file is required before any dispatch.
+#
+# Hard boundaries (all enforced in the script below, not just in this
+# comment):
+#   - touches unit-talk-worker-1 ONLY -- no other container
+#   - no env file edits, no delivery target changes
+#   - no deploy, no image pull, no `docker compose up`
+#   - no queue replay, no DB mutation of any kind
+#   - aborts with no action taken if the recent 502 condition is absent
+#   - at most one `docker restart` attempt, ever, per run
+#   - captures pre/post image, restart count, target, health, and logs so
+#     the action is fully auditable from the uploaded artifact alone
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type EXACTLY "restart-worker-if-502-present" to confirm this run may restart unit-talk-worker-1 if (and only if) the recent-502 condition is found'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  recover:
+    name: Restart unit-talk-worker-1 only if a recent 502 condition is present
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Validate confirmation input
+        run: |
+          if [ "${{ inputs.confirm }}" != "restart-worker-if-502-present" ]; then
+            echo "::error::Confirmation phrase did not match exactly. No action taken."
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Capture pre-state, conditionally restart, capture post-state
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            TARGET=unit-talk-worker-1
+            FAILED=0
+
+            echo '=== PRE-STATE ==='
+            echo '--- image / config ---'
+            PRE_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            echo \"\$PRE_LINE\"
+            PRE_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
+            PRE_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
+            PRE_HEALTH=\$(docker inspect \"\$TARGET\" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            echo \"Pre-restart health: \$PRE_HEALTH (none = no healthcheck configured on this container)\"
+            echo '--- configured target (most recent worker.startup line, canonical targets field) ---'
+            PRE_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
+            echo \"\$PRE_TARGET_LINE\"
+            PRE_TARGETS=\$(echo \"\$PRE_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get("targets"), sort_keys=True))' 2>&1) || PRE_TARGETS=\"PARSE_ERROR: \$PRE_TARGETS\"
+            echo \"Parsed pre-restart targets: \$PRE_TARGETS\"
+            echo '--- last 30 log lines ---'
+            docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
+
+            echo ''
+            echo '=== ABORT CHECK: is an ACTUAL recent 502/Bad-Gateway condition on the claim path present? ==='
+            echo '(bounded to the last 15 minutes of logs by timestamp -- old log text, and generic claim_next_outbox failures with no 502 signature (e.g. statement-timeout errors), do not authorize a restart)'
+            RECENT_502=\$(docker logs \"\$TARGET\" --since 15m 2>&1 | grep -icE 'claim_next_outbox failed:.*(502[^0-9]|bad gateway)')
+            echo \"Recent claim_next_outbox+502 line count in the last 15 minutes: \$RECENT_502\"
+
+            if [ \"\$RECENT_502\" -eq 0 ]; then
+              echo ''
+              echo '=== ABORT: no recent (last 15m) 502/Bad-Gateway evidence on the claim path found. Taking NO action. ==='
+              exit 0
+            fi
+
+            echo ''
+            echo '=== CONDITION MET: restarting worker container only (single attempt, no image pull, no compose up, no env change) ==='
+            docker restart \"\$TARGET\"
+            RESTART_EXIT=\$?
+            echo \"docker restart exit code: \$RESTART_EXIT\"
+            if [ \"\$RESTART_EXIT\" -ne 0 ]; then
+              echo '::error::docker restart returned a nonzero exit code -- recovery did NOT succeed.'
+              FAILED=1
+            fi
+
+            echo ''
+            echo '=== waiting up to 60s for the container to report running AND (healthy or no-healthcheck) ==='
+            echo '(status alone is NOT sufficient when a healthcheck is configured on this container -- a running-but-unhealthy container is a failed recovery, not a successful one)'
+            STATUS=unknown
+            HEALTH=unknown
+            for i in \$(seq 1 12); do
+              sleep 5
+              STATUS=\$(docker inspect \"\$TARGET\" --format '{{.State.Status}}' 2>&1)
+              HEALTH=\$(docker inspect \"\$TARGET\" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+              echo \"check \$i: Status=\$STATUS Health=\$HEALTH\"
+              if [ \"\$STATUS\" = 'running' ] && { [ \"\$HEALTH\" = 'healthy' ] || [ \"\$HEALTH\" = 'none' ]; }; then break; fi
+              if [ \"\$HEALTH\" = 'unhealthy' ]; then
+                echo 'Health reported unhealthy -- continuing to poll within the bounded window in case it recovers, but this will fail closed if the window expires in this state.'
+              fi
+            done
+
+            echo ''
+            echo '=== POST-STATE ==='
+            echo '--- image / config ---'
+            POST_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            echo \"\$POST_LINE\"
+            POST_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
+            POST_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
+            echo '--- configured target after restart (canonical targets field) ---'
+            POST_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
+            echo \"\$POST_TARGET_LINE\"
+            POST_TARGETS=\$(echo \"\$POST_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get("targets"), sort_keys=True))' 2>&1) || POST_TARGETS=\"PARSE_ERROR: \$POST_TARGETS\"
+            echo \"Parsed post-restart targets: \$POST_TARGETS\"
+            echo '--- last 30 log lines post-restart ---'
+            docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
+
+            echo ''
+            echo '=== POST-RESTART VERIFICATION (any failure here marks this run FAILED, not just informational) ==='
+
+            if [ \"\$STATUS\" != 'running' ]; then
+              echo \"::error::Container did not reach 'running' status within the 60s wait window (last observed: \$STATUS).\"
+              FAILED=1
+            elif [ \"\$HEALTH\" = 'unhealthy' ]; then
+              echo \"::error::Container is running but Docker reports Health=unhealthy. Status=running alone does not mean recovery succeeded when a healthcheck is configured -- FAILING closed.\"
+              FAILED=1
+            elif [ \"\$HEALTH\" = 'starting' ]; then
+              echo \"::error::Container health never left 'starting' within the 60s wait window -- cannot verify recovery succeeded. FAILING closed rather than treating an unverified state as success.\"
+              FAILED=1
+            elif [ \"\$HEALTH\" != 'healthy' ] && [ \"\$HEALTH\" != 'none' ]; then
+              echo \"::error::Container health is in an unrecognized/unverifiable state (\$HEALTH). FAILING closed.\"
+              FAILED=1
+            else
+              echo \"PASS: container status is running and health is \$HEALTH (healthy, or no healthcheck configured)\"
+            fi
+
+            if [ -n \"\$PRE_IMAGE\" ] && [ \"\$PRE_IMAGE\" = \"\$POST_IMAGE\" ]; then
+              echo \"PASS: image unchanged (\$POST_IMAGE) -- confirms a restart, not a recreation/pull\"
+            else
+              echo \"::error::Image changed across restart (pre=\$PRE_IMAGE post=\$POST_IMAGE) -- this must never happen for a plain docker restart.\"
+              FAILED=1
+            fi
+
+            case \"\$PRE_TARGETS\" in PARSE_ERROR*) echo \"::error::Could not parse pre-restart targets JSON: \$PRE_TARGETS\"; FAILED=1 ;; esac
+            case \"\$POST_TARGETS\" in PARSE_ERROR*) echo \"::error::Could not parse post-restart targets JSON: \$POST_TARGETS\"; FAILED=1 ;; esac
+            if [ -n \"\$PRE_TARGETS\" ] && [ \"\$PRE_TARGETS\" = \"\$POST_TARGETS\" ]; then
+              echo \"PASS: configured worker target(s) unchanged across restart (\$POST_TARGETS) -- compared canonically via the parsed targets field, not the raw log line\"
+            else
+              echo \"::error::Configured worker target changed across restart (pre=[\$PRE_TARGETS] post=[\$POST_TARGETS]).\"
+              FAILED=1
+            fi
+
+            EXPECTED_RESTART_COUNT=\$((PRE_RESTART_COUNT + 1))
+            if [ \"\$POST_RESTART_COUNT\" = \"\$EXPECTED_RESTART_COUNT\" ]; then
+              echo \"PASS: RestartCount advanced by exactly 1 (\$PRE_RESTART_COUNT -> \$POST_RESTART_COUNT), proving exactly one restart transition occurred\"
+            else
+              echo \"::error::RestartCount did not advance by exactly 1 (pre=\$PRE_RESTART_COUNT post=\$POST_RESTART_COUNT, expected=\$EXPECTED_RESTART_COUNT) -- either no restart registered or more than one occurred (e.g. a crash loop).\"
+              FAILED=1
+            fi
+
+            echo ''
+            if [ \"\$FAILED\" -ne 0 ]; then
+              echo '=== RESULT: FAILED -- one or more post-restart verifications did not pass. Treat this recovery as unverified/unsuccessful. ==='
+            else
+              echo '=== RESULT: PASS -- single verified restart transition, image and target unchanged, container running. ==='
+            fi
+            exit \"\$FAILED\"
+          " | tee worker-recovery-${{ github.run_id }}.txt
+          exit "${PIPESTATUS[0]}"
+
+      - name: Upload recovery artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-recovery-${{ github.run_id }}.txt
+          path: worker-recovery-${{ github.run_id }}.txt
+          retention-days: 90
