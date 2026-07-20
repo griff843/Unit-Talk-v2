@@ -11,7 +11,8 @@
  *   0 = Codex completed and PR opened
  *   1 = Codex failed or CLI unavailable
  *   2 = Precondition failed (no manifest, wrong CWD, health check failed, invalid/disabled
- *       model routing, policy-version mismatch, missing manual-override authority)
+ *       model routing, policy-version mismatch, missing manual-override authority,
+ *       delegation suspended -- UTV2-1546, see delegation-state.ts)
  *
  * Model routing (UTV2-1526): the manifest's `model_routing` block (or, for manifests that
  * predate that field, a documented legacy default) is validated against
@@ -33,6 +34,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import { requireDelegationActive } from './delegation-state.js';
 import {
   buildCodexModelArgs,
   resolveLegacyModelRouting,
@@ -47,6 +49,7 @@ interface CodexExecResult {
     | 'CODEX_UNAVAILABLE'
     | 'PRECONDITION_FAILED'
     | 'MODEL_ROUTING_INVALID'
+    | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'DRY_RUN';
@@ -434,6 +437,29 @@ async function main(): Promise<void> {
       issue_id: issueId,
       branch: manifest.branch,
       message: `Worktree CWD does not exist: ${resolvedCwd}. Run pnpm ops:lane-start to set up the worktree.`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
+
+  // UTV2-1546: delegation kill switch, checked immediately before the actual
+  // spawnSync('codex', ...) call below -- as late as possible, so every
+  // precondition/health/model-routing check above still runs and reports its
+  // own specific failure first, but strictly before any new Codex process is
+  // spawned. This is the only place in this file where a NEW executor
+  // process starts: manifest reads, health checks, and the dry-run preview
+  // above are not spawns and are intentionally left ungated (dry-run in
+  // particular remains available as a read-only preview even while
+  // delegation is suspended). Deliberately placed after the dry-run early
+  // return, not before it. Exit code 2 matches this file's existing
+  // PRECONDITION_FAILED convention.
+  const delegationCheck = requireDelegationActive('codex-exec');
+  if (!delegationCheck.ok) {
+    emitJson({
+      ok: false,
+      code: 'DELEGATION_SUSPENDED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: delegationCheck.message,
     } satisfies CodexExecResult);
     process.exit(2);
   }

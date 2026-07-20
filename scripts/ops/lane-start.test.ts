@@ -236,3 +236,42 @@ test('lane-start normalizes verification_target via requireVerificationTarget (U
     `requireVerificationTarget's normalized return value must be reassigned back to verificationTargetFlag, not discarded -- found: "${reassignmentLine}"`,
   );
 });
+
+// UTV2-1546: delegation kill switch must be the very first thing main() does --
+// before argument validation, before the substrate guard, before any lease
+// reservation, worktree creation, or manifest write. See delegation-state.ts's
+// full behavioral coverage (delegation-state.test.ts) for missing/malformed/
+// suspended/active state handling.
+test('lane-start checks delegation before argument validation and before any lease/worktree/manifest side effect', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const tryIndex = source.indexOf('try {');
+  const delegationCallIndex = source.indexOf("requireDelegationActive('lane-start')");
+  const missingArgsIndex = source.indexOf('const missing: string[] = [];');
+  const reserveLeaseIndex = source.indexOf('reserveLease(');
+  const createManifestIndex = source.indexOf('createManifest(');
+
+  assert.ok(delegationCallIndex >= 0, 'lane-start.ts must call requireDelegationActive');
+  assert.ok(tryIndex >= 0 && tryIndex < delegationCallIndex, 'delegation check must be inside the try block');
+  assert.ok(
+    delegationCallIndex < missingArgsIndex,
+    'delegation kill switch must run before argument validation',
+  );
+  assert.ok(
+    delegationCallIndex < reserveLeaseIndex,
+    'delegation kill switch must run before any lease reservation',
+  );
+  assert.ok(
+    delegationCallIndex < createManifestIndex,
+    'delegation kill switch must run before any manifest is created',
+  );
+});
+
+test('lane-start exits non-zero (refuses) when delegation is suspended', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const delegationBlock = source.slice(
+    source.indexOf("requireDelegationActive('lane-start')"),
+    source.indexOf("requireDelegationActive('lane-start')") + 300,
+  );
+  assert.match(delegationBlock, /delegation_suspended/);
+  assert.match(delegationBlock, /process\.exit\(1\)/);
+});

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
 import path from 'node:path';
 import {
   buildClaudePrompt,
@@ -8,7 +9,7 @@ import {
   transcriptPathForIssue,
 } from './claude-exec.js';
 import type { ExecutionPacket } from './execution-packet.js';
-import type { LaneManifest } from './shared.js';
+import { ROOT, type LaneManifest } from './shared.js';
 
 test('checkClaudeHealth accepts a working Claude CLI', () => {
   const health = checkClaudeHealth(() => ({
@@ -95,4 +96,30 @@ test('transcriptPathForIssue creates deterministic per-issue transcript path', (
     transcriptPath,
     path.join(process.cwd(), '.out/ops/claude-exec/UTV2-1200-2026-05-25T123456789Z.log'),
   );
+});
+
+// UTV2-1546: delegation kill switch must gate the actual `claude --print ...` spawn,
+// placed as late as possible so the CLI health check and manifest/precondition checks
+// above still report their own specific failure first. Full behavioral coverage of
+// the state reader itself (missing/malformed/suspended/active) lives in
+// delegation-state.test.ts.
+test('claude-exec checks delegation immediately before spawning claude, and exits 2 when suspended', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'claude-exec.ts'), 'utf8');
+  const dryRunReturnIndex = source.indexOf('printDryRun(');
+  const delegationCallIndex = source.indexOf("requireDelegationActive('claude-exec')");
+  const spawnIndex = source.indexOf("runner('claude', claudeArgs");
+
+  assert.ok(delegationCallIndex >= 0, 'claude-exec.ts must call requireDelegationActive');
+  assert.ok(
+    dryRunReturnIndex >= 0 && dryRunReturnIndex < delegationCallIndex,
+    'delegation check must be placed after the --dry-run early return, so dry-run preview stays available while suspended',
+  );
+  assert.ok(
+    delegationCallIndex < spawnIndex,
+    'delegation kill switch must run strictly before the claude spawn',
+  );
+
+  const delegationBlock = source.slice(delegationCallIndex, delegationCallIndex + 300);
+  assert.match(delegationBlock, /DELEGATION_SUSPENDED/);
+  assert.match(delegationBlock, /return 2/);
 });
