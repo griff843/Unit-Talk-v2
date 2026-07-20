@@ -62,3 +62,24 @@ effect of the lane, not a side effect.
 ## Tier
 
 T2 — lane-manifest metadata only.
+
+## Follow-up (2026-07-20): record lane-close truth-check result
+
+PR #1274 (this issue's own implementation) merged, but this lane's own
+manifest (`docs/06_status/lanes/UTV2-1565.json`) was not itself finalized
+in the same PR -- it still sat at `status: in_review` afterward, which
+counts as active for concurrency-cap purposes. This follow-up commit
+records `ops:lane-manifest record-merge`'s output (`status: merged`,
+`pr_url` bound to #1274) so the lane stops consuming a concurrency slot.
+Pure metadata; no code/runtime change.
+
+```text
+$ npx tsx scripts/ops/lane-manifest.ts record-merge UTV2-1565 --pr 1274 --json
+{
+  "ok": true,
+  "code": "merge_sha_recorded",
+  "issue_id": "UTV2-1565",
+  "status": "merged",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1274"
+}
+```
