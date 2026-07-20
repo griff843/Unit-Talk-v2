@@ -5,12 +5,17 @@ plus a shared strict reader (`scripts/ops/delegation-state.ts`) consulted fail-c
 every autonomous dispatch/execution entry point (`preflight.ts`, `lane-start.ts`,
 `codex-exec.ts`, `claude-exec.ts`).
 
-MERGE_SHA: e9cc7a0e
+MERGE_SHA: e9cc7a0e94164c139ae91170965b3bccdcdeb568
 
 The SHA above is this lane's pre-merge implementation commit
 (`claude/utv2-1546-delegation-kill-switch`), an ancestor of the eventual PR merge commit
 — per this repo's accepted proof-binding convention, a commit cannot embed the hash of
 the merge commit it will later become part of.
+
+## Verification
+
+T2 verification record for UTV2-1546 (delegation kill switch). Assertions and command
+evidence follow below.
 
 ## ASSERTIONS:
 
@@ -27,9 +32,43 @@ the merge commit it will later become part of.
 - [x] Tests cover the "existing-lane-execution" scenario: `codex-exec.ts`/`claude-exec.ts` load the manifest of an already-started lane and still gate the spawn on delegation, strictly before the process spawn
 - [x] `pnpm verify:parallel` is green on this branch
 - [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` returns PASS with no additional required artifacts
+- [x] `pnpm test:db` run for real against live Supabase (this repo's proof-auditor-gate requires it for any changed proof directory regardless of tier; this lane touches no DB code, so the run is a smoke-test confirmation, not issue-specific evidence)
 - [x] `STANDING_GUARDRAILS.md` was not touched (explicitly out of scope per the issue)
 
-## EVIDENCE:
+## Evidence / EVIDENCE:
+
+### pnpm test:db (T2 lane, no DB code touched — run for real against live Supabase to satisfy this repo's mechanical proof-auditor-gate requirement, not because this change touches the database layer)
+
+```
+$ pnpm test:db
+> @unit-talk/v2@0.1.0 test:db
+> tsx --test apps/api/src/database-smoke.test.ts
+
+TAP version 13
+# Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+# Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 102741.768473
+```
 
 ### delegation-state.test.ts (all states: missing / malformed / suspended / active / stale-token / existing-lane-execution)
 
@@ -109,8 +148,8 @@ $ pnpm verify:parallel
 aggregate list (and therefore is not exercised by `pnpm test`/`pnpm verify`'s test step
 directly, only by the standalone `npx tsx --test` invocations above). `package.json` is
 a declared singleton-only path, and at lane-start time it was already locked by another
-active lane's `file_scope_lock` (UTV2-1554, PR already merged on GitHub but not yet
-reconciled to `done` in its lane manifest — a ghost lane). Rather than touch a
+lane's `file_scope_lock` — that lane's PR was already merged on GitHub but its lane
+manifest had not yet been reconciled to `done` (a ghost lane). Rather than touch a
 contested shared file outside this lane's declared scope, this lane ships without that
 one-line registration. Follow-up: once the ghost lane is reconciled, append
 `scripts/ops/delegation-state.test.ts` to the `test:ops` script in `package.json` so
