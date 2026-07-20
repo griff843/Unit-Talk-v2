@@ -11,6 +11,7 @@ import {
   reserveLease,
 } from './lease-registry.js';
 import { evaluateSubstrate, gatherSubstrateFacts } from './substrate-guard.js';
+import { requireDelegationActive } from './delegation-state.js';
 import {
   activeManifestOverlap,
   branchExists,
@@ -202,6 +203,25 @@ function main(): void {
   const docsOnlyFastPath = bools.has('docs-only-fast-path') || flags.has('docs-only-fast-path');
 
   try {
+    // UTV2-1546: delegation kill switch. Independent of, and prior to, every
+    // other check in this function -- including argument validation -- so a
+    // suspended (or missing/malformed) delegation state refuses a new lane
+    // start even when the caller's flags are otherwise incomplete or invalid.
+    // Nothing below this point has run yet: no lease reservation
+    // (reserveLease), no worktree creation (createBranchAndWorktree), no
+    // manifest write (createManifest/writeManifest). This is a governance
+    // brake against runaway automation, not a security boundary -- see
+    // delegation-state.ts's doc comment.
+    const delegationCheck = requireDelegationActive('lane-start');
+    if (!delegationCheck.ok) {
+      emitJson({
+        ok: false,
+        code: 'delegation_suspended',
+        message: delegationCheck.message,
+      });
+      process.exit(1);
+    }
+
     const missing: string[] = [];
     if (!tierInput) {
       missing.push('--tier');

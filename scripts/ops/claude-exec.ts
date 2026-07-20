@@ -12,7 +12,8 @@
  * Exit codes:
  *   0 = Claude completed
  *   1 = Claude failed or CLI unavailable
- *   2 = Precondition failed
+ *   2 = Precondition failed (including delegation suspended -- UTV2-1546,
+ *       see delegation-state.ts)
  */
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
@@ -32,11 +33,18 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import { requireDelegationActive } from './delegation-state.js';
 import { defaultLeaseOwner, heartbeatLease } from './lease-registry.js';
 
 export interface ClaudeExecResult {
   ok: boolean;
-  code: 'SUCCESS' | 'CLAUDE_UNAVAILABLE' | 'PRECONDITION_FAILED' | 'EXECUTION_FAILED' | 'DRY_RUN';
+  code:
+    | 'SUCCESS'
+    | 'CLAUDE_UNAVAILABLE'
+    | 'PRECONDITION_FAILED'
+    | 'DELEGATION_SUSPENDED'
+    | 'EXECUTION_FAILED'
+    | 'DRY_RUN';
   issue_id: string;
   branch?: string;
   message: string;
@@ -285,6 +293,28 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
       issue_id: issueId,
       branch: manifest.branch,
       message: error instanceof Error ? error.message : String(error),
+    } satisfies ClaudeExecResult);
+    return 2;
+  }
+
+  // UTV2-1546: delegation kill switch, checked immediately before the actual
+  // executor spawn below -- as late as possible, so every precondition/health
+  // check above still runs and reports its own specific failure first, but
+  // strictly before any new Claude process is spawned. Manifest reads, the
+  // health check, and the --dry-run early return above are not spawns and
+  // are intentionally left ungated (dry-run remains available as a
+  // read-only preview even while delegation is suspended). The heartbeat
+  // refresh just above is a keepalive on an already-started lane, not a new
+  // executor spawn, so it is also left ungated. Exit code 2 matches this
+  // file's existing PRECONDITION_FAILED convention.
+  const delegationCheck = requireDelegationActive('claude-exec');
+  if (!delegationCheck.ok) {
+    emitJson({
+      ok: false,
+      code: 'DELEGATION_SUSPENDED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: delegationCheck.message,
     } satisfies ClaudeExecResult);
     return 2;
   }
