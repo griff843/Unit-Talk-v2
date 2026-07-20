@@ -270,3 +270,29 @@ test('codex-exec.ts persists evidence before emitting either a SUCCESS or EXECUT
       'this is what prevents a successful Codex run with a dangling, uncommitted evidence file from being reported READY_FOR_REVIEW',
   );
 });
+
+// UTV2-1546: delegation kill switch must gate the actual `codex exec` spawn, placed
+// as late as possible so every precondition/health/model-routing check above still
+// reports its own specific failure first. Full behavioral coverage of the state
+// reader itself (missing/malformed/suspended/active) lives in
+// delegation-state.test.ts.
+test('codex-exec checks delegation immediately before spawning codex, and exits 2 when suspended', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const dryRunExitIndex = source.indexOf("process.exit(0);");
+  const delegationCallIndex = source.indexOf("requireDelegationActive('codex-exec')");
+  const spawnIndex = source.indexOf("spawnSync('codex', codexArgs");
+
+  assert.ok(delegationCallIndex >= 0, 'codex-exec.ts must call requireDelegationActive');
+  assert.ok(
+    dryRunExitIndex >= 0 && dryRunExitIndex < delegationCallIndex,
+    'delegation check must be placed after the --dry-run early return, so dry-run preview stays available while suspended',
+  );
+  assert.ok(
+    delegationCallIndex < spawnIndex,
+    'delegation kill switch must run strictly before the codex spawn',
+  );
+
+  const delegationBlock = source.slice(delegationCallIndex, delegationCallIndex + 300);
+  assert.match(delegationBlock, /DELEGATION_SUSPENDED/);
+  assert.match(delegationBlock, /process\.exit\(2\)/);
+});

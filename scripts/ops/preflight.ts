@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
+import { requireDelegationActive } from './delegation-state.js';
 import {
   type CheckResult,
   type LaneTier,
@@ -182,6 +183,26 @@ async function main(): Promise<number> {
   const headSha = currentHeadSha();
   const checks: CheckResult[] = [];
   const waivers: PreflightWaiver[] = [];
+
+  // UTV2-1546: delegation kill switch. This must run before every other check
+  // below -- including validatePreflightSchemaDependencies(), which is cheap
+  // but is still the first real work this function does -- and long before any
+  // Linear call, baseline verify/test run, or token write. A suspended (or
+  // missing/malformed) delegation state fails preflight closed here,
+  // unconditionally, regardless of tier or any --skip/--waiver-reason
+  // combination (delegation is not a WAIVABLE_CHECKS entry and never will be).
+  // This is a governance brake against runaway automation, not a security
+  // boundary -- see delegation-state.ts's doc comment.
+  const delegationCheck = requireDelegationActive('preflight');
+  if (!delegationCheck.ok) {
+    const result = minimalFailureResult(issueId, branch, tier, 'FAIL', [
+      { id: 'PK1', status: 'fail', detail: delegationCheck.message },
+    ]);
+    writeSidecar(resultPath, result);
+    removeFileIfExists(tokenPath);
+    writeOutput(result, json);
+    return 1;
+  }
 
   const addCheck = (
     id: string,
