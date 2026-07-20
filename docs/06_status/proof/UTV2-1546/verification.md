@@ -5,12 +5,20 @@ plus a shared strict reader (`scripts/ops/delegation-state.ts`) consulted fail-c
 every autonomous dispatch/execution entry point (`preflight.ts`, `lane-start.ts`,
 `codex-exec.ts`, `claude-exec.ts`).
 
-MERGE_SHA: e9cc7a0e94164c139ae91170965b3bccdcdeb568
+MERGE_SHA: f0c3bda609399d3e323b128db0c08ce4f0b86cce
 
-The SHA above is this lane's pre-merge implementation commit
-(`claude/utv2-1546-delegation-kill-switch`), an ancestor of the eventual PR merge commit
-— per this repo's accepted proof-binding convention, a commit cannot embed the hash of
-the merge commit it will later become part of.
+The SHA above is the squash-merge commit of #1269 (the PR that shipped this
+kill switch), which is an ancestor of this addendum PR's branch (opened
+fresh from `origin/main` after #1269 merged). The original pre-merge
+implementation commit (`e9cc7a0e94164c139ae91170965b3bccdcdeb568`, on the
+now-deleted `claude/utv2-1546-delegation-kill-switch` branch) is NOT an
+ancestor of this branch -- a squash merge does not preserve source-branch
+commits in the target branch's history -- so it cannot bind here even
+though it was the correct binding for PR #1269 itself. Per this repo's
+accepted proof-binding convention, a commit cannot embed the hash of a
+merge commit it will later become part of, and this addendum's own commit
+is not yet merged, so f0c3bda6 (the nearest actual ancestor) is the correct
+binding.
 
 ## Verification
 
@@ -189,6 +197,41 @@ $ pnpm test:ops
 # tests 1092
 # suites 6
 # pass 1092
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+## Addendum: human ratification of activation (2026-07-20)
+
+Addendum parent SHA (ancestor of this addendum's own commit, per this repo's
+proof-binding convention -- a commit cannot embed its own hash):
+f0c3bda609399d3e323b128db0c08ce4f0b86cce (merge commit of #1269, the PR that
+shipped the kill switch this addendum activates).
+
+`docs/05_operations/DELEGATION_STATE.json`'s `delegation` field was flipped from
+`suspended` to `active` per griff843's explicit direction, after confirming (via this
+PR's own CI) that the kill switch is wired fail-closed at all four dispatch/exec entry
+points (`preflight.ts`, `lane-start.ts`, `codex-exec.ts`, `claude-exec.ts`) and that
+suspension correctly halted new dispatch as designed. This is the human-ratification
+event `docs/05_operations/DELEGATION_STATE.json`'s own `reason` field anticipates.
+
+The one self-consistency test that hard-coded the shipped file's value
+(`the real shipped DELEGATION_STATE.json parses and defaults to suspended`) was
+rewritten to assert only that the file exists and parses as a well-formed state
+(`active` or `suspended`), not a specific value — the whole point of this file is that
+its value legitimately changes over time as delegation is ratified or suspended.
+
+### Addendum evidence
+
+```
+$ npx tsx --test scripts/ops/delegation-state.test.ts scripts/ops/preflight.test.ts scripts/ops/lane-start.test.ts scripts/ops/codex-exec.test.ts scripts/ops/claude-exec.test.ts
+...
+1..68
+# tests 68
+# suites 0
+# pass 68
 # fail 0
 # cancelled 0
 # skipped 0

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "delegation": "suspended",
-  "updated_at": "2026-07-19T00:00:00.000Z",
-  "updated_by": "UTV2-1546",
-  "reason": "Default suspended state pending human ratification of autonomous delegation activation. See Delegation & Accountability v1."
+  "delegation": "active",
+  "updated_at": "2026-07-20T00:00:00.000Z",
+  "updated_by": "griff843",
+  "reason": "Human ratification of autonomous delegation activation per Delegation & Accountability v1, following UTV2-1546 merge (#1269, f0c3bda6). Kill switch confirmed wired fail-closed at all four dispatch/exec entry points before activation."
 }
