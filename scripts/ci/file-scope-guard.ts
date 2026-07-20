@@ -4,7 +4,13 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const ACTIVE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
+// 'merged' is included so a lane correctly reset to its pre-close state (e.g.
+// during a genuine ops:lane-close repair/reopen cycle) stays resolvable as
+// the trusted scope for its branch -- excluding it made the manifest (and
+// any scope-override, which only ever selects among already-active
+// manifests) invisible to this guard the moment status moved past
+// 'in_review' but before a full 'done' close (UTV2-1563).
+const ACTIVE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
 const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
 
 type GuardVerdict = 'PASS' | 'FAIL';
