@@ -80,7 +80,7 @@ Launch steps are grouped into three tiers. Each tier requires explicit PM approv
 - [ ] Canary audience defined and documented
 - [ ] Monitoring dashboards confirmed live and watched (UTV2-XXXX)
 - [ ] Support/moderation coverage confirmed for canary period
-- [ ] P3 data gate: UTV2-1042 evidence verdict rendered (pass/fail/defer — any outcome, but must be rendered)
+- [ ] P3 data gate: UTV2-1042 evidence verdict rendered against the active [Model Edge Acceptance Standard](MODEL_EDGE_ACCEPTANCE_STANDARD.md) (pass/fail/defer — any outcome, but must be rendered)
 - [ ] Dead-letter and outbox queue classification confirmed (UTV2-1320)
 - [ ] Discord audit complete (UTV2-1319) with no blocking findings
 - [ ] PM Tier B approval explicit
@@ -120,7 +120,7 @@ Launch steps are grouped into three tiers. Each tier requires explicit PM approv
 | Monitoring dashboards live | Recommended | Required | Required |
 | Discord audit (UTV2-1319) | Not required | Required | Required |
 | Queue semantics (UTV2-1320) | Not required | Required | Required |
-| P3 data-gate verdict rendered | Not required | Required | Required |
+| P3 data-gate verdict rendered against the Model Edge Acceptance Standard | Not required | Required | Required |
 | P3 data-gate PASS | Not required | Not required | Required |
 | Burn-in PASS | Not required | Not required | Required |
 | P4 economic cert OR waiver | Not required | Not required | Required |
@@ -144,6 +144,10 @@ Regardless of which launch tier is active, the following claims are **always for
 | Subscription/payment flow | P5 scope + separate PM approval |
 
 Any agent, document, or external communication making these claims without the gate being met is a **P0 protocol violation**.
+
+Ratifying the Model Edge Acceptance Standard establishes the measurement threshold;
+it does not itself satisfy the P3 empirical gate, P4 economic certification, or any
+launch-tier approval.
 
 ---
 

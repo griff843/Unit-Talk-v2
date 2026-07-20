@@ -27,14 +27,21 @@ test('DELEGATION_STATE_PATH points at the canonical docs/05_operations location'
   );
 });
 
-test('the real shipped DELEGATION_STATE.json parses and defaults to suspended', () => {
-  // Self-consistency check on the actual file this lane ships (UTV2-1546):
-  // default-suspended until a human ratifies activation.
+test('the real shipped DELEGATION_STATE.json exists and parses as a well-formed state (never malformed/missing)', () => {
+  // Self-consistency check on the actual file this repo ships (UTV2-1546).
+  // Deliberately does NOT assert a specific `delegation` value: that value is
+  // expected to change over time as a human ratifies or suspends autonomous
+  // delegation (see the file's own `updated_at`/`updated_by`/`reason`
+  // fields). What must always hold is that the shipped file exists and is
+  // strictly well-formed -- never missing, never malformed.
   assert.ok(fs.existsSync(DELEGATION_STATE_PATH), 'DELEGATION_STATE.json must exist on disk');
   const result = readDelegationState();
-  assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.code, 'DELEGATION_SUSPENDED');
-  assert.strictEqual(result.state?.delegation, 'suspended');
+  assert.notStrictEqual(result.code, 'DELEGATION_STATE_MISSING');
+  assert.notStrictEqual(result.code, 'DELEGATION_STATE_MALFORMED');
+  assert.ok(
+    result.state?.delegation === 'active' || result.state?.delegation === 'suspended',
+    'shipped DELEGATION_STATE.json must have a valid delegation value',
+  );
 });
 
 // --- missing file ---
