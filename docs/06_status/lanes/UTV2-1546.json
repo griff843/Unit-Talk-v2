@@ -12,10 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DELEGATION_STATE.json",
-    "docs/06_status/proof/UTV2-1546/.gitkeep",
-    "docs/06_status/proof/UTV2-1546/diff-summary.md",
     "docs/06_status/proof/UTV2-1546/verification.md",
-    "package.json",
     "scripts/ops/claude-exec.test.ts",
     "scripts/ops/claude-exec.ts",
     "scripts/ops/codex-exec.test.ts",

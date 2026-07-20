@@ -127,7 +127,7 @@ $ pnpm lint
 ```
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 14
+Changed files: 16
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
@@ -146,14 +146,28 @@ $ pnpm verify:parallel
 
 `scripts/ops/delegation-state.test.ts` is not wired into `package.json`'s `test:ops`
 aggregate list (and therefore is not exercised by `pnpm test`/`pnpm verify`'s test step
-directly, only by the standalone `npx tsx --test` invocations above). `package.json` is
-a declared singleton-only path, and at lane-start time it was already locked by another
-lane's `file_scope_lock` — that lane's PR was already merged on GitHub but its lane
-manifest had not yet been reconciled to `done` (a ghost lane). Rather than touch a
-contested shared file outside this lane's declared scope, this lane ships without that
-one-line registration. Follow-up: once the ghost lane is reconciled, append
-`scripts/ops/delegation-state.test.ts` to the `test:ops` script in `package.json` so
-CI's `pnpm verify` executes it going forward.
+directly, only by the standalone `npx tsx --test` invocations above, which this proof
+bundle embeds real output from). This is a hard mechanical block, not a soft choice:
+
+1. `package.json` is a declared singleton-only path, and at lane-start time it was
+   already locked by another lane's `file_scope_lock` — that lane's PR (#1250) had
+   already merged on GitHub, but its lane manifest had not been reconciled to `done`
+   (a ghost lane), so it was still counted as active.
+2. Even independent of (1), `scripts/ci/file-scope-guard.ts` (the CI check that
+   mechanically enforces file scope on every PR) pins a lane's allowed scope to
+   whichever `file_scope_lock` array was present in the **first commit** on the branch
+   that added the lane manifest — a deliberate anti-self-widening protection (see the
+   `outside_scope`/ghost-lane handling added under prior scope-guard hardening work).
+   A later commit editing `file_scope_lock` to add `package.json` has no effect on what
+   the guard allows. Widening scope for an already-started lane requires either an
+   authorized scope-override PR comment (`docs/05_operations/schemas/scope-override-v1.md`)
+   from a human/CODEOWNERS reviewer, tied to one specific head SHA, or starting a fresh
+   lane — neither of which this lane can self-grant.
+
+This PR therefore deliberately does not touch `package.json` at all. Follow-up: once the
+ghost lane is reconciled, a small follow-up PR (or an authorized scope-override comment
+on a future push to this branch) can append `scripts/ops/delegation-state.test.ts` to
+`test:ops` so `pnpm verify` executes it going forward.
 
 The `STANDING_GUARDRAILS.md` note mentioned in the issue's broader "Delegation &
 Accountability v1" effort is explicitly out of scope for this lane per the issue text
