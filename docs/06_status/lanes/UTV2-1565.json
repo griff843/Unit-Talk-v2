@@ -35,12 +35,12 @@
     "docs/06_status/proof/UTV2-1565/diff-summary.md",
     "docs/06_status/proof/UTV2-1565/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-20T19:44:19.000Z",
-  "heartbeat_at": "2026-07-20T20:10:43.950Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-20T23:55:24.834Z",
+  "closed_at": "2026-07-20T23:55:24.834Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1565-ghost-lane-reconciliation.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -51,6 +51,26 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1274"
+    },
+    {
+      "checked_at": "2026-07-20T23:55:22.493Z",
+      "verdict": "pass",
+      "merge_sha": "263468a737061e162d07610f33bfdd6d6af6808e",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1274",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-20T23:55:22.502Z",
+      "verdict": "pass",
+      "merge_sha": "263468a737061e162d07610f33bfdd6d6af6808e",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
