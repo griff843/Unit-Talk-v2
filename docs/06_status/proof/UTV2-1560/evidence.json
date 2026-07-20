@@ -5,13 +5,13 @@
   "tier": "T1",
   "lane_type": "hygiene",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
-  "reviewed_head_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
-  "evidence_commit_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
+  "source_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
+  "reviewed_head_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
+  "evidence_commit_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "PLACEHOLDER_REBIND_BEFORE_COMMIT",
+    "verified_source_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
     "verified_source_note": "Continuation of PR #1258, frozen at the T1 bounce limit (4 CHANGES_REQUIRED verdicts) per PM direction. Same already-reviewed content carried forward on a fresh branch from current main.",
     "sha_type": "implementation_sha",
     "ci_sentinels": {
@@ -40,10 +40,22 @@
     "workflow_safety_review": {
       "note": "Same read-only/no-mutation safety review already passed across #1258's review rounds, unchanged in this continuation:",
       "checks": [
-        { "check": "Only SSH commands executed are read-only: getent, dig, curl, openssl s_client, docker network ls/inspect, docker logs, ip route/link, sudo iptables -L / ufw status (best-effort)", "result": "PASS" },
-        { "check": "No docker restart/stop/rm/exec-with-write, no sed/tee/> against .env.production or any config file, no queue/DB write commands", "result": "PASS" },
-        { "check": "Secret values are never echoed -- only hostnames/ports parsed out of URL-style values, DB test is a bare TCP connect with no credentials sent", "result": "PASS" },
-        { "check": "ops-worker-recovery.yml is workflow_dispatch-only -- no automatic/scheduled execution, no trigger on push/PR events, this PR does not dispatch it", "result": "PASS" }
+        {
+          "check": "Only SSH commands executed are read-only: getent, dig, curl, openssl s_client, docker network ls/inspect, docker logs, ip route/link, sudo iptables -L / ufw status (best-effort)",
+          "result": "PASS"
+        },
+        {
+          "check": "No docker restart/stop/rm/exec-with-write, no sed/tee/> against .env.production or any config file, no queue/DB write commands",
+          "result": "PASS"
+        },
+        {
+          "check": "Secret values are never echoed -- only hostnames/ports parsed out of URL-style values, DB test is a bare TCP connect with no credentials sent",
+          "result": "PASS"
+        },
+        {
+          "check": "ops-worker-recovery.yml is workflow_dispatch-only -- no automatic/scheduled execution, no trigger on push/PR events, this PR does not dispatch it",
+          "result": "PASS"
+        }
       ]
     }
   },
