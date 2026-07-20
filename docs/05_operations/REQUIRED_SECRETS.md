@@ -313,6 +313,14 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "purpose": "Readiness flag gating canary and production deploys; deploy.yml fails closed if this is not exactly 'true'."
     },
     {
+      "name": "SYNC_BOT_TOKEN",
+      "required": true,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/post-merge-lane-close.yml", ".github/workflows/tier-label-apply.yml"],
+      "purpose": "PAT (repo scope) from a repo admin/owner, used wherever a workflow action must produce a genuine user-authored GitHub event (push, label) that cascades to trigger other workflows -- the default GITHUB_TOKEN's actions do not trigger further workflow runs (documented GitHub Actions behavior). post-merge-lane-close.yml uses it to push past branch protection; tier-label-apply.yml (UTV2-1551, P1-corrected) uses it so the tier-label sync's `labeled` event can fire Merge Gate's own `pull_request: labeled` trigger. This secret is deliberately kept out of tier-label-check.yml, which runs on `pull_request` and would therefore execute a same-repo PR's own modified copy of that workflow file before any review -- tier-label-apply.yml runs on `workflow_run` instead (always the base branch's own workflow definition), checks out no PR-controlled ref, and only consumes a strictly re-validated label-plan artifact. Fails closed with no GITHUB_TOKEN fallback, since a silent fallback would silently reintroduce the exact non-cascading-event bug this secret exists to fix."
+    },
+    {
       "name": "UNIT_TALK_STAGING_DEPLOY_HOST",
       "required": false,
       "source": "manual",

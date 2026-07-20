@@ -28,7 +28,18 @@ on:
         required: true
         type: number
   pull_request:
-    types: [synchronize, reopened, labeled, unlabeled, ready_for_review]
+    # UTV2-1551: `opened` was missing here, so a brand-new PR got zero Merge
+    # Gate evaluation from PR creation itself -- only from a later
+    # push/label/review/comment event. That could leave a fresh T1/T2 PR
+    # sitting `mergeStateStatus: BLOCKED` with the required "Merge Gate"
+    # check never having run at all (not failed -- never executed), with no
+    # visible signal of why. Adding `opened` makes Merge Gate run and report
+    # a status immediately on PR creation. This does not approve anything
+    # prematurely: the gate job's own logic already fails closed when no
+    # tier label / lane manifest / PM verdict exists yet (see the "Tier
+    # validation failed" and per-tier branches below), which is exactly the
+    # BLOCKED status a truly fresh PR should show.
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   pull_request_review:
     types: [submitted]
   issue_comment:
