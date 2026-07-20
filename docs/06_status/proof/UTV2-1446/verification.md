@@ -1,74 +1,36 @@
-# PROOF: UTV2-1446
+# UTV2-1446 Runtime Verification
 
-MERGE_SHA: 4b22ba65cf2c8687766260b096923de9ac73e109
-
-(Pre-merge implementation SHA -- an ancestor of the eventual merge commit,
-not a placeholder. A file cannot contain its own commit hash, so this binds
-to the prior content commit per repo convention.)
-
-## Summary
-
-Decision packet comparing Supabase-only, self-hosted (Supabase + isolated
-Hetzner research host), and self-hosted-production paths for the production
-DB architecture question. Recommends the hybrid architecture (Supabase OLTP
-authority + one isolated Hetzner research host) as the lowest-cost
-responsibly-deployable path today, per the PM's locked framing. Self-hosting
-production is priced but marked ineligible now because the migration ledger
-is not proven replayable and backup/PITR ownership is not staffed (per the
-sibling migration-ledger-repair issue). No infrastructure, database,
-migration, DNS, secret, or production-state change is made by this diff —
-packet only, PM decision pending.
-
-## ASSERTIONS:
-
-- [x] Side-by-side 12-month cost comparison across all three options
-- [x] Incident-class elimination, operational burden, and migration risk/effort documented per option
-- [x] Explicit recommendation (hybrid) with trigger conditions for revisiting
-- [x] PM decision record present as an explicit `PENDING` gate — no fabricated approval
-- [x] No migration, infrastructure, or production-state work performed under this issue
-- [x] `pnpm verify` PASS
-
-## EVIDENCE:
-
-```text
-$ pnpm type-check
-(clean, no errors)
-```
-
-```text
-$ pnpm test
-# tests 19
-# suites 0
-# pass 19
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-(final sub-suite shown; full aggregate `pnpm test` run exited 0)
-```
-
-```text
-$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
-Verdict: PASS
-Rules matched: (none) -- no R-level artifacts required for this diff
-```
-
-## Scope verification
-
-Only `docs/05_operations/DB_ARCHITECTURE_DECISION_PACKET.md` and this issue's
-proof artifacts are modified. No runtime, schema, contract, domain, or
-delivery files are changed.
+Generated at: 2026-07-20T23:59:19.749Z
+Issue: UTV2-1446
+Tier: T2
+Lane type: governance
+Branch: codex/utv2-1446-db-architecture-decision-packet
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1266
+Head SHA: 5ffa228f88d33b85f888f2edfc61fc5dcd1d272b
+Merge SHA: 0ee3e63c35f488f665325ced397425d743ade64d
+result: not_run
 
 ## Verification
+- [ ] `pnpm type-check`: not run by proof-generate
+- [ ] `pnpm test`: not run by proof-generate
+- [ ] `pnpm verify`: not run by proof-generate
+- [ ] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: not run by proof-generate
 
-T2 docs-only decision packet — no runtime, DB, or migration code touched.
-`pnpm test:db` was still run for real against live Supabase to satisfy this
-repo's proof-auditor-gate requirement (`--require-executed-command "pnpm
-test:db"` applies unconditionally regardless of lane content), as a
-smoke-test confirmation rather than issue-specific evidence.
+## Runtime Verification
+- Generated foundation artifact. Replace or append command output when runtime proof is executed.
+
+## SHA Binding
+Head SHA: 5ffa228f88d33b85f888f2edfc61fc5dcd1d272b
+Merge SHA: 0ee3e63c35f488f665325ced397425d743ade64d
+
+## Live-DB proof (T2 docs-only lane, no runtime/DB code touched)
+
+This lane's proof directories are audited by `pnpm exec tsx scripts/ops/proof-auditor-gate.ts --require-executed-command "pnpm test:db"`, which applies unconditionally to every changed proof directory regardless of tier. `pnpm test:db` was run against live Supabase solely to satisfy this gate.
 
 ```text
 $ pnpm test:db
+TAP version 13
+1..7
 # tests 7
 # suites 0
 # pass 7
@@ -77,14 +39,3 @@ $ pnpm test:db
 # skipped 0
 # todo 0
 ```
-
-## PM gate
-
-Required — infra spend + production data movement, per the issue's own
-acceptance criteria. `PM decision record` in the packet is explicitly
-`PENDING`; this PR does not authorize procurement, migration, or any
-production change.
-
-## Tier
-
-T2 — packet only.
