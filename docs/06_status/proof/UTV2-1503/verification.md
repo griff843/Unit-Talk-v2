@@ -1,26 +1,37 @@
 # PROOF: UTV2-1503
 
-MERGE_SHA: acd1228414f60bf0528294f642137b40394daf01
+MERGE_SHA: e61a7e7f0a8efd707a54b0c7794cf67a2a3a5572
 
 (This is the substantive audit-repair content commit, an ancestor of this
 branch's actual head -- a file cannot bind its own future hash once
 further proof-doc commits land on top of it, per this repo's established
-convention.)
+convention. This SHA was rebound after a 2026-07-21 main-sync rebase onto
+current `main`: the branch was 30 commits behind and missing
+`scripts/ops/executor-result-validate.ts`, which was causing the
+"Executor Result Validator" check to fail with `ERR_MODULE_NOT_FOUND`.
+The rebase replayed this lane's commits on top of current main, so the
+prior MERGE_SHA (`acd1228414f60bf0528294f642137b40394daf01`) is no longer
+an ancestor of this head; `e61a7e7f0a8efd707a54b0c7794cf67a2a3a5572` is
+that same commit's rebased equivalent -- identical message, identical
+audit-doc diff -- and is verified below to be an ancestor of the current
+head.)
 
 ## Summary
 
-The audit repair at substantive commit `acd1228414f60bf0528294f642137b40394daf01` passed the repository gate and the separately required live database smoke. This proof is mechanical executor evidence only. It is not independent Griff review, `t1-approved`, a `pm-verdict/v1`, or merge authorization.
+The audit repair at substantive commit `e61a7e7f0a8efd707a54b0c7794cf67a2a3a5572` (rebased equivalent of the original `acd1228414f60bf0528294f642137b40394daf01`) passed the repository gate and the separately required live database smoke, re-verified after the 2026-07-21 main-sync rebase. This proof is mechanical executor evidence only. It is not independent Griff review, `t1-approved`, a `pm-verdict/v1`, or merge authorization.
 
 ## ASSERTIONS:
 
 - [x] Corrected the observed-facts claim about `governance.yml`'s `forbidden_path_globs` (three entries, not one)
 - [x] Swapped the governance-critical-path list's reference from the retired `proof-auditor-gate.yml` to the active `proof-gate.yml`
 - [x] Both Codex P2 review threads resolved
-- [x] `pnpm verify` PASS (full suite, including live-DB smoke and live T1 proof)
+- [x] Main-synced onto current `main` (was 30 commits behind); this fixed the Executor Result Validator's `ERR_MODULE_NOT_FOUND` failure
+- [x] Re-verified both Codex P2 fixes and the audit's factual claims (forbidden-glob list, active `proof-gate.yml` reference, cited line numbers in `r-level-check.ts`/`truth-check-lib.ts`/`apply-branch-protection.sh`, `docs_authority_map.md` ownership rows) against current `main` post-sync -- no drift found, no doc changes needed
+- [x] `pnpm verify` PASS (full suite, including live-DB smoke and live T1 proof), re-run on this exact post-rebase head
 - [x] `pnpm test:db` PASS (7/7, live Supabase)
 - [x] R-level check PASS, no artifacts required for this diff
 
-## Codex P2 fixes (this revision)
+## Codex P2 fixes (prior revision, still present after main-sync)
 
 - Corrected the observed-facts claim that `governance.yml`'s `forbidden_path_globs` contains only `supabase/migrations/**` — it actually has three entries (`supabase/migrations/**`, `database/migrations/**`, `packages/**/database.types.ts`).
 - Swapped the recommended governance-critical-path list's `proof-auditor-gate.yml` reference (disabled to `workflow_dispatch` only) for `proof-gate.yml` (the active, PR-triggered consolidated Proof Gate) — the list as originally written would have protected a retired workflow name while leaving the active gate editable.
@@ -29,7 +40,14 @@ The audit repair at substantive commit `acd1228414f60bf0528294f642137b40394daf01
 ## EVIDENCE:
 
 - PR: https://github.com/griff843/Unit-Talk-v2/pull/1232
-- Substantive source SHA: `acd1228414f60bf0528294f642137b40394daf01`
+- Substantive source SHA: `e61a7e7f0a8efd707a54b0c7794cf67a2a3a5572` (rebased equivalent of `acd1228414f60bf0528294f642137b40394daf01`)
+- Ancestry check:
+
+```text
+$ git merge-base --is-ancestor e61a7e7f0a8efd707a54b0c7794cf67a2a3a5572 HEAD && echo "IS ANCESTOR"
+IS ANCESTOR
+```
+
 - Changed behavior: none; the lane remains an analysis-only governance audit.
 - Corrected authority model: lane allowlists establish path eligibility, while the Delegation Policy and tier gates establish execution, review, and merge authority.
 - Preserved T1 gate: both `t1-approved` and a valid Griff-authored, reviewed-head-bound `pm-verdict/v1` APPROVED artifact remain mandatory.
