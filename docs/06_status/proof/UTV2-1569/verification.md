@@ -1,6 +1,6 @@
 # PROOF: UTV2-1569
 
-MERGE_SHA: 734be3bd20bd45f12e4a31ea16e6732c457e529c
+MERGE_SHA: 98676e70fd7066f7c0b87d89144a4d826a3f862d
 
 (This is this branch's actual head at the time this proof was written — see the
 accompanying executor-result/v1 comment for confirmation this matches the PR's
@@ -10,6 +10,15 @@ current head.)
 
 Enforceable Fable 5 pilot routing, cap, evidence, expiry, and rollback. See
 `diff-summary.md` for the full file list and rationale.
+
+## Verification
+
+This is a docs/governance/ops-tooling diff — no runtime code path changed. Per this
+repo's precedent for doc-only/governance T1 lanes (UTV2-1503, UTV2-1568), the
+standalone live-DB smoke (`pnpm test:db`) is still run for real against Supabase
+rather than waived, and the full `pnpm verify` pipeline (env:check, lint, type-check,
+build, test, live-DB suites) passes at exit code 0 on this exact head. See the
+EVIDENCE section below for the literal terminal output of both.
 
 ## ASSERTIONS:
 
@@ -55,43 +64,43 @@ TAP version 13
 # Subtest: database repository bundle persists a submission and settlement when Supabase is configured
 ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
   ---
-  duration_ms: 17367.608779
+  duration_ms: 17503.55968
   type: 'test'
   ...
 # Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
 ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
   ---
-  duration_ms: 16979.496818
+  duration_ms: 16635.338492
   type: 'test'
   ...
 # Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
 ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
   ---
-  duration_ms: 16337.517773
+  duration_ms: 17955.507071
   type: 'test'
   ...
 # Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
 ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
   ---
-  duration_ms: 15288.704961
+  duration_ms: 17035.685429
   type: 'test'
   ...
 # Subtest: UTV2-883: no duplicate participants for the same external_id and sport
 ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
   ---
-  duration_ms: 816.694676
+  duration_ms: 778.269337
   type: 'test'
   ...
 # Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
 ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
   ---
-  duration_ms: 16407.463785
+  duration_ms: 17997.640969
   type: 'test'
   ...
 # Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
 ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
   ---
-  duration_ms: 16155.643244
+  duration_ms: 17264.165392
   type: 'test'
   ...
 1..7
@@ -102,7 +111,7 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 99920.143595
+# duration_ms 105719.830367
 ```
 
 Ran against Supabase project `zfzdnfwdarxucxtaojxm` using the repository's existing
@@ -123,7 +132,7 @@ scripts/ops/fable-pilot-rollback.test.ts      7 pass, 0 fail
 scripts/ops/shared.test.ts                   43 pass, 0 fail (7 new planning_model_routing tests)
 scripts/ops/lane-start.test.ts               17 pass, 0 fail (5 new fable-routing wiring tests)
 scripts/ops/truth-check-lib.test.ts          59 pass, 0 fail (6 new Fable evidence tests)
-scripts/ops/contract-validator.test.ts       53 pass, 0 fail (claude-fable-5 model-ID validation)
+scripts/ops/contract-validator.test.ts       56 pass, 0 fail (claude-fable-5 model-ID validation)
 ```
 
 ## R-level compliance

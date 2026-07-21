@@ -5,16 +5,16 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
-  "reviewed_head_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
-  "evidence_commit_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
-  "current_head_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
+  "source_sha": "98676e70fd7066f7c0b87d89144a4d826a3f862d",
+  "reviewed_head_sha": "98676e70fd7066f7c0b87d89144a4d826a3f862d",
+  "evidence_commit_sha": "98676e70fd7066f7c0b87d89144a4d826a3f862d",
+  "current_head_sha": "98676e70fd7066f7c0b87d89144a4d826a3f862d",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
-    "verified_source_note": "Real implementation following the pilot-evaluation issue's PILOT LONGER conclusion; a prior doc-only attempt was closed unmerged after being found non-executable.",
+    "verified_source_sha": "98676e70fd7066f7c0b87d89144a4d826a3f862d",
+    "verified_source_note": "Real implementation following the pilot-evaluation issue's PILOT LONGER conclusion; a prior doc-only attempt was closed unmerged after being found non-executable. This head follows a fix commit that dropped a persistent agent file after the File Scope Lock CI check correctly rejected a mid-lane scope expansion.",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-21T21:35:00.000Z",
+    "bound_at": "2026-07-21T22:05:00.000Z",
     "ci_sentinels": {
       "verify": "pass",
       "test_db": "pass"
@@ -44,7 +44,7 @@
       "shared.test.ts": { "pass": 43, "fail": 0, "new_tests": 7 },
       "lane-start.test.ts": { "pass": 17, "fail": 0, "new_tests": 5 },
       "truth-check-lib.test.ts": { "pass": 59, "fail": 0, "new_tests": 6 },
-      "contract-validator.test.ts": { "pass": 57, "fail": 0 }
+      "contract-validator.test.ts": { "pass": 56, "fail": 0 }
     }
   },
   "runtime_proof": {
@@ -92,6 +92,7 @@
   },
   "known_gaps": [
     "docs/05_operations/LANE_MANIFEST_SPEC.md's planned Section 17 addition documenting planning_model_routing was dropped from this diff because a live, concurrently-running lane (UTV2-1571) held an active file-scope lease on that exact file at implementation time. The field is documented in the JSON schema and in three-brain.md/OPERATING_MODEL_SONNET5.md instead.",
-    "The pilot itself has not been activated and has not run a single real qualifying task -- the mechanism is proven correct by unit test, not live pilot usage, since activation is explicitly out of this lane's scope."
+    "The pilot itself has not been activated and has not run a single real qualifying task -- the mechanism is proven correct by unit test, not live pilot usage, since activation is explicitly out of this lane's scope.",
+    "An earlier commit on this branch registered a persistent .claude/agents/fable-pilot-reviewer.md subagent and a corresponding docs/05_operations/system-alignment-registry.json entry; the File Scope Lock CI check correctly rejected the resulting mid-lane scope expansion (that check reads file_scope_lock from the lane's first commit only, by design). Fixed by dropping the persistent agent entirely -- the advisory Fable review is now an ad-hoc background Agent() call in dispatch.md Phase 5, needing no registry entry."
   ]
 }
