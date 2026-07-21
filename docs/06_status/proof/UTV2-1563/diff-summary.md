@@ -1,53 +1,42 @@
-# UTV2-1563 — Diff Summary
+# UTV2-1563 Diff Summary
 
+Generated at: 2026-07-21T00:00:42.656Z
 Issue: UTV2-1563
 Tier: T2
 Lane type: hygiene
-Branch: `claude/utv2-1563-active-statuses-merged`
+Branch: claude/utv2-1563-active-statuses-merged
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1276
+Head SHA: 9e04b68d8bd68b0c33ad914a67d42d429e7c1d63
+Merge SHA: 018eac57c1c4589e99de81d157319295e03226a8
+Diff base: 018eac57c1c4589e99de81d157319295e03226a8^1
+Diff target: 018eac57c1c4589e99de81d157319295e03226a8
 
-## Root cause
+## Git Diff Stat
+```
+.ops/sync/UTV2-1563.yml                        | 10 +++++
+ docs/06_status/lanes/UTV2-1563.json            | 39 +++++++++++++++++
+ docs/06_status/proof/UTV2-1563/.gitkeep        |  0
+ docs/06_status/proof/UTV2-1563/diff-summary.md | 53 +++++++++++++++++++++++
+ docs/06_status/proof/UTV2-1563/verification.md | 60 ++++++++++++++++++++++++++
+ scripts/ci/file-scope-guard.test.ts            | 50 +++++++++++++++++++++
+ scripts/ci/file-scope-guard.ts                 |  8 +++-
+ 7 files changed, 219 insertions(+), 1 deletion(-)
+```
 
-`scripts/ci/file-scope-guard.ts`'s `ACTIVE_STATUSES` set excluded `'merged'`.
-`resolveTrustedManifests()` resolves manifest *content* trustworthily
-regardless of status, but `activeManifests()` (the actual consumer used by
-`evaluateFileScopeGuard`) filters that trusted set down to
-`ACTIVE_STATUSES` before resolving a PR's own manifest or checking for
-cross-lane overlaps. A manifest correctly sitting at `status: 'merged'`
-(the normal state between a PR merging and `ops:lane-close` completing
-full closure, or after a deliberate reset from `'done'` back to `'merged'`
-to allow a genuine repair re-run) fell out of this filter entirely --
-its own `file_scope_lock` could no longer be resolved as the trusted
-scope for that branch, and no `scope-override/v1` comment could
-compensate either, since the override mechanism only ever selects among
-manifests already in the active set.
+## Git Name Status
+```
+A	.ops/sync/UTV2-1563.yml
+A	docs/06_status/lanes/UTV2-1563.json
+A	docs/06_status/proof/UTV2-1563/.gitkeep
+A	docs/06_status/proof/UTV2-1563/diff-summary.md
+A	docs/06_status/proof/UTV2-1563/verification.md
+M	scripts/ci/file-scope-guard.test.ts
+M	scripts/ci/file-scope-guard.ts
+```
 
-Reproduced live during UTV2-1543 continuation work (2026-07-19/20): a
-manifest reset from `done` back to `merged` briefly fell out of
-file-scope-guard's trusted set until the close cycle completed.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Fix
-
-- `scripts/ci/file-scope-guard.ts`: added `'merged'` to `ACTIVE_STATUSES`.
-- `scripts/ci/file-scope-guard.test.ts`: two new regression tests --
-  (1) a manifest at `status: 'merged'` is still resolved as the trusted
-  own-lane manifest (no "No active lane manifest found" error), and
-  (2) that manifest's `file_scope_lock` is still actively enforced (an
-  out-of-scope file still fails), proving the fix doesn't just silence the
-  missing-manifest error but genuinely restores enforcement.
-
-## Files changed
-
-- `scripts/ci/file-scope-guard.ts`
-- `scripts/ci/file-scope-guard.test.ts`
-- `docs/06_status/proof/UTV2-1563/diff-summary.md`, `verification.md`
-
-## Explicitly not changed
-
-- `scripts/ops/shared.ts`'s separate `ACTIVE_LOCK_STATUSES` constant
-  (used by the concurrency checker, substrate-guard, and other
-  consumers) already excludes `'merged'` too, and that exclusion is
-  actually *correct* for concurrency-cap purposes -- a merged lane should
-  stop counting against the cap. That constant is out of this issue's
-  scope; this fix is narrowly targeted at `file-scope-guard.ts`'s own,
-  separate `ACTIVE_STATUSES` constant, which exists purely to resolve
-  trusted scope, not to gate concurrency.
+## SHA Binding
+Head SHA: 9e04b68d8bd68b0c33ad914a67d42d429e7c1d63
+Merge SHA: 018eac57c1c4589e99de81d157319295e03226a8
