@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1568",
+  "title": "Bounded Fable 5 pilot (8 tasks/30 days, advisory-only) -- not permanent reinstatement",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "2924f327b531a3e9fa3b3df0dc43180861fa440e",
+  "reviewed_head_sha": "2924f327b531a3e9fa3b3df0dc43180861fa440e",
+  "evidence_commit_sha": "2924f327b531a3e9fa3b3df0dc43180861fa440e",
+  "current_head_sha": "2924f327b531a3e9fa3b3df0dc43180861fa440e",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "2924f327b531a3e9fa3b3df0dc43180861fa440e",
+    "verified_source_note": "Revised from an earlier permanent-reinstatement draft (37db27d7, adversarially reviewed BLOCK then PASS) into a bounded, advisory-only pilot per direct PM instruction.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-21T15:00:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1568-fable5-routing-reinstatement",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    }
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "note": "Docs/governance-only diff -- no runtime, workflow, or hook behavior changed by this lane."
+  },
+  "model_routing": {
+    "decision_type": "fable_pilot_authorization",
+    "pilot_cap": {
+      "max_qualifying_tasks": 8,
+      "max_days": 30
+    },
+    "binding_authority": false,
+    "reviewer_independent_of_author": true,
+    "fallback_used": false,
+    "mechanical_enforcement_status": "not_yet_built",
+    "tracked_followup": "UTV2-1569"
+  },
+  "known_gaps": [
+    "This bounded-pilot framing has not itself been through independent adversarial review -- the prior BLOCK->PASS cycle covered the permanent-reinstatement draft only.",
+    "Mechanical enforcement of the pilot's own 8-task/30-day/budget limits does not exist yet (UTV2-1569, T2, Backlog)."
+  ]
+}
