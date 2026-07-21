@@ -5,9 +5,9 @@
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1554-bootstrap-trusted-merge-gate-verdict-helper",
-  "branch": "claude/utv2-1554-bootstrap-trusted-merge-gate-verdict-helper",
+  "branch": "claude/utv2-1554-terminal-close-v2",
   "base_branch": "main",
-  "commit_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+  "commit_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1250",
   "files_changed": [
     ".ops/sync/UTV2-1554.yml",
@@ -36,14 +36,32 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1554/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-18T00:50:28.295Z",
-  "heartbeat_at": "2026-07-19T01:18:01.302Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-20T11:15:47.114Z",
+  "closed_at": "2026-07-20T11:15:47.114Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1554-bootstrap-trusted-merge-gate-verdict-helper.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-20T11:15:12.645Z",
+      "verdict": "fail",
+      "merge_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-20T11:15:43.683Z",
+      "verdict": "pass",
+      "merge_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

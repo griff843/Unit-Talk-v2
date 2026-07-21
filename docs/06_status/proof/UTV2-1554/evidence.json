@@ -5,13 +5,14 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
-  "reviewed_head_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
-  "evidence_commit_sha": "set-by-ci",
-  "current_head_sha": null,
-  "merge_sha": null,
+  "source_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+  "reviewed_head_sha": "c52ba30fe358bbfa611767fdc91c195583c9e0fb",
+  "reviewed_head_sha_note": "PR #1250's actual pre-merge HEAD SHA (the exact commit that was reviewed and approved), distinct from the squash-merge commit below. A prior repair pass collapsed this field to equal merge_sha, corrupting the head-bound T1 audit record -- restored here (PM verdict on PR #1270, 2026-07-21).",
+  "evidence_commit_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+  "current_head_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
+  "merge_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
   "sha_binding": {
-    "verified_source_sha": "8912f619ae71f6e626afb82b331a9b28721716e9",
+    "verified_source_sha": "c16054ba2a1806b733c033c773479abd99b76c74",
     "verified_source_note": "Stage 1 of the two-stage bootstrap: lands the final scripts/ops/merge-gate-verdict.cjs implementation, its full unit test suite, and lint/test:ops wiring on main, WITHOUT touching .github/workflows/merge-gate.yml at all. This closes the self-referential bootstrap gap the UTV2-1543 lane hit: once this merges, main (and therefore every future PR's base SHA) already contains the file, so #1246's own subsequent rebase can consume it from the trusted base checkout with no PR-head fetch fallback. This head additionally applies the PM's 2026-07-18T20:07:51Z CHANGES_REQUIRED trust-boundary repair (see pm_changes_required_repair below) and rebases cleanly onto main@1588c590 (post UTV2-1506 close).",
     "sha_type": "implementation_sha",
     "bound_at": "2026-07-19T01:18:01.302Z",
@@ -64,22 +65,64 @@
     "skipped": 0,
     "note": "This lane adds only a pure CommonJS module, its test suite, a lint override, and doc/schema updates -- no production code path, migration, or workflow file touched. Live smoke run regardless per T1 policy.",
     "queries": [
-      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
-      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
-      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
-      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
-      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
-      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
-      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
-      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+      {
+        "table": "submissions",
+        "description": "INSERT via processSubmission \u2014 one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick"
+      },
+      {
+        "table": "picks",
+        "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call"
+      },
+      {
+        "table": "settlement_records",
+        "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row"
+      },
+      {
+        "table": "audit_log",
+        "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction"
+      },
+      {
+        "table": "participants",
+        "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant"
+      }
     ],
     "row_counts": [
-      { "table": "picks", "count": 6 },
-      { "table": "submissions", "count": 6 },
-      { "table": "settlement_records", "count": 5 },
-      { "table": "distribution_outbox", "count": 1 },
-      { "table": "distribution_receipts", "count": 0 },
-      { "table": "participants", "count": 0 }
+      {
+        "table": "picks",
+        "count": 6
+      },
+      {
+        "table": "submissions",
+        "count": 6
+      },
+      {
+        "table": "settlement_records",
+        "count": 5
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 1
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0
+      },
+      {
+        "table": "participants",
+        "count": 0
+      }
     ]
   },
   "scope": {
