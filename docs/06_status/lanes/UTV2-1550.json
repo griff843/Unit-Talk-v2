@@ -32,7 +32,6 @@
     "docs/06_status/proof/UTV2-1550/diff-summary.md",
     "docs/06_status/proof/UTV2-1550/evidence.json",
     "docs/06_status/proof/UTV2-1550/verification.md",
-    "package.json",
     "scripts/ops/executor-result-validate.test.ts",
     "scripts/ops/executor-result-validate.ts",
     "scripts/ops/workflow-hardening.test.ts"
@@ -42,7 +41,7 @@
   ],
   "status": "merged",
   "started_at": "2026-07-17T03:18:14.806Z",
-  "heartbeat_at": "2026-07-17T21:40:10.449Z",
+  "heartbeat_at": "2026-07-21T12:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
