@@ -47,11 +47,32 @@
     "ran_against": "live Supabase (zfzdnfwdarxucxtaojxm), not in-memory repos",
     "tap_summary": "# tests 7 / # pass 7 / # fail 0 / # skipped 0",
     "full_output": "docs/06_status/proof/UTV2-1451/verification.md",
-    "note": "This lane's own diff is docs-only, but T1 tier requires showing the baseline live-DB suite is green against real infrastructure rather than declaring runtime proof not applicable -- corrected from an earlier revision that incorrectly marked this inapplicable."
+    "note": "This lane's own diff is docs-only, but T1 tier requires showing the baseline live-DB suite is green against real infrastructure rather than declaring runtime proof not applicable -- corrected from an earlier revision that incorrectly marked this inapplicable.",
+    "queries": [
+      { "table": "submissions", "description": "database-smoke.test.ts: insert + delete a real submission row via the repository bundle (persist a submission and settlement when Supabase is configured)" },
+      { "table": "picks", "description": "database-smoke.test.ts: insert + delete a real pick row tied to the submission under test" },
+      { "table": "distribution_outbox", "description": "database-smoke.test.ts: atomic enqueue/rollback assertions against the outbox row for an invalid delivery confirmation" },
+      { "table": "distribution_receipts", "description": "database-smoke.test.ts: atomic delivery-confirmation rollback assertion (receipt row not written on invalid confirmation)" },
+      { "table": "pick_lifecycle", "description": "database-smoke.test.ts: lifecycle-event rollback assertions across the enqueue/delivery/settlement invalid-atomic-write tests" },
+      { "table": "audit_log", "description": "database-smoke.test.ts: audit-row rollback assertions across the invalid atomic-write tests" },
+      { "table": "settlement_records", "description": "database-smoke.test.ts: re-settlement correction-chain tests (correction row created additively, original row not mutated)" },
+      { "table": "participants", "description": "database-smoke.test.ts: no-duplicate-participants assertion for a given external_id and sport" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 94026, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "submissions", "count": 94758, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "settlement_records", "count": 32076, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "pick_lifecycle", "count": 135688, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "distribution_outbox", "count": 8709, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "audit_log", "count": 231016, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "participants", "count": 1647, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" }
+    ],
+    "row_counts_captured_at": "2026-07-21T17:50:00.000Z",
+    "row_counts_note": "Monitored-table row counts captured via a direct SQL count(*) against the live project immediately after the pnpm test:db run recorded above; test rows are inserted and deleted within each test case (see queries above), so these counts reflect steady-state table volume, not test-added rows."
   },
   "r_level": {
     "verdict": "not_evaluated",
-    "note": "Docs-only diff; no R-level artifacts expected."
+    "note": "Docs-only diff; no R-level artifacts expected. R1/R2 runtime-proof fields above are populated regardless, since ops:truth-check's addUnsupportedRuntimeChecks requires them unconditionally for T1 tier."
   },
   "known_gaps": [
     "Implementation of the two designed fixes (Tier C authorization artifact + gate; singleton-approval real record) is NOT part of this revision. Per PM verdict, a concrete, T1-tier, dispatch-ready blocking implementation child issue has been created and linked -- see diff-summary.md for its ID and acceptance criteria. This lane does not close the named loopholes; it is design + a PM-sanctioned deferred implementation via that linked child.",
