@@ -28,6 +28,37 @@ function readWorkerRecoveryScript(): string {
   return step!.run!;
 }
 
+test('worker recovery: UTV2-1560 Codex P2 — confirmation input is never interpolated directly into shell source', () => {
+  const raw = readWorkerRecoveryYaml();
+  const parsed = parseYaml(raw) as {
+    jobs?: { recover?: { steps?: Array<{ name?: string; run?: string; env?: Record<string, unknown> }> } };
+  };
+  const steps = parsed.jobs?.recover?.steps ?? [];
+  const step = steps.find((s) => s.name === 'Validate confirmation input');
+  assert.ok(step, 'expected a dedicated confirmation-validation step');
+
+  // The step's *run script* specifically (env: assignments legitimately
+  // reference ${{ inputs.confirm }} -- that's the correct, safe path) must
+  // never contain the raw expression-interpolation form -- a confirmation
+  // value containing a quote and command separator could otherwise break out
+  // of the bracket test and execute arbitrary runner commands while deploy
+  // secrets are in scope.
+  assert.doesNotMatch(
+    step!.run ?? '',
+    /\$\{\{\s*inputs\.confirm\s*\}\}/,
+    'inputs.confirm must never be interpolated directly into the run: script -- pass it through env: instead',
+  );
+  assert.ok(
+    step!.env && Object.values(step!.env).some((v) => typeof v === 'string' && /inputs\.confirm/.test(v)),
+    'the confirmation-validation step must receive inputs.confirm via env:, not string interpolation',
+  );
+  assert.match(
+    step!.run ?? '',
+    /!=\s*"restart-worker-if-502-present"/,
+    'the comparison must test a shell variable (populated from env:), not the raw expression',
+  );
+});
+
 test('worker recovery: workflow is workflow_dispatch-only with a typed confirmation input', () => {
   const parsed = parseYaml(readWorkerRecoveryYaml()) as { on?: { workflow_dispatch?: { inputs?: Record<string, unknown> } } };
   assert.ok(parsed.on?.workflow_dispatch, 'must be workflow_dispatch-triggered');
@@ -105,8 +136,20 @@ test('worker recovery: changed target fails closed, compared via the canonical p
   const script = readWorkerRecoveryScript();
   assert.match(
     script,
-    /d=json\.loads\(sys\.stdin\.read\(\)\); print\(json\.dumps\(d\.get\("targets"\), sort_keys=True\)\)/,
+    /d=json\.loads\(sys\.stdin\.read\(\)\); print\(json\.dumps\(d\.get\(\\"targets\\"\), sort_keys=True\)\)/,
     'both pre and post target extraction must parse JSON and compare the targets field specifically',
+  );
+  // UTV2-1560 Codex P2: the inner Python string's quotes around "targets" must
+  // be backslash-escaped (matching every other embedded quote in this SSH
+  // script) so the local shell's outer double-quoted ssh argument doesn't
+  // strip them before the command ever reaches the remote host -- an
+  // unescaped d.get("targets") arrives on the remote side as the bare
+  // (undefined) identifier `targets`, raising NameError and permanently
+  // failing target verification.
+  assert.doesNotMatch(
+    script,
+    /d\.get\("targets"\)/,
+    'the inner Python string quotes must be escaped (d.get(\\"targets\\")), not left bare -- bare quotes are stripped by the outer local double-quoted ssh argument before reaching the remote host',
   );
   const compareIdx = script.indexOf('PASS: configured worker target(s) unchanged');
   assert.ok(compareIdx >= 0);

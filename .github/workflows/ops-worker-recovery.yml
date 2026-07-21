@@ -49,8 +49,16 @@ jobs:
           fi
 
       - name: Validate confirmation input
+        env:
+          # UTV2-1560 Codex P2: never interpolate ${{ inputs.confirm }} directly
+          # into the shell source -- a confirmation value containing a quote and
+          # command separator could break out of the bracket test and execute
+          # arbitrary runner commands while deploy secrets are in scope. Passing
+          # it through an env var and comparing that keeps it as data, never
+          # shell syntax, regardless of content.
+          CONFIRM_INPUT: ${{ inputs.confirm }}
         run: |
-          if [ "${{ inputs.confirm }}" != "restart-worker-if-502-present" ]; then
+          if [ "$CONFIRM_INPUT" != "restart-worker-if-502-present" ]; then
             echo "::error::Confirmation phrase did not match exactly. No action taken."
             exit 1
           fi
@@ -82,7 +90,7 @@ jobs:
             echo '--- configured target (most recent worker.startup line, canonical targets field) ---'
             PRE_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
             echo \"\$PRE_TARGET_LINE\"
-            PRE_TARGETS=\$(echo \"\$PRE_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get("targets"), sort_keys=True))' 2>&1) || PRE_TARGETS=\"PARSE_ERROR: \$PRE_TARGETS\"
+            PRE_TARGETS=\$(echo \"\$PRE_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get(\"targets\"), sort_keys=True))' 2>&1) || PRE_TARGETS=\"PARSE_ERROR: \$PRE_TARGETS\"
             echo \"Parsed pre-restart targets: \$PRE_TARGETS\"
             echo '--- last 30 log lines ---'
             docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
@@ -135,7 +143,7 @@ jobs:
             echo '--- configured target after restart (canonical targets field) ---'
             POST_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
             echo \"\$POST_TARGET_LINE\"
-            POST_TARGETS=\$(echo \"\$POST_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get("targets"), sort_keys=True))' 2>&1) || POST_TARGETS=\"PARSE_ERROR: \$POST_TARGETS\"
+            POST_TARGETS=\$(echo \"\$POST_TARGET_LINE\" | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); print(json.dumps(d.get(\"targets\"), sort_keys=True))' 2>&1) || POST_TARGETS=\"PARSE_ERROR: \$POST_TARGETS\"
             echo \"Parsed post-restart targets: \$POST_TARGETS\"
             echo '--- last 30 log lines post-restart ---'
             docker logs \"\$TARGET\" --tail 30 --timestamps 2>&1
