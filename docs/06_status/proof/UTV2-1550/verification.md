@@ -117,6 +117,17 @@ result" `github-script` step was already safe (script content lives in the
 trusted YAML, reads PR state only via the REST API). Full detail:
 `docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md`.
 
+## Addendum: file_scope_lock reconciliation (2026-07-21, branch claude/utv2-1550-scope-reconcile)
+
+Narrowed `file_scope_lock` to drop the stale `package.json` entry. This issue's own implementation
+is fully merged (PR #1239, main); no further active editing is happening under this issue, but the
+lock still blocked a later, unrelated lane (UTV2-1560/#1271) from touching the same `package.json`
+line under its own scope. `status` remains `merged` (honest — this lane still cannot mechanically
+reach `done` via `ops:lane-close --repair-merged`: `Executor Result Validation` and `P0 Protocol`
+only trigger on PR-scoped GitHub events and this PR is closed/merged, so they can never
+re-evaluate on this merge commit — a separate, pre-existing gap this reconciliation does not
+attempt to resolve). `pnpm verify` PASS on branch `claude/utv2-1550-scope-reconcile`.
+
 ## Owner boundary
 
 T1 — merge authority and repository enforcement configuration. Requires the
