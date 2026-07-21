@@ -22,6 +22,7 @@
     "docs/05_operations/policies/fable-pilot-policy.json",
     "docs/05_operations/schemas/fable-review-v1.md",
     "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+    "docs/05_operations/system-alignment-registry.json",
     "docs/governance/AGENT_SKILL_CONTRACTS.md",
     "scripts/ops/contract-validator.test.ts",
     "scripts/ops/contract-validator.ts",

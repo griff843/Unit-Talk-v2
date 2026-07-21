@@ -95,6 +95,17 @@
       "target_issue": "UTV2-1047"
     },
     {
+      "name": "fable-pilot-reviewer",
+      "kind": "prompt-agent",
+      "category": "manual-transitional",
+      "owner": "claude-governance",
+      "trigger": "manual invocation during a Fable pilot advisory review (UTV2-1569), gated on the pilot's own eligibility (fable-pilot-policy.json pilot_enabled + FABLE_PILOT_STATE.json status)",
+      "required_check_status": "not-required",
+      "artifact": "fable-review/v1 comment (advisory only, never a merge gate)",
+      "manual_allowance": "advisory-only bounded pilot, not yet activated",
+      "target_issue": "UTV2-1569"
+    },
+    {
       "name": "pr-risk-reviewer",
       "kind": "prompt-agent",
       "category": "manual-transitional",
