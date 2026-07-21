@@ -1,6 +1,6 @@
 # UTV2-1560 — Diff Summary
 
-MERGE_SHA: 8f8cf3a575b9ad179b2e07b9283f086e11f50a72
+MERGE_SHA: 21b81e909e7d66f05c1b96462aca1e47c728f7b2
 
 (This is the reviewed-implementation content commit, an ancestor of this
 branch's actual head — a file cannot bind its own future hash once further
@@ -63,6 +63,22 @@ onto current main.
   both to be non-empty and unequal for PASS. `RestartCount` is still
   captured and logged for audit purposes but no longer gates PASS/FAIL.
   Regression test updated accordingly (13/13 still pass).
+
+## PM verdict fixes (2026-07-21, latest revision — fail-closed abort-check)
+
+- A fresh `@codex review` requested at the RestartCount-fix head (`8f8cf3a5`)
+  surfaced one further P2 finding: if the worker container is missing, the
+  Docker daemon is unavailable, or the deploy user lacks Docker access, the
+  abort-check's `docker logs --since 15m` call fails, but its merged stderr
+  output was piped directly into `grep -c`, which counts zero matching
+  lines regardless. `RECENT_502=0` then took the "no recent evidence, safe
+  no-op" `exit 0` path -- silently reporting success when the restart gate
+  was never actually evaluated.
+- Fixed by capturing `docker logs`'s output into `RECENT_502_RAW` via a
+  plain command substitution (not a pipe) and capturing its own exit code
+  separately as `DOCKER_LOGS_EXIT` immediately afterward. A non-zero exit
+  now fails the script closed with an explicit `::error::` before
+  `RECENT_502` is ever computed. Regression test added (14/14 pass).
 
 ## Known non-blocking gaps (outside this PR's mechanical reach)
 

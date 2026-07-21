@@ -5,13 +5,13 @@
   "tier": "T1",
   "lane_type": "hygiene",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
-  "reviewed_head_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
-  "evidence_commit_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
+  "source_sha": "21b81e909e7d66f05c1b96462aca1e47c728f7b2",
+  "reviewed_head_sha": "21b81e909e7d66f05c1b96462aca1e47c728f7b2",
+  "evidence_commit_sha": "21b81e909e7d66f05c1b96462aca1e47c728f7b2",
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
+    "verified_source_sha": "21b81e909e7d66f05c1b96462aca1e47c728f7b2",
     "verified_source_note": "Continuation of PR #1258, frozen at the T1 bounce limit (4 CHANGES_REQUIRED verdicts) per PM direction. Same already-reviewed content carried forward on a fresh branch from current main. This revision additionally replaces the RestartCount-only manual-restart verification signal with StartedAt (see restart_signal_fix below) and restores test:ops wiring.",
     "sha_type": "implementation_sha",
     "ci_sentinels": {
@@ -71,6 +71,12 @@
     "finding": "Codex P2: RestartCount-only gating is unreliable for an operator-initiated docker restart, since Docker's RestartCount reflects only restart-policy-triggered restarts (on-failure/always), not a manual `docker restart` invocation.",
     "fix": "Replaced the gating check with the container's .State.StartedAt timestamp (captured pre/post as PRE_STARTED_AT/POST_STARTED_AT); PASS requires both non-empty and pre != post. RestartCount is still captured/logged for audit purposes only and no longer gates PASS/FAIL.",
     "regression_test": "scripts/ops/worker-recovery-workflow.test.ts: 'worker recovery: manual-restart verification uses StartedAt, not RestartCount, as the gating signal'",
+    "status": "PASS"
+  },
+  "abort_check_fail_closed_fix": {
+    "finding": "Codex P2 (fresh @codex review at head 8f8cf3a5): the abort-check piped docker logs' merged stderr output directly into grep -c, so a docker logs failure (missing container, daemon down, permission denied) yielded RECENT_502=0 and silently took the 'no recent evidence, safe no-op' exit-0 path instead of failing closed.",
+    "fix": "docker logs output is now captured into RECENT_502_RAW via plain command substitution (not a pipe), with its own exit code captured separately as DOCKER_LOGS_EXIT immediately afterward. A non-zero exit fails the script closed with an explicit ::error:: annotation before RECENT_502 is computed.",
+    "regression_test": "scripts/ops/worker-recovery-workflow.test.ts: 'worker recovery: abort-check fails closed if docker logs itself fails, instead of treating an inspection failure as no-evidence-found'",
     "status": "PASS"
   },
   "scope": {

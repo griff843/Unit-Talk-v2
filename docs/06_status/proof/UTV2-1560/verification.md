@@ -1,6 +1,6 @@
 # PROOF: UTV2-1560
 
-MERGE_SHA: 8f8cf3a575b9ad179b2e07b9283f086e11f50a72
+MERGE_SHA: 21b81e909e7d66f05c1b96462aca1e47c728f7b2
 
 (This is the reviewed-implementation content commit, an ancestor of this
 branch's actual head — a file cannot bind its own future hash once further
@@ -20,6 +20,10 @@ This revision fixes a live Codex P2 finding on the manual-restart
 verification signal (RestartCount -> StartedAt, see below) and restores
 `test:ops` wiring for the recovery workflow's regression test now that the
 two lanes that previously locked that `package.json` line have both merged.
+A fresh `@codex review` requested at the RestartCount-fix head surfaced one
+further P2 finding (the abort-check silently no-ops if `docker logs` itself
+fails); that is also fixed in this revision (see "Fail-closed abort-check
+fix" below).
 
 ## Verification
 
@@ -27,7 +31,8 @@ two lanes that previously locked that `package.json` line have both merged.
 
 - [x] `.github/workflows/ops-network-diagnose.yml` hardening carried forward unchanged from the accepted #1258 content (robust DB/pooler key discovery, curl-or-node HTTPS fallback)
 - [x] `.github/workflows/ops-worker-recovery.yml` (new, `workflow_dispatch`-only) carried forward, with the manual-restart verification signal replaced (see "RestartCount defect fix" below)
-- [x] `scripts/ops/worker-recovery-workflow.test.ts` passes (13/13), including the PM-verdict-requested Codex P2 fixes (env-passthrough for `inputs.confirm`, escaped nested quotes in the SSH python one-liner) and the new StartedAt-gating regression test
+- [x] `scripts/ops/worker-recovery-workflow.test.ts` passes (14/14), including the PM-verdict-requested Codex P2 fixes (env-passthrough for `inputs.confirm`, escaped nested quotes in the SSH python one-liner), the StartedAt-gating regression test, and the fail-closed abort-check regression test
+- [x] Fresh `@codex review` requested and landed on the RestartCount-fix head (`8f8cf3a5`); the one new finding it surfaced (fail-open abort-check on a `docker logs` failure) is fixed in this same revision
 - [x] No API restart, deploy, or environment mutation anywhere in either workflow
 - [x] This PR does not dispatch the recovery workflow
 - [x] `pnpm test:db` PASS (7/7, live Supabase)
@@ -55,13 +60,31 @@ logged for audit purposes (per the workflow's own auditability header
 comment) but no longer gates PASS/FAIL. Both the pre- and post-state
 `docker inspect` summary lines now also print `StartedAt` for auditability.
 
+## Fail-closed abort-check fix (this revision, from fresh @codex review)
+
+**Finding (Codex P2, live on head `8f8cf3a5`):** if the worker container is
+missing, the Docker daemon is unavailable, or the deploy user lacks Docker
+access, the abort-check's `docker logs "$TARGET" --since 15m` call fails,
+but its merged stderr output was piped directly into `grep -c`, which
+counts zero matching lines regardless of the underlying failure.
+`RECENT_502=0` then took the "no recent evidence, safe no-op" `exit 0`
+path -- silently reporting a successful run when the restart gate was never
+actually evaluated.
+
+**Fix:** `docker logs` output is now captured into `RECENT_502_RAW` via a
+plain command substitution (not a pipe), so its own exit code is captured
+separately as `DOCKER_LOGS_EXIT` immediately afterward. A non-zero exit
+now fails the script closed with an explicit `::error::` annotation before
+`RECENT_502` is ever computed from the (possibly-error) output. Regression
+test added; `scripts/ops/worker-recovery-workflow.test.ts` is 14/14 pass.
+
 ## EVIDENCE:
 
 ```text
 $ pnpm exec tsx --test scripts/ops/worker-recovery-workflow.test.ts
-# tests 13
+# tests 14
 # suites 0
-# pass 13
+# pass 14
 # fail 0
 # cancelled 0
 # skipped 0
