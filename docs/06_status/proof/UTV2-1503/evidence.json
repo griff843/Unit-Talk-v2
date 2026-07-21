@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1503",
+  "title": "Orchestrator standing-authority audit -- clean continuation proof",
+  "tier": "T1",
+  "lane_type": "governance",
+  "pr_url": null,
+  "generated_at": "2026-07-21T20:05:00Z",
+  "status": "PASS",
+  "sha_binding": {
+    "verified_source_sha": "5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b",
+    "verified_source_note": "Substantive content commit on the fresh continuation branch claude/utv2-1503-continuation, cut from current main. Carries forward, byte-for-byte, the audit doc already reviewed and PM-approved at a prior PR's final head for this issue, which exceeded the T1 CHANGES_REQUIRED bounce limit before it could merge. All facts in the audit (forbidden-glob list, active consolidated Proof Gate workflow name, cited line numbers in r-level-check.ts/truth-check-lib.ts/apply-branch-protection.sh, docs authority map ownership rows, live branch-protection snapshot, STANDING_GUARDRAILS.md content) were independently re-verified against current main immediately before this commit -- no drift found, no content changes required. Later commits on this branch are restricted to this lane's own manifest and proof/sync paths.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-21T20:05:00.000Z",
+    "ci_sentinels": {
+      "pnpm_verify": "pass",
+      "pnpm_test_db": "pass",
+      "r_level_check": "pass",
+      "owner_t1_gate": "pending_owner_action"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1503-continuation",
+    "role": "mechanical-repair-executor",
+    "independent_owner_certifier": false,
+    "note": "This bundle records mechanical checks only. It is not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Static checks, unit suites, live DB smoke, and the live T1 proof command completed successfully on the continuation branch."
+    },
+    "type_check": "pass (within pnpm verify)",
+    "tests": "pass (node:test suites within pnpm verify; full command exit 0)",
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    },
+    "scope_assertions": [
+      "Lane path eligibility is explicitly distinguished from Delegation Policy authority.",
+      "Every recommendation preserves both t1-approved and a valid Griff-authored head-bound pm-verdict/v1.",
+      "No override-label or single-artifact T1 approval route is recommended.",
+      "Branch-protection claims are a dated point-in-time snapshot.",
+      "Shared Griff and Claude identity is explicitly non-independent."
+    ]
+  },
+  "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "note": "Required T1 smoke evidence only; this audit changes no runtime or database behavior and performs no production mutation outside the existing self-cleaning test suite. Exact pass/fail counts are recorded in verification.md from the actual terminal run on this branch."
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_MECHANICAL_CHECKS_OWNER_APPROVAL_PENDING"
+}
