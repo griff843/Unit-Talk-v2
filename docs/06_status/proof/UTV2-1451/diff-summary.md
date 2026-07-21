@@ -1,6 +1,7 @@
 # UTV2-1451 — Outcome Contract / Design (spec-first, per existing precedent for this class of change)
 
 Generated: 2026-07-21
+Revision: corrected Loophole 1's PreToolUse notice mechanism per PM review on UTV2-1570 (2026-07-21)
 Issue: UTV2-1451 (Close Tier C / singleton / risk-class self-authorization loopholes, G-07)
 Tier: T1
 Branch: claude/utv2-1451-close-self-authorization-loopholes
@@ -48,19 +49,74 @@ This is a real-time editing guard, not a merge gate; `scripts/ops/merge-risk.ts`
 `TIER_C_EXACT_PATHS`/`TIER_C_PATH_PREFIXES` matrix is the correct single source of truth for what
 counts as Tier C here (per UTV2-1494's PM-locked decision that both mechanisms must read one list).
 
-**Design (corrected — see note below):**
+**Design (corrected a second time — see note below; this revision replaces a still-wrong
+"print to stdout" proposal from the previous revision):**
 1. The manifest-authorized case **must stay at `exit 0`**, not move to `exit 2`. The hook's own
-   current comment (`.claude/hooks/tier-c-path-guard.sh` line ~144) already documents why: exit 2
-   blocks the write outright pending confirmation ("Claude Code blocks on any non-zero exit") — an
-   earlier revision of this exact hook used exit 2 here and had to be changed to exit 0 for that
-   reason. So "always exit 2 regardless of authorization, changing only the message" (this design's
-   original proposal) is not viable: it would re-block every legitimate T1 Tier C lane, the same
-   failure mode the manifest-authorized bypass exists to avoid. The corrected fix: keep `exit 0` for
-   the manifest-authorized path, but still print the Tier C notice to **stdout** (not stderr) before
-   exiting 0, so the notice is visible in the session transcript/logs without requiring
-   confirmation. This closes the "no warning surfaced at all" half of the loophole (silence) without
-   reintroducing a local block that `exit 2` would cause — the real mechanical enforcement for the
-   non-T1 case lives in CI (item 2 below), not in the local hook's exit code.
+   current comment (`.claude/hooks/tier-c-path-guard.sh` line ~144) documents why: exit 2 blocks the
+   write outright pending confirmation — an earlier revision of this exact hook used exit 2 here and
+   had to be changed to exit 0 for that reason. This was independently corroborated live in this
+   session: the orchestrator's own `git reset --hard` tripped `bash-safety-guard.sh`'s exit-2 path,
+   and the command did not execute — the orchestrator had to switch to `git switch -C` to avoid the
+   hook entirely, confirming exit 2 is blocking in practice, not merely a documented risk. So "always
+   exit 2 regardless of authorization, changing only the message" is not viable: it would re-block
+   every legitimate T1 Tier C lane, the failure mode the manifest-authorized bypass exists to avoid.
+
+   **The previous revision of this design proposed fixing the silence by printing the Tier C notice
+   to plain stdout before `exit 0`. That proposal was itself wrong** (flagged directly by PM review
+   on UTV2-1570) and must not ship: a `PreToolUse` hook's stdout is parsed as JSON **only on exit
+   0**, and only specific recognized JSON fields are surfaced anywhere — arbitrary non-JSON text
+   printed to stdout is silently discarded by Claude Code, never shown in the transcript, the
+   session, or any log a human or future agent would see. "Print to stdout" is not a fix for the
+   silence; it reproduces it under a different name.
+
+   **Corrected mechanism:** on `exit 0`, print a single JSON object to stdout using the documented
+   `PreToolUse` hook output schema — set `hookSpecificOutput.permissionDecision` to `"allow"` (making
+   the allow decision explicit rather than implicit-via-silence) with a `hookSpecificOutput.
+   additionalContext` string carrying the Tier C notice (e.g. `"Tier C notice: <path> — <reason> —
+   authorized via manifest <issue_id> file_scope_lock"`), and additionally set a top-level
+   `systemMessage` field with the same notice. `additionalContext` is injected into Claude's own
+   context at the point the tool call fires, so it is visible in-transcript to the executing agent;
+   `systemMessage` is the general-purpose "warning shown to the user" field and is not
+   `PreToolUse`-specific, so setting both covers agent-visible and user-visible surfacing without
+   relying on a mechanism scoped to only one audience. Concretely:
+   ```json
+   {
+     "hookSpecificOutput": {
+       "hookEventName": "PreToolUse",
+       "permissionDecision": "allow",
+       "permissionDecisionReason": "Manifest-authorized Tier C write (UTV2-NNN file_scope_lock)",
+       "additionalContext": "TIER-C NOTICE: <path> — <reason> — authorized via active lane manifest UTV2-NNN"
+     },
+     "systemMessage": "TIER-C NOTICE: <path> — <reason> — authorized via active lane manifest UTV2-NNN"
+   }
+   ```
+   This closes the "no warning surfaced at all" half of the loophole (silence) without reintroducing
+   a local block — the real mechanical enforcement for the non-T1 case lives in CI (item 2 below),
+   not in the local hook's exit code.
+
+   **Confidence and sources (per PM instruction on UTV2-1570 to verify rather than assert):**
+   HIGH confidence, not empirically instrumented against a live transcript from within this lane
+   (this design-only lane does not touch the hook, and there is no available mechanism to observe a
+   hook's effect on this session's own transcript from inside the task that produced it). Basis:
+   (a) the official current Claude Code hooks reference at `code.claude.com/docs/en/hooks`, fetched
+   directly this session, which states explicitly: "Exit 0 means success. Claude Code parses stdout
+   for JSON output fields... JSON output is only processed on exit 0"; "Exit 2 means a blocking
+   error... PreToolUse blocks the tool call"; `hookSpecificOutput` for `PreToolUse` supports
+   `permissionDecision` (`allow`/`deny`/`ask`/`defer`), `permissionDecisionReason`,
+   `additionalContext`, and `updatedInput`; `systemMessage` is a universal JSON field ("warning
+   message shown to the user") requiring exit 0. (b) In-repo empirical precedent: this exact repo's
+   own shipped hooks already use the `{"systemMessage": "..."}` exit-0 JSON pattern successfully —
+   `.claude/hooks/session-start.sh`, `.claude/hooks/post-compact-reinjector.sh`,
+   `.claude/hooks/linear-sync-reminder.sh`, `.claude/hooks/commit-msg-linear-check.sh`, and
+   `.claude/hooks/untracked-scripts-check.sh` all emit `systemMessage` JSON on exit 0, and
+   `session-start.sh`'s output is what populates this session's own auto-injected system-state
+   context today — i.e., the mechanism is not merely documented, it is already load-bearing
+   elsewhere in this repo's hook set. Neither of these hooks is `PreToolUse`, so the specific
+   `additionalContext` field's `PreToolUse`-scoped behavior is verified from documentation only, not
+   from an in-repo running example — the implementation lane (UTV2-1570) must still include an
+   integration test or captured behavior proof of the exact `PreToolUse` JSON payload actually
+   surfacing (transcript capture or equivalent), per the acceptance criteria below, rather than
+   trusting this design's confidence level as sufficient proof on its own.
 2. The **mechanical, blocking half** moves to where it belongs: CI, not a local hook a developer
    session could route around entirely (e.g., by disabling hooks, which `PG8`'s preflight check
    already watches for separately). Add a new required check,
@@ -81,7 +137,9 @@ counts as Tier C here (per UTV2-1494's PM-locked decision that both mechanisms m
    whatever the diff touches. The gap is specifically **T2/T3 lanes silently touching Tier C via
    self-declared scope** with no comparable scrutiny; that's what the new gate closes.
 
-**Files:** `docs/05_operations/schemas/tier-c-approval-v1.md` (new), `scripts/ci/tier-c-authorization-gate.ts` (new, follow-up), `scripts/ci/tier-c-authorization-gate.test.ts` (new, follow-up), `.claude/hooks/tier-c-path-guard.sh` (small edit: keep `exit 0` for the manifest-authorized branch, add a stdout notice — do **not** change it to `exit 2`, per the corrected design above).
+**Files:** `docs/05_operations/schemas/tier-c-approval-v1.md` (new), `scripts/ci/tier-c-authorization-gate.ts` (new, follow-up), `scripts/ci/tier-c-authorization-gate.test.ts` (new, follow-up), `.claude/hooks/tier-c-path-guard.sh` (small edit: keep `exit 0` for the manifest-authorized branch, emit the `hookSpecificOutput.additionalContext` + `systemMessage` JSON payload described above — do **not** change it to `exit 2`, and do **not** substitute a naive stdout `echo` for the structured JSON payload), plus a new `.claude/hooks/tier-c-path-guard.test.sh` (or equivalent) that captures the hook's actual stdout for a manifest-authorized invocation and asserts it is valid JSON containing the expected `hookSpecificOutput.additionalContext`/`systemMessage` fields — this is the "integration test or captured behavior proof" acceptance criterion below, not optional polish.
+
+**Acceptance criteria addition for UTV2-1570 (per PM correction — this is now a hard requirement, not a nice-to-have):** the implementation PR must not merely change the hook's stdout and assert it "looks right" by inspection. It must include either (a) an automated test that invokes the hook binary directly with a manifest-authorized `PreToolUse` JSON stdin payload, captures real stdout, and asserts it parses as JSON with the expected `hookSpecificOutput.permissionDecision`/`additionalContext` and top-level `systemMessage` fields present and non-empty, or (b) an equivalent captured-behavior proof (e.g., a recorded transcript excerpt showing the notice actually surfaced) attached to the T1 evidence bundle. A design or comment asserting the mechanism "should" work per documentation, without a captured test/proof artifact, does not satisfy this criterion — this is the exact failure mode this design's own previous ("print to stdout") revision fell into.
 
 ## Loophole 2: `--singleton-approved` is a bare, unverified CLI flag
 
