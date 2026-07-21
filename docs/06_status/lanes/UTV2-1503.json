@@ -19,7 +19,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-07-16T01:23:32.809Z",
-  "heartbeat_at": "2026-07-16T05:52:06.000Z",
+  "heartbeat_at": "2026-07-21T17:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1503-orchestrator-standing-authority-narrowing.json",
