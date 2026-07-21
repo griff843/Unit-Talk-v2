@@ -1,11 +1,21 @@
 # PROOF: UTV2-1551
 
-MERGE_SHA: 86132abd6edd815d8e0bb542f1fd1f3f3f25756b
+MERGE_SHA: 09f08701848f21cb7949b912134868bb3a5d88b5
 
-The SHA above is the pre-merge implementation commit on
-`claude/utv2-1551-merge-gate-continuation` (an ancestor of the eventual PR
-head/merge commit — a file cannot contain its own future commit hash, so this
-binds to the exact reviewed implementation commit per repo convention).
+The SHA above is `09f08701848f21cb7949b912134868bb3a5d88b5` — the actual
+merge commit of PR #1264 on `main`, which shipped this proof's reviewed
+implementation (`merge-gate.yml`'s `opened` trigger fix, the
+`tier-label-check.yml`/`tier-label-apply.yml` token-boundary split, and
+`REQUIRED_SECRETS.md`). This branch's own diff (`claude/utv2-1551-t1-runtime-
+proof-repair`, PR #1285) carries no further implementation changes — it
+reconciles the lane manifest and binds real T1 runtime evidence
+(`docs/06_status/proof/UTV2-1551/evidence.json`) against that already-shipped
+commit, which the Executor Result Validator confirms is a genuine ancestor of
+this branch's head. The prior value here (`86132abd...`, a pre-merge commit
+on the earlier, now-superseded `claude/utv2-1551-merge-gate-continuation`
+branch) predated the rename/rebase onto current `main` and was never an
+ancestor of this branch's actual head — corrected as part of this PR's own
+governed continuation fix.
 
 ## Verification
 
