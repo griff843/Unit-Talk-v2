@@ -54,9 +54,25 @@ jobs:
               : context.payload.issue.number;
             core.setOutput('pr_number', prNumber);
 
+      # PM/Codex review (PR #1293, P1): this job holds checks:write/
+      # issues:write/pull-requests:write. actions/checkout defaults to the
+      # PR's own head/merge ref on pull_request events -- attacker-
+      # controlled -- and pnpm install below runs project/dependency
+      # lifecycle scripts (postinstall etc.). A malicious PR could modify
+      # package.json/pnpm-lock.yaml to run arbitrary code with this job's
+      # write-scoped token during install. Pin checkout to the PR's base
+      # SHA (immutable, reachable from main, never PR-supplied) for
+      # pull_request/pull_request_review-shaped events so install always
+      # resolves from trusted, non-PR-controlled dependency state -- same
+      # reasoning and pattern as merge-gate.yml's own checkout-ref pin
+      # (Codex P1 finding on that lane) and executor-result-validator.yml's.
+      # issue_comment/workflow_dispatch keep the default github.sha, which
+      # already resolves to the base repo's default-branch HEAD for those
+      # trigger types.
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
           fetch-depth: 0
 
       - name: Setup pnpm
@@ -68,6 +84,9 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      # Installs from the trusted base-branch package.json/pnpm-lock.yaml
+      # (see Checkout step above) -- never the PR's own, potentially
+      # PR-modified dependency manifest.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -110,100 +129,125 @@ jobs:
             });
             core.setOutput('check_run_id', check.id);
 
-            // ── Resolve authoritative tier from lane manifest, same source
-            // merge-gate.yml treats as authoritative -- GitHub tier labels are
-            // evidence, never authority (docs/05_operations/EXECUTION_TRUTH_MODEL.md).
-            const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
-              (prTitle || '').match(/((?:UTV2|UNI)-\d+)/i);
-            const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
+            // PM/Codex review (PR #1293, P2): everything below this point can
+            // throw (a malformed lane manifest, a transient API failure while
+            // listing files/comments, etc.). Without a try/catch, an error
+            // here would abort the step *after* the check above was already
+            // created, leaving it stuck `in_progress` on the PR head forever
+            // -- indistinguishable from "still running" to branch protection.
+            // Complete the check as a failure on any such error before
+            // rethrowing, so it always reaches a terminal state.
+            try {
+              // ── Resolve authoritative tier from lane manifest, same source
+              // merge-gate.yml treats as authoritative -- GitHub tier labels are
+              // evidence, never authority (docs/05_operations/EXECUTION_TRUTH_MODEL.md).
+              const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
+                (prTitle || '').match(/((?:UTV2|UNI)-\d+)/i);
+              const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
 
-            async function readManifest(ref) {
-              if (!issueId || !ref) return null;
-              try {
-                const { data } = await github.rest.repos.getContent({
-                  owner, repo,
-                  path: `docs/06_status/lanes/${issueId}.json`,
-                  ref,
-                });
-                if (Array.isArray(data) || !data.content) return null;
-                return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
-              } catch (error) {
-                if (error.status === 404) return null;
-                throw error;
-              }
-            }
-
-            const manifest = await readManifest(headSha) || await readManifest(baseSha);
-            const tier = manifest && /^(T1|T2|T3)$/i.test(String(manifest.tier))
-              ? String(manifest.tier).toUpperCase()
-              : 'T3'; // fail-closed default: an unresolvable tier is treated as
-                       // the most-scrutinized non-T1 case, never silently exempted.
-
-            // ── Changed files via the API (never a local `git diff` against
-            // a PR-controlled checkout -- same reasoning as
-            // file-scope-lock-check.yml's own "Collect changed files" step).
-            const files = await github.paginate(github.rest.pulls.listFiles, {
-              owner, repo, pull_number: prNumber, per_page: 100
-            });
-            fs.mkdirSync('.out', { recursive: true });
-            fs.writeFileSync('.out/tier-c-changed-files.txt', files.map((f) => f.filename).join('\n') + '\n', 'utf8');
-
-            // ── Collect authorized tier-c-approval/v1 comments. Mirrors
-            // scripts/ci/tier-c-approval-comment-parser.ts inline (GitHub
-            // Actions' github-script body cannot import a TS module
-            // directly) -- keep the two in lockstep on any future change.
-            const AUTHORIZED_REVIEWERS = new Set(['griff843']);
-
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner, repo, issue_number: prNumber, per_page: 100
-            });
-
-            const approvals = [];
-            for (const c of comments) {
-              if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') continue;
-
-              const body = (c.body || '').replace(/\r\n/g, '\n');
-              const lines = body.split(/\r?\n/).map((l) => l.trim());
-              if (lines[0] !== 'TIER_C_APPROVAL: APPROVED' || lines[1] !== 'schema: tier-c-approval/v1') continue;
-
-              const fields = {};
-              const paths = [];
-              let i = 2;
-              while (i < lines.length) {
-                const line = lines[i];
-                if (line === 'Paths:') {
-                  i += 1;
-                  while (i < lines.length && lines[i].startsWith('- ')) {
-                    const p = lines[i].slice(2).trim();
-                    if (p) paths.push(p);
-                    i += 1;
-                  }
-                  continue;
+              async function readManifest(ref) {
+                if (!issueId || !ref) return null;
+                try {
+                  const { data } = await github.rest.repos.getContent({
+                    owner, repo,
+                    path: `docs/06_status/lanes/${issueId}.json`,
+                    ref,
+                  });
+                  if (Array.isArray(data) || !data.content) return null;
+                  return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
+                } catch (error) {
+                  if (error.status === 404) return null;
+                  throw error;
                 }
-                const match = line.match(/^([A-Za-z-]+):\s*(.+)$/);
-                if (match) fields[match[1]] = match[2].trim();
-                i += 1;
               }
 
-              const issueFieldMatch = (fields['Issue'] || '').match(/^UTV2-\d+$/);
-              const prFieldMatch = (fields['PR'] || '').match(/^#(\d+)$/);
-              if (!issueFieldMatch || !prFieldMatch || !fields['Head-SHA'] || paths.length === 0) continue;
+              const manifest = await readManifest(headSha) || await readManifest(baseSha);
+              const tier = manifest && /^(T1|T2|T3)$/i.test(String(manifest.tier))
+                ? String(manifest.tier).toUpperCase()
+                : 'T3'; // fail-closed default: an unresolvable tier is treated as
+                         // the most-scrutinized non-T1 case, never silently exempted.
 
-              approvals.push({
-                issue_id: issueFieldMatch[0],
-                pr_number: Number.parseInt(prFieldMatch[1], 10),
-                head_sha: fields['Head-SHA'],
-                paths,
-                authorized_by: c.user.login,
-                reason: fields['Reason'] || '',
+              // ── Changed files via the API (never a local `git diff` against
+              // a PR-controlled checkout -- same reasoning as
+              // file-scope-lock-check.yml's own "Collect changed files" step).
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner, repo, pull_number: prNumber, per_page: 100
               });
-            }
+              fs.mkdirSync('.out', { recursive: true });
+              fs.writeFileSync('.out/tier-c-changed-files.txt', files.map((f) => f.filename).join('\n') + '\n', 'utf8');
 
-            fs.writeFileSync('.out/tier-c-approvals.json', JSON.stringify(approvals, null, 2), 'utf8');
-            fs.writeFileSync('.out/tier-c-meta.json', JSON.stringify({ tier, prNumber, headSha, issueId }, null, 2), 'utf8');
+              // ── Collect authorized tier-c-approval/v1 comments. Mirrors
+              // scripts/ci/tier-c-approval-comment-parser.ts inline (GitHub
+              // Actions' github-script body cannot import a TS module
+              // directly) -- keep the two in lockstep on any future change.
+              const AUTHORIZED_REVIEWERS = new Set(['griff843']);
+
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: prNumber, per_page: 100
+              });
+
+              const approvals = [];
+              for (const c of comments) {
+                if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') continue;
+
+                const body = (c.body || '').replace(/\r\n/g, '\n');
+                const lines = body.split(/\r?\n/).map((l) => l.trim());
+                if (lines[0] !== 'TIER_C_APPROVAL: APPROVED' || lines[1] !== 'schema: tier-c-approval/v1') continue;
+
+                const fields = {};
+                const paths = [];
+                let i = 2;
+                while (i < lines.length) {
+                  const line = lines[i];
+                  if (line === 'Paths:') {
+                    i += 1;
+                    while (i < lines.length && lines[i].startsWith('- ')) {
+                      const p = lines[i].slice(2).trim();
+                      if (p) paths.push(p);
+                      i += 1;
+                    }
+                    continue;
+                  }
+                  const match = line.match(/^([A-Za-z-]+):\s*(.+)$/);
+                  if (match) fields[match[1]] = match[2].trim();
+                  i += 1;
+                }
+
+                const issueFieldMatch = (fields['Issue'] || '').match(/^UTV2-\d+$/);
+                const prFieldMatch = (fields['PR'] || '').match(/^#(\d+)$/);
+                if (!issueFieldMatch || !prFieldMatch || !fields['Head-SHA'] || paths.length === 0) continue;
+
+                approvals.push({
+                  issue_id: issueFieldMatch[0],
+                  pr_number: Number.parseInt(prFieldMatch[1], 10),
+                  head_sha: fields['Head-SHA'],
+                  paths,
+                  authorized_by: c.user.login,
+                  reason: fields['Reason'] || '',
+                });
+              }
+
+              fs.writeFileSync('.out/tier-c-approvals.json', JSON.stringify(approvals, null, 2), 'utf8');
+              fs.writeFileSync('.out/tier-c-meta.json', JSON.stringify({ tier, prNumber, headSha, issueId }, null, 2), 'utf8');
+            } catch (error) {
+              await github.rest.checks.update({
+                owner, repo,
+                check_run_id: check.id,
+                status: 'completed',
+                conclusion: 'failure',
+                completed_at: new Date().toISOString(),
+                output: {
+                  title: 'Tier C Authorization Gate: INFRA ERROR',
+                  summary: `Failed to collect PR metadata/tier/changed files/approvals: ${error instanceof Error ? error.message : String(error)}`,
+                },
+              });
+              throw error;
+            }
 
       - name: Resolve trusted gate script and its dependency graph
         id: resolve_trusted
+        env:
+          GH_TOKEN: ${{ github.token }}
         # The PR under evaluation cannot be trusted to supply the code that
         # evaluates it -- a diff could touch a Tier C path *and* modify this
         # gate script (or scripts/ops/merge-risk.ts's own Tier C path
@@ -220,12 +264,19 @@ jobs:
         #
         # Bootstrap exception: origin/main has no copy yet of the two files
         # this very PR introduces (tier-c-authorization-gate.ts,
-        # tier-c-approval-comment-parser.ts). Fall back to the PR's own copy
-        # for exactly those two, with a loud warning -- expected only until
-        # this PR merges, same rollout pattern file-scope-lock-check.yml
-        # used for file-scope-guard.ts under UTV2-1521.
+        # tier-c-approval-comment-parser.ts). Fall back to fetching their
+        # *text content* (never executed as-is; only read as bytes) from the
+        # PR head SHA via the GitHub Contents API -- never from the local
+        # working tree, which is now pinned to the base SHA (see Checkout
+        # step) and so no longer contains the PR's own files at all. Reading
+        # file bytes via the API carries none of the pnpm-install/execution
+        # risk the checkout-ref pin closes; only running that content would.
+        # Expected only until this PR merges, same rollout pattern
+        # file-scope-lock-check.yml used for file-scope-guard.ts under
+        # UTV2-1521.
         run: |
           mkdir -p .out/trusted-checkout/scripts/ci .out/trusted-checkout/scripts/ops
+          HEAD_SHA=$(python3 -c "import json; print(json.load(open('.out/tier-c-meta.json'))['headSha'])")
 
           for f in scripts/ops/merge-risk.ts scripts/ops/shared.ts scripts/ops/concurrency-config.ts; do
             if git show "origin/main:$f" > ".out/trusted-checkout/$f" 2>/dev/null; then
@@ -240,8 +291,9 @@ jobs:
             if git show "origin/main:$f" > ".out/trusted-checkout/$f" 2>/dev/null; then
               echo "Using base-branch (origin/main) copy of $f"
             else
-              echo "::warning::Base branch has no $f yet -- falling back to this PR's own copy. Expected only for the PR that introduces this gate (UTV2-1570)."
-              cp "$f" ".out/trusted-checkout/$f"
+              echo "::warning::Base branch has no $f yet -- fetching its text content from the PR head SHA via the Contents API (never executed from the local working tree). Expected only for the PR that introduces this gate (UTV2-1570)."
+              gh api "repos/${{ github.repository }}/contents/$f?ref=$HEAD_SHA" --jq '.content' \
+                | base64 -d > ".out/trusted-checkout/$f"
             fi
           done
 

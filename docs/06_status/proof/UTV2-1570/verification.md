@@ -172,6 +172,30 @@ around `scripts/ops/lane-start.ts`'s current
 `flags.has('singleton-approved') || bools.has('singleton-approved')` line)
 once the conflicting lane merges or closes.
 
+## PM review: PARKED (authoritative status)
+
+griff843 posted a direct PR review on 2026-07-21T23:11:32Z:
+
+> PM exact-head review: approval is withheld and this implementation is
+> parked. The parent design #1289 is not approved; the singleton validator
+> is not wired into lane-start; the privileged gate executes PR-controlled
+> install scripts with write permissions; approval-comment reruns do not
+> reliably publish a passing check to the PR head; and an error after
+> explicit check creation can leave the check stuck in progress.
+
+This is the authoritative status of this PR. Two of the five points are
+fixed in this revision (see `evidence.json`'s `codex_review.round_2_and_pm_review.fixes_applied`):
+the privileged-install-scripts finding (checkout now pinned to the PR's
+base SHA, closing the PR-controlled-code-execution path) and the
+stuck-in-progress finding (the collect step's post-check-creation logic is
+now wrapped in try/catch so the explicit check always reaches a terminal
+state). The remaining three points are not resolvable by this executor
+alone: the parent design PR's own approval status, the singleton-validator
+lane-start wiring (blocked by a concurrent lane's active file-scope lock),
+and live re-verification of the approval-comment-rerun path against a real
+PR are all either outside this lane's authority or require a live retest
+this proof revision does not perform.
+
 ## Owner boundary
 
 T1 governance/security enforcement. Requires exact-head independent review,

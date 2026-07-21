@@ -4,7 +4,7 @@
   "title": "Implement Tier C authorization gate + singleton approval record (UTV2-1451 child)",
   "tier": "T1",
   "lane_type": "governance",
-  "status": "AWAITING_REVIEW",
+  "status": "PARKED_BY_PM",
   "source_sha": "333c0d041f2e345b41fc1e5608dda4121ef2050a",
   "reviewed_head_sha": null,
   "evidence_commit_sha": "set-by-ci",
@@ -213,7 +213,28 @@
       "finding": "P2: issue_comment-triggered re-evaluation (posting TIER_C_APPROVAL after an earlier failing pull_request run) never created or updated a Checks API run bound to the PR's head_sha -- only the job's own native per-trigger status was produced, which branch protection would not associate with the PR's head SHA for the pull_request-triggered failure. A later valid approval comment would not actually unblock the PR without a manual rerun or new push.",
       "fix": "Restructured the workflow to explicitly create a Checks API run (checks.create) bound to the PR's headSha at the start of every evaluation (regardless of trigger event), and explicitly complete it (checks.update) with the correct conclusion at the end -- mirroring merge-gate.yml's own established checks.create/checks.update pattern exactly. The 'Evaluate Tier C authorization' step now uses continue-on-error so the completion step always runs and the explicit check never gets stuck in_progress; core.setFailed() still marks the job itself failed on a BLOCKED verdict for Actions-tab visibility.",
       "status": "addressed"
+    },
+    "round_2_and_pm_review": {
+      "reviewed_at": "2026-07-21T23:11:32.000Z",
+      "codex_findings": [
+        "P1: privileged job (checks:write/issues:write/pull-requests:write) ran pnpm install against the PR's own (attacker-controlled) checkout on pull_request events -- a malicious PR could run arbitrary code with this job's write-scoped token via a malicious postinstall script or modified pnpm-lock.yaml.",
+        "P2: if the collect step's post-check-creation logic threw (malformed manifest, transient API failure listing files/comments, etc.), the completion step was skipped, leaving the explicit check stuck in_progress on the PR head forever."
+      ],
+      "pm_review": {
+        "author": "griff843",
+        "verbatim": "PM exact-head review: approval is withheld and this implementation is parked. The parent design #1289 is not approved; the singleton validator is not wired into lane-start; the privileged gate executes PR-controlled install scripts with write permissions; approval-comment reruns do not reliably publish a passing check to the PR head; and an error after explicit check creation can leave the check stuck in progress.",
+        "disposition": "PARKED -- approval explicitly withheld by the human PM. This is the authoritative status of this PR as of this proof revision; do not treat any later CI green state as overriding it. Two of the five points raised (privileged install scripts; check stuck in progress) are fixed in this revision -- see fixes below. The remaining three (parent design #1289 not yet approved; singleton validator not wired into lane-start; whether approval-comment reruns now reliably publish, given the round-1 fix) are not resolvable by this executor alone and require either the parent design PR's own approval, the conflicting UTV2-1569 lane clearing, or a live re-test of the issue_comment re-evaluation path against a real PR."
+      },
+      "fixes_applied": [
+        "Pinned the workflow's initial Checkout step to github.event.pull_request.base.sha (immutable, never PR-supplied) for pull_request events, matching merge-gate.yml's own established checkout-ref-pin pattern -- pnpm install now always resolves dependencies from trusted base-branch state, never the PR's own package.json/pnpm-lock.yaml. The two new-file bootstrap fallbacks in 'Resolve trusted gate script' now fetch text content (never executed as raw bytes) from the PR head SHA via the GitHub Contents API instead of reading a local working-tree copy, since that checkout no longer contains the PR's own new files.",
+        "Wrapped the collect step's post-check-creation logic (tier resolution, changed-files/approval-comment collection) in try/catch: any error now completes the explicit check as a failure with the error message before rethrowing, so the check always reaches a terminal state instead of getting stuck in_progress."
+      ],
+      "not_addressed_by_this_executor": [
+        "Parent design PR #1289's own approval status -- outside this lane's scope; tracked in Linear.",
+        "Singleton validator wiring into lane-start.ts -- blocked by the concurrent UTV2-1569 lane's active file-scope lock (see known_gaps above); requires that lane to clear first.",
+        "Whether the round-1 check-run-binding fix now reliably publishes a passing check on an approval-comment rerun -- not yet exercised against a live PR with a real TIER_C_APPROVAL comment; the fix is code-reviewed and logically sound but not runtime-proven in this exact scenario."
+      ]
     }
   },
-  "verdict": "READY_FOR_REVIEW_WITH_DOCUMENTED_GAP"
+  "verdict": "PARKED_BY_PM_NOT_READY_TO_MERGE"
 }
