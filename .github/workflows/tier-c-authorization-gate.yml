@@ -1,0 +1,275 @@
+name: Tier C Authorization Gate
+
+# Closes the "Tier C path guard silently authorizes via self-declared scope"
+# loophole (UTV2-1570, implementation child of UTV2-1451).
+#
+# .claude/hooks/tier-c-path-guard.sh is a local, real-time PreToolUse editing
+# guard -- a session can route around it entirely (disable hooks, edit
+# outside Claude Code). It is not a merge gate. This workflow is the
+# mechanical, CI-enforced half: it fails closed when a non-T1 PR's diff
+# touches a canonical Tier C path (scripts/ops/merge-risk.ts's isTierCPath(),
+# imported directly -- not a second Tier C path list) without a valid
+# tier-c-approval/v1 PR comment (docs/05_operations/schemas/tier-c-approval-v1.md)
+# covering every matched path, from an authorized CODEOWNERS human, bound to
+# the exact PR head SHA.
+#
+# T1 lanes touching Tier C paths need no additional artifact here: their own
+# t1-approved + pm-verdict/v1 gate (merge-gate.yml) already is PM sign-off on
+# the exact head, which necessarily covers whatever the diff touches.
+#
+# Required-check status: candidate for promotion to `main` branch protection
+# (see docs/05_operations/REQUIRED_CI_CHECKS.md §5) -- promote after the
+# first full green run is confirmed on a Tier-C-touching PR, same rollout
+# pattern used for Proof Auditor Gate.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: write
+
+jobs:
+  gate:
+    name: Tier C Authorization Gate
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, 'TIER_C_APPROVAL:'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve PR number
+        id: resolve_pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.eventName === 'pull_request'
+              ? context.payload.pull_request.number
+              : context.payload.issue.number;
+            core.setOutput('pr_number', prNumber);
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Resolve PR metadata, tier, changed files, and approval comments
+        id: collect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prNumber = Number(${{ steps.resolve_pr.outputs.pr_number }});
+
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+            const headSha = pr.head.sha;
+            const headRef = pr.head.ref;
+            const baseSha = pr.base.sha;
+            const prTitle = pr.title || '';
+
+            // ── Resolve authoritative tier from lane manifest, same source
+            // merge-gate.yml treats as authoritative -- GitHub tier labels are
+            // evidence, never authority (docs/05_operations/EXECUTION_TRUTH_MODEL.md).
+            const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
+              (prTitle || '').match(/((?:UTV2|UNI)-\d+)/i);
+            const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
+
+            async function readManifest(ref) {
+              if (!issueId || !ref) return null;
+              try {
+                const { data } = await github.rest.repos.getContent({
+                  owner, repo,
+                  path: `docs/06_status/lanes/${issueId}.json`,
+                  ref,
+                });
+                if (Array.isArray(data) || !data.content) return null;
+                return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            }
+
+            const manifest = await readManifest(headSha) || await readManifest(baseSha);
+            const tier = manifest && /^(T1|T2|T3)$/i.test(String(manifest.tier))
+              ? String(manifest.tier).toUpperCase()
+              : 'T3'; // fail-closed default: an unresolvable tier is treated as
+                       // the most-scrutinized non-T1 case, never silently exempted.
+
+            // ── Changed files via the API (never a local `git diff` against
+            // a PR-controlled checkout -- same reasoning as
+            // file-scope-lock-check.yml's own "Collect changed files" step).
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber, per_page: 100
+            });
+            fs.mkdirSync('.out', { recursive: true });
+            fs.writeFileSync('.out/tier-c-changed-files.txt', files.map((f) => f.filename).join('\n') + '\n', 'utf8');
+
+            // ── Collect authorized tier-c-approval/v1 comments. Mirrors
+            // scripts/ci/tier-c-approval-comment-parser.ts inline (GitHub
+            // Actions' github-script body cannot import a TS module
+            // directly) -- keep the two in lockstep on any future change.
+            const AUTHORIZED_REVIEWERS = new Set(['griff843']);
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: prNumber, per_page: 100
+            });
+
+            const approvals = [];
+            for (const c of comments) {
+              if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') continue;
+
+              const body = (c.body || '').replace(/\r\n/g, '\n');
+              const lines = body.split(/\r?\n/).map((l) => l.trim());
+              if (lines[0] !== 'TIER_C_APPROVAL: APPROVED' || lines[1] !== 'schema: tier-c-approval/v1') continue;
+
+              const fields = {};
+              const paths = [];
+              let i = 2;
+              while (i < lines.length) {
+                const line = lines[i];
+                if (line === 'Paths:') {
+                  i += 1;
+                  while (i < lines.length && lines[i].startsWith('- ')) {
+                    const p = lines[i].slice(2).trim();
+                    if (p) paths.push(p);
+                    i += 1;
+                  }
+                  continue;
+                }
+                const match = line.match(/^([A-Za-z-]+):\s*(.+)$/);
+                if (match) fields[match[1]] = match[2].trim();
+                i += 1;
+              }
+
+              const issueFieldMatch = (fields['Issue'] || '').match(/^UTV2-\d+$/);
+              const prFieldMatch = (fields['PR'] || '').match(/^#(\d+)$/);
+              if (!issueFieldMatch || !prFieldMatch || !fields['Head-SHA'] || paths.length === 0) continue;
+
+              approvals.push({
+                issue_id: issueFieldMatch[0],
+                pr_number: Number.parseInt(prFieldMatch[1], 10),
+                head_sha: fields['Head-SHA'],
+                paths,
+                authorized_by: c.user.login,
+                reason: fields['Reason'] || '',
+              });
+            }
+
+            fs.writeFileSync('.out/tier-c-approvals.json', JSON.stringify(approvals, null, 2), 'utf8');
+            fs.writeFileSync('.out/tier-c-meta.json', JSON.stringify({ tier, prNumber, headSha, issueId }, null, 2), 'utf8');
+
+      - name: Resolve trusted gate script and its dependency graph
+        id: resolve_trusted
+        # The PR under evaluation cannot be trusted to supply the code that
+        # evaluates it -- a diff could touch a Tier C path *and* modify this
+        # gate script (or scripts/ops/merge-risk.ts's own Tier C path
+        # matrix) in the same commit set to make the check pass. Resolve
+        # every file in the gate's own import graph (tier-c-authorization-
+        # gate.ts -> tier-c-approval-comment-parser.ts, and -> merge-risk.ts
+        # -> shared.ts + concurrency-config.ts) from origin/main and execute
+        # that mirror instead of the PR's own copies. shared.ts requires a
+        # real git repository at runtime (getRepoRoot()), so the mirror is
+        # placed under .out/ inside THIS checkout (a genuine repo), not an
+        # isolated temp directory -- verified empirically this session that
+        # relocating shared.ts outside any git repo throws immediately at
+        # import time.
+        #
+        # Bootstrap exception: origin/main has no copy yet of the two files
+        # this very PR introduces (tier-c-authorization-gate.ts,
+        # tier-c-approval-comment-parser.ts). Fall back to the PR's own copy
+        # for exactly those two, with a loud warning -- expected only until
+        # this PR merges, same rollout pattern file-scope-lock-check.yml
+        # used for file-scope-guard.ts under UTV2-1521.
+        run: |
+          mkdir -p .out/trusted-checkout/scripts/ci .out/trusted-checkout/scripts/ops
+
+          for f in scripts/ops/merge-risk.ts scripts/ops/shared.ts scripts/ops/concurrency-config.ts; do
+            if git show "origin/main:$f" > ".out/trusted-checkout/$f" 2>/dev/null; then
+              echo "Using base-branch (origin/main) copy of $f"
+            else
+              echo "::error::Base branch has no $f -- this file is expected to already exist on main. Failing closed."
+              exit 1
+            fi
+          done
+
+          for f in scripts/ci/tier-c-authorization-gate.ts scripts/ci/tier-c-approval-comment-parser.ts; do
+            if git show "origin/main:$f" > ".out/trusted-checkout/$f" 2>/dev/null; then
+              echo "Using base-branch (origin/main) copy of $f"
+            else
+              echo "::warning::Base branch has no $f yet -- falling back to this PR's own copy. Expected only for the PR that introduces this gate (UTV2-1570)."
+              cp "$f" ".out/trusted-checkout/$f"
+            fi
+          done
+
+      - name: Evaluate Tier C authorization
+        id: gate
+        run: |
+          TIER=$(python3 -c "import json; print(json.load(open('.out/tier-c-meta.json'))['tier'])")
+          PR_NUMBER=$(python3 -c "import json; print(json.load(open('.out/tier-c-meta.json'))['prNumber'])")
+          HEAD_SHA=$(python3 -c "import json; print(json.load(open('.out/tier-c-meta.json'))['headSha'])")
+          pnpm exec tsx .out/trusted-checkout/scripts/ci/tier-c-authorization-gate.ts \
+            --changed-files-file .out/tier-c-changed-files.txt \
+            --tier "$TIER" \
+            --approval-file .out/tier-c-approvals.json \
+            --pr-number "$PR_NUMBER" \
+            --head-sha "$HEAD_SHA" \
+            --output-json .out/tier-c-result.json
+
+      - name: Comment on Tier C authorization failure
+        if: failure() && steps.gate.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = Number(${{ steps.resolve_pr.outputs.pr_number }});
+            let result;
+            try {
+              result = JSON.parse(fs.readFileSync('.out/tier-c-result.json', 'utf8'));
+            } catch {
+              result = null;
+            }
+
+            const lines = ['**TIER C AUTHORIZATION REQUIRED**', ''];
+            if (result) {
+              lines.push(`Lane tier: \`${result.tier}\``, '');
+              lines.push('This PR touches Tier C path(s) with no valid `tier-c-approval/v1` comment covering them:', '');
+              for (const p of result.uncovered_paths) {
+                lines.push(`- \`${p}\``);
+              }
+              lines.push('');
+            }
+            lines.push(
+              'Post a comment matching `docs/05_operations/schemas/tier-c-approval-v1.md` ' +
+              '(schema: tier-c-approval/v1), authored by an authorized CODEOWNERS human, ' +
+              'bound to this exact PR and head SHA, covering every path listed above. ' +
+              'T1 lanes are exempt from this gate -- their own `t1-approved` + `pm-verdict/v1` ' +
+              'already covers this diff.'
+            );
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: lines.join('\n')
+            });
