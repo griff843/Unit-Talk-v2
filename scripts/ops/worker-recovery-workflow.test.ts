@@ -82,6 +82,38 @@ test('worker recovery: restart predicate requires an actual 502/Bad-Gateway sign
   );
 });
 
+test('worker recovery: abort-check fails closed if docker logs itself fails, instead of treating an inspection failure as no-evidence-found', () => {
+  const script = readWorkerRecoveryScript();
+
+  // Codex P2 (UTV2-1560): if the worker container is missing, the Docker
+  // daemon is unavailable, or the deploy user lacks Docker access, the
+  // abort-check's `docker logs` call fails -- but piping its (merged
+  // stderr) output straight into `grep -c` yields RECENT_502=0 either way,
+  // which the following branch then treats as "no recent 502 evidence,
+  // safe to no-op" (exit 0). That silently reports success when the
+  // restart gate was never actually evaluated. The fix must capture
+  // `docker logs`'s own exit code separately and fail closed (non-zero
+  // exit, explicit error) before ever computing RECENT_502 from it.
+  const rawIdx = script.indexOf('RECENT_502_RAW=');
+  assert.ok(rawIdx >= 0, 'docker logs output must be captured into its own variable, not piped directly into grep');
+
+  const exitCheckIdx = script.indexOf('DOCKER_LOGS_EXIT=\\$?', rawIdx);
+  assert.ok(exitCheckIdx >= 0, 'docker logs\' own exit code must be captured immediately after the command substitution');
+  assert.ok(exitCheckIdx < script.indexOf('RECENT_502=\\$(echo'), 'the exit-code capture must happen before RECENT_502 is computed');
+
+  const failClosedIdx = script.indexOf('DOCKER_LOGS_EXIT\\" -ne 0');
+  assert.ok(failClosedIdx >= 0, 'must branch on docker logs\' own exit code being non-zero');
+  const failBranch = script.slice(failClosedIdx, failClosedIdx + 300);
+  assert.match(failBranch, /::error::/, 'a docker logs failure must emit an explicit error annotation');
+  assert.match(failBranch, /exit 1/, 'a docker logs failure must fail the script closed, not fall through to the abort-as-success path');
+
+  // RECENT_502 itself must be computed from the already-captured raw
+  // output, not by re-invoking docker logs piped straight into grep.
+  const recentIdx = script.indexOf('RECENT_502=\\$(echo');
+  assert.ok(recentIdx >= 0, 'RECENT_502 must be derived from the captured RECENT_502_RAW variable');
+  assert.ok(recentIdx > failClosedIdx, 'RECENT_502 must only be computed after the fail-closed check has passed');
+});
+
 test('worker recovery: running + unhealthy fails closed', () => {
   const script = readWorkerRecoveryScript();
   const unhealthyIdx = script.indexOf(`elif [ \\"\\$HEALTH\\" = 'unhealthy' ]`);

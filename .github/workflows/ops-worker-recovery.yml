@@ -99,7 +99,14 @@ jobs:
             echo ''
             echo '=== ABORT CHECK: is an ACTUAL recent 502/Bad-Gateway condition on the claim path present? ==='
             echo '(bounded to the last 15 minutes of logs by timestamp -- old log text, and generic claim_next_outbox failures with no 502 signature (e.g. statement-timeout errors), do not authorize a restart)'
-            RECENT_502=\$(docker logs \"\$TARGET\" --since 15m 2>&1 | grep -icE 'claim_next_outbox failed:.*(502[^0-9]|bad gateway)')
+            RECENT_502_RAW=\$(docker logs \"\$TARGET\" --since 15m 2>&1)
+            DOCKER_LOGS_EXIT=\$?
+            if [ \"\$DOCKER_LOGS_EXIT\" -ne 0 ]; then
+              echo \"::error::docker logs --since 15m failed (exit \$DOCKER_LOGS_EXIT) -- cannot verify whether a recent 502 condition is present. Failing closed rather than treating an inspection failure as 'no evidence found'.\"
+              echo \"\$RECENT_502_RAW\"
+              exit 1
+            fi
+            RECENT_502=\$(echo \"\$RECENT_502_RAW\" | grep -icE 'claim_next_outbox failed:.*(502[^0-9]|bad gateway)')
             echo \"Recent claim_next_outbox+502 line count in the last 15 minutes: \$RECENT_502\"
 
             if [ \"\$RECENT_502\" -eq 0 ]; then
