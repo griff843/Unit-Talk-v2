@@ -83,7 +83,7 @@
     "pass": 7,
     "fail": 0,
     "skipped": 0,
-    "note": "This lane changes only a local Claude Code hook, CI gate scripts, a schema doc, and a pure Linear-GraphQL validator module; no production code path or migration touched. Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy, same reasoning as UTV2-1550's proof.",
+    "note": "This lane changes only a local Claude Code hook, CI gate scripts, and a pure Linear-GraphQL validator module (its schema is documented in that module's own header comment); no production code path or migration touched. Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy, same reasoning as a prior lane's proof for an equally out-of-domain CI/governance change.",
     "queries": [
       {
         "table": "submissions",

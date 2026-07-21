@@ -28,7 +28,10 @@
     "scripts/ops/singleton-approval.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1570/evidence.json"
+    "docs/06_status/proof/UTV2-1570/.gitkeep",
+    "docs/06_status/proof/UTV2-1570/diff-summary.md",
+    "docs/06_status/proof/UTV2-1570/evidence.json",
+    "docs/06_status/proof/UTV2-1570/verification.md"
   ],
   "status": "started",
   "started_at": "2026-07-21T21:56:53.581Z",

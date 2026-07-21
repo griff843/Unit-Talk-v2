@@ -1,5 +1,11 @@
 # PROOF: UTV2-1570
 
+Head SHA at proof-authoring time (pre-push local head; superseded by the
+actual PR head SHA / merge SHA per standard post-merge proof-SHA-binding
+automation): 824ce007fbdba04782b2cdaf2100701bd5e8e939
+
+## Verification
+
 ## Summary
 
 Implements the concrete Tier C authorization gate and singleton approval
@@ -120,14 +126,20 @@ ok 6 - UTV2-996: re-settling a settled pick creates correction — no true dupli
 ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
 1..7
 # tests 7
+# suites 0
 # pass 7
 # fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 104747.334305
 ```
 
-This lane changes only a local Claude Code hook, CI gate scripts, a schema
-doc, and a pure Linear-GraphQL validator module — no production code path
-or migration touched. Live smoke run regardless per T1 policy (same
-reasoning as UTV2-1550's proof).
+This lane changes only a local Claude Code hook, CI gate scripts, and a
+pure Linear-GraphQL validator module (its schema is documented in that
+module's own header comment) — no production code path or migration
+touched. Live smoke run regardless per T1 policy (same reasoning as a
+prior lane's proof for an equally out-of-domain CI/governance change).
 
 ## Live GraphQL introspection used to design `singleton-approval.ts`
 
