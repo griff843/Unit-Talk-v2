@@ -34,6 +34,53 @@ test (including live-DB suites) ... PASS
 (exit code 0)
 ```
 
+## Verification
+
+This is a documentation/governance-only diff (routing tables, operating-model prose, a
+contract-validator model allowlist) -- no runtime code paths changed. Per this repo's own
+precedent for doc-only T1 governance lanes (UTV2-1503, PR #1232), the standalone live-DB smoke
+is still run for real against Supabase rather than waived, so the gate has actual runtime
+evidence to bind to instead of an unenforced "N/A" claim.
+
+### Standalone live database smoke
+
+Command executed:
+
+```text
+pnpm test:db
+```
+
+Terminal summary (this exact head):
+
+```text
+TAP version 13
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 116585.891658
+```
+
+Ran against Supabase project `zfzdnfwdarxucxtaojxm` using the repository's existing
+`database-smoke.test.ts` suite. This documentation-only change performs no separate production
+mutation; the suite exercises the same submission/settlement/outbox paths every T1 lane's live-DB
+smoke already covers, and creates and cleans up its own test rows.
+
+### Full repository gate
+
+Command executed:
+
+```text
+pnpm verify
+```
+
+Result: PASS, exit code 0 (env:check, lint, type-check, build, full test suite including the
+live-DB smoke above).
+
 ## Known gaps (stated honestly, not omitted)
 
 - This pilot framing (as opposed to the earlier permanent-reinstatement draft) has not itself been

@@ -34,7 +34,16 @@
   },
   "runtime_proof": {
     "applicable": false,
-    "note": "Docs/governance-only diff -- no runtime, workflow, or hook behavior changed by this lane."
+    "note": "Docs/governance-only diff -- no runtime, workflow, or hook behavior changed by this lane. The standalone live-DB smoke below is still run for real (not waived) per this repo's UTV2-1503 precedent for doc-only T1 governance lanes, so the gate has actual evidence rather than an unenforced N/A claim.",
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "target": "live Supabase project zfzdnfwdarxucxtaojxm"
+    }
   },
   "model_routing": {
     "decision_type": "fable_pilot_authorization",
