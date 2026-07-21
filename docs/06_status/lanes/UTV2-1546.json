@@ -29,12 +29,12 @@
     "docs/06_status/proof/UTV2-1546/diff-summary.md",
     "docs/06_status/proof/UTV2-1546/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-20T02:52:53.129Z",
-  "heartbeat_at": "2026-07-20T19:42:30.380Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-21T00:00:07.077Z",
+  "closed_at": "2026-07-21T00:00:07.077Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1546-delegation-kill-switch.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -57,6 +57,26 @@
       "repaired_fields": [
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-21T00:00:04.011Z",
+      "verdict": "pass",
+      "merge_sha": "f0c3bda609399d3e323b128db0c08ce4f0b86cce",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1269",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-21T00:00:04.020Z",
+      "verdict": "pass",
+      "merge_sha": "f0c3bda609399d3e323b128db0c08ce4f0b86cce",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
