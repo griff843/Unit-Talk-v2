@@ -119,14 +119,60 @@ trusted YAML, reads PR state only via the REST API). Full detail:
 
 ## Addendum: file_scope_lock reconciliation (2026-07-21, branch claude/utv2-1550-scope-reconcile)
 
-Narrowed `file_scope_lock` to drop the stale `package.json` entry. This issue's own implementation
-is fully merged (PR #1239, main); no further active editing is happening under this issue, but the
-lock still blocked a later, unrelated lane (UTV2-1560/#1271) from touching the same `package.json`
-line under its own scope. `status` remains `merged` (honest — this lane still cannot mechanically
-reach `done` via `ops:lane-close --repair-merged`: `Executor Result Validation` and `P0 Protocol`
-only trigger on PR-scoped GitHub events and this PR is closed/merged, so they can never
-re-evaluate on this merge commit — a separate, pre-existing gap this reconciliation does not
-attempt to resolve). `pnpm verify` PASS on branch `claude/utv2-1550-scope-reconcile`.
+This issue's own implementation is fully merged (PR #1239, main); no further active editing is
+happening under this issue, but its manifest's `file_scope_lock` still declared `package.json`,
+blocking a later, unrelated lane from touching the same line under its own scope even though
+`ops:lane-start`'s own documented active-status set (`LANE_MANIFEST_SPEC.md` §6: `started,
+in_progress, in_review, blocked, reopened`) does not include `merged` — only the CI file-scope
+guard's separate, deliberately broader `ACTIVE_STATUSES` (which includes `merged`, per the
+UTV2-1563 comment in `scripts/ci/file-scope-guard.ts`) does.
+
+### What changed and why (redesign after PM CHANGES_REQUIRED, 2026-07-21 15:47 UTC)
+
+The first attempt narrowed `file_scope_lock` alone, dropping `package.json`, while leaving
+`package.json` in `files_changed`. A live `pnpm ops:truth-check UTV2-1550` run confirms this makes
+**S1** fail (`files_changed outside file_scope_lock: package.json`) — S1 requires
+`files_changed ⊆ file_scope_lock ∪ expected_proof_paths`. That is a real defect: it leaves the
+manifest unable to ever truthfully self-report a passing scope-consistency check again, independent
+of whether `done` is ever reached.
+
+Fix: `files_changed` now also drops `package.json`, keeping the two fields in lockstep so S1 holds.
+Per `LANE_MANIFEST_SPEC.md` §4.2, `files_changed` is explicitly documented as mutable
+(`file_scope_lock` is documented immutable outside of the not-yet-implemented `ops:lane:relock`
+command referenced in §6). This manifest edit does not alter shipped history: the manifest is
+explicitly "not authoritative for shipped code" (`LANE_MANIFEST_SPEC.md` §1) — the literal merged
+diff, including `package.json`, remains permanently on GitHub as PR #1239's merge commit
+(`1d555828eed109bfe3d33f8e9cc5caa1aa202db8`), which is rank-1 truth per `CLAUDE.md`'s truth
+hierarchy and is unaffected by this bookkeeping correction.
+
+`status` remains `merged`, not `done` (verified live, not assumed): `pnpm ops:truth-check UTV2-1550`
+currently fails on **L3** (Linear state is `In Claude`, mid-fix — expected to clear once this PR is
+back in PM review) and **G4** (`Executor Result Validation`, `Merge Gate`, `P0 Protocol` required
+checks are missing/failing on both the merge commit and the PR #1239 head SHA
+`88693ae3d03e0202692838db678c5d5a7e372f40` — confirmed via the GitHub Checks API: the only
+check-run under the exact required name `Executor Result Validation` for that head SHA is a
+same-day manual re-run, `https://github.com/griff843/Unit-Talk-v2/runs/88654323469`, which fails on
+proof-file header format, not the original identity bug; no run under that exact required name ever
+passed on that immutable SHA). This is the same structural, pre-existing gap already described in
+the UTV2-1550 Linear issue: the check that must be required (because this PR introduced it) cannot
+retroactively re-evaluate against a commit that predates its own bootstrap. `ops:lane-close
+--override` (PM force-close) is the only mechanical path to `done` from here, and the Linear issue
+text explicitly asks that this gap be "folded into the closeout-lifecycle hardening work rather than
+bypassed on main" — this reconciliation does not attempt an override.
+
+### Known gap: this PR's own File Scope Lock check
+
+`scripts/ci/file-scope-guard.ts`'s `findOwnManifest` resolves "own manifest" either by an exact
+`branch` match or, for a continuation PR opened from a new branch name (exactly this situation —
+see the UTV2-1524 comment in that file), by an externally-authorized `scope-override/v1` PR
+comment naming this exact issue/PR/head-SHA. Neither applies automatically here: this manifest's
+`branch` still names the original `claude/utv2-1550-executor-result-required-check-identity`, and no
+`scope-override/v1` comment has been posted for this PR. Consequently this PR's own edits to
+`docs/06_status/lanes/UTV2-1550.json` and this file continue to show as a conflict against the
+"foreign" UTV2-1550 lane in the File Scope Lock check. Clearing that check requires Griff to post a
+`scope-override/v1` comment on this exact PR/head SHA (the same mechanism already used for a
+different lane's own reconciliation manifest, PR #1282) — that authorization cannot come from the
+executor. `pnpm verify` PASS on branch `claude/utv2-1550-scope-reconcile`.
 
 ## Owner boundary
 

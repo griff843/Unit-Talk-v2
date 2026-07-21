@@ -18,7 +18,6 @@
     "docs/06_status/proof/UTV2-1550/diff-summary.md",
     "docs/06_status/proof/UTV2-1550/evidence.json",
     "docs/06_status/proof/UTV2-1550/verification.md",
-    "package.json",
     "scripts/ops/executor-result-validate.test.ts",
     "scripts/ops/executor-result-validate.ts",
     "scripts/ops/workflow-hardening.test.ts"
@@ -41,7 +40,7 @@
   ],
   "status": "merged",
   "started_at": "2026-07-17T03:18:14.806Z",
-  "heartbeat_at": "2026-07-21T12:00:00.000Z",
+  "heartbeat_at": "2026-07-21T17:11:06.853Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
@@ -161,6 +160,38 @@
         "G4"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-21T17:00:22.913Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-21T17:00:38.495Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-21T17:11:06.853Z",
+      "verdict": "fail",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [
+        "L3",
+        "G4"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
