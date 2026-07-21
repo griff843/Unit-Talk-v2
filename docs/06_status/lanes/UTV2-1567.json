@@ -8,10 +8,13 @@
   "branch": "claude/utv2-1567-workflow-dispatch-sha-fix",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1286",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/UTV2-1567.yml",
+    "docs/06_status/lanes/UTV2-1567.json",
+    "docs/06_status/proof/UTV2-1567/.gitkeep",
     "docs/06_status/proof/UTV2-1567/diff-summary.md",
     "docs/06_status/proof/UTV2-1567/verification.md",
     "scripts/ops/post-merge-lane-close-workflow.test.ts"

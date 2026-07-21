@@ -1,6 +1,6 @@
 # PROOF: UTV2-1567
 
-MERGE_SHA: 7c25ed65
+MERGE_SHA: 7c25ed65882caf8d99b5c0290f3161159624c8ba
 
 The SHA above is `main`'s HEAD at the time this lane branched, an ancestor
 of the eventual PR merge commit — per this repo's accepted proof-binding
@@ -42,3 +42,20 @@ $ pnpm verify
 ## Tier
 
 T2 — CI workflow logic + regression test only.
+
+## Live-DB proof (T2 CI-workflow-only lane, no runtime/DB code touched)
+
+This lane's proof directory is audited by `pnpm exec tsx scripts/ops/proof-auditor-gate.ts --require-executed-command "pnpm test:db"`, which applies unconditionally to every changed proof directory regardless of tier. `pnpm test:db` was run against live Supabase solely to satisfy this gate.
+
+```text
+$ pnpm test:db
+TAP version 13
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
