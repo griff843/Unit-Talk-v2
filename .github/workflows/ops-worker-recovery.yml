@@ -81,10 +81,11 @@ jobs:
 
             echo '=== PRE-STATE ==='
             echo '--- image / config ---'
-            PRE_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            PRE_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
             echo \"\$PRE_LINE\"
             PRE_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
             PRE_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
+            PRE_STARTED_AT=\$(docker inspect \"\$TARGET\" --format '{{.State.StartedAt}}' 2>&1)
             PRE_HEALTH=\$(docker inspect \"\$TARGET\" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
             echo \"Pre-restart health: \$PRE_HEALTH (none = no healthcheck configured on this container)\"
             echo '--- configured target (most recent worker.startup line, canonical targets field) ---'
@@ -136,10 +137,11 @@ jobs:
             echo ''
             echo '=== POST-STATE ==='
             echo '--- image / config ---'
-            POST_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
+            POST_LINE=\$(docker inspect \"\$TARGET\" --format 'Image={{.Image}} ImageName={{.Config.Image}} RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}} Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>&1)
             echo \"\$POST_LINE\"
             POST_IMAGE=\$(docker inspect \"\$TARGET\" --format '{{.Image}}' 2>&1)
             POST_RESTART_COUNT=\$(docker inspect \"\$TARGET\" --format '{{.RestartCount}}' 2>&1)
+            POST_STARTED_AT=\$(docker inspect \"\$TARGET\" --format '{{.State.StartedAt}}' 2>&1)
             echo '--- configured target after restart (canonical targets field) ---'
             POST_TARGET_LINE=\$(docker logs \"\$TARGET\" 2>&1 | grep 'worker.startup' | tail -1)
             echo \"\$POST_TARGET_LINE\"
@@ -183,11 +185,11 @@ jobs:
               FAILED=1
             fi
 
-            EXPECTED_RESTART_COUNT=\$((PRE_RESTART_COUNT + 1))
-            if [ \"\$POST_RESTART_COUNT\" = \"\$EXPECTED_RESTART_COUNT\" ]; then
-              echo \"PASS: RestartCount advanced by exactly 1 (\$PRE_RESTART_COUNT -> \$POST_RESTART_COUNT), proving exactly one restart transition occurred\"
+            echo \"RestartCount pre=\$PRE_RESTART_COUNT post=\$POST_RESTART_COUNT (informational only -- Docker's RestartCount reflects restarts performed by the container's restart policy, e.g. on-failure/always, NOT a manual 'docker restart' invocation like this workflow performs. It can legitimately stay unchanged across a successful operator-initiated restart, so it must never gate PASS/FAIL here.)\"
+            if [ -n \"\$PRE_STARTED_AT\" ] && [ -n \"\$POST_STARTED_AT\" ] && [ \"\$PRE_STARTED_AT\" != \"\$POST_STARTED_AT\" ]; then
+              echo \"PASS: container StartedAt advanced (\$PRE_STARTED_AT -> \$POST_STARTED_AT), proving the container process was actually restarted (StartedAt is set by the Docker daemon every time the container's process starts, regardless of whether the restart was manual or policy-triggered, so it is a reliable signal for both cases)\"
             else
-              echo \"::error::RestartCount did not advance by exactly 1 (pre=\$PRE_RESTART_COUNT post=\$POST_RESTART_COUNT, expected=\$EXPECTED_RESTART_COUNT) -- either no restart registered or more than one occurred (e.g. a crash loop).\"
+              echo \"::error::container StartedAt did not change across the restart (pre=\$PRE_STARTED_AT post=\$POST_STARTED_AT) -- no restart transition was verified.\"
               FAILED=1
             fi
 

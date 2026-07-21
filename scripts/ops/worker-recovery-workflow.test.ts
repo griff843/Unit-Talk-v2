@@ -160,14 +160,48 @@ test('worker recovery: changed target fails closed, compared via the canonical p
   assert.match(script, /PARSE_ERROR\*\).*FAILED=1/s);
 });
 
-test('worker recovery: RestartCount not advancing by exactly 1 fails closed', () => {
+test('worker recovery: manual-restart verification uses StartedAt, not RestartCount, as the gating signal', () => {
   const script = readWorkerRecoveryScript();
-  assert.match(script, /EXPECTED_RESTART_COUNT=\\\$\(\(PRE_RESTART_COUNT \+ 1\)\)/, 'must compute pre+1 explicitly');
-  const idx = script.indexOf('PASS: RestartCount advanced by exactly 1');
-  assert.ok(idx >= 0);
-  const surrounding = script.slice(idx, idx + 500);
-  assert.match(surrounding, /FAILED=1/);
-  assert.match(surrounding, /crash loop/i, 'the failure message should distinguish a possible crash loop from a no-op');
+
+  // Codex P2 (UTV2-1560): Docker's RestartCount only reflects restarts
+  // performed by the container's restart policy (on-failure/always) -- it
+  // does NOT increment for a manual `docker restart` invocation, which is
+  // exactly what this workflow performs. Gating on RestartCount would fail
+  // closed on every successful operator-initiated restart. RestartCount may
+  // still be captured/logged for audit purposes, but must never set FAILED.
+  const restartCountIdx = script.indexOf('RestartCount pre=');
+  assert.ok(restartCountIdx >= 0, 'RestartCount should still be logged informationally');
+  const restartCountLine = script.slice(restartCountIdx, restartCountIdx + 400);
+  assert.doesNotMatch(
+    restartCountLine,
+    /FAILED=1/,
+    'RestartCount must be informational only and must never itself set FAILED=1',
+  );
+  assert.match(
+    restartCountLine,
+    /informational only/i,
+    'the RestartCount log line must explicitly document that it does not gate success/failure',
+  );
+
+  // The actual gating signal: container StartedAt must change across the
+  // restart. StartedAt is set by the Docker daemon every time the
+  // container's process starts, whether the restart was manual or
+  // policy-triggered, making it a reliable signal for both cases.
+  const passIdx = script.indexOf('PASS: container StartedAt advanced');
+  assert.ok(passIdx >= 0, 'must have an explicit PASS branch keyed on StartedAt changing');
+  const gateIdx = script.indexOf('-n \\"\\$PRE_STARTED_AT\\"');
+  assert.ok(gateIdx >= 0, 'the gating check must require PRE_STARTED_AT to be non-empty');
+  const gateBranch = script.slice(gateIdx, passIdx);
+  assert.match(gateBranch, /-n \\"\\\$POST_STARTED_AT\\"/, 'the gating check must also require POST_STARTED_AT to be non-empty');
+  assert.match(
+    gateBranch,
+    /\\"\\\$PRE_STARTED_AT\\"\s*!=\s*\\"\\\$POST_STARTED_AT\\"/,
+    'the gating check must require pre != post',
+  );
+  const failIdx = script.indexOf('container StartedAt did not change across the restart');
+  assert.ok(failIdx >= 0, 'must have an explicit failure message when StartedAt does not change');
+  const failBranch = script.slice(failIdx, failIdx + 200);
+  assert.match(failBranch, /FAILED=1/, 'StartedAt not changing must set FAILED=1');
 });
 
 test('worker recovery: docker restart exit-code failure propagates to FAILED, not just informational logging', () => {
