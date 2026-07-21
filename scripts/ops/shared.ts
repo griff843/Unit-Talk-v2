@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
+import type { PlanningModelRoutingBlock } from './planning-model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
 export type LaneManifestStatus =
@@ -125,6 +126,21 @@ export interface LaneManifest {
    * LANE_MANIFEST_CURRENT_SCHEMA_VERSION's doc comment above for the version boundary.
    */
   model_routing?: ModelRoutingBlock;
+  /**
+   * Fable 5 pilot planning/review model decision (UTV2-1569). Claude-executor only --
+   * forbidden on any Codex-executor manifest, at any schema version (mirrors
+   * model_routing's Codex-only rule, inverted). Always OPTIONAL: unlike model_routing,
+   * this is never required at manifest-creation time even for a T1 Claude lane -- the
+   * ordinary case (no Fable involvement at all) simply omits it, since the Fable pilot
+   * is not on by default and most T1 lanes never touch it. When present, its `model`
+   * field is only ever "claude-sonnet-5" (the routed-but-recorded ordinary case,
+   * rarely worth persisting) or "claude-fable-5" (the pilot case, where recording it is
+   * the whole point -- see docs/05_operations/schemas/lane_manifest_v1.schema.json).
+   * See scripts/ops/planning-model-routing.ts for the resolver that produces this
+   * block, and docs/05_operations/policies/fable-pilot-policy.json for the policy it
+   * is resolved against.
+   */
+  planning_model_routing?: PlanningModelRoutingBlock;
   /**
    * The target issue this verification lane produces proof for (UTV2-1533 P2 fix).
    * Required for every schema_version-2 lane_type:"verification" manifest; forbidden on
@@ -977,6 +993,37 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     }
   }
 
+  if (manifest.planning_model_routing) {
+    const pmr = manifest.planning_model_routing;
+    const isCodexExecutor = manifest.executor === 'codex-cli' || manifest.executor === 'codex-cloud';
+    if (isCodexExecutor) {
+      errors.push(
+        `${sourcePath}: planning_model_routing is present but executor is "${manifest.executor}" -- planning_model_routing is Claude-only (mirrors model_routing's Codex-only rule, inverted)`,
+      );
+    }
+    if (!pmr.model || typeof pmr.model !== 'string') {
+      errors.push(`${sourcePath}: planning_model_routing.model is required`);
+    }
+    if (!pmr.profile || typeof pmr.profile !== 'string') {
+      errors.push(`${sourcePath}: planning_model_routing.profile is required`);
+    }
+    if (!['three-brain', 'manual-override'].includes(pmr.selected_by)) {
+      errors.push(`${sourcePath}: planning_model_routing.selected_by must be "three-brain" or "manual-override"`);
+    }
+    if (!pmr.rationale || typeof pmr.rationale !== 'string') {
+      errors.push(`${sourcePath}: planning_model_routing.rationale is required`);
+    }
+    if (!pmr.policy_version || typeof pmr.policy_version !== 'string') {
+      errors.push(`${sourcePath}: planning_model_routing.policy_version is required`);
+    }
+    if (typeof pmr.fallback_used !== 'boolean') {
+      errors.push(`${sourcePath}: planning_model_routing.fallback_used must be a boolean`);
+    }
+    if (pmr.fallback_used && !pmr.fallback_model) {
+      errors.push(`${sourcePath}: planning_model_routing.fallback_model is required when fallback_used is true`);
+    }
+  }
+
   return errors;
 }
 
@@ -1147,6 +1194,11 @@ export function createManifest(input: {
   requireExistingPreflightToken?: boolean;
   model_routing?: ModelRoutingBlock;
   /**
+   * Fable pilot planning/review model decision (UTV2-1569). Claude-only, always
+   * optional. See the LaneManifest.planning_model_routing doc comment.
+   */
+  planning_model_routing?: PlanningModelRoutingBlock;
+  /**
    * The target issue this verification lane produces proof for. Required for
    * lane_type:"verification" at schema_version 2; forbidden on any other
    * lane_type. See the LaneManifest.verification_target doc comment.
@@ -1179,6 +1231,12 @@ export function createManifest(input: {
     throw new Error(
       `Lane ${input.issue_id} has executor "${input.executor ?? 'unset'}" but a model_routing block was supplied. ` +
         `model_routing is Codex-only -- Claude lanes must never carry an executable Codex model configuration.`,
+    );
+  }
+  if (isCodexExecutor && input.planning_model_routing) {
+    throw new Error(
+      `Lane ${input.issue_id} has executor "${input.executor}" but a planning_model_routing block was supplied. ` +
+        `planning_model_routing is Claude-only (the Fable pilot never applies to Codex lanes).`,
     );
   }
   const isVerificationLane = input.lane_type === 'verification';
@@ -1221,6 +1279,7 @@ export function createManifest(input: {
     truth_check_history: [],
     reopen_history: [],
     ...(input.model_routing ? { model_routing: input.model_routing } : {}),
+    ...(input.planning_model_routing ? { planning_model_routing: input.planning_model_routing } : {}),
     ...(input.verification_target ? { verification_target: input.verification_target } : {}),
   };
 }

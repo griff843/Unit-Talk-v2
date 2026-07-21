@@ -1,0 +1,53 @@
+{
+  "policy_version": "1.0.0",
+  "schema_version": 1,
+  "description": "Canonical policy for the bounded Fable 5 pilot (UTV2-1569, following the pilot-evaluation issue's PILOT LONGER / lean YES / narrow scope conclusion). This file is the sole source of truth for which trigger classes, caps, and skip conditions govern Fable 5 eligibility as an advisory-only planning/review model. scripts/ops/planning-model-routing.ts is the sole mechanical consumer -- do not duplicate these values elsewhere. Mirrors the Codex model-routing policy convention (docs/05_operations/policies/codex-model-routing.json).",
+  "verified_against": {
+    "OPERATING_MODEL_SONNET5.md": "section 1",
+    "three-brain.md": "Fable 5 pilot routing section"
+  },
+  "pilot_enabled": false,
+  "pilot_enabled_description": "Global mechanical kill switch, independent of docs/05_operations/FABLE_PILOT_STATE.json's own status field. When false, scripts/ops/planning-model-routing.ts#resolvePlanningModel and #resolveFableAdvisoryReview must NEVER return a Fable model, regardless of pilot state, trigger class, or caller input. Both this flag AND the pilot state's status=='active' are required for Fable eligibility -- either one being false/off fails closed to Sonnet. This is the primary lever scripts/ops/fable-pilot-rollback.ts flips to false.",
+  "default_model": "claude-sonnet-5",
+  "default_profile": "sonnet-default",
+  "fable_model": "claude-fable-5",
+  "trigger_classes": {
+    "repeated_architecture_bounce": {
+      "enabled": true,
+      "profile": "fable-pilot-advisory",
+      "description": "A lane has bounced CHANGES_REQUIRED more than once on the same architectural question (2+ same-question bounces)."
+    },
+    "live_state_root_cause": {
+      "enabled": true,
+      "profile": "fable-pilot-advisory",
+      "description": "A hard root-cause/mechanistic-verification task where live-state evidence (runtime, DB, CI) must be checked, not just reasoned about."
+    },
+    "product_synthesis_no_precedent": {
+      "enabled": true,
+      "profile": "fable-pilot-advisory",
+      "description": "A product-synthesis decision with no existing precedent to follow -- judgment-heavy, not mechanically derivable from prior work."
+    },
+    "build_mode_certification_review": {
+      "enabled": true,
+      "profile": "fable-pilot-certification-review",
+      "description": "Advisory review of a Build Mode planning artifact or certification packet before it reaches Griff. Never itself a certifying vote."
+    }
+  },
+  "skip_list": [
+    "routine_coding",
+    "manifest_bookkeeping",
+    "proof_rebinding",
+    "ci_cleanup",
+    "mechanical_reconciliation"
+  ],
+  "skip_list_description": "Fable is never eligible for these classes even if a caller supplies a trigger_class string -- resolvePlanningModel treats any of these as an automatic Sonnet result, not a fallback. These are explicitly out of scope per UTV2-1569's required outcome.",
+  "caps": {
+    "max_qualifying_tasks": 8,
+    "max_days": 30,
+    "usage_ceiling_usd": 150
+  },
+  "advisory_only": true,
+  "binding_authority": false,
+  "reviewer_independence_required": true,
+  "fallback_model": "claude-sonnet-5"
+}

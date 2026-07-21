@@ -41,6 +41,7 @@ import {
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
+import { resolvePlanningModel, type PlanningModelRoutingBlock } from './planning-model-routing.js';
 // checkConcurrencyLimits() is the real, fail-closed mechanical authority for lane
 // admission -- it lives in concurrency-rules.ts (not here) so that lane-maximizer.ts's
 // advisory wave planner can import and call the exact same implementation instead of
@@ -358,6 +359,31 @@ function main(): void {
       process.exit(1);
     }
 
+    // Fable pilot planning-model routing (UTV2-1569), Claude-only, always optional.
+    // Mirrors --model-profile's shape but for the ordinary (non-Fable) case there is
+    // nothing to resolve at all -- the overwhelming majority of Claude lanes supply
+    // neither flag and planning_model_routing simply stays absent from the manifest.
+    // Only reached when the caller explicitly wants to record a Fable pilot decision.
+    const isClaudeExecutorForFable = executor === 'claude';
+    const fableTriggerClassFlag = flags.get('fable-trigger-class')?.at(-1);
+    const fableRationaleFlag = flags.get('fable-rationale')?.at(-1);
+    if (!isClaudeExecutorForFable && (fableTriggerClassFlag || fableRationaleFlag)) {
+      emitJson({
+        ok: false,
+        code: 'fable_routing_not_applicable',
+        message: `--fable-trigger-class/--fable-rationale supplied but executor "${executor}" is not claude. planning_model_routing is Claude-only.`,
+      });
+      process.exit(1);
+    }
+    if (isClaudeExecutorForFable && fableTriggerClassFlag && !fableRationaleFlag) {
+      emitJson({
+        ok: false,
+        code: 'fable_rationale_required',
+        message: '--fable-trigger-class requires --fable-rationale <text> as well.',
+      });
+      process.exit(1);
+    }
+
     // Same resume-vs-new-lane reasoning as model-profile above: only required/consumed
     // on the path that calls createManifest for a brand-new verification lane.
     const isVerificationLaneType = canonicalLaneType === 'verification';
@@ -553,6 +579,30 @@ function main(): void {
       modelRouting = resolution.model_routing!;
     }
 
+    // Planning-model routing resolution (UTV2-1569): only reached when the caller
+    // explicitly asks for it via --fable-trigger-class. Fails closed to Sonnet inside
+    // resolvePlanningModel itself (pilot ineligible, policy disabled, unknown/skip-listed
+    // trigger class, etc.) -- resolvePlanningModel never throws and never returns
+    // ok:false except on a policy-load failure, so this only exits non-zero in that one
+    // narrow case.
+    let planningModelRouting: PlanningModelRoutingBlock | undefined;
+    if (isClaudeExecutorForFable && fableTriggerClassFlag) {
+      const resolution = resolvePlanningModel({
+        tier,
+        triggerClass: fableTriggerClassFlag,
+        rationale: fableRationaleFlag!,
+      });
+      if (!resolution.ok) {
+        emitJson({
+          ok: false,
+          code: `planning_model_routing_${resolution.code.toLowerCase()}`,
+          message: resolution.message,
+        });
+        process.exit(1);
+      }
+      planningModelRouting = resolution.routing!;
+    }
+
     if (!branchAlreadyExists && !worktreeAlreadyExists) {
       createBranchAndWorktree(branch, worktreePath);
       linkWorktreeEnv(worktreePath);
@@ -602,6 +652,7 @@ function main(): void {
       now,
       requireExistingPreflightToken: true,
       model_routing: modelRouting,
+      ...(planningModelRouting ? { planning_model_routing: planningModelRouting } : {}),
       ...(verificationTargetFlag ? { verification_target: verificationTargetFlag } : {}),
     });
 

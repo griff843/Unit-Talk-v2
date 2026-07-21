@@ -170,13 +170,22 @@ For each validated target:
 
 **T1 lanes — mandatory planning phase before execution:**
 
-Spawn a planning subagent before touching any code. Use `model: "sonnet"` (Sonnet 5) for all T1 work — standard and novel/constitutional/governance scope alike. There is no higher planning-model tier: genuinely novel architecture, constitutional scope, or unresolved scope ambiguity is a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+Spawn a planning subagent before touching any code. **Resolve the planning model — never hardcode a literal.** Call `resolvePlanningModel()` (`scripts/ops/planning-model-routing.ts`) with the lane's tier and, if `/three-brain` identified one of the four ratified Fable pilot trigger classes for this issue (`.claude/commands/three-brain.md`'s "Fable 5 pilot routing" section), pass that trigger class and a rationale. Use `toAgentModelOverride(resolution.routing.model)` as the Agent call's `model` value — `"sonnet"` for the ordinary case and every fallback path (pilot ineligible, policy disabled, unknown/skip-listed trigger class), `"fable"` only when the pilot is genuinely active, within its caps, and the trigger class matches. There is no manual escalation tier above what this resolver returns: genuinely novel architecture, constitutional scope, or unresolved scope ambiguity outside the four ratified classes is still a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
 
 The plan this subagent produces is an **Outcome Contract** — a planning artifact only. It does not replace the lane manifest, `file_scope_lock`, `expected_proof_paths`, R-level checks, or PM merge gates. Its "Scope" and proof-relevant sections must generate-or-match the lane manifest's `file_scope_lock`/`expected_proof_paths` at lane-start time. Any divergence discovered later (e.g. the PR touches files outside the declared scope) is itself a Rule 9 escalation trigger — do not silently patch the manifest and continue.
 
 ```typescript
+const routing = resolvePlanningModel({
+  tier: "T1",
+  triggerClass: fable_trigger_class, // set by /three-brain routing, or null/undefined for the ordinary case
+  rationale: fable_rationale ?? "standard T1 planning",
+});
+// routing.routing.model is "claude-sonnet-5" or "claude-fable-5"; routing.routing.fallback_used
+// is true whenever a requested Fable trigger class fell back to Sonnet -- report this in
+// Phase 6, never drop it silently.
+
 Agent({
-  model: "sonnet",
+  model: toAgentModelOverride(routing.routing.model), // "sonnet" | "fable"
   description: `T1 planning: ${issue_id}`,
   prompt: `You are planning a T1 lane before implementation begins. Do not write code.
 
@@ -226,7 +235,7 @@ After the planning subagent returns, immediately post the Outcome Contract as a 
 ```
 mcp__claude_ai_Linear__save_comment({
   issueId: "<issue_id>",
-  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: sonnet\nStatus: awaiting Griff review before implementation begins."
+  body: `## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: ${routing.routing.model}${routing.routing.fallback_used ? ` (fallback from ${routing.routing.requested_model}: ${routing.routing.fallback_reason})` : ''}\nStatus: awaiting Griff review before implementation begins.`
 })
 ```
 Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
@@ -236,6 +245,10 @@ Do not begin implementation until Griff approves — either in-session or via a 
 Every Claude lane (T1 after plan approval, T2, T3) implements via a background `Agent` call in the worktree `ops:lane-start` already created — the same pattern already used for Codex. The orchestrator session never edits lane implementation files, never runs `pnpm verify`/tests for the lane, and never pushes lane commits directly; it dispatches, waits for the completion notification, then reviews/merges/closes exactly like a returned Codex PR (Phase 5).
 
 ```typescript
+// Implementation always uses Sonnet, never the resolved planning model above -- "routine
+// coding" is explicitly skip-listed in fable-pilot-policy.json even while the pilot is
+// active. The Fable pilot only ever applies to the planning pass (Phase 4, above) and the
+// advisory review pass (Phase 5, below) -- never to writing the code itself.
 Agent({
   run_in_background: true,
   model: "sonnet",
@@ -324,6 +337,8 @@ Return: APPROVE or REJECT with findings.`
 ```
 
 **Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
+
+**Optional additional Fable advisory review (UTV2-1569) — never a replacement for the codex-return-reviewer critique above:** if this lane matches one of the four ratified Fable pilot trigger classes (most likely `repeated_architecture_bounce` if this PR has already bounced `CHANGES_REQUIRED` more than once on the same architectural question, or `build_mode_certification_review` for a certification packet), call `resolveFableAdvisoryReview()` (`scripts/ops/planning-model-routing.ts`) with `reviewerIndependentOfAuthor: true` before spawning. If it resolves to `claude-fable-5`, spawn `subagent_type: "fable-pilot-reviewer"` as an ADDITIONAL background agent — its `FABLE_REVIEW: ADVISORY` output (`docs/05_operations/schemas/fable-review-v1.md`) is posted alongside, never instead of, the mandatory critique above, and never gates APPROVE/REJECT or merge. If `resolveFableAdvisoryReview()` falls back to Sonnet (pilot ineligible for any reason) or the trigger class doesn't apply, skip this step entirely — it is optional in every sense the mandatory critique above is not.
 
 5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
 6. If abandoning an active lane before work begins, release the lease explicitly:

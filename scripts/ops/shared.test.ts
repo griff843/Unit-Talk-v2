@@ -385,6 +385,163 @@ test('validateManifest rejects an override block missing authority or reason', (
   assert.match(errors, /model_routing.override.reason is required/);
 });
 
+// ── planning_model_routing (UTV2-1569 Fable pilot) — mirrors the model_routing pattern above, Claude-only instead of Codex-only ──
+
+test('createManifest rejects planning_model_routing on a Codex lane (UTV2-1569)', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1569',
+        tier: 'T1',
+        branch: 'codex/utv2-1569-with-planning-routing',
+        worktree_path: worktreePathForBranch('codex/utv2-1569-with-planning-routing'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1569', 'T1'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1569-with-planning-routing.json',
+        executor: 'codex-cli',
+        model_routing: {
+          profile: 'codex-terra-medium',
+          model: 'gpt-5.6-terra',
+          reasoning_effort: 'medium',
+          selected_by: 'three-brain',
+          policy_version: '1.0.0',
+        },
+        planning_model_routing: {
+          model: 'claude-sonnet-5',
+          profile: 'sonnet-default',
+          selected_by: 'three-brain',
+          rationale: 'x',
+          policy_version: '1.0.0',
+          fallback_used: false,
+        },
+      }),
+    /planning_model_routing is Claude-only/,
+  );
+});
+
+test('createManifest accepts a Claude T1 lane with a valid Fable planning_model_routing block', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1569',
+    tier: 'T1',
+    branch: 'claude/utv2-1569-with-planning-routing',
+    worktree_path: worktreePathForBranch('claude/utv2-1569-with-planning-routing'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1569', 'T1'),
+    preflight_token: '.out/ops/preflight/claude/utv2-1569-with-planning-routing.json',
+    executor: 'claude',
+    planning_model_routing: {
+      model: 'claude-fable-5',
+      profile: 'fable-pilot-advisory',
+      selected_by: 'three-brain',
+      rationale: 'repeated architecture bounce on the same question',
+      policy_version: '1.0.0',
+      fallback_used: false,
+    },
+  });
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  assert.deepStrictEqual(validateManifest(manifest), []);
+  assert.strictEqual(manifest.planning_model_routing?.model, 'claude-fable-5');
+});
+
+test('createManifest allows a Claude lane to omit planning_model_routing entirely (the ordinary, pilot-not-involved case)', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1569',
+    tier: 'T1',
+    branch: 'claude/utv2-1569-no-planning-routing',
+    worktree_path: worktreePathForBranch('claude/utv2-1569-no-planning-routing'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1569', 'T1'),
+    preflight_token: '.out/ops/preflight/claude/utv2-1569-no-planning-routing.json',
+    executor: 'claude',
+  });
+  assert.strictEqual(manifest.planning_model_routing, undefined);
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  assert.deepStrictEqual(validateManifest(manifest), []);
+});
+
+test('validateManifest rejects a planning_model_routing block manually attached to a Codex manifest', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1569',
+    tier: 'T2',
+    branch: 'codex/utv2-1569-tamper',
+    worktree_path: worktreePathForBranch('codex/utv2-1569-tamper'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1569', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1569-tamper.json',
+    executor: 'codex-cli',
+    model_routing: {
+      profile: 'codex-terra-medium',
+      model: 'gpt-5.6-terra',
+      reasoning_effort: 'medium',
+      selected_by: 'three-brain',
+      policy_version: '1.0.0',
+    },
+  });
+  (manifest as { planning_model_routing?: unknown }).planning_model_routing = {
+    model: 'claude-fable-5',
+    profile: 'fable-pilot-advisory',
+    selected_by: 'three-brain',
+    rationale: 'x',
+    policy_version: '1.0.0',
+    fallback_used: false,
+  };
+  assert.match(validateManifest(manifest).join('\n'), /planning_model_routing is Claude-only/);
+});
+
+test('validateManifest rejects a structurally incomplete planning_model_routing block', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1569',
+    tier: 'T1',
+    branch: 'claude/utv2-1569-bad-routing',
+    worktree_path: worktreePathForBranch('claude/utv2-1569-bad-routing'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1569', 'T1'),
+    preflight_token: '.out/ops/preflight/claude/utv2-1569-bad-routing.json',
+    executor: 'claude',
+    planning_model_routing: {
+      model: 'claude-fable-5',
+      profile: 'fable-pilot-advisory',
+      selected_by: 'three-brain',
+      rationale: 'x',
+      policy_version: '1.0.0',
+      fallback_used: false,
+    },
+  });
+  (manifest as { planning_model_routing?: { selected_by?: unknown } }).planning_model_routing!.selected_by =
+    'because-i-said-so';
+  assert.match(
+    validateManifest(manifest).join('\n'),
+    /planning_model_routing.selected_by must be "three-brain" or "manual-override"/,
+  );
+});
+
+test('validateManifest requires fallback_model when planning_model_routing.fallback_used is true', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1569',
+    tier: 'T1',
+    branch: 'claude/utv2-1569-missing-fallback-model',
+    worktree_path: worktreePathForBranch('claude/utv2-1569-missing-fallback-model'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1569', 'T1'),
+    preflight_token: '.out/ops/preflight/claude/utv2-1569-missing-fallback-model.json',
+    executor: 'claude',
+    planning_model_routing: {
+      model: 'claude-sonnet-5',
+      profile: 'sonnet-default',
+      selected_by: 'three-brain',
+      rationale: 'x',
+      policy_version: '1.0.0',
+      fallback_used: true,
+    },
+  });
+  assert.match(
+    validateManifest(manifest).join('\n'),
+    /planning_model_routing.fallback_model is required when fallback_used is true/,
+  );
+});
+
 test('validateManifest accepts Windows absolute worktree paths on non-Windows runners', () => {
   const manifest = createManifest({
     issue_id: 'UTV2-1062',

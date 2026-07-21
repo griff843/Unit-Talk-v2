@@ -8,6 +8,16 @@ export const VALID_MODELS = [
   'claude-opus-4-8',
   'claude-opus-4-7',
   'claude-haiku-4-5-20251001',
+  // UTV2-1569: bounded pilot (8 tasks/30 days/usage ceiling, advisory-only) for the
+  // narrow repeated-bounce / live-state-root-cause / product-synthesis /
+  // certification-review reviewer role only -- see OPERATING_MODEL_SONNET5.md §1 and
+  // docs/05_operations/policies/fable-pilot-policy.json. Mechanically gated by
+  // scripts/ops/planning-model-routing.ts; removed from routing by UTV2-1390, re-added
+  // here (not left invalid) so .claude/agents/fable-pilot-reviewer.md validates. This
+  // string being valid does NOT mean the pilot is active -- see
+  // docs/05_operations/FABLE_PILOT_STATE.json (status: "pending", not activated by
+  // this diff).
+  'claude-fable-5',
 ] as const;
 export type ClaudeModel = (typeof VALID_MODELS)[number];
 
@@ -18,6 +28,7 @@ export const KNOWN_GOVERNANCE_AGENTS = [
   'db-proof-reviewer',
   'lane-reconciler',
   'pr-risk-reviewer',
+  'fable-pilot-reviewer',
 ] as const;
 
 export const SKILL_CATEGORIES = [

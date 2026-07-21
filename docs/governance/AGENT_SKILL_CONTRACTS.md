@@ -33,7 +33,12 @@ type ClaudeModel =
   | 'claude-sonnet-4-6'
   | 'claude-opus-4-8'
   | 'claude-opus-4-7'
-  | 'claude-haiku-4-5-20251001';
+  | 'claude-haiku-4-5-20251001'
+  // UTV2-1569: bounded pilot (8 tasks/30 days/usage ceiling, advisory-only) for the
+  // narrow repeated-bounce / live-state-root-cause / product-synthesis /
+  // certification-review reviewer role only -- see OPERATING_MODEL_SONNET5.md §1.
+  // Removed by UTV2-1390; re-added rather than left invalid.
+  | 'claude-fable-5';
 ```
 
 ### Agent validation rules

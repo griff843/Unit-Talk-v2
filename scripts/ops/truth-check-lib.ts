@@ -21,6 +21,7 @@ export function isLinearStatePermittedForL3(stateName: string | null | undefined
   return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
 }
 import { loadEnvironment } from '@unit-talk/config';
+import { loadFablePilotPolicy } from './planning-model-routing.js';
 import {
   type CheckResult,
   type LaneManifest,
@@ -243,6 +244,74 @@ export function evaluateT2ProofEvidence(input: {
     add('P14', 'pass', 'verification log references r-level-check');
   } else {
     add('P14', 'fail', 'verification log must reference scripts/ci/r-level-check.ts');
+  }
+
+  return checks;
+}
+
+/**
+ * Fable pilot routing evidence check (UTV2-1569). Integrated into every truth-check
+ * run, not gated by tier -- it is a no-op (skip) for any lane whose manifest does not
+ * carry a Fable-model planning_model_routing block, and only actually evaluates
+ * anything for the narrow set of lanes that do. This is the truth-check integration
+ * the earlier pilot attempt (PR #1287) explicitly said did not exist yet ("Fable-routed
+ * decisions are not yet mechanically validated or count-capped in code").
+ *
+ * Fails closed: a Fable-routed lane with missing/incomplete evidence fails these
+ * checks, it does not silently pass because Fable evidence is "hard to find".
+ */
+export function evaluateFableRoutingEvidence(input: {
+  manifest: LaneManifest;
+  proofContents: string;
+}): CheckResult[] {
+  const checks: CheckResult[] = [];
+  const add = (id: string, status: 'pass' | 'fail' | 'skip', detail: string): void => {
+    checks.push({ id, status, detail });
+  };
+
+  const planningModelRouting = input.manifest.planning_model_routing;
+  if (!planningModelRouting || planningModelRouting.model !== 'claude-fable-5') {
+    add('F1', 'skip', 'lane is not Fable-routed (no planning_model_routing.model: "claude-fable-5") -- Fable evidence checks not applicable');
+    return checks;
+  }
+
+  if (/reviewer_independent_of_author["']?\s*:?\s*true/i.test(input.proofContents)) {
+    add('F1', 'pass', 'proof evidence asserts reviewer_independent_of_author: true');
+  } else {
+    add(
+      'F1',
+      'fail',
+      'Fable-routed lane requires reviewer_independent_of_author: true evidence in the proof bundle (fable-review/v1 comment or evidence.json) -- fails closed without it, per UTV2-1569',
+    );
+  }
+
+  if (/binding["']?\s*:?\s*false/i.test(input.proofContents) || /advisory_only["']?\s*:?\s*true/i.test(input.proofContents)) {
+    add('F2', 'pass', 'proof evidence documents the Fable review as advisory-only / non-binding');
+  } else {
+    add(
+      'F2',
+      'fail',
+      'Fable-routed lane requires evidence documenting the review as advisory-only / non-binding (binding: false or advisory_only: true) -- Fable must never appear to carry merge authority',
+    );
+  }
+
+  try {
+    const policy = loadFablePilotPolicy();
+    if (planningModelRouting.policy_version === policy.policy_version) {
+      add('F3', 'pass', 'planning_model_routing.policy_version matches the current fable-pilot-policy.json');
+    } else {
+      add(
+        'F3',
+        'fail',
+        `planning_model_routing.policy_version "${planningModelRouting.policy_version}" does not match current fable-pilot-policy.json policy_version "${policy.policy_version}" -- policy drifted since this lane's routing decision was made`,
+      );
+    }
+  } catch (error) {
+    add(
+      'F3',
+      'fail',
+      `could not load fable-pilot-policy.json to verify policy_version drift: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   return checks;
@@ -710,6 +779,17 @@ export async function runTruthCheck(
       })) {
         addCheck(check.id, check.status === 'fail' ? 'fail' : 'pass', check.detail);
       }
+    }
+
+    // UTV2-1569: Fable pilot routing evidence -- integrated unconditionally (not
+    // gated by tier), since it is a no-op skip for every lane that is not
+    // Fable-routed and this repo's fail-closed convention prefers "always run,
+    // skip when not applicable" over conditionally wiring a new check into only
+    // one tier branch and risking it silently never firing for a future non-T1
+    // Fable use case.
+    const fableProofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
+    for (const check of evaluateFableRoutingEvidence({ manifest, proofContents: fableProofContents })) {
+      addCheck(check.id, check.status, check.detail);
     }
 
     if (manifest.files_changed.length > 0 && manifest.file_scope_lock.length > 0) {
