@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1451-close-self-authorization-loopholes",
   "branch": "claude/utv2-1451-close-self-authorization-loopholes",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "3730df957b3696c21c7d53ceb8dae02617eb2f15",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1289",
   "files_changed": [
     ".ops/sync/UTV2-1451.yml",
     "docs/06_status/lanes/UTV2-1451.json",
@@ -24,7 +24,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1451/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-21T14:25:00.000Z",
   "heartbeat_at": "2026-07-21T14:25:00.000Z",
   "closed_at": null,
