@@ -1,8 +1,24 @@
-# UTV2-1503 — Verification Evidence
+# PROOF: UTV2-1503
+
+MERGE_SHA: acd1228414f60bf0528294f642137b40394daf01
+
+(This is the substantive audit-repair content commit, an ancestor of this
+branch's actual head -- a file cannot bind its own future hash once
+further proof-doc commits land on top of it, per this repo's established
+convention.)
 
 ## Summary
 
 The audit repair at substantive commit `acd1228414f60bf0528294f642137b40394daf01` passed the repository gate and the separately required live database smoke. This proof is mechanical executor evidence only. It is not independent Griff review, `t1-approved`, a `pm-verdict/v1`, or merge authorization.
+
+## ASSERTIONS:
+
+- [x] Corrected the observed-facts claim about `governance.yml`'s `forbidden_path_globs` (three entries, not one)
+- [x] Swapped the governance-critical-path list's reference from the retired `proof-auditor-gate.yml` to the active `proof-gate.yml`
+- [x] Both Codex P2 review threads resolved
+- [x] `pnpm verify` PASS (full suite, including live-DB smoke and live T1 proof)
+- [x] `pnpm test:db` PASS (7/7, live Supabase)
+- [x] R-level check PASS, no artifacts required for this diff
 
 ## Codex P2 fixes (this revision)
 
@@ -10,7 +26,7 @@ The audit repair at substantive commit `acd1228414f60bf0528294f642137b40394daf01
 - Swapped the recommended governance-critical-path list's `proof-auditor-gate.yml` reference (disabled to `workflow_dispatch` only) for `proof-gate.yml` (the active, PR-triggered consolidated Proof Gate) — the list as originally written would have protected a retired workflow name while leaving the active gate editable.
 - Both Codex P2 review threads resolved after this commit landed.
 
-## Evidence
+## EVIDENCE:
 
 - PR: https://github.com/griff843/Unit-Talk-v2/pull/1232
 - Substantive source SHA: `acd1228414f60bf0528294f642137b40394daf01`
