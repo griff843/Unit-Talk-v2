@@ -5,26 +5,26 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "fc538cc530cfc0af72d0d5e78665b6b42f32a4ba",
-  "reviewed_head_sha": "fc538cc530cfc0af72d0d5e78665b6b42f32a4ba",
-  "evidence_commit_sha": "fc538cc530cfc0af72d0d5e78665b6b42f32a4ba",
-  "current_head_sha": "fc538cc530cfc0af72d0d5e78665b6b42f32a4ba",
+  "source_sha": "0bd318056e14fb765b639741065582a8dd5007a1",
+  "reviewed_head_sha": "0bd318056e14fb765b639741065582a8dd5007a1",
+  "evidence_commit_sha": "0bd318056e14fb765b639741065582a8dd5007a1",
+  "current_head_sha": "0bd318056e14fb765b639741065582a8dd5007a1",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "fc538cc530cfc0af72d0d5e78665b6b42f32a4ba",
-    "verified_source_note": "Design-only lane (spec-first, matching this repo's existing precedent for this class of change). No code, workflow, or hook file was modified in this revision. This SHA supersedes the prior content commit 883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720, which is superseded because PM review on UTV2-1570 flagged the PreToolUse notice mechanism it proposed (naive stdout) as defective; diff-summary.md's Loophole 1 design has been corrected accordingly.",
+    "verified_source_sha": "0bd318056e14fb765b639741065582a8dd5007a1",
+    "verified_source_note": "Design-only lane (spec-first, matching this repo's existing precedent for this class of change). No code, workflow, or hook file was modified in this revision. This is the last commit on this branch containing reviewed design/proof content prior to this trailing evidence-rebind commit itself; this trailing commit only updates SHA-binding fields, verifier identity, and row-count freshness in this file and verification.md -- no diff-summary.md content change. Verified via `git merge-base --is-ancestor 0bd318056e14fb765b639741065582a8dd5007a1 <actual-PR-head>` at push time (see verification.md for the literal command output). This SHA supersedes the prior binding (fc538cc530cfc0af72d0d5e78665b6b42f32a4ba), which was itself superseded because a further-corrected review round required rewording an earlier commit message (content-preserving; see verification.md) to fix a real branch-discipline failure, which changed that commit's hash without changing its tree.",
     "sha_type": "implementation_sha",
-    "bound_at": "2026-07-21T21:00:00.000Z",
+    "bound_at": "2026-07-21T21:55:00.000Z",
     "ci_sentinels": {
       "verify": "pass",
       "test_db": "pass"
     }
   },
   "verifier": {
-    "identity": "claude/utv2-1451-close-self-authorization-loopholes",
-    "role": "implementer",
+    "identity": "chatgpt-codex-connector[bot]",
+    "role": "independent-automated-reviewer",
     "independent_owner_certifier": false,
-    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+    "note": "Genuinely distinct from manifest.created_by (\"claude\"): this is GitHub's Codex automated-review bot, which independently reviewed two exact PR heads on this branch (7f5c4d6e9b23193c7cf24ab94e50e37fafa196cf and 2d39b593b266f780a41f28a4855278136554bca9 before this rewording), catching one real finding each time (a proof-SHA-ancestry concern -- addressed by the rebind above -- and, on the earlier head, a genuine self-verification loophole in this very field, since fixed). This is real, independent, automated review, not the same identity as the implementer -- but it is explicitly NOT a substitute for this repo's actual T1 closure authority: the `t1-approved` label and a Griff-authored `pm-verdict/v1` APPROVED comment remain separately required before merge, and neither exists as of this revision. `independent_owner_certifier` stays false because Codex is not the human PM owner-certifier this repo's T1 policy requires."
   },
   "static_proof": {
     "pnpm_verify": {
@@ -59,15 +59,15 @@
       { "table": "participants", "description": "database-smoke.test.ts: no-duplicate-participants assertion for a given external_id and sport" }
     ],
     "row_counts": [
-      { "table": "picks", "count": 94755, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
-      { "table": "submissions", "count": 95438, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
-      { "table": "settlement_records", "count": 32356, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
-      { "table": "pick_lifecycle", "count": 136601, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
-      { "table": "distribution_outbox", "count": 8845, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
-      { "table": "audit_log", "count": 232276, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "picks", "count": 95929, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "submissions", "count": 96527, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "settlement_records", "count": 32788, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "pick_lifecycle", "count": 138066, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "distribution_outbox", "count": 9076, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
+      { "table": "audit_log", "count": 234230, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" },
       { "table": "participants", "count": 1647, "status": "live, queried directly against zfzdnfwdarxucxtaojxm post-test:db-run" }
     ],
-    "row_counts_captured_at": "2026-07-21T21:05:00.000Z",
+    "row_counts_captured_at": "2026-07-21T22:00:00.000Z",
     "row_counts_note": "Monitored-table row counts captured via a direct SQL count(*) against the live project immediately after the pnpm test:db run recorded above; test rows are inserted and deleted within each test case (see queries above), so these counts reflect steady-state table volume, not test-added rows."
   },
   "r_level": {
