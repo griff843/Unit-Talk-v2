@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1569",
+  "title": "Build enforceable Fable pilot routing, cap, evidence, expiry, and rollback",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
+  "reviewed_head_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
+  "evidence_commit_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
+  "current_head_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "734be3bd20bd45f12e4a31ea16e6732c457e529c",
+    "verified_source_note": "Real implementation following the pilot-evaluation issue's PILOT LONGER conclusion; a prior doc-only attempt was closed unmerged after being found non-executable.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-21T21:35:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "test_db": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1569-build-enforceable-fable-pilot-routing-cap-evidence-expiry",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level_check": {
+      "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": []
+    },
+    "new_mechanism_tests": {
+      "fable-pilot-state.test.ts": { "pass": 20, "fail": 0 },
+      "planning-model-routing.test.ts": { "pass": 15, "fail": 0 },
+      "fable-pilot-rollback.test.ts": { "pass": 7, "fail": 0 },
+      "shared.test.ts": { "pass": 43, "fail": 0, "new_tests": 7 },
+      "lane-start.test.ts": { "pass": 17, "fail": 0, "new_tests": 5 },
+      "truth-check-lib.test.ts": { "pass": 59, "fail": 0, "new_tests": 6 },
+      "contract-validator.test.ts": { "pass": 57, "fail": 0 }
+    }
+  },
+  "runtime_proof": {
+    "applicable": true,
+    "note": "Docs/governance/ops-tooling diff -- no runtime code path changed. Per this repo's precedent for doc-only/governance T1 lanes (UTV2-1503, UTV2-1568), the standalone live-DB smoke is still run for real (not waived) against Supabase.",
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "target": "live Supabase project zfzdnfwdarxucxtaojxm",
+      "queries": [
+        "database repository bundle persists a submission and settlement when Supabase is configured",
+        "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "UTV2-883: no duplicate participants for the same external_id and sport",
+        "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+        "UTV2-996: correction chain is additive -- original settlement row is not mutated"
+      ],
+      "row_counts": {
+        "submissions_created": 1,
+        "settlements_created": 1,
+        "corrections_created": 1
+      }
+    }
+  },
+  "fable_pilot": {
+    "activated_by_this_lane": false,
+    "state_file_status": "pending",
+    "state_file_activated_at": null,
+    "policy_pilot_enabled": false,
+    "trigger_classes": [
+      "repeated_architecture_bounce",
+      "live_state_root_cause",
+      "product_synthesis_no_precedent",
+      "build_mode_certification_review"
+    ],
+    "advisory_only": true,
+    "binding_authority": false,
+    "reviewer_independent_of_author_required": true,
+    "rollback_proven_by_test": true
+  },
+  "known_gaps": [
+    "docs/05_operations/LANE_MANIFEST_SPEC.md's planned Section 17 addition documenting planning_model_routing was dropped from this diff because a live, concurrently-running lane (UTV2-1571) held an active file-scope lease on that exact file at implementation time. The field is documented in the JSON schema and in three-brain.md/OPERATING_MODEL_SONNET5.md instead.",
+    "The pilot itself has not been activated and has not run a single real qualifying task -- the mechanism is proven correct by unit test, not live pilot usage, since activation is explicitly out of this lane's scope."
+  ]
+}
