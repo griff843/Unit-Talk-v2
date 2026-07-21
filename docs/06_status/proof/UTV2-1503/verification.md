@@ -29,6 +29,7 @@ review, `t1-approved`, a `pm-verdict/v1`, or merge authorization.
 
 ## EVIDENCE:
 
+- PR: https://github.com/griff843/Unit-Talk-v2/pull/1290
 - Substantive source SHA: `5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b`
 - Changed behavior: none; the lane remains an analysis-only governance audit.
 - Corrected authority model: lane allowlists establish path eligibility, while the Delegation Policy and tier gates establish execution, review, and merge authority.

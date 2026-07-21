@@ -4,7 +4,7 @@
   "title": "Orchestrator standing-authority audit -- clean continuation proof",
   "tier": "T1",
   "lane_type": "governance",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1290",
   "generated_at": "2026-07-21T20:05:00Z",
   "status": "PASS",
   "sha_binding": {
