@@ -70,8 +70,12 @@ anywhere once complete:
 5. `scripts/ops/contract-validator.ts` — remove `'claude-fable-5'` from `VALID_MODELS`,
    and its paired test in `scripts/ops/contract-validator.test.ts` (the "claude-fable-5
    is valid" assertion, keeping the "unknown model" negative-path test).
-6. `.claude/agents/fable-pilot-reviewer.md` — delete the agent file entirely (it
-   declares `model: claude-fable-5`, which is no longer a valid contract).
+6. `.claude/commands/dispatch.md`'s Phase 5 "Optional additional Fable advisory review"
+   paragraph — revert to remove the ad-hoc Fable review spawn instructions. No
+   persistent `.claude/agents/` contract declares `claude-fable-5` today (an ad-hoc
+   `Agent()` call with the short-name `"fable"` override is used instead, same pattern
+   as the T1 planning subagent) — if a future persistent agent contract is added during
+   the pilot, delete that file too as part of this step.
 
 The single command for all of this, once Part 1 has already run:
 

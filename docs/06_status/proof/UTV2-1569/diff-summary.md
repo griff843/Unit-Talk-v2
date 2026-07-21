@@ -5,7 +5,6 @@ Branch: claude/utv2-1569-build-enforceable-fable-pilot-routing-cap-evidence-expi
 
 ## Files changed
 
-- `.claude/agents/fable-pilot-reviewer.md` — new advisory-only Fable pilot reviewer subagent (report-only, no Edit/Write/Agent tools)
 - `.claude/commands/dispatch.md` — Phase 4 (T1 planning) and Phase 5 (advisory review) now call `resolvePlanningModel()`/`resolveFableAdvisoryReview()` instead of a hardcoded `"sonnet"` literal
 - `.claude/commands/three-brain.md` — new "Fable 5 pilot routing (bounded, UTV2-1569)" section: four ratified trigger classes, explicit skip list, mechanical eligibility gate, suspension/kill path, evidence requirements
 - `docs/05_operations/FABLE_PILOT_CLOSEOUT_TEMPLATE.md` — new closeout packet template (per-task findings, aggregate metrics, fresh YES/NO/EXTEND decision packet)
@@ -16,9 +15,8 @@ Branch: claude/utv2-1569-build-enforceable-fable-pilot-routing-cap-evidence-expi
 - `docs/05_operations/policies/fable-pilot-policy.json` — new canonical policy: trigger classes, skip list, caps, independent `pilot_enabled` kill switch
 - `docs/05_operations/schemas/fable-review-v1.md` — new schema for the advisory Fable review comment format, mandatory `reviewer_independent_of_author: true`
 - `docs/05_operations/schemas/lane_manifest_v1.schema.json` — new optional `planning_model_routing` block (Claude-only, mirrors `model_routing`'s shape inverted)
-- `docs/05_operations/system-alignment-registry.json` — registers `fable-pilot-reviewer` in `tool_surfaces` (required by `automation-coverage-check`)
 - `docs/governance/AGENT_SKILL_CONTRACTS.md` — `ClaudeModel` type union gains `claude-fable-5`
-- `scripts/ops/contract-validator.ts` (+test) — `VALID_MODELS` gains `claude-fable-5`; `KNOWN_GOVERNANCE_AGENTS` gains `fable-pilot-reviewer`
+- `scripts/ops/contract-validator.ts` (+test) — `VALID_MODELS` gains `claude-fable-5` (forward-looking; no persistent agent contract declares it in this diff)
 - `scripts/ops/fable-pilot-rollback.ts` (+test) — mechanical, idempotent rollback; proven (not asserted) to make Fable unselectable
 - `scripts/ops/fable-pilot-state.ts` (+test) — fail-closed pilot state reader, pure cap-evaluation/state-transition helpers (activate/suspend/rollback/record-task)
 - `scripts/ops/lane-start.ts` (+test) — new optional `--fable-trigger-class`/`--fable-rationale` flags resolve and persist `planning_model_routing`, Claude-only

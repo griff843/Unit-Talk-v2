@@ -307,7 +307,6 @@ const EXISTING_AGENTS = [
   'db-proof-reviewer',
   'lane-reconciler',
   'pr-risk-reviewer',
-  'fable-pilot-reviewer',
 ];
 
 for (const agent of EXISTING_AGENTS) {

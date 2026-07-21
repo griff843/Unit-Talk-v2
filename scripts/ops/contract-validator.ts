@@ -13,8 +13,11 @@ export const VALID_MODELS = [
   // certification-review reviewer role only -- see OPERATING_MODEL_SONNET5.md §1 and
   // docs/05_operations/policies/fable-pilot-policy.json. Mechanically gated by
   // scripts/ops/planning-model-routing.ts; removed from routing by UTV2-1390, re-added
-  // here (not left invalid) so .claude/agents/fable-pilot-reviewer.md validates. This
-  // string being valid does NOT mean the pilot is active -- see
+  // here so a future persistent agent contract that legitimately declares this model
+  // doesn't fail contract validation. No agent under .claude/agents/ declares it today
+  // -- ad-hoc Agent() calls in dispatch.md use the short-name "fable" override instead
+  // (Agent tool's model param), which this allowlist does not govern. This string
+  // being valid does NOT mean the pilot is active -- see
   // docs/05_operations/FABLE_PILOT_STATE.json (status: "pending", not activated by
   // this diff).
   'claude-fable-5',
@@ -28,7 +31,6 @@ export const KNOWN_GOVERNANCE_AGENTS = [
   'db-proof-reviewer',
   'lane-reconciler',
   'pr-risk-reviewer',
-  'fable-pilot-reviewer',
 ] as const;
 
 export const SKILL_CATEGORIES = [

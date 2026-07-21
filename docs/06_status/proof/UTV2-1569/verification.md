@@ -123,7 +123,7 @@ scripts/ops/fable-pilot-rollback.test.ts      7 pass, 0 fail
 scripts/ops/shared.test.ts                   43 pass, 0 fail (7 new planning_model_routing tests)
 scripts/ops/lane-start.test.ts               17 pass, 0 fail (5 new fable-routing wiring tests)
 scripts/ops/truth-check-lib.test.ts          59 pass, 0 fail (6 new Fable evidence tests)
-scripts/ops/contract-validator.test.ts       57 pass, 0 fail (fable-pilot-reviewer agent validation)
+scripts/ops/contract-validator.test.ts       53 pass, 0 fail (claude-fable-5 model-ID validation)
 ```
 
 ## R-level compliance
