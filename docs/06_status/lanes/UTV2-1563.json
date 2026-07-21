@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1563-active-statuses-merged",
   "branch": "claude/utv2-1563-active-statuses-merged",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "018eac57c1c4589e99de81d157319295e03226a8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1276",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1563/diff-summary.md",
@@ -20,14 +20,44 @@
     "docs/06_status/proof/UTV2-1563/diff-summary.md",
     "docs/06_status/proof/UTV2-1563/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-20T20:13:19.104Z",
-  "heartbeat_at": "2026-07-20T20:13:19.104Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-21T00:00:51.997Z",
+  "closed_at": "2026-07-21T00:00:51.997Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1563-active-statuses-merged.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-21T00:00:40.955Z",
+      "verdict": "pass",
+      "merge_sha": "018eac57c1c4589e99de81d157319295e03226a8",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1276"
+    },
+    {
+      "checked_at": "2026-07-21T00:00:46.383Z",
+      "verdict": "pass",
+      "merge_sha": "018eac57c1c4589e99de81d157319295e03226a8",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1276",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-21T00:00:46.393Z",
+      "verdict": "pass",
+      "merge_sha": "018eac57c1c4589e99de81d157319295e03226a8",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
