@@ -39,3 +39,14 @@ TAP version 13
 # skipped 0
 # todo 0
 ```
+
+# PROOF: UTV2-1563
+
+MERGE_SHA: 018eac57c1c4589e99de81d157319295e03226a8
+
+## ASSERTIONS:
+- [x] Lane manifest reaches status: done with a real closed_at
+- [x] pnpm ops:truth-check passes for UTV2-1563
+
+## EVIDENCE:
+See the lane-close and truth-check output embedded above in this file.
