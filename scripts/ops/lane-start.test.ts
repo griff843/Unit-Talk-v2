@@ -295,17 +295,27 @@ test('lane-start requires --fable-rationale whenever --fable-trigger-class is su
   assert.match(source, /--fable-trigger-class requires --fable-rationale <text> as well/);
 });
 
-test('lane-start resolves planning_model_routing via resolvePlanningModel, never hardcoding a model literal', () => {
+test('lane-start resolves planning_model_routing via resolveAndRecordPlanningModel, never hardcoding a model literal', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
-  assert.match(source, /import \{ resolvePlanningModel, type PlanningModelRoutingBlock \} from '\.\/planning-model-routing\.js'/);
-  assert.match(source, /resolvePlanningModel\(\{\s*\n\s*tier,\s*\n\s*triggerClass: fableTriggerClassFlag,/);
+  assert.match(source, /import \{ resolveAndRecordPlanningModel, type PlanningModelRoutingBlock \} from '\.\/planning-model-routing\.js'/);
+  assert.match(source, /resolveAndRecordPlanningModel\(\{\s*\n\s*tier,\s*\n\s*triggerClass: fableTriggerClassFlag,/);
 });
 
-test('lane-start fails closed (non-zero exit) if resolvePlanningModel itself reports not-ok (e.g. policy load failure)', () => {
+test('lane-start uses resolveAndRecordPlanningModel (not the bare read-only resolvePlanningModel) so a real Fable selection atomically records the qualifying task against pilot state (UTV2-1569 PR #1292 P1 fix)', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
-  const resolveIndex = source.indexOf('const resolution = resolvePlanningModel({');
+  assert.doesNotMatch(
+    source,
+    /resolvePlanningModel\(/,
+    'lane-start.ts must not call the bare resolvePlanningModel directly -- it must go through resolveAndRecordPlanningModel so Fable selections are recorded, not just read',
+  );
+  assert.match(source, /taskId: issueId/);
+});
+
+test('lane-start fails closed (non-zero exit) if resolveAndRecordPlanningModel itself reports not-ok (e.g. policy load failure)', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const resolveIndex = source.indexOf('const resolution = resolveAndRecordPlanningModel({');
   assert.ok(resolveIndex >= 0, 'expected a planning-model resolution call site');
-  const block = source.slice(resolveIndex, resolveIndex + 400);
+  const block = source.slice(resolveIndex, resolveIndex + 500);
   assert.match(block, /if \(!resolution\.ok\)/);
   assert.match(block, /process\.exit\(1\)/);
 });

@@ -63,6 +63,7 @@ export type FablePilotCheckCode =
   | 'PILOT_EXPIRED'
   | 'PILOT_ROLLED_BACK'
   | 'PILOT_CAPS_EXCEEDED'
+  | 'PILOT_DATES_INVALID'
   | 'PILOT_STATE_MISSING'
   | 'PILOT_STATE_MALFORMED';
 
@@ -88,6 +89,72 @@ const VALID_STATUSES: readonly FablePilotStatus[] = [
   'expired',
   'rolled_back',
 ];
+
+/**
+ * Fail-closed validation of activation/expiry dates for an "active" pilot state.
+ * Every one of these is a distinct, explicitly-tested malformed-input case (Codex
+ * review finding, PR #1292) -- a missing/malformed date must never be silently
+ * skipped by a comparison that just happens to be falsy or NaN:
+ *
+ *   - activated_at missing, empty, or not a parseable date.
+ *   - expires_at missing, empty, or not a parseable date.
+ *   - expires_at at or before activated_at (non-positive window).
+ *   - expires_at inconsistent with activated_at + max_days beyond a small
+ *     (5-minute) clock-skew/serialization tolerance -- catches a hand-edited or
+ *     drifted expiry that no longer reflects the policy's own max_days.
+ *
+ * Pure and side-effect-free; never mutates its input.
+ */
+const ACTIVATION_DATE_TOLERANCE_MS = 5 * 60 * 1000;
+
+export function validateActivationDates(
+  state: FablePilotState,
+): { ok: true } | { ok: false; message: string } {
+  if (!state.activated_at || typeof state.activated_at !== 'string' || !state.activated_at.trim()) {
+    return {
+      ok: false,
+      message: 'Fable pilot state is "active" but activated_at is missing or empty -- cannot validate the pilot window, failing closed.',
+    };
+  }
+  const activatedAtMs = Date.parse(state.activated_at);
+  if (Number.isNaN(activatedAtMs)) {
+    return {
+      ok: false,
+      message: `Fable pilot state is "active" but activated_at ("${state.activated_at}") is not a parseable date -- failing closed.`,
+    };
+  }
+
+  if (!state.expires_at || typeof state.expires_at !== 'string' || !state.expires_at.trim()) {
+    return {
+      ok: false,
+      message: 'Fable pilot state is "active" but expires_at is missing or empty -- cannot validate the pilot window, failing closed.',
+    };
+  }
+  const expiresAtMs = Date.parse(state.expires_at);
+  if (Number.isNaN(expiresAtMs)) {
+    return {
+      ok: false,
+      message: `Fable pilot state is "active" but expires_at ("${state.expires_at}") is not a parseable date -- failing closed.`,
+    };
+  }
+
+  if (expiresAtMs <= activatedAtMs) {
+    return {
+      ok: false,
+      message: `Fable pilot state is "active" but expires_at (${state.expires_at}) is not after activated_at (${state.activated_at}) -- inconsistent activation window, failing closed.`,
+    };
+  }
+
+  const expectedExpiresAtMs = activatedAtMs + state.max_days * 24 * 60 * 60 * 1000;
+  if (Math.abs(expiresAtMs - expectedExpiresAtMs) > ACTIVATION_DATE_TOLERANCE_MS) {
+    return {
+      ok: false,
+      message: `Fable pilot state is "active" but expires_at (${state.expires_at}) does not match activated_at + max_days (${state.max_days}) within tolerance (expected ~${new Date(expectedExpiresAtMs).toISOString()}) -- expiry does not reflect current policy, failing closed.`,
+    };
+  }
+
+  return { ok: true };
+}
 
 /**
  * Strictly parse and validate the pilot state file. Never throws -- every failure mode
@@ -194,6 +261,24 @@ export function readFablePilotState(
     };
   }
 
+  // status === 'active' -- reject closed on missing/malformed/inconsistent activation
+  // dates BEFORE the cap check. Codex review finding (PR #1292): a missing or
+  // unparseable activated_at previously skipped the calendar-window check entirely
+  // (evaluatePilotCaps' `if (state.activated_at)` guard is falsy for missing/empty
+  // values), and an unparseable expires_at produced NaN, which fails every numeric
+  // comparison silently rather than triggering the expiry branch -- both let an
+  // "active" pilot with bad dates stay eligible instead of failing closed. Every one
+  // of these must be rejected explicitly, never left for a comparison to no-op past.
+  const dateValidation = validateActivationDates(state);
+  if (!dateValidation.ok) {
+    return {
+      ok: false,
+      code: 'PILOT_DATES_INVALID',
+      message: dateValidation.message,
+      state,
+    };
+  }
+
   // status === 'active' -- still subject to the mechanical cap check.
   const caps = evaluatePilotCaps(state);
   if (!caps.withinCaps) {
@@ -241,18 +326,38 @@ export function evaluatePilotCaps(
     );
   }
 
+  // Defense in depth (Codex review finding, PR #1292): readFablePilotState already
+  // rejects a missing/malformed/inconsistent activation window via
+  // validateActivationDates() before this function is ever reached on that path, but
+  // this function is also called directly by recordQualifyingTask and by the CLI's
+  // `status` command against a state that has NOT necessarily passed that gate. A
+  // missing activated_at must never silently skip the day-cap check (the previous
+  // `if (state.activated_at)` guard treated "no date" as "no day cap" instead of
+  // "cannot prove this pilot has time left"), and an unparseable date must never
+  // produce a NaN that fails the `<= 0` comparison to no-op past the cap.
   let daysRemaining: number | null = null;
-  if (state.activated_at) {
+  if (!state.activated_at || Number.isNaN(Date.parse(state.activated_at))) {
+    reasons.push(
+      `activation date missing or unparseable (activated_at: ${JSON.stringify(state.activated_at ?? null)}) -- cannot prove the pilot is within its ${state.max_days}-day window`,
+    );
+  } else {
     const activatedAt = new Date(state.activated_at);
-    const expiresAt = state.expires_at
-      ? new Date(state.expires_at)
-      : new Date(activatedAt.getTime() + state.max_days * 24 * 60 * 60 * 1000);
-    const msRemaining = expiresAt.getTime() - now.getTime();
-    daysRemaining = msRemaining / (24 * 60 * 60 * 1000);
-    if (msRemaining <= 0) {
+    const expiresAtValid = state.expires_at && !Number.isNaN(Date.parse(state.expires_at));
+    if (state.expires_at && !expiresAtValid) {
       reasons.push(
-        `day cap reached (activated ${state.activated_at}, ${state.max_days}-day window elapsed)`,
+        `expiry date unparseable (expires_at: ${JSON.stringify(state.expires_at)}) -- cannot prove the pilot is within its ${state.max_days}-day window`,
       );
+    } else {
+      const expiresAt = expiresAtValid
+        ? new Date(state.expires_at as string)
+        : new Date(activatedAt.getTime() + state.max_days * 24 * 60 * 60 * 1000);
+      const msRemaining = expiresAt.getTime() - now.getTime();
+      daysRemaining = msRemaining / (24 * 60 * 60 * 1000);
+      if (msRemaining <= 0) {
+        reasons.push(
+          `day cap reached (activated ${state.activated_at}, ${state.max_days}-day window elapsed)`,
+        );
+      }
     }
   }
 

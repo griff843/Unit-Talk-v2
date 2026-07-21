@@ -34,7 +34,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT, parseJsonFile } from './shared.js';
-import { readFablePilotState, type FablePilotCheckResult } from './fable-pilot-state.js';
+import {
+  readFablePilotState,
+  recordQualifyingTask,
+  writeFablePilotState,
+  type FablePilotCheckResult,
+} from './fable-pilot-state.js';
 
 export type ClaudePlanningModel = 'claude-sonnet-5' | 'claude-fable-5';
 
@@ -66,7 +71,19 @@ export interface FablePilotPolicy {
   fable_model: ClaudePlanningModel;
   trigger_classes: Record<FableTriggerClass, FablePilotTriggerClassEntry>;
   skip_list: string[];
-  caps: { max_qualifying_tasks: number; max_days: number; usage_ceiling_usd: number };
+  caps: {
+    max_qualifying_tasks: number;
+    max_days: number;
+    usage_ceiling_usd: number;
+    /**
+     * Recorded against FABLE_PILOT_STATE.json's usage_used_usd at the moment a Fable
+     * selection is made (UTV2-1569 PR #1292 fix) -- the real per-task dollar cost is not
+     * knowable at selection time, so the policy fixes a conservative estimate that is
+     * recorded atomically with the routing decision itself, rather than deferring usage
+     * accounting to some later step that might never run.
+     */
+    estimated_usage_per_task_usd: number;
+  };
   advisory_only: boolean;
   binding_authority: boolean;
   reviewer_independence_required: boolean;
@@ -142,6 +159,17 @@ function validatePolicyShape(policy: FablePilotPolicy): void {
   }
   if (!Array.isArray(policy.skip_list)) {
     throw new Error('fable-pilot-policy.json skip_list must be an array');
+  }
+  if (
+    !policy.caps ||
+    typeof policy.caps.max_qualifying_tasks !== 'number' ||
+    typeof policy.caps.max_days !== 'number' ||
+    typeof policy.caps.usage_ceiling_usd !== 'number' ||
+    typeof policy.caps.estimated_usage_per_task_usd !== 'number'
+  ) {
+    throw new Error(
+      'fable-pilot-policy.json caps must include numeric max_qualifying_tasks, max_days, usage_ceiling_usd, and estimated_usage_per_task_usd',
+    );
   }
 }
 
@@ -301,6 +329,130 @@ export function resolveFableAdvisoryReview(
     };
   }
   return resolvePlanningModel(input);
+}
+
+export interface ResolveAndRecordInput extends ResolvePlanningModelInput {
+  /**
+   * Unique identifier for this qualifying task -- the issue ID is used by
+   * scripts/ops/lane-start.ts (one qualifying task per Fable-routed lane created).
+   */
+  taskId: string;
+}
+
+export interface ResolveAndRecordResult extends PlanningModelResolution {
+  /** True iff this call actually selected Fable AND wrote an updated pilot state. */
+  pilotStateRecorded: boolean;
+}
+
+/**
+ * Resolve the planning model AND, if it selects Fable, atomically record the
+ * qualifying task and its estimated usage against the pilot state file in the SAME
+ * call -- this is the fix for the PR #1292 review finding that `resolvePlanningModel`
+ * alone only ever READ the pilot state to check eligibility and never wrote a task
+ * back to it, so `task_count`/`usage_used_usd` never changed after a real Fable
+ * selection and the caps could never mechanically expire. Every caller that persists
+ * a Fable routing decision (scripts/ops/lane-start.ts at manifest-creation time, and
+ * the Phase 5 advisory-review path) must call THIS function, not the bare
+ * resolvePlanningModel/resolveFableAdvisoryReview, so a real selection can never
+ * happen without the pilot's own counters moving in the same operation.
+ *
+ * Ordering within this function matters and is deliberate: resolve first (read-only),
+ * then -- only on an actual Fable selection -- re-read the current state, apply
+ * recordQualifyingTask (which itself mechanically flips status to "expired" the
+ * moment any cap is crossed by this very task), and persist it, all before returning.
+ * A caller that receives `code: 'OK_FABLE_SELECTED'` back from this function is
+ * guaranteed the state file already reflects that selection -- there is no window
+ * where the routing decision exists without the corresponding state mutation.
+ */
+export function resolveAndRecordPlanningModel(
+  input: ResolveAndRecordInput,
+): ResolveAndRecordResult {
+  const resolution = resolvePlanningModel(input);
+  if (resolution.code !== 'OK_FABLE_SELECTED') {
+    return { ...resolution, pilotStateRecorded: false };
+  }
+
+  // Re-read (rather than thread through resolvePlanningModel's internal read) so this
+  // function has no hidden coupling to resolvePlanningModel's implementation details --
+  // it only depends on the same public readFablePilotState/recordQualifyingTask/
+  // writeFablePilotState contract every other caller in this module already uses.
+  const pilotCheck = readFablePilotState(input.statePath);
+  if (!pilotCheck.ok || !pilotCheck.state) {
+    // Pilot eligibility flipped between resolvePlanningModel's check and this one
+    // (e.g. a concurrent suspend/rollback) -- fail closed to Sonnet rather than
+    // trusting a routing decision the state no longer supports.
+    return {
+      ok: true,
+      code: 'FALLBACK_PILOT_NOT_ELIGIBLE',
+      message: `Fable pilot eligibility changed between resolution and recording (${pilotCheck.code}): ${pilotCheck.message}. Falling back to Sonnet rather than recording against a state that is no longer eligible.`,
+      routing: {
+        model: resolution.routing!.model === 'claude-fable-5' ? 'claude-sonnet-5' : resolution.routing!.model,
+        profile: 'sonnet-default',
+        selected_by: 'three-brain',
+        rationale: input.rationale,
+        policy_version: resolution.routing!.policy_version,
+        fallback_used: true,
+        fallback_model: 'claude-sonnet-5',
+        requested_model: 'claude-fable-5',
+        fallback_reason: 'pilot eligibility changed between resolution and recording',
+      },
+      pilotStateRecorded: false,
+    };
+  }
+
+  let policy;
+  try {
+    policy = input.policy ?? loadFablePilotPolicy(input.policyPath);
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'POLICY_LOAD_FAILED',
+      message: error instanceof Error ? error.message : String(error),
+      pilotStateRecorded: false,
+    };
+  }
+
+  const nextState = recordQualifyingTask(
+    pilotCheck.state,
+    {
+      taskId: input.taskId,
+      triggerClass: input.triggerClass as FableTriggerClass,
+      usageDeltaUsd: policy.caps.estimated_usage_per_task_usd,
+    },
+    input.now,
+  );
+  writeFablePilotState(nextState, input.statePath);
+
+  return { ...resolution, pilotStateRecorded: true };
+}
+
+export interface ResolveAndRecordFableAdvisoryReviewInput
+  extends ResolveFableAdvisoryReviewInput {
+  taskId: string;
+}
+
+/**
+ * Advisory-review counterpart to resolveAndRecordPlanningModel: an advisory Fable
+ * review (e.g. a Build Mode certification review) is a genuinely separate selection
+ * moment from lane creation -- it happens at PR-review time, against an already-open
+ * PR, not at manifest-creation time. It must record its own qualifying task the same
+ * way: reviewer-independence is checked first (no override, same as
+ * resolveFableAdvisoryReview), and only a genuine Fable selection writes the state
+ * file, atomically, before returning.
+ */
+export function resolveAndRecordFableAdvisoryReview(
+  input: ResolveAndRecordFableAdvisoryReviewInput,
+): ResolveAndRecordResult {
+  if (!input.reviewerIndependentOfAuthor) {
+    return {
+      ok: false,
+      code: 'FALLBACK_MISSING_REVIEWER_INDEPENDENCE',
+      message:
+        'reviewer_independent_of_author must be true for any Fable review claim. Refusing to resolve a Fable review model without it -- there is no override.',
+      pilotStateRecorded: false,
+    };
+  }
+  return resolveAndRecordPlanningModel(input);
 }
 
 /**

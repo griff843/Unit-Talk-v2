@@ -7,6 +7,7 @@ import {
   FABLE_PILOT_STATE_PATH,
   readFablePilotState,
   evaluatePilotCaps,
+  validateActivationDates,
   recordQualifyingTask,
   suspendPilot,
   activatePilot,
@@ -289,4 +290,149 @@ test('rollbackPilot is terminal: once rolled_back, activatePilot can never bring
   const rolledBack = rollbackPilot(state, 'governance rollback', 'griff843');
   assert.strictEqual(rolledBack.status, 'rolled_back');
   assert.throws(() => activatePilot(rolledBack, 'griff843'));
+});
+
+// ── Activation-date fail-closed validation (UTV2-1569 PR #1292 Codex review finding) ──
+// ── every malformed-input case gets its own explicit test, per the PM's required fix ──
+
+test('validateActivationDates rejects a missing activated_at', () => {
+  const state = baseState({ status: 'active', activated_at: null, expires_at: '2026-08-20T00:00:00.000Z' });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /activated_at is missing or empty/);
+});
+
+test('validateActivationDates rejects an empty-string activated_at', () => {
+  const state = baseState({ status: 'active', activated_at: '   ', expires_at: '2026-08-20T00:00:00.000Z' });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /activated_at is missing or empty/);
+});
+
+test('validateActivationDates rejects an unparseable activated_at', () => {
+  const state = baseState({ status: 'active', activated_at: 'not-a-date', expires_at: '2026-08-20T00:00:00.000Z' });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /not a parseable date/);
+});
+
+test('validateActivationDates rejects a missing expires_at', () => {
+  const state = baseState({ status: 'active', activated_at: '2026-07-21T00:00:00.000Z', expires_at: null });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /expires_at is missing or empty/);
+});
+
+test('validateActivationDates rejects an unparseable expires_at', () => {
+  const state = baseState({ status: 'active', activated_at: '2026-07-21T00:00:00.000Z', expires_at: 'garbage' });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /not a parseable date/);
+});
+
+test('validateActivationDates rejects expires_at at or before activated_at', () => {
+  const state = baseState({
+    status: 'active',
+    activated_at: '2026-07-21T00:00:00.000Z',
+    expires_at: '2026-07-20T00:00:00.000Z',
+  });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /is not after activated_at/);
+});
+
+test('validateActivationDates rejects expires_at equal to activated_at', () => {
+  const state = baseState({
+    status: 'active',
+    activated_at: '2026-07-21T00:00:00.000Z',
+    expires_at: '2026-07-21T00:00:00.000Z',
+  });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+});
+
+test('validateActivationDates rejects expires_at inconsistent with activated_at + max_days', () => {
+  const state = baseState({
+    status: 'active',
+    activated_at: '2026-07-21T00:00:00.000Z',
+    expires_at: '2026-12-25T00:00:00.000Z', // nowhere near activated_at + 30 days
+    max_days: 30,
+  });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.match(result.message, /does not match activated_at \+ max_days/);
+});
+
+test('validateActivationDates accepts a well-formed, internally-consistent activation window', () => {
+  const now = new Date('2026-07-21T00:00:00.000Z');
+  const state = baseState({
+    status: 'active',
+    activated_at: now.toISOString(),
+    expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    max_days: 30,
+  });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, true);
+});
+
+test('validateActivationDates tolerates small clock-skew/serialization drift (well within 5 minutes)', () => {
+  const now = new Date('2026-07-21T00:00:00.000Z');
+  const state = baseState({
+    status: 'active',
+    activated_at: now.toISOString(),
+    expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000 + 60_000).toISOString(), // +1 minute
+    max_days: 30,
+  });
+  const result = validateActivationDates(state);
+  assert.strictEqual(result.ok, true);
+});
+
+test('readFablePilotState fails closed with PILOT_DATES_INVALID for every malformed activation-date case, even when the caps themselves would otherwise pass', () => {
+  const dir = makeTmpStateDir();
+  const cases: Array<[string, Partial<FablePilotState>]> = [
+    ['missing activated_at', { activated_at: null, expires_at: '2026-08-20T00:00:00.000Z' }],
+    ['unparseable activated_at', { activated_at: 'nope', expires_at: '2026-08-20T00:00:00.000Z' }],
+    ['missing expires_at', { activated_at: '2026-07-21T00:00:00.000Z', expires_at: null }],
+    ['unparseable expires_at', { activated_at: '2026-07-21T00:00:00.000Z', expires_at: 'nope' }],
+    [
+      'expires_at before activated_at',
+      { activated_at: '2026-07-21T00:00:00.000Z', expires_at: '2026-07-01T00:00:00.000Z' },
+    ],
+    [
+      'expires_at inconsistent with max_days',
+      { activated_at: '2026-07-21T00:00:00.000Z', expires_at: '2027-01-01T00:00:00.000Z' },
+    ],
+  ];
+  for (const [label, overrides] of cases) {
+    const filePath = writeState(
+      dir,
+      JSON.stringify(baseState({ status: 'active', task_count: 1, usage_used_usd: 5, ...overrides })),
+      `case-${label.replace(/\s+/g, '-')}.json`,
+    );
+    const result = readFablePilotState(filePath);
+    assert.strictEqual(result.ok, false, `expected ${label} to be rejected`);
+    assert.strictEqual(result.code, 'PILOT_DATES_INVALID', `expected ${label} to produce PILOT_DATES_INVALID`);
+  }
+});
+
+test('evaluatePilotCaps itself (defense in depth, independent of readFablePilotState) treats a missing/unparseable activation date as a cap failure, never a silent no-op', () => {
+  const missingDateState = baseState({ status: 'active', activated_at: null, task_count: 1 });
+  const missingResult = evaluatePilotCaps(missingDateState);
+  assert.strictEqual(missingResult.withinCaps, false);
+  assert.ok(missingResult.reasons.some((r) => r.includes('activation date missing or unparseable')));
+
+  const unparseableDateState = baseState({ status: 'active', activated_at: 'not-a-date', task_count: 1 });
+  const unparseableResult = evaluatePilotCaps(unparseableDateState);
+  assert.strictEqual(unparseableResult.withinCaps, false);
+  assert.ok(unparseableResult.reasons.some((r) => r.includes('activation date missing or unparseable')));
+
+  const unparseableExpiryState = baseState({
+    status: 'active',
+    activated_at: '2026-07-21T00:00:00.000Z',
+    expires_at: 'garbage',
+    task_count: 1,
+  });
+  const unparseableExpiryResult = evaluatePilotCaps(unparseableExpiryState);
+  assert.strictEqual(unparseableExpiryResult.withinCaps, false);
+  assert.ok(unparseableExpiryResult.reasons.some((r) => r.includes('expiry date unparseable')));
 });

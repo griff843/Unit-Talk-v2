@@ -8,6 +8,8 @@ import {
   loadFablePilotPolicy,
   resolvePlanningModel,
   resolveFableAdvisoryReview,
+  resolveAndRecordPlanningModel,
+  resolveAndRecordFableAdvisoryReview,
   toAgentModelOverride,
   type FablePilotPolicy,
 } from './planning-model-routing.js';
@@ -49,7 +51,7 @@ function basePolicy(overrides: Partial<FablePilotPolicy> = {}): FablePilotPolicy
       },
     },
     skip_list: ['routine_coding', 'manifest_bookkeeping', 'proof_rebinding', 'ci_cleanup', 'mechanical_reconciliation'],
-    caps: { max_qualifying_tasks: 8, max_days: 30, usage_ceiling_usd: 150 },
+    caps: { max_qualifying_tasks: 8, max_days: 30, usage_ceiling_usd: 150, estimated_usage_per_task_usd: 15 },
     advisory_only: true,
     binding_authority: false,
     reviewer_independence_required: true,
@@ -291,4 +293,151 @@ test('resolvePlanningModel never throws on a missing/malformed policy file -- fa
   const result = resolvePlanningModel({ tier: 'T1', rationale: 'x', policyPath: missingPath });
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.code, 'POLICY_LOAD_FAILED');
+});
+
+// ── resolveAndRecordPlanningModel (UTV2-1569 PR #1292 fix: a real Fable selection must ──
+// ── atomically record task_count/usage_used_usd in the SAME call, never a separate step ──
+
+test('resolveAndRecordPlanningModel records a qualifying task and persists it when Fable is genuinely selected', () => {
+  const dir = makeTmpDir();
+  const policyPath = writePolicy(dir, basePolicy());
+  const statePath = writeState(dir, activeState());
+
+  const before = JSON.parse(fs.readFileSync(statePath, 'utf8')) as FablePilotState;
+  assert.strictEqual(before.task_count, 0);
+  assert.strictEqual(before.usage_used_usd, 0);
+
+  const result = resolveAndRecordPlanningModel({
+    tier: 'T1',
+    triggerClass: 'repeated_architecture_bounce',
+    rationale: '2x CHANGES_REQUIRED on the same architectural question',
+    taskId: 'UTV2-9001',
+    policyPath,
+    statePath,
+  });
+
+  assert.strictEqual(result.code, 'OK_FABLE_SELECTED');
+  assert.strictEqual(result.routing?.model, 'claude-fable-5');
+  assert.strictEqual(result.pilotStateRecorded, true);
+
+  const after = JSON.parse(fs.readFileSync(statePath, 'utf8')) as FablePilotState;
+  assert.strictEqual(after.task_count, 1);
+  assert.strictEqual(after.usage_used_usd, 15);
+  assert.strictEqual(after.qualifying_tasks.length, 1);
+  assert.strictEqual(after.qualifying_tasks[0]!.task_id, 'UTV2-9001');
+});
+
+test('resolveAndRecordPlanningModel does NOT touch the state file when the resolution falls back to Sonnet', () => {
+  const dir = makeTmpDir();
+  const policyPath = writePolicy(dir, basePolicy({ pilot_enabled: false }));
+  const statePath = writeState(dir, activeState());
+  const before = fs.readFileSync(statePath, 'utf8');
+
+  const result = resolveAndRecordPlanningModel({
+    tier: 'T1',
+    triggerClass: 'repeated_architecture_bounce',
+    rationale: 'x',
+    taskId: 'UTV2-9002',
+    policyPath,
+    statePath,
+  });
+
+  assert.strictEqual(result.code, 'FALLBACK_POLICY_DISABLED');
+  assert.strictEqual(result.pilotStateRecorded, false);
+  assert.strictEqual(fs.readFileSync(statePath, 'utf8'), before);
+});
+
+test('resolveAndRecordPlanningModel mechanically expires the pilot the moment the 8th qualifying task is recorded through this path', () => {
+  const dir = makeTmpDir();
+  const policyPath = writePolicy(dir, basePolicy());
+  const statePath = writeState(dir, activeState({ task_count: 7 }));
+
+  const result = resolveAndRecordPlanningModel({
+    tier: 'T1',
+    triggerClass: 'live_state_root_cause',
+    rationale: 'x',
+    taskId: 'UTV2-9008',
+    policyPath,
+    statePath,
+  });
+  assert.strictEqual(result.code, 'OK_FABLE_SELECTED');
+  assert.strictEqual(result.pilotStateRecorded, true);
+
+  const after = JSON.parse(fs.readFileSync(statePath, 'utf8')) as FablePilotState;
+  assert.strictEqual(after.task_count, 8);
+  assert.strictEqual(after.status, 'expired');
+
+  // A subsequent selection attempt must now fall back to Sonnet -- the cap is real.
+  const nextAttempt = resolveAndRecordPlanningModel({
+    tier: 'T1',
+    triggerClass: 'live_state_root_cause',
+    rationale: 'x',
+    taskId: 'UTV2-9009',
+    policyPath,
+    statePath,
+  });
+  assert.strictEqual(nextAttempt.routing?.model, 'claude-sonnet-5');
+  assert.strictEqual(nextAttempt.pilotStateRecorded, false);
+});
+
+test('resolveAndRecordFableAdvisoryReview refuses (no state write) without reviewer_independent_of_author: true', () => {
+  const dir = makeTmpDir();
+  const policyPath = writePolicy(dir, basePolicy());
+  const statePath = writeState(dir, activeState());
+  const before = fs.readFileSync(statePath, 'utf8');
+
+  const result = resolveAndRecordFableAdvisoryReview({
+    tier: 'T1',
+    triggerClass: 'build_mode_certification_review',
+    rationale: 'x',
+    taskId: 'UTV2-9011',
+    policyPath,
+    statePath,
+    reviewerIndependentOfAuthor: false,
+  });
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'FALLBACK_MISSING_REVIEWER_INDEPENDENCE');
+  assert.strictEqual(result.pilotStateRecorded, false);
+  assert.strictEqual(fs.readFileSync(statePath, 'utf8'), before);
+});
+
+test('resolveAndRecordFableAdvisoryReview records a qualifying task when reviewer independence is asserted and the pilot is eligible', () => {
+  const dir = makeTmpDir();
+  const policyPath = writePolicy(dir, basePolicy());
+  const statePath = writeState(dir, activeState());
+
+  const result = resolveAndRecordFableAdvisoryReview({
+    tier: 'T1',
+    triggerClass: 'build_mode_certification_review',
+    rationale: 'certification packet review',
+    taskId: 'UTV2-9012',
+    policyPath,
+    statePath,
+    reviewerIndependentOfAuthor: true,
+  });
+  assert.strictEqual(result.code, 'OK_FABLE_SELECTED');
+  assert.strictEqual(result.pilotStateRecorded, true);
+
+  const after = JSON.parse(fs.readFileSync(statePath, 'utf8')) as FablePilotState;
+  assert.strictEqual(after.task_count, 1);
+  assert.strictEqual(after.qualifying_tasks[0]!.task_id, 'UTV2-9012');
+});
+
+test('resolveAndRecordPlanningModel mechanically expires the pilot when usage crosses the ceiling in the same recorded call', () => {
+  const dir = makeTmpDir();
+  const policyPath = writePolicy(dir, basePolicy());
+  const statePath = writeState(dir, activeState({ usage_used_usd: 140, usage_ceiling_usd: 150 }));
+
+  const result = resolveAndRecordPlanningModel({
+    tier: 'T1',
+    triggerClass: 'product_synthesis_no_precedent',
+    rationale: 'x',
+    taskId: 'UTV2-9010',
+    policyPath,
+    statePath,
+  });
+  assert.strictEqual(result.code, 'OK_FABLE_SELECTED');
+  const after = JSON.parse(fs.readFileSync(statePath, 'utf8')) as FablePilotState;
+  assert.strictEqual(after.usage_used_usd, 155);
+  assert.strictEqual(after.status, 'expired');
 });

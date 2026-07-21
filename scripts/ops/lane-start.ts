@@ -41,7 +41,7 @@ import {
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
-import { resolvePlanningModel, type PlanningModelRoutingBlock } from './planning-model-routing.js';
+import { resolveAndRecordPlanningModel, type PlanningModelRoutingBlock } from './planning-model-routing.js';
 // checkConcurrencyLimits() is the real, fail-closed mechanical authority for lane
 // admission -- it lives in concurrency-rules.ts (not here) so that lane-maximizer.ts's
 // advisory wave planner can import and call the exact same implementation instead of
@@ -581,16 +581,25 @@ function main(): void {
 
     // Planning-model routing resolution (UTV2-1569): only reached when the caller
     // explicitly asks for it via --fable-trigger-class. Fails closed to Sonnet inside
-    // resolvePlanningModel itself (pilot ineligible, policy disabled, unknown/skip-listed
-    // trigger class, etc.) -- resolvePlanningModel never throws and never returns
+    // resolveAndRecordPlanningModel itself (pilot ineligible, policy disabled,
+    // unknown/skip-listed trigger class, etc.) -- it never throws and never returns
     // ok:false except on a policy-load failure, so this only exits non-zero in that one
     // narrow case.
+    //
+    // Codex review fix (PR #1292, P1): this MUST call resolveAndRecordPlanningModel,
+    // not the bare read-only resolvePlanningModel. A real Fable selection has to
+    // mechanically record the qualifying task and its usage against
+    // FABLE_PILOT_STATE.json in the SAME operation that persists planning_model_routing
+    // into the manifest below -- otherwise task_count/usage_used_usd never move after a
+    // real selection and the 8-task/usage caps can never mechanically expire. Using
+    // the issue ID as taskId means one qualifying task per Fable-routed lane created.
     let planningModelRouting: PlanningModelRoutingBlock | undefined;
     if (isClaudeExecutorForFable && fableTriggerClassFlag) {
-      const resolution = resolvePlanningModel({
+      const resolution = resolveAndRecordPlanningModel({
         tier,
         triggerClass: fableTriggerClassFlag,
         rationale: fableRationaleFlag!,
+        taskId: issueId,
       });
       if (!resolution.ok) {
         emitJson({

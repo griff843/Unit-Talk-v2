@@ -30,7 +30,7 @@ function activePolicy(): FablePilotPolicy {
       },
     },
     skip_list: [],
-    caps: { max_qualifying_tasks: 8, max_days: 30, usage_ceiling_usd: 150 },
+    caps: { max_qualifying_tasks: 8, max_days: 30, usage_ceiling_usd: 150, estimated_usage_per_task_usd: 15 },
     advisory_only: true,
     binding_authority: false,
     reviewer_independence_required: true,
