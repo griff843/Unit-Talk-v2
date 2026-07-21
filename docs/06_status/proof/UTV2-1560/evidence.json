@@ -5,14 +5,14 @@
   "tier": "T1",
   "lane_type": "hygiene",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
-  "reviewed_head_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
-  "evidence_commit_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
+  "source_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
+  "reviewed_head_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
+  "evidence_commit_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "5546c7324415fff7feb2c574bdc583c899a4b2c9",
-    "verified_source_note": "Continuation of PR #1258, frozen at the T1 bounce limit (4 CHANGES_REQUIRED verdicts) per PM direction. Same already-reviewed content carried forward on a fresh branch from current main.",
+    "verified_source_sha": "8f8cf3a575b9ad179b2e07b9283f086e11f50a72",
+    "verified_source_note": "Continuation of PR #1258, frozen at the T1 bounce limit (4 CHANGES_REQUIRED verdicts) per PM direction. Same already-reviewed content carried forward on a fresh branch from current main. This revision additionally replaces the RestartCount-only manual-restart verification signal with StartedAt (see restart_signal_fix below) and restores test:ops wiring.",
     "sha_type": "implementation_sha",
     "ci_sentinels": {
       "verify": "pass",
@@ -67,6 +67,12 @@
     "fail": 0,
     "note": "Live smoke run per T1 policy; this lane changes only GitHub Actions workflow files, a test file, and package.json's test list -- no production code path or migration."
   },
+  "restart_signal_fix": {
+    "finding": "Codex P2: RestartCount-only gating is unreliable for an operator-initiated docker restart, since Docker's RestartCount reflects only restart-policy-triggered restarts (on-failure/always), not a manual `docker restart` invocation.",
+    "fix": "Replaced the gating check with the container's .State.StartedAt timestamp (captured pre/post as PRE_STARTED_AT/POST_STARTED_AT); PASS requires both non-empty and pre != post. RestartCount is still captured/logged for audit purposes only and no longer gates PASS/FAIL.",
+    "regression_test": "scripts/ops/worker-recovery-workflow.test.ts: 'worker recovery: manual-restart verification uses StartedAt, not RestartCount, as the gating signal'",
+    "status": "PASS"
+  },
   "scope": {
     "implementation_paths": [
       ".github/workflows/ops-network-diagnose.yml",
@@ -91,7 +97,9 @@
   },
   "known_gaps": [
     "Docker daemon events window covers only 7 days.",
-    "Deploy-timestamp correlation done at the analysis layer, not inside the SSH probe."
+    "Deploy-timestamp correlation done at the analysis layer, not inside the SSH probe.",
+    "File Scope Lock (advisory, not a required status check) fails on a ghost docs/06_status/lanes/UTV2-1560.json manifest left on main from merged PR #1256 (status never advanced past 'started'); fixing it requires a main-side ops:lane-close --repair-merged reconciliation, outside this lane branch's scope.",
+    "Readiness Regression Gate (advisory, not a required status check) fails on a repo-wide, pre-existing readiness-score.json ledger unrelated to this lane."
   ],
   "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
 }
