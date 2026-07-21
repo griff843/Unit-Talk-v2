@@ -7,9 +7,17 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1568-fable5-routing-reinstatement",
   "branch": "claude/utv2-1568-fable5-routing-reinstatement",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "37db27d78e18fa3eab11f8fa6ec4feabd4068c43",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1287",
+  "files_changed": [
+    ".ops/sync/UTV2-1568.yml",
+    "docs/06_status/lanes/UTV2-1568.json",
+    ".claude/commands/three-brain.md",
+    "docs/05_operations/OPERATING_MODEL_SONNET5.md",
+    "docs/05_operations/agent-role-contracts.md",
+    "docs/governance/AGENT_SKILL_CONTRACTS.md",
+    "scripts/ops/contract-validator.ts"
+  ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1568.yml",
     ".claude/commands/three-brain.md",
@@ -24,7 +32,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1568/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-21T02:27:00.000Z",
   "heartbeat_at": "2026-07-21T02:27:00.000Z",
   "closed_at": null,
