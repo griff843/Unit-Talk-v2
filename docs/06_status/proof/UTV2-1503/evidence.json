@@ -1,25 +1,26 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1503",
-  "title": "Orchestrator standing-authority audit -- clean continuation proof",
+  "pr_number": 1290,
   "tier": "T1",
   "lane_type": "governance",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1290",
-  "generated_at": "2026-07-21T20:05:00Z",
+  "source_sha": "5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b",
+  "generated_at": "2026-07-21T22:00:00Z",
   "status": "PASS",
   "sha_binding": {
     "verified_source_sha": "5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b",
-    "verified_source_note": "Substantive content commit on the fresh continuation branch claude/utv2-1503-continuation, cut from current main. Carries forward, byte-for-byte, the audit doc already reviewed and PM-approved at a prior PR's final head for this issue, which exceeded the T1 CHANGES_REQUIRED bounce limit before it could merge. All facts in the audit (forbidden-glob list, active consolidated Proof Gate workflow name, cited line numbers in r-level-check.ts/truth-check-lib.ts/apply-branch-protection.sh, docs authority map ownership rows, live branch-protection snapshot, STANDING_GUARDRAILS.md content) were independently re-verified against current main immediately before this commit -- no drift found, no content changes required. Later commits on this branch are restricted to this lane's own manifest and proof/sync paths.",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "verified_source_note": "Substantive audit-content commit on this branch (claude/utv2-1503-continuation), cut from main at c3cb22683c0f218f7a6acdf3e4335a673932e91c. Carries forward, byte-for-byte, the audit doc already reviewed and PM-approved at a prior PR's final head for this issue. Ancestry independently re-verified with `git merge-base --is-ancestor 5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b <current head>` (passes) immediately before this proof revision, not assumed from the prior lane's records. This SHA is native to this branch's own history -- it is not a pointer carried over from any other PR's branch.",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-21T20:05:00.000Z",
+    "bound_at": "2026-07-21T22:00:00.000Z",
     "ci_sentinels": {
       "pnpm_verify": "pass",
       "pnpm_test_db": "pass",
       "r_level_check": "pass",
       "owner_t1_gate": "pending_owner_action"
-    }
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   },
   "verifier": {
     "identity": "claude/utv2-1503-continuation",
@@ -32,7 +33,7 @@
       "command": "pnpm verify",
       "status": "PASS",
       "exit_code": 0,
-      "note": "Static checks, unit suites, live DB smoke, and the live T1 proof command completed successfully on the continuation branch."
+      "note": "Static checks, unit suites, live DB smoke, and the live T1 proof command completed successfully on this exact branch after a fresh isolated-worktree install."
     },
     "type_check": "pass (within pnpm verify)",
     "tests": "pass (node:test suites within pnpm verify; full command exit 0)",
@@ -50,11 +51,66 @@
     ]
   },
   "runtime_proof": {
-    "pnpm_test_db": "pass",
     "command": "pnpm test:db",
     "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
     "supabase_project": "zfzdnfwdarxucxtaojxm",
-    "note": "Required T1 smoke evidence only; this audit changes no runtime or database behavior and performs no production mutation outside the existing self-cleaning test suite. Exact pass/fail counts are recorded in verification.md from the actual terminal run on this branch."
+    "note": "Required T1 smoke evidence only; this audit changes no runtime or database behavior and performs no production mutation outside the existing self-cleaning test suite.",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "Created and read a smoke pick through repository abstractions, transitioned it through queued, posted, and settled, then removed the test rows."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "Asserted invalid enqueue and settlement paths leave zero forbidden lifecycle rows."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "Asserted invalid enqueue creates no row and invalid delivery preserves processing state atomically."
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "Asserted invalid delivery creates zero receipt rows."
+      },
+      {
+        "table": "settlement_records",
+        "description": "Asserted invalid settlement creates zero rows and correction chains remain additive."
+      },
+      {
+        "table": "audit_log",
+        "description": "Asserted rejected atomic delivery and settlement paths create zero audit rows."
+      },
+      {
+        "table": "participants",
+        "description": "Checked that external_id, sport, and participant_type keys contain no duplicate player rows."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "pick_lifecycle",
+        "count": 0,
+        "status": "forbidden enqueue and settlement transitions absent"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "rejected delivery produced no receipt"
+      },
+      {
+        "table": "settlement_records",
+        "count": 0,
+        "status": "rejected settlement produced no settlement record"
+      },
+      {
+        "table": "audit_log",
+        "count": 0,
+        "status": "rejected atomic operations produced no audit rows"
+      }
+    ]
   },
   "owner_boundary": {
     "t1_approved_label": "absent_and_not_created_by_this_lane",

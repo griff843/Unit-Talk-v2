@@ -26,6 +26,9 @@ review, `t1-approved`, a `pm-verdict/v1`, or merge authorization.
 - [x] `pnpm verify` PASS (full suite, including live-DB smoke and live T1 proof), run on this exact branch after a fresh `pnpm install` in an isolated worktree
 - [x] `pnpm test:db` PASS (7/7, live Supabase, standalone run)
 - [x] R-level check PASS, no artifacts required for this diff
+- [x] (This revision) `evidence.json` rebuilt to `schema_version: 1`, the schema `scripts/ops/truth-check-lib.ts`'s T1 `P6` check actually requires and that every real `done` T1 governance lane on `main` actually uses -- confirmed `scripts/ci/proof-binding-validator.ts` (the schema-v2 validator) does not apply to this file, since it is wired only into `migration-reversibility-gate.yml`, which this PR does not trigger
+- [x] (This revision) Every SHA in `evidence.json`/`verification.md` re-verified against this branch's actual current ancestry with `git merge-base --is-ancestor`, shown above, not assumed -- no SHA carried over from the prior PR's branch (grep confirms zero matches)
+- [x] (This revision) Both Codex-flagged ancestry findings re-checked: the two cited SHAs (`9de2146d`, `6ac0838`) do not exist in this branch's history and are not applicable; the real finding (schema_version mismatch) is resolved above
 
 ## EVIDENCE:
 
@@ -35,6 +38,52 @@ review, `t1-approved`, a `pm-verdict/v1`, or merge authorization.
 - Corrected authority model: lane allowlists establish path eligibility, while the Delegation Policy and tier gates establish execution, review, and merge authority.
 - Preserved T1 gate: both `t1-approved` and a valid Griff-authored, reviewed-head-bound `pm-verdict/v1` APPROVED artifact remain mandatory.
 - Identity boundary: shared Griff/Claude account provenance and executor output are explicitly non-independent.
+
+### SHA ancestry verification (shown, not asserted)
+
+Base `main` at the time this branch was cut, and re-confirmed with no drift before this revision:
+
+```text
+$ git rev-parse origin/main
+c3cb22683c0f218f7a6acdf3e4335a673932e91c
+$ git merge-base HEAD origin/main
+c3cb22683c0f218f7a6acdf3e4335a673932e91c
+```
+
+The substantive content commit is a real ancestor of this branch's own head (verified directly, not assumed from any prior lane's records):
+
+```text
+$ git merge-base --is-ancestor 5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b HEAD && echo "IS ANCESTOR"
+IS ANCESTOR
+```
+
+This branch's commit list relative to `main`, before this schema-correction commit lands on top (all authored on this branch, none inherited from the prior PR's branch):
+
+```text
+$ git log --oneline origin/main..HEAD
+6cd0d416 chore(lanes): UTV2-1503 bind pr_url to the continuation PR
+f13d4726 chore(proof): UTV2-1503 continuation evidence and verification bundle
+5aa66f6c UTV2-1503: orchestrator standing authority audit and narrowing recommendation -- clean continuation
+a47add85 chore(lanes): UTV2-1503 continuation lane manifest and sync metadata
+```
+
+This edit lands as one further commit on top of that history -- proof/manifest-only, per this repo's established convention that a proof file cannot bind its own future hash. The exact resulting head SHA is reported in this lane's `EXECUTOR_RESULT` comment and the PR itself once pushed.
+
+No commit SHA in this proof bundle or in `evidence.json` was inherited from the prior PR's branch (grepped this branch's proof/audit/manifest files for every SHA that appeared in the prior PR's records -- zero matches).
+
+### Proof schema correction (this revision)
+
+`evidence.json`'s `schema_version` was `2` in the prior revision of this PR. That was wrong for this file: `scripts/ops/truth-check-lib.ts`'s T1 evidence check (`P6`, line ~668) reads the first JSON file in the lane manifest's `expected_proof_paths` (here, `evidence.json`) and requires `schema_version === 1` -- not `2`. Confirmed this is the actually-enforced, currently-working convention by inspecting every `done` T1 governance lane's own `evidence.json` on `main` (e.g. `UTV2-1494`, `UTV2-1506`, `UTV2-1521`, `UTV2-1537`, `UTV2-1557`, `UTV2-1467`, `UTV2-1493`): all use `schema_version: 1`, none use `2`.
+
+Separately confirmed that `scripts/ci/proof-binding-validator.ts` (the schema-v2, `sha_binding`-requiring validator referenced in the prior revision and in one of Codex's review comments) is **not** wired into the general Proof Gate or Proof Auditor Gate that runs on this PR -- `grep` across `.github/workflows/*.yml` shows it is invoked only by `migration-reversibility-gate.yml`, which itself triggers only on `supabase/migrations/**` / `db/migrations-rollback/**` paths. This PR touches none of those paths, so that validator never runs against this PR's `evidence.json` at all; treating it as authoritative for this file was a mistake in the prior revision. `evidence.json` is now `schema_version: 1`, matching every real, currently-`done` T1 governance lane's actual working evidence bundle.
+
+### Codex review resolution (re-checked against this revision)
+
+Three inline findings were posted against the prior head (`6cd0d416`):
+
+1. **P1, `verification.md`** -- claimed `MERGE_SHA` is not an ancestor of a cited head `9de2146d`. That SHA does not exist anywhere in this branch's history (`git cat-file -t 9de2146d` fails); not applicable.
+2. **P1, `evidence.json`** -- the real finding: `schema_version: 2` conflicts with `truth-check-lib.ts`'s T1 `P6` check. Resolved above by rebuilding the file as `schema_version: 1`.
+3. **P2, `evidence.json`** -- claimed the source SHA is not an ancestor of a cited head `6ac0838`. That SHA also does not exist anywhere in this branch's history (`git cat-file -t 6ac0838` fails); not applicable. The real ancestry check (against this branch's actual head, shown above) passes.
 
 ## Verification
 
