@@ -34,7 +34,7 @@ type ClaudeModel =
   | 'claude-opus-4-8'
   | 'claude-opus-4-7'
   | 'claude-haiku-4-5-20251001'
-  // UTV2-1568: reinstated for the narrow repeated-bounce / product-synthesis /
+  // UTV2-1568: PILOT (8 tasks/30 days, advisory-only) for the narrow repeated-bounce / product-synthesis /
   // certification reviewer role only -- see OPERATING_MODEL_SONNET5.md §1.
   // Removed by UTV2-1390; re-added rather than left invalid.
   | 'claude-fable-5';
