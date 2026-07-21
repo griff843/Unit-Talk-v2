@@ -5,18 +5,19 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "f254a3c467e69efb435990511a73d702946d5648",
-  "reviewed_head_sha": "f254a3c467e69efb435990511a73d702946d5648",
-  "evidence_commit_sha": "f254a3c467e69efb435990511a73d702946d5648",
-  "current_head_sha": "f254a3c467e69efb435990511a73d702946d5648",
+  "source_sha": "883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720",
+  "reviewed_head_sha": "883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720",
+  "evidence_commit_sha": "883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720",
+  "current_head_sha": "883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "f254a3c467e69efb435990511a73d702946d5648",
-    "verified_source_note": "Design-only lane (spec-first, matching the UTV2-1494 precedent for this class of change). No code, workflow, or hook file was modified in this revision.",
+    "verified_source_sha": "883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720",
+    "verified_source_note": "Design-only lane (spec-first, matching this repo's existing precedent for this class of change). No code, workflow, or hook file was modified in this revision.",
     "sha_type": "implementation_sha",
-    "bound_at": "2026-07-21T14:35:00.000Z",
+    "bound_at": "2026-07-21T17:10:00.000Z",
     "ci_sentinels": {
-      "verify": "pass"
+      "verify": "pass",
+      "test_db": "pass"
     }
   },
   "verifier": {
@@ -39,15 +40,21 @@
     }
   },
   "runtime_proof": {
-    "applicable": false,
-    "note": "No runtime, workflow, or hook behavior changed by this lane -- there is no runtime surface to prove against. Matches UTV2-1494's own precedent statement for spec-only lanes: 'No pnpm test:db, R2/R3/R4 artifacts, or runtime proof apply.'"
+    "applicable": true,
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "exit_code": 0,
+    "ran_against": "live Supabase (zfzdnfwdarxucxtaojxm), not in-memory repos",
+    "tap_summary": "# tests 7 / # pass 7 / # fail 0 / # skipped 0",
+    "full_output": "docs/06_status/proof/UTV2-1451/verification.md",
+    "note": "This lane's own diff is docs-only, but T1 tier requires showing the baseline live-DB suite is green against real infrastructure rather than declaring runtime proof not applicable -- corrected from an earlier revision that incorrectly marked this inapplicable."
   },
   "r_level": {
     "verdict": "not_evaluated",
     "note": "Docs-only diff; no R-level artifacts expected."
   },
   "known_gaps": [
-    "Implementation of the two designed fixes (Tier C authorization artifact + gate; singleton-approval real record) is a tracked follow-up, not part of this revision -- see diff-summary.md 'Sequencing recommendation'.",
-    "The mechanical tier-classifier Phase 2 (blocking) cutover and its prerequisite baseline/sweep report are explicitly out of scope for this lane -- both require their own separate PM approval per the locked MECHANICAL_TIER_CLASSIFIER_SPEC.md."
+    "Implementation of the two designed fixes (Tier C authorization artifact + gate; singleton-approval real record) is NOT part of this revision. Per PM verdict, a concrete, T1-tier, dispatch-ready blocking implementation child issue has been created and linked -- see diff-summary.md for its ID and acceptance criteria. This lane does not close the named loopholes; it is design + a PM-sanctioned deferred implementation via that linked child.",
+    "The mechanical tier-classifier blocking-phase cutover and its prerequisite baseline/sweep report are explicitly out of scope for this lane -- both require their own separate PM approval per the locked MECHANICAL_TIER_CLASSIFIER_SPEC.md."
   ]
 }

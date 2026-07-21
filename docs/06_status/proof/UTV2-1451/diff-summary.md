@@ -1,9 +1,22 @@
-# UTV2-1451 — Outcome Contract / Design (spec-first, per UTV2-1494 precedent)
+# UTV2-1451 — Outcome Contract / Design (spec-first, per existing precedent for this class of change)
 
 Generated: 2026-07-21
 Issue: UTV2-1451 (Close Tier C / singleton / risk-class self-authorization loopholes, G-07)
 Tier: T1
 Branch: claude/utv2-1451-close-self-authorization-loopholes
+
+## Scope of this lane (per PM verdict)
+
+This lane is **design-only**: spec + a PM-sanctioned deferred implementation via a linked child
+issue. It does **not** close the Tier C or singleton self-authorization loopholes described below.
+
+Per PM verdict on PR #1289, a concrete, T1-tier, dispatch-ready blocking implementation child issue
+has been created for the two genuinely unaddressed loopholes (Tier C path guard self-authorization;
+`--singleton-approved` bare flag): **the child issue implementing loopholes 1 and 2 below is
+UTV2-1570** ("Implement Tier C authorization gate + singleton approval record (UTV2-1451 child)"),
+linked as blocking this issue in Linear, with acceptance criteria drawn directly from the designs
+below. Real enforcement of these loopholes is pending that child's own dispatch, review, and PM
+approval — not part of this lane's own Done criteria.
 
 ## Why spec-first, not a rushed implementation
 
@@ -119,8 +132,10 @@ tier-determination mechanism itself. That's a small doc edit, not new code.
 ## Sequencing recommendation
 
 1. This design doc (now).
-2. Follow-up implementation PR(s) for loopholes 1 and 2 (concrete code + tests per the designs
-   above) — the next actionable unit of work on this issue.
+2. UTV2-1570 (linked, blocking this issue, T1, dispatch-ready) — the concrete implementation PR
+   for loopholes 1 and 2 (concrete code + tests per the designs above). This is the next actionable
+   unit of work on this issue, and closes the loopholes this issue names; this design-only lane
+   does not.
 3. Separately, generate the Phase 1 sweep report (bounded, mechanical, no design decisions needed)
    — could be its own small T2/T3 lane, unblocks evaluating Phase 2 cutover readiness.
 4. Phase 2 cutover proposal — its own PM-gated decision, per the locked spec; not this lane's job.
