@@ -29,6 +29,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1570/.gitkeep",
+    "docs/06_status/proof/UTV2-1570/correction-plan.md",
     "docs/06_status/proof/UTV2-1570/diff-summary.md",
     "docs/06_status/proof/UTV2-1570/evidence.json",
     "docs/06_status/proof/UTV2-1570/verification.md"
