@@ -71,7 +71,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve PR metadata, tier, changed files, and approval comments
+      - name: Resolve PR metadata, create pending check, tier, changed files, and approval comments
         id: collect
         uses: actions/github-script@v7
         with:
@@ -86,6 +86,29 @@ jobs:
             const headRef = pr.head.ref;
             const baseSha = pr.base.sha;
             const prTitle = pr.title || '';
+
+            // ── Create an explicit check run bound to the PR's head SHA
+            // (Codex review, PR #1293): an issue_comment-triggered
+            // evaluation (posting a TIER_C_APPROVAL comment after an
+            // earlier pull_request-triggered failure) does NOT create or
+            // update any Checks API run by default -- it only produces the
+            // workflow's own native per-job status for whatever ref
+            // triggered *this* run, which is never the PR's head_sha for an
+            // issue_comment event. Branch protection would keep showing the
+            // earlier failed pull_request run against that head SHA
+            // forever, so a later valid approval comment would never
+            // actually unblock the PR without a manual rerun or new push.
+            // Mirrors merge-gate.yml's own checks.create/checks.update
+            // pattern exactly, bound explicitly to headSha regardless of
+            // which event triggered this run.
+            const { data: check } = await github.rest.checks.create({
+              owner, repo,
+              name: 'Tier C Authorization Gate',
+              head_sha: headSha,
+              status: 'in_progress',
+              started_at: new Date().toISOString(),
+            });
+            core.setOutput('check_run_id', check.id);
 
             // ── Resolve authoritative tier from lane manifest, same source
             // merge-gate.yml treats as authoritative -- GitHub tier labels are
@@ -224,6 +247,14 @@ jobs:
 
       - name: Evaluate Tier C authorization
         id: gate
+        # continue-on-error: the job's own native check is not what branch
+        # protection keys off (see "Create pending check" above) -- the
+        # explicit checks.update below is. Letting this step fail the job
+        # outright would skip that completion step and leave the explicit
+        # check stuck "in_progress" forever. The follow-up step still marks
+        # the job failed via core.setFailed() when the verdict is FAIL, so
+        # Actions-tab visibility is unaffected.
+        continue-on-error: true
         run: |
           TIER=$(python3 -c "import json; print(json.load(open('.out/tier-c-meta.json'))['tier'])")
           PR_NUMBER=$(python3 -c "import json; print(json.load(open('.out/tier-c-meta.json'))['prNumber'])")
@@ -236,40 +267,69 @@ jobs:
             --head-sha "$HEAD_SHA" \
             --output-json .out/tier-c-result.json
 
-      - name: Comment on Tier C authorization failure
-        if: failure() && steps.gate.outcome == 'failure'
+      - name: Complete check run and comment on failure
+        if: always() && steps.collect.outcome == 'success'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const prNumber = Number(${{ steps.resolve_pr.outputs.pr_number }});
-            let result;
+            const checkRunId = Number(${{ steps.collect.outputs.check_run_id }});
+
+            let result = null;
             try {
               result = JSON.parse(fs.readFileSync('.out/tier-c-result.json', 'utf8'));
             } catch {
               result = null;
             }
 
-            const lines = ['**TIER C AUTHORIZATION REQUIRED**', ''];
-            if (result) {
-              lines.push(`Lane tier: \`${result.tier}\``, '');
-              lines.push('This PR touches Tier C path(s) with no valid `tier-c-approval/v1` comment covering them:', '');
-              for (const p of result.uncovered_paths) {
-                lines.push(`- \`${p}\``);
-              }
-              lines.push('');
-            }
-            lines.push(
-              'Post a comment matching `docs/05_operations/schemas/tier-c-approval-v1.md` ' +
-              '(schema: tier-c-approval/v1), authored by an authorized CODEOWNERS human, ' +
-              'bound to this exact PR and head SHA, covering every path listed above. ' +
-              'T1 lanes are exempt from this gate -- their own `t1-approved` + `pm-verdict/v1` ' +
-              'already covers this diff.'
-            );
+            // No result file at all means the gate script itself crashed
+            // before writing output (infra error, not an authorization
+            // finding) -- fail closed rather than silently passing.
+            const passed = result ? result.verdict === 'PASS' : false;
 
-            await github.rest.issues.createComment({
+            await github.rest.checks.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: prNumber,
-              body: lines.join('\n')
+              check_run_id: checkRunId,
+              status: 'completed',
+              conclusion: passed ? 'success' : 'failure',
+              completed_at: new Date().toISOString(),
+              output: {
+                title: passed
+                  ? 'Tier C Authorization Gate: PASS'
+                  : 'Tier C Authorization Gate: BLOCKED',
+                summary: result
+                  ? `${result.reason}\n\nTier: ${result.tier}\nMatched Tier C paths: ${result.matched_tier_c_paths.join(', ') || '(none)'}`
+                  : 'Gate script did not produce a result (infra error) -- failing closed.',
+              },
             });
+
+            if (!passed) {
+              const lines = ['**TIER C AUTHORIZATION REQUIRED**', ''];
+              if (result) {
+                lines.push(`Lane tier: \`${result.tier}\``, '');
+                lines.push('This PR touches Tier C path(s) with no valid `tier-c-approval/v1` comment covering them:', '');
+                for (const p of result.uncovered_paths) {
+                  lines.push(`- \`${p}\``);
+                }
+                lines.push('');
+              }
+              lines.push(
+                'Post a comment matching `docs/05_operations/schemas/tier-c-approval-v1.md` ' +
+                '(schema: tier-c-approval/v1), authored by an authorized CODEOWNERS human, ' +
+                'bound to this exact PR and head SHA, covering every path listed above. ' +
+                'T1 lanes are exempt from this gate -- their own `t1-approved` + `pm-verdict/v1` ' +
+                'already covers this diff. Once a valid approval comment is posted, this check ' +
+                're-evaluates automatically and updates in place -- no new push required.'
+              );
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: lines.join('\n'),
+              });
+
+              core.setFailed('Tier C authorization gate: BLOCKED');
+            }

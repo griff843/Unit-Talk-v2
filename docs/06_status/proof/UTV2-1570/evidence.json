@@ -164,5 +164,13 @@
     "The Tier C Authorization Gate workflow is registered as a required-check CANDIDATE in REQUIRED_CI_CHECKS.md (§5.6), not yet flipped live in GitHub branch protection -- same rollout pattern used for Proof Auditor Gate (candidate first, promoted to required after a confirmed green run on a Tier-C-touching PR). Live branch protection today lists only: verify, Executor Result Validation, Merge Gate, P0 Protocol (confirmed via `gh api repos/.../branches/main/protection` at authoring time) -- several other 'always_required' entries already in REQUIRED_CI_CHECKS.md (e.g. proof-regression) are also not live-configured, so this gap is consistent with existing repo practice, not a new shortfall introduced by this lane. Promoting it to a live required check is a deliberate follow-up action, not something this PR performs unilaterally.",
     "The bootstrap fallback in tier-c-authorization-gate.yml (falling back to this PR's own copy of tier-c-authorization-gate.ts / tier-c-approval-comment-parser.ts when origin/main has neither yet) is exercised on THIS PR's own first CI run by construction -- expected and self-resolving once this PR merges, same pattern file-scope-lock-check.yml used for file-scope-guard.ts under UTV2-1521."
   ],
+  "codex_review": {
+    "requested_at": "2026-07-21T22:35:00.000Z",
+    "round_1": {
+      "finding": "P2: issue_comment-triggered re-evaluation (posting TIER_C_APPROVAL after an earlier failing pull_request run) never created or updated a Checks API run bound to the PR's head_sha -- only the job's own native per-trigger status was produced, which branch protection would not associate with the PR's head SHA for the pull_request-triggered failure. A later valid approval comment would not actually unblock the PR without a manual rerun or new push.",
+      "fix": "Restructured the workflow to explicitly create a Checks API run (checks.create) bound to the PR's headSha at the start of every evaluation (regardless of trigger event), and explicitly complete it (checks.update) with the correct conclusion at the end -- mirroring merge-gate.yml's own established checks.create/checks.update pattern exactly. The 'Evaluate Tier C authorization' step now uses continue-on-error so the completion step always runs and the explicit check never gets stuck in_progress; core.setFailed() still marks the job itself failed on a BLOCKED verdict for Actions-tab visibility.",
+      "status": "addressed"
+    }
+  },
   "verdict": "READY_FOR_REVIEW_WITH_DOCUMENTED_GAP"
 }
