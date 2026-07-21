@@ -21,7 +21,29 @@ onto current main.
   narrow worker-only recovery workflow.
 - `scripts/ops/worker-recovery-workflow.test.ts` — regression tests for the
   recovery workflow's structure and safety properties.
-- `package.json` — wires the new test file into `test:ops`.
+
+**Known deferred gap:** the new test file is not yet wired into `test:ops`
+in `package.json`. That single line is genuinely locked by two other active
+lanes (UTV2-1550, UTV2-1554) that also append to it, and UTV2-1550 cannot
+currently reach `done` (a separate, unrelated CI-evaluation limitation, not
+a defect in this lane). Wiring it in is a one-line follow-up once one of
+those lanes clears; until then the test still runs directly
+(`npx tsx --test scripts/ops/worker-recovery-workflow.test.ts`, 13/13 pass)
+but is not part of the aggregate `pnpm test`/`pnpm verify` run.
+
+## PM verdict fixes (2026-07-21, this revision)
+
+- Two Codex P2 findings fixed in `ops-worker-recovery.yml`: the manual
+  `confirm` input is now passed through `env:` and compared as a shell
+  variable (never interpolated directly into the run script, closing a
+  shell-injection path); the embedded Python one-liner's `d.get("targets")`
+  had unescaped inner quotes that the outer local double-quoted `ssh`
+  argument stripped before reaching the remote host (`NameError`, always
+  failing target verification post-restart) -- now escaped consistently
+  with the rest of the script. Both covered by new/updated regression tests.
+- Removed the `package.json` edit (see deferred-gap note above) rather than
+  force a cross-lane conflict with UTV2-1550/UTV2-1554's own locks on that
+  same line.
 
 ## Why a continuation PR, not a rebase of #1258
 

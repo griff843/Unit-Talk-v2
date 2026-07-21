@@ -21,7 +21,6 @@
   "file_scope_lock": [
     ".github/workflows/ops-network-diagnose.yml",
     ".github/workflows/ops-worker-recovery.yml",
-    "package.json",
     "scripts/ops/worker-recovery-workflow.test.ts",
     "docs/06_status/proof/UTV2-1560/.gitkeep",
     "docs/06_status/proof/UTV2-1560/diff-summary.md",

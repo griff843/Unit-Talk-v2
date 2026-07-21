@@ -1,6 +1,11 @@
 # PROOF: UTV2-1560
 
-MERGE_SHA: 5546c7324415fff7feb2c574bdc583c899a4b2c9
+MERGE_SHA: 570dd5186f0962ec8c5ca00a2645e968167f7e39
+
+(This is the reviewed-implementation content commit, an ancestor of this
+branch's actual head — a file cannot bind its own future hash once further
+proof-doc commits land on top of it, per this repo's established
+convention.)
 
 ## Summary
 
@@ -12,11 +17,13 @@ already merged and unaffected; this continuation adds two diagnostic-gap
 fixes to that workflow plus a new narrow, `workflow_dispatch`-only
 worker-recovery workflow.
 
-## ASSERTIONS:
+## Verification
+
+### ASSERTIONS:
 
 - [x] `.github/workflows/ops-network-diagnose.yml` hardening carried forward unchanged from the accepted #1258 content (robust DB/pooler key discovery, curl-or-node HTTPS fallback)
 - [x] `.github/workflows/ops-worker-recovery.yml` (new, `workflow_dispatch`-only) carried forward unchanged
-- [x] `scripts/ops/worker-recovery-workflow.test.ts` passes (12/12)
+- [x] `scripts/ops/worker-recovery-workflow.test.ts` passes (13/13, including the two PM-verdict-requested Codex P2 fixes: env-passthrough for `inputs.confirm`, escaped nested quotes in the SSH python one-liner)
 - [x] No API restart, deploy, or environment mutation anywhere in either workflow
 - [x] This PR does not dispatch the recovery workflow
 - [x] `pnpm test:db` PASS (7/7, live Supabase)
@@ -25,9 +32,9 @@ worker-recovery workflow.
 
 ```text
 $ pnpm exec tsx --test scripts/ops/worker-recovery-workflow.test.ts
-# tests 12
+# tests 13
 # suites 0
-# pass 12
+# pass 13
 # fail 0
 # cancelled 0
 # skipped 0
@@ -37,6 +44,16 @@ $ pnpm exec tsx --test scripts/ops/worker-recovery-workflow.test.ts
 ```text
 $ pnpm type-check
 (clean, no errors)
+```
+
+```text
+$ pnpm verify
+env:check ... PASS
+lint ... PASS
+type-check ... PASS
+build ... PASS
+test (including live-DB suites, e.g. claimNextAtomic concurrency, UTV2-1327) ... PASS
+(exit code 0)
 ```
 
 ```text
