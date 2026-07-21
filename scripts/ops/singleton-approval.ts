@@ -1,19 +1,89 @@
 #!/usr/bin/env tsx
 /**
- * Singleton approval validator (UTV2-1570, implementation child of UTV2-1451).
+ * Singleton approval validator, schema singleton-approval/v1 (UTV2-1570,
+ * implementation child of UTV2-1451).
  *
  * Replaces the self-asserted `--singleton-approved` flag in lane-start.ts
  * with `--singleton-approval-ref <Linear comment URL>`: fetches the
  * referenced Linear comment live via the GraphQL API, validates it against
- * a fixed schema (docs/05_operations/schemas/singleton-approval-v1.md),
- * confirms complete singleton-path coverage, and confirms the posting
- * user's identity matches the issue's own human owner (`creator`) -- an
- * artifact that had to be posted by the actual issue owner, not generated
- * inline by the same automated flow requesting the lane.
+ * a fixed schema, confirms complete singleton-path coverage, and confirms
+ * the posting user's identity matches the issue's own human owner
+ * (`creator`) -- an artifact that had to be posted by the actual issue
+ * owner, not generated inline by the same automated flow requesting the
+ * lane. `--singleton-approved` alone is deprecated to a warning-only legacy
+ * path for exactly one release (kept for already-scripted callers) and is
+ * never sufficient authority on its own.
  *
  * Deliberately Linear-comment-based, not GitHub-PR-comment-based: singleton
  * approval is needed at lane-start time, before any PR exists, so the
  * artifact must be checkable pre-PR.
+ *
+ * (Schema note: this was originally drafted as a standalone
+ * docs/05_operations/schemas/singleton-approval-v1.md, mirroring
+ * scope-override-v1.md/tier-c-approval-v1.md's own doc-file convention.
+ * It was folded into this header comment instead after CI's
+ * file-scope-guard rejected the standalone file: file_scope_lock content is
+ * mechanically frozen to the *first* commit that added a lane's manifest
+ * (scripts/ci/file-scope-guard.ts's resolveTrustedManifests), specifically
+ * so a PR cannot widen its own declared scope in a later commit -- a
+ * genuinely new file discovered mid-implementation has no forward-only path
+ * around that freeze short of an externally-authored scope-override/v1 PR
+ * comment, which this lane cannot fabricate for itself. Documenting the
+ * schema here, in an already-declared file, was the honest fix.)
+ *
+ * ## Comment format (posted on the Linear issue being started)
+ *
+ * ```
+ * SINGLETON_APPROVED
+ * schema: singleton-approval/v1
+ * Issue: UTV2-###
+ * Paths:
+ * - path/one.ts
+ * - path/two/**
+ * Reason: <why this lane needs to touch singleton-only paths>
+ * ```
+ *
+ * ## Validation rules (`validateSingletonApprovalRef`, first failure wins, fail closed)
+ *
+ * 1. `--singleton-approval-ref` must be a well-formed Linear comment URL
+ *    (`https://linear.app/<workspace>/issue/<ISSUE-ID>/<slug>#comment-<id>`).
+ *    → `singleton_approval_malformed_ref`
+ * 2. The `<ISSUE-ID>` embedded in the URL must equal the issue being
+ *    started. → `singleton_approval_issue_mismatch`
+ * 3. The referenced comment must exist on that issue, matched by exact
+ *    `url` equality against the comment's own canonical `url` field --
+ *    never by parsing/reconstructing an ID from the ref string, since
+ *    Linear's comment URL fragment is a truncated 8-character prefix of the
+ *    full comment UUID, not the full ID (confirmed via live GraphQL
+ *    introspection against a real comment on this issue).
+ *    → `singleton_approval_not_found`
+ * 4. The comment must not be bot-authored (`botActor` must be null).
+ *    → `singleton_approval_bot_author`
+ * 5. The comment's author (`user.id`) must equal the issue's own
+ *    `creator.id` -- the human who owns the issue, fetched live, not a
+ *    config-file allowlist. Deliberately narrower than `tier-c-approval/v1`'s
+ *    CODEOWNERS-set check: singleton approval is scoped to *this specific
+ *    issue's owner*, not any authorized reviewer. → `singleton_approval_wrong_author`
+ * 6. The comment body must match the fixed schema above.
+ *    → `singleton_approval_schema_mismatch`
+ * 7. Every singleton path in the lane's declared file scope must be covered
+ *    by at least one `Paths:` entry (exact match or trailing `/**` prefix).
+ *    → `singleton_approval_incomplete_coverage`, listing uncovered paths.
+ *
+ * There is no partial credit -- a missing, malformed, wrong-author, or
+ * incomplete-coverage approval never grants an exception.
+ *
+ * ## Relationship to scope-override/v1 and tier-c-approval/v1
+ *
+ * All three share the same underlying trust property (an externally
+ * authored artifact the requesting diff cannot forge) but authorize
+ * different things on different platforms:
+ *
+ * | Schema | Platform | Authorizes | Authorized by |
+ * |---|---|---|---|
+ * | scope-override/v1 | GitHub PR comment | exceeding declared file_scope_lock | any CODEOWNERS human, non-bot |
+ * | tier-c-approval/v1 | GitHub PR comment | non-T1 lane touching Tier C paths | any CODEOWNERS human, non-bot |
+ * | singleton-approval/v1 | Linear issue comment | starting a lane with singleton-only paths in scope | specifically the issue's own creator |
  */
 
 export interface ParsedSingletonApproval {

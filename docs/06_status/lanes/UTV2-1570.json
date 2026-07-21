@@ -15,7 +15,6 @@
     ".claude/hooks/tier-c-path-guard.test.sh",
     ".github/workflows/tier-c-authorization-gate.yml",
     "docs/05_operations/REQUIRED_CI_CHECKS.md",
-    "docs/05_operations/schemas/singleton-approval-v1.md",
     "docs/05_operations/schemas/tier-c-approval-v1.md",
     "docs/06_status/proof/UTV2-1570/diff-summary.md",
     "docs/06_status/proof/UTV2-1570/evidence.json",
