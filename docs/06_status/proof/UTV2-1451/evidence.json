@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1451",
+  "title": "Close Tier C / singleton / risk-class self-authorization loopholes (G-07)",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "d3525def6d5005452155727073c2641c0e96f2a3",
+  "reviewed_head_sha": "d3525def6d5005452155727073c2641c0e96f2a3",
+  "evidence_commit_sha": "d3525def6d5005452155727073c2641c0e96f2a3",
+  "current_head_sha": "d3525def6d5005452155727073c2641c0e96f2a3",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "d3525def6d5005452155727073c2641c0e96f2a3",
+    "verified_source_note": "Design-only lane (spec-first, matching the UTV2-1494 precedent for this class of change). No code, workflow, or hook file was modified in this revision.",
+    "sha_type": "implementation_sha",
+    "bound_at": "2026-07-21T14:35:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1451-close-self-authorization-loopholes",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "scope": {
+      "runtime_code_touched": false,
+      "workflow_files_touched": false,
+      "hook_files_touched": false,
+      "note": "docs/06_status/proof/UTV2-1451/diff-summary.md and this evidence bundle are the only substantive content; docs/06_status/lanes/UTV2-1451.json and .ops/sync/UTV2-1451.yml are lane bookkeeping."
+    }
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "note": "No runtime, workflow, or hook behavior changed by this lane -- there is no runtime surface to prove against. Matches UTV2-1494's own precedent statement for spec-only lanes: 'No pnpm test:db, R2/R3/R4 artifacts, or runtime proof apply.'"
+  },
+  "r_level": {
+    "verdict": "not_evaluated",
+    "note": "Docs-only diff; no R-level artifacts expected."
+  },
+  "known_gaps": [
+    "Implementation of the two designed fixes (Tier C authorization artifact + gate; singleton-approval real record) is a tracked follow-up, not part of this revision -- see diff-summary.md 'Sequencing recommendation'.",
+    "The mechanical tier-classifier Phase 2 (blocking) cutover and its prerequisite baseline/sweep report are explicitly out of scope for this lane -- both require their own separate PM approval per the locked MECHANICAL_TIER_CLASSIFIER_SPEC.md."
+  ]
+}
