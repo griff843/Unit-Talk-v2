@@ -7,31 +7,32 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1560-network-worker-recovery-v2",
   "branch": "claude/utv2-1560-network-worker-recovery-v2",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "438ec66eb5c1ccddf1c4aaddb031f380742835d5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1271",
   "files_changed": [
     ".github/workflows/ops-network-diagnose.yml",
     ".github/workflows/ops-worker-recovery.yml",
-    "package.json",
-    "scripts/ops/worker-recovery-workflow.test.ts",
-    "docs/06_status/proof/UTV2-1560/.gitkeep",
+    "docs/06_status/lanes/UTV2-1560.json",
     "docs/06_status/proof/UTV2-1560/diff-summary.md",
-    "docs/06_status/proof/UTV2-1560/verification.md"
+    "docs/06_status/proof/UTV2-1560/evidence.json",
+    "docs/06_status/proof/UTV2-1560/verification.md",
+    "scripts/ops/worker-recovery-workflow.test.ts"
   ],
   "file_scope_lock": [
     ".github/workflows/ops-network-diagnose.yml",
     ".github/workflows/ops-worker-recovery.yml",
-    "scripts/ops/worker-recovery-workflow.test.ts",
-    "docs/06_status/proof/UTV2-1560/.gitkeep",
+    "docs/06_status/lanes/UTV2-1560.json",
     "docs/06_status/proof/UTV2-1560/diff-summary.md",
-    "docs/06_status/proof/UTV2-1560/verification.md"
+    "docs/06_status/proof/UTV2-1560/evidence.json",
+    "docs/06_status/proof/UTV2-1560/verification.md",
+    "scripts/ops/worker-recovery-workflow.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1560/evidence.json"
   ],
   "status": "started",
   "started_at": "2026-07-20T11:30:00.000Z",
-  "heartbeat_at": "2026-07-20T11:30:00.000Z",
+  "heartbeat_at": "2026-07-21T04:52:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1560-network-worker-recovery-v2.json",
