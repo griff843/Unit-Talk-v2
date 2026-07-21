@@ -38,13 +38,37 @@
       "rules_matched": []
     },
     "new_mechanism_tests": {
-      "fable-pilot-state.test.ts": { "pass": 20, "fail": 0 },
-      "planning-model-routing.test.ts": { "pass": 15, "fail": 0 },
-      "fable-pilot-rollback.test.ts": { "pass": 7, "fail": 0 },
-      "shared.test.ts": { "pass": 43, "fail": 0, "new_tests": 7 },
-      "lane-start.test.ts": { "pass": 17, "fail": 0, "new_tests": 5 },
-      "truth-check-lib.test.ts": { "pass": 59, "fail": 0, "new_tests": 6 },
-      "contract-validator.test.ts": { "pass": 56, "fail": 0 }
+      "fable-pilot-state.test.ts": {
+        "pass": 20,
+        "fail": 0
+      },
+      "planning-model-routing.test.ts": {
+        "pass": 15,
+        "fail": 0
+      },
+      "fable-pilot-rollback.test.ts": {
+        "pass": 7,
+        "fail": 0
+      },
+      "shared.test.ts": {
+        "pass": 43,
+        "fail": 0,
+        "new_tests": 7
+      },
+      "lane-start.test.ts": {
+        "pass": 17,
+        "fail": 0,
+        "new_tests": 5
+      },
+      "truth-check-lib.test.ts": {
+        "pass": 59,
+        "fail": 0,
+        "new_tests": 6
+      },
+      "contract-validator.test.ts": {
+        "pass": 56,
+        "fail": 0
+      }
     }
   },
   "runtime_proof": {
@@ -93,6 +117,7 @@
   "known_gaps": [
     "docs/05_operations/LANE_MANIFEST_SPEC.md's planned Section 17 addition documenting planning_model_routing was dropped from this diff because a live, concurrently-running lane (UTV2-1571) held an active file-scope lease on that exact file at implementation time. The field is documented in the JSON schema and in three-brain.md/OPERATING_MODEL_SONNET5.md instead.",
     "The pilot itself has not been activated and has not run a single real qualifying task -- the mechanism is proven correct by unit test, not live pilot usage, since activation is explicitly out of this lane's scope.",
-    "An earlier commit on this branch registered a persistent .claude/agents/fable-pilot-reviewer.md subagent and a corresponding docs/05_operations/system-alignment-registry.json entry; the File Scope Lock CI check correctly rejected the resulting mid-lane scope expansion (that check reads file_scope_lock from the lane's first commit only, by design). Fixed by dropping the persistent agent entirely -- the advisory Fable review is now an ad-hoc background Agent() call in dispatch.md Phase 5, needing no registry entry."
+    "An earlier commit on this branch registered a persistent .claude/agents/fable-pilot-reviewer.md subagent and a corresponding docs/05_operations/system-alignment-registry.json entry; the File Scope Lock CI check correctly rejected the resulting mid-lane scope expansion (that check reads file_scope_lock from the lane's first commit only, by design). Fixed by dropping the persistent agent entirely -- the advisory Fable review is now an ad-hoc background Agent() call in dispatch.md Phase 5, needing no registry entry.",
+    "package.json's test:ops script (which pnpm test/pnpm verify actually invoke) does not yet list scripts/ops/fable-pilot-state.test.ts, scripts/ops/planning-model-routing.test.ts, or scripts/ops/fable-pilot-rollback.test.ts -- these 3 new test files were run directly (npx tsx --test <file>) and pass, but are not yet wired into the aggregated pnpm test step. Wiring them requires editing package.json, which is outside this lane's declared file_scope_lock; expanding it now would repeat the exact scope-creep mistake already caught and reverted earlier in this diff (see the fix(scope) commit). This requires either a follow-up scope-authorized lane or a griff843 scope-override/v1 PR comment before these 3 files run automatically in CI."
   ]
 }
