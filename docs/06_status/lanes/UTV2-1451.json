@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1451-close-self-authorization-loopholes",
   "branch": "claude/utv2-1451-close-self-authorization-loopholes",
   "base_branch": "main",
-  "commit_sha": "883583dfdc525dc0e9aa6a00bda0e7ff4f9e2720",
+  "commit_sha": "8e35abda1cdcad7e1736315cc3b50775202e7e91",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1289",
   "files_changed": [
     ".ops/sync/UTV2-1451.yml",

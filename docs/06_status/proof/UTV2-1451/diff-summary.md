@@ -48,12 +48,19 @@ This is a real-time editing guard, not a merge gate; `scripts/ops/merge-risk.ts`
 `TIER_C_EXACT_PATHS`/`TIER_C_PATH_PREFIXES` matrix is the correct single source of truth for what
 counts as Tier C here (per UTV2-1494's PM-locked decision that both mechanisms must read one list).
 
-**Design:**
-1. The hook still allows the write locally (blocking local edits entirely would break every
-   legitimate T1 Tier C lane) but **stops silently exiting 0** purely because the manifest
-   self-declares the path. It always emits the warning (exit 2) — the manifest-authorized case
-   changes only the *message*, never the *exit code* — so a human/session watching output always
-   sees the Tier C notice, closing the "silent" half of the loophole.
+**Design (corrected — see note below):**
+1. The manifest-authorized case **must stay at `exit 0`**, not move to `exit 2`. The hook's own
+   current comment (`.claude/hooks/tier-c-path-guard.sh` line ~144) already documents why: exit 2
+   blocks the write outright pending confirmation ("Claude Code blocks on any non-zero exit") — an
+   earlier revision of this exact hook used exit 2 here and had to be changed to exit 0 for that
+   reason. So "always exit 2 regardless of authorization, changing only the message" (this design's
+   original proposal) is not viable: it would re-block every legitimate T1 Tier C lane, the same
+   failure mode the manifest-authorized bypass exists to avoid. The corrected fix: keep `exit 0` for
+   the manifest-authorized path, but still print the Tier C notice to **stdout** (not stderr) before
+   exiting 0, so the notice is visible in the session transcript/logs without requiring
+   confirmation. This closes the "no warning surfaced at all" half of the loophole (silence) without
+   reintroducing a local block that `exit 2` would cause — the real mechanical enforcement for the
+   non-T1 case lives in CI (item 2 below), not in the local hook's exit code.
 2. The **mechanical, blocking half** moves to where it belongs: CI, not a local hook a developer
    session could route around entirely (e.g., by disabling hooks, which `PG8`'s preflight check
    already watches for separately). Add a new required check,
@@ -74,7 +81,7 @@ counts as Tier C here (per UTV2-1494's PM-locked decision that both mechanisms m
    whatever the diff touches. The gap is specifically **T2/T3 lanes silently touching Tier C via
    self-declared scope** with no comparable scrutiny; that's what the new gate closes.
 
-**Files:** `docs/05_operations/schemas/tier-c-approval-v1.md` (new), `scripts/ci/tier-c-authorization-gate.ts` (new, follow-up), `scripts/ci/tier-c-authorization-gate.test.ts` (new, follow-up), `.claude/hooks/tier-c-path-guard.sh` (small edit: drop the silent-exit-0 branch).
+**Files:** `docs/05_operations/schemas/tier-c-approval-v1.md` (new), `scripts/ci/tier-c-authorization-gate.ts` (new, follow-up), `scripts/ci/tier-c-authorization-gate.test.ts` (new, follow-up), `.claude/hooks/tier-c-path-guard.sh` (small edit: keep `exit 0` for the manifest-authorized branch, add a stdout notice — do **not** change it to `exit 2`, per the corrected design above).
 
 ## Loophole 2: `--singleton-approved` is a bare, unverified CLI flag
 
