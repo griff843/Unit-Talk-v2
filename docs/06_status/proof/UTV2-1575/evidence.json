@@ -5,11 +5,11 @@
   "tier": "T1",
   "lane_type": "governance",
   "generated_at": "2026-07-22T15:50:00.000Z",
-  "head_sha": null,
+  "head_sha": "82b247e30bb3637fa40ae3cf2070f711d4a0b617",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": null,
-    "verified_source_note": "Filled in at commit time by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
+    "verified_source_sha": "82b247e30bb3637fa40ae3cf2070f711d4a0b617",
+    "verified_source_note": "Accepted pre-merge source SHA, matching verification.md; the authoritative merge SHA remains unset until post-merge closeout.",
     "sha_type": "branch_head",
     "bound_at": "2026-07-22T15:50:00.000Z",
     "ci_sentinels": {
