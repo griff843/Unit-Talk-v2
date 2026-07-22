@@ -4,13 +4,52 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-// 'merged' is included so a lane correctly reset to its pre-close state (e.g.
-// during a genuine ops:lane-close repair/reopen cycle) stays resolvable as
-// the trusted scope for its branch -- excluding it made the manifest (and
-// any scope-override, which only ever selects among already-active
-// manifests) invisible to this guard the moment status moved past
-// 'in_review' but before a full 'done' close (UTV2-1563).
-const ACTIVE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
+// UTV2-1571: this guard has two DISTINCT roles that UTV2-1563 originally
+// conflated into one status set, and that conflation is exactly what let a
+// merged-but-not-yet-`done` manifest (UTV2-1550: merged via PR #1239, stuck
+// at status "merged" because its own merge commit's required-check identity
+// changed as a side effect of the very PR being evaluated, so G4 can never
+// pass) perpetually block every OTHER lane from touching any path in its
+// `file_scope_lock` (e.g. package.json), with no way to release that lock
+// short of falsifying the historical `files_changed` record (rejected, PR
+// #1288).
+//
+// Role 1 -- SELF-SCOPE RESOLUTION: "is this PR's own diff allowed to touch
+// these files?" A manifest reset to "merged" between a PR merging and
+// ops:lane-close finishing full closure (or a deliberate reset from "done"
+// back to "merged" to allow a genuine re-run of the close) must still resolve
+// as the trusted scope for ITS OWN branch -- excluding "merged" here breaks
+// exactly the case UTV2-1563 fixed (the manifest, and any scope-override,
+// become invisible the moment status moves past "in_review" but before a
+// full "done" close).
+//
+// Role 2 -- CONFLICT-BLOCKING: "does another lane's declared scope block a
+// DIFFERENT lane's diff?" Once a lane is merged, its code is already shipped
+// -- the only way it can still legitimately need to keep blocking others is
+// if something is actively resuming/continuing it, and that resumption is
+// represented by the SAME manifest transitioning back to a genuinely active
+// status (most commonly "reopened"; see TRANSITIONS in scripts/ops/shared.ts,
+// where `merged` can only advance to `done`, `reopened`, or stay `merged`).
+// So "merged" alone, with no live continuation, must never count as active
+// for this role. This exactly mirrors `ACTIVE_LOCK_STATUSES` in
+// scripts/ops/shared.ts -- the canonical set every other ops/*.ts consumer
+// (ops:lane-start's activeManifestOverlap, execution-state.ts's
+// isActiveLane, merge-risk.ts's activeLanesOnly, lane-maximizer.ts) already
+// uses for this exact purpose. This file cannot import that module directly
+// (the CI workflow extracts and runs this file standalone from origin/main,
+// with no sibling scripts/ops/ tree available at that path -- see
+// .github/workflows/file-scope-lock-check.yml's "Resolve trusted guard
+// script" step), so the set is intentionally duplicated here rather than
+// imported.
+//
+// `files_changed` (the immutable, GitHub-diff-derived historical record) is
+// NEVER read by either role below -- only `file_scope_lock` (current/at-
+// lane-start-declared edit-scope) ever participates in scope or conflict
+// evaluation. That separation was already true before this change; this fix
+// only corrects WHICH manifests' file_scope_lock counts toward blocking
+// others, not what field is consulted.
+const SELF_SCOPE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
+const LOCK_CONFLICT_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
 const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
 
 type GuardVerdict = 'PASS' | 'FAIL';
@@ -21,6 +60,12 @@ interface LaneManifest {
   status?: string;
   file_scope_lock?: string[];
   expected_proof_paths?: string[];
+  // The immutable, GitHub-diff-derived historical record (LANE_MANIFEST_SPEC.md
+  // §4.2). Modeled here only so tests can assert this guard NEVER reads it --
+  // neither role (self-scope resolution nor conflict-blocking) ever consults
+  // files_changed, only file_scope_lock. See the SELF_SCOPE_STATUSES /
+  // LOCK_CONFLICT_STATUSES doc comment (UTV2-1571).
+  files_changed?: string[];
   // A manifest-embedded `scope_override` field existed here before UTV2-1521.
   // It was removed: the manifest is part of the PR's own diff, so a
   // well-formed-looking override object proved nothing about actual
@@ -423,8 +468,12 @@ function loadManifests(root: string, args: ParsedArgs): LaneManifest[] {
   return readManifests(root, args.manifestDir);
 }
 
-function activeManifests(manifests: LaneManifest[]): LaneManifest[] {
-  return manifests.filter((manifest) => ACTIVE_STATUSES.has(String(manifest.status ?? '')));
+function selfScopeManifests(manifests: LaneManifest[]): LaneManifest[] {
+  return manifests.filter((manifest) => SELF_SCOPE_STATUSES.has(String(manifest.status ?? '')));
+}
+
+function lockConflictManifests(manifests: LaneManifest[]): LaneManifest[] {
+  return manifests.filter((manifest) => LOCK_CONFLICT_STATUSES.has(String(manifest.status ?? '')));
 }
 
 function findOwnManifest(
@@ -515,8 +564,15 @@ export function evaluateFileScopeGuard(input: {
   headSha?: string | null;
 }): GuardResult {
   const errors: string[] = [];
-  const active = activeManifests(input.manifests);
-  const ownManifest = findOwnManifest(active, input.prBranch, {
+  // Own-manifest resolution (role 1) intentionally uses the WIDER status set
+  // (includes "merged") -- a lane must always be able to resolve itself,
+  // even mid-close. Conflict-blocking (role 2, below) intentionally uses the
+  // NARROWER set (excludes "merged") -- a merged-but-not-yet-done lane no
+  // longer holds active edit-lock capacity over anyone else. See the
+  // SELF_SCOPE_STATUSES / LOCK_CONFLICT_STATUSES doc comment above.
+  const selfScope = selfScopeManifests(input.manifests);
+  const lockConflictCandidates = lockConflictManifests(input.manifests);
+  const ownManifest = findOwnManifest(selfScope, input.prBranch, {
     overrides: input.externalOverrides ?? [],
     prNumber: input.prNumber ?? null,
     headSha: input.headSha ?? null,
@@ -552,7 +608,7 @@ export function evaluateFileScopeGuard(input: {
   }
 
   const conflicts: GuardConflict[] = [];
-  for (const manifest of active) {
+  for (const manifest of lockConflictCandidates) {
     // Skip the PR's own lane, however it was resolved (exact branch match or
     // the UTV2-1524 issue-ID fallback) -- otherwise a continuation PR's own
     // manifest is spuriously flagged as a conflicting foreign lane.

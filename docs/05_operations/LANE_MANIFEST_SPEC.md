@@ -332,3 +332,20 @@ Optional field `verification_target` (schema: `docs/05_operations/schemas/lane_m
 **Compatibility cutoff:** `schema_version 2` is the real boundary (same shape as `model_routing`'s UTV2-1526 fix above, and the same reasoning: field presence alone cannot distinguish "predates this field" from "deleted from a schema_version-2 manifest"). `schema_version: 1` verification manifests may lack `verification_target`; `schema_version: 2` verification manifests must carry a valid one, and deleting it fails `validateManifest`.
 
 **What it's for:** `checkConcurrencyLimits()` in `scripts/ops/lane-start.ts` uses it to enforce the per-target Verification cap (`docs/governance/CONCURRENCY_CONFIG.json`'s `type_caps.verification.max_per_target`, default 1 — see `docs/governance/LANE_CONCURRENCY_POLICY.md` §1). An active verification lane whose `verification_target` cannot be determined (a legacy `schema_version: 1` manifest with no target) blocks every new verification lane start until it is resolved or closed — fail-closed, not a silent pass.
+
+## 17. Historical scope vs. active edit-lock ownership (UTV2-1571)
+
+`file_scope_lock` has always served two distinct purposes that were, until this fix, evaluated using the same status set:
+
+1. **Self-scope resolution** — "is this PR's own diff allowed to touch these files?" A manifest reset to `merged` between a PR merging and `ops:lane-close` finishing full closure must still resolve as the trusted scope for its own branch (UTV2-1563).
+2. **Conflict-blocking** — "does another lane's declared scope block a *different* lane's diff?" A `merged` manifest's code is already shipped; it should not indefinitely hold active edit-lock capacity over anyone else once merged, unless something is genuinely still resuming it (which manifests as a status transition back to an active state, most commonly `reopened` — see the `TRANSITIONS` map in `scripts/ops/shared.ts`).
+
+`scripts/ci/file-scope-guard.ts` (the CI PR gate) previously used one `ACTIVE_STATUSES` set (including `merged`) for both roles. This let a **merged-but-not-yet-`done`** manifest whose truth-check can never mechanically pass (see UTV2-1550 below) permanently block every other lane from touching any path in its `file_scope_lock`, with no way to release that lock short of falsifying the historical `files_changed` record (rejected — PR #1288).
+
+The fix splits the guard's status sets:
+- `SELF_SCOPE_STATUSES` (role 1, includes `merged`) — unchanged from UTV2-1563.
+- `LOCK_CONFLICT_STATUSES` (role 2, excludes `merged`) — matches `ACTIVE_LOCK_STATUSES` in `scripts/ops/shared.ts`, the set every other `ops/*.ts` consumer (`ops:lane-start`'s `activeManifestOverlap`, `execution-state.ts`'s `isActiveLane`, `merge-risk.ts`'s `activeLanesOnly`, `lane-maximizer.ts`) already used for this exact purpose. `scripts/ci/file-scope-guard.ts` cannot import `scripts/ops/shared.ts` directly (the CI workflow extracts and runs this file standalone from `origin/main` with no sibling `scripts/ops/` tree available at that path), so the set is intentionally duplicated rather than imported.
+
+**`files_changed` is never read by either role.** Only `file_scope_lock` (current/declared-at-lane-start edit-scope) ever participates in scope or conflict evaluation, in both the guard and in `ops:lane-start`'s own overlap check. This was already true before this fix; the fix only corrects *which manifests'* `file_scope_lock` counts toward blocking others. The immutable historical record (`files_changed`) remains exactly as GitHub's merged diff produced it, and truth-check's `S1` (files_changed ⊆ file_scope_lock ∪ expected_proof_paths) and `G5` (no post-merge touches without a linked follow-up) checks continue to run against it unchanged.
+
+**Scope note:** this fix does not implement LANE_MANIFEST_SPEC §2's "Override close" event — that remains documented-but-unimplemented, unchanged by UTV2-1571. UTV2-1550's own terminal closure is a separate, narrower question (see the UTV2-1571 proof bundle for the specific mechanical gap and the manual, PM-reviewed path required to close it).

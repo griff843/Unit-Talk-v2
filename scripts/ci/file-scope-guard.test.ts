@@ -176,6 +176,151 @@ test('UTV2-1563: a manifest at status "merged" still enforces its file_scope_loc
   ]);
 });
 
+// ── UTV2-1571: merged historical scope vs. active edit-lock ownership ──────
+//
+// UTV2-1550 merged (PR #1239) but is stuck at status "merged" forever -- its
+// own merge commit's required-check identity changed as a side effect of the
+// very PR being evaluated, so G4 (truth-check's CI-green gate) can never
+// pass for that specific merge SHA. Before this fix, ACTIVE_STATUSES treated
+// "merged" as active for BOTH own-lane self-scope resolution AND foreign-lane
+// conflict-blocking, so UTV2-1550's file_scope_lock (which legitimately
+// includes package.json, per its real merged diff) permanently blocked every
+// other lane (e.g. UTV2-1560) from touching package.json, with no way to
+// release that lock short of falsifying the historical files_changed record
+// (rejected, PR #1288). These tests prove the fix: a merged manifest keeps
+// resolving as ITS OWN trusted scope (UTV2-1563's fix, unchanged) while no
+// longer counting as an active edit-lock against ANYONE ELSE'S diff.
+
+test('UTV2-1571: a merged historical lane no longer blocks a different lane touching the same locked path', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1560-continuation',
+    changedFiles: ['package.json'],
+    manifests: [
+      {
+        issue_id: 'UTV2-1560',
+        branch: 'claude/utv2-1560-continuation',
+        status: 'started',
+        file_scope_lock: ['package.json'],
+      },
+      {
+        // Models UTV2-1550: merged, files_changed includes package.json (the
+        // real, immutable historical record from PR #1239), file_scope_lock
+        // still declares it too (never falsified) -- but status "merged"
+        // alone, with no live continuation, must not block UTV2-1560.
+        issue_id: 'UTV2-1550',
+        branch: 'claude/utv2-1550-executor-result-required-check-identity',
+        status: 'merged',
+        file_scope_lock: ['package.json', 'scripts/ops/executor-result-validate.ts'],
+        files_changed: ['package.json', 'scripts/ops/executor-result-validate.ts'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.conflicts, []);
+  assert.deepEqual(result.outside_scope, []);
+});
+
+test('UTV2-1571: a merged historical lane still resolves as its OWN branch\'s trusted self-scope while simultaneously not blocking a foreign lane (combined regression)', () => {
+  const mergedManifest = {
+    issue_id: 'UTV2-1550',
+    branch: 'claude/utv2-1550-executor-result-required-check-identity',
+    status: 'merged',
+    file_scope_lock: ['package.json'],
+    files_changed: ['package.json'],
+  };
+  const foreignManifest = {
+    issue_id: 'UTV2-1560',
+    branch: 'claude/utv2-1560-continuation',
+    status: 'started',
+    file_scope_lock: ['package.json'],
+  };
+
+  // Evaluated as UTV2-1550's own PR (in isolation -- no other lane holding an
+  // active, overlapping lock exists yet): still resolves and still enforces
+  // its own declared scope (unchanged UTV2-1563 behavior).
+  const ownEvaluation = evaluateFileScopeGuard({
+    prBranch: mergedManifest.branch,
+    changedFiles: ['package.json'],
+    manifests: [mergedManifest],
+  });
+  assert.equal(ownEvaluation.verdict, 'PASS');
+  assert.equal(ownEvaluation.own_manifest_issue, 'UTV2-1550');
+
+  // Evaluated as UTV2-1560's PR: the merged manifest must not appear as a
+  // conflicting foreign lock.
+  const foreignEvaluation = evaluateFileScopeGuard({
+    prBranch: foreignManifest.branch,
+    changedFiles: ['package.json'],
+    manifests: [mergedManifest, foreignManifest],
+  });
+  assert.equal(foreignEvaluation.verdict, 'PASS');
+  assert.deepEqual(foreignEvaluation.conflicts, []);
+});
+
+test('UTV2-1571: an active continuation (status "reopened") of a previously-merged lane still blocks other lanes', () => {
+  // A merged lane resumed via a genuine continuation transitions back to an
+  // active status (TRANSITIONS in scripts/ops/shared.ts: merged -> reopened
+  // is the only path back to active). Once that happens, normal conflict
+  // blocking must resume exactly as for any other active lane -- the
+  // "merged never blocks" exemption must NOT leak into genuinely active
+  // continuations.
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1560-continuation',
+    changedFiles: ['package.json'],
+    manifests: [
+      {
+        issue_id: 'UTV2-1560',
+        branch: 'claude/utv2-1560-continuation',
+        status: 'started',
+        file_scope_lock: ['package.json'],
+      },
+      {
+        issue_id: 'UTV2-1550',
+        branch: 'claude/utv2-1550-executor-result-required-check-identity',
+        status: 'reopened',
+        file_scope_lock: ['package.json'],
+        files_changed: ['package.json'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'FAIL');
+  assert.deepEqual(result.conflicts, [
+    {
+      file: 'package.json',
+      locked_by: 'UTV2-1550',
+      lane_branch: 'claude/utv2-1550-executor-result-required-check-identity',
+      lock_pattern: 'package.json',
+    },
+  ]);
+});
+
+test('UTV2-1571: files_changed (historical record) is never consulted for conflict-blocking, even when it diverges from file_scope_lock', () => {
+  // Post-merge, a lane's file_scope_lock and files_changed can legitimately
+  // diverge in principle (files_changed is the immutable ground truth;
+  // file_scope_lock is what was declared at lane-start). Prove the guard
+  // only ever reads file_scope_lock for this determination -- a path present
+  // in files_changed but absent from file_scope_lock must never trigger a
+  // conflict, regardless of manifest status.
+  const result = evaluateFileScopeGuard({
+    prBranch: 'claude/some-other-lane',
+    changedFiles: ['scripts/ops/workflow-hardening.test.ts'],
+    manifests: [
+      {
+        issue_id: 'UTV2-1550',
+        branch: 'claude/utv2-1550-executor-result-required-check-identity',
+        status: 'started', // even in an ACTIVE status
+        file_scope_lock: ['package.json'],
+        files_changed: ['package.json', 'scripts/ops/workflow-hardening.test.ts'],
+      },
+    ],
+  });
+
+  assert.equal(result.verdict, 'PASS');
+  assert.deepEqual(result.conflicts, []);
+});
+
 test('lane branch without an active own manifest fails closed', () => {
   const result = evaluateFileScopeGuard({
     prBranch: 'codex/utv2-1495-hard-file-scope-lock-enforcement',
