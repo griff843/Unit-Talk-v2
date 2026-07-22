@@ -110,6 +110,7 @@ jobs:
           CHECK_NAME: ${{ steps.check_name.outputs.name }}
         with:
           script: |
+            const { selectLatestVerifyCheckRun } = require('./scripts/ops/executor-result-check-selection.cjs');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const checkName = process.env.CHECK_NAME;
@@ -340,15 +341,26 @@ jobs:
                 }
 
                 // ── 8. Verify CI on exact HEAD SHA ─────────────────────
-                const { data: checkRuns } = await github.rest.checks.listForRef({
-                  owner, repo, ref: headSha
+                // UTV2-1573: paginate across every page of check-runs for
+                // this commit. GitHub's Checks API defaults to 30 per page;
+                // this repo routinely accumulates 60-100+ check-runs on a
+                // single commit (dozens of required/advisory workflows and
+                // matrix jobs), so an unpaginated call can miss a real,
+                // completed, successful "verify" run just because it fell
+                // outside the first page -- a false-negative that fails this
+                // required check for reasons unrelated to the PR's actual
+                // state. `github.paginate` walks every page (no upper
+                // bound); `filter: 'latest'` keeps only the newest run per
+                // check-run name+app so re-runs and duplicate checks don't
+                // inflate the fetched set.
+                const allCheckRuns = await github.paginate(github.rest.checks.listForRef, {
+                  owner, repo, ref: headSha, per_page: 100, filter: 'latest'
                 });
 
-                // Find the CI workflow's job (named "verify" in ci.yml)
-                const ciRun = checkRuns.check_runs.find(
-                  r => r.name === 'verify' &&
-                       r.app && r.app.slug === 'github-actions'
-                );
+                // Deterministically select the newest "verify" run from the
+                // github-actions app -- see scripts/ops/executor-result-check-selection.cjs
+                // and its test suite for the exact selection semantics.
+                const ciRun = selectLatestVerifyCheckRun(allCheckRuns);
 
                 if (!ciRun) {
                   errors.push(
