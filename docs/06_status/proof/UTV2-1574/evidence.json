@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1574",
+  "title": "Sole-Owner Governance Ratification -- nine decisions + five-PR migration authorization",
+  "tier": "T1",
+  "lane_type": "governance",
+  "generated_at": "2026-07-22T14:30:00.000Z",
+  "head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": null,
+    "verified_source_note": "Filled in at commit time by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-22T14:30:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1574",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "This is a decision-record PR authored at griff843's direct chat instruction, recording his ruling on SOLE_OWNER_GOVERNANCE_CONVERGENCE_PROPOSAL.md §7. Not an independent model recommendation -- the ratified decisions are the Converged rec. already agreed by both Claude's and Codex's independent prior analyses."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure documentation change -- no code, workflow, or branch-protection modification in this diff. No runtime-observable behavior to verify."
+  },
+  "scope": {
+    "implementation_paths": [
+      "docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md"
+    ],
+    "not_changed": [
+      "docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md (amended by reference, not edited)",
+      "any branch protection configuration",
+      "any workflow file",
+      "any product/runtime code"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "rows_1_to_7_and_9_ratified_as_converged_rec": "PASS",
+    "row_8_explicitly_deferred_not_silently_assumed": "PASS",
+    "does_not_replace_or_silently_override_t1m_delegation_final_pm_decision": "PASS_AMENDS_BY_REFERENCE",
+    "authorizes_pr1_only_not_pr2_through_pr5": "PASS",
+    "no_mechanism_change_in_this_diff": "PASS_DOCUMENTATION_ONLY"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "Row 8 (acceptable annualized bad-merge probability) remains unfilled -- explicitly deferred per griff843's direct instruction, blocking only PR5's cutover, not PR1's start."
+  ],
+  "verdict": "READY_FOR_PM_REVIEW"
+}
