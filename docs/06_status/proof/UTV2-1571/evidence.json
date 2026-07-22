@@ -7,6 +7,16 @@
   "generated_at": "2026-07-21T21:45:00.000Z",
   "head_sha": "e99ce8b1f230f0242f0a4ce77048fea779979544",
   "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "2c4fb7909af3761a79d4becf3263189a291ae50f",
+    "verified_source_note": "Pre-merge branch head. Rebound to the true merge SHA by ops:proof-generate --merge-sha during post-merge lane-close reconciliation (this object's presence is what makes this file rebindable — see rebindEvidenceJsonSha in scripts/ops/proof-generate.ts).",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-21T21:45:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
   "verifier": {
     "identity": "claude/utv2-1571",
     "role": "implementer",
@@ -31,10 +41,7 @@
       "status": "PASS",
       "rules_matched": "none",
       "changed_files": 5
-    },
-    "test_run_logs": [
-      "npx tsx --test scripts/ci/file-scope-guard.test.ts -- 37/37 pass"
-    ]
+    }
   },
   "runtime_proof": {
     "command": "pnpm test:db",

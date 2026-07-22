@@ -1,12 +1,21 @@
 # PROOF: UTV2-1571
 
+| Field | Value |
+| --- | --- |
+| Issue | UTV2-1571 |
+| Tier | T1 |
+| Branch | claude/utv2-1571-file-scope-lock-history-separation |
+| Commit SHA(s) | `2c4fb7909af3761a79d4becf3263189a291ae50f` (branch head, pre-merge) |
+
 MERGE_SHA: 880a76522a3f39f3d6dfa1d5a56119363d79bb19
 
 (This SHA is the core-fix commit, an ancestor of this proof commit and of the
 PR's eventual merge commit — used here to satisfy proof/merge-SHA binding
-without a circular self-reference. The real merge SHA will additionally be
+without a circular self-reference. The real merge SHA is additionally
 recorded post-merge by the standard `ops:proof-generate --merge-sha`
-closeout step.)
+closeout step, which rewrites the "Commit SHA(s)" row above and the
+"Merge SHA Binding" section below to the true merge SHA — see
+`rebindVerificationMdSha` in `scripts/ops/proof-generate.ts`.)
 
 ## Verification
 
@@ -93,6 +102,16 @@ VERDICT: fail (43 checks, 2 failures)
 $ pnpm verify
 (full local run — lint, type-check, build, test suite, test:db — exit code 0)
 ```
+
+## Merge SHA Binding
+
+Branch: claude/utv2-1571-file-scope-lock-history-separation
+Merge SHA: pending — rebound automatically by `ops:proof-generate --merge-sha`
+during post-merge lane-close reconciliation (`post-merge-lane-close.yml`).
+This heading and the "Commit SHA(s)" row above are the two markers
+`rewriteVerificationMdLines` (`scripts/ops/proof-generate.ts`) looks for; both
+are present so the rebind is not a no-op.
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1291
 
 ## UTV2-1550 status after this PR
 
