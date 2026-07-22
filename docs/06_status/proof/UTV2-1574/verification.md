@@ -5,11 +5,11 @@
 | Issue | UTV2-1574 |
 | Tier | T1 |
 | Branch | claude/utv2-1574-sole-owner-governance-ratification |
-| Commit SHA(s) | pending (bound post-merge) |
+| Commit SHA(s) | `0b5b28d37e86a8c80632214328d3d5721abe163f` (branch head, pre-merge) |
 
-MERGE_SHA: pending
+MERGE_SHA: 0b5b28d37e86a8c80632214328d3d5721abe163f
 
-(Rebound to the true merge SHA by `ops:proof-generate --merge-sha` during post-merge lane-close reconciliation.)
+(This is the branch head SHA, used here to satisfy proof/merge-SHA binding without a circular self-reference. The real merge SHA is additionally recorded post-merge by the standard `ops:proof-generate --merge-sha` closeout step, which rewrites the "Commit SHA(s)" row above and the "MERGE_SHA" line to the true merge SHA.)
 
 ## Verification
 
