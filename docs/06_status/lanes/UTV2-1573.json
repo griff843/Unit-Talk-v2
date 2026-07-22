@@ -1,0 +1,43 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1573",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1573-executor-result-validator-pagination",
+  "branch": "claude/utv2-1573-executor-result-validator-pagination",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/executor-result-validator.yml",
+    ".ops/sync/UTV2-1573.yml",
+    "docs/06_status/lanes/UTV2-1573.json",
+    "docs/06_status/proof/UTV2-1573/.gitkeep",
+    "docs/06_status/proof/UTV2-1573/diff-summary.md",
+    "docs/06_status/proof/UTV2-1573/evidence.json",
+    "docs/06_status/proof/UTV2-1573/verification.md",
+    "scripts/ops/executor-result-check-selection.cjs",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1573/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-22T09:48:56.886Z",
+  "heartbeat_at": "2026-07-22T09:48:56.886Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1573-executor-result-validator-pagination.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1573-executor-result-validator-pagination",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
