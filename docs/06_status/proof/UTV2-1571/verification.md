@@ -5,9 +5,9 @@
 | Issue | UTV2-1571 |
 | Tier | T1 |
 | Branch | claude/utv2-1571-file-scope-lock-history-separation |
-| Commit SHA(s) | `2c4fb7909af3761a79d4becf3263189a291ae50f` (branch head, pre-merge) |
+| Commit SHA(s) | `a192cd78f649131e0716578713c2ca3bc1c0bb06` (actual merge commit -- this repair PR builds directly on it) |
 
-MERGE_SHA: 880a76522a3f39f3d6dfa1d5a56119363d79bb19
+MERGE_SHA: a192cd78f649131e0716578713c2ca3bc1c0bb06
 
 (This SHA is the core-fix commit, an ancestor of this proof commit and of the
 PR's eventual merge commit — used here to satisfy proof/merge-SHA binding
