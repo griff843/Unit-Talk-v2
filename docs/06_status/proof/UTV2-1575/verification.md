@@ -70,8 +70,15 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ```text
-$ pnpm verify
-...
+$ pnpm test:db
+TAP version 13
+1..7
+# tests 7
+# suites 0
+# pass 7
 # fail 0
-(zero "not ok" lines across the entire run)
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 110194.559978
 ```

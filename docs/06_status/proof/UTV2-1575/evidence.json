@@ -41,7 +41,56 @@
     }
   },
   "runtime_proof": {
-    "note": "Environment protection is a live GitHub platform setting (not a git diff) -- verified directly against the GitHub API rather than through a code test. No other runtime-observable behavior in this diff."
+    "note": "Environment protection is a live GitHub platform setting (not a git diff) -- verified directly against the GitHub API rather than through a code test. The live DB evidence below is included because T1 lanes require runtime proof unconditionally, not because this documentation-only diff changes database behavior.",
+    "pnpm_test_db": "pass",
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts inserts and deletes a real submission row while exercising the live persistence path"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts inserts and deletes a real pick row while exercising the live persistence path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts verifies invalid atomic operations do not leave lifecycle rows"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts verifies invalid delivery confirmation rolls back the outbox mutation"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts verifies invalid delivery confirmation leaves no receipt"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts verifies rollback behavior and additive correction audit writes"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts verifies settlement corrections are additive and do not mutate the original row"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 98685, "status": "healthy" },
+      { "table": "pick_lifecycle", "count": 141490, "status": "healthy" },
+      { "table": "submissions", "count": 99086, "status": "healthy" },
+      { "table": "distribution_outbox", "count": 9606, "status": "healthy" },
+      { "table": "audit_log", "count": 238936, "status": "healthy" },
+      { "table": "settlement_records", "count": 33824, "status": "healthy" },
+      { "table": "distribution_receipts", "count": 3573, "status": "healthy" }
+    ],
+    "row_counts_captured_at": "2026-07-22T22:08:57Z",
+    "row_counts_note": "Exact live table counts queried through the Supabase REST API immediately after pnpm test:db completed. The smoke suite cleans up its inserted rows, so these counts represent steady-state data.",
+    "test_db_tap_output": "1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0"
   },
   "scope": {
     "implementation_paths": [
