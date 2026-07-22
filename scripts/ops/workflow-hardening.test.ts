@@ -527,6 +527,91 @@ test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-contr
   );
 });
 
+test('UTV2-1573: executor-result-validator.yml paginates check-runs instead of a single unpaginated call', () => {
+  const workflow = readWorkflow('executor-result-validator.yml');
+
+  assert.match(
+    workflow,
+    /await github\.paginate\(github\.rest\.checks\.listForRef,\s*\{\s*\n\s*owner, repo, ref: headSha, per_page: 100/,
+    'executor-result-validator.yml must fetch check-runs via github.paginate with per_page: 100, not a single-page checks.listForRef call',
+  );
+  assert.doesNotMatch(
+    workflow,
+    /const \{ data: checkRuns \} = await github\.rest\.checks\.listForRef/,
+    'executor-result-validator.yml must not still contain the old unpaginated checks.listForRef call',
+  );
+  assert.match(
+    workflow,
+    /require\('\.\/scripts\/ops\/executor-result-check-selection\.cjs'\)/,
+    'executor-result-validator.yml must select the verify check-run via the tested module, not inline .find() logic',
+  );
+  assert.doesNotMatch(
+    workflow,
+    /checkRuns\.check_runs\.find/,
+    'executor-result-validator.yml must not still contain the old inline check-run selection',
+  );
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun finds a valid run past the first page boundaries', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  const noise = (count: number, offset = 0) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: offset + i,
+      name: 'some-other-check',
+      app: { slug: 'github-actions' },
+      status: 'completed',
+      conclusion: 'success',
+    }));
+
+  const verifyRun = { id: 9999, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+
+  // Past the API's 30-per-page default.
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([...noise(30), verifyRun]), verifyRun);
+  // Past a naive 100-item cap -- the fix must not silently stop paginating at 100.
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([...noise(150), verifyRun]), verifyRun);
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun ignores a same-named check from a different app', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  const foreignVerify = { id: 5, name: 'verify', app: { slug: 'some-third-party-app' }, status: 'completed', conclusion: 'success' };
+  const realVerify = { id: 3, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([foreignVerify, realVerify]), realVerify);
+  assert.strictEqual(selectLatestVerifyCheckRun([foreignVerify]), null);
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun picks the newest of duplicate github-actions verify runs', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  const stale = { id: 100, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' };
+  const rerun = { id: 200, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+
+  // Newest (highest id) governs regardless of insertion order.
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([rerun, stale]), rerun);
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([stale, rerun]), rerun);
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun fails closed -- missing, incomplete, or failed latest run is never silently bypassed', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  // Missing entirely.
+  assert.strictEqual(selectLatestVerifyCheckRun([]), null);
+  assert.strictEqual(selectLatestVerifyCheckRun([{ id: 1, name: 'lint', app: { slug: 'github-actions' } }]), null);
+
+  // The newest matching run is incomplete -- callers must see THIS run (and
+  // report "not completed"), not an older completed one.
+  const olderSuccess = { id: 1, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+  const newerInProgress = { id: 2, name: 'verify', app: { slug: 'github-actions' }, status: 'in_progress', conclusion: null };
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([olderSuccess, newerInProgress]), newerInProgress);
+
+  // The newest matching run failed -- callers must see THIS run (and report
+  // the failure), not fall back to an older success.
+  const newerFailed = { id: 3, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' };
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([olderSuccess, newerFailed]), newerFailed);
+});
+
 test('codex return review extracts issue IDs without sed delimiter traps', () => {
   const workflow = readWorkflow('codex-return-review.yml');
 
