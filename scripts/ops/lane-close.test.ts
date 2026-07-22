@@ -9,6 +9,7 @@ import {
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
   mapFailuresToCode,
+  rebindRepairedLaneProof,
   repairMergedLaneManifest,
   releaseCloseoutLocks,
   remediationForCode,
@@ -621,6 +622,53 @@ test('UTV2-1564: a second --repair-merged call against an already-correctly-repa
     assert.strictEqual(secondRun.manifest.truth_check_history.length, 1);
     assert.deepStrictEqual(secondRun.manifest.truth_check_history, firstRun.manifest.truth_check_history);
     assert.deepStrictEqual(secondRun.changed_fields, []);
+  });
+});
+
+test('repair mode rebinds proof from the repair PR SHA to the implementation PR merge SHA', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'evidence.json'),
+      `${JSON.stringify({
+        status: 'merged',
+        sha_binding: {
+          verified_source_sha: 'repair-pr-merge-sha',
+          sha_type: 'merge_sha',
+          bound_at: '2026-05-26T03:00:00.000Z',
+        },
+      }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(proofDir, 'verification.md'),
+      [
+        '| Commit SHA(s) | `repair-pr-merge-sha` (merge SHA) |',
+        '',
+        '## Merge SHA Binding',
+        '',
+        'Merge SHA: `repair-pr-merge-sha`',
+        'PR: https://github.com/griff843/Unit-Talk-v2/pull/1296',
+        '',
+      ].join('\n'),
+    );
+
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({
+        commit_sha: 'implementation-pr-merge-sha',
+        pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1291',
+      }),
+      { repoRoot, now: new Date('2026-05-26T04:00:00.000Z') },
+    );
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated']);
+    const evidence = fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8');
+    const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(evidence, /implementation-pr-merge-sha/);
+    assert.doesNotMatch(evidence, /repair-pr-merge-sha/);
+    assert.match(verification, /implementation-pr-merge-sha/);
+    assert.match(verification, /pull\/1291/);
+    assert.doesNotMatch(verification, /repair-pr-merge-sha|pull\/1296/);
   });
 });
 
