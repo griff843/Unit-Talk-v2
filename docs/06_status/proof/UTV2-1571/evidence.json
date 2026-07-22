@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1571",
+  "title": "Separate historical changed-file truth from active lock ownership",
+  "tier": "T1",
+  "lane_type": "governance",
+  "generated_at": "2026-07-21T21:45:00.000Z",
+  "head_sha": "e99ce8b1f230f0242f0a4ce77048fea779979544",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "2c4fb7909af3761a79d4becf3263189a291ae50f",
+    "verified_source_note": "Pre-merge branch head. Rebound to the true merge SHA by ops:proof-generate --merge-sha during post-merge lane-close reconciliation (this object's presence is what makes this file rebindable — see rebindEvidenceJsonSha in scripts/ops/proof-generate.ts).",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-21T21:45:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1571",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_file_scope_guard": {
+      "command": "npx tsx --test scripts/ci/file-scope-guard.test.ts",
+      "status": "PASS",
+      "tests": 37,
+      "pass": 37,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "changed_files": 5
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "note": "This lane changes only CI-gate TypeScript (no production pick-pipeline code path or migration touched). Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy.",
+    "queries": [
+      { "table": "submissions", "description": "INSERT via processSubmission -- unrelated live-DB smoke coverage, unaffected by this diff" },
+      { "table": "picks", "description": "INSERT/UPDATE via processSubmission and transitionPickLifecycle -- unrelated live-DB smoke coverage" },
+      { "table": "pick_lifecycle", "description": "INSERT on each transition; SELECT COUNT(*) asserting zero rows for rejected transitions" },
+      { "table": "distribution_outbox", "description": "INSERT/UPDATE via enqueueDistributionAtomic/claimNextAtomic" },
+      { "table": "distribution_receipts", "description": "SELECT COUNT(*) asserting zero rows after a rejected confirmDeliveryAtomic call" },
+      { "table": "settlement_records", "description": "INSERT via settlePickAtomic; SELECT asserting correction rows are additive, not mutating" },
+      { "table": "audit_log", "description": "SELECT COUNT(*) asserting audit-row invariants for rejected and successful atomic operations" },
+      { "table": "participants", "description": "read-only SELECT scanning for the duplicate (external_id, sport, participant_type) invariant" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ci/file-scope-guard.ts",
+      "scripts/ci/file-scope-guard.test.ts",
+      "docs/05_operations/LANE_MANIFEST_SPEC.md"
+    ],
+    "not_changed": [
+      "docs/06_status/lanes/UTV2-1550.json",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-close.test.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/shared.test.ts",
+      "scripts/ops/truth-check-lib.ts",
+      "apps/command-center/src/app/api/governance/lanes/route.ts"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false,
+    "manifest_schema_field_semantics_changed": false,
+    "descope_note": "An earlier iteration of this lane built a new ops:lane-close --override CLI mechanism with GitHub-comment-based authorization. It was fully removed by explicit PM decision (privileged-surface scope creep beyond what the underlying file-scope-guard bug requires) and is not present in this diff."
+  },
+  "acceptance_criteria": {
+    "files_changed_preserved_verbatim_for_utv2_1550": "PASS_NOT_MODIFIED_BY_THIS_PR",
+    "active_edit_lock_represented_separately_from_historical_scope": "PASS",
+    "merged_nonterminal_manifests_do_not_consume_active_scope_capacity": "PASS",
+    "truth_check_s1_g5_coverage_over_real_historical_paths_preserved": "PASS_UNCHANGED_CONFIRMED_LIVE",
+    "governed_terminal_reconciliation_path_provided": "DOCUMENTED_MANUAL_PATH_ONLY_NO_MECHANISM_BUILT",
+    "no_direct_main_edits_or_history_deletion": "PASS",
+    "regression_tests_merged_historical_scope": "PASS",
+    "regression_tests_active_continuation_locks": "PASS",
+    "regression_tests_post_merge_touch_auditing": "PASS_VIA_UNCHANGED_TRUTH_CHECK_LIB_PLUS_DEDICATED_FILES_CHANGED_TEST",
+    "utv2_1550_truth_closed": "NOT_DONE_REQUIRES_MANUAL_PM_ATTESTED_MANIFEST_EDIT_VIA_GOVERNED_LANE",
+    "utv2_1550_ghost_capacity_zero": "PASS_LEASE_RELEASED_WORKTREES_AND_BRANCHES_REMOVED"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "UTV2-1550 itself is not truth-closed by this PR, and this PR builds no mechanism to close it. Live pnpm ops:truth-check UTV2-1550 (read-only) confirms 2 remaining structural failures: L3 (Linear state) and G4 (required checks on the historical merge commit, structurally unsatisfiable per the PR's own incident doc). See verification.md for the exact manual, PM-reviewed action that would be needed."
+  ],
+  "verdict": "READY_FOR_PM_REVIEW"
+}
