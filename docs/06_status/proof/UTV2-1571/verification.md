@@ -181,3 +181,13 @@ T1 — CI gate logic and lane-lifecycle governance tooling. Requires the
 `t1-approved` label and a valid Griff-authored `pm-verdict/v1` APPROVED
 comment (or GitHub PR review approval) bound to the reviewed head. This
 proof supplies neither.
+
+## Addendum: lane-close manifest repair (2026-07-22)
+
+Post-merge, `ops:lane-close --repair-merged` failed for this lane with `"Manifest has no pr_url to repair
+from."` because `docs/06_status/lanes/UTV2-1571.json` was left with `pr_url: null` after PR #1291 merged
+(`a192cd78`). This addendum documents the follow-up repair PR (`claude/utv2-1571-lane-close-repair`), which
+sets only `pr_url` -- `commit_sha` and `status` are deliberately left for the real `ops:lane-close
+--repair-merged` run (re-triggered after that PR merges) to derive authoritatively from GitHub's own merge
+state, matching the `DIRECT_MAIN_BYPASS_POLICY.md`-sanctioned repair-branch pattern already used for PR #1248
+(the equivalent UTV2-1550 repair).
