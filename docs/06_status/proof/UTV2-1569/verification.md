@@ -1,6 +1,6 @@
 # PROOF: UTV2-1569
 
-MERGE_SHA: 98676e70fd7066f7c0b87d89144a4d826a3f862d
+MERGE_SHA: cb79f0594aba5267ac8ff6455872e641fc81ea1f
 
 (This is this branch's actual head at the time this proof was written — see the
 accompanying executor-result/v1 comment for confirmation this matches the PR's
@@ -64,43 +64,43 @@ TAP version 13
 # Subtest: database repository bundle persists a submission and settlement when Supabase is configured
 ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
   ---
-  duration_ms: 17503.55968
+  duration_ms: 18363.846181
   type: 'test'
   ...
 # Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
 ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
   ---
-  duration_ms: 16635.338492
+  duration_ms: 17218.979288
   type: 'test'
   ...
 # Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
 ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
   ---
-  duration_ms: 17955.507071
+  duration_ms: 17791.096028
   type: 'test'
   ...
 # Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
 ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
   ---
-  duration_ms: 17035.685429
+  duration_ms: 16932.794907
   type: 'test'
   ...
 # Subtest: UTV2-883: no duplicate participants for the same external_id and sport
 ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
   ---
-  duration_ms: 778.269337
+  duration_ms: 768.346293
   type: 'test'
   ...
 # Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
 ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
   ---
-  duration_ms: 17997.640969
+  duration_ms: 17991.832542
   type: 'test'
   ...
 # Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
 ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
   ---
-  duration_ms: 17264.165392
+  duration_ms: 18753.498873
   type: 'test'
   ...
 1..7
@@ -111,7 +111,7 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 105719.830367
+# duration_ms 108658.482895
 ```
 
 Ran against Supabase project `zfzdnfwdarxucxtaojxm` using the repository's existing
@@ -123,31 +123,56 @@ to instead of an unenforced "N/A" claim. The suite exercises the same
 submission/settlement/outbox paths every T1 lane's live-DB smoke already covers, and
 creates and cleans up its own test rows.
 
-### New-mechanism unit test coverage (218 tests, all passing on this head)
+### New-mechanism unit test coverage (325 tests, all passing on this head)
 
 ```text
-scripts/ops/fable-pilot-state.test.ts        20 pass, 0 fail
-scripts/ops/planning-model-routing.test.ts   15 pass, 0 fail
+scripts/ops/fable-pilot-state.test.ts        32 pass, 0 fail (12 new activation-date fail-closed tests)
+scripts/ops/planning-model-routing.test.ts   21 pass, 0 fail (6 new resolveAndRecord*/atomic-recording tests)
 scripts/ops/fable-pilot-rollback.test.ts      7 pass, 0 fail
-scripts/ops/shared.test.ts                   43 pass, 0 fail (7 new planning_model_routing tests)
-scripts/ops/lane-start.test.ts               17 pass, 0 fail (5 new fable-routing wiring tests)
-scripts/ops/truth-check-lib.test.ts          59 pass, 0 fail (6 new Fable evidence tests)
-scripts/ops/contract-validator.test.ts       56 pass, 0 fail (claude-fable-5 model-ID validation)
+scripts/ops/shared.test.ts                   43 pass, 0 fail
+scripts/ops/lane-start.test.ts               18 pass, 0 fail
+scripts/ops/truth-check-lib.test.ts          69 pass, 0 fail (rewritten: real SHA-bound fable-review/v1 parser, not loose text matching)
+scripts/ops/contract-validator.test.ts       56 pass, 0 fail
 ```
+
+### Canonical test-path wiring (PM_VERDICT required correction #5)
+
+```text
+$ pnpm test:ops
+# tests 1187
+# fail 0
+```
+
+`scripts/ops/fable-pilot-state.test.ts`, `scripts/ops/planning-model-routing.test.ts`, and
+`scripts/ops/fable-pilot-rollback.test.ts` are now listed in `package.json`'s `test:ops`
+script. Confirmed running INSIDE `pnpm test:ops` (not just runnable directly) by grepping
+this run's TAP output for their `Subtest:` names — 25 matching subtests found in the
+`test:ops` run itself.
 
 ## R-level compliance
 
 ```text
 $ tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 29
+Changed files: 31
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
+## PM_VERDICT response (bounce 1)
+
+`griff843` posted `PM_VERDICT: CHANGES_REQUIRED` on PR #1292 at head `e37d28a9c0a471c7824ef35a1ab0f0338369af05` (2026-07-21T23:10:54Z), bounce 1 of 2. Every blocking/required finding is addressed on this head:
+
+- **P1** (real Fable selections never call the state mutation path) → `resolveAndRecordPlanningModel()`/`resolveAndRecordFableAdvisoryReview()` now atomically record the qualifying task and usage against `FABLE_PILOT_STATE.json` in the same call that resolves the routing decision. Proven by test: a real selection increments `task_count`/`usage_used_usd` and mechanically expires the pilot the moment a cap is crossed, in that same call.
+- **P1** (normal `/dispatch` creates the manifest before resolving the Fable planner) → `/dispatch` Phase 3 (`ops:lane-start`) now resolves and persists `planning_model_routing` via `--fable-trigger-class`/`--fable-rationale`, before the manifest is handed to Phase 4. Phase 4 reads `manifest.planning_model_routing.model` — it no longer re-resolves independently.
+- **P2** (malformed/missing activation dates can leave an active pilot eligible) → `validateActivationDates()` + new `PILOT_DATES_INVALID` code reject closed on: missing `activated_at`, empty `activated_at`, unparseable `activated_at`, missing `expires_at`, unparseable `expires_at`, `expires_at` at/before `activated_at`, and `expires_at` inconsistent with `activated_at + max_days`. `evaluatePilotCaps()` itself is separately hardened (defense in depth) against the same cases. Each case has its own explicit test.
+- **P2** (new tests not wired into canonical `test:ops`/`pnpm verify`) → done; see above.
+- **P2** (truth-check accepts loose text rather than parsing a `fable-review/v1` record) → `findLatestFableReview()` structurally parses the schema header, `Issue:`, `Trigger class:` (enum-checked), `Policy version:`, `Reviewed head SHA:`, and the three literal assertions, then F2 binds the record's `Reviewed head SHA` against the PR's actual head via `shaMatches()` — a stale or copy-pasted comment no longer satisfies the check.
+- **Return Review Packet failing** → addressed by fixing the underlying scope-bleed (proof paths declared in `expected_proof_paths`) and test-wiring findings it was reporting.
+
 ## Known gaps (stated honestly, not omitted)
 
-- `docs/05_operations/LANE_MANIFEST_SPEC.md`'s planned §17 documentation addition for `planning_model_routing` was dropped from this diff — a live, concurrently-running lane (UTV2-1571) held an active file-scope lease on that exact file at implementation time. The field is documented in the JSON schema and in `three-brain.md`/`OPERATING_MODEL_SONNET5.md` instead. Recommended follow-up once UTV2-1571 closes.
-- Mechanical enforcement of `lane-start.ts`'s new `--fable-trigger-class`/`--fable-rationale` flags is covered by source-text assertion tests (matching this file's existing testing convention for CLI wiring), not a full end-to-end CLI invocation test — `shared.test.ts`'s `createManifest`/`validateManifest` tests cover the manifest-level behavior those flags produce directly.
+- `docs/05_operations/LANE_MANIFEST_SPEC.md`'s planned §17 documentation addition for `planning_model_routing` is still not in this diff — a separate, genuinely live lane (UTV2-1571) holds an active file-scope lease on that exact file. The field remains documented in the JSON schema and in `three-brain.md`/`OPERATING_MODEL_SONNET5.md` instead.
+- `package.json` is also under an active file-scope lease held by a separate, genuinely live lane (UTV2-1570, same owner, building a Tier C authorization gate). This diff touches `package.json` anyway because the PM's own verdict explicitly required the test-wiring fix as core scope — but the concurrent-lease overlap is real; the two branches will need a routine merge-order coordination (a one-line conflict on `test:ops`) before both can land.
 - The pilot itself has not been activated and has not run a single real qualifying task — the mechanism is proven correct by unit test, not by live pilot usage, since activation is out of this lane's scope by design.
 
 ## Owner boundary
