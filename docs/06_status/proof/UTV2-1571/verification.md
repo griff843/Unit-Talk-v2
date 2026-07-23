@@ -5,7 +5,7 @@
 | Issue | UTV2-1571 |
 | Tier | T1 |
 | Branch | claude/utv2-1571-file-scope-lock-history-separation |
-| Commit SHA(s) | `a192cd78f649131e0716578713c2ca3bc1c0bb06` (actual merge commit -- this repair PR builds directly on it) |
+| Commit SHA(s) | `a192cd78f649131e0716578713c2ca3bc1c0bb06` (merge SHA) |
 
 MERGE_SHA: a192cd78f649131e0716578713c2ca3bc1c0bb06
 
@@ -105,14 +105,8 @@ $ pnpm verify
 
 ## Merge SHA Binding
 
-Branch: claude/utv2-1571-file-scope-lock-history-separation
-Merge SHA: pending — rebound automatically by `ops:proof-generate --merge-sha`
-during post-merge lane-close reconciliation (`post-merge-lane-close.yml`).
-This heading and the "Commit SHA(s)" row above are the two markers
-`rewriteVerificationMdLines` (`scripts/ops/proof-generate.ts`) looks for; both
-are present so the rebind is not a no-op.
+Merge SHA: `a192cd78f649131e0716578713c2ca3bc1c0bb06`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1291
-
 ## UTV2-1550 status after this PR
 
 **Not truth-closed by this PR, and this PR builds no mechanism to close it.**

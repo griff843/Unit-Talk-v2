@@ -8,10 +8,10 @@
   "head_sha": "e99ce8b1f230f0242f0a4ce77048fea779979544",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "2c4fb7909af3761a79d4becf3263189a291ae50f",
+    "verified_source_sha": "a192cd78f649131e0716578713c2ca3bc1c0bb06",
     "verified_source_note": "Pre-merge branch head. Rebound to the true merge SHA by ops:proof-generate --merge-sha during post-merge lane-close reconciliation (this object's presence is what makes this file rebindable — see rebindEvidenceJsonSha in scripts/ops/proof-generate.ts).",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-21T21:45:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-23T23:55:10.181Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "not_yet_run"
@@ -52,22 +52,64 @@
     "skipped": 0,
     "note": "This lane changes only CI-gate TypeScript (no production pick-pipeline code path or migration touched). Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy.",
     "queries": [
-      { "table": "submissions", "description": "INSERT via processSubmission -- unrelated live-DB smoke coverage, unaffected by this diff" },
-      { "table": "picks", "description": "INSERT/UPDATE via processSubmission and transitionPickLifecycle -- unrelated live-DB smoke coverage" },
-      { "table": "pick_lifecycle", "description": "INSERT on each transition; SELECT COUNT(*) asserting zero rows for rejected transitions" },
-      { "table": "distribution_outbox", "description": "INSERT/UPDATE via enqueueDistributionAtomic/claimNextAtomic" },
-      { "table": "distribution_receipts", "description": "SELECT COUNT(*) asserting zero rows after a rejected confirmDeliveryAtomic call" },
-      { "table": "settlement_records", "description": "INSERT via settlePickAtomic; SELECT asserting correction rows are additive, not mutating" },
-      { "table": "audit_log", "description": "SELECT COUNT(*) asserting audit-row invariants for rejected and successful atomic operations" },
-      { "table": "participants", "description": "read-only SELECT scanning for the duplicate (external_id, sport, participant_type) invariant" }
+      {
+        "table": "submissions",
+        "description": "INSERT via processSubmission -- unrelated live-DB smoke coverage, unaffected by this diff"
+      },
+      {
+        "table": "picks",
+        "description": "INSERT/UPDATE via processSubmission and transitionPickLifecycle -- unrelated live-DB smoke coverage"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "INSERT on each transition; SELECT COUNT(*) asserting zero rows for rejected transitions"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "INSERT/UPDATE via enqueueDistributionAtomic/claimNextAtomic"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "SELECT COUNT(*) asserting zero rows after a rejected confirmDeliveryAtomic call"
+      },
+      {
+        "table": "settlement_records",
+        "description": "INSERT via settlePickAtomic; SELECT asserting correction rows are additive, not mutating"
+      },
+      {
+        "table": "audit_log",
+        "description": "SELECT COUNT(*) asserting audit-row invariants for rejected and successful atomic operations"
+      },
+      {
+        "table": "participants",
+        "description": "read-only SELECT scanning for the duplicate (external_id, sport, participant_type) invariant"
+      }
     ],
     "row_counts": [
-      { "table": "picks", "count": 6 },
-      { "table": "submissions", "count": 6 },
-      { "table": "settlement_records", "count": 5 },
-      { "table": "distribution_outbox", "count": 1 },
-      { "table": "distribution_receipts", "count": 0 },
-      { "table": "participants", "count": 0 }
+      {
+        "table": "picks",
+        "count": 6
+      },
+      {
+        "table": "submissions",
+        "count": 6
+      },
+      {
+        "table": "settlement_records",
+        "count": 5
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 1
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0
+      },
+      {
+        "table": "participants",
+        "count": 0
+      }
     ]
   },
   "scope": {
