@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1578",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1578-autonomy-control-plane-kernel",
+  "branch": "codex/utv2-1578-autonomy-control-plane-kernel",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "schemas/autonomy/**",
+    "scripts/autonomy/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1578/evidence.json",
+    "docs/06_status/proof/UTV2-1578/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-23T17:55:35.234Z",
+  "heartbeat_at": "2026-07-23T17:55:35.234Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1578-autonomy-control-plane-kernel.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1578-autonomy-control-plane-kernel",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
