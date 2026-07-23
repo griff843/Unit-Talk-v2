@@ -5,6 +5,7 @@
   "title": "AUT-2: Deterministic autonomy control-plane kernel",
   "tier": "T1",
   "lane_type": "hygiene",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1303",
   "generated_at": "2026-07-23T19:33:04.281Z",
   "head_sha": "3516d3db45920f172a535b2a5c8f5b24d8e486a3",
   "sha_binding": {
@@ -182,6 +183,7 @@
     "dependency_state_at_proof": "OPEN"
   },
   "owner_boundary": {
+    "github_tier_label": "tier:T1_applied",
     "independent_claude_review": "required_not_yet_recorded",
     "t1_approved_label": "not_yet_applied",
     "pm_verdict_v1": "not_yet_posted",
