@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.internal/schemas/autonomy/execution-record-v1.json",
+  "title": "Durable autonomy execution record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "run_id",
+    "session_id",
+    "state",
+    "input_hash",
+    "created_at",
+    "updated_at",
+    "cycle",
+    "retry_count",
+    "transition_sequence"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "session_id": { "type": "string", "minLength": 1 },
+    "state": {
+      "enum": [
+        "created",
+        "evaluating",
+        "packet_ready",
+        "dispatching",
+        "no_op",
+        "queued",
+        "dispatched",
+        "blocked",
+        "escalated"
+      ]
+    },
+    "input_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "cycle": { "type": "integer", "minimum": 0 },
+    "retry_count": { "type": "integer", "minimum": 0 },
+    "transition_sequence": { "type": "integer", "minimum": 0 },
+    "decision": { "$ref": "candidate-decision.schema.json" },
+    "packet_id": { "type": "string", "pattern": "^packet_[0-9a-f]{64}$" },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "reason_codes"],
+      "properties": {
+        "kind": {
+          "enum": ["no_op", "queue", "dispatch", "blocked", "escalation"]
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "packet_id": { "type": "string", "pattern": "^packet_[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

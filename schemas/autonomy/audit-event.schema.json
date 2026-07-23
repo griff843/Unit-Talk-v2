@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.internal/schemas/autonomy/audit-event-v1.json",
+  "title": "Append-only autonomy audit event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "event_id",
+    "run_id",
+    "sequence",
+    "event_type",
+    "occurred_at",
+    "previous_hash",
+    "event_hash",
+    "payload"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": { "type": "string", "pattern": "^event_[0-9a-f]{64}$" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "event_type": {
+      "enum": [
+        "run.created",
+        "run.resumed",
+        "state.transitioned",
+        "decision.recorded",
+        "packet.created",
+        "run.completed",
+        "lease.released"
+      ]
+    },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "previous_hash": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "event_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "payload": { "type": "object" }
+  }
+}
