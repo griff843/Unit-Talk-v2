@@ -529,21 +529,79 @@ export function buildRepairRequiredViaPrPacket(input: {
 }
 
 /**
+ * Repository this trusted post-merge capability is bound to. Hard-coded (not
+ * read from GITHUB_REPOSITORY alone as the sole check) so a forked/renamed
+ * repo context can never satisfy the trusted-context check by accident.
+ */
+const TRUSTED_POST_MERGE_REPOSITORY = 'griff843/Unit-Talk-v2';
+
+/**
+ * GITHUB_WORKFLOW_REF identifies the exact workflow *file* that is executing
+ * (e.g. `griff843/Unit-Talk-v2/.github/workflows/post-merge-lane-close.yml@refs/heads/main`),
+ * unlike GITHUB_WORKFLOW (the human-readable `name:` field, which any workflow
+ * file could reuse). Matching on the file path is what makes this identity
+ * check meaningful rather than cosmetic.
+ */
+const TRUSTED_POST_MERGE_WORKFLOW_REF_PATTERN =
+  /(^|\/)\.github\/workflows\/post-merge-lane-close\.yml@refs\/heads\/main$/;
+
+/**
+ * UTV2-1576: the post-merge closeout persistence contradiction proven by PR
+ * #1296 workflow run 30002061214 -- `guardRepairAgainstMainCheckout` fires
+ * against *any* checkout literally on the `main` branch, which is exactly
+ * what `actions/checkout@v4` leaves post-merge-lane-close.yml standing on
+ * (GitHub Actions checks out a real local branch named `main` for a `push`
+ * trigger, not a detached HEAD), so the workflow this guard exists to let
+ * operate safely on `main` was itself always blocked by it.
+ *
+ * This function decides whether the CURRENT invocation is that one, specific,
+ * trusted automation context -- never by actor identity (spoofable/varies
+ * between push and workflow_dispatch), always by the conjunction of every
+ * marker GitHub sets for that exact workflow file running against that exact
+ * repo and ref, PLUS the caller having explicitly opted in via CLI flag. Any
+ * single missing marker fails closed to "not trusted", including the flag
+ * being passed alone with no matching environment, or the environment being
+ * complete with no flag passed.
+ */
+export function isTrustedPostMergeAutomation(
+  env: Record<string, string | undefined>,
+  flags: { postMergeTrusted: boolean },
+): boolean {
+  if (!flags.postMergeTrusted) return false;
+  if (env.GITHUB_ACTIONS !== 'true') return false;
+  if (env.GITHUB_REPOSITORY !== TRUSTED_POST_MERGE_REPOSITORY) return false;
+  if (env.GITHUB_REF !== 'refs/heads/main') return false;
+  if (!TRUSTED_POST_MERGE_WORKFLOW_REF_PATTERN.test(env.GITHUB_WORKFLOW_REF ?? '')) return false;
+  return true;
+}
+
+/**
  * Returns a blocking `repair_required_via_pr` result when `--repair-merged`
  * produced real tracked-file changes AND the caller is standing in a checkout on
  * `main` -- the exact shared-checkout condition that produced UTV2-1542. Returns
  * `null` (proceed as normal) for every other case: no changes to repair, the lane
- * was already closed, or the caller is in a dedicated lane worktree/branch, which
- * is always safe to write to directly since landing it still requires a PR merge.
+ * was already closed, the caller is in a dedicated lane worktree/branch (always
+ * safe to write to directly since landing it still requires a PR merge), or the
+ * caller is the one trusted post-merge automation context (UTV2-1576) -- verified
+ * by `isTrustedPostMergeAutomation`, never by this function itself, so this
+ * function never reads process.env directly.
  */
 export function guardRepairAgainstMainCheckout(
   repair: RepairMergedManifestResult,
-  options: { currentBranch: string; repoRoot: string; artifactRoot?: string },
+  options: {
+    currentBranch: string;
+    repoRoot: string;
+    artifactRoot?: string;
+    trustedPostMerge?: boolean;
+  },
 ): RepairRequiredViaPrResult | null {
   if (!repair.ok || repair.code !== 'repaired' || repair.changed_fields.length === 0) {
     return null;
   }
   if (options.currentBranch !== 'main') {
+    return null;
+  }
+  if (options.trustedPostMerge === true) {
     return null;
   }
   return buildRepairRequiredViaPrPacket({
@@ -648,10 +706,17 @@ async function main(): Promise<void> {
       // checkout on `main` -- that shared-checkout condition is exactly how the
       // third direct-main-push incident happened. Emit a repair packet + governed
       // branch/PR steps instead of leaving an ordinary commit-ready working tree.
+      //
+      // UTV2-1576: except for the one trusted post-merge automation context this
+      // guard was always meant to permit -- see isTrustedPostMergeAutomation().
       const currentBranchResult = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+      const trustedPostMerge = isTrustedPostMergeAutomation(process.env, {
+        postMergeTrusted: bools.has('post-merge-trusted'),
+      });
       const guard = guardRepairAgainstMainCheckout(repair, {
         currentBranch: currentBranchResult.ok ? currentBranchResult.stdout : '',
         repoRoot: process.cwd(),
+        trustedPostMerge,
       });
       if (guard) {
         emitJson(guard);

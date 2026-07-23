@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1576",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1576-governance-capacity-recovery",
+  "branch": "codex/utv2-1576-governance-capacity-recovery",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1300",
+  "files_changed": [
+    ".ops/sync/UTV2-1576.yml",
+    ".github/workflows/post-merge-lane-close.yml",
+    "docs/06_status/lanes/UTV2-1560.json",
+    "docs/06_status/lanes/UTV2-1573.json",
+    "docs/06_status/lanes/UTV2-1575.json",
+    "docs/06_status/lanes/UTV2-1576.json",
+    "docs/06_status/proof/UTV2-1560/evidence.json",
+    "docs/06_status/proof/UTV2-1573/evidence.json",
+    "docs/06_status/proof/UTV2-1573/verification.md",
+    "docs/06_status/proof/UTV2-1575/evidence.json",
+    "docs/06_status/proof/UTV2-1575/verification.md",
+    "docs/06_status/proof/UTV2-1576/diff-summary.md",
+    "docs/06_status/proof/UTV2-1576/evidence.json",
+    "docs/06_status/proof/UTV2-1576/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1576.yml",
+    ".github/workflows/post-merge-lane-close.yml",
+    "docs/06_status/lanes/UTV2-1560.json",
+    "docs/06_status/lanes/UTV2-1573.json",
+    "docs/06_status/lanes/UTV2-1575.json",
+    "docs/06_status/lanes/UTV2-1576.json",
+    "docs/06_status/proof/UTV2-1560/evidence.json",
+    "docs/06_status/proof/UTV2-1573/evidence.json",
+    "docs/06_status/proof/UTV2-1573/verification.md",
+    "docs/06_status/proof/UTV2-1575/evidence.json",
+    "docs/06_status/proof/UTV2-1575/verification.md",
+    "docs/06_status/proof/UTV2-1576/**",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1576/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-23T13:45:00.000Z",
+  "heartbeat_at": "2026-07-23T13:45:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1576-governance-capacity-recovery.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "admission_exception": {
+    "type": "pm_authorized_manual_admission",
+    "reason": "Normal ops:lane-start admission was deadlocked: stale merged governance manifests (UTV2-1560, UTV2-1573, UTV2-1574, UTV2-1575) falsely consumed all governance-type concurrency capacity, and this lane's own fix (repairing that same admission path) could not be admitted through the path it repairs.",
+    "authorized_by": "pm",
+    "scope": "Lane admission (manifest/worktree/branch creation) only. Does not waive pnpm verify, CI, tier labeling, PM approval, branch protection, or the configured concurrency cap -- this lane still requires normal T1 merge authority (t1-approved label + pm-verdict/v1 APPROVED comment) to land.",
+    "superseded_recovery_pr_note": "This manifest replaces the earlier UTV2-1576-labeled recovery framing for PR #1300 -- the same PR is now a fully governed T1 lane covering both the stale-lane reconciliation and the capability fix that caused the staleness."
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1576-governance-capacity-recovery",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

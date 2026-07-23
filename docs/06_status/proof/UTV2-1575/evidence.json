@@ -8,10 +8,10 @@
   "head_sha": "82b247e30bb3637fa40ae3cf2070f711d4a0b617",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "82b247e30bb3637fa40ae3cf2070f711d4a0b617",
+    "verified_source_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa",
     "verified_source_note": "Accepted pre-merge source SHA, matching verification.md; the authoritative merge SHA remains unset until post-merge closeout.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-22T15:50:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-23T11:32:50.864Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "not_yet_run"
@@ -80,13 +80,41 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 98685, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 141490, "status": "healthy" },
-      { "table": "submissions", "count": 99086, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 9606, "status": "healthy" },
-      { "table": "audit_log", "count": 238936, "status": "healthy" },
-      { "table": "settlement_records", "count": 33824, "status": "healthy" },
-      { "table": "distribution_receipts", "count": 3573, "status": "healthy" }
+      {
+        "table": "picks",
+        "count": 98685,
+        "status": "healthy"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 141490,
+        "status": "healthy"
+      },
+      {
+        "table": "submissions",
+        "count": 99086,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 9606,
+        "status": "healthy"
+      },
+      {
+        "table": "audit_log",
+        "count": 238936,
+        "status": "healthy"
+      },
+      {
+        "table": "settlement_records",
+        "count": 33824,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 3573,
+        "status": "healthy"
+      }
     ],
     "row_counts_captured_at": "2026-07-22T22:08:57Z",
     "row_counts_note": "Exact live table counts queried through the Supabase REST API immediately after pnpm test:db completed. The smoke suite cleans up its inserted rows, so these counts represent steady-state data.",

@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1576",
+  "title": "Capability-bound post-merge closeout persistence",
+  "tier": "T1",
+  "lane_type": "governance",
+  "generated_at": "2026-07-23T13:59:00.000Z",
+  "head_sha": "8b87de522c5c381d0877346f3c3bf5ad969c6b09",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "8b87de522c5c381d0877346f3c3bf5ad969c6b09",
+    "verified_source_note": "Pre-merge branch head (the commit immediately before this proof commit -- this file cannot reference its own not-yet-created SHA). Rebound to the true merge SHA by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-23T13:59:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1576",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact. Requires normal T1 merge authority (t1-approved label + pm-verdict/v1 APPROVED comment) to land -- no admin or required-check override."
+  },
+  "problem": {
+    "root_cause": "guardRepairAgainstMainCheckout() (UTV2-1542) blocks any checkout literally on the `main` branch from persisting --repair-merged's tracked-file changes, as a defense against a real prior incident (an operator committing repaired state directly to main from a shared checkout). But actions/checkout@v4 on a `push` trigger leaves a real local branch named `main` (not a detached HEAD) -- so post-merge-lane-close.yml, the one workflow this guard exists to let operate safely on `main`, was itself always blocked by it.",
+    "proof_of_defect": "PR #1296 (UTV2-1571's own lane-close manifest repair) merged as d9a3661e and triggered post-merge-lane-close.yml run 30002061214. The 'Run lane closeout' step's ops:lane-close --repair-merged --explain call returned code=repair_required_via_pr, remediation='...produced tracked-file changes (docs/06_status/lanes/UTV2-1571.json) while running from a checkout on main. This is blocked...'. The workflow failed, and UTV2-1571's manifest was never closed -- independently confirmed via `gh api repos/griff843/Unit-Talk-v2/actions/jobs/89189303115/logs`.",
+    "consequence": "Every governance lane merged since this guard shipped stayed at its pre-merge manifest status (started/in_review, commit_sha:null) despite being merged on GitHub. Because ops:lane-start's admission check counts these stale-active manifests against the governance type-cap, normal admission for new governance lanes -- including this lane's own admission -- became deadlocked. PM authorized manual branch creation as a narrow, one-time admission exception (recorded in docs/06_status/lanes/UTV2-1576.json's admission_exception block) to land the fix that closes this loop; no other lane-start control was waived."
+  },
+  "fix": {
+    "capability": "isTrustedPostMergeAutomation() in scripts/ops/lane-close.ts -- returns true only when ALL of the following hold simultaneously: the explicit --post-merge-trusted CLI flag was passed, GITHUB_ACTIONS=='true', GITHUB_REPOSITORY=='griff843/Unit-Talk-v2', GITHUB_REF=='refs/heads/main', and GITHUB_WORKFLOW_REF matches '.github/workflows/post-merge-lane-close.yml@refs/heads/main'. Any single missing marker fails closed. Never keyed on actor identity (github.actor varies between push and workflow_dispatch and is not checked at all).",
+    "wiring": "guardRepairAgainstMainCheckout() accepts a pre-evaluated trustedPostMerge boolean and returns null (no block) only when it is true; every existing call site and test that does not pass it behaves identically to before this change. post-merge-lane-close.yml's 'Run lane closeout' step now passes --post-merge-trusted.",
+    "scope_guard": "A new 'Fail closed on unexpected tracked changes' workflow step runs after lane-close succeeds and before anything is staged: it asserts via `git status --porcelain` that only the closing issue's own manifest, proof directory, and per-issue sync file are dirty, and aborts without committing if anything else is dirty.",
+    "recursive_trigger_guard": "Pre-existing, unmodified: `if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'` on the job already prevents the bot's own bookkeeping commit from re-triggering another closeout run."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Full run including lint, type-check, build, all unit suites, live pnpm test:db, and live pnpm test:t1-proof:live. Zero '# fail' lines above 0 and zero 'not ok' lines across the entire run."
+    },
+    "unit_tests_lane_close": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-close.test.ts",
+      "status": "PASS",
+      "tests": 80,
+      "pass": 80,
+      "fail": 0,
+      "note": "69 pre-existing tests (unchanged, still passing -- confirms no regression to the UTV2-1542 guard's default-blocked behavior) + 11 new UTV2-1576 tests covering isTrustedPostMergeAutomation() and the guard's trustedPostMerge parameter."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 103328.02,
+    "note": "Live database-smoke suite (apps/api/src/database-smoke.test.ts) against real Supabase (zfzdnfwdarxucxtaojxm). Also ran pnpm test:t1-proof:live (14 T1 runtime-invariant proof files) as part of the same verify pass -- all passing.",
+    "queries": [
+      { "table": "picks", "description": "live-DB smoke persistence, lifecycle transitions, cleanup" },
+      { "table": "submissions", "description": "live-DB smoke submission persistence and cleanup" },
+      { "table": "pick_lifecycle", "description": "live lifecycle inserts and rejected-transition count assertions" },
+      { "table": "distribution_outbox", "description": "live enqueue/claim/rollback/idempotency assertions" },
+      { "table": "settlement_records", "description": "live additive settlement and correction assertions" },
+      { "table": "audit_log", "description": "live rollback and additive settlement audit assertions" },
+      { "table": "distribution_receipts", "description": "live rejected-delivery receipt count assertion" }
+    ]
+  },
+  "reconciliation_verification": {
+    "note": "This lane's own capability fix was independently re-verified against the three lanes it reconciles.",
+    "utv2_1560": { "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1256", "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6", "verified_against": "gh pr view 1256 --json mergeCommit" },
+    "utv2_1573": { "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1295", "merge_sha": "0fbb3e806c7eaf86c9e0a9b986046c585adce899", "verified_against": "gh pr view 1295 --json mergeCommit" },
+    "utv2_1575": { "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1299", "merge_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa", "verified_against": "gh pr view 1299 --json mergeCommit" },
+    "leases_released": ["UTV2-1573", "UTV2-1575"],
+    "leases_already_released_by_prior_unrelated_event": ["UTV2-1560"],
+    "merge_mutex_released": true,
+    "worktrees_removed": [
+      ".out/worktrees/claude__utv2-1560-hetzner-supabase-502-diagnosis",
+      ".out/worktrees/claude__utv2-1573-executor-result-validator-pagination",
+      ".out/worktrees/claude__utv2-1575-five-pr-migration-pr1-identity-boundary"
+    ],
+    "excluded_untouched": ["UTV2-1571 (remains started/active)", "UTV2-1574 (remains started, its own R1/R2 proof gap unresolved -- reverted to exact main content in this lane, no fabricated proof)"]
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-close.test.ts",
+      ".github/workflows/post-merge-lane-close.yml"
+    ],
+    "reconciliation_paths": [
+      "docs/06_status/lanes/UTV2-1560.json",
+      "docs/06_status/lanes/UTV2-1573.json",
+      "docs/06_status/lanes/UTV2-1575.json",
+      "docs/06_status/proof/UTV2-1560/evidence.json",
+      "docs/06_status/proof/UTV2-1573/evidence.json",
+      "docs/06_status/proof/UTV2-1573/verification.md",
+      "docs/06_status/proof/UTV2-1575/evidence.json",
+      "docs/06_status/proof/UTV2-1575/verification.md"
+    ],
+    "own_lane_paths": [
+      ".ops/sync/UTV2-1576.yml",
+      "docs/06_status/lanes/UTV2-1576.json",
+      "docs/06_status/proof/UTV2-1576/evidence.json",
+      "docs/06_status/proof/UTV2-1576/verification.md",
+      "docs/06_status/proof/UTV2-1576/diff-summary.md"
+    ],
+    "not_changed": [
+      "UTV2-1571 manifest, proof, or sync files",
+      "UTV2-1574 manifest or proof (reverted to exact main content)",
+      "PR #1297 / UTV2-1550",
+      "governance-cap / concurrency-limit logic",
+      "any product/runtime code",
+      "branch protection or repository settings"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "explicit_cli_capability_argument": "PASS -- --post-merge-trusted",
+    "requires_github_actions_true_refs_heads_main_and_exact_workflow_identity": "PASS -- isTrustedPostMergeAutomation() checks all three plus GITHUB_REPOSITORY",
+    "local_main_ordinary_automation_forged_or_missing_capability_remain_blocked": "PASS -- covered by 11 new regression tests",
+    "trusted_context_persists_only_expected_bookkeeping_paths": "PASS -- pre-existing targeted git add calls plus new fail-closed scope guard",
+    "unrelated_tracked_changes_fail": "PASS -- scope guard step",
+    "bot_commits_cannot_recursively_trigger_closeout": "PASS -- pre-existing actor guard, unmodified, verified present",
+    "repair_binds_utv2_1571_to_pr_1291_merge_sha_a192cd78": "DEFERRED -- UTV2-1571 intentionally untouched by this lane per PM instruction; to be verified by replaying Post-Merge Lane Close for UTV2-1571 after this PR merges",
+    "focused_tests_and_pnpm_verify_pass": "PASS",
+    "after_merge_replay_utv2_1571_and_verify_terminal_state": "PENDING -- post-merge follow-up action, not part of this proof"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "UTV2-1571 is not closed by this PR -- it remains the sole active governance lane, to be closed by replaying the now-fixed Post-Merge Lane Close workflow after this PR merges, per PM instruction.",
+    "UTV2-1574's own R1/R2 runtime-proof gap (missing structured queries/row-counts) is unresolved and out of scope for this lane -- its manifest and proof are reverted to exact main content, not touched.",
+    "This proof's head_sha/verified_source_sha is the pre-proof-commit branch head (circular-reference workaround, same pattern as UTV2-1573/1575's own proof) -- rebound to the true merge SHA by ops:proof-generate --merge-sha post-merge."
+  ],
+  "verdict": "READY_FOR_PM_REVIEW"
+}

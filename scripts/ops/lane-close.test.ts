@@ -8,6 +8,7 @@ import {
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
+  isTrustedPostMergeAutomation,
   mapFailuresToCode,
   rebindRepairedLaneProof,
   repairMergedLaneManifest,
@@ -1104,5 +1105,171 @@ test('buildRepairRequiredViaPrPacket names the exact preflight + lane-start comm
     assert.ok(
       result.commands.some((c) => c.includes('ops:lane-start UTV2-1497') && c.includes('claude/utv2-1497-lane-close-repair')),
     );
+  });
+});
+
+// ── UTV2-1576: trusted post-merge automation capability ──
+// PR #1296 workflow run 30002061214 proved guardRepairAgainstMainCheckout blocks
+// post-merge-lane-close.yml itself: actions/checkout@v4 on a `push` trigger
+// leaves a real local branch named `main` (not detached HEAD), so the workflow
+// this guard exists to let operate safely on `main` was always caught by it too.
+// isTrustedPostMergeAutomation() is the narrow, multi-invariant exception: every
+// GitHub-set marker for that exact workflow file/repo/ref PLUS an explicit CLI
+// flag must all agree, or the guard still blocks as before.
+
+const TRUSTED_POST_MERGE_ENV = {
+  GITHUB_ACTIONS: 'true',
+  GITHUB_REPOSITORY: 'griff843/Unit-Talk-v2',
+  GITHUB_REF: 'refs/heads/main',
+  GITHUB_WORKFLOW_REF: 'griff843/Unit-Talk-v2/.github/workflows/post-merge-lane-close.yml@refs/heads/main',
+};
+
+test('isTrustedPostMergeAutomation is true only for the exact trusted context plus the explicit flag', () => {
+  assert.strictEqual(
+    isTrustedPostMergeAutomation(TRUSTED_POST_MERGE_ENV, { postMergeTrusted: true }),
+    true,
+  );
+});
+
+test('isTrustedPostMergeAutomation is false for a local shell with no GitHub Actions env at all, even with the flag', () => {
+  assert.strictEqual(isTrustedPostMergeAutomation({}, { postMergeTrusted: true }), false);
+});
+
+test('isTrustedPostMergeAutomation is false for ordinary GitHub Actions automation (a different workflow) even on main with the flag', () => {
+  assert.strictEqual(
+    isTrustedPostMergeAutomation(
+      { ...TRUSTED_POST_MERGE_ENV, GITHUB_WORKFLOW_REF: 'griff843/Unit-Talk-v2/.github/workflows/merge-gate.yml@refs/heads/main' },
+      { postMergeTrusted: true },
+    ),
+    false,
+  );
+});
+
+test('isTrustedPostMergeAutomation is false for the exact trusted context when the explicit CLI flag is missing', () => {
+  assert.strictEqual(
+    isTrustedPostMergeAutomation(TRUSTED_POST_MERGE_ENV, { postMergeTrusted: false }),
+    false,
+  );
+});
+
+test('isTrustedPostMergeAutomation is false when the flag is passed but GITHUB_ACTIONS is unset (a forged/incomplete context)', () => {
+  const { GITHUB_ACTIONS: _omit, ...rest } = TRUSTED_POST_MERGE_ENV;
+  assert.strictEqual(isTrustedPostMergeAutomation(rest, { postMergeTrusted: true }), false);
+});
+
+test('isTrustedPostMergeAutomation is false for the trusted workflow running on a non-main ref (e.g. a PR branch)', () => {
+  assert.strictEqual(
+    isTrustedPostMergeAutomation(
+      {
+        ...TRUSTED_POST_MERGE_ENV,
+        GITHUB_REF: 'refs/heads/codex/utv2-1576-governance-capacity-recovery',
+        GITHUB_WORKFLOW_REF:
+          'griff843/Unit-Talk-v2/.github/workflows/post-merge-lane-close.yml@refs/heads/codex/utv2-1576-governance-capacity-recovery',
+      },
+      { postMergeTrusted: true },
+    ),
+    false,
+  );
+});
+
+test('isTrustedPostMergeAutomation is false for a fork or renamed repo presenting an otherwise-identical context', () => {
+  assert.strictEqual(
+    isTrustedPostMergeAutomation(
+      { ...TRUSTED_POST_MERGE_ENV, GITHUB_REPOSITORY: 'someone-else/Unit-Talk-v2' },
+      { postMergeTrusted: true },
+    ),
+    false,
+  );
+});
+
+test('guard still blocks a plain main checkout with no trustedPostMerge option at all (pre-UTV2-1576 behavior unchanged)', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ issue_id: 'UTV2-1497', status: 'started', commit_sha: null, preflight_token: tokenPath }),
+      {
+        repoRoot,
+        artifactRoot,
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+        }),
+      },
+    );
+
+    const guard = guardRepairAgainstMainCheckout(repair, { currentBranch: 'main', repoRoot });
+    assert.ok(guard, 'guard must still fire when trustedPostMerge is not passed');
+    assert.strictEqual(guard?.code, 'repair_required_via_pr');
+  });
+});
+
+test('guard still blocks a plain main checkout when trustedPostMerge is explicitly false', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ issue_id: 'UTV2-1497', status: 'started', commit_sha: null, preflight_token: tokenPath }),
+      {
+        repoRoot,
+        artifactRoot,
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+        }),
+      },
+    );
+
+    const guard = guardRepairAgainstMainCheckout(repair, { currentBranch: 'main', repoRoot, trustedPostMerge: false });
+    assert.ok(guard, 'guard must still fire when trustedPostMerge is false');
+    assert.strictEqual(guard?.code, 'repair_required_via_pr');
+  });
+});
+
+test('guard is a no-op on main when trustedPostMerge is true — the one exception this capability exists to grant', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ issue_id: 'UTV2-1571', status: 'started', commit_sha: null, preflight_token: tokenPath }),
+      {
+        repoRoot,
+        artifactRoot,
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1291',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'a192cd78f649131e0716578713c2ca3bc1c0bb06',
+        }),
+      },
+    );
+    assert.strictEqual(repair.ok, true);
+    assert.ok(repair.changed_fields.length > 0, 'precondition: repair must actually produce changes');
+
+    const guard = guardRepairAgainstMainCheckout(repair, { currentBranch: 'main', repoRoot, trustedPostMerge: true });
+    assert.strictEqual(guard, null, 'trusted post-merge automation must be allowed to proceed on main');
+  });
+});
+
+test('guard on a non-main branch remains a no-op regardless of trustedPostMerge (never needed, never harmful)', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ issue_id: 'UTV2-1497', status: 'started', commit_sha: null, preflight_token: tokenPath }),
+      {
+        repoRoot,
+        artifactRoot,
+        fetchPr: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1221',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+        }),
+      },
+    );
+
+    const guard = guardRepairAgainstMainCheckout(repair, {
+      currentBranch: 'claude/utv2-1497-lane-close-repair',
+      repoRoot,
+      trustedPostMerge: false,
+    });
+    assert.strictEqual(guard, null);
   });
 });

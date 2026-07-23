@@ -8,10 +8,10 @@
   "head_sha": "e10414799ce6366b186d247dc18463a158b92b36",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "e10414799ce6366b186d247dc18463a158b92b36",
+    "verified_source_sha": "0fbb3e806c7eaf86c9e0a9b986046c585adce899",
     "verified_source_note": "Pre-merge branch head. Rebound to the true merge SHA by ops:proof-generate --merge-sha during post-merge lane-close reconciliation (this object's presence is what makes this file rebindable -- see rebindEvidenceJsonSha in scripts/ops/proof-generate.ts).",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-22T10:02:53.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-23T11:32:12.788Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "not_yet_run"
@@ -44,7 +44,28 @@
     }
   },
   "runtime_proof": {
-    "note": "This lane changes only a CI-gate GitHub Actions workflow and its ops-tooling helper module -- no production pick-pipeline code path or migration is touched. pnpm test:db ran as part of the full pnpm verify pass above (unrelated live-DB smoke coverage, unaffected by this diff); no dedicated live-DB assertions were added because none of this diff's behavior is DB-observable."
+    "note": "This lane changes only a CI-gate GitHub Actions workflow and its ops-tooling helper module -- no production pick-pipeline code path or migration is touched. Live DB smoke and table counts were recaptured during the governed stale-lane reconciliation because T1 truth checks require structured runtime evidence.",
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "queries": [
+      { "table": "submissions", "description": "Live database-smoke submission persistence and cleanup" },
+      { "table": "picks", "description": "Live database-smoke pick persistence, lifecycle transitions, and cleanup" },
+      { "table": "pick_lifecycle", "description": "Live lifecycle inserts and rejected-transition count assertions" },
+      { "table": "distribution_outbox", "description": "Live enqueue, claim, rollback, and idempotency assertions" },
+      { "table": "distribution_receipts", "description": "Live rejected-delivery receipt count assertion" },
+      { "table": "audit_log", "description": "Live rollback and additive settlement audit assertions" },
+      { "table": "settlement_records", "description": "Live additive settlement and correction assertions" }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 99143 },
+      { "table": "pick_lifecycle", "count": 142055 },
+      { "table": "submissions", "count": 99511 },
+      { "table": "distribution_outbox", "count": 9694 },
+      { "table": "audit_log", "count": 239777 },
+      { "table": "settlement_records", "count": 33995 },
+      { "table": "distribution_receipts", "count": 3581 }
+    ],
+    "row_counts_captured_at": "2026-07-23T11:36:40Z"
   },
   "scope": {
     "implementation_paths": [

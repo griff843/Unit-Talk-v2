@@ -205,7 +205,16 @@ jobs:
           # Repair stale merged-lane state from the authoritative PR merge SHA,
           # then run the normal lane-close truth gate. This keeps post-merge
           # automation on the same closeout path operators use manually.
-          close_output=$(pnpm ops:lane-close "$ISSUE_ID" --repair-merged --explain 2>&1) || exit_code=$?
+          #
+          # --post-merge-trusted (UTV2-1576) is the explicit capability flag that,
+          # together with this job's GITHUB_ACTIONS/GITHUB_REPOSITORY/GITHUB_REF/
+          # GITHUB_WORKFLOW_REF context, is the ONLY combination that satisfies
+          # isTrustedPostMergeAutomation() in scripts/ops/lane-close.ts and lets
+          # --repair-merged persist tracked-file changes from a checkout on `main`.
+          # Passing the flag alone (e.g. from a local shell or another workflow)
+          # does nothing without this exact context, and this exact context
+          # without the flag still fails closed to the governed-PR repair path.
+          close_output=$(pnpm ops:lane-close "$ISSUE_ID" --repair-merged --explain --post-merge-trusted 2>&1) || exit_code=$?
           exit_code=${exit_code:-0}
 
           echo "$close_output"
@@ -308,6 +317,30 @@ jobs:
         run: |
           echo "::error title=post-merge-lane-close::Lane closeout failed (exit ${{ steps.lane_close.outputs.exit_code }}) — lane NOT closed."
           exit "${{ steps.lane_close.outputs.exit_code }}"
+
+      - name: Fail closed on unexpected tracked changes (UTV2-1576)
+        # Defense-in-depth for the trusted post-merge capability: the closeout
+        # path is only ever supposed to touch this one issue's manifest, its
+        # own proof directory, and its own per-issue sync file. If anything
+        # else in the tracked working tree is dirty when we reach this point,
+        # something upstream (proof-generate, truth-check, a future change to
+        # this workflow) is writing outside its authorized scope -- abort
+        # before staging or committing anything rather than silently carry it.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.lane_close.outputs.exit_code == '0'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+        run: |
+          set -euo pipefail
+          allowed_pattern="^(${MANIFEST_PATH}|docs/06_status/proof/${ISSUE_ID}/.*|\.ops/sync/${ISSUE_ID}\.yml)$"
+          unexpected=$(git status --porcelain=v1 | awk '{ $1=""; sub(/^ /, ""); print }' | grep -vE "$allowed_pattern" || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error title=post-merge-lane-close::Closeout produced tracked changes outside the authorized scope for $ISSUE_ID:"
+            echo "$unexpected"
+            echo "::error title=post-merge-lane-close::Refusing to commit. This is a fail-closed scope guard, not a lane-close failure -- investigate before re-running."
+            exit 1
+          fi
+          echo "::notice title=post-merge-lane-close::Scope guard OK -- only $ISSUE_ID's own manifest/proof/sync paths are dirty."
 
       - name: Commit and push manifest change
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.lane_close.outputs.exit_code == '0'

@@ -5,9 +5,9 @@
 | Issue | UTV2-1575 |
 | Tier | T1 |
 | Branch | claude/utv2-1575-five-pr-migration-pr1-identity-boundary |
-| Commit SHA(s) | `82b247e30bb3637fa40ae3cf2070f711d4a0b617` (branch head, pre-merge) |
+| Commit SHA(s) | `df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa` (merge SHA) |
 
-MERGE_SHA: 82b247e30bb3637fa40ae3cf2070f711d4a0b617
+MERGE_SHA: df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa
 
 (This is the branch head SHA, used here to satisfy proof/merge-SHA binding without a circular self-reference. The real merge SHA is additionally recorded post-merge by the standard `ops:proof-generate --merge-sha` closeout step.)
 
