@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 
-export type AutonomyMode = 'halted' | 'shadow' | 't3-live' | 't2-t3-live';
-export type CandidateTier = 'T1' | 'T2' | 'T3';
+export type AutonomyMode = 'halted' | 'shadow' | 't3_live' | 't2t3_live';
+export type CandidateTier = 'T2' | 'T3';
 export type Executor = 'claude' | 'codex-cli' | 'codex-cloud';
 
 export interface AutonomyCeilings {
   max_cycles: number;
   max_duration_ms: number;
-  max_retries_per_candidate: number;
+  max_operation_duration_ms: number;
+  max_dispatches_per_cycle: number;
+  max_merges_per_cycle: number;
+  max_retries_per_operation: number;
   max_token_budget: number;
   max_cost_micros: number;
 }
@@ -17,15 +20,18 @@ export interface AutonomyPolicy {
   mode: AutonomyMode;
   owner_halt: boolean;
   owner_halt_reason: string | null;
+  heartbeat_ttl_seconds: number;
   ceilings: AutonomyCeilings;
 }
 
 export interface UsageSnapshot {
   cycles: number;
   elapsed_ms: number;
-  retries_for_candidate: number;
+  retries_for_operation: number;
   tokens_used: number;
   cost_micros: number;
+  dispatches: number;
+  merges: number;
 }
 
 export interface Candidate {
@@ -117,10 +123,14 @@ export interface MechanicalFacts {
     approved: boolean;
     state: 'approved' | 'pending' | 'rejected' | 'unknown';
   };
-  github_mergeability:
-    | 'MERGEABLE'
-    | 'CONFLICTING'
+  github_mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+  github_merge_state_status:
+    | 'CLEAN'
     | 'BLOCKED'
+    | 'BEHIND'
+    | 'DIRTY'
+    | 'DRAFT'
+    | 'HAS_HOOKS'
     | 'UNKNOWN'
     | 'UNSTABLE';
 }
@@ -133,6 +143,7 @@ export interface CandidateDecision {
   mode: AutonomyMode;
   action: 'queue' | 'dispatch' | 'blocked' | 'escalation';
   dispatchable: boolean;
+  packet_eligible: boolean;
   blocking_findings: BlockerFinding[];
   advisories: BlockerFinding[];
   reason_codes: string[];
@@ -142,23 +153,87 @@ export interface CandidateDecision {
 export interface DispatchPacket {
   schema_version: 1;
   packet_id: string;
-  run_id: string;
-  decision_id: string;
-  candidate: Candidate;
-  created_at: string;
+  issue_id: string;
+  tier: CandidateTier;
+  executor: Executor;
+  mode_at_dispatch: Exclude<AutonomyMode, 'halted'>;
+  generated_at: string;
+  expires_at: string;
+  file_scope_lock: string[];
+  sensitive_path_check: {
+    passed: boolean;
+    checked_against: 'docs/05_operations/DELEGATION_POLICY.md#sensitive-path-matrix';
+    checked_at: string;
+    matched_paths: string[];
+  };
+  dispatch_reason: string;
+  idempotency_key: string;
+  kill_switch_check: { checked_at: string; halted: false };
+  dry_run: boolean;
   content_sha256: string;
+  concurrency_snapshot_ref?: string;
 }
 
-export type ExecutionState =
-  | 'created'
-  | 'evaluating'
-  | 'packet_ready'
+export type CycleState =
+  | 'idle'
+  | 'waking'
+  | 'gating'
+  | 'selecting'
   | 'dispatching'
-  | 'no_op'
-  | 'queued'
-  | 'dispatched'
-  | 'blocked'
-  | 'escalated';
+  | 'shadow_evaluating'
+  | 'reporting'
+  | 'cooling_down';
+
+export interface ModeHistoryEntry {
+  at: string;
+  from: AutonomyMode;
+  to: AutonomyMode;
+  trigger: string;
+  actor: 'owner' | 'kernel_auto_rollback' | 'kernel_auto_halt';
+}
+
+export interface KernelExecutionState {
+  schema_version: 1;
+  mode: AutonomyMode;
+  cycle_state: CycleState;
+  halted: boolean;
+  halted_reason: string | null;
+  current_cycle_id: string | null;
+  last_cycle_started_at: string | null;
+  last_cycle_completed_at: string | null;
+  last_heartbeat_at: string;
+  heartbeat_ttl_seconds: number;
+  owner_pid: number | null;
+  consecutive_infra_failures: number;
+  consecutive_rollback_triggers: number;
+  cost_counters: {
+    window_started_at: string;
+    window_tokens_used: number;
+    window_dispatch_count: number;
+  };
+  active_dispatch_ids: string[];
+  mode_history: ModeHistoryEntry[];
+}
+
+export interface StateTransitionRecord {
+  sequence: number;
+  from: CycleState;
+  to: CycleState;
+  at: string;
+}
+
+export interface ExecutionRecord {
+  schema_version: 1;
+  cycle_id: string;
+  mode: AutonomyMode;
+  input_hash: string;
+  created_at: string;
+  updated_at: string;
+  transitions: StateTransitionRecord[];
+  decision?: CandidateDecision;
+  packet_id?: string;
+  outcome?: StructuredOutcome;
+}
 
 export interface StructuredOutcome {
   kind: 'no_op' | 'queue' | 'dispatch' | 'blocked' | 'escalation';
@@ -166,53 +241,50 @@ export interface StructuredOutcome {
   packet_id?: string;
 }
 
-export interface ExecutionRecord {
-  schema_version: 1;
-  run_id: string;
-  session_id: string;
-  state: ExecutionState;
-  input_hash: string;
-  created_at: string;
-  updated_at: string;
-  cycle: number;
-  retry_count: number;
-  transition_sequence: number;
-  decision?: CandidateDecision;
-  packet_id?: string;
-  outcome?: StructuredOutcome;
-}
+export type AuditEventType =
+  | 'cycle_started'
+  | 'cycle_completed'
+  | 'kill_switch_checked'
+  | 'kill_switch_engaged'
+  | 'kill_switch_confirmed_halted'
+  | 'gate_result'
+  | 'candidate_selected'
+  | 'candidate_refused_sensitive_path'
+  | 'candidate_refused_t1_excluded'
+  | 'candidate_refused_concurrency'
+  | 'dispatch_intent'
+  | 'dispatch_outcome'
+  | 'shadow_decision'
+  | 'mode_promoted'
+  | 'mode_rolled_back'
+  | 'auto_halt_triggered'
+  | 'crash_recovery_reconciled'
+  | 'audit_integrity_failure';
 
 export interface AuditEvent {
   schema_version: 1;
   event_id: string;
-  run_id: string;
   sequence: number;
-  event_type:
-    | 'run.created'
-    | 'run.resumed'
-    | 'state.transitioned'
-    | 'decision.recorded'
-    | 'packet.created'
-    | 'run.completed'
-    | 'lease.released';
-  occurred_at: string;
-  previous_hash: string | null;
+  ts: string;
+  event_type: AuditEventType;
+  phase: 'intent' | 'outcome' | 'info';
+  actor: 'kernel' | 'owner' | 'claude' | 'codex';
+  mode: AutonomyMode;
+  severity: 'debug' | 'info' | 'medium' | 'high' | 'critical';
+  issue_id: string | null;
+  idempotency_key: string | null;
+  prev_event_hash: string | null;
   event_hash: string;
-  payload: Record<string, unknown>;
+  detail: Record<string, unknown>;
 }
 
-export const TERMINAL_STATES: ReadonlySet<ExecutionState> = new Set([
-  'no_op',
-  'queued',
-  'dispatched',
-  'blocked',
-  'escalated',
-]);
+export type ReconciliationOutcome =
+  | 'confirmed_done'
+  | 'confirmed_not_done'
+  | 'confirmed_in_progress_externally_unblocked';
 
 export function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value);
-  }
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) {
     return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
   }

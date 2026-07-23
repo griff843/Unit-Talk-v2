@@ -1,60 +1,55 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unit-talk.internal/schemas/autonomy/execution-record-v1.json",
-  "title": "Durable autonomy execution record v1",
+  "$id": "https://unit-talk.dev/schemas/autonomy/execution-record-v1.schema.json",
+  "title": "Durable autonomy cycle execution record v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
-    "run_id",
-    "session_id",
-    "state",
+    "cycle_id",
+    "mode",
     "input_hash",
     "created_at",
     "updated_at",
-    "cycle",
-    "retry_count",
-    "transition_sequence"
+    "transitions"
   ],
   "properties": {
     "schema_version": { "const": 1 },
-    "run_id": { "type": "string", "minLength": 1 },
-    "session_id": { "type": "string", "minLength": 1 },
-    "state": {
-      "enum": [
-        "created",
-        "evaluating",
-        "packet_ready",
-        "dispatching",
-        "no_op",
-        "queued",
-        "dispatched",
-        "blocked",
-        "escalated"
-      ]
-    },
-    "input_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "cycle_id": { "type": "string", "minLength": 1 },
+    "mode": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+    "input_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "created_at": { "type": "string", "format": "date-time" },
     "updated_at": { "type": "string", "format": "date-time" },
-    "cycle": { "type": "integer", "minimum": 0 },
-    "retry_count": { "type": "integer", "minimum": 0 },
-    "transition_sequence": { "type": "integer", "minimum": 0 },
-    "decision": { "$ref": "candidate-decision.schema.json" },
-    "packet_id": { "type": "string", "pattern": "^packet_[0-9a-f]{64}$" },
-    "outcome": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind", "reason_codes"],
-      "properties": {
-        "kind": {
-          "enum": ["no_op", "queue", "dispatch", "blocked", "escalation"]
-        },
-        "reason_codes": {
-          "type": "array",
-          "items": { "type": "string", "minLength": 1 }
-        },
-        "packet_id": { "type": "string", "pattern": "^packet_[0-9a-f]{64}$" }
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "from", "to", "at"],
+        "properties": {
+          "sequence": { "type": "integer", "minimum": 1 },
+          "from": { "$ref": "#/$defs/cycle_state" },
+          "to": { "$ref": "#/$defs/cycle_state" },
+          "at": { "type": "string", "format": "date-time" }
+        }
       }
+    },
+    "decision": { "type": "object" },
+    "packet_id": { "type": "string" },
+    "outcome": { "type": "object" }
+  },
+  "$defs": {
+    "cycle_state": {
+      "enum": [
+        "idle",
+        "waking",
+        "gating",
+        "selecting",
+        "dispatching",
+        "shadow_evaluating",
+        "reporting",
+        "cooling_down"
+      ]
     }
   }
 }

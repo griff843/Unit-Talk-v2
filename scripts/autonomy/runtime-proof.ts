@@ -4,32 +4,39 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  type AutonomyMode,
   type AutonomyPolicy,
   type Candidate,
   type MechanicalFacts,
   type StructuredOutcome,
 } from './contracts.js';
 import { runKernelCycle } from './kernel.js';
-import { resolvePolicy } from './policy.js';
+import { CONTRACT_MAXIMA, resolvePolicy } from './policy.js';
 import { FileAutonomyStore } from './store.js';
 
 const NOW = '2026-07-23T18:00:00.000Z';
-const LATER = '2026-07-23T19:00:00.000Z';
+const LATER = '2026-07-23T18:10:00.000Z';
 const HEAD = 'a'.repeat(40);
 
-const POLICY: AutonomyPolicy = {
-  schema_version: 1,
-  mode: 't2-t3-live',
-  owner_halt: false,
-  owner_halt_reason: null,
-  ceilings: {
-    max_cycles: 5,
-    max_duration_ms: 300_000,
-    max_retries_per_candidate: 2,
-    max_token_budget: 100_000,
-    max_cost_micros: 1_000_000,
-  },
-};
+function policy(mode: AutonomyMode): AutonomyPolicy {
+  return {
+    schema_version: 1,
+    mode,
+    owner_halt: false,
+    owner_halt_reason: null,
+    heartbeat_ttl_seconds: CONTRACT_MAXIMA.heartbeat_ttl_seconds,
+    ceilings: {
+      max_cycles: 1,
+      max_duration_ms: CONTRACT_MAXIMA.max_duration_ms,
+      max_operation_duration_ms: CONTRACT_MAXIMA.max_operation_duration_ms,
+      max_dispatches_per_cycle: CONTRACT_MAXIMA.max_dispatches_per_cycle,
+      max_merges_per_cycle: CONTRACT_MAXIMA.max_merges_per_cycle,
+      max_retries_per_operation: CONTRACT_MAXIMA.max_retries_per_operation,
+      max_token_budget: 100_000,
+      max_cost_micros: 1_000_000,
+    },
+  };
+}
 
 const CANDIDATE: Candidate = {
   issue_id: 'UTV2-1578',
@@ -83,7 +90,7 @@ function facts(overrides: Partial<MechanicalFacts> = {}): MechanicalFacts {
     behind_by: 0,
     merge_conflicts: false,
     locks_and_leases: [],
-    current_session_id: 'proof-session',
+    current_session_id: 'proof-stable-session',
     protected_file_expansion: {
       detected: false,
       paths: [],
@@ -91,49 +98,64 @@ function facts(overrides: Partial<MechanicalFacts> = {}): MechanicalFacts {
       authenticated: false,
     },
     environment: { required: false, approved: false, state: 'unknown' },
-    github_mergeability: 'MERGEABLE',
+    github_mergeable: 'MERGEABLE',
+    github_merge_state_status: 'CLEAN',
     ...overrides,
   };
 }
 
+function promote(store: FileAutonomyStore, mode: AutonomyMode): void {
+  store.initialize(NOW);
+  if (mode === 'halted') return;
+  store.setModeByOwner('shadow', NOW, 'proof_owner_promotion');
+  if (mode === 'shadow') return;
+  store.setModeByOwner('t3_live', NOW, 'proof_owner_promotion');
+  if (mode === 't2t3_live') {
+    store.setModeByOwner('t2t3_live', NOW, 'proof_owner_promotion');
+  }
+}
+
 function executeScenario(
   root: string,
-  runId: string,
+  cycleId: string,
+  mode: AutonomyMode,
   candidate: Candidate | null,
   mechanicalFacts: MechanicalFacts | null,
-  policy = POLICY,
   retries = 0,
 ): {
   outcome: StructuredOutcome;
+  final_cycle_state: string;
   event_chain_valid: boolean;
   packet_integrity_valid: boolean;
 } {
-  const store = new FileAutonomyStore(path.join(root, runId));
+  const store = new FileAutonomyStore(path.join(root, cycleId));
+  promote(store, mode);
   const result = runKernelCycle(store, {
-    run_id: runId,
-    session_id: 'proof-session',
+    cycle_id: cycleId,
     now: NOW,
-    lease_expires_at: LATER,
-    policy,
+    packet_expires_at: LATER,
+    policy: policy(mode),
     usage: {
       cycles: 0,
       elapsed_ms: 0,
-      retries_for_candidate: retries,
+      retries_for_operation: retries,
       tokens_used: 0,
       cost_micros: 0,
+      dispatches: 0,
+      merges: 0,
     },
     candidate,
     facts: mechanicalFacts,
   });
-  if (!result.ok) throw new Error(`${runId}:${result.code}`);
-  const packetIntegrityValid = true;
-  if (result.outcome.packet_id) {
-    store.readPacket(result.outcome.packet_id);
-  }
+  if (!result.ok) throw new Error(`${cycleId}:${result.code}`);
+  if (result.outcome.packet_id) store.readPacket(result.outcome.packet_id);
   return {
     outcome: result.outcome,
+    final_cycle_state: store.readState().cycle_state,
     event_chain_valid: store.verifyEventChain(),
-    packet_integrity_valid: packetIntegrityValid,
+    packet_integrity_valid: result.outcome.packet_id
+      ? Boolean(store.readPacket(result.outcome.packet_id))
+      : true,
   };
 }
 
@@ -144,32 +166,35 @@ export function runRuntimeProof(): Record<string, unknown> {
   try {
     const failClosed = resolvePolicy({});
     const scenarios = {
-      no_op: executeScenario(proofRoot, 'proof-noop', null, null),
+      no_op: executeScenario(proofRoot, 'proof-noop', 't3_live', null, null),
       queue: executeScenario(
         proofRoot,
         'proof-queue',
-        { ...CANDIDATE, tier: 'T1' },
+        'shadow',
+        CANDIDATE,
         facts(),
       ),
       dispatch: executeScenario(
         proofRoot,
         'proof-dispatch',
+        't3_live',
         CANDIDATE,
         facts(),
       ),
       blocked: executeScenario(
         proofRoot,
         'proof-blocked',
+        't3_live',
         CANDIDATE,
         facts({ merge_conflicts: true }),
       ),
       escalation: executeScenario(
         proofRoot,
         'proof-escalation',
+        't3_live',
         CANDIDATE,
         facts(),
-        POLICY,
-        3,
+        2,
       ),
     };
     const expected: Record<string, StructuredOutcome['kind']> = {
@@ -188,17 +213,25 @@ export function runRuntimeProof(): Record<string, unknown> {
     const packetsValid = Object.values(scenarios).every(
       (scenario) => scenario.packet_integrity_valid,
     );
+    const cyclesIdle = Object.values(scenarios).every(
+      (scenario) => scenario.final_cycle_state === 'idle',
+    );
     const verdict =
       failClosed.policy.mode === 'halted' &&
+      !failClosed.valid &&
       outcomeKindsValid &&
       logsValid &&
-      packetsValid
+      packetsValid &&
+      cyclesIdle
         ? 'PASS'
         : 'FAIL';
     return {
       schema_version: 1,
-      proof: 'utv2-1578-autonomy-kernel-runtime',
+      issue_id: 'UTV2-1578',
+      proof: 'autonomy-kernel-runtime',
       run_at: new Date().toISOString(),
+      contract_source:
+        'AUT-1 PR #1302 head 43257000a016fc3bc96d9fde51a86d5d0be4d4d5',
       fail_closed_default: {
         mode: failClosed.policy.mode,
         valid: failClosed.valid,
@@ -208,6 +241,8 @@ export function runRuntimeProof(): Record<string, unknown> {
       outcome_kinds_valid: outcomeKindsValid,
       event_chains_valid: logsValid,
       dispatch_packets_valid: packetsValid,
+      cycles_returned_idle: cyclesIdle,
+      t1_packet_tier_representable: false,
       verdict,
     };
   } finally {
@@ -217,6 +252,14 @@ export function runRuntimeProof(): Record<string, unknown> {
 
 function main(): void {
   const proof = runRuntimeProof();
+  const outputFlagIndex = process.argv.indexOf('--output');
+  if (outputFlagIndex >= 0) {
+    const outputPath = process.argv[outputFlagIndex + 1];
+    if (!outputPath) throw new Error('RUNTIME_PROOF_OUTPUT_PATH_REQUIRED');
+    const resolved = path.resolve(outputPath);
+    fs.mkdirSync(path.dirname(resolved), { recursive: true });
+    fs.writeFileSync(resolved, `${JSON.stringify(proof, null, 2)}\n`, 'utf8');
+  }
   process.stdout.write(`${JSON.stringify(proof, null, 2)}\n`);
   if (proof['verdict'] !== 'PASS') process.exitCode = 1;
 }

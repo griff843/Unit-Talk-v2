@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/autonomy/autonomy-execution-state-v1.schema.json",
+  "title": "Autonomy kernel execution state v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "mode",
+    "cycle_state",
+    "halted",
+    "halted_reason",
+    "current_cycle_id",
+    "last_cycle_started_at",
+    "last_cycle_completed_at",
+    "last_heartbeat_at",
+    "heartbeat_ttl_seconds",
+    "owner_pid",
+    "consecutive_infra_failures",
+    "consecutive_rollback_triggers",
+    "cost_counters",
+    "active_dispatch_ids",
+    "mode_history"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "mode": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+    "cycle_state": {
+      "enum": [
+        "idle",
+        "waking",
+        "gating",
+        "selecting",
+        "dispatching",
+        "shadow_evaluating",
+        "reporting",
+        "cooling_down"
+      ]
+    },
+    "halted": { "type": "boolean" },
+    "halted_reason": { "type": ["string", "null"] },
+    "current_cycle_id": { "type": ["string", "null"] },
+    "last_cycle_started_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "last_cycle_completed_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "last_heartbeat_at": { "type": "string", "format": "date-time" },
+    "heartbeat_ttl_seconds": { "type": "integer", "minimum": 1 },
+    "owner_pid": { "type": ["integer", "null"] },
+    "consecutive_infra_failures": { "type": "integer", "minimum": 0 },
+    "consecutive_rollback_triggers": { "type": "integer", "minimum": 0 },
+    "cost_counters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_started_at",
+        "window_tokens_used",
+        "window_dispatch_count"
+      ],
+      "properties": {
+        "window_started_at": { "type": "string", "format": "date-time" },
+        "window_tokens_used": { "type": "integer", "minimum": 0 },
+        "window_dispatch_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "active_dispatch_ids": { "type": "array", "items": { "type": "string" } },
+    "mode_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["at", "from", "to", "trigger", "actor"],
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "from": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+          "to": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+          "trigger": { "type": "string" },
+          "actor": {
+            "enum": ["owner", "kernel_auto_rollback", "kernel_auto_halt"]
+          }
+        }
+      }
+    }
+  }
+}

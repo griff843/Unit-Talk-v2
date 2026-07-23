@@ -1,35 +1,56 @@
-import { type ExecutionState, TERMINAL_STATES } from './contracts.js';
+import { type AutonomyMode, type CycleState } from './contracts.js';
 
-export const ALLOWED_TRANSITIONS: Readonly<
-  Record<ExecutionState, readonly ExecutionState[]>
+export const ALLOWED_CYCLE_TRANSITIONS: Readonly<
+  Record<CycleState, readonly CycleState[]>
 > = {
-  created: ['evaluating'],
-  evaluating: ['packet_ready', 'no_op', 'queued', 'blocked', 'escalated'],
-  packet_ready: ['dispatching', 'blocked', 'escalated'],
-  dispatching: ['dispatched', 'blocked', 'escalated'],
-  no_op: [],
-  queued: [],
-  dispatched: [],
-  blocked: [],
-  escalated: [],
+  idle: ['waking'],
+  waking: ['gating', 'idle'],
+  gating: ['selecting', 'idle'],
+  selecting: ['dispatching', 'shadow_evaluating', 'reporting'],
+  dispatching: ['reporting'],
+  shadow_evaluating: ['reporting'],
+  reporting: ['cooling_down'],
+  cooling_down: ['idle'],
 };
 
-export function canTransition(
-  from: ExecutionState,
-  to: ExecutionState,
-): boolean {
-  return ALLOWED_TRANSITIONS[from].includes(to);
+export const OWNER_MODE_TRANSITIONS: Readonly<
+  Record<AutonomyMode, readonly AutonomyMode[]>
+> = {
+  halted: ['halted', 'shadow'],
+  shadow: ['halted', 't3_live'],
+  t3_live: ['halted', 'shadow', 't2t3_live'],
+  t2t3_live: ['halted', 't3_live'],
+};
+
+export const KERNEL_ROLLBACK_TRANSITIONS: Readonly<
+  Partial<Record<AutonomyMode, AutonomyMode>>
+> = {
+  t3_live: 'shadow',
+  t2t3_live: 't3_live',
+};
+
+export function canTransitionCycle(from: CycleState, to: CycleState): boolean {
+  return ALLOWED_CYCLE_TRANSITIONS[from].includes(to);
 }
 
-export function assertTransition(
-  from: ExecutionState,
-  to: ExecutionState,
-): void {
-  if (!canTransition(from, to)) {
-    throw new Error(`INVALID_AUTONOMY_TRANSITION:${from}->${to}`);
+export function assertCycleTransition(from: CycleState, to: CycleState): void {
+  if (!canTransitionCycle(from, to)) {
+    throw new Error(`INVALID_AUTONOMY_CYCLE_TRANSITION:${from}->${to}`);
   }
 }
 
-export function isTerminal(state: ExecutionState): boolean {
-  return TERMINAL_STATES.has(state);
+export function canOwnerTransitionMode(
+  from: AutonomyMode,
+  to: AutonomyMode,
+): boolean {
+  return OWNER_MODE_TRANSITIONS[from].includes(to);
+}
+
+export function assertOwnerModeTransition(
+  from: AutonomyMode,
+  to: AutonomyMode,
+): void {
+  if (!canOwnerTransitionMode(from, to)) {
+    throw new Error(`INVALID_OWNER_MODE_TRANSITION:${from}->${to}`);
+  }
 }

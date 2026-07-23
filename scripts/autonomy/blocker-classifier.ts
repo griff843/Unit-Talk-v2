@@ -107,6 +107,20 @@ function classifyEvidence(
     ];
   }
   if (
+    evidence.expires_at !== null &&
+    !Number.isFinite(Date.parse(evidence.expires_at))
+  ) {
+    return [
+      finding(
+        category,
+        `${prefix}_EXPIRY_INVALID`,
+        'escalation',
+        label,
+        `${label} expiry timestamp is invalid`,
+      ),
+    ];
+  }
+  if (
     evidence.expires_at &&
     Date.parse(evidence.expires_at) <= Date.parse(observedAt)
   ) {
@@ -206,18 +220,22 @@ export function classifyBlockers(
       ),
     );
   }
-  if (facts.behind_by > 0) {
+  if (facts.behind_by > 0 || facts.github_merge_state_status === 'BEHIND') {
     all.push(
       finding(
         'branch_base',
         'BRANCH_BEHIND_BASE',
         'blocker',
         'github.compare',
-        `Branch is ${facts.behind_by} commit(s) behind base`,
+        `Branch is behind base (${facts.behind_by} commit(s) reported)`,
       ),
     );
   }
-  if (facts.merge_conflicts) {
+  if (
+    facts.merge_conflicts ||
+    facts.github_mergeable === 'CONFLICTING' ||
+    facts.github_merge_state_status === 'DIRTY'
+  ) {
     all.push(
       finding(
         'merge_conflicts',
@@ -229,11 +247,20 @@ export function classifyBlockers(
     );
   }
   for (const lease of facts.locks_and_leases) {
+    if (lease.status === 'released') continue;
+    const expiry = Date.parse(lease.expires_at);
+    const observedAt = Date.parse(facts.observed_at);
+    const fresh =
+      Number.isFinite(expiry) &&
+      Number.isFinite(observedAt) &&
+      expiry > observedAt;
     if (
-      lease.status === 'released' ||
-      lease.owner_session_id === facts.current_session_id
-    )
+      lease.status === 'active' &&
+      lease.owner_session_id === facts.current_session_id &&
+      fresh
+    ) {
       continue;
+    }
     if (lease.status === 'stale_reclaim_required') {
       all.push(
         finding(
@@ -244,7 +271,7 @@ export function classifyBlockers(
           `${lease.kind} requires explicit audited reclaim`,
         ),
       );
-    } else if (Date.parse(lease.expires_at) > Date.parse(facts.observed_at)) {
+    } else if (fresh) {
       all.push(
         finding(
           'locks_leases',
@@ -295,16 +322,42 @@ export function classifyBlockers(
       ),
     );
   }
-  if (facts.github_mergeability !== 'MERGEABLE') {
+  if (
+    facts.github_mergeable === 'UNKNOWN' ||
+    facts.github_merge_state_status === 'UNKNOWN'
+  ) {
     all.push(
       finding(
         'github_mergeability',
-        facts.github_mergeability === 'UNKNOWN'
-          ? 'GITHUB_MERGEABILITY_UNKNOWN'
-          : 'GITHUB_MERGEABILITY_NOT_READY',
+        'GITHUB_MERGEABILITY_UNKNOWN',
+        'blocker',
+        'github.mergeability',
+        `GitHub mergeability is ${facts.github_mergeable}/${facts.github_merge_state_status}`,
+      ),
+    );
+  }
+  if (
+    facts.github_merge_state_status === 'BLOCKED' ||
+    facts.github_merge_state_status === 'DRAFT'
+  ) {
+    all.push(
+      finding(
+        'github_mergeability',
+        'GITHUB_MERGEABILITY_NOT_READY',
         'blocker',
         'github.mergeStateStatus',
-        `GitHub mergeability state is ${facts.github_mergeability}`,
+        `GitHub merge-state status is ${facts.github_merge_state_status}`,
+      ),
+    );
+  }
+  if (facts.github_merge_state_status === 'UNSTABLE') {
+    all.push(
+      finding(
+        'github_mergeability',
+        'GITHUB_UNSTABLE_ADVISORY_ONLY',
+        'advisory',
+        'github.mergeStateStatus',
+        'GitHub reports UNSTABLE; required checks and mergeability are evaluated independently',
       ),
     );
   }

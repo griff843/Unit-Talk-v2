@@ -8,39 +8,40 @@ import {
   type DispatchPacket,
   type ExecutionRecord,
   type MechanicalFacts,
+  type ReconciliationOutcome,
   sha256,
   type StructuredOutcome,
   type UsageSnapshot,
 } from './contracts.js';
 import { evaluateCeilings } from './policy.js';
-import { isTerminal } from './state-machine.js';
 import { FileAutonomyStore } from './store.js';
 
 export interface KernelInput {
-  run_id: string;
-  session_id: string;
+  cycle_id: string;
   now: string;
-  lease_expires_at: string;
+  packet_expires_at: string;
   policy: AutonomyPolicy;
   usage: UsageSnapshot;
   candidate: Candidate | null;
   facts: MechanicalFacts | null;
+  recovery_truth?: Readonly<Record<string, ReconciliationOutcome>>;
 }
 
 export type KernelResult =
   | {
       ok: true;
-      record: ExecutionRecord;
+      record: ExecutionRecord | null;
       outcome: StructuredOutcome;
-      resumed: boolean;
+      reconciled: boolean;
     }
   | {
       ok: false;
       outcome: StructuredOutcome;
       code:
-        | 'ACTIVE_RUN_CONFLICT'
-        | 'EXPLICIT_RECLAIM_REQUIRED'
-        | 'INPUT_DRIFT_ON_RESUME';
+        | 'ACTIVE_CYCLE_CONFLICT'
+        | 'RECOVERY_RECONCILIATION_REQUIRED'
+        | 'PERSISTED_MODE_MISMATCH'
+        | 'AUTONOMY_STATE_FAIL_CLOSED';
     };
 
 export function evaluateCandidate(
@@ -69,13 +70,10 @@ export function evaluateCandidate(
       ? 'escalation'
       : 'blocked';
     reasonCodes = classification.blocking.map((entry) => entry.code);
-  } else if (candidate.tier === 'T1') {
-    action = 'queue';
-    reasonCodes = ['T1_REQUIRES_HUMAN_GOVERNANCE'];
   } else if (policy.mode === 'shadow') {
     action = 'queue';
-    reasonCodes = ['SHADOW_MODE_NO_LIVE_DISPATCH'];
-  } else if (policy.mode === 't3-live' && candidate.tier !== 'T3') {
+    reasonCodes = ['SHADOW_MODE_DRY_RUN_ONLY'];
+  } else if (policy.mode === 't3_live' && candidate.tier === 'T2') {
     action = 'queue';
     reasonCodes = ['MODE_DOES_NOT_AUTHORIZE_TIER'];
   } else {
@@ -84,12 +82,18 @@ export function evaluateCandidate(
   }
 
   reasonCodes = [...new Set(reasonCodes)].sort();
+  const packetEligible =
+    classification.blocking.length === 0 &&
+    ceilingReasons.length === 0 &&
+    policy.mode !== 'halted' &&
+    !policy.owner_halt;
   const decisionContent = {
     candidate_id: candidate.issue_id,
     evaluated_at: evaluatedAt,
     mode: policy.mode,
     action,
     dispatchable: action === 'dispatch',
+    packet_eligible: packetEligible,
     blocking_findings: classification.blocking,
     advisories: classification.advisories,
     reason_codes: reasonCodes,
@@ -102,24 +106,64 @@ export function evaluateCandidate(
   }) as CandidateDecision;
 }
 
-export function createDispatchPacket(
-  runId: string,
-  decision: CandidateDecision,
-  candidate: Candidate,
-  createdAt: string,
-): Readonly<DispatchPacket> {
-  if (!decision.dispatchable || decision.action !== 'dispatch') {
-    throw new Error('DISPATCH_PACKET_REQUIRES_DISPATCH_DECISION');
+export function createDispatchPacket(input: {
+  cycle_id: string;
+  decision: CandidateDecision;
+  candidate: Candidate;
+  facts: MechanicalFacts;
+  generated_at: string;
+  expires_at: string;
+}): Readonly<DispatchPacket> {
+  if (input.candidate.tier !== 'T2' && input.candidate.tier !== 'T3') {
+    throw new Error('T1_DISPATCH_PACKET_STRUCTURALLY_FORBIDDEN');
   }
+  if (!/^UTV2-[0-9]+$/.test(input.candidate.issue_id)) {
+    throw new Error('DISPATCH_PACKET_ISSUE_ID_INVALID');
+  }
+  if (input.candidate.file_scope.length === 0) {
+    throw new Error('DISPATCH_PACKET_FILE_SCOPE_REQUIRED');
+  }
+  if (
+    !Number.isFinite(Date.parse(input.generated_at)) ||
+    !Number.isFinite(Date.parse(input.expires_at)) ||
+    Date.parse(input.expires_at) <= Date.parse(input.generated_at)
+  ) {
+    throw new Error('DISPATCH_PACKET_EXPIRY_INVALID');
+  }
+  if (!input.decision.packet_eligible || input.decision.mode === 'halted') {
+    throw new Error('DISPATCH_PACKET_REQUIRES_ELIGIBLE_DECISION');
+  }
+  const protectedCheck = input.facts.protected_file_expansion;
+  const sensitivePathPassed =
+    !protectedCheck.detected ||
+    (protectedCheck.authorized && protectedCheck.authenticated);
+  if (!sensitivePathPassed) {
+    throw new Error('DISPATCH_PACKET_SENSITIVE_PATH_REFUSED');
+  }
+  const dryRun = input.decision.action !== 'dispatch';
   const content = {
     schema_version: 1 as const,
-    run_id: runId,
-    decision_id: decision.decision_id,
-    candidate: {
-      ...candidate,
-      file_scope: [...candidate.file_scope].sort(),
+    issue_id: input.candidate.issue_id,
+    tier: input.candidate.tier,
+    executor: input.candidate.executor,
+    mode_at_dispatch: input.decision.mode,
+    generated_at: input.generated_at,
+    expires_at: input.expires_at,
+    file_scope_lock: [...input.candidate.file_scope].sort(),
+    sensitive_path_check: {
+      passed: true,
+      checked_against:
+        'docs/05_operations/DELEGATION_POLICY.md#sensitive-path-matrix' as const,
+      checked_at: input.generated_at,
+      matched_paths: [] as string[],
     },
-    created_at: createdAt,
+    dispatch_reason: input.decision.reason_codes.join(','),
+    idempotency_key: `${input.candidate.issue_id}:lane-start:${input.cycle_id}`,
+    kill_switch_check: {
+      checked_at: input.generated_at,
+      halted: false as const,
+    },
+    dry_run: dryRun,
   };
   const digest = sha256(content);
   return deepFreeze({
@@ -133,148 +177,235 @@ export function runKernelCycle(
   store: FileAutonomyStore,
   input: KernelInput,
 ): KernelResult {
+  let state;
+  try {
+    state = store.readState();
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === 'AUTONOMY_STATE_MISSING_FAIL_CLOSED'
+    ) {
+      state = store.initialize(input.now, input.policy.heartbeat_ttl_seconds);
+    } else {
+      return failClosedStateResult();
+    }
+  }
+
+  if (input.policy.owner_halt && state.mode !== 'halted') {
+    state = store.engageOwnerHalt(
+      input.now,
+      input.policy.owner_halt_reason ?? 'owner_kill_switch',
+    );
+  }
+  if (state.mode !== input.policy.mode) {
+    return failureResult('PERSISTED_MODE_MISMATCH', 'escalation');
+  }
+  if (state.halted || input.policy.mode === 'halted') {
+    store.appendAudit({
+      event_type: 'kill_switch_confirmed_halted',
+      phase: 'info',
+      actor: 'kernel',
+      mode: 'halted',
+      severity: 'critical',
+      issue_id: null,
+      idempotency_key: null,
+      ts: input.now,
+      detail: { reason: state.halted_reason ?? 'fail_closed' },
+    });
+    return {
+      ok: true,
+      record: null,
+      outcome: { kind: 'no_op', reason_codes: ['AUTONOMY_HALTED'] },
+      reconciled: false,
+    };
+  }
+
   const inputHash = sha256({
     policy: input.policy,
     usage: input.usage,
     candidate: input.candidate,
     facts: input.facts,
   });
-  let record = store.readRecord(input.run_id);
-  if (record && record.input_hash !== inputHash) {
-    return {
-      ok: false,
-      code: 'INPUT_DRIFT_ON_RESUME',
-      outcome: { kind: 'escalation', reason_codes: ['INPUT_DRIFT_ON_RESUME'] },
-    };
-  }
-  if (record && isTerminal(record.state)) {
-    if (!record.outcome) throw new Error('TERMINAL_RECORD_MISSING_OUTCOME');
-    return { ok: true, record, outcome: record.outcome, resumed: true };
-  }
-
-  const claim = store.claimRun({
-    run_id: input.run_id,
-    session_id: input.session_id,
+  let claim = store.beginCycle({
+    cycle_id: input.cycle_id,
     now: input.now,
-    expires_at: input.lease_expires_at,
+    expected_mode: input.policy.mode,
+    input_hash: inputHash,
   });
-  if (!claim.ok) {
-    const reclaim = claim.code === 'explicit_reclaim_required';
-    return {
-      ok: false,
-      code: reclaim ? 'EXPLICIT_RECLAIM_REQUIRED' : 'ACTIVE_RUN_CONFLICT',
-      outcome: {
-        kind: reclaim ? 'escalation' : 'blocked',
-        reason_codes: [
-          reclaim ? 'EXPLICIT_RECLAIM_REQUIRED' : 'ACTIVE_RUN_CONFLICT',
-        ],
-      },
-    };
-  }
-
-  const resumed = claim.code === 'resumed' && record !== null;
-  if (!record) {
-    record = {
-      schema_version: 1,
-      run_id: input.run_id,
-      session_id: input.session_id,
-      state: 'created',
+  let reconciled = false;
+  if (!claim.ok && claim.code === 'RECOVERY_RECONCILIATION_REQUIRED') {
+    if (!input.recovery_truth) {
+      return failureResult('RECOVERY_RECONCILIATION_REQUIRED', 'escalation');
+    }
+    try {
+      store.reconcileStaleCycle(input.now, input.recovery_truth);
+    } catch {
+      return failureResult('RECOVERY_RECONCILIATION_REQUIRED', 'escalation');
+    }
+    reconciled = true;
+    claim = store.beginCycle({
+      cycle_id: input.cycle_id,
+      now: input.now,
+      expected_mode: input.policy.mode,
       input_hash: inputHash,
-      created_at: input.now,
-      updated_at: input.now,
-      cycle: input.usage.cycles,
-      retry_count: input.usage.retries_for_candidate,
-      transition_sequence: 0,
+    });
+  }
+  if (!claim.ok) {
+    const kind =
+      claim.code === 'ACTIVE_CYCLE_CONFLICT' ? 'blocked' : 'escalation';
+    return failureResult(claim.code, kind);
+  }
+
+  store.appendAudit({
+    event_type: 'kill_switch_checked',
+    phase: 'info',
+    actor: 'kernel',
+    mode: input.policy.mode,
+    severity: 'info',
+    issue_id: null,
+    idempotency_key: null,
+    ts: input.now,
+    detail: { halted: false, cycle_id: input.cycle_id },
+  });
+  store.transitionCycle(input.cycle_id, 'gating', input.now);
+
+  if (input.candidate && !input.facts) {
+    const outcome: StructuredOutcome = {
+      kind: 'escalation',
+      reason_codes: ['MECHANICAL_FACTS_REQUIRED_FOR_CANDIDATE'],
     };
-    store.createRecord(record);
-  } else {
-    store.appendResumeEvent(input.run_id, input.now);
+    store.recordOutcome(input.cycle_id, outcome, input.now);
+    store.transitionCycle(input.cycle_id, 'idle', input.now);
+    store.appendCycleCompleted(
+      input.cycle_id,
+      input.policy.mode,
+      outcome,
+      input.now,
+    );
+    return {
+      ok: true,
+      record: store.readRecord(input.cycle_id),
+      outcome,
+      reconciled,
+    };
   }
 
-  if (record.state === 'created') {
-    record = transitionRecord(record, 'evaluating', input.now);
-    store.transition(input.run_id, record, 'state.transitioned', {});
-  }
-
-  if (record.state === 'evaluating') {
-    if (!input.candidate) {
-      const outcome: StructuredOutcome = {
+  store.transitionCycle(input.cycle_id, 'selecting', input.now);
+  if (!input.candidate) {
+    return completeFromSelecting(
+      store,
+      input,
+      {
         kind: 'no_op',
         reason_codes: ['NO_CANDIDATE'],
-      };
-      record = transitionRecord(record, 'no_op', input.now, { outcome });
-      store.transition(input.run_id, record, 'run.completed', { outcome });
-      store.releaseRun(input.run_id, input.session_id, input.now);
-      return { ok: true, record, outcome, resumed };
-    }
-    if (!input.facts)
-      throw new Error('MECHANICAL_FACTS_REQUIRED_FOR_CANDIDATE');
-    const decision = evaluateCandidate(
-      input.candidate,
-      input.facts,
-      input.policy,
-      input.usage,
-      input.now,
+      },
+      reconciled,
     );
-    if (decision.action !== 'dispatch') {
-      const outcome = outcomeForDecision(decision);
-      const state =
-        decision.action === 'queue'
-          ? 'queued'
-          : decision.action === 'blocked'
-            ? 'blocked'
-            : 'escalated';
-      record = transitionRecord(record, state, input.now, {
-        decision,
-        outcome,
-      });
-      store.transition(input.run_id, record, 'run.completed', {
-        decision_id: decision.decision_id,
-        outcome,
-      });
-      store.releaseRun(input.run_id, input.session_id, input.now);
-      return { ok: true, record, outcome, resumed };
-    }
-    const packet = createDispatchPacket(
-      input.run_id,
-      decision,
-      input.candidate,
-      input.now,
-    );
-    store.writePacket(packet);
-    record = transitionRecord(record, 'packet_ready', input.now, {
-      decision,
-      packet_id: packet.packet_id,
-    });
-    store.transition(input.run_id, record, 'packet.created', {
+  }
+
+  const facts = input.facts;
+  if (!facts) throw new Error('UNREACHABLE_MECHANICAL_FACTS_STATE');
+  const decision = evaluateCandidate(
+    input.candidate,
+    facts,
+    input.policy,
+    input.usage,
+    input.now,
+  );
+  store.recordDecision(input.cycle_id, decision, input.now);
+  store.appendAudit({
+    event_type: 'candidate_selected',
+    phase: 'info',
+    actor: 'kernel',
+    mode: input.policy.mode,
+    severity: 'info',
+    issue_id: input.candidate.issue_id,
+    idempotency_key: null,
+    ts: input.now,
+    detail: {
       decision_id: decision.decision_id,
-      packet_id: packet.packet_id,
-    });
+      action: decision.action,
+      reason_codes: decision.reason_codes,
+    },
+  });
+
+  if (!decision.packet_eligible) {
+    return completeFromSelecting(
+      store,
+      input,
+      outcomeForDecision(decision),
+      reconciled,
+    );
   }
 
-  if (record.state === 'packet_ready') {
-    if (!record.packet_id)
-      throw new Error('PACKET_READY_RECORD_MISSING_PACKET');
-    store.readPacket(record.packet_id);
-    record = transitionRecord(record, 'dispatching', input.now);
-    store.transition(input.run_id, record, 'state.transitioned', {
-      packet_id: record.packet_id,
-    });
+  const latestState = store.readState();
+  if (latestState.halted) {
+    return completeFromSelecting(
+      store,
+      input,
+      { kind: 'blocked', reason_codes: ['KILL_SWITCH_ENGAGED'] },
+      reconciled,
+    );
   }
-
-  if (record.state !== 'dispatching' || !record.packet_id) {
-    throw new Error(`UNRESUMABLE_EXECUTION_STATE:${record.state}`);
-  }
-  store.readPacket(record.packet_id);
+  const packet = createDispatchPacket({
+    cycle_id: input.cycle_id,
+    decision,
+    candidate: input.candidate,
+    facts,
+    generated_at: input.now,
+    expires_at: input.packet_expires_at,
+  });
+  store.transitionCycle(
+    input.cycle_id,
+    packet.dry_run ? 'shadow_evaluating' : 'dispatching',
+    input.now,
+  );
+  if (!packet.dry_run) store.markDispatchIntent(packet, input.now);
+  store.writePacket(packet);
+  store.markDispatchOutcome(packet, input.now);
   const outcome: StructuredOutcome = {
-    kind: 'dispatch',
-    reason_codes: ['IMMUTABLE_PACKET_READY'],
-    packet_id: record.packet_id,
+    kind: decision.action === 'dispatch' ? 'dispatch' : 'queue',
+    reason_codes:
+      decision.action === 'dispatch'
+        ? ['IMMUTABLE_PACKET_READY']
+        : decision.reason_codes,
+    packet_id: packet.packet_id,
   };
-  record = transitionRecord(record, 'dispatched', input.now, { outcome });
-  store.transition(input.run_id, record, 'run.completed', { outcome });
-  store.releaseRun(input.run_id, input.session_id, input.now);
-  return { ok: true, record, outcome, resumed };
+  store.transitionCycle(input.cycle_id, 'reporting', input.now);
+  return completeFromReporting(store, input, outcome, reconciled);
+}
+
+function completeFromSelecting(
+  store: FileAutonomyStore,
+  input: KernelInput,
+  outcome: StructuredOutcome,
+  reconciled: boolean,
+): KernelResult {
+  store.transitionCycle(input.cycle_id, 'reporting', input.now);
+  return completeFromReporting(store, input, outcome, reconciled);
+}
+
+function completeFromReporting(
+  store: FileAutonomyStore,
+  input: KernelInput,
+  outcome: StructuredOutcome,
+  reconciled: boolean,
+): KernelResult {
+  store.recordOutcome(input.cycle_id, outcome, input.now);
+  store.transitionCycle(input.cycle_id, 'cooling_down', input.now);
+  store.transitionCycle(input.cycle_id, 'idle', input.now);
+  store.appendCycleCompleted(
+    input.cycle_id,
+    input.policy.mode,
+    outcome,
+    input.now,
+  );
+  return {
+    ok: true,
+    record: store.readRecord(input.cycle_id),
+    outcome,
+    reconciled,
+  };
 }
 
 function outcomeForDecision(decision: CandidateDecision): StructuredOutcome {
@@ -283,22 +414,34 @@ function outcomeForDecision(decision: CandidateDecision): StructuredOutcome {
       ? 'queue'
       : decision.action === 'blocked'
         ? 'blocked'
-        : 'escalation';
+        : decision.action === 'dispatch'
+          ? 'dispatch'
+          : 'escalation';
   return { kind, reason_codes: decision.reason_codes };
 }
 
-function transitionRecord(
-  record: ExecutionRecord,
-  state: ExecutionRecord['state'],
-  updatedAt: string,
-  patch: Partial<ExecutionRecord> = {},
-): ExecutionRecord {
+function failureResult(
+  code:
+    | 'ACTIVE_CYCLE_CONFLICT'
+    | 'RECOVERY_RECONCILIATION_REQUIRED'
+    | 'PERSISTED_MODE_MISMATCH',
+  kind: 'blocked' | 'escalation',
+): KernelResult {
   return {
-    ...record,
-    ...patch,
-    state,
-    updated_at: updatedAt,
-    transition_sequence: record.transition_sequence + 1,
+    ok: false,
+    code,
+    outcome: { kind, reason_codes: [code] },
+  };
+}
+
+function failClosedStateResult(): KernelResult {
+  return {
+    ok: false,
+    code: 'AUTONOMY_STATE_FAIL_CLOSED',
+    outcome: {
+      kind: 'escalation',
+      reason_codes: ['AUTONOMY_STATE_FAIL_CLOSED'],
+    },
   };
 }
 

@@ -6,13 +6,12 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { classifyBlockers } from './blocker-classifier.js';
 import {
+  type AutonomyMode,
   type AutonomyPolicy,
   type Candidate,
   type CheckFact,
   type EvidenceFact,
-  type ExecutionRecord,
   type MechanicalFacts,
-  sha256,
   type UsageSnapshot,
 } from './contracts.js';
 import {
@@ -20,16 +19,18 @@ import {
   evaluateCandidate,
   runKernelCycle,
 } from './kernel.js';
-import { evaluateCeilings, resolvePolicy } from './policy.js';
+import { CONTRACT_MAXIMA, evaluateCeilings, resolvePolicy } from './policy.js';
 import {
-  ALLOWED_TRANSITIONS,
-  assertTransition,
-  canTransition,
+  ALLOWED_CYCLE_TRANSITIONS,
+  assertCycleTransition,
+  canTransitionCycle,
 } from './state-machine.js';
 import { FileAutonomyStore } from './store.js';
 
 const NOW = '2026-07-23T18:00:00.000Z';
-const LATER = '2026-07-23T19:00:00.000Z';
+const LATER = '2026-07-23T18:10:00.000Z';
+const EXPIRED = '2026-07-23T17:00:00.000Z';
+const AFTER_TTL = '2026-07-23T18:20:00.000Z';
 const HEAD = 'a'.repeat(40);
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -37,26 +38,34 @@ const ROOT = path.resolve(
   '..',
 );
 
-const POLICY: AutonomyPolicy = {
-  schema_version: 1,
-  mode: 't2-t3-live',
-  owner_halt: false,
-  owner_halt_reason: null,
-  ceilings: {
-    max_cycles: 10,
-    max_duration_ms: 60_000,
-    max_retries_per_candidate: 2,
-    max_token_budget: 100_000,
-    max_cost_micros: 1_000_000,
-  },
-};
+function policy(mode: AutonomyMode = 't2t3_live'): AutonomyPolicy {
+  return {
+    schema_version: 1,
+    mode,
+    owner_halt: mode === 'halted',
+    owner_halt_reason: mode === 'halted' ? 'owner_kill_switch' : null,
+    heartbeat_ttl_seconds: CONTRACT_MAXIMA.heartbeat_ttl_seconds,
+    ceilings: {
+      max_cycles: 1,
+      max_duration_ms: CONTRACT_MAXIMA.max_duration_ms,
+      max_operation_duration_ms: CONTRACT_MAXIMA.max_operation_duration_ms,
+      max_dispatches_per_cycle: CONTRACT_MAXIMA.max_dispatches_per_cycle,
+      max_merges_per_cycle: CONTRACT_MAXIMA.max_merges_per_cycle,
+      max_retries_per_operation: CONTRACT_MAXIMA.max_retries_per_operation,
+      max_token_budget: 100_000,
+      max_cost_micros: 1_000_000,
+    },
+  };
+}
 
 const USAGE: UsageSnapshot = {
   cycles: 0,
   elapsed_ms: 0,
-  retries_for_candidate: 0,
+  retries_for_operation: 0,
   tokens_used: 0,
   cost_micros: 0,
+  dispatches: 0,
+  merges: 0,
 };
 
 const CANDIDATE: Candidate = {
@@ -103,7 +112,7 @@ function cleanFacts(overrides: Partial<MechanicalFacts> = {}): MechanicalFacts {
     behind_by: 0,
     merge_conflicts: false,
     locks_and_leases: [],
-    current_session_id: 'session-a',
+    current_session_id: 'stable-session',
     protected_file_expansion: {
       detected: false,
       paths: [],
@@ -111,96 +120,142 @@ function cleanFacts(overrides: Partial<MechanicalFacts> = {}): MechanicalFacts {
       authenticated: false,
     },
     environment: { required: false, approved: false, state: 'unknown' },
-    github_mergeability: 'MERGEABLE',
+    github_mergeable: 'MERGEABLE',
+    github_merge_state_status: 'CLEAN',
     ...overrides,
   };
 }
 
 function withTempStore<T>(
+  mode: AutonomyMode,
   callback: (store: FileAutonomyStore, root: string) => T,
 ): T {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-autonomy-test-'));
   try {
-    return callback(new FileAutonomyStore(root), root);
+    const store = new FileAutonomyStore(root);
+    store.initialize(NOW);
+    promoteStore(store, mode);
+    return callback(store, root);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 }
 
-test('mode and owner halt evaluation fail closed when configuration is absent', () => {
-  const resolution = resolvePolicy({});
-  assert.equal(resolution.valid, false);
-  assert.equal(resolution.policy.mode, 'halted');
-  assert.equal(resolution.policy.owner_halt, true);
-  assert.deepEqual(resolution.reason_codes, [
+function promoteStore(store: FileAutonomyStore, mode: AutonomyMode): void {
+  if (mode === 'halted') return;
+  store.setModeByOwner('shadow', NOW, 'owner_promotion');
+  if (mode === 'shadow') return;
+  store.setModeByOwner('t3_live', NOW, 'owner_promotion');
+  if (mode === 't2t3_live') {
+    store.setModeByOwner('t2t3_live', NOW, 'owner_promotion');
+  }
+}
+
+function kernelInput(
+  cycleId: string,
+  mode: AutonomyMode,
+  candidate: Candidate | null,
+  facts: MechanicalFacts | null,
+) {
+  return {
+    cycle_id: cycleId,
+    now: NOW,
+    packet_expires_at: LATER,
+    policy: policy(mode),
+    usage: USAGE,
+    candidate,
+    facts,
+  };
+}
+
+test('missing or invalid configuration fails closed and canonical defaults cannot be loosened', () => {
+  const missing = resolvePolicy({});
+  assert.equal(missing.valid, false);
+  assert.equal(missing.policy.mode, 'halted');
+  assert.equal(missing.policy.owner_halt, true);
+  assert.deepEqual(missing.reason_codes, [
     'AUTONOMY_CEILINGS_MISSING',
     'AUTONOMY_MODE_MISSING',
     'OWNER_HALT_SIGNAL_MISSING',
   ]);
-});
 
-test('valid explicit configuration selects live mode and owner halt always wins', () => {
-  const live = resolvePolicy({
-    mode: 't3-live',
+  const loosened = resolvePolicy({
+    mode: 't2t3_live',
     owner_halt: false,
-    ceilings: POLICY.ceilings,
+    ceilings: {
+      ...policy().ceilings,
+      max_dispatches_per_cycle: 3,
+    },
   });
-  assert.equal(live.valid, true);
-  assert.equal(live.policy.mode, 't3-live');
-
-  const halted = resolvePolicy({
-    mode: 't2-t3-live',
-    owner_halt: true,
-    owner_halt_reason: 'operator kill switch',
-    ceilings: POLICY.ceilings,
-  });
-  assert.equal(halted.policy.mode, 'halted');
-  assert.deepEqual(halted.reason_codes, ['OWNER_HALT_ACTIVE']);
+  assert.equal(loosened.valid, false);
+  assert.equal(loosened.policy.mode, 'halted');
+  assert.ok(loosened.reason_codes.includes('MAX_DISPATCHES_INVALID'));
 });
 
-test('cycle, duration, retry, token, and cost ceilings are exact and deterministic', () => {
+test('mode changes require staged owner transitions and owner halt wins', () => {
+  withTempStore('halted', (store) => {
+    assert.throws(
+      () => store.setModeByOwner('t3_live', NOW, 'skip_shadow'),
+      /INVALID_OWNER_MODE_TRANSITION/,
+    );
+    store.setModeByOwner('shadow', NOW, 'owner_promotion');
+    store.setModeByOwner('t3_live', NOW, 'owner_promotion');
+    const halted = store.engageOwnerHalt(NOW, 'owner_kill_switch');
+    assert.equal(halted.mode, 'halted');
+    assert.equal(halted.halted, true);
+    assert.equal(halted.halted_reason, 'owner_kill_switch');
+  });
+});
+
+test('cycle, duration, retry, dispatch, merge, token, and cost ceilings are exact', () => {
   assert.deepEqual(
-    evaluateCeilings(POLICY.ceilings, {
-      cycles: 10,
-      elapsed_ms: 60_000,
-      retries_for_candidate: 3,
+    evaluateCeilings(policy().ceilings, {
+      cycles: 1,
+      elapsed_ms: CONTRACT_MAXIMA.max_duration_ms,
+      retries_for_operation: 2,
       tokens_used: 100_000,
       cost_micros: 1_000_000,
+      dispatches: 2,
+      merges: 3,
     }),
     [
       'MAX_COST_REACHED',
       'MAX_CYCLES_REACHED',
+      'MAX_DISPATCHES_REACHED',
       'MAX_DURATION_REACHED',
+      'MAX_MERGES_REACHED',
       'MAX_RETRIES_EXCEEDED',
       'MAX_TOKEN_BUDGET_REACHED',
     ],
   );
-  assert.deepEqual(evaluateCeilings(POLICY.ceilings, USAGE), []);
+  assert.deepEqual(evaluateCeilings(policy().ceilings, USAGE), []);
 });
 
-test('blocker classifier accepts clean mechanical facts and keeps advisory failures non-blocking', () => {
-  const facts = cleanFacts({
-    checks: [
-      passingCheck('Verify'),
-      {
-        name: 'Optional Preview',
-        required: false,
-        status: 'completed',
-        conclusion: 'failure',
-        sha: HEAD,
-      },
-    ],
-  });
-  const result = classifyBlockers(facts);
+test('advisory workflow failures and GitHub UNSTABLE remain non-blocking', () => {
+  const result = classifyBlockers(
+    cleanFacts({
+      checks: [
+        passingCheck('Verify'),
+        {
+          name: 'Optional Preview',
+          required: false,
+          status: 'completed',
+          conclusion: 'failure',
+          sha: HEAD,
+        },
+      ],
+      github_merge_state_status: 'UNSTABLE',
+    }),
+  );
   assert.equal(result.mechanically_dispatchable, true);
   assert.deepEqual(result.blocking, []);
   assert.deepEqual(
     result.advisories.map((entry) => entry.code),
-    ['ADVISORY_WORKFLOW_FAILURE'],
+    ['ADVISORY_WORKFLOW_FAILURE', 'GITHUB_UNSTABLE_ADVISORY_ONLY'],
   );
 });
 
-test('blocker classifier emits the exact required blocker taxonomy', () => {
+test('blocker classifier emits the exact required taxonomy', () => {
   const staleEvidence: EvidenceFact = {
     required: true,
     present: true,
@@ -241,9 +296,7 @@ test('blocker classifier emits the exact required blocker taxonomy', () => {
     },
     {
       name: 'missing labels',
-      facts: cleanFacts({
-        required_labels: ['tier:T3', 'executor-result-valid'],
-      }),
+      facts: cleanFacts({ required_labels: ['tier:T3', 'proof:valid'] }),
       code: 'MISSING_REQUIRED_LABEL',
     },
     {
@@ -253,7 +306,7 @@ test('blocker classifier emits the exact required blocker taxonomy', () => {
     },
     {
       name: 'merge conflicts',
-      facts: cleanFacts({ merge_conflicts: true }),
+      facts: cleanFacts({ github_mergeable: 'CONFLICTING' }),
       code: 'MERGE_CONFLICTS_PRESENT',
     },
     {
@@ -262,9 +315,9 @@ test('blocker classifier emits the exact required blocker taxonomy', () => {
         locks_and_leases: [
           {
             kind: 'lease',
-            resource: 'schemas/autonomy/**',
+            resource: 'scripts/autonomy/**',
             status: 'active',
-            owner_session_id: 'session-b',
+            owner_session_id: 'other-stable-session',
             expires_at: LATER,
           },
         ],
@@ -291,8 +344,8 @@ test('blocker classifier emits the exact required blocker taxonomy', () => {
       code: 'ENVIRONMENT_APPROVAL_REQUIRED',
     },
     {
-      name: 'GitHub mergeability state',
-      facts: cleanFacts({ github_mergeability: 'UNKNOWN' }),
+      name: 'GitHub mergeability',
+      facts: cleanFacts({ github_mergeable: 'UNKNOWN' }),
       code: 'GITHUB_MERGEABILITY_UNKNOWN',
     },
   ];
@@ -301,392 +354,397 @@ test('blocker classifier emits the exact required blocker taxonomy', () => {
     assert.equal(result.mechanically_dispatchable, false, fixture.name);
     assert.ok(
       result.blocking.some((entry) => entry.code === fixture.code),
-      `${fixture.name}: expected ${fixture.code}, got ${JSON.stringify(result.blocking)}`,
+      `${fixture.name}: ${fixture.code}`,
     );
   }
 });
 
-test('stable-session ownership resumes across PID changes and never self-classifies as orphaned', () => {
-  withTempStore((store) => {
-    const first = store.claimRun({
-      run_id: 'run-stable',
-      session_id: 'stable-session',
+test('stable-session lock ownership never depends on short-lived process IDs', () => {
+  const ownLease = classifyBlockers(
+    cleanFacts({
+      locks_and_leases: [
+        {
+          kind: 'lock',
+          resource: 'merge',
+          status: 'active',
+          owner_session_id: 'stable-session',
+          expires_at: LATER,
+        },
+      ],
+    }),
+  );
+  assert.equal(ownLease.mechanically_dispatchable, true);
+  const expiredOwnLease = classifyBlockers(
+    cleanFacts({
+      locks_and_leases: [
+        {
+          kind: 'lock',
+          resource: 'merge',
+          status: 'active',
+          owner_session_id: 'stable-session',
+          expires_at: EXPIRED,
+        },
+      ],
+    }),
+  );
+  assert.ok(
+    expiredOwnLease.blocking.some(
+      (entry) => entry.code === 'EXPIRED_LOCK_OR_LEASE_REQUIRES_RECLAIM',
+    ),
+  );
+
+  withTempStore('t3_live', (store) => {
+    const first = store.beginCycle({
+      cycle_id: 'cycle-owner',
       now: NOW,
-      expires_at: LATER,
-      process_id: 111,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
     });
-    const second = store.claimRun({
-      run_id: 'run-stable',
-      session_id: 'stable-session',
-      now: NOW,
-      expires_at: LATER,
-      process_id: 222,
+    const fresh = store.beginCycle({
+      cycle_id: 'cycle-other',
+      now: LATER,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
     });
-    assert.equal(first.ok && first.code, 'claimed');
-    assert.equal(second.ok && second.code, 'resumed');
-    if (second.ok) assert.equal(second.lease.process_id, 111);
+    const stale = store.beginCycle({
+      cycle_id: 'cycle-other',
+      now: AFTER_TTL,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
+    });
+    assert.equal(first.ok, true);
+    assert.equal(!fresh.ok && fresh.code, 'ACTIVE_CYCLE_CONFLICT');
+    assert.equal(!stale.ok && stale.code, 'RECOVERY_RECONCILIATION_REQUIRED');
   });
 });
 
-test('single-run concurrency blocks other sessions and requires explicit reclaim after expiry', () => {
-  withTempStore((store) => {
-    store.claimRun({
-      run_id: 'run-owner',
-      session_id: 'session-owner',
-      now: NOW,
-      expires_at: LATER,
-    });
-    const conflict = store.claimRun({
-      run_id: 'run-other',
-      session_id: 'session-other',
-      now: NOW,
-      expires_at: LATER,
-    });
-    const expired = store.claimRun({
-      run_id: 'run-other',
-      session_id: 'session-other',
-      now: '2026-07-23T20:00:00.000Z',
-      expires_at: '2026-07-23T21:00:00.000Z',
-    });
-    assert.equal(!conflict.ok && conflict.code, 'active_run_conflict');
-    assert.equal(!expired.ok && expired.code, 'explicit_reclaim_required');
-  });
-});
-
-test('every state-machine transition is explicitly accepted or rejected', () => {
-  const states = Object.keys(ALLOWED_TRANSITIONS) as Array<
-    keyof typeof ALLOWED_TRANSITIONS
+test('every canonical cycle-state transition is explicitly accepted or rejected', () => {
+  const states = Object.keys(ALLOWED_CYCLE_TRANSITIONS) as Array<
+    keyof typeof ALLOWED_CYCLE_TRANSITIONS
   >;
-  let accepted = 0;
-  let rejected = 0;
   for (const from of states) {
     for (const to of states) {
-      const expected = ALLOWED_TRANSITIONS[from].includes(to);
-      assert.equal(canTransition(from, to), expected, `${from}->${to}`);
-      if (expected) {
-        assert.doesNotThrow(() => assertTransition(from, to));
-        accepted += 1;
-      } else {
+      const expected = ALLOWED_CYCLE_TRANSITIONS[from].includes(to);
+      assert.equal(canTransitionCycle(from, to), expected, `${from}->${to}`);
+      if (expected) assert.doesNotThrow(() => assertCycleTransition(from, to));
+      else {
         assert.throws(
-          () => assertTransition(from, to),
-          /INVALID_AUTONOMY_TRANSITION/,
+          () => assertCycleTransition(from, to),
+          /INVALID_AUTONOMY_CYCLE_TRANSITION/,
         );
-        rejected += 1;
       }
     }
   }
-  assert.equal(accepted, 12);
-  assert.equal(rejected, 69);
 });
 
 test('candidate decisions enforce halted, shadow, tier, blocker, and ceiling rules', () => {
-  const halted = evaluateCandidate(
-    CANDIDATE,
-    cleanFacts(),
-    { ...POLICY, mode: 'halted', owner_halt: true },
-    USAGE,
-    NOW,
+  const cases = [
+    evaluateCandidate(CANDIDATE, cleanFacts(), policy('halted'), USAGE, NOW),
+    evaluateCandidate(CANDIDATE, cleanFacts(), policy('shadow'), USAGE, NOW),
+    evaluateCandidate(
+      { ...CANDIDATE, tier: 'T2' },
+      cleanFacts(),
+      policy('t3_live'),
+      USAGE,
+      NOW,
+    ),
+    evaluateCandidate(CANDIDATE, cleanFacts(), policy('t3_live'), USAGE, NOW),
+    evaluateCandidate(
+      CANDIDATE,
+      cleanFacts({ merge_conflicts: true }),
+      policy('t3_live'),
+      USAGE,
+      NOW,
+    ),
+    evaluateCandidate(
+      CANDIDATE,
+      cleanFacts(),
+      policy('t3_live'),
+      { ...USAGE, cycles: 1 },
+      NOW,
+    ),
+  ];
+  assert.deepEqual(
+    cases.map((entry) => entry.action),
+    ['blocked', 'queue', 'queue', 'dispatch', 'blocked', 'escalation'],
   );
-  const shadow = evaluateCandidate(
-    CANDIDATE,
-    cleanFacts(),
-    { ...POLICY, mode: 'shadow' },
-    USAGE,
-    NOW,
-  );
-  const t1 = evaluateCandidate(
-    { ...CANDIDATE, tier: 'T1' },
-    cleanFacts(),
-    POLICY,
-    USAGE,
-    NOW,
-  );
-  const blocked = evaluateCandidate(
-    CANDIDATE,
-    cleanFacts({ merge_conflicts: true }),
-    POLICY,
-    USAGE,
-    NOW,
-  );
-  const ceiling = evaluateCandidate(
-    CANDIDATE,
-    cleanFacts(),
-    POLICY,
-    { ...USAGE, cycles: 10 },
-    NOW,
-  );
-  assert.equal(halted.action, 'blocked');
-  assert.equal(shadow.action, 'queue');
-  assert.equal(t1.action, 'queue');
-  assert.equal(blocked.action, 'blocked');
-  assert.equal(ceiling.action, 'escalation');
 });
 
-test('candidate decision and immutable dispatch packet are content-addressed and deterministic', () => {
-  const decisionA = evaluateCandidate(
+test('dispatch packets are deterministic, content-addressed, dry-run aware, and T1-proof', () => {
+  const shadowDecision = evaluateCandidate(
     CANDIDATE,
     cleanFacts(),
-    POLICY,
+    policy('shadow'),
     USAGE,
     NOW,
   );
-  const decisionB = evaluateCandidate(
-    CANDIDATE,
-    cleanFacts(),
-    POLICY,
-    USAGE,
-    NOW,
+  const input = {
+    cycle_id: 'cycle-packet',
+    decision: shadowDecision,
+    candidate: { ...CANDIDATE, file_scope: ['z/**', 'a/**'] },
+    facts: cleanFacts(),
+    generated_at: NOW,
+    expires_at: LATER,
+  };
+  const packetA = createDispatchPacket(input);
+  const packetB = createDispatchPacket(input);
+  assert.deepEqual(packetA, packetB);
+  assert.equal(packetA.dry_run, true);
+  assert.deepEqual(packetA.file_scope_lock, ['a/**', 'z/**']);
+  assert.equal(packetA.packet_id, `packet_${packetA.content_sha256}`);
+  assert.equal(Object.isFrozen(packetA), true);
+
+  assert.throws(
+    () =>
+      createDispatchPacket({
+        ...input,
+        candidate: { ...CANDIDATE, tier: 'T1' } as unknown as Candidate,
+      }),
+    /T1_DISPATCH_PACKET_STRUCTURALLY_FORBIDDEN/,
   );
-  assert.deepEqual(decisionA, decisionB);
-  assert.equal(decisionA.action, 'dispatch');
-  const packet = createDispatchPacket(
-    'run-packet',
-    decisionA,
-    { ...CANDIDATE, file_scope: ['z/**', 'a/**'] },
-    NOW,
-  );
-  assert.equal(Object.isFrozen(packet), true);
-  assert.deepEqual(packet.candidate.file_scope, ['a/**', 'z/**']);
-  assert.equal(packet.packet_id, `packet_${packet.content_sha256}`);
 });
 
 test('kernel returns structured no-op, queue, dispatch, blocked, and escalation outcomes', () => {
   const scenarios: Array<{
-    run: string;
+    mode: AutonomyMode;
     candidate: Candidate | null;
     facts: MechanicalFacts | null;
-    policy: AutonomyPolicy;
-    usage: UsageSnapshot;
+    usage?: UsageSnapshot;
     expected: string;
   }> = [
+    { mode: 't3_live', candidate: null, facts: null, expected: 'no_op' },
     {
-      run: 'run-noop',
-      candidate: null,
-      facts: null,
-      policy: POLICY,
-      usage: USAGE,
-      expected: 'no_op',
-    },
-    {
-      run: 'run-queue',
-      candidate: { ...CANDIDATE, tier: 'T1' },
+      mode: 'shadow',
+      candidate: CANDIDATE,
       facts: cleanFacts(),
-      policy: POLICY,
-      usage: USAGE,
       expected: 'queue',
     },
     {
-      run: 'run-dispatch',
+      mode: 't3_live',
       candidate: CANDIDATE,
       facts: cleanFacts(),
-      policy: POLICY,
-      usage: USAGE,
       expected: 'dispatch',
     },
     {
-      run: 'run-blocked',
+      mode: 't3_live',
       candidate: CANDIDATE,
       facts: cleanFacts({ merge_conflicts: true }),
-      policy: POLICY,
-      usage: USAGE,
       expected: 'blocked',
     },
     {
-      run: 'run-escalation',
+      mode: 't3_live',
       candidate: CANDIDATE,
       facts: cleanFacts(),
-      policy: POLICY,
-      usage: { ...USAGE, retries_for_candidate: 3 },
+      usage: { ...USAGE, retries_for_operation: 2 },
       expected: 'escalation',
     },
   ];
-  for (const scenario of scenarios) {
-    withTempStore((store) => {
+  scenarios.forEach((scenario, index) => {
+    withTempStore(scenario.mode, (store) => {
+      const input = kernelInput(
+        `cycle-outcome-${index}`,
+        scenario.mode,
+        scenario.candidate,
+        scenario.facts,
+      );
       const result = runKernelCycle(store, {
-        run_id: scenario.run,
-        session_id: 'session-a',
-        now: NOW,
-        lease_expires_at: LATER,
-        policy: scenario.policy,
-        usage: scenario.usage,
-        candidate: scenario.candidate,
-        facts: scenario.facts,
+        ...input,
+        usage: scenario.usage ?? input.usage,
       });
       assert.equal(result.ok, true);
-      if (result.ok) {
-        assert.equal(result.outcome.kind, scenario.expected);
-        assert.equal(store.verifyEventChain(), true);
-      }
+      assert.equal(result.outcome.kind, scenario.expected);
+      assert.equal(store.readState().cycle_state, 'idle');
+      assert.equal(store.verifyEventChain(), true);
     });
-  }
+  });
 });
 
-test('crash-safe resume continues a packet-ready run under the same stable session', () => {
-  withTempStore((store) => {
-    const input = {
-      run_id: 'run-resume',
-      session_id: 'stable-session',
-      now: NOW,
-      lease_expires_at: LATER,
-      policy: POLICY,
-      usage: USAGE,
-      candidate: CANDIDATE,
-      facts: cleanFacts({ current_session_id: 'stable-session' }),
-    };
-    const inputHash = sha256({
-      policy: input.policy,
-      usage: input.usage,
-      candidate: input.candidate,
-      facts: input.facts,
+test('durable execution records preserve the canonical transition history', () => {
+  withTempStore('t3_live', (store) => {
+    const result = runKernelCycle(
+      store,
+      kernelInput('cycle-record', 't3_live', CANDIDATE, cleanFacts()),
+    );
+    assert.equal(result.ok, true);
+    assert.ok(result.ok && result.record);
+    if (!result.ok || !result.record) return;
+    assert.deepEqual(
+      result.record.transitions.map(({ from, to }) => `${from}->${to}`),
+      [
+        'idle->waking',
+        'waking->gating',
+        'gating->selecting',
+        'selecting->dispatching',
+        'dispatching->reporting',
+        'reporting->cooling_down',
+        'cooling_down->idle',
+      ],
+    );
+    assert.equal(result.record.outcome?.kind, 'dispatch');
+    assert.ok(result.record.packet_id);
+  });
+});
+
+test('fresh concurrent cycles block and stale cycles never resume their persisted step', () => {
+  withTempStore('t3_live', (store) => {
+    const started = store.beginCycle({
+      cycle_id: 'cycle-crashed',
+      now: EXPIRED,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
     });
-    store.claimRun({
-      run_id: input.run_id,
-      session_id: input.session_id,
-      now: input.now,
-      expires_at: input.lease_expires_at,
-      process_id: 111,
+    assert.equal(started.ok, true);
+    store.transitionCycle('cycle-crashed', 'gating', EXPIRED);
+
+    const recovered = runKernelCycle(store, {
+      ...kernelInput('cycle-fresh', 't3_live', null, null),
+      recovery_truth: {},
     });
-    const created: ExecutionRecord = {
-      schema_version: 1,
-      run_id: input.run_id,
-      session_id: input.session_id,
-      state: 'created',
-      input_hash: inputHash,
-      created_at: NOW,
-      updated_at: NOW,
-      cycle: 0,
-      retry_count: 0,
-      transition_sequence: 0,
-    };
-    store.createRecord(created);
-    const evaluating: ExecutionRecord = {
-      ...created,
-      state: 'evaluating',
-      transition_sequence: 1,
-    };
-    store.transition(input.run_id, evaluating, 'state.transitioned', {});
+    assert.equal(recovered.ok, true);
+    assert.equal(recovered.ok && recovered.reconciled, true);
+    assert.deepEqual(
+      store
+        .readRecord('cycle-crashed')
+        ?.transitions.map(({ from, to }) => `${from}->${to}`),
+      ['idle->waking', 'waking->gating'],
+    );
+    assert.equal(store.readRecord('cycle-fresh')?.outcome?.kind, 'no_op');
+  });
+});
+
+test('stale active dispatches require rank-truth reconciliation before a fresh cycle', () => {
+  withTempStore('t3_live', (store) => {
+    store.beginCycle({
+      cycle_id: 'cycle-active-action',
+      now: EXPIRED,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
+    });
+    store.transitionCycle('cycle-active-action', 'gating', EXPIRED);
+    store.transitionCycle('cycle-active-action', 'selecting', EXPIRED);
     const decision = evaluateCandidate(
-      input.candidate,
-      input.facts,
-      POLICY,
+      CANDIDATE,
+      cleanFacts(),
+      policy('t3_live'),
+      USAGE,
+      EXPIRED,
+    );
+    const packet = createDispatchPacket({
+      cycle_id: 'cycle-active-action',
+      decision,
+      candidate: CANDIDATE,
+      facts: cleanFacts(),
+      generated_at: EXPIRED,
+      expires_at: NOW,
+    });
+    store.transitionCycle('cycle-active-action', 'dispatching', EXPIRED);
+    store.markDispatchIntent(packet, EXPIRED);
+
+    const blocked = runKernelCycle(
+      store,
+      kernelInput('cycle-after-crash', 't3_live', null, null),
+    );
+    assert.equal(blocked.ok, false);
+    assert.equal(
+      !blocked.ok && blocked.code,
+      'RECOVERY_RECONCILIATION_REQUIRED',
+    );
+
+    const recovered = runKernelCycle(store, {
+      ...kernelInput('cycle-after-crash', 't3_live', null, null),
+      recovery_truth: {
+        [packet.idempotency_key]: 'confirmed_in_progress_externally_unblocked',
+      },
+    });
+    assert.equal(recovered.ok, true);
+    assert.ok(
+      store
+        .readEvents()
+        .some((event) => event.event_type === 'crash_recovery_reconciled'),
+    );
+  });
+});
+
+test('a corrupt execution-state file fails closed instead of assuming the last mode', () => {
+  withTempStore('t3_live', (store, root) => {
+    fs.writeFileSync(
+      path.join(root, 'execution-state.json'),
+      '{bad json',
+      'utf8',
+    );
+    const result = runKernelCycle(
+      store,
+      kernelInput('cycle-corrupt', 't3_live', null, null),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok && result.code, 'AUTONOMY_STATE_FAIL_CLOSED');
+  });
+});
+
+test('persisted mode and requested policy must agree before any cycle starts', () => {
+  withTempStore('shadow', (store) => {
+    const result = runKernelCycle(
+      store,
+      kernelInput('cycle-mode-drift', 't3_live', null, null),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok && result.code, 'PERSISTED_MODE_MISMATCH');
+    assert.equal(result.outcome.kind, 'escalation');
+    assert.equal(store.readState().cycle_state, 'idle');
+  });
+});
+
+test('kill switch prevents a new dispatch action after a packet decision', () => {
+  withTempStore('t3_live', (store) => {
+    store.beginCycle({
+      cycle_id: 'cycle-halt',
+      now: NOW,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
+    });
+    const decision = evaluateCandidate(
+      CANDIDATE,
+      cleanFacts(),
+      policy('t3_live'),
       USAGE,
       NOW,
     );
-    const packet = createDispatchPacket(
-      input.run_id,
+    const packet = createDispatchPacket({
+      cycle_id: 'cycle-halt',
       decision,
-      input.candidate,
-      NOW,
-    );
-    store.writePacket(packet);
-    const packetReady: ExecutionRecord = {
-      ...evaluating,
-      state: 'packet_ready',
-      transition_sequence: 2,
-      decision,
-      packet_id: packet.packet_id,
-    };
-    store.transition(input.run_id, packetReady, 'packet.created', {
-      packet_id: packet.packet_id,
-    });
-
-    const resumed = runKernelCycle(store, input);
-    assert.equal(resumed.ok, true);
-    if (resumed.ok) {
-      assert.equal(resumed.resumed, true);
-      assert.equal(resumed.record.state, 'dispatched');
-      assert.equal(resumed.outcome.packet_id, packet.packet_id);
-    }
-    assert.equal(store.verifyEventChain(), true);
-    assert.ok(
-      store.readEvents().some((event) => event.event_type === 'run.resumed'),
-    );
-  });
-});
-
-test('resume fails closed when the caller changes immutable run input', () => {
-  withTempStore((store) => {
-    const first = runKernelCycle(store, {
-      run_id: 'run-drift',
-      session_id: 'session-a',
-      now: NOW,
-      lease_expires_at: LATER,
-      policy: POLICY,
-      usage: USAGE,
-      candidate: { ...CANDIDATE, tier: 'T1' },
-      facts: cleanFacts(),
-    });
-    assert.equal(first.ok, true);
-
-    const second = runKernelCycle(store, {
-      run_id: 'run-drift',
-      session_id: 'session-a',
-      now: NOW,
-      lease_expires_at: LATER,
-      policy: POLICY,
-      usage: USAGE,
       candidate: CANDIDATE,
       facts: cleanFacts(),
-    });
-    assert.equal(second.ok, false);
-    if (!second.ok) assert.equal(second.code, 'INPUT_DRIFT_ON_RESUME');
-  });
-});
-
-test('terminal run replay is idempotent and does not reacquire the single-run lease', () => {
-  withTempStore((store) => {
-    const input = {
-      run_id: 'run-idempotent',
-      session_id: 'session-a',
-      now: NOW,
-      lease_expires_at: LATER,
-      policy: POLICY,
-      usage: USAGE,
-      candidate: null,
-      facts: null,
-    };
-    const first = runKernelCycle(store, input);
-    const replay = runKernelCycle(store, input);
-    assert.equal(first.ok, true);
-    assert.equal(replay.ok, true);
-    if (first.ok && replay.ok) {
-      assert.deepEqual(replay.outcome, first.outcome);
-      assert.equal(replay.resumed, true);
-    }
-    const next = store.claimRun({
-      run_id: 'run-next',
-      session_id: 'session-b',
-      now: NOW,
+      generated_at: NOW,
       expires_at: LATER,
     });
-    assert.equal(next.ok && next.code, 'claimed');
+    store.engageOwnerHalt(NOW, 'owner_kill_switch');
+    assert.throws(
+      () => store.markDispatchIntent(packet, NOW),
+      /KILL_SWITCH_ENGAGED_BEFORE_DISPATCH/,
+    );
   });
 });
 
-test('append-only event log is hash chained and detects tampering', () => {
-  withTempStore((store, root) => {
-    const result = runKernelCycle(store, {
-      run_id: 'run-events',
-      session_id: 'session-a',
-      now: NOW,
-      lease_expires_at: LATER,
-      policy: POLICY,
-      usage: USAGE,
-      candidate: null,
-      facts: null,
-    });
-    assert.equal(result.ok, true);
+test('append-only event log is gapless, hash chained, and detects tampering', () => {
+  withTempStore('t3_live', (store, root) => {
+    runKernelCycle(
+      store,
+      kernelInput('cycle-events', 't3_live', CANDIDATE, cleanFacts()),
+    );
     assert.equal(store.verifyEventChain(), true);
     const eventPath = path.join(root, 'events.ndjson');
-    const events = fs
-      .readFileSync(eventPath, 'utf8')
-      .replace('NO_CANDIDATE', 'TAMPERED');
-    fs.writeFileSync(eventPath, events, 'utf8');
+    fs.writeFileSync(
+      eventPath,
+      fs
+        .readFileSync(eventPath, 'utf8')
+        .replace('IMMUTABLE_PACKET_READY', 'TAMPERED'),
+      'utf8',
+    );
     assert.equal(store.verifyEventChain(), false);
   });
 });
 
-test('all autonomy JSON schemas parse and expose closed top-level contracts', () => {
+test('all JSON schemas are closed and packets structurally exclude T1', () => {
   const schemaDir = path.join(ROOT, 'schemas', 'autonomy');
   const files = fs
     .readdirSync(schemaDir)
@@ -694,6 +752,7 @@ test('all autonomy JSON schemas parse and expose closed top-level contracts', ()
     .sort();
   assert.deepEqual(files, [
     'audit-event.schema.json',
+    'autonomy-execution-state.schema.json',
     'autonomy-policy.schema.json',
     'candidate-decision.schema.json',
     'dispatch-packet.schema.json',
@@ -705,8 +764,16 @@ test('all autonomy JSON schemas parse and expose closed top-level contracts', ()
     ) as {
       additionalProperties?: boolean;
       required?: unknown[];
+      properties?: Record<string, { enum?: string[] }>;
     };
     assert.equal(schema.additionalProperties, false, file);
     assert.ok((schema.required?.length ?? 0) > 0, file);
   }
+  const packetSchema = JSON.parse(
+    fs.readFileSync(
+      path.join(schemaDir, 'dispatch-packet.schema.json'),
+      'utf8',
+    ),
+  ) as { properties: { tier: { enum: string[] } } };
+  assert.deepEqual(packetSchema.properties.tier.enum, ['T2', 'T3']);
 });

@@ -1,42 +1,83 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unit-talk.internal/schemas/autonomy/audit-event-v1.json",
+  "$id": "https://unit-talk.dev/schemas/autonomy/audit-event-v1.schema.json",
   "title": "Append-only autonomy audit event v1",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "schema_version",
     "event_id",
-    "run_id",
     "sequence",
+    "ts",
     "event_type",
-    "occurred_at",
-    "previous_hash",
+    "phase",
+    "actor",
+    "mode",
+    "severity",
+    "issue_id",
+    "idempotency_key",
+    "prev_event_hash",
     "event_hash",
-    "payload"
+    "detail"
   ],
   "properties": {
     "schema_version": { "const": 1 },
-    "event_id": { "type": "string", "pattern": "^event_[0-9a-f]{64}$" },
-    "run_id": { "type": "string", "minLength": 1 },
+    "event_id": { "type": "string", "pattern": "^event_[a-f0-9]{64}$" },
     "sequence": { "type": "integer", "minimum": 1 },
+    "ts": { "type": "string", "format": "date-time" },
     "event_type": {
       "enum": [
-        "run.created",
-        "run.resumed",
-        "state.transitioned",
-        "decision.recorded",
-        "packet.created",
-        "run.completed",
-        "lease.released"
+        "cycle_started",
+        "cycle_completed",
+        "kill_switch_checked",
+        "kill_switch_engaged",
+        "kill_switch_confirmed_halted",
+        "gate_result",
+        "candidate_selected",
+        "candidate_refused_sensitive_path",
+        "candidate_refused_t1_excluded",
+        "candidate_refused_concurrency",
+        "dispatch_intent",
+        "dispatch_outcome",
+        "shadow_decision",
+        "mode_promoted",
+        "mode_rolled_back",
+        "auto_halt_triggered",
+        "crash_recovery_reconciled",
+        "audit_integrity_failure"
       ]
     },
-    "occurred_at": { "type": "string", "format": "date-time" },
-    "previous_hash": {
+    "phase": { "enum": ["intent", "outcome", "info"] },
+    "actor": { "enum": ["kernel", "owner", "claude", "codex"] },
+    "mode": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+    "severity": { "enum": ["debug", "info", "medium", "high", "critical"] },
+    "issue_id": { "type": ["string", "null"], "pattern": "^UTV2-[0-9]+$" },
+    "idempotency_key": { "type": ["string", "null"] },
+    "prev_event_hash": {
       "type": ["string", "null"],
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[a-f0-9]{64}$"
     },
-    "event_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-    "payload": { "type": "object" }
-  }
+    "event_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "detail": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "enum": ["intent", "outcome"] } } },
+      "then": {
+        "properties": {
+          "idempotency_key": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "event_type": {
+            "enum": ["audit_integrity_failure", "auto_halt_triggered"]
+          }
+        }
+      },
+      "then": { "properties": { "severity": { "const": "critical" } } }
+    }
+  ]
 }

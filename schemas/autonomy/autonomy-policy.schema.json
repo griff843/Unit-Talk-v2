@@ -1,31 +1,63 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unit-talk.internal/schemas/autonomy/autonomy-policy-v1.json",
+  "$id": "https://unit-talk.dev/schemas/autonomy/autonomy-policy-v1.schema.json",
   "title": "Autonomy policy v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "mode", "owner_halt", "ceilings"],
+  "required": [
+    "schema_version",
+    "mode",
+    "owner_halt",
+    "owner_halt_reason",
+    "heartbeat_ttl_seconds",
+    "ceilings"
+  ],
   "properties": {
     "schema_version": { "const": 1 },
-    "mode": {
-      "enum": ["halted", "shadow", "t3-live", "t2-t3-live"]
-    },
+    "mode": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
     "owner_halt": { "type": "boolean" },
     "owner_halt_reason": { "type": ["string", "null"] },
+    "heartbeat_ttl_seconds": { "type": "integer", "minimum": 1 },
     "ceilings": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "max_cycles",
         "max_duration_ms",
-        "max_retries_per_candidate",
+        "max_operation_duration_ms",
+        "max_dispatches_per_cycle",
+        "max_merges_per_cycle",
+        "max_retries_per_operation",
         "max_token_budget",
         "max_cost_micros"
       ],
       "properties": {
-        "max_cycles": { "type": "integer", "minimum": 1 },
-        "max_duration_ms": { "type": "integer", "minimum": 1 },
-        "max_retries_per_candidate": { "type": "integer", "minimum": 0 },
+        "max_cycles": { "type": "integer", "minimum": 1, "maximum": 1 },
+        "max_duration_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1200000
+        },
+        "max_operation_duration_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600000
+        },
+        "max_dispatches_per_cycle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "max_merges_per_cycle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "max_retries_per_operation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1
+        },
         "max_token_budget": { "type": "integer", "minimum": 1 },
         "max_cost_micros": { "type": "integer", "minimum": 0 }
       }
