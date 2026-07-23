@@ -134,10 +134,7 @@ export function createDispatchPacket(input: {
     throw new Error('DISPATCH_PACKET_REQUIRES_ELIGIBLE_DECISION');
   }
   const protectedCheck = input.facts.protected_file_expansion;
-  const sensitivePathPassed =
-    !protectedCheck.detected ||
-    (protectedCheck.authorized && protectedCheck.authenticated);
-  if (!sensitivePathPassed) {
+  if (protectedCheck.detected) {
     throw new Error('DISPATCH_PACKET_SENSITIVE_PATH_REFUSED');
   }
   const dryRun = input.decision.action !== 'dispatch';
@@ -189,6 +186,11 @@ export function runKernelCycle(
     } else {
       return failClosedStateResult();
     }
+  }
+
+  if (!store.verifyEventChain()) {
+    store.engageKernelAutoHalt(input.now, 'audit_integrity_failure');
+    return failClosedStateResult();
   }
 
   if (input.policy.owner_halt && state.mode !== 'halted') {

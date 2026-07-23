@@ -61,6 +61,7 @@ function policy(mode: AutonomyMode = 't2t3_live'): AutonomyPolicy {
 const USAGE: UsageSnapshot = {
   cycles: 0,
   elapsed_ms: 0,
+  operation_elapsed_ms: 0,
   retries_for_operation: 0,
   tokens_used: 0,
   cost_micros: 0,
@@ -190,6 +191,20 @@ test('missing or invalid configuration fails closed and canonical defaults canno
   assert.equal(loosened.valid, false);
   assert.equal(loosened.policy.mode, 'halted');
   assert.ok(loosened.reason_codes.includes('MAX_DISPATCHES_INVALID'));
+
+  const looseHeartbeat = resolvePolicy({
+    mode: 't3_live',
+    owner_halt: false,
+    heartbeat_ttl_seconds: CONTRACT_MAXIMA.heartbeat_ttl_seconds + 1,
+    ceilings: policy().ceilings,
+  });
+  assert.equal(looseHeartbeat.valid, false);
+  assert.equal(looseHeartbeat.policy.mode, 'halted');
+  assert.equal(
+    looseHeartbeat.policy.heartbeat_ttl_seconds,
+    CONTRACT_MAXIMA.heartbeat_ttl_seconds,
+  );
+  assert.ok(looseHeartbeat.reason_codes.includes('HEARTBEAT_TTL_INVALID'));
 });
 
 test('mode changes require staged owner transitions and owner halt wins', () => {
@@ -212,6 +227,7 @@ test('cycle, duration, retry, dispatch, merge, token, and cost ceilings are exac
     evaluateCeilings(policy().ceilings, {
       cycles: 1,
       elapsed_ms: CONTRACT_MAXIMA.max_duration_ms,
+      operation_elapsed_ms: CONTRACT_MAXIMA.max_operation_duration_ms,
       retries_for_operation: 2,
       tokens_used: 100_000,
       cost_micros: 1_000_000,
@@ -224,6 +240,7 @@ test('cycle, duration, retry, dispatch, merge, token, and cost ceilings are exac
       'MAX_DISPATCHES_REACHED',
       'MAX_DURATION_REACHED',
       'MAX_MERGES_REACHED',
+      'MAX_OPERATION_DURATION_REACHED',
       'MAX_RETRIES_EXCEEDED',
       'MAX_TOKEN_BUDGET_REACHED',
     ],
@@ -337,6 +354,18 @@ test('blocker classifier emits the exact required taxonomy', () => {
       code: 'PROTECTED_FILE_EXPANSION_UNAUTHORIZED',
     },
     {
+      name: 'protected-file expansion cannot be overridden',
+      facts: cleanFacts({
+        protected_file_expansion: {
+          detected: true,
+          paths: ['packages/contracts/src/submission.ts'],
+          authorized: true,
+          authenticated: true,
+        },
+      }),
+      code: 'PROTECTED_FILE_EXPANSION_FORBIDDEN',
+    },
+    {
       name: 'environment approval',
       facts: cleanFacts({
         environment: { required: true, approved: false, state: 'pending' },
@@ -347,6 +376,11 @@ test('blocker classifier emits the exact required taxonomy', () => {
       name: 'GitHub mergeability',
       facts: cleanFacts({ github_mergeable: 'UNKNOWN' }),
       code: 'GITHUB_MERGEABILITY_UNKNOWN',
+    },
+    {
+      name: 'GitHub pre-receive hooks',
+      facts: cleanFacts({ github_merge_state_status: 'HAS_HOOKS' }),
+      code: 'GITHUB_MERGEABILITY_NOT_READY',
     },
   ];
   for (const fixture of cases) {
@@ -415,6 +449,28 @@ test('stable-session lock ownership never depends on short-lived process IDs', (
     assert.equal(first.ok, true);
     assert.equal(!fresh.ok && fresh.code, 'ACTIVE_CYCLE_CONFLICT');
     assert.equal(!stale.ok && stale.code, 'RECOVERY_RECONCILIATION_REQUIRED');
+  });
+});
+
+test('a stale exclusive claim is reclaimed by timestamp without PID liveness', () => {
+  withTempStore('t3_live', (store, root) => {
+    fs.writeFileSync(
+      path.join(root, 'cycle-claim.lock'),
+      `${JSON.stringify({
+        schema_version: 1,
+        owner_token: 'prior-stable-session',
+        acquired_at: EXPIRED,
+      })}\n`,
+      'utf8',
+    );
+    const claim = store.beginCycle({
+      cycle_id: 'cycle-after-stale-claim',
+      now: AFTER_TTL,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
+    });
+    assert.equal(claim.ok, true);
+    assert.equal(fs.existsSync(path.join(root, 'cycle-claim.lock')), false);
   });
 });
 
@@ -501,6 +557,22 @@ test('dispatch packets are deterministic, content-addressed, dry-run aware, and 
         candidate: { ...CANDIDATE, tier: 'T1' } as unknown as Candidate,
       }),
     /T1_DISPATCH_PACKET_STRUCTURALLY_FORBIDDEN/,
+  );
+
+  assert.throws(
+    () =>
+      createDispatchPacket({
+        ...input,
+        facts: cleanFacts({
+          protected_file_expansion: {
+            detected: true,
+            paths: ['packages/contracts/src/submission.ts'],
+            authorized: true,
+            authenticated: true,
+          },
+        }),
+      }),
+    /DISPATCH_PACKET_SENSITIVE_PATH_REFUSED/,
   );
 });
 
@@ -725,6 +797,47 @@ test('kill switch prevents a new dispatch action after a packet decision', () =>
   });
 });
 
+test('dispatch intent and outcome records prevent duplicate action attempts', () => {
+  withTempStore('t3_live', (store) => {
+    store.beginCycle({
+      cycle_id: 'cycle-idempotency',
+      now: NOW,
+      expected_mode: 't3_live',
+      input_hash: HEAD,
+    });
+    store.transitionCycle('cycle-idempotency', 'gating', NOW);
+    store.transitionCycle('cycle-idempotency', 'selecting', NOW);
+    const decision = evaluateCandidate(
+      CANDIDATE,
+      cleanFacts(),
+      policy('t3_live'),
+      USAGE,
+      NOW,
+    );
+    const packet = createDispatchPacket({
+      cycle_id: 'cycle-idempotency',
+      decision,
+      candidate: CANDIDATE,
+      facts: cleanFacts(),
+      generated_at: NOW,
+      expires_at: LATER,
+    });
+    store.transitionCycle('cycle-idempotency', 'dispatching', NOW);
+    store.markDispatchIntent(packet, NOW);
+    assert.throws(
+      () => store.markDispatchIntent(packet, NOW),
+      /DISPATCH_RECONCILIATION_REQUIRED/,
+    );
+    store.markDispatchOutcome(packet, NOW);
+    store.markDispatchOutcome(packet, NOW);
+    assert.equal(store.readState().cost_counters.window_dispatch_count, 1);
+    assert.throws(
+      () => store.markDispatchIntent(packet, NOW),
+      /DISPATCH_ACTION_ALREADY_COMPLETED/,
+    );
+  });
+});
+
 test('append-only event log is gapless, hash chained, and detects tampering', () => {
   withTempStore('t3_live', (store, root) => {
     runKernelCycle(
@@ -741,6 +854,14 @@ test('append-only event log is gapless, hash chained, and detects tampering', ()
       'utf8',
     );
     assert.equal(store.verifyEventChain(), false);
+    const result = runKernelCycle(
+      store,
+      kernelInput('cycle-after-audit-tamper', 't3_live', null, null),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(!result.ok && result.code, 'AUTONOMY_STATE_FAIL_CLOSED');
+    assert.equal(store.readState().mode, 'halted');
+    assert.equal(store.readState().halted_reason, 'audit_integrity_failure');
   });
 });
 

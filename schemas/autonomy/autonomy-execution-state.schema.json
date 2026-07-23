@@ -49,7 +49,11 @@
       "format": "date-time"
     },
     "last_heartbeat_at": { "type": "string", "format": "date-time" },
-    "heartbeat_ttl_seconds": { "type": "integer", "minimum": 1 },
+    "heartbeat_ttl_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 900
+    },
     "owner_pid": { "type": ["integer", "null"] },
     "consecutive_infra_failures": { "type": "integer", "minimum": 0 },
     "consecutive_rollback_triggers": { "type": "integer", "minimum": 0 },

@@ -293,18 +293,21 @@ export function classifyBlockers(
       );
     }
   }
-  if (
-    facts.protected_file_expansion.detected &&
-    (!facts.protected_file_expansion.authorized ||
-      !facts.protected_file_expansion.authenticated)
-  ) {
+  if (facts.protected_file_expansion.detected) {
+    const trustedOverride =
+      facts.protected_file_expansion.authorized &&
+      facts.protected_file_expansion.authenticated;
     all.push(
       finding(
         'protected_files',
-        'PROTECTED_FILE_EXPANSION_UNAUTHORIZED',
+        trustedOverride
+          ? 'PROTECTED_FILE_EXPANSION_FORBIDDEN'
+          : 'PROTECTED_FILE_EXPANSION_UNAUTHORIZED',
         'escalation',
         facts.protected_file_expansion.paths.slice().sort().join(','),
-        'Protected-file expansion lacks trusted authorization',
+        trustedOverride
+          ? 'Protected paths are outside unattended kernel authority even with a trusted scope override'
+          : 'Protected-file expansion lacks trusted authorization',
       ),
     );
   }
@@ -338,7 +341,8 @@ export function classifyBlockers(
   }
   if (
     facts.github_merge_state_status === 'BLOCKED' ||
-    facts.github_merge_state_status === 'DRAFT'
+    facts.github_merge_state_status === 'DRAFT' ||
+    facts.github_merge_state_status === 'HAS_HOOKS'
   ) {
     all.push(
       finding(

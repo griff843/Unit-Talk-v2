@@ -17,7 +17,11 @@
     "mode": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
     "owner_halt": { "type": "boolean" },
     "owner_halt_reason": { "type": ["string", "null"] },
-    "heartbeat_ttl_seconds": { "type": "integer", "minimum": 1 },
+    "heartbeat_ttl_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 900
+    },
     "ceilings": {
       "type": "object",
       "additionalProperties": false,

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -17,6 +18,13 @@ import {
   assertCycleTransition,
   assertOwnerModeTransition,
 } from './state-machine.js';
+import { CONTRACT_MAXIMA } from './policy.js';
+
+interface ClaimLock {
+  schema_version: 1;
+  owner_token: string;
+  acquired_at: string;
+}
 
 export type BeginCycleResult =
   | { ok: true; state: KernelExecutionState; record: ExecutionRecord }
@@ -51,7 +59,11 @@ export class FileAutonomyStore {
 
   initialize(now: string, heartbeatTtlSeconds = 900): KernelExecutionState {
     assertTimestamp(now, 'INITIAL_STATE_TIMESTAMP_INVALID');
-    if (!Number.isInteger(heartbeatTtlSeconds) || heartbeatTtlSeconds < 1) {
+    if (
+      !Number.isInteger(heartbeatTtlSeconds) ||
+      heartbeatTtlSeconds < 1 ||
+      heartbeatTtlSeconds > CONTRACT_MAXIMA.heartbeat_ttl_seconds
+    ) {
       throw new Error('INITIAL_STATE_HEARTBEAT_TTL_INVALID');
     }
     const state: KernelExecutionState = {
@@ -158,6 +170,48 @@ export class FileAutonomyStore {
     return state;
   }
 
+  engageKernelAutoHalt(at: string, reason: string): KernelExecutionState {
+    assertTimestamp(at, 'AUTO_HALT_TIMESTAMP_INVALID');
+    const state = this.readState();
+    const next: KernelExecutionState = {
+      ...state,
+      mode: 'halted',
+      halted: true,
+      halted_reason: reason,
+      mode_history:
+        state.mode === 'halted'
+          ? state.mode_history
+          : [
+              ...state.mode_history,
+              {
+                at,
+                from: state.mode,
+                to: 'halted',
+                trigger: reason,
+                actor: 'kernel_auto_halt' as const,
+              },
+            ],
+    };
+    this.atomicWrite(this.statePath, next);
+    try {
+      this.appendAudit({
+        event_type: 'auto_halt_triggered',
+        phase: 'info',
+        actor: 'kernel',
+        mode: 'halted',
+        severity: 'critical',
+        issue_id: null,
+        idempotency_key: null,
+        ts: at,
+        detail: { from: state.mode, reason },
+      });
+    } catch {
+      // State is already durably halted. A malformed audit file cannot safely
+      // accept another event; preserving it unchanged is the forensic record.
+    }
+    return next;
+  }
+
   beginCycle(input: {
     cycle_id: string;
     now: string;
@@ -167,7 +221,7 @@ export class FileAutonomyStore {
     safeId(input.cycle_id);
     assertTimestamp(input.now, 'CYCLE_TIMESTAMP_INVALID');
     try {
-      return this.withClaimLock(() => {
+      return this.withClaimLock(input.now, () => {
         const state = this.readState();
         if (state.mode !== input.expected_mode) {
           return { ok: false, code: 'PERSISTED_MODE_MISMATCH', state };
@@ -230,7 +284,7 @@ export class FileAutonomyStore {
     outcomes: Readonly<Record<string, ReconciliationOutcome>>,
   ): KernelExecutionState {
     assertTimestamp(at, 'RECONCILIATION_TIMESTAMP_INVALID');
-    return this.withClaimLock(() => {
+    return this.withClaimLock(at, () => {
       const state = this.readState();
       if (state.cycle_state === 'idle') return state;
       if (this.isHeartbeatFresh(state, at)) {
@@ -353,6 +407,15 @@ export class FileAutonomyStore {
   markDispatchIntent(packet: DispatchPacket, at: string): void {
     const state = this.readState();
     if (state.halted) throw new Error('KILL_SWITCH_ENGAGED_BEFORE_DISPATCH');
+    const matchingEvents = this.readEvents().filter(
+      (event) => event.idempotency_key === packet.idempotency_key,
+    );
+    if (matchingEvents.some((event) => event.phase === 'outcome')) {
+      throw new Error('DISPATCH_ACTION_ALREADY_COMPLETED');
+    }
+    if (matchingEvents.some((event) => event.phase === 'intent')) {
+      throw new Error('DISPATCH_RECONCILIATION_REQUIRED');
+    }
     if (!state.active_dispatch_ids.includes(packet.idempotency_key)) {
       this.atomicWrite(this.statePath, {
         ...state,
@@ -378,6 +441,15 @@ export class FileAutonomyStore {
 
   markDispatchOutcome(packet: DispatchPacket, at: string): void {
     const state = this.readState();
+    const matchingEvents = this.readEvents().filter(
+      (event) => event.idempotency_key === packet.idempotency_key,
+    );
+    if (!packet.dry_run) {
+      if (matchingEvents.some((event) => event.phase === 'outcome')) return;
+      if (!matchingEvents.some((event) => event.phase === 'intent')) {
+        throw new Error('DISPATCH_INTENT_REQUIRED');
+      }
+    }
     this.appendAudit({
       event_type: packet.dry_run ? 'shadow_decision' : 'dispatch_outcome',
       phase: packet.dry_run ? 'info' : 'outcome',
@@ -432,23 +504,27 @@ export class FileAutonomyStore {
   }
 
   verifyEventChain(): boolean {
-    let previousHash: string | null = null;
-    let expectedSequence = 1;
-    for (const event of this.readEvents()) {
-      const content = eventContent(event);
-      const expectedHash = sha256(content);
-      if (
-        event.sequence !== expectedSequence ||
-        event.prev_event_hash !== previousHash ||
-        event.event_hash !== expectedHash ||
-        event.event_id !== `event_${expectedHash}`
-      ) {
-        return false;
+    try {
+      let previousHash: string | null = null;
+      let expectedSequence = 1;
+      for (const event of this.readEvents()) {
+        const content = eventContent(event);
+        const expectedHash = sha256(content);
+        if (
+          event.sequence !== expectedSequence ||
+          event.prev_event_hash !== previousHash ||
+          event.event_hash !== expectedHash ||
+          event.event_id !== `event_${expectedHash}`
+        ) {
+          return false;
+        }
+        previousHash = event.event_hash;
+        expectedSequence += 1;
       }
-      previousHash = event.event_hash;
-      expectedSequence += 1;
+      return true;
+    } catch {
+      return false;
     }
-    return true;
   }
 
   private isHeartbeatFresh(state: KernelExecutionState, now: string): boolean {
@@ -507,13 +583,91 @@ export class FileAutonomyStore {
     return record;
   }
 
-  private withClaimLock<T>(callback: () => T): T {
-    const fd = fs.openSync(this.claimLockPath, 'wx', 0o600);
+  private withClaimLock<T>(at: string, callback: () => T): T {
+    const lock = this.acquireClaimLock(at);
     try {
       return callback();
     } finally {
-      fs.closeSync(fd);
-      fs.unlinkSync(this.claimLockPath);
+      this.releaseClaimLock(lock.owner_token);
+    }
+  }
+
+  private acquireClaimLock(at: string): ClaimLock {
+    assertTimestamp(at, 'CLAIM_LOCK_TIMESTAMP_INVALID');
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const lock: ClaimLock = {
+        schema_version: 1,
+        owner_token: randomUUID(),
+        acquired_at: at,
+      };
+      try {
+        writeExclusive(this.claimLockPath, lock);
+        return lock;
+      } catch (error) {
+        if (!isAlreadyExists(error)) throw error;
+      }
+
+      const existing = this.readClaimLock();
+      const state = this.readState();
+      const ageMs = Date.parse(at) - Date.parse(existing.acquired_at);
+      if (
+        !Number.isFinite(ageMs) ||
+        ageMs < 0 ||
+        ageMs <= state.heartbeat_ttl_seconds * 1_000
+      ) {
+        throw alreadyExistsError('AUTONOMY_CLAIM_LOCK_ACTIVE');
+      }
+      const stalePath = `${this.claimLockPath}.${sha256(existing)}.stale`;
+      try {
+        fs.renameSync(this.claimLockPath, stalePath);
+        fs.unlinkSync(stalePath);
+      } catch (error) {
+        if (!isMissing(error)) throw error;
+      }
+    }
+    throw alreadyExistsError('AUTONOMY_CLAIM_LOCK_CONTENTION');
+  }
+
+  private readClaimLock(): ClaimLock {
+    let lock: ClaimLock;
+    try {
+      lock = JSON.parse(fs.readFileSync(this.claimLockPath, 'utf8')) as ClaimLock;
+    } catch {
+      return this.claimLockFromMtime();
+    }
+    if (
+      lock.schema_version !== 1 ||
+      typeof lock.owner_token !== 'string' ||
+      lock.owner_token.length === 0 ||
+      !Number.isFinite(Date.parse(lock.acquired_at))
+    ) {
+      return this.claimLockFromMtime();
+    }
+    return lock;
+  }
+
+  private claimLockFromMtime(): ClaimLock {
+    const stats = fs.statSync(this.claimLockPath);
+    return {
+      schema_version: 1,
+      owner_token: `invalid-${stats.mtimeMs}`,
+      acquired_at: stats.mtime.toISOString(),
+    };
+  }
+
+  private releaseClaimLock(ownerToken: string): void {
+    let lock: ClaimLock;
+    try {
+      lock = this.readClaimLock();
+    } catch {
+      return;
+    }
+    if (lock.owner_token === ownerToken) {
+      try {
+        fs.unlinkSync(this.claimLockPath);
+      } catch (error) {
+        if (!isMissing(error)) throw error;
+      }
     }
   }
 
@@ -567,7 +721,8 @@ function validateState(state: KernelExecutionState): void {
   assertTimestamp(state.last_heartbeat_at, 'AUTONOMY_STATE_HEARTBEAT_INVALID');
   if (
     !Number.isInteger(state.heartbeat_ttl_seconds) ||
-    state.heartbeat_ttl_seconds < 1
+    state.heartbeat_ttl_seconds < 1 ||
+    state.heartbeat_ttl_seconds > CONTRACT_MAXIMA.heartbeat_ttl_seconds
   ) {
     throw new Error('AUTONOMY_STATE_HEARTBEAT_TTL_INVALID');
   }
@@ -637,4 +792,19 @@ function isAlreadyExists(error: unknown): boolean {
     'code' in error &&
     (error as { code?: unknown }).code === 'EEXIST'
   );
+}
+
+function isMissing(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'ENOENT'
+  );
+}
+
+function alreadyExistsError(message: string): NodeJS.ErrnoException {
+  const error = new Error(message) as NodeJS.ErrnoException;
+  error.code = 'EEXIST';
+  return error;
 }

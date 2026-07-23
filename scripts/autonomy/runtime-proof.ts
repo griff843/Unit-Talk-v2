@@ -138,6 +138,7 @@ function executeScenario(
     usage: {
       cycles: 0,
       elapsed_ms: 0,
+      operation_elapsed_ms: 0,
       retries_for_operation: retries,
       tokens_used: 0,
       cost_micros: 0,

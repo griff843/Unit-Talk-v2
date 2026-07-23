@@ -54,7 +54,11 @@ export function resolvePolicy(input: {
   const ceilings = resolveCeilings(input.ceilings, reasons);
   const heartbeatTtl =
     input.heartbeat_ttl_seconds ?? CONTRACT_MAXIMA.heartbeat_ttl_seconds;
-  if (!Number.isInteger(heartbeatTtl) || heartbeatTtl < 1) {
+  if (
+    !Number.isInteger(heartbeatTtl) ||
+    heartbeatTtl < 1 ||
+    heartbeatTtl > CONTRACT_MAXIMA.heartbeat_ttl_seconds
+  ) {
     reasons.push('HEARTBEAT_TTL_INVALID');
   }
 
@@ -75,7 +79,9 @@ export function resolvePolicy(input: {
       owner_halt: ownerHalt,
       owner_halt_reason: input.owner_halt_reason?.trim() || null,
       heartbeat_ttl_seconds:
-        Number.isInteger(heartbeatTtl) && heartbeatTtl > 0
+        Number.isInteger(heartbeatTtl) &&
+        heartbeatTtl > 0 &&
+        heartbeatTtl <= CONTRACT_MAXIMA.heartbeat_ttl_seconds
           ? heartbeatTtl
           : CONTRACT_MAXIMA.heartbeat_ttl_seconds,
       ceilings,
@@ -186,6 +192,9 @@ export function evaluateCeilings(
   if (usage.cycles >= ceilings.max_cycles) exceeded.push('MAX_CYCLES_REACHED');
   if (usage.elapsed_ms >= ceilings.max_duration_ms) {
     exceeded.push('MAX_DURATION_REACHED');
+  }
+  if (usage.operation_elapsed_ms >= ceilings.max_operation_duration_ms) {
+    exceeded.push('MAX_OPERATION_DURATION_REACHED');
   }
   if (usage.retries_for_operation > ceilings.max_retries_per_operation) {
     exceeded.push('MAX_RETRIES_EXCEEDED');

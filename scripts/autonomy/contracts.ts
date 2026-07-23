@@ -27,6 +27,7 @@ export interface AutonomyPolicy {
 export interface UsageSnapshot {
   cycles: number;
   elapsed_ms: number;
+  operation_elapsed_ms: number;
   retries_for_operation: number;
   tokens_used: number;
   cost_micros: number;
