@@ -5,15 +5,15 @@
 | Issue | UTV2-1576 |
 | Tier | T1 |
 | Branch | codex/utv2-1576-governance-capacity-recovery |
-| Commit SHA(s) | `8b87de522c5c381d0877346f3c3bf5ad969c6b09` (branch head, pre-merge) |
+| Implementation PR | [#1300](https://github.com/griff843/Unit-Talk-v2/pull/1300) |
+| Commit SHA(s) | `fd5674d700f7ef56dd33772eacd8576bbd7f008b` (authoritative #1300 merge SHA) |
 
-MERGE_SHA: 8b87de522c5c381d0877346f3c3bf5ad969c6b09
+MERGE_SHA: fd5674d700f7ef56dd33772eacd8576bbd7f008b
 
-(This is the branch head SHA, used here to satisfy proof/merge-SHA binding
-without a circular self-reference. The real merge SHA is additionally
-recorded post-merge by the standard `ops:proof-generate --merge-sha`
-closeout step, which rewrites the "Commit SHA(s)" row above and the
-"MERGE_SHA" line to the true merge SHA.)
+(This is PR #1300's authoritative implementation merge SHA, rebound through
+the standard `ops:proof-generate --merge-sha` path. The proof-correction PR
+only supplies the missing R2 evidence and must not replace #1300 as the
+implementation source of truth.)
 
 ## Verification
 
@@ -126,8 +126,24 @@ TAP version 13
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 103328.0211
+# duration_ms 102963.675402
 ```
+
+Fresh monitored-table counts were captured at `2026-07-23T17:47:49.562Z`
+using read-only Supabase JS HEAD requests with exact counts:
+
+| Table | Count | Status |
+| --- | ---: | --- |
+| `picks` | 99593 | healthy |
+| `submissions` | 99935 | healthy |
+| `pick_lifecycle` | 142594 | healthy |
+| `distribution_outbox` | 9782 | healthy |
+| `settlement_records` | 34158 | healthy |
+| `audit_log` | 240519 | healthy |
+| `distribution_receipts` | 3589 | healthy |
+
+The `pnpm test:db` suite's temporary rows are removed by its cleanup hooks;
+these counts were captured after the clean 7/7 run completed.
 
 ```text
 $ pnpm verify
