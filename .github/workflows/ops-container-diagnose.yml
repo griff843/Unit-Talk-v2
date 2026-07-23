@@ -1,0 +1,178 @@
+name: Ops — Container Diagnose (restart history)
+
+# UTV2-1561: read-only diagnostic for unit-talk-api-1's 314-lifetime-restart
+# finding. Captures container/daemon/kernel state needed to classify the
+# restart pattern (current-image instability, accumulated historical
+# restarts, deliberate recreations, health-check churn, or host reboots).
+# Never restarts, deploys, or mutates any container, env file, or secret.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  diagnose:
+    name: Diagnose unit-talk-api-1 restart history (read-only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run read-only container/daemon/kernel diagnostics
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set +e
+            TARGET=unit-talk-api-1
+
+            echo '=== 1. CONTAINER IDENTITY: CREATION TIME / IMAGE / RESTART POLICY ==='
+            docker inspect \"\$TARGET\" --format 'Created={{.Created}} Image={{.Image}} RestartPolicy={{json .HostConfig.RestartPolicy}}' 2>&1
+            docker inspect \"\$TARGET\" --format 'ImageName={{.Config.Image}}' 2>&1
+
+            echo ''
+            echo '=== 2. FULL STATE BLOCK (Status/ExitCode/OOMKilled/Error/StartedAt/FinishedAt/RestartCount) ==='
+            docker inspect \"\$TARGET\" --format '{{json .State}}' 2>&1 | python3 -m json.tool 2>/dev/null || docker inspect \"\$TARGET\" --format '{{json .State}}' 2>&1
+            echo '--- RestartCount (explicit) ---'
+            docker inspect \"\$TARGET\" --format 'RestartCount={{.RestartCount}}' 2>&1
+
+            echo ''
+            echo '=== 3. HEALTH CHECK STATUS + RECENT HEALTH LOG ==='
+            docker inspect \"\$TARGET\" --format '{{if .State.Health}}{{json .State.Health}}{{else}}no healthcheck configured{{end}}' 2>&1 | python3 -m json.tool 2>/dev/null || echo 'no healthcheck or not parseable'
+
+            echo ''
+            echo '=== 4. DEPLOYED VERSION IDENTIFIER (from health endpoint, matches log gitSha) ==='
+            curl -s --max-time 10 http://localhost:4000/health 2>&1 | python3 -m json.tool 2>/dev/null || echo 'health endpoint unreachable or non-JSON'
+
+            echo ''
+            echo '=== 5. DOCKER DAEMON EVENTS FOR THIS CONTAINER (last 7 days, non-blocking) ==='
+            NOW_TS=\$(date +%s)
+            SINCE_TS=\$((NOW_TS - 604800))
+            EVENTS_OUT=\$(docker events --since \"\$SINCE_TS\" --until \"\$NOW_TS\" --filter \"container=\$TARGET\" 2>&1)
+            EVENTS_EXIT=\$?
+            if [ \"\$EVENTS_EXIT\" -ne 0 ]; then
+              echo \"DOCKER EVENTS COLLECTION FAILED (exit \$EVENTS_EXIT) -- the section below is NOT evidence of zero events, the command itself errored:\"
+              echo \"\$EVENTS_OUT\"
+            else
+              echo \"\$EVENTS_OUT\" | tail -200
+            fi
+
+            echo ''
+            echo '=== 6. DOCKER DAEMON EVENTS: ALL CONTAINER DIE/OOM/RESTART/HEALTH_STATUS EVENTS (last 7 days) ==='
+            EVENTS2_OUT=\$(docker events --since \"\$SINCE_TS\" --until \"\$NOW_TS\" --filter 'event=die' --filter 'event=oom' --filter 'event=restart' --filter 'event=health_status' 2>&1)
+            EVENTS2_EXIT=\$?
+            if [ \"\$EVENTS2_EXIT\" -ne 0 ]; then
+              echo \"DOCKER EVENTS COLLECTION FAILED (exit \$EVENTS2_EXIT) -- the section below is NOT evidence of zero events, the command itself errored:\"
+              echo \"\$EVENTS2_OUT\"
+            else
+              echo \"\$EVENTS2_OUT\" | tail -300
+            fi
+
+            echo ''
+            echo '=== 7. CONTAINER LOG TAIL AROUND STARTUP (last 300 lines, for crash context) ==='
+            docker logs \"\$TARGET\" --tail 300 --timestamps 2>&1 | head -300
+
+            echo ''
+            echo '=== 8. HOST KERNEL / OOM EVENTS (last 7 days) ==='
+            JOURNAL_K_OUT=\$(journalctl -k --since '7 days ago' --no-pager 2>&1)
+            JOURNAL_K_EXIT=\$?
+            if [ \"\$JOURNAL_K_EXIT\" -ne 0 ]; then
+              echo \"journalctl -k FAILED (exit \$JOURNAL_K_EXIT) -- likely a permission failure, NOT evidence of zero OOM events:\"
+              echo \"\$JOURNAL_K_OUT\"
+            else
+              OOM_MATCHES=\$(echo \"\$JOURNAL_K_OUT\" | grep -iE 'oom|killed process|out of memory' | tail -100)
+              if [ -z \"\$OOM_MATCHES\" ]; then
+                echo 'journalctl -k succeeded, zero OOM/killed-process matches in the last 7 days'
+              else
+                echo \"\$OOM_MATCHES\"
+              fi
+            fi
+            echo '--- dmesg fallback ---'
+            DMESG_OUT=\$(dmesg -T 2>&1)
+            DMESG_EXIT=\$?
+            if [ \"\$DMESG_EXIT\" -ne 0 ]; then
+              echo \"dmesg FAILED (exit \$DMESG_EXIT) -- likely a permission failure, NOT evidence of zero OOM events:\"
+              echo \"\$DMESG_OUT\"
+            else
+              DMESG_MATCHES=\$(echo \"\$DMESG_OUT\" | grep -iE 'oom|killed process' | tail -50)
+              if [ -z \"\$DMESG_MATCHES\" ]; then
+                echo 'dmesg succeeded, zero OOM/killed-process matches'
+              else
+                echo \"\$DMESG_MATCHES\"
+              fi
+            fi
+
+            echo ''
+            echo '=== 9. DOCKER DAEMON LOG / SERVICE EVENTS (last 7 days) ==='
+            JOURNAL_DOCKER_OUT=\$(journalctl -u docker --since '7 days ago' --no-pager 2>&1)
+            JOURNAL_DOCKER_EXIT=\$?
+            if [ \"\$JOURNAL_DOCKER_EXIT\" -ne 0 ]; then
+              echo \"journalctl -u docker FAILED (exit \$JOURNAL_DOCKER_EXIT) -- likely a permission failure, NOT evidence the docker daemon log is empty:\"
+              echo \"\$JOURNAL_DOCKER_OUT\"
+            else
+              echo \"\$JOURNAL_DOCKER_OUT\" | tail -150
+            fi
+
+            echo ''
+            echo '=== 10. HOST REBOOT HISTORY ==='
+            (last reboot -F 2>&1 | head -10) || echo 'last reboot unavailable'
+            echo '--- uptime ---'
+            uptime 2>&1
+            echo '--- who -b (last boot time) ---'
+            who -b 2>&1
+
+            echo ''
+            echo '=== 11. CPU / MEMORY / DISK PRESSURE (current snapshot) ==='
+            echo '--- free -h ---'
+            free -h 2>&1
+            echo '--- df -h ---'
+            df -h 2>&1
+            echo '--- docker stats (no-stream, all containers) ---'
+            timeout 10 docker stats --no-stream 2>&1
+            echo '--- load average ---'
+            cat /proc/loadavg 2>&1
+            echo '--- /proc/pressure (PSI, if available) ---'
+            (cat /proc/pressure/memory 2>&1) || echo 'PSI memory unavailable'
+            (cat /proc/pressure/cpu 2>&1) || echo 'PSI cpu unavailable'
+            (cat /proc/pressure/io 2>&1) || echo 'PSI io unavailable'
+
+            echo ''
+            echo '=== 12. ALL SERVICE CONTAINER STATUS (cross-check against UTV2-1477 ingestor/worker) ==='
+            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.RunningFor}}\t{{.CreatedAt}}' 2>&1
+
+            echo ''
+            echo '=== 13. DEPLOY CORRELATION: .env.production mtime + deploy marker files ==='
+            ls -la '$DEPLOY_PATH/.env.production' 2>&1 || echo '.env.production not found at expected path'
+            (find '$DEPLOY_PATH' -maxdepth 1 -name '*.deploy*' -newer /tmp -o -maxdepth 1 -name 'VERSION' 2>&1) || true
+          " | tee container-diagnose-${{ github.run_id }}.txt
+
+      - name: Upload diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-diagnose-${{ github.run_id }}.txt
+          path: container-diagnose-${{ github.run_id }}.txt
+          retention-days: 30
