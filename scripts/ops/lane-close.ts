@@ -15,6 +15,7 @@ import {
   type TruthCheckResult,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
+import { rebindMergeSha, type ShaRebindOutcome } from './proof-generate.js';
 import {
   acquireMergeLock,
   defaultMergeLockOwner,
@@ -436,6 +437,25 @@ export interface RepairRequiredViaPrResult {
 }
 
 /**
+ * Post-merge automation initially sees the repair PR's merge SHA, but
+ * --repair-merged resolves the implementation PR recorded in manifest.pr_url.
+ * Rebind proof to that authoritative implementation SHA before truth-check so
+ * manifest and proof cannot diverge when a historical lane is repaired.
+ */
+export function rebindRepairedLaneProof(
+  manifest: LaneManifest,
+  options: { repoRoot?: string; now?: Date } = {},
+): ShaRebindOutcome[] {
+  return rebindMergeSha(
+    options.repoRoot ?? process.cwd(),
+    manifest.issue_id,
+    manifest.commit_sha,
+    (options.now ?? new Date()).toISOString(),
+    manifest.pr_url,
+  );
+}
+
+/**
  * Built in response to a real incident (UTV2-1542, the third occurrence of this
  * repo's direct-main-push control failure -- see
  * docs/06_status/INCIDENTS/INC-2026-07-14-utv2-1533-direct-main-push.md): an
@@ -640,6 +660,7 @@ async function main(): Promise<void> {
 
       writeManifest(repair.manifest);
       manifest = repair.manifest;
+      rebindRepairedLaneProof(manifest);
     }
 
     requireCloseCommitSha(manifest);

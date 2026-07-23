@@ -5,9 +5,9 @@
 | Issue | UTV2-1571 |
 | Tier | T1 |
 | Branch | claude/utv2-1571-file-scope-lock-history-separation |
-| Commit SHA(s) | `2c4fb7909af3761a79d4becf3263189a291ae50f` (branch head, pre-merge) |
+| Commit SHA(s) | `a192cd78f649131e0716578713c2ca3bc1c0bb06` (actual merge commit -- this repair PR builds directly on it) |
 
-MERGE_SHA: 880a76522a3f39f3d6dfa1d5a56119363d79bb19
+MERGE_SHA: a192cd78f649131e0716578713c2ca3bc1c0bb06
 
 (This SHA is the core-fix commit, an ancestor of this proof commit and of the
 PR's eventual merge commit — used here to satisfy proof/merge-SHA binding
@@ -181,3 +181,13 @@ T1 — CI gate logic and lane-lifecycle governance tooling. Requires the
 `t1-approved` label and a valid Griff-authored `pm-verdict/v1` APPROVED
 comment (or GitHub PR review approval) bound to the reviewed head. This
 proof supplies neither.
+
+## Addendum: lane-close manifest repair (2026-07-22)
+
+Post-merge, `ops:lane-close --repair-merged` failed for this lane with `"Manifest has no pr_url to repair
+from."` because `docs/06_status/lanes/UTV2-1571.json` was left with `pr_url: null` after PR #1291 merged
+(`a192cd78`). This addendum documents the follow-up repair PR (`claude/utv2-1571-lane-close-repair`), which
+sets only `pr_url` -- `commit_sha` and `status` are deliberately left for the real `ops:lane-close
+--repair-merged` run (re-triggered after that PR merges) to derive authoritatively from GitHub's own merge
+state, matching the `DIRECT_MAIN_BYPASS_POLICY.md`-sanctioned repair-branch pattern already used for PR #1248
+(the equivalent UTV2-1550 repair).
