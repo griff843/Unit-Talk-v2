@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1398",
+  "title": "Market-family classifier fix: map nba-spread to game-line",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "source_sha": "c67facf1cbaffe5a08754becd2a5e6008b909fa1",
+  "reviewed_head_sha": "c67facf1cbaffe5a08754becd2a5e6008b909fa1",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "c67facf1cbaffe5a08754becd2a5e6008b909fa1",
+    "verified_source_note": "Single implementation commit; only lane/proof metadata commits follow.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1398",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "unit_tests": {
+      "command": "tsx --test packages/domain/src/scoring/promotion-weight-profiles.test.ts",
+      "status": "PASS",
+      "tests": 38,
+      "pass": 38,
+      "fail": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "note": "Standalone live-DB smoke; this lane changes only pure domain classification logic and performs no production mutation."
+  },
+  "scope": {
+    "implementation_paths": [
+      "packages/domain/src/scoring/promotion-weight-profiles.ts",
+      "packages/domain/src/scoring/promotion-weight-profiles.test.ts"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1398.yml",
+      "docs/06_status/lanes/UTV2-1398.json",
+      "docs/06_status/proof/UTV2-1398/diff-summary.md",
+      "docs/06_status/proof/UTV2-1398/verification.md",
+      "docs/06_status/proof/UTV2-1398/evidence.json"
+    ],
+    "modifier_weights_changed": false,
+    "thresholds_changed": false,
+    "other_patterns_changed": false
+  },
+  "acceptance_criteria": {
+    "nba_spread_maps_to_game_line": "PASS",
+    "no_unrelated_classifier_change": "PASS",
+    "no_modifier_cap_weight_threshold_change": "PASS",
+    "scoring_sensitive_proof_present": "PASS",
+    "revert_path_preserved": "PASS"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "absent_and_not_created_by_this_lane",
+    "pm_verdict_v1": "absent_and_not_created_by_this_lane",
+    "merge_authorized": false
+  },
+  "verdict": "PASS_PENDING_T1_OWNER_APPROVAL"
+}
