@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1576-governance-capacity-recovery",
   "branch": "codex/utv2-1576-governance-capacity-recovery",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "fd5674d700f7ef56dd33772eacd8576bbd7f008b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1300",
   "files_changed": [
     ".ops/sync/UTV2-1576.yml",
@@ -46,14 +46,37 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1576/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-23T13:45:00.000Z",
-  "heartbeat_at": "2026-07-23T13:45:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-23T23:53:36.461Z",
+  "closed_at": "2026-07-23T23:53:36.461Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1576-governance-capacity-recovery.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-23T23:53:32.829Z",
+      "verdict": "pass",
+      "merge_sha": "fd5674d700f7ef56dd33772eacd8576bbd7f008b",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1300",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-23T23:53:32.838Z",
+      "verdict": "pass",
+      "merge_sha": "fd5674d700f7ef56dd33772eacd8576bbd7f008b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "admission_exception": {
     "type": "pm_authorized_manual_admission",

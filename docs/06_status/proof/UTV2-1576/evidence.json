@@ -11,7 +11,7 @@
     "verified_source_sha": "fd5674d700f7ef56dd33772eacd8576bbd7f008b",
     "verified_source_note": "Authoritative implementation merge SHA for PR #1300, rebound with ops:proof-generate --merge-sha. This proof-only continuation PR is not the implementation source of truth.",
     "sha_type": "merge_sha",
-    "bound_at": "2026-07-23T17:54:22.929Z",
+    "bound_at": "2026-07-23T23:53:32.835Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "not_yet_run"
@@ -64,40 +64,109 @@
     "duration_ms": 102963.675402,
     "note": "Fresh live database-smoke suite (apps/api/src/database-smoke.test.ts) against real Supabase (zfzdnfwdarxucxtaojxm): 7 tests, 7 pass, 0 fail. The suite's temporary rows are removed by its verified cleanup hooks. Also ran pnpm test:t1-proof:live after this capture; all invoked invariant proof files passed, with one stale-provider-data assertion skipped by its explicit test contract.",
     "queries": [
-      { "table": "picks", "description": "live-DB smoke persistence, lifecycle transitions, cleanup" },
-      { "table": "submissions", "description": "live-DB smoke submission persistence and cleanup" },
-      { "table": "pick_lifecycle", "description": "live lifecycle inserts and rejected-transition count assertions" },
-      { "table": "distribution_outbox", "description": "live enqueue/claim/rollback/idempotency assertions" },
-      { "table": "settlement_records", "description": "live additive settlement and correction assertions" },
-      { "table": "audit_log", "description": "live rollback and additive settlement audit assertions" },
-      { "table": "distribution_receipts", "description": "live rejected-delivery receipt count assertion" }
+      {
+        "table": "picks",
+        "description": "live-DB smoke persistence, lifecycle transitions, cleanup"
+      },
+      {
+        "table": "submissions",
+        "description": "live-DB smoke submission persistence and cleanup"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "live lifecycle inserts and rejected-transition count assertions"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "live enqueue/claim/rollback/idempotency assertions"
+      },
+      {
+        "table": "settlement_records",
+        "description": "live additive settlement and correction assertions"
+      },
+      {
+        "table": "audit_log",
+        "description": "live rollback and additive settlement audit assertions"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "live rejected-delivery receipt count assertion"
+      }
     ],
     "row_counts": [
-      { "table": "picks", "count": 99593, "status": "healthy" },
-      { "table": "submissions", "count": 99935, "status": "healthy" },
-      { "table": "pick_lifecycle", "count": 142594, "status": "healthy" },
-      { "table": "distribution_outbox", "count": 9782, "status": "healthy" },
-      { "table": "settlement_records", "count": 34158, "status": "healthy" },
-      { "table": "audit_log", "count": 240519, "status": "healthy" },
-      { "table": "distribution_receipts", "count": 3589, "status": "healthy" }
+      {
+        "table": "picks",
+        "count": 99593,
+        "status": "healthy"
+      },
+      {
+        "table": "submissions",
+        "count": 99935,
+        "status": "healthy"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 142594,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 9782,
+        "status": "healthy"
+      },
+      {
+        "table": "settlement_records",
+        "count": 34158,
+        "status": "healthy"
+      },
+      {
+        "table": "audit_log",
+        "count": 240519,
+        "status": "healthy"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 3589,
+        "status": "healthy"
+      }
     ],
     "row_counts_captured_at": "2026-07-23T17:47:49.562Z",
     "row_counts_method": "Read-only Supabase JS HEAD requests using select('*', { count: 'exact', head: true }) with the configured service-role client; no rows were selected or mutated."
   },
   "reconciliation_verification": {
     "note": "This lane's own capability fix was independently re-verified against the three lanes it reconciles.",
-    "utv2_1560": { "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1256", "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6", "verified_against": "gh pr view 1256 --json mergeCommit" },
-    "utv2_1573": { "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1295", "merge_sha": "0fbb3e806c7eaf86c9e0a9b986046c585adce899", "verified_against": "gh pr view 1295 --json mergeCommit" },
-    "utv2_1575": { "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1299", "merge_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa", "verified_against": "gh pr view 1299 --json mergeCommit" },
-    "leases_released": ["UTV2-1573", "UTV2-1575"],
-    "leases_already_released_by_prior_unrelated_event": ["UTV2-1560"],
+    "utv2_1560": {
+      "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1256",
+      "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+      "verified_against": "gh pr view 1256 --json mergeCommit"
+    },
+    "utv2_1573": {
+      "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1295",
+      "merge_sha": "0fbb3e806c7eaf86c9e0a9b986046c585adce899",
+      "verified_against": "gh pr view 1295 --json mergeCommit"
+    },
+    "utv2_1575": {
+      "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1299",
+      "merge_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa",
+      "verified_against": "gh pr view 1299 --json mergeCommit"
+    },
+    "leases_released": [
+      "UTV2-1573",
+      "UTV2-1575"
+    ],
+    "leases_already_released_by_prior_unrelated_event": [
+      "UTV2-1560"
+    ],
     "merge_mutex_released": true,
     "worktrees_removed": [
       ".out/worktrees/claude__utv2-1560-hetzner-supabase-502-diagnosis",
       ".out/worktrees/claude__utv2-1573-executor-result-validator-pagination",
       ".out/worktrees/claude__utv2-1575-five-pr-migration-pr1-identity-boundary"
     ],
-    "excluded_untouched": ["UTV2-1571 (remains started/active)", "UTV2-1574 (remains started, its own R1/R2 proof gap unresolved -- reverted to exact main content in this lane, no fabricated proof)"]
+    "excluded_untouched": [
+      "UTV2-1571 (remains started/active)",
+      "UTV2-1574 (remains started, its own R1/R2 proof gap unresolved -- reverted to exact main content in this lane, no fabricated proof)"
+    ]
   },
   "scope": {
     "implementation_paths": [

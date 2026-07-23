@@ -6,7 +6,7 @@
 | Tier | T1 |
 | Branch | codex/utv2-1576-governance-capacity-recovery |
 | Implementation PR | [#1300](https://github.com/griff843/Unit-Talk-v2/pull/1300) |
-| Commit SHA(s) | `fd5674d700f7ef56dd33772eacd8576bbd7f008b` (authoritative #1300 merge SHA) |
+| Commit SHA(s) | `fd5674d700f7ef56dd33772eacd8576bbd7f008b` (merge SHA) |
 
 MERGE_SHA: fd5674d700f7ef56dd33772eacd8576bbd7f008b
 
