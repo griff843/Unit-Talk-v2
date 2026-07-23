@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/autonomy/dispatch_packet_v1.schema.json",
+  "title": "Autonomy Kernel Dispatch Packet V1",
+  "description": "Emitted by the autonomy kernel (AUT-2) when it decides to dispatch a T2 or T3 lane, either for real (t3_live/t2t3_live modes) or as a shadow-mode record. This is the kernel's OWN artifact — distinct from docs/05_operations/schemas/execution-packet-v1.md, which is the pre-existing Codex CLI task packet format. A dispatch packet, once accepted, causes the kernel to invoke the same ops:lane-start / ops:dispatch primitives a human-invoked /dispatch already uses; it does not bypass them.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "packet_id",
+    "issue_id",
+    "tier",
+    "executor",
+    "mode_at_dispatch",
+    "generated_at",
+    "expires_at",
+    "file_scope_lock",
+    "sensitive_path_check",
+    "dispatch_reason",
+    "idempotency_key",
+    "kill_switch_check",
+    "dry_run"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "packet_id": {
+      "type": "string",
+      "description": "UUID or ULID, unique per packet. Never reused across cycles, even for the same issue_id.",
+      "minLength": 8
+    },
+    "issue_id": {
+      "type": "string",
+      "pattern": "^UTV2-[0-9]+$"
+    },
+    "tier": {
+      "enum": ["T2", "T3"],
+      "description": "T1 is not a representable value. A T1 dispatch attempt fails schema validation at emission time, before any mechanical gate runs -- see THREAT_MODEL.md #5. This is a compile-time/validate-time guarantee, not a runtime branch that could be skipped."
+    },
+    "executor": {
+      "enum": ["claude", "codex-cli", "codex-cloud"],
+      "description": "Which executor the kernel is dispatching to, resolved by the same three-brain routing rules a human orchestrator would use. Must match lane_manifest_v1.schema.json's created_by/executor vocabulary."
+    },
+    "mode_at_dispatch": {
+      "enum": ["shadow", "t3_live", "t2t3_live"],
+      "description": "The kernel mode in effect at the moment this packet was generated. halted is not a valid value here -- a packet is never generated while halted (STATE_MACHINE.md 3.2)."
+    },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Packets are single-cycle artifacts. A packet not acted on by expires_at is discarded, not carried into the next cycle -- the next cycle re-evaluates from current truth and generates a fresh packet if the candidate is still eligible."
+    },
+    "file_scope_lock": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" },
+      "description": "Identical semantics to lane_manifest_v1.schema.json's file_scope_lock. Computed the same way ops:scope-suggest already computes it for a human-invoked lane-start."
+    },
+    "sensitive_path_check": {
+      "type": "object",
+      "required": ["passed", "checked_against", "checked_at"],
+      "properties": {
+        "passed": {
+          "type": "boolean",
+          "description": "Must be true for the packet to be actionable. A packet with passed: false is a shadow-mode-only record of a refusal (THREAT_MODEL.md #3) -- it is never dispatched, in any mode."
+        },
+        "checked_against": {
+          "const": "docs/05_operations/DELEGATION_POLICY.md#sensitive-path-matrix",
+          "description": "Pinned reference so the check's provenance is auditable -- this must always cite the sensitive-path matrix, never a kernel-local copy of it."
+        },
+        "checked_at": { "type": "string", "format": "date-time" },
+        "matched_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Non-empty only when passed is false -- the specific sensitive paths that caused refusal."
+        }
+      },
+      "additionalProperties": false
+    },
+    "dispatch_reason": {
+      "type": "string",
+      "description": "Free-text but required -- human-readable justification (e.g. 'top candidate per ops:lane-maximizer, no concurrency/scope conflicts, tier=T3, sensitive-path check passed'). Non-authoritative narrative; the mechanical fields above are what gate the action, this is for audit-log readability."
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Deterministic function of (issue_id, action_type, cycle_id) -- e.g. 'UTV2-1234:lane-start:cycle-2026-07-23T18:00Z'. Used on crash/restart to detect whether this exact action was already durably recorded before re-attempting -- see CRASH_RESTART_SEMANTICS.md 3."
+    },
+    "kill_switch_check": {
+      "type": "object",
+      "required": ["checked_at", "halted"],
+      "properties": {
+        "checked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Must be re-checked immediately before this packet is acted on, not just at cycle start -- see KILL_SWITCH_CONTRACT.md 2."
+        },
+        "halted": {
+          "const": false,
+          "description": "A packet with halted: true is a contradiction (the kernel must not have generated a live packet while halted) and fails validation."
+        }
+      },
+      "additionalProperties": false
+    },
+    "dry_run": {
+      "type": "boolean",
+      "description": "true when mode_at_dispatch is shadow, or when the packet represents a refused/would-not-dispatch record. When true, no mutating call (ops:lane-start, PR open, merge, Linear write) may follow from this packet under any circumstance."
+    },
+    "concurrency_snapshot_ref": {
+      "type": "string",
+      "description": "Optional pointer (path or artifact ID) to the ops:execution-state / ops:merge-risk / ops:lane-maximizer output this packet's decision was based on, for post-hoc audit."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "mode_at_dispatch": { "const": "shadow" } } },
+      "then": { "properties": { "dry_run": { "const": true } } }
+    },
+    {
+      "if": { "properties": { "sensitive_path_check": { "properties": { "passed": { "const": false } } } } },
+      "then": { "properties": { "dry_run": { "const": true } } }
+    }
+  ]
+}
