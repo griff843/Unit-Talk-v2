@@ -5,9 +5,9 @@
 | Issue | UTV2-1573 |
 | Tier | T1 |
 | Branch | claude/utv2-1573-executor-result-validator-pagination |
-| Commit SHA(s) | `e10414799ce6366b186d247dc18463a158b92b36` (rebased implementation commit, pre-merge) |
+| Commit SHA(s) | `0fbb3e806c7eaf86c9e0a9b986046c585adce899` (merge SHA) |
 
-MERGE_SHA: e10414799ce6366b186d247dc18463a158b92b36
+MERGE_SHA: 0fbb3e806c7eaf86c9e0a9b986046c585adce899
 
 (This is the branch head SHA, used here to satisfy proof/merge-SHA binding
 without a circular self-reference. The real merge SHA is additionally
@@ -18,8 +18,8 @@ closeout step, which rewrites the "Commit SHA(s)" row above and the
 
 ## Merge SHA Binding
 
-Pending -- rebound automatically post-merge.
-
+Merge SHA: `0fbb3e806c7eaf86c9e0a9b986046c585adce899`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1295
 ## Verification
 
 ## Summary

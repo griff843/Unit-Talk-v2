@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1575-five-pr-migration-pr1-identity-boundary",
   "branch": "claude/utv2-1575-five-pr-migration-pr1-identity-boundary",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1299",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,46 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1575/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-22T15:50:22.758Z",
-  "heartbeat_at": "2026-07-22T22:34:20.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-23T11:34:31.654Z",
+  "closed_at": "2026-07-23T11:34:31.654Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1575-five-pr-migration-pr1-identity-boundary.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-23T11:32:50.845Z",
+      "verdict": "pass",
+      "merge_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1299",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-23T11:32:50.876Z",
+      "verdict": "fail",
+      "merge_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa",
+      "failures": [
+        "G3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-23T11:34:27.280Z",
+      "verdict": "pass",
+      "merge_sha": "df6ec745d0b20a85c71b8373e6ddc76e19e0eeaa",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
