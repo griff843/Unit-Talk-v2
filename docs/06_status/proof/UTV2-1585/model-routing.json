@@ -9,8 +9,6 @@
   "legacy_compatibility_used": false,
   "override_used": false,
   "override_authorized_by": null,
-  "codex_exit_code": 0,
-  "generated_at": "2026-07-24T15:32:24Z",
-  "source_sha": "63095cf585989b94b3361bd8c5c3e4f3a1ffc830",
-  "merge_sha": null
+  "codex_exit_code": null,
+  "generated_at": "2026-07-24T15:41:03.151Z"
 }
