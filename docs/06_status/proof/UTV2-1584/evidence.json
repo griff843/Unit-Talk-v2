@@ -1,19 +1,24 @@
 {
   "schema_version": 1,
+  "status": "PRE_MERGE_VERIFIED",
   "issue_id": "UTV2-1584",
   "title": "Safe existing-branch readmission for interrupted lanes",
   "tier": "T1",
   "lane_type": "governance",
-  "generated_at": "2026-07-24T11:06:41Z",
-  "head_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
+  "generated_at": "2026-07-24T13:48:54Z",
+  "head_sha": "5cbe30fcc8535eb2caa8f1c7e94520438ee02789",
   "sha_binding": {
-    "verified_source_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
-    "verified_source_note": "Final substantive implementation commit; subsequent commits are limited to proof and lane metadata.",
+    "verified_source_sha": "5cbe30fcc8535eb2caa8f1c7e94520438ee02789",
+    "verified_source_note": "Final substantive implementation commit (PM CHANGES_REQUIRED correction: PR base-ref binding, fixing head 33e9dba5d0c44289f471e2dbb3caaa471cbfb0f2); subsequent commits are limited to proof and lane metadata.",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-24T11:06:41Z",
+    "bound_at": "2026-07-24T13:48:54Z",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
-    "merge_sha": null
+    "merge_sha": null,
+    "ci_sentinels": {
+      "verify": "pass_locally_pending_ci",
+      "merge_gate": "pending"
+    }
   },
   "verifier": {
     "identity": "codex-cli/utv2-1584",
@@ -44,19 +49,25 @@
       {
         "command": "npx tsx --test scripts/ops/preflight.test.ts",
         "status": "PASS",
-        "tests": 26,
-        "pass": 26,
+        "tests": 28,
+        "pass": 28,
         "fail": 0
       },
       {
         "command": "npx tsx --test scripts/ops/lane-start.test.ts",
         "status": "PASS",
-        "tests": 23,
-        "pass": 23,
+        "tests": 28,
+        "pass": 28,
         "fail": 0
       }
     ],
-    "new_adversarial_tests": 20,
+    "new_adversarial_tests": 27,
+    "pm_correction": {
+      "prior_head_reviewed": "33e9dba5d0c44289f471e2dbb3caaa471cbfb0f2",
+      "verdict": "CHANGES_REQUIRED",
+      "finding": "readmission authority check verified PR head/base repository but never verified the PR base ref was main",
+      "tests_added_in_correction": 7
+    },
     "diff_check": {
       "command": "git diff --check",
       "status": "PASS"
@@ -72,7 +83,7 @@
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "duration_ms": 107671.908971,
+      "duration_ms": 112720.776897,
       "supabase_project": "zfzdnfwdarxucxtaojxm"
     },
     "t1_live_suite": {
@@ -155,6 +166,7 @@
     "fresh_lease_manifest_sync_and_worktree_metadata": "PASS",
     "rollback_removes_partial_state_and_preserves_existing_branch": "PASS",
     "non_pass_preflight_invalidates_stale_readmission_token": "PASS",
+    "pr_base_ref_bound_and_independently_reverified_at_lane_start": "PASS",
     "fresh_admission_and_normal_resume_unchanged": "PASS",
     "adversarial_test_matrix": "PASS",
     "operator_runbook": "PASS"
