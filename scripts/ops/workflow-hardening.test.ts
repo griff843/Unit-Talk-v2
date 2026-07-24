@@ -51,6 +51,166 @@ function workflowEvent(name: string, eventName: string): WorkflowDocument {
   return objectField(objectField(readWorkflowYaml(name), 'on'), eventName);
 }
 
+interface MockCheckRun {
+  id: number;
+  name: string;
+  head_sha: string;
+  external_id: string;
+  app: { slug: string };
+  status: string;
+  conclusion: string | null;
+  output?: { title?: string; summary?: string };
+}
+
+interface MockComment {
+  body: string;
+  created_at: string;
+  user: { login: string; type: string };
+}
+
+async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: MockCheckRun[] = []) {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const gate = objectField(objectField(workflow, 'jobs'), 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+  const evalStep = steps.find(
+    (step) => typeof step.with === 'object' && step.with && typeof (step.with as Record<string, unknown>).script === 'string',
+  );
+  assert.ok(evalStep, 'merge-gate.yml must have an executable github-script step');
+
+  const script = stringField(objectField(evalStep, 'with'), 'script');
+
+  type AsyncScript = (...args: unknown[]) => Promise<void>;
+  type AsyncFunctionConstructor = new (...args: string[]) => AsyncScript;
+  const AsyncFunction = Object.getPrototypeOf(async () => undefined).constructor as AsyncFunctionConstructor;
+  const evaluate = new AsyncFunction('github', 'context', 'core', 'require', script);
+  const verdictModule = await import('./merge-gate-verdict.cjs');
+
+  const prNumber = 1585;
+  const headSha = '1585158515851585158515851585158515851585';
+  const baseSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const pr = {
+    number: prNumber,
+    head: { sha: headSha, ref: 'codex/utv2-1585-canonical-check' },
+    base: { sha: baseSha },
+    title: 'feat(ops): UTV2-1585 canonical check identity',
+  };
+  const labels = [`tier:${tier}`];
+  const comments: MockComment[] = [];
+  const reviews: Array<{ state: string }> = [];
+  const postedGateComments: string[] = [];
+  const checks = initialChecks.map((check) => ({ ...check, app: { ...check.app } }));
+  let createCount = 0;
+  let nextCheckId = Math.max(0, ...checks.map((check) => check.id)) + 1;
+
+  const listForRef = async (params: Record<string, unknown>) => {
+    assert.strictEqual(params.ref, headSha);
+    assert.strictEqual(params.check_name, 'Merge Gate');
+    assert.strictEqual(params.filter, 'all');
+    assert.strictEqual(params.per_page, 100);
+    return { data: { check_runs: checks } };
+  };
+
+  const github = {
+    paginate: async (
+      endpoint: (params: Record<string, unknown>) => Promise<{ data: { check_runs: MockCheckRun[] } }>,
+      params: Record<string, unknown>,
+    ) => (await endpoint(params)).data.check_runs,
+    rest: {
+      checks: {
+        listForRef,
+        create: async (params: Record<string, unknown>) => {
+          createCount += 1;
+          const check: MockCheckRun = {
+            id: nextCheckId++,
+            name: String(params.name),
+            head_sha: String(params.head_sha),
+            external_id: String(params.external_id),
+            app: { slug: 'github-actions' },
+            status: String(params.status),
+            conclusion: null,
+          };
+          checks.push(check);
+          return { data: check };
+        },
+        update: async (params: Record<string, unknown>) => {
+          const check = checks.find((candidate) => candidate.id === params.check_run_id);
+          assert.ok(check, `check ${String(params.check_run_id)} must exist before update`);
+          if (typeof params.status === 'string') check.status = params.status;
+          if (typeof params.conclusion === 'string') check.conclusion = params.conclusion;
+          if (typeof params.external_id === 'string') check.external_id = params.external_id;
+          if (params.status === 'in_progress') check.conclusion = null;
+          if (params.output && typeof params.output === 'object') {
+            check.output = params.output as MockCheckRun['output'];
+          }
+          return { data: check };
+        },
+      },
+      issues: {
+        get: async () => ({ data: { labels: labels.map((name) => ({ name })) } }),
+        addLabels: async (params: Record<string, unknown>) => {
+          for (const label of params.labels as string[]) {
+            if (!labels.includes(label)) labels.push(label);
+          }
+          return { data: labels.map((name) => ({ name })) };
+        },
+        listComments: async () => ({ data: comments }),
+        createComment: async (params: Record<string, unknown>) => {
+          postedGateComments.push(String(params.body));
+          return { data: { id: postedGateComments.length } };
+        },
+      },
+      pulls: {
+        get: async () => ({ data: pr }),
+        listReviews: async () => ({ data: reviews }),
+      },
+      repos: {
+        getContent: async () => ({
+          data: {
+            content: Buffer.from(JSON.stringify({ issue_id: 'UTV2-1585', tier })).toString('base64'),
+            encoding: 'base64',
+          },
+        }),
+      },
+    },
+  };
+
+  async function run(eventName: 'pull_request' | 'pull_request_review' | 'issue_comment') {
+    const payload =
+      eventName === 'issue_comment'
+        ? { issue: { number: prNumber }, comment: { body: 'PM_VERDICT:' } }
+        : { pull_request: pr };
+    let evaluatorFailure: string | null = null;
+    const core = {
+      setFailed: (message: string) => {
+        evaluatorFailure = message;
+      },
+    };
+    const requireModule = (specifier: unknown) => {
+      assert.strictEqual(specifier, './scripts/ops/merge-gate-verdict.cjs');
+      return verdictModule;
+    };
+
+    await evaluate(github, { eventName, payload, repo: { owner: 'unit-talk', repo: 'v2' } }, core, requireModule);
+    assert.strictEqual(
+      evaluatorFailure,
+      null,
+      'policy denial must fail the canonical check without failing the Merge Gate Evaluator job',
+    );
+  }
+
+  return {
+    checks,
+    comments,
+    reviews,
+    labels,
+    postedGateComments,
+    prNumber,
+    headSha,
+    run,
+    createCount: () => createCount,
+  };
+}
+
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
   const { lintMigrationContent } = await import('../lint-migrations.mjs');
 
@@ -315,6 +475,154 @@ test('UTV2-1551: merge gate is structurally wired for PM verdict comments and ev
     gateIf,
     /github\.event_name == 'pull_request'/,
     'merge gate job condition must run unconditionally for pull_request events (including opened) without a narrower per-type restriction',
+  );
+});
+
+test('UTV2-1585: only the custom exact-head check owns the required Merge Gate identity', () => {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const pullRequestReview = workflowEvent('merge-gate.yml', 'pull_request_review');
+  const gate = objectField(objectField(workflow, 'jobs'), 'gate');
+  const concurrency = objectField(gate, 'concurrency');
+
+  assert.strictEqual(
+    gate.name,
+    'Merge Gate Evaluator',
+    'the native Actions job check must not collide with the required custom Merge Gate check',
+  );
+  assert.deepStrictEqual(stringArrayField(pullRequestReview, 'types'), ['submitted', 'edited', 'dismissed']);
+  assert.match(
+    stringField(concurrency, 'group'),
+    /inputs\.pull_number/,
+    'workflow_dispatch must serialize on the same per-PR concurrency identity as webhook events',
+  );
+  assert.strictEqual(
+    concurrency['cancel-in-progress'],
+    false,
+    'canonical check evaluations must queue instead of cancelling a run that already marked the check in_progress',
+  );
+});
+
+test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
+  const harness = await createMergeGateHarness('T1');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.createCount(), 1);
+  assert.strictEqual(harness.checks.length, 1);
+  const canonicalId = harness.checks[0].id;
+  assert.strictEqual(harness.checks[0].external_id, `merge-gate:${harness.prNumber}:${harness.headSha}`);
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.createCount(), 1, 'a pre-verdict review event must not create a second check');
+  assert.strictEqual(harness.checks.length, 1);
+  assert.strictEqual(harness.checks[0].id, canonicalId);
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.labels.push('t1-approved');
+  harness.comments.push({
+    body: [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: UTV2-1585',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-07-24T15:30:00Z',
+    user: { login: 'griff843', type: 'User' },
+  });
+
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.createCount(), 1, 'the exact-head verdict event must reuse the existing check');
+  assert.strictEqual(harness.checks.length, 1);
+  assert.strictEqual(harness.checks[0].id, canonicalId);
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+});
+
+test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical check', async () => {
+  const harness = await createMergeGateHarness('T2');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.reviews.push({ state: 'APPROVED' });
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+
+  harness.reviews.splice(0, harness.reviews.length, { state: 'DISMISSED' });
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+  assert.strictEqual(harness.createCount(), 1);
+  assert.strictEqual(harness.checks.length, 1);
+});
+
+test('UTV2-1585: same-identity duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
+  const headSha = '1585158515851585158515851585158515851585';
+  const harnessPrNumber = 1585;
+  const harness = await createMergeGateHarness('T3', [
+    {
+      id: 4,
+      name: 'Merge Gate',
+      head_sha: headSha,
+      external_id: `merge-gate:${harnessPrNumber}:${headSha}`,
+      app: { slug: 'github-actions' },
+      status: 'completed',
+      conclusion: 'failure',
+    },
+    {
+      id: 9,
+      name: 'Merge Gate',
+      head_sha: headSha,
+      external_id: `merge-gate:${harnessPrNumber}:${headSha}`,
+      app: { slug: 'github-actions' },
+      status: 'completed',
+      conclusion: 'failure',
+    },
+  ]);
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.createCount(), 0, 'an existing exact-head check must be reused');
+  assert.strictEqual(harness.checks.find((check) => check.id === 9)?.conclusion, 'success');
+  assert.strictEqual(harness.checks.find((check) => check.id === 4)?.conclusion, 'neutral');
+  assert.ok(
+    harness.checks.every((check) => check.conclusion !== 'failure'),
+    'no older same-name failure may remain capable of blocking the unchanged head',
+  );
+});
+
+// UTV2-1585 (adversarial review finding): true pre-fix duplicates -- the ones
+// actually left on already-polluted heads like PR #1304's, created by the
+// former create-on-every-event behavior -- never had a canonical (or any
+// matching) external_id set. Matching on external_id alone would let those
+// survive untouched forever. Adoption must work by name + exact head SHA +
+// app alone, regardless of external_id.
+test('UTV2-1585: pre-fix legacy duplicates without a canonical external_id are adopted and neutralized, not left blocking', async () => {
+  const headSha = '1585158515851585158515851585158515851585';
+  const harnessPrNumber = 1585;
+  // Mirrors the real state observed on PR #1304's head after the former
+  // create-on-every-event behavior: six same-head "Merge Gate" checks, none
+  // carrying the canonical external_id format, four of them failure.
+  const harness = await createMergeGateHarness('T3', [
+    { id: 100, name: 'Merge Gate', head_sha: headSha, external_id: '3dd4c479-23c0-58a9-94de-3da9c130d6a9', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 101, name: 'Merge Gate', head_sha: headSha, external_id: 'ea2023ef-0e17-54d1-a5ec-18c7a0431972', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 102, name: 'Merge Gate', head_sha: headSha, external_id: '066178b1-5a03-5e40-a62d-aae8aa550458', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 103, name: 'Merge Gate', head_sha: headSha, external_id: 'ee820f51-4b9a-58ba-b049-ba1e6ee02988', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 104, name: 'Merge Gate', head_sha: headSha, external_id: 'af7bb44a-f42d-58a9-b23f-66a41ffb4dd8', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
+    { id: 105, name: 'Merge Gate', head_sha: headSha, external_id: '', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
+  ]);
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.createCount(), 0, 'a same-head legacy check must be adopted, not duplicated with a 7th check');
+  assert.strictEqual(harness.checks.length, 6, 'no new check-run is created when six legacy same-head checks already exist');
+  const canonical = harness.checks.find((check) => check.id === 105);
+  assert.strictEqual(canonical?.external_id, `merge-gate:${harnessPrNumber}:${headSha}`, 'the adopted legacy check (highest id among non-canonical matches) must be bound to the canonical external_id going forward');
+  for (const legacyId of [100, 101, 102, 103, 104]) {
+    assert.strictEqual(harness.checks.find((check) => check.id === legacyId)?.conclusion, 'neutral', `legacy check ${legacyId} must be neutralized, not left as failure`);
+  }
+  assert.ok(
+    harness.checks.every((check) => check.conclusion !== 'failure'),
+    'no pre-fix legacy failure may remain capable of blocking an already-polluted head once this evaluator runs',
   );
 });
 
