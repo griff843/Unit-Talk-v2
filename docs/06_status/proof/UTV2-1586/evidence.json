@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1586",
+  "title": "Trusted post-merge repair can bind a missing PR URL",
+  "tier": "T1",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-24T20:18:25Z",
+  "sha_binding": {
+    "verified_source_sha": "2df5b423ef3a5b67cc4e18c665e8d439b03333df",
+    "verified_source_note": "Substantive implementation commit. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-07-24T20:18:25Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex/utv2-1586-trusted-post-merge-pr-binding",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/post-merge-lane-close.yml",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-close.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1586/evidence.json",
+      "docs/06_status/proof/UTV2-1586/model-routing.json",
+      "docs/06_status/proof/UTV2-1586/verification.md"
+    ],
+    "runtime_change": false,
+    "workflow_change": true,
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Static verification, the full unit suite, live database smoke tests, and the broader T1 live-proof battery passed."
+    },
+    "focused_lane_close_tests": {
+      "command": "npx tsx --test scripts/ops/lane-close.test.ts",
+      "status": "PASS",
+      "tests": 108,
+      "pass": 108,
+      "fail": 0,
+      "skipped": 0,
+      "detail": "Includes all 17 required trusted repair cases, transaction rollback, terminal cleanup, regression guards, workflow forwarding, and the real UTV2-1585 PR #1305 fixture."
+    },
+    "focused_workflow_tests": {
+      "command": "npx tsx --test scripts/ops/workflow-hardening.test.ts",
+      "status": "PASS",
+      "tests": 44,
+      "pass": 44,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "manifest_validation": {
+      "command": "npx tsx scripts/ops/lane-manifest.ts validate UTV2-1586 --json",
+      "status": "PASS",
+      "code": "manifest_valid"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "classification": "Governance tooling and workflow change; the live DB suite is the mandatory T1 runtime gate and does not exercise GitHub PR validation directly.",
+    "production_mutation_by_lane": false,
+    "broader_live_proof": {
+      "command": "pnpm test:t1-proof:live",
+      "status": "PASS",
+      "fail": 0,
+      "skipped": 1,
+      "skip_reason": "The latest provider snapshot was older than the bounded lookback window; the test classifies this as stale provider data rather than a code failure."
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Only the exact trusted Post-Merge Lane Close context may supply an explicit PR.",
+      "status": "PASS",
+      "evidence": "The new path consumes the existing isTrustedPostMergeAutomation result; local, ordinary CI, flag-only, and missing-repair invocations fail with distinct codes."
+    },
+    {
+      "criterion": "Validate the supplied PR completely before manifest mutation.",
+      "status": "PASS",
+      "evidence": "Repository, existence, merged state, exact branch and issue title identity, authoritative merge SHA, original manifest/proof diff, conflicting binding, and main reachability are checked before repairMergedLaneManifest receives the PR."
+    },
+    {
+      "criterion": "Reject repair substitution and missing implementation artifacts distinctly.",
+      "status": "PASS",
+      "evidence": "The candidate must contain the issue lane manifest plus every expected_proof_path; missing manifest and missing proof paths emit separate repair_pr_substitution and missing_implementation_artifacts codes."
+    },
+    {
+      "criterion": "Trusted workflow dispatch accepts an optional exact PR and forwards it only to the trusted repair command.",
+      "status": "PASS",
+      "evidence": "workflow_dispatch exposes optional pr; a quoted shell argument array adds --pr only to ops:lane-close with --repair-merged and --post-merge-trusted."
+    },
+    {
+      "criterion": "Repair is transactional and reaches terminal cleanup or restores prior local state.",
+      "status": "PASS",
+      "evidence": "Rollback snapshots manifest, proof tree, sync record, lease, and merge mutex. Successful trusted repair finalizes done/closed_at, removes sync, releases locks, and removes only the exact clean registered non-current worktree."
+    },
+    {
+      "criterion": "All 17 required cases, including the UTV2-1585/#1305 fixture, are covered.",
+      "status": "PASS",
+      "evidence": "Focused lane-close suite passes 108/108 and contains numbered UTV2-1586 cases 1 through 17 using merge SHA 97527b791fc37acce41f4f46fd88699dce054b66."
+    }
+  ],
+  "known_limitations": [
+    "The trusted hosted runner can remove only a worktree present on that runner. A recorded path from another machine is treated as already absent there; the required local orchestration reconciliation remains the authority for machine-local stale worktrees.",
+    "The UTV2-1585 live workflow replay is explicitly a post-merge follow-up and is not performed by this implementation PR."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true
+  }
+}
