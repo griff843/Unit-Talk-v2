@@ -10,3 +10,4 @@ entities:
   proofs:
     - docs/06_status/proof/UTV2-1584/evidence.json
     - docs/06_status/proof/UTV2-1584/model-routing.json
+    - docs/06_status/proof/UTV2-1584/verification.md

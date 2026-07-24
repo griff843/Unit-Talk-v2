@@ -4,24 +4,29 @@
   "title": "Safe existing-branch readmission for interrupted lanes",
   "tier": "T1",
   "lane_type": "governance",
-  "generated_at": "2026-07-24T09:52:30Z",
+  "generated_at": "2026-07-24T10:12:22Z",
+  "head_sha": "26a4d86211a69950d8a323f38a20d9d6731b46af",
+  "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "c7c5df3600c5d9c3d121b303cb136205ca7c313f",
-    "verified_source_note": "Implementation commit verified before the additive proof and control-plane closeout commit.",
+    "verified_source_sha": "26a4d86211a69950d8a323f38a20d9d6731b46af",
+    "verified_source_note": "Final substantive implementation commit; subsequent commits are limited to proof and lane metadata.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-24T10:12:22Z",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
     "merge_sha": null
   },
   "verifier": {
-    "identity": "codex-cli/gpt-5.6-sol",
-    "role": "implementation-lane"
+    "identity": "codex-cli/utv2-1584",
+    "role": "implementer",
+    "independent_owner_certifier": false
   },
   "static_proof": {
     "pnpm_verify": {
       "command": "pnpm verify",
       "status": "PASS",
       "exit_code": 0,
-      "verified_source_sha": "c7c5df3600c5d9c3d121b303cb136205ca7c313f",
+      "verified_source_sha": "26a4d86211a69950d8a323f38a20d9d6731b46af",
       "steps": {
         "ops_sync_check": "PASS",
         "ops_system_alignment_check": "PASS",
@@ -68,7 +73,7 @@
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "duration_ms": 99669,
+      "duration_ms": 101993.470691,
       "supabase_project": "zfzdnfwdarxucxtaojxm"
     },
     "t1_live_suite": {
@@ -82,24 +87,64 @@
       ]
     },
     "queries": [
-      "database repository bundle persists submission and settlement",
-      "invalid atomic enqueue rolls back lifecycle and outbox writes",
-      "invalid atomic delivery confirmation rolls back outbox, receipt, lifecycle, and audit writes",
-      "invalid atomic settlement rolls back settlement, lifecycle, and audit writes",
-      "participant upsert prevents duplicate rows",
-      "re-settlement creates an additive correction without duplicate base rows",
-      "settlement correction chain preserves the original row"
+      {
+        "table": "picks",
+        "description": "live submission, lifecycle transition, settlement, and cleanup assertions"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "live valid transition inserts and invalid transition rollback assertions"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "live enqueue and delivery-confirmation atomic rollback assertions"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "live invalid delivery receipt rollback assertions"
+      },
+      {
+        "table": "settlement_records",
+        "description": "live additive settlement correction and original-row immutability assertions"
+      },
+      {
+        "table": "audit_log",
+        "description": "live enqueue, delivery, and settlement audit rollback assertions"
+      },
+      {
+        "table": "participants",
+        "description": "live participant upsert duplicate-prevention assertion"
+      }
     ],
     "row_counts": [
       {
-        "note": "No lane-specific production rows or schema were changed. Shared live proof fixtures exercised picks, pick_lifecycle, distribution_outbox, distribution_receipts, audit_log, settlement_records, and participants.",
-        "lane_specific_mutations": 0
+        "table": "distribution_outbox",
+        "count": 201,
+        "filter": "status=pending",
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 799,
+        "filter": "status=processing",
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 3623,
+        "filter": "status=sent",
+        "status": "observed"
       }
     ],
+    "row_counts_captured_at": "2026-07-24T10:12:00Z",
+    "lane_specific_mutations": 0,
     "pipeline_health_observation": {
       "command": "pnpm pipeline:health -- --json",
       "status": "DOWN",
       "lane_caused": false,
+      "worker_heartbeats_in_10m": 0,
+      "processing_over_stale_claim_threshold": 791,
+      "pending_over_silent_stranding_threshold": 197,
       "note": "Pre-existing worker/backlog condition documented in the lane packet; unrelated to the readmission tooling diff and not treated as a passing runtime claim."
     }
   },
@@ -113,5 +158,15 @@
     "adversarial_test_matrix": "PASS",
     "operator_runbook": "PASS"
   },
-  "verdict": "PASS"
+  "owner_boundary": {
+    "independent_claude_review": "requested_after_pr_open",
+    "t1_approved_label": "not_applied_by_executor",
+    "pm_verdict_v1": "not_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "Live pipeline health is DOWN because the worker has no recent heartbeat and historical outbox rows remain stranded; the issue packet identifies worker DOWN as pre-existing and this governance-only lane does not modify delivery runtime.",
+    "The UTV2-1282 live proof skipped its window-content assertion because the newest provider_offer_history row is older than 72 hours; the test classifies this as stale provider data, not a code regression."
+  ],
+  "verdict": "READY_FOR_REVIEW"
 }
