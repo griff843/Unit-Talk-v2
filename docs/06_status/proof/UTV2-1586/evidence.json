@@ -4,14 +4,14 @@
   "title": "Trusted post-merge repair can bind a missing PR URL",
   "tier": "T1",
   "status": "ready_for_pm_review",
-  "generated_at": "2026-07-24T20:36:25Z",
+  "generated_at": "2026-07-24T21:05:19Z",
   "sha_binding": {
-    "verified_source_sha": "9a2dba7726514a2f5ba7e5515fd7b8393b214b20",
-    "verified_source_note": "Final substantive implementation commit, including the pre-invocation rollback snapshot that prevents a failed repair from preserving an auto-acquired merge mutex. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "verified_source_sha": "52ff083536d1e120e39c4b21a87c9241041a5920",
+    "verified_source_note": "Final substantive implementation commit, including rollback-safe coordination snapshots, control-plane filtering from files_changed, and staging of the terminal sync-file deletion. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-24T20:36:25Z",
+    "bound_at": "2026-07-24T21:05:19Z",
     "pr_number": null,
     "approved_head_sha": null
   },
@@ -51,7 +51,7 @@
       "pass": 108,
       "fail": 0,
       "skipped": 0,
-      "detail": "Includes all 17 required trusted repair cases, transaction rollback, terminal cleanup, regression guards, workflow forwarding, and the real UTV2-1585 PR #1305 fixture."
+      "detail": "Includes all 17 required trusted repair cases, transaction rollback, terminal cleanup, control-plane filtering, sync-deletion staging, regression guards, workflow forwarding, and the real UTV2-1585 PR #1305 fixture."
     },
     "focused_workflow_tests": {
       "command": "npx tsx --test scripts/ops/workflow-hardening.test.ts",
@@ -178,7 +178,7 @@
     {
       "criterion": "Repair is transactional and reaches terminal cleanup or restores prior local state.",
       "status": "PASS",
-      "evidence": "Rollback snapshots manifest, proof tree, sync record, lease, and merge mutex before auto-acquiring the mutex. Failed repair removes coordination state created by the invocation; successful trusted repair finalizes done/closed_at, removes sync, releases locks, and removes only the exact clean registered non-current worktree."
+      "evidence": "Rollback snapshots manifest, proof tree, sync record, lease, and merge mutex before auto-acquiring the mutex. Failed repair removes coordination state created by the invocation; successful trusted repair finalizes done/closed_at, removes sync, stages that tracked deletion in the workflow, releases locks, and removes only the exact clean registered non-current worktree."
     },
     {
       "criterion": "All 17 required cases, including the UTV2-1585/#1305 fixture, are covered.",

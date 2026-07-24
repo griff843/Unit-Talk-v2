@@ -1,4 +1,6 @@
-# UTV2-1586 verification
+# PROOF: UTV2-1586
+
+MERGE_SHA: 52ff083536d1e120e39c4b21a87c9241041a5920
 
 ## Summary
 
@@ -7,17 +9,23 @@ the exact trusted workflow context. It resolves and validates the original PR
 before mutation, rolls back partial repair state on failure, and completes
 terminal sync/lease/mutex/worktree cleanup on success.
 
-## Evidence
+ASSERTIONS:
 
-- Final substantive implementation commit: `9a2dba7726514a2f5ba7e5515fd7b8393b214b20`
-- Transaction hardening: rollback now snapshots coordination state before
+- [x] Trusted explicit PR binding is accepted only in the exact post-merge
+  workflow context and only together with repair mode.
+- [x] PR repository, merge state, issue/branch identity, original artifacts,
+  binding conflicts, authoritative merge SHA, and main reachability are
+  validated before mutation.
+- [x] Transaction rollback snapshots coordination state before
   auto-acquiring the merge mutex, preventing failed repair ghost capacity
-- Focused lane-close result: 108 tests, 108 pass, 0 fail, 0 skipped
-- Focused workflow-hardening result: 44 tests, 44 pass, 0 fail, 0 skipped
-- Live database smoke result: 7 tests, 7 pass, 0 fail
-- Manifest validation: PASS (`manifest_valid`)
-- Diff check: PASS
-- R-level result: PASS
+- [x] Trusted repair records implementation and proof paths without polluting
+  `files_changed` with lane manifest or per-issue sync control artifacts.
+- [x] Successful trusted repair completes terminal manifest, sync, lease,
+  mutex, and safe worktree cleanup.
+- [x] The post-merge workflow stages a sync-file deletion after lane-close
+  removes the working-tree file.
+
+EVIDENCE:
 
 ## Verification
 
