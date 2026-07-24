@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   buildRepairRequiredViaPrPacket,
+  completeSuccessfulLaneClose,
+  createRepairRollbackTransaction,
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
@@ -16,6 +18,8 @@ import {
   remediationForCode,
   requireCloseCommitSha,
   TruthCheckDriftError,
+  validateTrustedPostMergeRepair,
+  type RepairMergedPrInfo,
   type CloseoutFailureCode,
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
@@ -70,6 +74,29 @@ function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
     created_by: 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
+    ...overrides,
+  };
+}
+
+function createTrustedRepairPr(
+  manifest: LaneManifest,
+  overrides: Partial<RepairMergedPrInfo> = {},
+): RepairMergedPrInfo {
+  const number = 1305;
+  return {
+    url: `https://github.com/griff843/Unit-Talk-v2/pull/${number}`,
+    number,
+    repository: 'griff843/Unit-Talk-v2',
+    state: 'merged',
+    merged: true,
+    mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
+    headRefName: manifest.branch,
+    title: `feat(ops): ${manifest.issue_id} implementation`,
+    files: [
+      `docs/06_status/lanes/${manifest.issue_id}.json`,
+      ...manifest.expected_proof_paths,
+      'scripts/ops/lane-close.ts',
+    ],
     ...overrides,
   };
 }
@@ -928,6 +955,15 @@ const allFailureCodes: CloseoutFailureCode[] = [
   'registry_mismatch',
   'infra_error',
   'truth_check_failed',
+  'untrusted_invocation',
+  'explicit_pr_requires_repair',
+  'pr_not_found',
+  'wrong_repository',
+  'issue_identity_mismatch',
+  'conflicting_pr_binding',
+  'repair_pr_substitution',
+  'missing_implementation_artifacts',
+  'unreachable_merge_sha',
   'repair_required_via_pr',
 ];
 
@@ -947,7 +983,8 @@ test('post-merge lane close workflow delegates to repair-merged lane closeout', 
     'utf8',
   );
 
-  assert.match(workflow, /pnpm ops:lane-close "\$ISSUE_ID" --repair-merged --explain/);
+  assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted\)/);
+  assert.match(workflow, /pnpm ops:lane-close "\$\{close_args\[@\]\}"/);
   assert.match(workflow, /Bind proof artifacts to merge SHA/);
   assert.match(workflow, /git add docs\/06_status\/proof\/"\$ISSUE_ID"\//);
   assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID"/);
@@ -1272,4 +1309,380 @@ test('guard on a non-main branch remains a no-op regardless of trustedPostMerge 
     });
     assert.strictEqual(guard, null);
   });
+});
+
+// ── UTV2-1586: trusted missing-PR binding ────────────────────────────────────
+
+function createMissingBindingManifest(
+  overrides: Partial<LaneManifest> = {},
+): LaneManifest {
+  return createManifest({
+    issue_id: 'UTV2-1585',
+    branch: 'codex/utv2-1585-merge-gate-canonical-check-identity',
+    status: 'started',
+    commit_sha: null,
+    pr_url: null,
+    files_changed: [],
+    expected_proof_paths: [
+      'docs/06_status/proof/UTV2-1585/evidence.json',
+      'docs/06_status/proof/UTV2-1585/model-routing.json',
+    ],
+    ...overrides,
+  });
+}
+
+test('UTV2-1586 #1 trusted workflow invocation may bind a missing PR', () => {
+  const manifest = createMissingBindingManifest();
+  const pr = createTrustedRepairPr(manifest);
+  const validation = validateTrustedPostMergeRepair(manifest, '#1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => pr,
+    isMergeReachable: () => true,
+  });
+
+  assert.strictEqual(validation.ok, true);
+  assert.ok(validation.pr);
+  const repair = repairMergedLaneManifest(manifest, {
+    validatedPr: validation.pr ?? undefined,
+  });
+  assert.strictEqual(repair.ok, true);
+  assert.strictEqual(repair.manifest.pr_url, pr.url);
+  assert.strictEqual(repair.manifest.commit_sha, pr.mergeSha);
+  assert.deepStrictEqual(repair.manifest.files_changed, pr.files);
+});
+
+test('UTV2-1586 #2 local invocation cannot bind a missing PR', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: false,
+  });
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'untrusted_invocation');
+});
+
+test('UTV2-1586 #3 --post-merge-trusted alone cannot grant trust', () => {
+  const manifest = createMissingBindingManifest();
+  const trusted = isTrustedPostMergeAutomation({}, { postMergeTrusted: true });
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: trusted,
+  });
+  assert.strictEqual(trusted, false);
+  assert.strictEqual(result.code, 'untrusted_invocation');
+});
+
+test('UTV2-1586 #4 supplied --pr requires --repair-merged', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: false,
+    trustedPostMerge: true,
+  });
+  assert.strictEqual(result.code, 'explicit_pr_requires_repair');
+});
+
+test('UTV2-1586 #5 matching existing PR binding is an idempotent no-op', () => {
+  const base = createMissingBindingManifest({
+    status: 'merged',
+    commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    preflight_token: 'dispatch-auto',
+  });
+  const pr = createTrustedRepairPr(base);
+  const manifest = { ...base, files_changed: pr.files ?? [] };
+  const validation = validateTrustedPostMergeRepair(manifest, '#1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => pr,
+    isMergeReachable: () => true,
+  });
+  assert.strictEqual(validation.ok, true);
+
+  const repair = repairMergedLaneManifest(manifest, {
+    validatedPr: validation.pr ?? undefined,
+  });
+  assert.strictEqual(repair.code, 'already_repaired');
+  assert.deepStrictEqual(repair.changed_fields, []);
+});
+
+test('UTV2-1586 #6 conflicting existing PR binding fails distinctly', () => {
+  const manifest = createMissingBindingManifest({
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1304',
+  });
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+  });
+  assert.strictEqual(result.code, 'conflicting_pr_binding');
+});
+
+test('UTV2-1586 #7 wrong-repository PR fails distinctly', () => {
+  const result = validateTrustedPostMergeRepair(
+    createMissingBindingManifest(),
+    'https://github.com/someone-else/Unit-Talk-v2/pull/1305',
+    { repairMerged: true, trustedPostMerge: true },
+  );
+  assert.strictEqual(result.code, 'wrong_repository');
+});
+
+test('UTV2-1586 PR lookup failure maps to pr_not_found', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => {
+      throw new Error('not found');
+    },
+  });
+  assert.strictEqual(result.code, 'pr_not_found');
+});
+
+test('UTV2-1586 #8 unmerged PR fails distinctly', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(manifest, {
+      state: 'open',
+      merged: false,
+      mergeSha: null,
+    }),
+  });
+  assert.strictEqual(result.code, 'pr_not_merged');
+});
+
+test('UTV2-1586 #9 wrong issue or branch identity fails distinctly', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(manifest, {
+      headRefName: 'codex/utv2-9999-unrelated',
+      title: 'feat(ops): UTV2-9999 unrelated',
+    }),
+  });
+  assert.strictEqual(result.code, 'issue_identity_mismatch');
+});
+
+test('UTV2-1586 #10 later repair PR cannot substitute for implementation PR', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(manifest, {
+      files: ['docs/06_status/proof/UTV2-1585/verification.md'],
+    }),
+  });
+  assert.strictEqual(result.code, 'repair_pr_substitution');
+});
+
+test('UTV2-1586 missing declared implementation proof fails distinctly', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(manifest, {
+      files: [`docs/06_status/lanes/${manifest.issue_id}.json`],
+    }),
+  });
+  assert.strictEqual(result.code, 'missing_implementation_artifacts');
+});
+
+test('UTV2-1586 #11 changed or unreachable merge SHA fails closed', () => {
+  const staleManifest = createMissingBindingManifest({ commit_sha: 'caller-changed-sha' });
+  const mismatch = validateTrustedPostMergeRepair(staleManifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(staleManifest),
+    isMergeReachable: () => true,
+  });
+  assert.strictEqual(mismatch.code, 'pr_sha_mismatch');
+
+  const manifest = createMissingBindingManifest();
+  const unreachable = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(manifest),
+    isMergeReachable: () => false,
+  });
+  assert.strictEqual(unreachable.code, 'unreachable_merge_sha');
+});
+
+test('UTV2-1586 #12 failed truth-check rollback restores null PR binding and proof bytes', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1586-rollback-'));
+  const issueId = 'UTV2-1585';
+  const manifestPath = path.join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
+  const proofPath = path.join(repoRoot, 'docs', '06_status', 'proof', issueId, 'evidence.json');
+  const syncPath = path.join(repoRoot, '.ops', 'sync', `${issueId}.yml`);
+  const leasePath = path.join(repoRoot, '.ops', 'leases', `${issueId}.json`);
+  const mergeLockPath = path.join(repoRoot, '.ops', 'merge-lock.json');
+  try {
+    const original = createMissingBindingManifest();
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    fs.mkdirSync(path.dirname(proofPath), { recursive: true });
+    fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+    fs.mkdirSync(path.dirname(leasePath), { recursive: true });
+    fs.writeFileSync(manifestPath, `${JSON.stringify(original, null, 2)}\n`);
+    fs.writeFileSync(proofPath, '{"sha":"pre-repair"}\n');
+    fs.writeFileSync(syncPath, 'entities:\n  issues: [UTV2-1585]\n');
+    fs.writeFileSync(leasePath, '{"status":"active"}\n');
+    fs.writeFileSync(mergeLockPath, '{"status":"held"}\n');
+
+    const transaction = createRepairRollbackTransaction(issueId, repoRoot);
+    fs.writeFileSync(manifestPath, `${JSON.stringify({
+      ...original,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+    }, null, 2)}\n`);
+    fs.writeFileSync(proofPath, '{"sha":"partially-rebound"}\n');
+    fs.rmSync(syncPath);
+    fs.writeFileSync(leasePath, '{"status":"released"}\n');
+    fs.writeFileSync(mergeLockPath, '{"status":"released"}\n');
+    transaction.rollback();
+
+    const restored = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as LaneManifest;
+    assert.strictEqual(restored.pr_url, null);
+    assert.strictEqual(restored.commit_sha, null);
+    assert.strictEqual(fs.readFileSync(proofPath, 'utf8'), '{"sha":"pre-repair"}\n');
+    assert.strictEqual(fs.readFileSync(syncPath, 'utf8'), 'entities:\n  issues: [UTV2-1585]\n');
+    assert.strictEqual(fs.readFileSync(leasePath, 'utf8'), '{"status":"active"}\n');
+    assert.strictEqual(fs.readFileSync(mergeLockPath, 'utf8'), '{"status":"held"}\n');
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1586 #13 successful repair reaches done with terminal fields and cleanup', async () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1586-success-'));
+  const manifest = createMissingBindingManifest();
+  const pr = createTrustedRepairPr(manifest);
+  const repair = repairMergedLaneManifest(manifest, { validatedPr: pr });
+  const truthCheck = createTruthCheckResult({
+    issue_id: manifest.issue_id,
+    tier: manifest.tier,
+    merge_sha: pr.mergeSha,
+    pr_url: pr.url,
+  });
+  const cleanupCalls: string[] = [];
+  const syncPath = path.join(repoRoot, '.ops', 'sync', `${manifest.issue_id}.yml`);
+  fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+  fs.writeFileSync(syncPath, 'entities:\n  issues: [UTV2-1585]\n');
+
+  try {
+    const completion = await completeSuccessfulLaneClose(
+      manifest.issue_id,
+      repair.manifest,
+      truthCheck,
+      {
+        trustedBindingRepair: true,
+        repoRoot,
+        finalizeManifest: () => ({
+          ...repair.manifest,
+          status: 'done',
+          closed_at: '2026-07-24T21:00:00.000Z',
+        }),
+        transitionLinear: async () => {
+          cleanupCalls.push('linear');
+        },
+        releaseLocks: (issueId, branch) => {
+          cleanupCalls.push(`locks:${issueId}:${branch}`);
+          return { warnings: [] };
+        },
+        cleanupWorktree: () => {
+          cleanupCalls.push('worktree');
+          return 'removed';
+        },
+      },
+    );
+
+    assert.strictEqual(repair.ok, true);
+    assert.strictEqual(completion.manifest.status, 'done');
+    assert.strictEqual(completion.manifest.closed_at, '2026-07-24T21:00:00.000Z');
+    assert.strictEqual(completion.manifest.pr_url, pr.url);
+    assert.strictEqual(completion.manifest.commit_sha, pr.mergeSha);
+    assert.deepStrictEqual(completion.manifest.files_changed, pr.files);
+    assert.ok(completion.manifest.truth_check_history.some((entry) => entry.verdict === 'pass'));
+    assert.strictEqual(completion.sync_removed, true);
+    assert.strictEqual(fs.existsSync(syncPath), false);
+    assert.strictEqual(completion.worktree_cleanup, 'removed');
+    assert.deepStrictEqual(cleanupCalls, [
+      'linear',
+      `locks:${manifest.issue_id}:${manifest.branch}`,
+      'worktree',
+    ]);
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1586 #14 ordinary lane-close repair usage without --pr is unchanged', () => {
+  const manifest = createManifest();
+  const result = repairMergedLaneManifest(manifest, {
+    fetchPr: () => ({
+      url: manifest.pr_url ?? '',
+      state: 'merged',
+      merged: true,
+      mergeSha: 'ordinary-authoritative-sha',
+    }),
+  });
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.manifest.commit_sha, 'ordinary-authoritative-sha');
+});
+
+test('UTV2-1586 #15 pre-existing repair path with populated pr_url is unchanged', () => {
+  const manifest = createManifest({
+    status: 'in_review',
+    commit_sha: null,
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+  });
+  const result = repairMergedLaneManifest(manifest, {
+    fetchPr: () => ({
+      url: manifest.pr_url ?? '',
+      state: 'merged',
+      merged: true,
+      mergeSha: 'pre-existing-path-sha',
+    }),
+  });
+  assert.strictEqual(result.code, 'repaired');
+  assert.strictEqual(result.manifest.pr_url, manifest.pr_url);
+});
+
+test('UTV2-1586 #16 workflow dispatch forwards PR only to trusted repair command', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  assert.match(workflow, /pr:\n\s+description: "Original implementation PR URL or number/);
+  assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted\)/);
+  assert.match(workflow, /close_args\+=\(--pr "\$EXPLICIT_PR"\)/);
+  assert.strictEqual((workflow.match(/--pr "\$EXPLICIT_PR"/gu) ?? []).length, 1);
+});
+
+test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact merge SHA', () => {
+  const manifest = createMissingBindingManifest();
+  const pr = createTrustedRepairPr(manifest, {
+    title: 'feat(ops): UTV2-1585 canonicalize Merge Gate check identity',
+    files: [
+      '.github/workflows/merge-gate.yml',
+      '.ops/sync/UTV2-1585.yml',
+      'docs/06_status/lanes/UTV2-1585.json',
+      'docs/06_status/proof/UTV2-1585/evidence.json',
+      'docs/06_status/proof/UTV2-1585/model-routing.json',
+      'docs/06_status/proof/UTV2-1585/verification.md',
+      'scripts/ops/workflow-hardening.test.ts',
+    ],
+  });
+  const validation = validateTrustedPostMergeRepair(manifest, '#1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => pr,
+    isMergeReachable: (sha) => sha === '97527b791fc37acce41f4f46fd88699dce054b66',
+  });
+  assert.strictEqual(validation.ok, true);
+  const repair = repairMergedLaneManifest(manifest, {
+    validatedPr: validation.pr ?? undefined,
+  });
+  assert.strictEqual(repair.manifest.pr_url, 'https://github.com/griff843/Unit-Talk-v2/pull/1305');
+  assert.strictEqual(repair.manifest.commit_sha, '97527b791fc37acce41f4f46fd88699dce054b66');
 });
