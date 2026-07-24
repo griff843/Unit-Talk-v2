@@ -120,6 +120,7 @@ For each validated target:
 
 1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
 2. Determine file scope from the issue description (look for explicit file paths first; fall back to package names or area labels). Declare the **narrowest possible scope** — list individual files when known (`apps/worker/src/processor.ts`), not directory globs (`apps/worker/**`), unless the issue explicitly requires changes across the full subtree. Overly broad locks block other lanes unnecessarily.
+2.5. **For a T1 Claude candidate only:** before calling `ops:lane-start`, check whether `/three-brain`'s routing decision (Phase 1) identified one of the four ratified Fable pilot trigger classes for this issue (`.claude/commands/three-brain.md`'s "Fable 5 pilot routing" section). If so, determine the trigger class and a one-line rationale now — this is the ONLY place the trigger class is decided, and it must happen before lane-start, not after. **Ordering matters and is enforced, not advisory** (UTV2-1569 PR #1292 fix): resolving the routing decision after the manifest already exists means a real Fable planning pass can run with no `planning_model_routing` evidence ever persisted, and `evaluateFableRoutingEvidence()` would then silently skip instead of enforcing the required evidence. There is no separate "resolve routing" step for the orchestrator to call directly — `ops:lane-start` itself calls `scripts/ops/planning-model-routing.ts#resolveAndRecordPlanningModel()` when given the flags below, so resolving AND recording happens atomically inside lane-start, in the same operation that writes the manifest.
 3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose. Do not check out the lane branch on the main checkout.
 
    ```bash
@@ -127,6 +128,8 @@ For each validated target:
    pnpm ops:lane-start UTV2-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
    ```
    **Codex executors only:** append `--model-profile {profile}` using the profile three-brain resolved (`/three-brain`'s Codex model-profile routing table). `ops:lane-start` rejects a Codex lane started without `--model-profile`, and rejects `--model-profile` on a `claude` executor. See `/three-brain` and `docs/05_operations/policies/codex-model-routing.json`.
+
+   **T1 Claude lane matching a Fable trigger class (step 2.5) only:** append `--fable-trigger-class {class} --fable-rationale "{one-line rationale}"`. `ops:lane-start` resolves the routing decision via `resolveAndRecordPlanningModel()`, and — only if that resolution genuinely selects Fable (pilot active, within caps, trigger class enabled) — atomically records the qualifying task and its estimated usage against `docs/05_operations/FABLE_PILOT_STATE.json` in the same call, before returning. The manifest it writes always carries `planning_model_routing` with whatever model was actually decided (Sonnet on any fallback path, Fable only when genuinely eligible) — Phase 4 below reads this value; it never re-resolves it. Omit both flags entirely for the ordinary case (no trigger class applies) — `planning_model_routing` is simply absent from the manifest, exactly as before.
 
    `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification. Treat the `cwd`/`worktree_path` it reports as the only valid execution directory for that lane.
    For the T3 docs-only fast path only, replace lane creation with:
@@ -170,13 +173,18 @@ For each validated target:
 
 **T1 lanes — mandatory planning phase before execution:**
 
-Spawn a planning subagent before touching any code. Use `model: "sonnet"` (Sonnet 5) for all T1 work — standard and novel/constitutional/governance scope alike. There is no higher planning-model tier: genuinely novel architecture, constitutional scope, or unresolved scope ambiguity is a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+Spawn a planning subagent before touching any code. **Read the planning model from the manifest — never re-resolve it here, and never hardcode a literal.** Phase 3 (step 2.5/3) already resolved the routing decision via `ops:lane-start`'s `--fable-trigger-class`/`--fable-rationale` flags, which called `resolveAndRecordPlanningModel()` and persisted the result into `docs/06_status/lanes/UTV2-{number}.json`'s `planning_model_routing` block — atomically, before this phase ever runs. Re-resolving here (calling the resolver a second time, independently of what Phase 3 already decided and recorded) is exactly the ordering bug UTV2-1569 PR #1292's review caught: the pilot's state could have changed between a Phase-3-time and a Phase-4-time resolution, and a second, unrecorded resolution would let a real Fable pass run with no persisted evidence at all. Read the manifest's `planning_model_routing.model` (or `"claude-sonnet-5"` if the field is absent — the ordinary case) and pass it through `toAgentModelOverride()` for the Agent call's `model` value. There is no manual escalation tier above what Phase 3 already decided: genuinely novel architecture, constitutional scope, or unresolved scope ambiguity outside the four ratified classes is still a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
 
 The plan this subagent produces is an **Outcome Contract** — a planning artifact only. It does not replace the lane manifest, `file_scope_lock`, `expected_proof_paths`, R-level checks, or PM merge gates. Its "Scope" and proof-relevant sections must generate-or-match the lane manifest's `file_scope_lock`/`expected_proof_paths` at lane-start time. Any divergence discovered later (e.g. the PR touches files outside the declared scope) is itself a Rule 9 escalation trigger — do not silently patch the manifest and continue.
 
 ```typescript
+// Read, never re-resolve -- Phase 3 already persisted this atomically with the manifest.
+const plannedModel = manifest.planning_model_routing?.model ?? "claude-sonnet-5";
+// manifest.planning_model_routing?.fallback_used is true whenever Phase 3's Fable
+// trigger class fell back to Sonnet -- report this in Phase 6, never drop it silently.
+
 Agent({
-  model: "sonnet",
+  model: toAgentModelOverride(plannedModel), // "sonnet" | "fable"
   description: `T1 planning: ${issue_id}`,
   prompt: `You are planning a T1 lane before implementation begins. Do not write code.
 
@@ -226,7 +234,7 @@ After the planning subagent returns, immediately post the Outcome Contract as a 
 ```
 mcp__claude_ai_Linear__save_comment({
   issueId: "<issue_id>",
-  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: sonnet\nStatus: awaiting Griff review before implementation begins."
+  body: `## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: ${plannedModel}${manifest.planning_model_routing?.fallback_used ? ` (fallback from ${manifest.planning_model_routing.requested_model}: ${manifest.planning_model_routing.fallback_reason})` : ''}\nStatus: awaiting Griff review before implementation begins.`
 })
 ```
 Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
@@ -236,6 +244,10 @@ Do not begin implementation until Griff approves — either in-session or via a 
 Every Claude lane (T1 after plan approval, T2, T3) implements via a background `Agent` call in the worktree `ops:lane-start` already created — the same pattern already used for Codex. The orchestrator session never edits lane implementation files, never runs `pnpm verify`/tests for the lane, and never pushes lane commits directly; it dispatches, waits for the completion notification, then reviews/merges/closes exactly like a returned Codex PR (Phase 5).
 
 ```typescript
+// Implementation always uses Sonnet, never the resolved planning model above -- "routine
+// coding" is explicitly skip-listed in fable-pilot-policy.json even while the pilot is
+// active. The Fable pilot only ever applies to the planning pass (Phase 4, above) and the
+// advisory review pass (Phase 5, below) -- never to writing the code itself.
 Agent({
   run_in_background: true,
   model: "sonnet",
@@ -324,6 +336,8 @@ Return: APPROVE or REJECT with findings.`
 ```
 
 **Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
+
+**Optional additional Fable advisory review (UTV2-1569) — never a replacement for the codex-return-reviewer critique above:** if this lane matches one of the four ratified Fable pilot trigger classes (most likely `repeated_architecture_bounce` if this PR has already bounced `CHANGES_REQUIRED` more than once on the same architectural question, or `build_mode_certification_review` for a certification packet), call `resolveAndRecordFableAdvisoryReview()` (`scripts/ops/planning-model-routing.ts`, **not** the bare read-only `resolveFableAdvisoryReview()` — a real selection here must atomically record the qualifying task and usage against `FABLE_PILOT_STATE.json` the same way lane-start's planning-time resolution does) with `reviewerIndependentOfAuthor: true` and `taskId: issue_id` before spawning. If it resolves to `claude-fable-5`, spawn an ADDITIONAL ad-hoc background agent (no `subagent_type` — same pattern as the T1 planning subagent in Phase 4, not a persistent `.claude/agents/` contract) with `model: toAgentModelOverride(resolution.routing.model)` and a prompt instructing it to review the unedited diff (`git diff main`, never an author-curated summary) and post its finding using the `fable-review/v1` schema (`docs/05_operations/schemas/fable-review-v1.md`), including the `Reviewed head SHA:` field bound to the PR's exact current head — its `FABLE_REVIEW: ADVISORY` output is posted alongside, never instead of, the mandatory critique above, and never gates APPROVE/REJECT or merge. If the resolution falls back to Sonnet (pilot ineligible for any reason) or the trigger class doesn't apply, skip this step entirely — it is optional in every sense the mandatory critique above is not.
 
 5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
 6. If abandoning an active lane before work begins, release the lease explicitly:

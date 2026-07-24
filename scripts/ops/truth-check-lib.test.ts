@@ -5,9 +5,11 @@ import {
   checkCommitReachableFromMain,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
+  evaluateFableRoutingEvidence,
   evaluateRequiredChecksWithHeadFallback,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
+  findLatestFableReview,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
@@ -15,6 +17,7 @@ import {
   parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
   type EvidenceBundleV1,
+  type GitHubIssueComment,
 } from './truth-check-lib.js';
 import type { CheckResult, TruthCheckResult } from './shared.js';
 
@@ -787,6 +790,249 @@ test('T2 proof evidence does not treat verify:commands as pnpm verify', () => {
       ].join('\n'),
     }),
     ['P13'],
+  );
+});
+
+// ── Fable pilot routing evidence (UTV2-1569) ──────────────────────────────────
+
+function fableManifestFixture(
+  planningModelRouting?: Parameters<typeof evaluateFableRoutingEvidence>[0]['manifest']['planning_model_routing'],
+): Parameters<typeof evaluateFableRoutingEvidence>[0]['manifest'] {
+  return {
+    schema_version: 2,
+    issue_id: 'UTV2-9001',
+    lane_type: 'governance',
+    executor: 'claude',
+    tier: 'T1',
+    worktree_path: '.out/worktrees/claude__utv2-9001-fixture',
+    branch: 'claude/utv2-9001-fixture',
+    base_branch: 'main',
+    commit_sha: 'abc123',
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/9001',
+    files_changed: [],
+    file_scope_lock: ['scripts/ops/truth-check-lib.ts'],
+    expected_proof_paths: ['docs/06_status/proof/UTV2-9001/evidence.json'],
+    status: 'merged',
+    started_at: '2026-07-21T00:00:00.000Z',
+    heartbeat_at: '2026-07-21T00:00:00.000Z',
+    closed_at: null,
+    blocked_by: [],
+    preflight_token: '.out/ops/preflight/claude/utv2-9001-fixture.json',
+    created_by: 'claude',
+    truth_check_history: [],
+    reopen_history: [],
+    ...(planningModelRouting ? { planning_model_routing: planningModelRouting } : {}),
+  };
+}
+
+const FABLE_HEAD_SHA = 'e37d28a9c0a471c7824ef35a1ab0f0338369af05';
+
+function fableReviewComment(overrides: Partial<Record<string, string>> = {}, author = 'someone-else'): GitHubIssueComment {
+  const fields = {
+    Issue: 'UTV2-9001',
+    'Trigger class': 'repeated_architecture_bounce',
+    'Policy version': '1.0.0',
+    'Reviewed head SHA': FABLE_HEAD_SHA,
+    binding: 'false',
+    advisory_only: 'true',
+    reviewer_independent_of_author: 'true',
+    ...overrides,
+  };
+  const body = [
+    'FABLE_REVIEW: ADVISORY',
+    'schema: fable-review/v1',
+    ...Object.entries(fields).map(([key, value]) => `${key}: ${value}`),
+  ].join('\n');
+  return { body, user: { login: author, type: 'User' } };
+}
+
+function fableFailureIds(input: {
+  planningModelRouting?: Parameters<typeof evaluateFableRoutingEvidence>[0]['manifest']['planning_model_routing'];
+  comments?: GitHubIssueComment[];
+  reviewedHeadSha?: string | null;
+}): string[] {
+  return evaluateFableRoutingEvidence({
+    manifest: fableManifestFixture(input.planningModelRouting),
+    issueId: 'UTV2-9001',
+    comments: input.comments ?? [],
+    reviewedHeadSha: 'reviewedHeadSha' in input ? input.reviewedHeadSha! : FABLE_HEAD_SHA,
+  })
+    .filter((check) => check.status === 'fail')
+    .map((check) => check.id);
+}
+
+const fableRouting = (overrides: Partial<NonNullable<Parameters<typeof evaluateFableRoutingEvidence>[0]['manifest']['planning_model_routing']>> = {}) => ({
+  model: 'claude-fable-5' as const,
+  profile: 'fable-pilot-advisory',
+  selected_by: 'three-brain' as const,
+  rationale: 'repeated architecture bounce',
+  policy_version: '1.0.0',
+  fallback_used: false,
+  ...overrides,
+});
+
+test('Fable routing evidence check is a no-op skip for a lane with no planning_model_routing at all', () => {
+  const results = evaluateFableRoutingEvidence({
+    manifest: fableManifestFixture(undefined),
+    issueId: 'UTV2-9001',
+    comments: [],
+    reviewedHeadSha: null,
+  });
+  assert.strictEqual(results.length, 1);
+  assert.strictEqual(results[0]!.status, 'skip');
+});
+
+test('Fable routing evidence check is a no-op skip for a Sonnet planning_model_routing (not Fable)', () => {
+  const results = evaluateFableRoutingEvidence({
+    manifest: fableManifestFixture({
+      model: 'claude-sonnet-5',
+      profile: 'sonnet-default',
+      selected_by: 'three-brain',
+      rationale: 'ordinary work',
+      policy_version: '1.0.0',
+      fallback_used: false,
+    }),
+    issueId: 'UTV2-9001',
+    comments: [],
+    reviewedHeadSha: null,
+  });
+  assert.strictEqual(results.length, 1);
+  assert.strictEqual(results[0]!.status, 'skip');
+});
+
+test('Fable routing evidence check fails closed on a Fable-routed lane with no review comment at all', () => {
+  // policy_version deliberately matches the real shipped fable-pilot-policy.json here
+  // so F3 (drift detection) passes and this test isolates F1/F2 (missing evidence)
+  // specifically -- F3's own drift behavior is covered by the two tests below.
+  assert.deepStrictEqual(
+    fableFailureIds({ planningModelRouting: fableRouting(), comments: [] }).sort(),
+    ['F1', 'F2'],
+  );
+});
+
+test('Fable routing evidence check passes F1/F2 with a real, correctly-bound fable-review/v1 comment', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment()],
+  });
+  assert.ok(!failures.includes('F1'), 'F1 should pass with a valid fable-review/v1 record');
+  assert.ok(!failures.includes('F2'), 'F2 should pass when the record is bound to the exact reviewed head');
+});
+
+test('Fable routing evidence check F1 rejects loose text that merely mentions the right keywords without the real schema header', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [
+      {
+        body: [
+          '## Diff Summary',
+          'reviewer_independent_of_author: true',
+          'binding: false',
+          'advisory_only: true',
+          'this text mentions the right words but is not a real fable-review/v1 comment',
+        ].join('\n'),
+      },
+    ],
+  });
+  assert.ok(failures.includes('F1'), 'F1 must fail closed on loose text lacking the exact schema header');
+});
+
+test('Fable routing evidence check F1 rejects a record with an unrecognized trigger class', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment({ 'Trigger class': 'i_made_this_up' })],
+  });
+  assert.ok(failures.includes('F1'), 'F1 must reject a trigger class outside the four ratified classes');
+});
+
+test('Fable routing evidence check F1 rejects a record missing reviewer_independent_of_author: true (no override)', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment({ reviewer_independent_of_author: 'false' })],
+  });
+  assert.ok(failures.includes('F1'), 'F1 must reject when reviewer_independent_of_author is not exactly true');
+});
+
+test('Fable routing evidence check F1 rejects a record asserting binding: true or missing advisory_only: true', () => {
+  const boundFailures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment({ binding: 'true' })],
+  });
+  assert.ok(boundFailures.includes('F1'), 'F1 must reject binding: true');
+
+  const noAdvisoryFailures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment({ advisory_only: 'false' })],
+  });
+  assert.ok(noAdvisoryFailures.includes('F1'), 'F1 must reject advisory_only anything other than true');
+});
+
+test('Fable routing evidence check F2 fails closed when the review comment is bound to a DIFFERENT (stale or copy-pasted) head SHA', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment({ 'Reviewed head SHA': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' })],
+    reviewedHeadSha: FABLE_HEAD_SHA,
+  });
+  assert.ok(failures.includes('F2'), 'F2 must fail when the record is bound to a different head than the one being evaluated');
+});
+
+test('Fable routing evidence check F2 fails closed when there is no reviewedHeadSha to bind against at all', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment()],
+    reviewedHeadSha: null,
+  });
+  assert.ok(failures.includes('F2'), 'F2 must fail when there is nothing to bind the record to');
+});
+
+test('Fable routing evidence check only trusts the LATEST matching fable-review/v1 comment (mirrors pm-verdict/v1 "latest wins")', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [
+      fableReviewComment({ 'Reviewed head SHA': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' }),
+      fableReviewComment(), // the latest one, correctly bound
+    ],
+    reviewedHeadSha: FABLE_HEAD_SHA,
+  });
+  assert.ok(!failures.includes('F1'));
+  assert.ok(!failures.includes('F2'));
+});
+
+test('Fable routing evidence check F3 fails closed when policy_version has drifted from the current fable-pilot-policy.json', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting({ policy_version: '0.0.1-stale' }),
+    comments: [fableReviewComment()],
+  });
+  assert.ok(failures.includes('F3'), 'F3 should fail when policy_version does not match the current policy file');
+});
+
+test('Fable routing evidence check F3 passes when policy_version matches the real shipped fable-pilot-policy.json', () => {
+  const failures = fableFailureIds({
+    planningModelRouting: fableRouting(),
+    comments: [fableReviewComment()],
+  });
+  assert.ok(!failures.includes('F3'), 'F3 should pass when policy_version matches the real shipped policy');
+});
+
+test('findLatestFableReview directly: returns null when no comment matches the exact schema header', () => {
+  assert.strictEqual(
+    findLatestFableReview([{ body: 'not a fable review at all' }], 'UTV2-9001'),
+    null,
+  );
+});
+
+test('findLatestFableReview directly: parses a well-formed record and returns its fields', () => {
+  const match = findLatestFableReview([fableReviewComment()], 'UTV2-9001');
+  assert.ok(match);
+  assert.strictEqual(match!.triggerClass, 'repeated_architecture_bounce');
+  assert.strictEqual(match!.policyVersion, '1.0.0');
+  assert.strictEqual(match!.reviewedHeadSha, FABLE_HEAD_SHA);
+});
+
+test('findLatestFableReview directly: ignores a record addressed to a different issue', () => {
+  assert.strictEqual(
+    findLatestFableReview([fableReviewComment({ Issue: 'UTV2-1234' })], 'UTV2-9001'),
+    null,
   );
 });
 

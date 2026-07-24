@@ -21,6 +21,7 @@ export function isLinearStatePermittedForL3(stateName: string | null | undefined
   return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
 }
 import { loadEnvironment } from '@unit-talk/config';
+import { loadFablePilotPolicy } from './planning-model-routing.js';
 import {
   type CheckResult,
   type LaneManifest,
@@ -243,6 +244,161 @@ export function evaluateT2ProofEvidence(input: {
     add('P14', 'pass', 'verification log references r-level-check');
   } else {
     add('P14', 'fail', 'verification log must reference scripts/ci/r-level-check.ts');
+  }
+
+  return checks;
+}
+
+/**
+ * Fable pilot routing evidence check (UTV2-1569). Integrated into every truth-check
+ * run, not gated by tier -- it is a no-op (skip) for any lane whose manifest does not
+ * carry a Fable-model planning_model_routing block, and only actually evaluates
+ * anything for the narrow set of lanes that do. This is the truth-check integration
+ * the earlier pilot attempt (PR #1287) explicitly said did not exist yet ("Fable-routed
+ * decisions are not yet mechanically validated or count-capped in code").
+ *
+ * Fails closed: a Fable-routed lane with missing/incomplete evidence fails these
+ * checks, it does not silently pass because Fable evidence is "hard to find".
+ */
+const FABLE_TRIGGER_CLASSES = new Set([
+  'repeated_architecture_bounce',
+  'live_state_root_cause',
+  'product_synthesis_no_precedent',
+  'build_mode_certification_review',
+]);
+
+export interface FableReviewMatch {
+  triggerClass: string;
+  policyVersion: string;
+  reviewedHeadSha: string;
+  comment: GitHubIssueComment;
+}
+
+/**
+ * Parse a real `fable-review/v1` record (docs/05_operations/schemas/fable-review-v1.md)
+ * out of a PR's comments -- replaces the loose regex text-matching that shipped in the
+ * first version of this check (Codex review finding, PR #1292: "It never requires a
+ * `schema: fable-review/v1` entry or validates the reviewed head SHA... so stale or
+ * copy-pasted text can satisfy truth-check for a different review"). Every one of the
+ * schema's mandatory fields is checked structurally, not just substring-matched:
+ * exact header lines, `Issue:` matching this issue, `Trigger class:` one of the four
+ * ratified classes, `Policy version:`/`Reviewed head SHA:` present, and the three
+ * literal assertions (`binding: false`, `advisory_only: true`,
+ * `reviewer_independent_of_author: true`) exactly as the schema requires -- no
+ * override, no fuzzy match. Returns the LAST matching comment (mirrors
+ * findLatestPmVerdict's "latest wins" convention) or null if none validate.
+ */
+export function findLatestFableReview(
+  comments: GitHubIssueComment[],
+  issueId: string,
+): FableReviewMatch | null {
+  const matches: FableReviewMatch[] = [];
+  for (const comment of comments) {
+    const body = comment.body?.replace(/\\r\\n/g, '\n');
+    if (!body) continue;
+    const lines = body.split(/\r?\n/).map((line) => line.trim());
+    if (lines[0] !== 'FABLE_REVIEW: ADVISORY') continue;
+    if (lines[1] !== 'schema: fable-review/v1') continue;
+
+    const fields: Record<string, string> = {};
+    for (const line of lines.slice(2)) {
+      const match = line.match(/^([A-Za-z_ ]+):\s*(.+)$/);
+      if (match) {
+        fields[match[1]!.trim().toLowerCase()] = match[2]!.trim();
+      }
+    }
+
+    const issueField = fields['issue'];
+    if (!issueField || issueField.toUpperCase() !== issueId.toUpperCase()) continue;
+
+    const triggerClass = fields['trigger class'];
+    if (!triggerClass || !FABLE_TRIGGER_CLASSES.has(triggerClass)) continue;
+
+    const policyVersion = fields['policy version'];
+    if (!policyVersion) continue;
+
+    const reviewedHeadSha = fields['reviewed head sha'];
+    if (!reviewedHeadSha) continue;
+
+    // Every one of these is a literal, exact assertion -- the schema requires them
+    // spelled exactly this way, with no override for a near-miss.
+    if (fields['binding'] !== 'false') continue;
+    if (fields['advisory_only'] !== 'true') continue;
+    if (fields['reviewer_independent_of_author'] !== 'true') continue;
+
+    matches.push({ triggerClass, policyVersion, reviewedHeadSha, comment });
+  }
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1]!;
+}
+
+/**
+ * Fable pilot routing evidence check (UTV2-1569). No-op (skip) for any lane whose
+ * manifest does not carry a Fable-model planning_model_routing block. For a
+ * Fable-routed lane, requires a real, SHA-bound fable-review/v1 record
+ * (findLatestFableReview above) -- not loose text matching. This closes the exact
+ * gap Codex review flagged in the first version of this check.
+ */
+export function evaluateFableRoutingEvidence(input: {
+  manifest: LaneManifest;
+  issueId: string;
+  comments: GitHubIssueComment[];
+  /** The SHA this lane's Fable review must be bound to -- merge SHA if merged, else the PR's current head SHA. */
+  reviewedHeadSha: string | null;
+}): CheckResult[] {
+  const checks: CheckResult[] = [];
+  const add = (id: string, status: 'pass' | 'fail' | 'skip', detail: string): void => {
+    checks.push({ id, status, detail });
+  };
+
+  const planningModelRouting = input.manifest.planning_model_routing;
+  if (!planningModelRouting || planningModelRouting.model !== 'claude-fable-5') {
+    add('F1', 'skip', 'lane is not Fable-routed (no planning_model_routing.model: "claude-fable-5") -- Fable evidence checks not applicable');
+    return checks;
+  }
+
+  const review = findLatestFableReview(input.comments, input.issueId);
+  if (!review) {
+    add(
+      'F1',
+      'fail',
+      'Fable-routed lane requires a valid fable-review/v1 record (schema line, Issue, ratified Trigger class, Policy version, Reviewed head SHA, binding: false, advisory_only: true, reviewer_independent_of_author: true) -- none found. Fails closed, per UTV2-1569.',
+    );
+  } else {
+    add('F1', 'pass', `valid fable-review/v1 record found (trigger class: ${review.triggerClass})`);
+  }
+
+  if (!review) {
+    add('F2', 'fail', 'no fable-review/v1 record to bind to a head SHA');
+  } else if (!input.reviewedHeadSha) {
+    add('F2', 'fail', 'no reviewed head SHA available to bind the fable-review/v1 record against');
+  } else if (!shaMatches(review.reviewedHeadSha, input.reviewedHeadSha)) {
+    add(
+      'F2',
+      'fail',
+      `fable-review/v1 record's Reviewed head SHA (${review.reviewedHeadSha}) does not match the SHA being evaluated (${input.reviewedHeadSha}) -- a stale or copy-pasted review does not satisfy evidence for this head`,
+    );
+  } else {
+    add('F2', 'pass', `fable-review/v1 record is bound to the exact reviewed head (${input.reviewedHeadSha})`);
+  }
+
+  try {
+    const policy = loadFablePilotPolicy();
+    if (planningModelRouting.policy_version === policy.policy_version) {
+      add('F3', 'pass', 'planning_model_routing.policy_version matches the current fable-pilot-policy.json');
+    } else {
+      add(
+        'F3',
+        'fail',
+        `planning_model_routing.policy_version "${planningModelRouting.policy_version}" does not match current fable-pilot-policy.json policy_version "${policy.policy_version}" -- policy drifted since this lane's routing decision was made`,
+      );
+    }
+  } catch (error) {
+    add(
+      'F3',
+      'fail',
+      `could not load fable-pilot-policy.json to verify policy_version drift: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   return checks;
@@ -709,6 +865,43 @@ export async function runTruthCheck(
         proofContents,
       })) {
         addCheck(check.id, check.status === 'fail' ? 'fail' : 'pass', check.detail);
+      }
+    }
+
+    // UTV2-1569: Fable pilot routing evidence -- integrated unconditionally (not
+    // gated by tier), since it is a no-op skip for every lane that is not
+    // Fable-routed and this repo's fail-closed convention prefers "always run,
+    // skip when not applicable" over conditionally wiring a new check into only
+    // one tier branch and risking it silently never firing for a future non-T1
+    // Fable use case. By this point in runTruthCheck, M4 has already required
+    // manifest.status to be "merged"/"done", so githubToken/pullRequest above are
+    // already resolved -- reused here rather than re-fetched. Binds to the PR's own
+    // head SHA (not the merge commit SHA, which is a brand-new hash under a squash
+    // merge) -- a Fable review posted while the PR was open reviewed that head, and
+    // "bind review evidence to the exact reviewed PR head" means exactly that head.
+    if (manifest.planning_model_routing?.model === 'claude-fable-5') {
+      const fableComments = await fetchGitHubPullRequestComments(
+        prRef.owner,
+        prRef.repo,
+        prRef.number,
+        githubToken,
+      );
+      for (const check of evaluateFableRoutingEvidence({
+        manifest,
+        issueId,
+        comments: fableComments,
+        reviewedHeadSha: pullRequest.head?.sha ?? null,
+      })) {
+        addCheck(check.id, check.status, check.detail);
+      }
+    } else {
+      for (const check of evaluateFableRoutingEvidence({
+        manifest,
+        issueId,
+        comments: [],
+        reviewedHeadSha: null,
+      })) {
+        addCheck(check.id, check.status, check.detail);
       }
     }
 
@@ -1188,7 +1381,7 @@ async function fetchGitHubPullRequest(
   });
 }
 
-interface GitHubIssueComment {
+export interface GitHubIssueComment {
   body?: string;
   user?: { login?: string; type?: string } | null;
   html_url?: string;

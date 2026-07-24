@@ -275,3 +275,52 @@ test('lane-start exits non-zero (refuses) when delegation is suspended', () => {
   assert.match(delegationBlock, /delegation_suspended/);
   assert.match(delegationBlock, /process\.exit\(1\)/);
 });
+
+// UTV2-1569: Fable pilot planning-model routing wiring, mirrors the --model-profile
+// pattern above but Claude-only and always optional (the ordinary case supplies
+// neither flag and planning_model_routing simply never appears in the manifest).
+
+test('lane-start rejects --fable-trigger-class/--fable-rationale on a non-Claude executor', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /fable_routing_not_applicable/);
+  assert.match(
+    source,
+    /supplied but executor "\$\{executor\}" is not claude\. planning_model_routing is Claude-only/,
+  );
+});
+
+test('lane-start requires --fable-rationale whenever --fable-trigger-class is supplied', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /fable_rationale_required/);
+  assert.match(source, /--fable-trigger-class requires --fable-rationale <text> as well/);
+});
+
+test('lane-start resolves planning_model_routing via resolveAndRecordPlanningModel, never hardcoding a model literal', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /import \{ resolveAndRecordPlanningModel, type PlanningModelRoutingBlock \} from '\.\/planning-model-routing\.js'/);
+  assert.match(source, /resolveAndRecordPlanningModel\(\{\s*\n\s*tier,\s*\n\s*triggerClass: fableTriggerClassFlag,/);
+});
+
+test('lane-start uses resolveAndRecordPlanningModel (not the bare read-only resolvePlanningModel) so a real Fable selection atomically records the qualifying task against pilot state (UTV2-1569 PR #1292 P1 fix)', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.doesNotMatch(
+    source,
+    /resolvePlanningModel\(/,
+    'lane-start.ts must not call the bare resolvePlanningModel directly -- it must go through resolveAndRecordPlanningModel so Fable selections are recorded, not just read',
+  );
+  assert.match(source, /taskId: issueId/);
+});
+
+test('lane-start fails closed (non-zero exit) if resolveAndRecordPlanningModel itself reports not-ok (e.g. policy load failure)', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const resolveIndex = source.indexOf('const resolution = resolveAndRecordPlanningModel({');
+  assert.ok(resolveIndex >= 0, 'expected a planning-model resolution call site');
+  const block = source.slice(resolveIndex, resolveIndex + 500);
+  assert.match(block, /if \(!resolution\.ok\)/);
+  assert.match(block, /process\.exit\(1\)/);
+});
+
+test('lane-start never passes planning_model_routing on a Codex lane (createManifest itself also rejects this, defense in depth)', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /isClaudeExecutorForFable = executor === 'claude'/);
+});

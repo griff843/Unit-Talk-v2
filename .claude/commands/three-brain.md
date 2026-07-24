@@ -32,10 +32,43 @@ Three-brain returns both an executor and a **planning model** for T1 Claude lane
 
 | Condition | Planning model | Rationale |
 |---|---|---|
-| T1, all scopes (standard and novel/constitutional/governance) | `sonnet` (Sonnet 5) | Adaptive thinking + improved agentic bench make Sonnet 5 sufficient for T1 planning across scope types |
+| T1, standard scope (no ratified Fable trigger class fires) | `sonnet` (Sonnet 5) | Adaptive thinking + improved agentic bench make Sonnet 5 sufficient for ordinary T1 planning |
+| T1, one of the four ratified Fable pilot trigger classes fires (see below), AND the pilot is currently eligible | `fable` (Fable 5) — **advisory-only, bounded pilot (UTV2-1569)** | See "Fable 5 pilot routing" below |
 | T2 / T3 Claude | *(none — no planning subagent)* | Bounded work; orchestrator session handles directly |
 
-**Default:** `sonnet`. There is no escalation tier above Sonnet 5 for planning — genuinely novel-architecture, constitutional-scope, or ambiguous-boundary T1 work is a Rule 9 Griff-escalation trigger (scope ambiguity / Tier C), not a model-routing decision. Full model policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+**Default:** `sonnet`. There is no escalation tier above Sonnet 5 for planning outside the narrow, bounded Fable pilot below — genuinely novel-architecture, constitutional-scope, or ambiguous-boundary T1 work that does NOT match one of the four ratified trigger classes is still a Rule 9 Griff-escalation trigger (scope ambiguity / Tier C), not a model-routing decision. Full model policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+
+**Executable routing (UTV2-1569):** this table's decision is not self-executing prose. The routing decision is resolved exactly once, atomically with lane creation: `/dispatch` Phase 3 passes `--fable-trigger-class`/`--fable-rationale` to `ops:lane-start`, which calls `scripts/ops/planning-model-routing.ts#resolveAndRecordPlanningModel()` — this both decides the model AND, on a genuine Fable selection, atomically records the qualifying task/usage against `FABLE_PILOT_STATE.json` in the same operation that writes `planning_model_routing` into the manifest. Phase 4's planning subagent then only ever READS the manifest's already-persisted `planning_model_routing.model` (mapped via `toAgentModelOverride()` to the Agent tool's `model` param) — it never re-resolves. This ordering fix (PR #1292 review) closes the gap an earlier version of this pilot's implementation left open: resolving the model AFTER the manifest already existed meant a real Fable planning pass could run with no persisted evidence at all.
+
+### Fable 5 pilot routing (bounded, UTV2-1569)
+
+Following the pilot-evaluation issue's **PILOT LONGER — lean YES, narrow scope** conclusion, Fable 5 is reinstated for exactly four ratified trigger classes, and only for the duration of a mechanically-bounded pilot:
+
+| Trigger class | When it fires |
+|---|---|
+| `repeated_architecture_bounce` | A lane has bounced `CHANGES_REQUIRED` more than once on the same architectural question. |
+| `live_state_root_cause` | A hard root-cause/mechanistic-verification task where live-state evidence (runtime, DB, CI) must be checked, not just reasoned about. |
+| `product_synthesis_no_precedent` | A product-synthesis decision with no existing precedent to follow. |
+| `build_mode_certification_review` | Advisory review of a Build Mode planning/certification packet before it reaches Griff. |
+
+**Explicit skip list — Fable is never eligible for these, even if a caller supplies one of these strings as a trigger class:** routine coding, manifest bookkeeping, proof rebinding, CI cleanup, mechanical reconciliation. `resolvePlanningModel()` (the read-only resolution `resolveAndRecordPlanningModel()` wraps) treats any of these as an automatic Sonnet result, not a fallback worth ceremony.
+
+**Advisory only, always:** a Fable pilot decision is never a merge authority, never a `pm-verdict/v1` substitute, and never counts as a vote in any T1-M quorum, machine or otherwise — this holds for every one of the four trigger classes above, including `build_mode_certification_review`. Nothing Fable produces during the pilot authorizes a merge by itself, and it never touches Rule 9 or Griff's T1-H authority.
+
+**Mechanical eligibility gate (fail-closed):** Fable is selectable only when ALL of the following hold, checked by `resolvePlanningModel()` (the resolution step `resolveAndRecordPlanningModel()` wraps and then atomically records) itself, not left to operator judgment:
+1. `docs/05_operations/policies/fable-pilot-policy.json`'s `pilot_enabled` is `true`.
+2. The requested trigger class is one of the four above and individually enabled in that policy.
+3. `docs/05_operations/FABLE_PILOT_STATE.json` reads back `PILOT_ACTIVE_WITHIN_CAPS` (activated, not suspended/expired/rolled-back, and under all three of the 8-task/30-day/usage-ceiling caps) via `scripts/ops/fable-pilot-state.ts#readFablePilotState()`.
+
+Any one of these failing falls back to Sonnet with `fallback_used: true` recorded in the manifest's `planning_model_routing` block — never a thrown error, never a silent continue past a cap. **As of this pilot's mechanism landing, the pilot has NOT been activated** — `FABLE_PILOT_STATE.json`'s `status` is `"pending"`, so every resolution currently falls back to Sonnet regardless of trigger class. Starting the pilot's clock is a real operational decision reserved for Griff, not something any dispatch cycle does automatically.
+
+**Suspension/kill path, independent of the model being evaluated:** an operator can set `FABLE_PILOT_STATE.json`'s `status` to `"suspended"` (via `scripts/ops/fable-pilot-state.ts suspend`) at any time, for any reason (cost, behavior, policy concern) — this is a pure operational brake, not a verdict on Fable's quality, and is independent of `fable-pilot-policy.json`'s separate `pilot_enabled` kill switch. Either one being off blocks all Fable routing.
+
+**Evidence and reviewer independence:** every Fable-routed lane's manifest carries a `planning_model_routing` block (model, profile, selected_by, rationale, policy_version, fallback_used, fallback_model — see `docs/05_operations/schemas/lane_manifest_v1.schema.json`'s `planning_model_routing` definition; a full LANE_MANIFEST_SPEC.md section is a pending documentation follow-up, held back only by a file-scope conflict with a separate concurrently-open lane), and any Fable review claim must assert `reviewer_independent_of_author: true` (`docs/05_operations/schemas/fable-review-v1.md`) — there is no override. `ops:truth-check` validates this for every Fable-routed lane via `evaluateFableRoutingEvidence()`.
+
+**Rollback:** `docs/05_operations/FABLE_PILOT_ROLLBACK.md`. The mechanical half (`scripts/ops/fable-pilot-rollback.ts`) is a single function call that makes Fable permanently unselectable regardless of doc/allowlist state.
+
+**Closeout:** at 8 qualifying tasks, 30 calendar days, or the usage ceiling — whichever comes first — the pilot state mechanically flips to `expired` (never silently continues), and `docs/05_operations/FABLE_PILOT_CLOSEOUT_TEMPLATE.md` is filled in for a fresh `FABLE 5 PERMANENT INTEGRATION: YES / NO / EXTEND` decision packet. No permanent routing or authority change happens without a later, exact-head Griff decision.
 
 ### Codex lane critique model
 

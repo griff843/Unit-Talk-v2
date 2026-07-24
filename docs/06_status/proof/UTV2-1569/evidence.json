@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1569",
+  "title": "Build enforceable Fable pilot routing, cap, evidence, expiry, and rollback",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PRE_MERGE_VERIFIED",
+  "source_sha": "cb79f0594aba5267ac8ff6455872e641fc81ea1f",
+  "reviewed_head_sha": "cb79f0594aba5267ac8ff6455872e641fc81ea1f",
+  "evidence_commit_sha": "cb79f0594aba5267ac8ff6455872e641fc81ea1f",
+  "current_head_sha": "cb79f0594aba5267ac8ff6455872e641fc81ea1f",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "cb79f0594aba5267ac8ff6455872e641fc81ea1f",
+    "verified_source_note": "PM_VERDICT: CHANGES_REQUIRED (bounce 1, posted by griff843 on PR #1292 at 2026-07-21T23:10:54Z) required substantive rework on top of the initial implementation: atomic task/usage recording at the real selection point, corrected dispatch ordering (resolve+persist before the planner spawns, not after), fail-closed activation-date validation, canonical test-path wiring, and a real SHA-bound fable-review/v1 parser. This head is that rework.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-21T23:55:00.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "test_db": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1569-build-enforceable-fable-pilot-routing-cap-evidence-expiry",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "note": "Run blocking in the foreground (waited on the actual OS process, not backgrounded-and-assumed) at this exact head."
+    },
+    "r_level_check": {
+      "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": []
+    },
+    "test_ops_canonical_path": {
+      "command": "pnpm test:ops",
+      "status": "PASS",
+      "tests": 1187,
+      "fail": 0,
+      "note": "scripts/ops/fable-pilot-state.test.ts, scripts/ops/planning-model-routing.test.ts, and scripts/ops/fable-pilot-rollback.test.ts are now wired into package.json's test:ops script and confirmed running inside it (not just runnable directly) -- verified by grepping this exact run's TAP output for their Subtest names."
+    },
+    "new_mechanism_tests": {
+      "fable-pilot-state.test.ts": { "pass": 32, "fail": 0, "note": "12 new tests added for activation-date fail-closed validation" },
+      "planning-model-routing.test.ts": { "pass": 21, "fail": 0, "note": "6 new tests added for resolveAndRecordPlanningModel/resolveAndRecordFableAdvisoryReview" },
+      "fable-pilot-rollback.test.ts": { "pass": 7, "fail": 0 },
+      "shared.test.ts": { "pass": 43, "fail": 0 },
+      "lane-start.test.ts": { "pass": 18, "fail": 0 },
+      "truth-check-lib.test.ts": { "pass": 69, "fail": 0, "note": "rewritten Fable evidence tests now exercise a real SHA-bound fable-review/v1 parser instead of loose text matching" },
+      "contract-validator.test.ts": { "pass": 56, "fail": 0 }
+    }
+  },
+  "runtime_proof": {
+    "applicable": true,
+    "note": "Docs/governance/ops-tooling diff -- no runtime code path changed. Per this repo's precedent for doc-only/governance T1 lanes (UTV2-1503, UTV2-1568), the standalone live-DB smoke is still run for real (not waived) against Supabase.",
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "target": "live Supabase project zfzdnfwdarxucxtaojxm",
+      "queries": [
+        "database repository bundle persists a submission and settlement when Supabase is configured",
+        "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "UTV2-883: no duplicate participants for the same external_id and sport",
+        "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+        "UTV2-996: correction chain is additive -- original settlement row is not mutated"
+      ],
+      "row_counts": {
+        "submissions_created": 1,
+        "settlements_created": 1,
+        "corrections_created": 1
+      }
+    }
+  },
+  "fable_pilot": {
+    "activated_by_this_lane": false,
+    "state_file_status": "pending",
+    "state_file_activated_at": null,
+    "state_file_task_count": 0,
+    "policy_pilot_enabled": false,
+    "trigger_classes": [
+      "repeated_architecture_bounce",
+      "live_state_root_cause",
+      "product_synthesis_no_precedent",
+      "build_mode_certification_review"
+    ],
+    "advisory_only": true,
+    "binding_authority": false,
+    "reviewer_independent_of_author_required": true,
+    "rollback_proven_by_test": true,
+    "task_usage_recording_atomic_with_routing_decision": true,
+    "activation_dates_fail_closed_validated": true,
+    "review_evidence_sha_bound_structural_parse": true
+  },
+  "pm_verdict_response": {
+    "bounce": 1,
+    "verdict_head_sha": "e37d28a9c0a471c7824ef35a1ab0f0338369af05",
+    "blocking_findings_addressed": [
+      "P1: real Fable selections never call the state mutation path -- fixed via resolveAndRecordPlanningModel/resolveAndRecordFableAdvisoryReview, called from lane-start.ts and dispatch.md Phase 5",
+      "P1: normal /dispatch creates the manifest before resolving the Fable planner -- fixed by moving resolution to /dispatch Phase 3 (lane-start time), before the manifest exists in its final form and before Phase 4 spawns",
+      "P2: malformed or missing activation/expiry dates can leave an active pilot eligible -- fixed via validateActivationDates + PILOT_DATES_INVALID + evaluatePilotCaps hardening",
+      "P2: new tests not wired into canonical test:ops/pnpm verify path -- fixed, confirmed running inside pnpm test:ops",
+      "P2: truth-check accepts loose text rather than parsing a fable-review/v1 record bound to the reviewed head -- fixed via findLatestFableReview + SHA binding check (F2)",
+      "Return Review Packet failing -- addressed by fixing the underlying scope-bleed and test-wiring findings it was reporting"
+    ]
+  },
+  "known_gaps": [
+    "docs/05_operations/LANE_MANIFEST_SPEC.md's planned Section 17 addition documenting planning_model_routing is still not included in this diff -- a separate, genuinely live lane (UTV2-1571) holds an active file-scope lease on that exact file. The field remains documented in the JSON schema and in three-brain.md/OPERATING_MODEL_SONNET5.md instead.",
+    "package.json (test:ops wiring) is also under an active file-scope lease held by a separate, genuinely live lane (UTV2-1570, same owner griff843/griffadavi, currently building a Tier C authorization gate). This diff touches package.json anyway because the PM's own CHANGES_REQUIRED verdict explicitly required the test-wiring fix as core scope, not an expansion -- but the concurrent-lease overlap is real and the two branches will need coordinated merge order (whichever merges second will need a routine rebase/conflict resolution on that one package.json line) before either merges. Flagging explicitly rather than silently proceeding as if there is no overlap.",
+    "The pilot itself has not been activated and has not run a single real qualifying task -- the mechanism is proven correct by unit test (including a live-fixture-driven proof that a real selection increments task_count/usage_used_usd and mechanically expires at the cap), not by live pilot usage, since activation is explicitly out of this lane's scope."
+  ]
+}

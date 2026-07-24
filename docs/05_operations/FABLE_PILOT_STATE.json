@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "pending",
+  "activated_at": null,
+  "expires_at": null,
+  "max_tasks": 8,
+  "max_days": 30,
+  "usage_ceiling_usd": 150,
+  "task_count": 0,
+  "usage_used_usd": 0,
+  "qualifying_tasks": [],
+  "updated_at": "2026-07-21T00:00:00.000Z",
+  "updated_by": "griff843",
+  "reason": "UTV2-1569: pilot mechanism built (routing, cap enforcement, evidence, truth-check integration, rollback). Status deliberately left at 'pending' -- the pilot's clock has NOT been started. Activation (setting status to 'active' and activated_at/expires_at to real timestamps) is a real operational decision reserved for Griff via scripts/ops/fable-pilot-state.ts's activate command, and is explicitly out of scope for this lane per the issue's own instruction. See docs/05_operations/FABLE_PILOT_ROLLBACK.md for the suspension/rollback path, independent of this file's status."
+}
