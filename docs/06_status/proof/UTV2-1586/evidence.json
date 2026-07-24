@@ -4,14 +4,14 @@
   "title": "Trusted post-merge repair can bind a missing PR URL",
   "tier": "T1",
   "status": "ready_for_pm_review",
-  "generated_at": "2026-07-24T20:18:25Z",
+  "generated_at": "2026-07-24T20:36:25Z",
   "sha_binding": {
-    "verified_source_sha": "2df5b423ef3a5b67cc4e18c665e8d439b03333df",
-    "verified_source_note": "Substantive implementation commit. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "verified_source_sha": "9a2dba7726514a2f5ba7e5515fd7b8393b214b20",
+    "verified_source_note": "Final substantive implementation commit, including the pre-invocation rollback snapshot that prevents a failed repair from preserving an auto-acquired merge mutex. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-24T20:18:25Z",
+    "bound_at": "2026-07-24T20:36:25Z",
     "pr_number": null,
     "approved_head_sha": null
   },
@@ -87,12 +87,65 @@
   "runtime_proof": {
     "command": "pnpm test:db",
     "status": "PASS",
+    "pnpm_test_db": "pass",
     "tests": 7,
     "pass": 7,
     "fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
     "target_supabase_project": "zfzdnfwdarxucxtaojxm",
     "classification": "Governance tooling and workflow change; the live DB suite is the mandatory T1 runtime gate and does not exercise GitHub PR validation directly.",
     "production_mutation_by_lane": false,
+    "queries": [
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts persists a submission and settlement through the live database repository bundle and cleans up its fixtures."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts verifies invalid atomic enqueue, delivery, and settlement operations leave no partial lifecycle writes."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts verifies invalid atomic enqueue and delivery confirmation leave no partial outbox mutation."
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts verifies rollback behavior and additive correction audit writes."
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts verifies re-settlement creates additive corrections without mutating the original settlement."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 101273,
+        "status": "observed"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 144677,
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 10103,
+        "status": "observed"
+      },
+      {
+        "table": "audit_log",
+        "count": 243446,
+        "status": "observed"
+      },
+      {
+        "table": "settlement_records",
+        "count": 34772,
+        "status": "observed"
+      }
+    ],
+    "row_counts_captured_at": "2026-07-24T20:36:25.200Z",
+    "row_counts_note": "Exact live table counts captured read-only through the Supabase REST API after pnpm verify completed its database smoke and T1 live-proof suites.",
     "broader_live_proof": {
       "command": "pnpm test:t1-proof:live",
       "status": "PASS",
@@ -125,7 +178,7 @@
     {
       "criterion": "Repair is transactional and reaches terminal cleanup or restores prior local state.",
       "status": "PASS",
-      "evidence": "Rollback snapshots manifest, proof tree, sync record, lease, and merge mutex. Successful trusted repair finalizes done/closed_at, removes sync, releases locks, and removes only the exact clean registered non-current worktree."
+      "evidence": "Rollback snapshots manifest, proof tree, sync record, lease, and merge mutex before auto-acquiring the mutex. Failed repair removes coordination state created by the invocation; successful trusted repair finalizes done/closed_at, removes sync, releases locks, and removes only the exact clean registered non-current worktree."
     },
     {
       "criterion": "All 17 required cases, including the UTV2-1585/#1305 fixture, are covered.",

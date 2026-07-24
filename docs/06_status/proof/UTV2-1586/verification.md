@@ -9,7 +9,9 @@ terminal sync/lease/mutex/worktree cleanup on success.
 
 ## Evidence
 
-- Substantive implementation commit: `2df5b423ef3a5b67cc4e18c665e8d439b03333df`
+- Final substantive implementation commit: `9a2dba7726514a2f5ba7e5515fd7b8393b214b20`
+- Transaction hardening: rollback now snapshots coordination state before
+  auto-acquiring the merge mutex, preventing failed repair ghost capacity
 - Focused lane-close result: 108 tests, 108 pass, 0 fail, 0 skipped
 - Focused workflow-hardening result: 44 tests, 44 pass, 0 fail, 0 skipped
 - Live database smoke result: 7 tests, 7 pass, 0 fail
@@ -30,6 +32,7 @@ The following commands were executed on the substantive branch head:
 - `pnpm test:t1-proof:live`
 - `pnpm verify`
 - `npx tsx scripts/ops/lane-manifest.ts validate UTV2-1586 --json`
+- `pnpm ops:proof-check UTV2-1586 --json`
 - `git diff --check`
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
 
@@ -60,6 +63,9 @@ exit 0
 
 Manifest validation
 {"ok":true,"code":"manifest_valid","errors":[]}
+
+JSON evidence bundle
+Verdict: PASS
 
 R-level
 Verdict: PASS
