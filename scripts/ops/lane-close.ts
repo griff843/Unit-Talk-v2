@@ -19,11 +19,12 @@ import { rebindMergeSha, type ShaRebindOutcome } from './proof-generate.js';
 import {
   acquireMergeLock,
   defaultMergeLockOwner,
+  MERGE_LOCK_PATH,
   releaseMergeLock,
   requireMergeLockHeld,
   type MergeLockResult,
 } from './merge-mutex.js';
-import { releaseLease } from './lease-registry.js';
+import { leasePathForIssue, releaseLease } from './lease-registry.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -44,15 +45,29 @@ export type CloseoutFailureCode =
   | 'truth_check_failed'  // general truth-check failure (catch-all)
   | 'truth_check_drift'   // manifest's persisted truth-check moved past the result that authorized this close
   | 'infra_error'         // missing token, manifest, or schema error
+  | 'untrusted_invocation' // explicit PR binding was not invoked by the trusted post-merge workflow
+  | 'explicit_pr_requires_repair' // --pr was supplied without --repair-merged
+  | 'pr_not_found'        // supplied PR does not exist or could not be resolved
+  | 'wrong_repository'    // supplied/resolved PR is outside griff843/Unit-Talk-v2
+  | 'issue_identity_mismatch' // PR branch/title does not identify the requested lane
+  | 'conflicting_pr_binding' // manifest already points at a different PR
+  | 'repair_pr_substitution' // candidate PR never contained this issue's lane manifest
+  | 'missing_implementation_artifacts' // candidate PR omitted declared proof artifacts
+  | 'unreachable_merge_sha' // GitHub merge SHA is not reachable from current main
   | 'repair_required_via_pr'; // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
 
 export type CloseoutOutcome = 'closed' | 'already_closed' | 'closed_with_warnings' | 'blocked';
 
 export interface RepairMergedPrInfo {
   url: string;
+  number?: number;
+  repository?: string;
   state: string | null;
   merged: boolean;
   mergeSha: string | null;
+  headRefName?: string | null;
+  title?: string | null;
+  files?: string[];
 }
 
 export interface RepairMergedManifestResult {
@@ -129,6 +144,24 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'The manifest\'s persisted truth-check history changed, failed, or advanced after the passing ' +
         'result that authorized this close was computed (a concurrent run likely wrote a newer entry). ' +
         'Refused to close. Re-run ops:lane-close from a clean state.';
+    case 'untrusted_invocation':
+      return 'Explicit post-merge PR binding is restricted to the trusted Post-Merge Lane Close workflow on main.';
+    case 'explicit_pr_requires_repair':
+      return 'The --pr option is valid only together with --repair-merged.';
+    case 'pr_not_found':
+      return 'The supplied pull request could not be resolved in griff843/Unit-Talk-v2.';
+    case 'wrong_repository':
+      return 'The supplied pull request must belong to exactly griff843/Unit-Talk-v2.';
+    case 'issue_identity_mismatch':
+      return 'The supplied pull request branch and title do not match this issue lane.';
+    case 'conflicting_pr_binding':
+      return 'The manifest already records a different authoritative pull request.';
+    case 'repair_pr_substitution':
+      return 'The supplied pull request did not contain this issue lane manifest and cannot substitute for the implementation PR.';
+    case 'missing_implementation_artifacts':
+      return 'The supplied pull request omitted one or more proof artifacts declared by the lane manifest.';
+    case 'unreachable_merge_sha':
+      return 'GitHub reports a merge SHA that is not reachable from current origin/main.';
     case 'repair_required_via_pr':
       return 'ops:lane-close --repair-merged produced tracked-file changes while running from a checkout on main. ' +
         'These changes must NOT be committed or pushed directly to main (see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md) -- ' +
@@ -141,6 +174,7 @@ export function remediationForCode(code: CloseoutFailureCode): string {
 const MISSING_COMMIT_SHA_MESSAGE =
   'ERROR: Lane close requires commit_sha — run ops:truth-check first';
 const REPAIR_PREFLIGHT_TOKEN = 'dispatch-auto';
+const TRUSTED_POST_MERGE_REPOSITORY = 'griff843/Unit-Talk-v2';
 
 /**
  * Thrown by finalizeLaneCloseManifest() when the manifest's persisted
@@ -259,10 +293,137 @@ export function releaseCloseoutLocks(
   return { warnings };
 }
 
+export interface TrustedPostMergeRepairValidation {
+  ok: boolean;
+  code: 'trusted_pr_validated' | CloseoutFailureCode;
+  remediation: string;
+  pr: RepairMergedPrInfo | null;
+}
+
+export function implementationFilesFromTrustedRepair(
+  manifest: LaneManifest,
+  files: string[],
+): string[] {
+  const controlPlanePaths = new Set([
+    `docs/06_status/lanes/${manifest.issue_id}.json`,
+    `.ops/sync/${manifest.issue_id}.yml`,
+  ]);
+  return files.filter((file) => !controlPlanePaths.has(file));
+}
+
+/**
+ * Validates an explicit historical implementation PR before any tracked lane
+ * state is changed. The caller passes the result of
+ * isTrustedPostMergeAutomation(), rather than a raw CLI flag, so merely adding
+ * --post-merge-trusted can never grant this capability.
+ */
+export function validateTrustedPostMergeRepair(
+  manifest: LaneManifest,
+  prInput: string,
+  options: {
+    repairMerged: boolean;
+    trustedPostMerge: boolean;
+    fetchPr?: (pr: string) => RepairMergedPrInfo;
+    isMergeReachable?: (mergeSha: string) => boolean;
+  },
+): TrustedPostMergeRepairValidation {
+  const blocked = (
+    code: CloseoutFailureCode,
+    pr: RepairMergedPrInfo | null = null,
+  ): TrustedPostMergeRepairValidation => ({
+    ok: false,
+    code,
+    remediation: remediationForCode(code),
+    pr,
+  });
+
+  if (!options.repairMerged) {
+    return blocked('explicit_pr_requires_repair');
+  }
+  if (!options.trustedPostMerge) {
+    return blocked('untrusted_invocation');
+  }
+
+  const supplied = parsePrReference(prInput);
+  if (!supplied) {
+    return blocked('pr_not_found');
+  }
+  if (supplied.repository !== TRUSTED_POST_MERGE_REPOSITORY) {
+    return blocked('wrong_repository');
+  }
+
+  if (manifest.pr_url) {
+    const existing = parsePrReference(manifest.pr_url);
+    if (
+      !existing ||
+      existing.repository !== supplied.repository ||
+      existing.number !== supplied.number
+    ) {
+      return blocked('conflicting_pr_binding');
+    }
+  }
+
+  let pr: RepairMergedPrInfo;
+  try {
+    pr = (options.fetchPr ?? fetchTrustedMergedPrInfo)(prInput);
+  } catch {
+    return blocked('pr_not_found');
+  }
+
+  const resolved = parsePrReference(pr.url);
+  const resolvedRepository = pr.repository ?? resolved?.repository ?? '';
+  const resolvedNumber = pr.number ?? resolved?.number ?? null;
+  if (
+    resolvedRepository !== TRUSTED_POST_MERGE_REPOSITORY ||
+    resolvedNumber !== supplied.number
+  ) {
+    return blocked('wrong_repository', pr);
+  }
+  if (!pr.merged) {
+    return blocked('pr_not_merged', pr);
+  }
+  if (!pr.mergeSha) {
+    return blocked('missing_merge_sha', pr);
+  }
+
+  const issuePattern = new RegExp(`(^|[^A-Z0-9])${escapeRegExp(manifest.issue_id)}([^A-Z0-9]|$)`, 'iu');
+  if (
+    pr.headRefName !== manifest.branch ||
+    !issuePattern.test(pr.title ?? '')
+  ) {
+    return blocked('issue_identity_mismatch', pr);
+  }
+
+  const files = pr.files ?? [];
+  const manifestPath = `docs/06_status/lanes/${manifest.issue_id}.json`;
+  if (!files.includes(manifestPath)) {
+    return blocked('repair_pr_substitution', pr);
+  }
+  if (manifest.expected_proof_paths.some((proofPath) => !files.includes(proofPath))) {
+    return blocked('missing_implementation_artifacts', pr);
+  }
+  if (manifest.commit_sha && manifest.commit_sha !== pr.mergeSha) {
+    return blocked('pr_sha_mismatch', pr);
+  }
+
+  const reachable = options.isMergeReachable ?? isMergeShaReachableFromMain;
+  if (!reachable(pr.mergeSha)) {
+    return blocked('unreachable_merge_sha', pr);
+  }
+
+  return {
+    ok: true,
+    code: 'trusted_pr_validated',
+    remediation: '',
+    pr,
+  };
+}
+
 export function repairMergedLaneManifest(
   manifest: LaneManifest,
   options: {
     fetchPr?: (prUrl: string) => RepairMergedPrInfo;
+    validatedPr?: RepairMergedPrInfo;
     now?: Date;
     repoRoot?: string;
     artifactRoot?: string;
@@ -299,11 +460,11 @@ export function repairMergedLaneManifest(
     };
   }
 
-  if (!manifest.pr_url) {
+  if (!manifest.pr_url && !options.validatedPr) {
     return repairBlocked(manifest, 'infra_error', 'Manifest has no pr_url to repair from.');
   }
 
-  const pr = (options.fetchPr ?? fetchMergedPrInfo)(manifest.pr_url);
+  const pr = options.validatedPr ?? (options.fetchPr ?? fetchMergedPrInfo)(manifest.pr_url ?? '');
   if (!pr.merged || !pr.mergeSha) {
     return {
       ok: false,
@@ -325,6 +486,9 @@ export function repairMergedLaneManifest(
     status: 'merged',
     commit_sha: pr.mergeSha,
     pr_url: pr.url,
+    files_changed: options.validatedPr
+      ? implementationFilesFromTrustedRepair(manifest, options.validatedPr.files ?? [])
+      : manifest.files_changed,
     heartbeat_at: now,
     truth_check_history: manifest.truth_check_history ?? [],
   };
@@ -332,6 +496,9 @@ export function repairMergedLaneManifest(
   recordChanged(changedFields, manifest.status, next.status, 'status');
   recordChanged(changedFields, manifest.commit_sha, next.commit_sha, 'commit_sha');
   recordChanged(changedFields, manifest.pr_url, next.pr_url, 'pr_url');
+  if (!arraysEqual(manifest.files_changed, next.files_changed)) {
+    changedFields.push('files_changed');
+  }
 
   // repairPreflightToken() re-derives its `changed` flag from whether its own
   // validation threw, not from whether the persisted value actually differs
@@ -533,8 +700,6 @@ export function buildRepairRequiredViaPrPacket(input: {
  * read from GITHUB_REPOSITORY alone as the sole check) so a forked/renamed
  * repo context can never satisfy the trusted-context check by accident.
  */
-const TRUSTED_POST_MERGE_REPOSITORY = 'griff843/Unit-Talk-v2';
-
 /**
  * GITHUB_WORKFLOW_REF identifies the exact workflow *file* that is executing
  * (e.g. `griff843/Unit-Talk-v2/.github/workflows/post-merge-lane-close.yml@refs/heads/main`),
@@ -654,16 +819,227 @@ function isIdempotentLeaseReleaseFailure(
   return result.code === 'lease_invalid_existing' && result.message.startsWith('Lease not found:');
 }
 
+export interface RepairRollbackTransaction {
+  rollback: () => void;
+  commit: () => void;
+}
+
+interface FileSnapshot {
+  path: string;
+  contents: Buffer | null;
+}
+
+/**
+ * Snapshots every local persistence surface changed by trusted repair:
+ * manifest, proof, sync registration, lease, and merge mutex. Restoring this
+ * snapshot prevents a failed closeout from leaving only pr_url/commit_sha (or
+ * partially rebound proof/cleanup state) persisted.
+ */
+export function createRepairRollbackTransaction(
+  issueId: string,
+  repoRoot = process.cwd(),
+): RepairRollbackTransaction {
+  const manifestPath = path.join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
+  const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
+  const fileSnapshots: FileSnapshot[] = [
+    snapshotFile(manifestPath),
+    snapshotFile(path.join(repoRoot, '.ops', 'sync', `${issueId}.yml`)),
+    snapshotFile(leasePathForIssue(issueId, path.join(repoRoot, '.ops', 'leases'))),
+    snapshotFile(path.join(repoRoot, '.ops', path.basename(MERGE_LOCK_PATH))),
+  ];
+  const proofFiles = snapshotDirectory(proofDir);
+  let active = true;
+
+  return {
+    rollback: () => {
+      if (!active) return;
+      for (const snapshot of fileSnapshots) {
+        restoreFile(snapshot);
+      }
+      fs.rmSync(proofDir, { recursive: true, force: true });
+      for (const [relativePath, contents] of proofFiles) {
+        const destination = path.join(proofDir, relativePath);
+        fs.mkdirSync(path.dirname(destination), { recursive: true });
+        fs.writeFileSync(destination, contents);
+      }
+      active = false;
+    },
+    commit: () => {
+      active = false;
+    },
+  };
+}
+
+export type LaneWorktreeCleanup = 'not_requested' | 'already_absent' | 'removed';
+
+export interface SuccessfulLaneCloseResult {
+  manifest: LaneManifest;
+  warnings: string[];
+  sync_removed: boolean;
+  worktree_cleanup: LaneWorktreeCleanup;
+}
+
+/**
+ * Completes the terminal closeout sequence after a passing truth-check. The
+ * injected operations keep the full success path testable without contacting
+ * Linear or mutating the developer's real lease/worktree state.
+ */
+export async function completeSuccessfulLaneClose(
+  issueId: string,
+  manifestBeforeClose: LaneManifest,
+  authorizedTruthCheck: TruthCheckResult,
+  options: {
+    trustedBindingRepair?: boolean;
+    repoRoot?: string;
+    finalizeManifest?: (issue: string, result: TruthCheckResult) => LaneManifest;
+    transitionLinear?: (issue: string) => Promise<void>;
+    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+    cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
+  } = {},
+): Promise<SuccessfulLaneCloseResult> {
+  const manifest = (options.finalizeManifest ?? finalizeLaneCloseManifest)(
+    issueId,
+    authorizedTruthCheck,
+  );
+  await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+
+  let syncRemoved = false;
+  let worktreeCleanup: LaneWorktreeCleanup = 'not_requested';
+  if (options.trustedBindingRepair) {
+    const syncPath = path.join(
+      options.repoRoot ?? process.cwd(),
+      '.ops',
+      'sync',
+      `${issueId}.yml`,
+    );
+    syncRemoved = fs.existsSync(syncPath);
+    fs.rmSync(syncPath, { force: true });
+  }
+
+  const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
+    issueId,
+    manifestBeforeClose.branch,
+  );
+
+  // Worktree removal is deliberately last: every earlier fallible local
+  // mutation can be restored by RepairRollbackTransaction. Once a clean,
+  // non-current worktree is removed there are no later fallible operations.
+  if (options.trustedBindingRepair) {
+    worktreeCleanup = (options.cleanupWorktree ?? cleanupClosedLaneWorktree)(manifest);
+  }
+
+  return {
+    manifest,
+    warnings: closeoutLocks.warnings,
+    sync_removed: syncRemoved,
+    worktree_cleanup: worktreeCleanup,
+  };
+}
+
+/**
+ * Removes only the exact clean worktree recorded by the terminal manifest.
+ * Hosted post-merge runners normally see the original machine path as absent,
+ * which is already a clean state on that runner. Dirty, unregistered, or
+ * current worktrees fail closed instead of being deleted.
+ */
+export function cleanupClosedLaneWorktree(
+  manifest: LaneManifest,
+): Exclude<LaneWorktreeCleanup, 'not_requested'> {
+  const target = path.resolve(manifest.worktree_path);
+  if (!fs.existsSync(target)) {
+    return 'already_absent';
+  }
+
+  const current = fs.realpathSync(process.cwd());
+  const resolvedTarget = fs.realpathSync(target);
+  if (current === resolvedTarget) {
+    throw new Error(`Refusing to remove current lane worktree: ${target}`);
+  }
+
+  const worktrees = execFileSync('git', ['worktree', 'list', '--porcelain'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const registered = worktrees
+    .split(/\r?\n/u)
+    .filter((line) => line.startsWith('worktree '))
+    .some((line) => path.resolve(line.slice('worktree '.length).trim()) === target);
+  if (!registered) {
+    throw new Error(`Refusing to remove unregistered lane worktree path: ${target}`);
+  }
+
+  const dirty = execFileSync('git', ['-C', target, 'status', '--porcelain=v1'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+  if (dirty) {
+    throw new Error(`Refusing to remove dirty lane worktree: ${target}`);
+  }
+
+  execFileSync('git', ['worktree', 'remove', target], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return 'removed';
+}
+
 async function main(): Promise<void> {
-  const { positionals, bools } = parseArgs(process.argv.slice(2));
+  const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
+  const explicitPr = flags.get('pr')?.at(-1)?.trim() ?? '';
+  let transaction: RepairRollbackTransaction | null = null;
 
   try {
     let manifest = readManifest(issueId);
+    const repairMerged = bools.has('repair-merged');
+    const trustedPostMerge = isTrustedPostMergeAutomation(process.env, {
+      postMergeTrusted: bools.has('post-merge-trusted'),
+    });
+
+    if (explicitPr && !repairMerged) {
+      emitJson({
+        ok: false,
+        code: 'explicit_pr_requires_repair' as CloseoutFailureCode,
+        outcome: 'blocked' satisfies CloseoutOutcome,
+        remediation: remediationForCode('explicit_pr_requires_repair'),
+        issue_id: issueId,
+      });
+      process.exit(1);
+    }
+
+    let validatedPr: RepairMergedPrInfo | undefined;
+    if (explicitPr) {
+      const validation = validateTrustedPostMergeRepair(manifest, explicitPr, {
+        repairMerged,
+        trustedPostMerge,
+      });
+      if (!validation.ok || !validation.pr) {
+        emitJson({
+          ok: false,
+          code: validation.code,
+          outcome: 'blocked' satisfies CloseoutOutcome,
+          remediation: validation.remediation,
+          issue_id: issueId,
+          pr: validation.pr,
+        });
+        process.exit(1);
+      }
+      validatedPr = validation.pr;
+    }
+
+    // Snapshot before auto-acquiring the merge mutex. If any later repair step
+    // fails, rollback must restore the caller's pre-invocation coordination
+    // state rather than preserve a mutex acquired only for this failed run.
+    if (repairMerged) {
+      transaction = createRepairRollbackTransaction(issueId);
+    }
+
     const lock = ensureCloseoutMergeLock(manifest, {
       acquireLock: !bools.has('no-acquire-lock'),
     });
     if (!lock.ok) {
+      transaction?.rollback();
+      transaction = null;
       emitJson({
         ok: false,
         code: lock.code,
@@ -677,9 +1053,14 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
-    if (bools.has('repair-merged')) {
-      const repair = repairMergedLaneManifest(manifest, { releaseLocksIfAlreadyDone: true });
+    if (repairMerged) {
+      const repair = repairMergedLaneManifest(manifest, {
+        releaseLocksIfAlreadyDone: true,
+        validatedPr,
+      });
       if (!repair.ok) {
+        transaction.rollback();
+        transaction = null;
         emitJson({
           ok: false,
           code: repair.code,
@@ -691,6 +1072,16 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       if (repair.code === 'already_closed') {
+        let worktreeCleanup: LaneWorktreeCleanup = 'not_requested';
+        let syncRemoved = false;
+        if (validatedPr) {
+          const syncPath = path.join(process.cwd(), '.ops', 'sync', `${issueId}.yml`);
+          syncRemoved = fs.existsSync(syncPath);
+          fs.rmSync(syncPath, { force: true });
+          worktreeCleanup = cleanupClosedLaneWorktree(manifest);
+        }
+        transaction.commit();
+        transaction = null;
         emitJson({
           ok: true,
           code: 'lane_closed' as CloseoutFailureCode,
@@ -698,6 +1089,8 @@ async function main(): Promise<void> {
           issue_id: issueId,
           status: manifest.status,
           remediation: repair.remediation,
+          sync_removed: syncRemoved,
+          worktree_cleanup: worktreeCleanup,
         });
         process.exit(0);
       }
@@ -710,15 +1103,14 @@ async function main(): Promise<void> {
       // UTV2-1576: except for the one trusted post-merge automation context this
       // guard was always meant to permit -- see isTrustedPostMergeAutomation().
       const currentBranchResult = git(['rev-parse', '--abbrev-ref', 'HEAD']);
-      const trustedPostMerge = isTrustedPostMergeAutomation(process.env, {
-        postMergeTrusted: bools.has('post-merge-trusted'),
-      });
       const guard = guardRepairAgainstMainCheckout(repair, {
         currentBranch: currentBranchResult.ok ? currentBranchResult.stdout : '',
         repoRoot: process.cwd(),
         trustedPostMerge,
       });
       if (guard) {
+        transaction.rollback();
+        transaction = null;
         emitJson(guard);
         process.exit(1);
       }
@@ -738,6 +1130,8 @@ async function main(): Promise<void> {
     });
 
     if (result.exit_code !== 0) {
+      transaction?.rollback();
+      transaction = null;
       const code = mapFailuresToCode(result.failures, result.verdict);
       emitJson({
         ok: false,
@@ -750,12 +1144,17 @@ async function main(): Promise<void> {
       process.exit(result.exit_code);
     }
 
-    manifest = finalizeLaneCloseManifest(issueId, result);
-
-    await transitionLinearIssueToDone(issueId);
-    const closeoutLocks = releaseCloseoutLocks(issueId, manifest.branch);
+    const completion = await completeSuccessfulLaneClose(
+      issueId,
+      manifest,
+      result,
+      { trustedBindingRepair: Boolean(validatedPr) },
+    );
+    manifest = completion.manifest;
     const outcome: CloseoutOutcome =
-      closeoutLocks.warnings.length > 0 ? 'closed_with_warnings' : 'closed';
+      completion.warnings.length > 0 ? 'closed_with_warnings' : 'closed';
+    transaction?.commit();
+    transaction = null;
 
     emitJson({
       ok: true,
@@ -764,10 +1163,14 @@ async function main(): Promise<void> {
       issue_id: issueId,
       status: manifest.status,
       closed_at: manifest.closed_at,
-      warnings: closeoutLocks.warnings,
+      warnings: completion.warnings,
+      sync_removed: completion.sync_removed,
+      worktree_cleanup: completion.worktree_cleanup,
       truth_check: result,
     });
   } catch (error) {
+    transaction?.rollback();
+    transaction = null;
     if (
       error instanceof Error &&
       error.message === MISSING_COMMIT_SHA_MESSAGE
@@ -848,30 +1251,143 @@ function writeRepairArtifact(input: {
   return artifactPath;
 }
 
+function snapshotDirectory(directory: string): Map<string, Buffer> {
+  const snapshot = new Map<string, Buffer>();
+  if (!fs.existsSync(directory)) return snapshot;
+
+  const visit = (current: string): void => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const absolute = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolute);
+      } else if (entry.isFile()) {
+        snapshot.set(path.relative(directory, absolute), fs.readFileSync(absolute));
+      }
+    }
+  };
+  visit(directory);
+  return snapshot;
+}
+
+function snapshotFile(filePath: string): FileSnapshot {
+  return {
+    path: filePath,
+    contents: fs.existsSync(filePath) ? fs.readFileSync(filePath) : null,
+  };
+}
+
+function restoreFile(snapshot: FileSnapshot): void {
+  if (snapshot.contents === null) {
+    fs.rmSync(snapshot.path, { force: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(snapshot.path), { recursive: true });
+  fs.writeFileSync(snapshot.path, snapshot.contents);
+}
+
 function fetchMergedPrInfo(prUrl: string): RepairMergedPrInfo {
-  const selector = normalizePrSelector(prUrl);
-  const stdout = execFileSync('gh', ['pr', 'view', selector, '--json', 'url,state,mergedAt,mergeCommit'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  return fetchPrInfo(prUrl, false);
+}
+
+function fetchTrustedMergedPrInfo(prUrl: string): RepairMergedPrInfo {
+  return fetchPrInfo(prUrl, true);
+}
+
+function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
+  const reference = parsePrReference(prUrl);
+  if (!reference || reference.repository !== TRUSTED_POST_MERGE_REPOSITORY) {
+    throw new Error(`Invalid pull request reference: ${prUrl}`);
+  }
+  const selector = String(reference.number);
+  const stdout = execFileSync(
+    'gh',
+    [
+      'pr',
+      'view',
+      selector,
+      '--repo',
+      TRUSTED_POST_MERGE_REPOSITORY,
+      '--json',
+      'url,state,mergedAt,mergeCommit,headRefName,title',
+    ],
+    {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  );
+  const filesStdout = includeFiles
+    ? execFileSync(
+        'gh',
+        [
+          'api',
+          '--paginate',
+          `repos/${TRUSTED_POST_MERGE_REPOSITORY}/pulls/${selector}/files`,
+          '--jq',
+          '.[].filename',
+        ],
+        {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      )
+    : '';
   const parsed = JSON.parse(stdout) as {
     url?: string;
     state?: string | null;
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
+    headRefName?: string | null;
+    title?: string | null;
   };
   const state = parsed.state?.toLowerCase() ?? null;
   return {
     url: parsed.url ?? prUrl,
+    number: reference.number,
+    repository: reference.repository,
     state,
     merged: state === 'merged' || Boolean(parsed.mergedAt),
     mergeSha: parsed.mergeCommit?.oid ?? null,
+    headRefName: parsed.headRefName ?? null,
+    title: parsed.title ?? null,
+    ...(includeFiles
+      ? { files: filesStdout.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean) }
+      : {}),
   };
 }
 
-function normalizePrSelector(prUrl: string): string {
-  const match = prUrl.match(/\/pull\/(\d+)(?:\b|$)/u);
-  return match?.[1] ?? prUrl;
+function parsePrReference(
+  input: string,
+): { repository: string; number: number } | null {
+  const value = input.trim();
+  const numeric = value.match(/^#?(\d+)$/u);
+  if (numeric) {
+    return {
+      repository: TRUSTED_POST_MERGE_REPOSITORY,
+      number: Number(numeric[1]),
+    };
+  }
+
+  const url = value.match(
+    /^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)(?:[/?#].*)?$/iu,
+  );
+  if (!url) return null;
+  return {
+    repository: url[1] ?? '',
+    number: Number(url[2]),
+  };
+}
+
+function isMergeShaReachableFromMain(mergeSha: string): boolean {
+  const result = git(['merge-base', '--is-ancestor', mergeSha, 'origin/main']);
+  return result.ok;
+}
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((entry, index) => entry === right[index]);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
 }
 
 function recordChanged(changedFields: string[], previous: unknown, next: unknown, field: string): void {
