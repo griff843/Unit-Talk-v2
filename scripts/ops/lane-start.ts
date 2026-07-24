@@ -298,11 +298,11 @@ function branchContainsExactIssue(branch: string, issueId: string): boolean {
   return new RegExp(`(?:^|[/_-])${escaped}(?:$|[/_-])`).test(branch.toLowerCase());
 }
 
-function isPermittedControlRegistryPath(filePath: string): boolean {
+export function isPermittedControlRegistryPath(filePath: string): boolean {
   const normalized = filePath.trim().replaceAll('\\', '/');
   return (
-    normalized.startsWith('.ops/sync/') ||
-    normalized.startsWith('docs/06_status/lanes/')
+    /^\.ops\/sync\/UTV2-\d+\.yml$/.test(normalized) ||
+    /^docs\/06_status\/lanes\/UTV2-\d+\.json$/.test(normalized)
   );
 }
 
@@ -855,6 +855,18 @@ function main(): void {
       }
 
       const mainHead = assertCleanMainControlCheckout();
+      const refreshMain = git(['fetch', 'origin', 'main']);
+      if (!refreshMain.ok) {
+        throw new Error(`unable to refresh origin/main during readmission: ${refreshMain.stderr}`);
+      }
+      const refreshBranch = git([
+        'fetch',
+        'origin',
+        `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+      ]);
+      if (!refreshBranch.ok) {
+        throw new Error(`unable to refresh origin/${branch} during readmission: ${refreshBranch.stderr}`);
+      }
       const originMain = git(['rev-parse', 'origin/main']);
       if (!originMain.ok || originMain.stdout !== mainHead) {
         throw new Error('main head changed or no longer matches origin/main after preflight');

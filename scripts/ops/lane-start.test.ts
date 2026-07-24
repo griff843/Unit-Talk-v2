@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ROOT } from './shared.js';
 import {
   type ExistingBranchReadmissionToken,
+  isPermittedControlRegistryPath,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
 
@@ -355,6 +356,15 @@ test('readmission 14: changed main head invalidates both token head bindings', (
     openPrNumber: token.open_pr_number,
   });
   assert.deepEqual(errors, ['main head changed after preflight']);
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const readmissionStart = source.indexOf('if (readmitExistingBranch) {', source.indexOf('let modelRouting'));
+  const refreshMain = source.indexOf("git(['fetch', 'origin', 'main'])", readmissionStart);
+  const readOriginMain = source.indexOf("git(['rev-parse', 'origin/main'])", readmissionStart);
+  assert.ok(
+    refreshMain !== -1 && refreshMain < readOriginMain,
+    'lane-start must refresh origin/main before comparing it with the token-bound main SHA',
+  );
 });
 
 test('readmission 15: reconstructed worktree uses the existing branch without a new-branch flag', () => {
@@ -427,6 +437,11 @@ test('readmission 19: root checkout is checked as clean main and never switched 
   assert.match(source, /currentBranch\.stdout !== 'main'/);
   assert.doesNotMatch(source, /git\(\['checkout', branch\]/);
   assert.doesNotMatch(source, /git\(\['switch', branch\]/);
+
+  assert.equal(isPermittedControlRegistryPath('.ops/sync/UTV2-1584.yml'), true);
+  assert.equal(isPermittedControlRegistryPath('docs/06_status/lanes/UTV2-1584.json'), true);
+  assert.equal(isPermittedControlRegistryPath('.ops/sync/arbitrary.txt'), false);
+  assert.equal(isPermittedControlRegistryPath('docs/06_status/lanes/UTV2-1584.json.bak'), false);
 });
 
 test('readmission 20: generic unsafe force cannot substitute for explicit readmission mode', () => {
