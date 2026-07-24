@@ -10,6 +10,7 @@ import {
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
+  implementationFilesFromTrustedRepair,
   isTrustedPostMergeAutomation,
   mapFailuresToCode,
   rebindRepairedLaneProof,
@@ -1349,7 +1350,14 @@ test('UTV2-1586 #1 trusted workflow invocation may bind a missing PR', () => {
   assert.strictEqual(repair.ok, true);
   assert.strictEqual(repair.manifest.pr_url, pr.url);
   assert.strictEqual(repair.manifest.commit_sha, pr.mergeSha);
-  assert.deepStrictEqual(repair.manifest.files_changed, pr.files);
+  assert.deepStrictEqual(
+    repair.manifest.files_changed,
+    implementationFilesFromTrustedRepair(manifest, pr.files ?? []),
+  );
+  assert.doesNotMatch(
+    repair.manifest.files_changed.join('\n'),
+    /^(?:docs\/06_status\/lanes\/|\.ops\/sync\/)/mu,
+  );
 });
 
 test('UTV2-1586 #2 local invocation cannot bind a missing PR', () => {
@@ -1390,7 +1398,10 @@ test('UTV2-1586 #5 matching existing PR binding is an idempotent no-op', () => {
     preflight_token: 'dispatch-auto',
   });
   const pr = createTrustedRepairPr(base);
-  const manifest = { ...base, files_changed: pr.files ?? [] };
+  const manifest = {
+    ...base,
+    files_changed: implementationFilesFromTrustedRepair(base, pr.files ?? []),
+  };
   const validation = validateTrustedPostMergeRepair(manifest, '#1305', {
     repairMerged: true,
     trustedPostMerge: true,
@@ -1611,7 +1622,10 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
     assert.strictEqual(completion.manifest.closed_at, '2026-07-24T21:00:00.000Z');
     assert.strictEqual(completion.manifest.pr_url, pr.url);
     assert.strictEqual(completion.manifest.commit_sha, pr.mergeSha);
-    assert.deepStrictEqual(completion.manifest.files_changed, pr.files);
+    assert.deepStrictEqual(
+      completion.manifest.files_changed,
+      implementationFilesFromTrustedRepair(manifest, pr.files ?? []),
+    );
     assert.ok(completion.manifest.truth_check_history.some((entry) => entry.verdict === 'pass'));
     assert.strictEqual(completion.sync_removed, true);
     assert.strictEqual(fs.existsSync(syncPath), false);
@@ -1667,6 +1681,9 @@ test('UTV2-1586 #16 workflow dispatch forwards PR only to trusted repair command
   assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted\)/);
   assert.match(workflow, /close_args\+=\(--pr "\$EXPLICIT_PR"\)/);
   assert.strictEqual((workflow.match(/--pr "\$EXPLICIT_PR"/gu) ?? []).length, 1);
+  assert.match(workflow, /git ls-files -- "\$per_issue_sync"/);
+  assert.match(workflow, /git add -A -- "\$per_issue_sync"/);
+  assert.doesNotMatch(workflow, /if \[ -f "\$per_issue_sync" \]/);
 });
 
 test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact merge SHA', () => {
@@ -1695,4 +1712,11 @@ test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact me
   });
   assert.strictEqual(repair.manifest.pr_url, 'https://github.com/griff843/Unit-Talk-v2/pull/1305');
   assert.strictEqual(repair.manifest.commit_sha, '97527b791fc37acce41f4f46fd88699dce054b66');
+  assert.deepStrictEqual(repair.manifest.files_changed, [
+    '.github/workflows/merge-gate.yml',
+    'docs/06_status/proof/UTV2-1585/evidence.json',
+    'docs/06_status/proof/UTV2-1585/model-routing.json',
+    'docs/06_status/proof/UTV2-1585/verification.md',
+    'scripts/ops/workflow-hardening.test.ts',
+  ]);
 });

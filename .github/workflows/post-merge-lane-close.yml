@@ -368,8 +368,10 @@ jobs:
 
           # Remove per-issue sync file now that the lane is closed.
           per_issue_sync=".ops/sync/${ISSUE_ID}.yml"
-          if [ -f "$per_issue_sync" ]; then
-            git rm --force "$per_issue_sync"
+          if git ls-files -- "$per_issue_sync" | grep -q .; then
+            # lane-close removes the working-tree file before this step. Stage
+            # the tracked deletion from the index even though -f is now false.
+            git add -A -- "$per_issue_sync"
             echo "::notice title=post-merge-lane-close::Removed per-issue sync file $per_issue_sync"
           fi
 

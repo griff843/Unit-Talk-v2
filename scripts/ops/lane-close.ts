@@ -300,6 +300,17 @@ export interface TrustedPostMergeRepairValidation {
   pr: RepairMergedPrInfo | null;
 }
 
+export function implementationFilesFromTrustedRepair(
+  manifest: LaneManifest,
+  files: string[],
+): string[] {
+  const controlPlanePaths = new Set([
+    `docs/06_status/lanes/${manifest.issue_id}.json`,
+    `.ops/sync/${manifest.issue_id}.yml`,
+  ]);
+  return files.filter((file) => !controlPlanePaths.has(file));
+}
+
 /**
  * Validates an explicit historical implementation PR before any tracked lane
  * state is changed. The caller passes the result of
@@ -475,7 +486,9 @@ export function repairMergedLaneManifest(
     status: 'merged',
     commit_sha: pr.mergeSha,
     pr_url: pr.url,
-    files_changed: options.validatedPr?.files ?? manifest.files_changed,
+    files_changed: options.validatedPr
+      ? implementationFilesFromTrustedRepair(manifest, options.validatedPr.files ?? [])
+      : manifest.files_changed,
     heartbeat_at: now,
     truth_check_history: manifest.truth_check_history ?? [],
   };
