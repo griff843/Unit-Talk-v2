@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1577",
+  "title": "AUT-1: Autonomy contracts, state machine, and threat model",
+  "tier": "T1",
+  "lane_type": "hygiene",
+  "generated_at": "2026-07-23T18:38:25.000Z",
+  "head_sha": "07d866a390fe5ca4d3b23aca03ffa728d888a457",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": null,
+    "verified_source_note": "Filled in at commit time by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-23T18:38:25.000Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1577",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Implementer proof only. Per the program directive, this PR requires independent Codex adversarial review before PM sign-off -- this evidence bundle is not itself the certification artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "112 TAP suites, 3827 tests passed, 0 failed, 0 'not ok' lines across the full pipeline (sync-check, system-alignment-check, automation-coverage-check, env:check, lint, type-check, build, test, smart-form verify, verify:commands, test:live-db). Full log: docs/06_status/proof/UTV2-1577/verification.md."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "changed_files": 20
+    }
+  },
+  "runtime_proof": {
+    "note": "Pure documentation/schema change -- no code, workflow, or branch-protection modification in this diff. No new runtime behavior exists to verify. Per docs/05_operations/OPERATING_MODEL_SONNET5.md #5, governance-only T1 lanes still run pnpm test:db (done, as part of pnpm verify above, all live-DB suites green) but do not need to demonstrate the change itself against runtime data since there is no runtime change -- this lane produces contracts for code that does not exist yet (AUT-2 through AUT-6 are separate, not-yet-implemented lanes)."
+  },
+  "scope": {
+    "implementation_paths": [
+      "docs/05_operations/autonomy/README.md",
+      "docs/05_operations/autonomy/STATE_MACHINE.md",
+      "docs/05_operations/autonomy/AUTHORITY_MATRIX.md",
+      "docs/05_operations/autonomy/schemas/dispatch_packet_v1.schema.json",
+      "docs/05_operations/autonomy/schemas/autonomy_execution_state_v1.schema.json",
+      "docs/05_operations/autonomy/schemas/audit_event_v1.schema.json",
+      "docs/05_operations/autonomy/KILL_SWITCH_CONTRACT.md",
+      "docs/05_operations/autonomy/MODE_CONTRACT.md",
+      "docs/05_operations/autonomy/LIMITS.md",
+      "docs/05_operations/autonomy/CRASH_RESTART_SEMANTICS.md",
+      "docs/05_operations/autonomy/T1_QUEUE_BEHAVIOR.md",
+      "docs/05_operations/autonomy/THREAT_MODEL.md",
+      "docs/05_operations/autonomy/NOTIFICATION_TAXONOMY.md",
+      "docs/05_operations/autonomy/PROMOTION_ROLLBACK_STANDARDS.md",
+      "docs/05_operations/autonomy/PROGRAM_COMPLETION_DEFINITION.md",
+      "docs/05_operations/autonomy/COMPATIBILITY_MAP.md",
+      "docs/06_status/autonomy/STATUS.md"
+    ],
+    "not_changed": [
+      "any scripts/** code (no AUT-2 kernel implementation in this lane)",
+      "any .github/workflows/** file",
+      "docs/06_status/lanes/UTV2-1571.json and everything under docs/06_status/proof/UTV2-1571/** (reserved -- separate concurrent Codex emergency-stabilization lane, never read or referenced)",
+      "any other existing shared script, workflow, or doc outside docs/05_operations/autonomy/** and docs/06_status/autonomy/**"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false,
+    "file_scope_lock_respected": true
+  },
+  "acceptance_criteria": {
+    "all_15_deliverables_present": "PASS",
+    "deliverables_map": {
+      "1_state_machine": "docs/05_operations/autonomy/STATE_MACHINE.md",
+      "2_authority_matrix": "docs/05_operations/autonomy/AUTHORITY_MATRIX.md",
+      "3_dispatch_packet_schema": "docs/05_operations/autonomy/schemas/dispatch_packet_v1.schema.json",
+      "4_execution_state_schema": "docs/05_operations/autonomy/schemas/autonomy_execution_state_v1.schema.json",
+      "5_audit_event_schema": "docs/05_operations/autonomy/schemas/audit_event_v1.schema.json",
+      "6_kill_switch_contract": "docs/05_operations/autonomy/KILL_SWITCH_CONTRACT.md",
+      "7_mode_contract": "docs/05_operations/autonomy/MODE_CONTRACT.md",
+      "8_hard_limits": "docs/05_operations/autonomy/LIMITS.md",
+      "9_crash_restart_semantics": "docs/05_operations/autonomy/CRASH_RESTART_SEMANTICS.md",
+      "10_t1_queue_behavior": "docs/05_operations/autonomy/T1_QUEUE_BEHAVIOR.md",
+      "11_threat_model": "docs/05_operations/autonomy/THREAT_MODEL.md",
+      "12_notification_taxonomy": "docs/05_operations/autonomy/NOTIFICATION_TAXONOMY.md",
+      "13_promotion_rollback_standards": "docs/05_operations/autonomy/PROMOTION_ROLLBACK_STANDARDS.md",
+      "14_program_completion_definition": "docs/05_operations/autonomy/PROGRAM_COMPLETION_DEFINITION.md",
+      "15_compatibility_map": "docs/05_operations/autonomy/COMPATIBILITY_MAP.md"
+    },
+    "no_t1_authority_granted_to_kernel_under_any_mode": "PASS",
+    "json_schemas_are_valid_json": "PASS -- verified via node JSON.parse against all three schema files",
+    "grounded_in_real_existing_mechanisms": "PASS -- cross-referenced against EXECUTION_TRUTH_MODEL.md, LANE_MANIFEST_SPEC.md, TRUTH_CHECK_SPEC.md, DELEGATION_POLICY.md, OPERATING_MODEL_SONNET5.md, CONCURRENCY_CONFIG.json, LANE_CONCURRENCY_POLICY.md, scripts/ops/lease-registry.ts, scripts/ops/merge-mutex.ts, .github/workflows/track-a-monitor.yml, .claude/commands/loop-dispatch.md, .claude/commands/dispatch.md",
+    "orphaned_pid_grounding_addressed": "PASS -- CRASH_RESTART_SEMANTICS.md #1 cites the real 2026-07-23 merge-mutex.ts orphaned_pid false-positive and mandates the lease-registry.ts heartbeat+TTL pattern instead",
+    "reserved_paths_not_touched": "PASS -- UTV2-1571 paths and post-merge-lane-close.yml/lane-close.ts never read or referenced"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "codex_adversarial_review": "not_yet_performed -- required per program directive before PM sign-off",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "Numeric limits in LIMITS.md (wake frequency, cycle caps, cost ceiling mechanism) are conservative starting defaults reasoned from existing ratified numbers elsewhere in this repo, not yet empirically validated against a running kernel -- explicitly disclosed in LIMITS.md's own calibration-disclosure note and flagged in this lane's report to the orchestrator/PM.",
+    "The kernel's own execution-state artifact's canonical file path is deliberately left to AUT-2 to choose (only its distinctness from the existing ops:execution-state report is mandated) -- see COMPATIBILITY_MAP.md naming caveat.",
+    "Whether /loop-dispatch is eventually replaced (not just wrapped) by the scheduled kernel is explicitly left as a later, separate PM-gated decision -- COMPATIBILITY_MAP.md does not resolve this, by design."
+  ],
+  "verdict": "READY_FOR_PM_REVIEW"
+}
