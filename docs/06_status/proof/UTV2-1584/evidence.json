@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1584",
+  "title": "Safe existing-branch readmission for interrupted lanes",
+  "tier": "T1",
+  "lane_type": "governance",
+  "generated_at": "2026-07-24T09:52:30Z",
+  "sha_binding": {
+    "verified_source_sha": "c7c5df3600c5d9c3d121b303cb136205ca7c313f",
+    "verified_source_note": "Implementation commit verified before the additive proof and control-plane closeout commit.",
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null,
+    "merge_sha": null
+  },
+  "verifier": {
+    "identity": "codex-cli/gpt-5.6-sol",
+    "role": "implementation-lane"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "verified_source_sha": "c7c5df3600c5d9c3d121b303cb136205ca7c313f",
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS",
+        "test_live_db": "PASS"
+      }
+    },
+    "focused_tests": [
+      {
+        "command": "npx tsx --test scripts/ops/preflight.test.ts",
+        "status": "PASS",
+        "tests": 25,
+        "pass": 25,
+        "fail": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ops/lane-start.test.ts",
+        "status": "PASS",
+        "tests": 22,
+        "pass": 22,
+        "fail": 0
+      }
+    ],
+    "new_adversarial_tests": 20,
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "note": "Governance/tooling lane with no application-runtime or database implementation changes. Live Supabase verification is required by the T1 packet and completed through the repository's real DB and T1 proof suites.",
+    "command": "pnpm verify",
+    "status": "PASS",
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "duration_ms": 99669,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    },
+    "t1_live_suite": {
+      "command": "pnpm test:t1-proof:live",
+      "status": "PASS",
+      "environmental_skips": [
+        {
+          "test": "findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)",
+          "reason": "The most recent provider_offer_history row was older than the 72-hour lookback. The test classified this as stale provider data, not a code regression."
+        }
+      ]
+    },
+    "queries": [
+      "database repository bundle persists submission and settlement",
+      "invalid atomic enqueue rolls back lifecycle and outbox writes",
+      "invalid atomic delivery confirmation rolls back outbox, receipt, lifecycle, and audit writes",
+      "invalid atomic settlement rolls back settlement, lifecycle, and audit writes",
+      "participant upsert prevents duplicate rows",
+      "re-settlement creates an additive correction without duplicate base rows",
+      "settlement correction chain preserves the original row"
+    ],
+    "row_counts": [
+      {
+        "note": "No lane-specific production rows or schema were changed. Shared live proof fixtures exercised picks, pick_lifecycle, distribution_outbox, distribution_receipts, audit_log, settlement_records, and participants.",
+        "lane_specific_mutations": 0
+      }
+    ],
+    "pipeline_health_observation": {
+      "command": "pnpm pipeline:health -- --json",
+      "status": "DOWN",
+      "lane_caused": false,
+      "note": "Pre-existing worker/backlog condition documented in the lane packet; unrelated to the readmission tooling diff and not treated as a passing runtime claim."
+    }
+  },
+  "acceptance_criteria": {
+    "explicit_opt_in_only": "PASS",
+    "fail_closed_preflight_for_branch_pr_lease_lock_scope_and_continuation_state": "PASS",
+    "existing_branch_reconstructed_without_new_branch_creation": "PASS",
+    "fresh_lease_manifest_sync_and_worktree_metadata": "PASS",
+    "rollback_removes_partial_state_and_preserves_existing_branch": "PASS",
+    "fresh_admission_and_normal_resume_unchanged": "PASS",
+    "adversarial_test_matrix": "PASS",
+    "operator_runbook": "PASS"
+  },
+  "verdict": "PASS"
+}

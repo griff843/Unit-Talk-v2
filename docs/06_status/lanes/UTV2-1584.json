@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1584-existing-branch-readmission",
   "branch": "codex/utv2-1584-existing-branch-readmission",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c7c5df3600c5d9c3d121b303cb136205ca7c313f",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "docs/05_operations/EXISTING_BRANCH_READMISSION.md",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/preflight.test.ts",
+    "scripts/ops/preflight.ts"
+  ],
   "file_scope_lock": [
     "docs/05_operations/EXISTING_BRANCH_READMISSION.md",
     "scripts/ops/lane-start.test.ts",
@@ -23,7 +29,7 @@
   ],
   "status": "started",
   "started_at": "2026-07-24T09:23:51.092Z",
-  "heartbeat_at": "2026-07-24T09:23:51.092Z",
+  "heartbeat_at": "2026-07-24T09:52:30.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1584-existing-branch-readmission.json",
