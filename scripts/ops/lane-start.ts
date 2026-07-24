@@ -8,8 +8,11 @@ import {
 } from './lane-execution.js';
 import {
   defaultLeaseOwner,
+  readAllLeases,
+  releaseLease,
   reserveLease,
 } from './lease-registry.js';
+import { readMergeLock } from './merge-mutex.js';
 import { evaluateSubstrate, gatherSubstrateFacts } from './substrate-guard.js';
 import { requireDelegationActive } from './delegation-state.js';
 import {
@@ -20,6 +23,7 @@ import {
   currentHeadSha,
   defaultProofPaths,
   emitJson,
+  git,
   issueToManifestPath,
   manifestExists,
   normalizeFileScope,
@@ -38,6 +42,7 @@ import {
   ROOT,
   type CanonicalLaneType,
   type LaneExecutor,
+  type PreflightToken,
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
@@ -68,6 +73,72 @@ const LEGACY_EXECUTOR_MAP: Record<string, LaneExecutor> = {
   'codex-cloud': 'codex-cloud',
   codex: 'codex-cli',
 };
+
+export interface ExistingBranchReadmissionToken extends PreflightToken {
+  mode: 'existing-branch-readmission';
+  branch_head_sha: string;
+  origin_main_sha: string;
+  open_pr_number: number;
+  open_pr_url: string;
+  ahead_count: number;
+  behind_count: number;
+  requested_lane_type: CanonicalLaneType;
+  executor: LaneExecutor;
+  file_scope: string[];
+  previous_lane_type: string | null;
+  no_worktree: true;
+  no_active_lease: true;
+  no_active_merge_mutex: true;
+}
+
+export interface ReadmissionTokenRequest {
+  issueId: string;
+  branch: string;
+  tier: string;
+  laneType: CanonicalLaneType;
+  executor: LaneExecutor;
+  fileScope: string[];
+  currentMainSha: string;
+  currentBranchSha: string;
+  openPrNumber: number;
+}
+
+export function validateReadmissionTokenRequest(
+  token: ExistingBranchReadmissionToken,
+  request: ReadmissionTokenRequest,
+): string[] {
+  const errors: string[] = [];
+  if (token.mode !== 'existing-branch-readmission') errors.push('token mode is not existing-branch readmission');
+  if (token.issue_id !== request.issueId) errors.push('token issue does not match request');
+  if (token.branch !== request.branch) errors.push('token branch does not match request');
+  if (token.tier !== request.tier) errors.push('token tier does not match request');
+  if (token.requested_lane_type !== request.laneType) errors.push('token lane type does not match request');
+  if (token.executor !== request.executor) errors.push('token executor does not match request');
+  if (!Array.isArray(token.file_scope) || !sameStrings(token.file_scope, request.fileScope)) {
+    errors.push('token file scope does not match request');
+  }
+  if (token.origin_main_sha !== request.currentMainSha || token.head_sha !== request.currentMainSha) {
+    errors.push('main head changed after preflight');
+  }
+  if (token.branch_head_sha !== request.currentBranchSha) {
+    errors.push('branch head changed after preflight');
+  }
+  if (token.open_pr_number !== request.openPrNumber) errors.push('open PR identity changed after preflight');
+  if (
+    token.no_worktree !== true ||
+    token.no_active_lease !== true ||
+    token.no_active_merge_mutex !== true
+  ) {
+    errors.push('token absence proofs are incomplete');
+  }
+  return errors;
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  const a = [...left].sort();
+  const b = [...right].sort();
+  return a.length === b.length && a.every((value, index) => value === b[index]);
+}
 
 // Paths that require serialized (singleton) execution — parallel dispatch is invalid
 // unless --singleton-approved is explicitly passed.
@@ -193,6 +264,207 @@ function linkWorktreeEnv(worktreePath: string): void {
   }
 }
 
+interface FileSnapshot {
+  path: string;
+  existed: boolean;
+  content: string;
+}
+
+interface ExactOpenPr {
+  number: number;
+  head: { ref: string; sha: string; repo: { full_name: string } | null };
+  base: { repo: { full_name: string } | null };
+}
+
+function snapshotFile(filePath: string): FileSnapshot {
+  return {
+    path: filePath,
+    existed: fs.existsSync(filePath),
+    content: fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '',
+  };
+}
+
+function restoreFile(snapshot: FileSnapshot): void {
+  if (snapshot.existed) {
+    fs.mkdirSync(path.dirname(snapshot.path), { recursive: true });
+    fs.writeFileSync(snapshot.path, snapshot.content, 'utf8');
+  } else if (fs.existsSync(snapshot.path)) {
+    fs.rmSync(snapshot.path, { force: true });
+  }
+}
+
+function branchContainsExactIssue(branch: string, issueId: string): boolean {
+  const escaped = issueId.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[/_-])${escaped}(?:$|[/_-])`).test(branch.toLowerCase());
+}
+
+function isPermittedControlRegistryPath(filePath: string): boolean {
+  const normalized = filePath.trim().replaceAll('\\', '/');
+  return (
+    normalized.startsWith('.ops/sync/') ||
+    normalized.startsWith('docs/06_status/lanes/')
+  );
+}
+
+function assertCleanMainControlCheckout(): string {
+  const currentBranch = git(['branch', '--show-current']);
+  if (!currentBranch.ok || currentBranch.stdout !== 'main') {
+    throw new Error(`existing-branch readmission requires the control checkout on main, got ${currentBranch.stdout || '(detached)'}`);
+  }
+  const status = git(['status', '--porcelain=v1', '--untracked-files=all']);
+  if (!status.ok) {
+    throw new Error(`unable to validate main checkout cleanliness: ${status.stderr}`);
+  }
+  const unsafe = status.stdout
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => line.slice(3).replace(/^.* -> /, ''))
+    .filter((filePath) => !isPermittedControlRegistryPath(filePath));
+  if (unsafe.length > 0) {
+    throw new Error(`main control checkout has non-registry changes: ${unsafe.join(', ')}`);
+  }
+  return currentHeadSha();
+}
+
+function resolveExistingBranchSha(branch: string): { sha: string; sourceRef: string; local: boolean } {
+  const local = git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]).ok;
+  const sourceRef = local ? `refs/heads/${branch}` : `refs/remotes/origin/${branch}`;
+  const result = git(['rev-parse', sourceRef]);
+  if (!result.ok || !result.stdout) {
+    throw new Error(`existing target branch ${branch} no longer exists locally or on origin`);
+  }
+  return { sha: result.stdout, sourceRef, local };
+}
+
+function branchHasWorktree(branch: string, canonicalPath: string): boolean {
+  const worktrees = git(['worktree', 'list', '--porcelain']);
+  if (!worktrees.ok) {
+    throw new Error(`unable to inspect worktrees: ${worktrees.stderr}`);
+  }
+  return (
+    worktreeExists(canonicalPath) ||
+    worktrees.stdout
+      .split(/\n\n+/)
+      .some((block) => block.split(/\r?\n/).includes(`branch refs/heads/${branch}`))
+  );
+}
+
+function currentRepository(): string {
+  const result = spawnSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
+  if (result.status !== 0 || !result.stdout.trim()) {
+    throw new Error(`unable to resolve current GitHub repository: ${result.stderr || 'unknown error'}`);
+  }
+  return result.stdout.trim();
+}
+
+function exactOpenPullRequest(repository: string, branch: string): ExactOpenPr {
+  const owner = repository.split('/')[0] ?? '';
+  const result = spawnSync(
+    'gh',
+    [
+      'api',
+      '--method',
+      'GET',
+      `repos/${repository}/pulls`,
+      '-f',
+      'state=open',
+      '-f',
+      `head=${owner}:${branch}`,
+    ],
+    { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
+  );
+  if (result.status !== 0) {
+    throw new Error(`unable to revalidate open PR: ${result.stderr || 'unknown error'}`);
+  }
+  const pullRequests = JSON.parse(result.stdout) as ExactOpenPr[];
+  if (pullRequests.length !== 1) {
+    throw new Error(`expected exactly one open PR for ${branch}, found ${pullRequests.length}`);
+  }
+  const pullRequest = pullRequests[0]!;
+  if (
+    pullRequest.head.ref !== branch ||
+    pullRequest.head.repo?.full_name !== repository ||
+    pullRequest.base.repo?.full_name !== repository
+  ) {
+    throw new Error('open PR identity or repository changed after preflight');
+  }
+  return pullRequest;
+}
+
+function assertNoReadmissionOwnershipState(issueId: string, branch: string, worktreePath: string): void {
+  if (branchHasWorktree(branch, worktreePath)) {
+    throw new Error(`a worktree appeared for ${branch} after preflight`);
+  }
+  const lease = readAllLeases().find(
+    (candidate) =>
+      (candidate.issue_id === issueId || candidate.branch === branch) &&
+      (candidate.status === 'active' || candidate.status === 'stale_reclaim_required'),
+  );
+  if (lease) {
+    throw new Error(`an active lease appeared for ${lease.issue_id} after preflight`);
+  }
+  const mergeLock = readMergeLock();
+  if (!mergeLock.ok && mergeLock.code !== 'merge_lock_missing') {
+    throw new Error(`merge mutex state is invalid: ${mergeLock.message}`);
+  }
+  if (
+    mergeLock.ok &&
+    mergeLock.lock.issue_id === issueId &&
+    mergeLock.lock.status !== 'released'
+  ) {
+    throw new Error(`an active merge mutex appeared for ${issueId} after preflight`);
+  }
+}
+
+function createWorktreeFromExistingBranch(
+  branch: string,
+  worktreePath: string,
+  branchState: { sha: string; sourceRef: string; local: boolean },
+): { localBranchCreated: boolean } {
+  fs.mkdirSync(path.dirname(worktreePath), { recursive: true });
+  let localBranchCreated = false;
+  if (!branchState.local) {
+    const createLocal = git(['branch', '--track', branch, branchState.sourceRef]);
+    if (!createLocal.ok) {
+      throw new Error(`failed to materialize local tracking ref for existing branch: ${createLocal.stderr}`);
+    }
+    localBranchCreated = true;
+  }
+  const add = git(['worktree', 'add', worktreePath, branch]);
+  if (!add.ok) {
+    if (localBranchCreated) {
+      git(['branch', '-D', branch]);
+    }
+    throw new Error(`failed to reconstruct worktree from existing branch: ${add.stderr}`);
+  }
+  const reconstructedHead = currentHeadSha(worktreePath);
+  if (reconstructedHead !== branchState.sha) {
+    git(['worktree', 'remove', '--force', worktreePath]);
+    if (localBranchCreated) {
+      git(['branch', '-D', branch]);
+    }
+    throw new Error(`reconstructed worktree head mismatch: expected ${branchState.sha}, got ${reconstructedHead}`);
+  }
+  return { localBranchCreated };
+}
+
+function removeReadmissionWorktree(
+  branch: string,
+  worktreePath: string,
+  localBranchCreated: boolean,
+): void {
+  if (worktreeExists(worktreePath)) {
+    git(['worktree', 'remove', '--force', worktreePath]);
+  }
+  if (localBranchCreated && branchExists(branch)) {
+    git(['branch', '-D', branch]);
+  }
+}
+
 function main(): void {
   const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
@@ -201,6 +473,8 @@ function main(): void {
   const laneType = flags.get('lane-type')?.at(-1);
   const fileArgs = flags.get('files') ?? [];
   const docsOnlyFastPath = bools.has('docs-only-fast-path') || flags.has('docs-only-fast-path');
+  const readmitExistingBranch =
+    bools.has('readmit-existing-branch') || flags.has('readmit-existing-branch');
 
   try {
     // UTV2-1546: delegation kill switch. Independent of, and prior to, every
@@ -232,6 +506,9 @@ function main(): void {
     if (!laneType && !docsOnlyFastPath) {
       missing.push('--lane-type');
     }
+    if (readmitExistingBranch && !flags.get('executor')?.at(-1)) {
+      missing.push('--executor');
+    }
     if (fileArgs.length === 0) {
       missing.push('--files (repeatable, at least one required)');
     }
@@ -243,6 +520,9 @@ function main(): void {
           `Valid --lane-type values: ${CANONICAL_LANE_TYPES.join(', ')} (or legacy: ${Object.keys(LEGACY_EXECUTOR_MAP).join(', ')}).`,
       );
     }
+    if (readmitExistingBranch && docsOnlyFastPath) {
+      throw new Error('--readmit-existing-branch cannot be combined with --docs-only-fast-path');
+    }
 
     // Fail closed on an unsafe lane substrate before reserving a lease or
     // creating a worktree (UTV2 SPRINT-OPS-LANE-SUBSTRATE-STABILIZATION-001).
@@ -252,13 +532,23 @@ function main(): void {
     // via --force-unsafe-substrate (logged in the failure payload).
     const forceUnsafeSubstrate = bools.has('force-unsafe-substrate') || flags.has('force-unsafe-substrate');
     const substrateReport = evaluateSubstrate(gatherSubstrateFacts({ includeMergeRisk: false }));
-    if (!substrateReport.ok && !forceUnsafeSubstrate) {
+    const untoleratedSubstrateFindings = substrateReport.findings.filter(
+      (finding) =>
+        finding.severity === 'hard_fail' &&
+        !(
+          readmitExistingBranch &&
+          finding.code === 'active_lane_missing_worktree' &&
+          finding.lanes?.length === 1 &&
+          finding.lanes[0] === issueId
+        ),
+    );
+    if (untoleratedSubstrateFindings.length > 0 && !forceUnsafeSubstrate) {
       emitJson({
         ok: false,
         code: 'substrate_unsafe',
         message:
           'Lane substrate is unsafe; refusing to start lane. Run `pnpm ops:substrate-guard` for full detail, resolve the findings, or pass --force-unsafe-substrate to override.',
-        findings: substrateReport.findings.filter((f) => f.severity === 'hard_fail'),
+        findings: untoleratedSubstrateFindings,
       });
       process.exit(1);
     }
@@ -459,6 +749,9 @@ function main(): void {
     const manifestPath = issueToManifestPath(issueId);
 
     if (branchAlreadyExists && worktreeAlreadyExists) {
+      if (readmitExistingBranch) {
+        throw new Error('Existing-branch readmission requires the target branch to have no worktree');
+      }
       if (!manifestExists(issueId)) {
         throw new Error('Branch and worktree already exist but no manifest exists for this issue');
       }
@@ -516,10 +809,13 @@ function main(): void {
       return;
     }
 
-    if (branchAlreadyExists && !worktreeAlreadyExists) {
+    if (readmitExistingBranch && worktreeAlreadyExists) {
+      throw new Error('Existing-branch readmission requires the target branch to have no worktree');
+    }
+    if (!readmitExistingBranch && branchAlreadyExists && !worktreeAlreadyExists) {
       throw new Error('Branch exists but worktree does not exist; Phase 1 fails closed');
     }
-    if (!branchAlreadyExists && worktreeAlreadyExists) {
+    if (!readmitExistingBranch && !branchAlreadyExists && worktreeAlreadyExists) {
       throw new Error('Worktree exists but branch does not exist; Phase 1 fails closed');
     }
 
@@ -551,6 +847,226 @@ function main(): void {
         process.exit(1);
       }
       modelRouting = resolution.model_routing!;
+    }
+
+    if (readmitExistingBranch) {
+      if (!branchContainsExactIssue(branch, issueId)) {
+        throw new Error(`Branch ${branch} does not contain exact issue identifier ${issueId}`);
+      }
+
+      const mainHead = assertCleanMainControlCheckout();
+      const originMain = git(['rev-parse', 'origin/main']);
+      if (!originMain.ok || originMain.stdout !== mainHead) {
+        throw new Error('main head changed or no longer matches origin/main after preflight');
+      }
+
+      const branchState = resolveExistingBranchSha(branch);
+      const mergeBase = git(['merge-base', 'origin/main', branchState.sourceRef]);
+      if (!mergeBase.ok || !mergeBase.stdout) {
+        throw new Error(`existing branch ${branch} no longer has related history with origin/main`);
+      }
+      const relation = git([
+        'rev-list',
+        '--left-right',
+        '--count',
+        `origin/main...${branchState.sourceRef}`,
+      ]);
+      const [behindRaw, aheadRaw, ...extraRelationParts] = relation.stdout.split(/\s+/);
+      const behind = Number.parseInt(behindRaw ?? '', 10);
+      const ahead = Number.parseInt(aheadRaw ?? '', 10);
+      if (
+        !relation.ok ||
+        extraRelationParts.length > 0 ||
+        !Number.isInteger(behind) ||
+        !Number.isInteger(ahead)
+      ) {
+        throw new Error(`unable to revalidate existing branch divergence: ${relation.stderr || relation.stdout}`);
+      }
+
+      const repository = currentRepository();
+      const pullRequest = exactOpenPullRequest(repository, branch);
+      if (pullRequest.head.sha !== branchState.sha) {
+        throw new Error('open PR head and existing branch head no longer match');
+      }
+
+      assertNoReadmissionOwnershipState(issueId, branch, worktreePath);
+
+      const token = preflight.token as ExistingBranchReadmissionToken;
+      const tokenErrors = validateReadmissionTokenRequest(token, {
+        issueId,
+        branch,
+        tier,
+        laneType: canonicalLaneType,
+        executor,
+        fileScope: normalizedFiles,
+        currentMainSha: mainHead,
+        currentBranchSha: branchState.sha,
+        openPrNumber: pullRequest.number,
+      });
+      if (token.ahead_count !== ahead || token.behind_count !== behind) {
+        tokenErrors.push('branch divergence changed after preflight');
+      }
+      if (tokenErrors.length > 0) {
+        throw new Error(`Readmission token is stale or mismatched: ${tokenErrors.join('; ')}`);
+      }
+
+      const priorManifest = manifestExists(issueId) ? readManifest(issueId) : null;
+      if (priorManifest && priorManifest.branch !== branch) {
+        throw new Error(
+          `Existing manifest metadata belongs to ${priorManifest.branch}, not requested branch ${branch}`,
+        );
+      }
+
+      const expectedProofPaths = defaultProofPaths(issueId, tier);
+      if (isCodexExecutor) {
+        expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
+      }
+
+      const syncPath = path.join(ROOT, '.ops', 'sync', `${issueId}.yml`);
+      const manifestSnapshot = snapshotFile(manifestPath);
+      const syncSnapshot = snapshotFile(syncPath);
+      let localBranchCreated = false;
+      let worktreeCreated = false;
+      let leaseReserved = false;
+
+      try {
+        const worktree = createWorktreeFromExistingBranch(branch, worktreePath, branchState);
+        localBranchCreated = worktree.localBranchCreated;
+        worktreeCreated = true;
+        linkWorktreeEnv(worktreePath);
+
+        const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
+        const lease = reserveLease({
+          issue_id: issueId,
+          branch,
+          executor,
+          cwd: worktreePath,
+          worktree_path: worktreePath,
+          execution_location: { cwd: setup.execution_location.cwd },
+          file_scope_lock: normalizedFiles,
+          owner: defaultLeaseOwner(),
+        });
+        if (!lease.ok) {
+          throw new Error(`Lane lease check failed: ${lease.code} ${lease.message}`);
+        }
+        leaseReserved = true;
+
+        const now = new Date().toISOString();
+        const manifest = createManifest({
+          issue_id: issueId,
+          tier,
+          branch,
+          worktree_path: worktreePath,
+          file_scope_lock: normalizedFiles,
+          expected_proof_paths: expectedProofPaths,
+          preflight_token: preflight.tokenRelativePath,
+          lane_type: canonicalLaneType,
+          executor,
+          created_by: executor === 'claude' ? 'claude' : 'codex-cli',
+          status: 'started',
+          now,
+          requireExistingPreflightToken: true,
+          model_routing: modelRouting,
+          ...(verificationTargetFlag ? { verification_target: verificationTargetFlag } : {}),
+        });
+        manifest.execution_location = setup.execution_location;
+        manifest.notes =
+          `existing-branch readmission; previous_lane_type=${token.previous_lane_type ?? 'unknown'}; ` +
+          `new_lane_type=${canonicalLaneType}; preserved_head=${branchState.sha}; open_pr=${pullRequest.number}`;
+        if (tier === 'T1' && manifest.expected_proof_paths.length === 0) {
+          throw new Error(`T1 lane ${issueId} has no expected_proof_paths declared`);
+        }
+        writeManifest(manifest);
+        writeSyncFile(issueId, buildSyncYml(issueId));
+
+        if (git(['branch', '--show-current']).stdout !== 'main') {
+          throw new Error('root checkout changed branches during readmission');
+        }
+
+        const worktreeManifestDir = path.join(worktreePath, 'docs', '06_status', 'lanes');
+        fs.mkdirSync(worktreeManifestDir, { recursive: true });
+        fs.copyFileSync(manifestPath, path.join(worktreeManifestDir, `${issueId}.json`));
+        const worktreeSyncDir = path.join(worktreePath, '.ops', 'sync');
+        fs.mkdirSync(worktreeSyncDir, { recursive: true });
+        fs.copyFileSync(syncPath, path.join(worktreeSyncDir, `${issueId}.yml`));
+
+        const metadataPaths = [
+          `docs/06_status/lanes/${issueId}.json`,
+          `.ops/sync/${issueId}.yml`,
+        ];
+        const worktreeProofDir = path.join(worktreePath, 'docs', '06_status', 'proof', issueId);
+        if (!fs.existsSync(worktreeProofDir)) {
+          fs.mkdirSync(worktreeProofDir, { recursive: true });
+        }
+        if (fs.readdirSync(worktreeProofDir).length === 0) {
+          fs.writeFileSync(path.join(worktreeProofDir, '.gitkeep'), '', 'utf8');
+          metadataPaths.push(`docs/06_status/proof/${issueId}/.gitkeep`);
+        }
+
+        const add = git(['add', '--', ...metadataPaths], worktreePath);
+        if (!add.ok) {
+          throw new Error(`failed to stage readmission metadata: ${add.stderr}`);
+        }
+        const staged = git(['diff', '--cached', '--name-only'], worktreePath);
+        const stagedPaths = staged.stdout.split(/\r?\n/).filter(Boolean);
+        if (
+          !staged.ok ||
+          stagedPaths.length === 0 ||
+          stagedPaths.some((filePath) => !metadataPaths.includes(filePath))
+        ) {
+          throw new Error(
+            `readmission attempted to commit non-metadata paths: ${stagedPaths.join(', ') || '(none)'}`,
+          );
+        }
+        const commit = git(
+          ['commit', '-m', `chore(lanes): ${issueId} existing branch readmission metadata`],
+          worktreePath,
+        );
+        if (!commit.ok) {
+          throw new Error(`failed to commit regenerated readmission metadata: ${commit.stderr}`);
+        }
+
+        emitJson({
+          ok: true,
+          code: 'lane_readmitted_existing_branch',
+          issue_id: issueId,
+          tier,
+          branch,
+          preserved_branch_head: branchState.sha,
+          metadata_commit: currentHeadSha(worktreePath),
+          open_pr_number: pullRequest.number,
+          ahead_count: ahead,
+          behind_count: behind,
+          previous_lane_type: token.previous_lane_type,
+          lane_type: canonicalLaneType,
+          executor,
+          worktree_path: worktreePath,
+          cwd: setup.execution_location.cwd,
+          execution_location: setup.execution_location,
+          lease_code: lease.code,
+          lease_path: lease.lease_path,
+          manifest_path: relativeToRoot(manifestPath),
+          file_scope_lock: normalizedFiles,
+          expected_proof_paths: manifest.expected_proof_paths,
+          preflight_token: preflight.tokenRelativePath,
+          status: 'started',
+        });
+        return;
+      } catch (error) {
+        if (leaseReserved) {
+          releaseLease({
+            issue_id: issueId,
+            actor: 'ops:lane-start',
+            reason: 'existing-branch readmission transaction rolled back',
+          });
+        }
+        if (worktreeCreated || worktreeExists(worktreePath)) {
+          removeReadmissionWorktree(branch, worktreePath, localBranchCreated);
+        }
+        restoreFile(manifestSnapshot);
+        restoreFile(syncSnapshot);
+        throw error;
+      }
     }
 
     if (!branchAlreadyExists && !worktreeAlreadyExists) {

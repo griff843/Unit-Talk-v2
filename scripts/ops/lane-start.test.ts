@@ -3,6 +3,38 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './shared.js';
+import {
+  type ExistingBranchReadmissionToken,
+  validateReadmissionTokenRequest,
+} from './lane-start.js';
+
+function readmissionToken(): ExistingBranchReadmissionToken {
+  return {
+    schema_version: 1,
+    branch: 'codex/utv2-1584-existing-branch-readmission',
+    head_sha: 'a'.repeat(40),
+    tier: 'T1',
+    issue_id: 'UTV2-1584',
+    generated_at: '2026-07-24T00:00:00.000Z',
+    expires_at: '2026-07-24T00:15:00.000Z',
+    checks: { git: 'pass', env: 'pass', deps: 'pass' },
+    status: 'pass',
+    mode: 'existing-branch-readmission',
+    branch_head_sha: 'b'.repeat(40),
+    origin_main_sha: 'a'.repeat(40),
+    open_pr_number: 1303,
+    open_pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1303',
+    ahead_count: 9,
+    behind_count: 4,
+    requested_lane_type: 'governance',
+    executor: 'codex-cli',
+    file_scope: ['scripts/ops/lane-start.ts', 'scripts/ops/preflight.ts'],
+    previous_lane_type: 'hygiene',
+    no_worktree: true,
+    no_active_lease: true,
+    no_active_merge_mutex: true,
+  };
+}
 
 // UTV2-1492: lane-start.ts now owns declared-proof-path validation for T1
 // (moved out of preflight.ts's removed PX5 check) and scaffolds the empty
@@ -274,4 +306,137 @@ test('lane-start exits non-zero (refuses) when delegation is suspended', () => {
   );
   assert.match(delegationBlock, /delegation_suspended/);
   assert.match(delegationBlock, /process\.exit\(1\)/);
+});
+
+test('readmission 11: ordinary resume remains a separate lane_resumed path', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /if \(branchAlreadyExists && worktreeAlreadyExists\) \{[\s\S]*if \(readmitExistingBranch\)/,
+  );
+  assert.match(source, /code: 'lane_resumed'/);
+});
+
+test('readmission 12: existing branch plus missing worktree still fails without the flag', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /if \(!readmitExistingBranch && branchAlreadyExists && !worktreeAlreadyExists\) \{\s*throw new Error\('Branch exists but worktree does not exist; Phase 1 fails closed'\)/,
+  );
+});
+
+test('readmission 13: changed branch head invalidates the token', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: 'c'.repeat(40),
+    openPrNumber: token.open_pr_number,
+  });
+  assert.deepEqual(errors, ['branch head changed after preflight']);
+});
+
+test('readmission 14: changed main head invalidates both token head bindings', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: 'd'.repeat(40),
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+  });
+  assert.deepEqual(errors, ['main head changed after preflight']);
+});
+
+test('readmission 15: reconstructed worktree uses the existing branch without a new-branch flag', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const start = source.indexOf('function createWorktreeFromExistingBranch(');
+  const end = source.indexOf('function removeReadmissionWorktree(', start);
+  const block = source.slice(start, end);
+  assert.match(block, /git\(\['worktree', 'add', worktreePath, branch\]\)/);
+  assert.doesNotMatch(block, /'worktree', 'add'[\s\S]*'-b'/);
+  assert.match(block, /reconstructedHead !== branchState\.sha/);
+});
+
+test('readmission 16: fresh manifest records requested governance and prior hygiene only as history', () => {
+  const token = readmissionToken();
+  const valid = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: 'governance',
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+  });
+  assert.deepEqual(valid, []);
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /lane_type: canonicalLaneType/);
+  assert.match(source, /previous_lane_type=\$\{token\.previous_lane_type \?\? 'unknown'\}/);
+  assert.doesNotMatch(source, /^\s*lane_type:\s*token\.previous_lane_type/m);
+});
+
+test('readmission 17: mismatched scope, executor, lane type, tier, or PR cannot reuse a token', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: 'T2',
+    laneType: 'hygiene',
+    executor: 'claude',
+    fileScope: ['scripts/ops/preflight.ts'],
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: 999,
+  });
+  assert.deepEqual(errors, [
+    'token tier does not match request',
+    'token lane type does not match request',
+    'token executor does not match request',
+    'token file scope does not match request',
+    'open PR identity changed after preflight',
+  ]);
+});
+
+test('readmission 18: post-worktree failures release lease, remove worktree, and restore root metadata', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const transactionStart = source.indexOf('const manifestSnapshot = snapshotFile(manifestPath);');
+  const transactionEnd = source.indexOf("if (!branchAlreadyExists && !worktreeAlreadyExists) {", transactionStart);
+  const block = source.slice(transactionStart, transactionEnd);
+  assert.match(block, /releaseLease\(\{/);
+  assert.match(block, /removeReadmissionWorktree\(branch, worktreePath, localBranchCreated\)/);
+  assert.match(block, /restoreFile\(manifestSnapshot\)/);
+  assert.match(block, /restoreFile\(syncSnapshot\)/);
+});
+
+test('readmission 19: root checkout is checked as clean main and never switched to the lane branch', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /function assertCleanMainControlCheckout\(\)/);
+  assert.match(source, /currentBranch\.stdout !== 'main'/);
+  assert.doesNotMatch(source, /git\(\['checkout', branch\]/);
+  assert.doesNotMatch(source, /git\(\['switch', branch\]/);
+});
+
+test('readmission 20: generic unsafe force cannot substitute for explicit readmission mode', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const legacyFailure = source.indexOf(
+    "throw new Error('Branch exists but worktree does not exist; Phase 1 fails closed')",
+  );
+  assert.notEqual(legacyFailure, -1);
+  const nearby = source.slice(Math.max(0, legacyFailure - 160), legacyFailure + 160);
+  assert.match(nearby, /!readmitExistingBranch/);
+  assert.doesNotMatch(nearby, /forceUnsafeSubstrate/);
+  assert.match(source, /code: 'lane_readmitted_existing_branch'/);
 });

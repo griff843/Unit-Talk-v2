@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
 import { requireDelegationActive } from './delegation-state.js';
+import { readAllLeases } from './lease-registry.js';
+import { readMergeLock } from './merge-mutex.js';
 import {
   type CheckResult,
   type LaneTier,
@@ -11,6 +13,8 @@ import {
   type PreflightResult,
   type PreflightToken,
   type PreflightWaiver,
+  type CanonicalLaneType,
+  type LaneExecutor,
   EVIDENCE_BUNDLE_SCHEMA_PATH,
   LANE_MANIFEST_SCHEMA_PATH,
   PREFLIGHT_BASELINE_CACHE_PATH,
@@ -49,6 +53,93 @@ type LinearIssueRecord = {
   state?: { name: string } | null;
   labels?: { nodes: Array<{ name: string }> } | null;
 };
+
+const CONTINUATION_ELIGIBLE_STATES = new Set([
+  'In Claude',
+  'In Codex',
+  'In Claude Review',
+  'In Codex Review',
+  'In Progress',
+]);
+
+const TERMINAL_LINEAR_STATES = new Set([
+  'Done',
+  'Canceled',
+  'Cancelled',
+  'Failed',
+  'Duplicate',
+]);
+
+export interface ExistingBranchReadmissionContext {
+  mode: 'existing-branch-readmission';
+  branch_head_sha: string;
+  origin_main_sha: string;
+  open_pr_number: number;
+  open_pr_url: string;
+  ahead_count: number;
+  behind_count: number;
+  requested_lane_type: CanonicalLaneType;
+  executor: LaneExecutor;
+  file_scope: string[];
+  previous_lane_type: string | null;
+  no_worktree: true;
+  no_active_lease: true;
+  no_active_merge_mutex: true;
+}
+
+type ExistingBranchReadmissionToken = PreflightToken & ExistingBranchReadmissionContext;
+
+interface ExistingBranchMetadata {
+  issue_id?: string;
+  branch?: string;
+  lane_type?: string;
+}
+
+interface OpenPullRequest {
+  number: number;
+  html_url: string;
+  title: string;
+  body: string;
+  state: string;
+  head: { ref: string; sha: string; repo: { full_name: string } | null };
+  base: { repo: { full_name: string } | null };
+}
+
+const CANONICAL_READMISSION_LANE_TYPES = new Set<CanonicalLaneType>([
+  'runtime',
+  'modeling',
+  'verification',
+  'hygiene',
+  'migration',
+  'governance',
+  'delivery-ui',
+  'data-canonical',
+]);
+
+const READMISSION_EXECUTORS = new Set<LaneExecutor>(['claude', 'codex-cli', 'codex-cloud']);
+
+export function branchContainsExactIssue(branch: string, issueId: string): boolean {
+  const escaped = issueId.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[/_-])${escaped}(?:$|[/_-])`).test(branch.toLowerCase());
+}
+
+export function isContinuationEligibleLinearState(state: string): boolean {
+  return CONTINUATION_ELIGIBLE_STATES.has(state);
+}
+
+export function isTerminalLinearState(state: string): boolean {
+  return TERMINAL_LINEAR_STATES.has(state);
+}
+
+export function parseAheadBehind(value: string): { behind: number; ahead: number } | null {
+  const [behindRaw, aheadRaw, ...rest] = value.trim().split(/\s+/);
+  const behind = Number.parseInt(behindRaw ?? '', 10);
+  const ahead = Number.parseInt(aheadRaw ?? '', 10);
+  if (rest.length > 0 || !Number.isInteger(behind) || !Number.isInteger(ahead) || behind < 0 || ahead < 0) {
+    return null;
+  }
+  return { behind, ahead };
+}
 
 // PE3 (GITHUB_TOKEN) is waivable across all tiers: the token is only needed at
 // PR-creation time (ops:lane-link-pr), not during the coding/doc work itself.
@@ -170,6 +261,8 @@ async function main(): Promise<number> {
   const refresh = bools.has('refresh');
   const fast = bools.has('fast');
   const docsOnlyFastPath = bools.has('docs-only-fast-path') || flags.has('docs-only-fast-path');
+  const readmitExistingBranch =
+    bools.has('readmit-existing-branch') || flags.has('readmit-existing-branch');
   const waiverReason = getFlag(flags, 'waiver-reason');
   const requestedSkips = [...new Set(getFlags(flags, 'skip'))];
   const requireDocs = getFlags(flags, 'require-doc').map((docPath) =>
@@ -177,6 +270,8 @@ async function main(): Promise<number> {
   );
   const candidateFiles = getFlags(flags, 'files');
   const normalizedCandidateFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
+  const requestedLaneType = getFlag(flags, 'lane-type');
+  const requestedExecutor = getFlag(flags, 'executor');
   const tokenPath = preflightTokenPathForBranch(branch);
   const resultPath = preflightResultPathForBranch(branch);
   const runAt = new Date().toISOString();
@@ -228,6 +323,42 @@ async function main(): Promise<number> {
     writeSidecar(resultPath, result);
     writeOutput(result, json);
     return 3;
+  }
+
+  if (readmitExistingBranch) {
+    if (docsOnlyFastPath) {
+      const result = minimalFailureResult(issueId, branch, tier, 'FAIL', [
+        {
+          id: 'PRA0',
+          status: 'fail',
+          detail: '--readmit-existing-branch cannot be combined with --docs-only-fast-path',
+        },
+      ]);
+      writeSidecar(resultPath, result);
+      removeFileIfExists(tokenPath);
+      writeOutput(result, json);
+      return 1;
+    }
+    const missingReadmissionArgs = [
+      ...(!requestedLaneType ? ['--lane-type'] : []),
+      ...(!requestedExecutor ? ['--executor'] : []),
+      ...(normalizedCandidateFiles.length === 0 ? ['--files'] : []),
+    ];
+    if (missingReadmissionArgs.length > 0) {
+      const result = minimalFailureResult(issueId, branch, tier, 'FAIL', [
+        {
+          id: 'PRA0',
+          status: 'fail',
+          detail:
+            `--readmit-existing-branch requires explicit ${missingReadmissionArgs.join(', ')}; ` +
+            'readmission never inherits prior authority metadata',
+        },
+      ]);
+      writeSidecar(resultPath, result);
+      removeFileIfExists(tokenPath);
+      writeOutput(result, json);
+      return 1;
+    }
   }
 
   if (requestedSkips.length > 0 && !waiverReason) {
@@ -290,10 +421,30 @@ async function main(): Promise<number> {
     ? path.join(ROOT, 'local.env')
     : path.join(ROOT, '.env');
   const env = runEnvCheck(envFilePath, tier, addCheck);
-  runRepoChecks(issueId, branch, addCheck);
+  const readmissionContext = readmitExistingBranch
+    ? runExistingBranchReadmissionChecks({
+        issueId,
+        tier,
+        branch,
+        requestedLaneType: requestedLaneType!,
+        requestedExecutor: requestedExecutor!,
+        fileScope: normalizedCandidateFiles,
+        addCheck,
+      })
+    : null;
+  runRepoChecks(issueId, branch, addCheck, readmitExistingBranch, readmissionContext);
   runDependencyChecks(addCheck);
   validateDocsOnlyFastPath(tier, docsOnlyFastPath, normalizedCandidateFiles, addCheck);
-  const linearState = await runLinearChecks(issueId, tier, env, normalizedCandidateFiles, refresh, addCheck);
+  const linearState = await runLinearChecks(
+    issueId,
+    tier,
+    env,
+    normalizedCandidateFiles,
+    refresh,
+    addCheck,
+    readmitExistingBranch,
+    branch,
+  );
   runRequiredDocChecks(tier, linearState.labels, requireDocs, addCheck);
   runGateEquivalentChecks(issueId, tier, branch, headSha, addCheck);
   if (tier === 'T1') {
@@ -331,7 +482,17 @@ async function main(): Promise<number> {
     if (!dryRun) {
       writeJsonFile(
         tokenPath,
-        createToken(issueId, tier, branch, headSha, runAt, waivers, baseline.cacheHit, collectCheckedDocs(requireDocs, tier, linearState.labels)),
+        createToken(
+          issueId,
+          tier,
+          branch,
+          headSha,
+          runAt,
+          waivers,
+          baseline.cacheHit,
+          collectCheckedDocs(requireDocs, tier, linearState.labels),
+          readmissionContext,
+        ),
       );
       if (baseline.updatedCache) {
         writePreflightBaselineCache(baseline.updatedCache);
@@ -442,10 +603,310 @@ function runEnvCheck(
   }
 }
 
+function runExistingBranchReadmissionChecks(input: {
+  issueId: string;
+  tier: LaneTier;
+  branch: string;
+  requestedLaneType: string;
+  requestedExecutor: string;
+  fileScope: string[];
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void;
+}): ExistingBranchReadmissionContext | null {
+  const { issueId, branch, requestedLaneType, requestedExecutor, fileScope, addCheck } = input;
+  let failed = false;
+  const check = (id: string, ok: boolean, pass: string, fail: string): void => {
+    addCheck(id, ok ? 'pass' : 'fail', ok ? pass : fail);
+    failed ||= !ok;
+  };
+
+  const laneTypeValid = CANONICAL_READMISSION_LANE_TYPES.has(requestedLaneType as CanonicalLaneType);
+  check(
+    'PRA1',
+    laneTypeValid,
+    `requested lane type is explicit: ${requestedLaneType}`,
+    `invalid readmission --lane-type ${requestedLaneType}`,
+  );
+  const executorValid = READMISSION_EXECUTORS.has(requestedExecutor as LaneExecutor);
+  check(
+    'PRA2',
+    executorValid,
+    `requested executor is explicit: ${requestedExecutor}`,
+    `invalid readmission --executor ${requestedExecutor}`,
+  );
+  check(
+    'PRA3',
+    fileScope.length > 0,
+    `requested file scope recorded (${fileScope.length} paths)`,
+    'readmission requires a non-empty explicit file scope',
+  );
+  check(
+    'PRA4',
+    branchContainsExactIssue(branch, issueId),
+    `branch contains exact issue identifier ${issueId}`,
+    `branch ${branch} does not contain exact issue identifier ${issueId}`,
+  );
+
+  const currentBranch = git(['branch', '--show-current']);
+  check(
+    'PRA5',
+    currentBranch.ok && currentBranch.stdout === 'main',
+    'invoking checkout is exactly main',
+    `readmission must run from main, got ${currentBranch.stdout || currentBranch.stderr || '(detached)'}`,
+  );
+
+  const status = git(['status', '--porcelain=v1', '--untracked-files=all']);
+  const dirtyPaths = status.ok ? parsePorcelainPaths(status.stdout) : [];
+  const unsafeDirtyPaths = dirtyPaths.filter((entry) => !isLaneRegistryPath(entry));
+  check(
+    'PRA6',
+    status.ok && unsafeDirtyPaths.length === 0,
+    dirtyPaths.length === 0
+      ? 'main control checkout is clean'
+      : `main control checkout has only permitted registry state (${dirtyPaths.length} paths)`,
+    status.ok
+      ? `main control checkout has non-registry changes: ${unsafeDirtyPaths.join(', ')}`
+      : `git status failed: ${status.stderr}`,
+  );
+
+  const fetchMain = git(['fetch', 'origin', 'main']);
+  const mainSha = git(['rev-parse', 'main']);
+  const originMainSha = git(['rev-parse', 'origin/main']);
+  check(
+    'PRA7',
+    fetchMain.ok &&
+      mainSha.ok &&
+      originMainSha.ok &&
+      mainSha.stdout === originMainSha.stdout &&
+      currentHeadSha() === mainSha.stdout,
+    `local main exactly matches origin/main at ${originMainSha.stdout}`,
+    'local main, current HEAD, and origin/main must resolve to the same commit',
+  );
+
+  // Fetch the named branch without creating or checking out a local branch.
+  git(['fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`]);
+  const localRef = git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]).ok
+    ? `refs/heads/${branch}`
+    : null;
+  const remoteRef = git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`]).ok
+    ? `refs/remotes/origin/${branch}`
+    : null;
+  const targetRef = localRef ?? remoteRef;
+  check(
+    'PRA8',
+    targetRef !== null,
+    `target branch exists at ${targetRef ?? ''}`,
+    `target branch ${branch} does not exist locally or on origin`,
+  );
+
+  const worktreeList = git(['worktree', 'list', '--porcelain']);
+  const branchWorktreePresent =
+    worktreeList.ok &&
+    worktreeList.stdout
+      .split(/\n\n+/)
+      .some((block) => block.split(/\r?\n/).includes(`branch refs/heads/${branch}`));
+  check(
+    'PRA9',
+    worktreeList.ok && !branchWorktreePresent && !worktreeExists(worktreePathForBranch(branch)),
+    'no worktree exists for the target branch',
+    `a worktree already exists for ${branch}`,
+  );
+
+  let noActiveLease = false;
+  try {
+    const conflictingLease = readAllLeases().find(
+      (lease) =>
+        (lease.issue_id === issueId || lease.branch === branch) &&
+        (lease.status === 'active' || lease.status === 'stale_reclaim_required'),
+    );
+    noActiveLease = !conflictingLease;
+    check(
+      'PRA10',
+      noActiveLease,
+      'no active lease exists for the issue or branch',
+      `active lease exists for ${conflictingLease?.issue_id ?? issueId}`,
+    );
+  } catch (error) {
+    check(
+      'PRA10',
+      false,
+      '',
+      `lease registry could not be validated: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  const mergeLock = readMergeLock();
+  const sameIssueActiveMergeLock =
+    mergeLock.ok && mergeLock.lock.issue_id === issueId && mergeLock.lock.status !== 'released';
+  check(
+    'PRA11',
+    mergeLock.code === 'merge_lock_missing' ||
+      (mergeLock.ok && !sameIssueActiveMergeLock) ||
+      (!mergeLock.ok && mergeLock.code === 'merge_lock_missing'),
+    'no active merge mutex is owned by the issue',
+    sameIssueActiveMergeLock
+      ? `active merge mutex is owned by ${issueId}`
+      : `merge mutex state could not be validated: ${mergeLock.message}`,
+  );
+
+  let branchHeadSha = '';
+  let behindCount = -1;
+  let aheadCount = -1;
+  if (targetRef) {
+    const head = git(['rev-parse', targetRef]);
+    branchHeadSha = head.ok ? head.stdout : '';
+    const mergeBase = git(['merge-base', 'origin/main', targetRef]);
+    check(
+      'PRA12',
+      head.ok && mergeBase.ok && Boolean(mergeBase.stdout),
+      `target branch has merge base ${mergeBase.stdout} with current main`,
+      `target branch ${branch} has unrelated or invalid history`,
+    );
+    const relation = git(['rev-list', '--left-right', '--count', `origin/main...${targetRef}`]);
+    const parsedRelation = relation.ok ? parseAheadBehind(relation.stdout) : null;
+    if (parsedRelation) {
+      behindCount = parsedRelation.behind;
+      aheadCount = parsedRelation.ahead;
+    }
+    check(
+      'PRA13',
+      parsedRelation !== null,
+      `target divergence recorded exactly: ahead=${aheadCount}, behind=${behindCount}`,
+      `could not calculate target divergence: ${relation.stderr || relation.stdout}`,
+    );
+  } else {
+    check('PRA12', false, '', 'target branch history is unavailable');
+    check('PRA13', false, '', 'target branch divergence is unavailable');
+  }
+
+  const repository = readCurrentRepository();
+  const pullRequests = repository ? readOpenPullRequests(repository, branch) : [];
+  const pullRequest = pullRequests.length === 1 ? pullRequests[0]! : null;
+  check(
+    'PRA14',
+    Boolean(
+      pullRequest &&
+        pullRequest.state === 'open' &&
+        pullRequest.head.ref === branch &&
+        pullRequest.head.sha === branchHeadSha,
+    ),
+    `open PR #${pullRequest?.number ?? 0} exactly matches ${branch}@${branchHeadSha}`,
+    pullRequests.length === 0
+      ? `no open PR exactly matches branch ${branch}`
+      : pullRequests.length > 1
+        ? `multiple open PRs match branch ${branch}`
+        : `open PR head does not match ${branch}@${branchHeadSha}`,
+  );
+  check(
+    'PRA15',
+    Boolean(
+      repository &&
+        pullRequest?.head.repo?.full_name === repository &&
+        pullRequest?.base.repo?.full_name === repository,
+    ),
+    `PR head, PR base, and branch resolve to ${repository}`,
+    'PR and branch do not resolve to the same repository',
+  );
+
+  const branchMetadata = targetRef ? readExistingBranchMetadata(targetRef, issueId) : null;
+  const controlMetadata = readAllManifests().find((manifest) => manifest.issue_id === issueId) ?? null;
+  const metadata = branchMetadata ?? controlMetadata;
+  const metadataMatches =
+    metadata === null || (metadata.issue_id === issueId && metadata.branch === branch);
+  check(
+    'PRA16',
+    metadataMatches,
+    metadata
+      ? `existing metadata matches ${issueId} on ${branch}; previous lane type=${metadata.lane_type ?? 'unknown'}`
+      : 'no prior branch metadata was found',
+    `existing branch metadata belongs to ${metadata?.issue_id ?? 'unknown'} on ${metadata?.branch ?? 'unknown'}`,
+  );
+
+  if (
+    failed ||
+    !laneTypeValid ||
+    !executorValid ||
+    !targetRef ||
+    !pullRequest ||
+    !repository ||
+    !noActiveLease ||
+    !branchHeadSha ||
+    behindCount < 0 ||
+    aheadCount < 0
+  ) {
+    return null;
+  }
+
+  return {
+    mode: 'existing-branch-readmission',
+    branch_head_sha: branchHeadSha,
+    origin_main_sha: originMainSha.stdout,
+    open_pr_number: pullRequest.number,
+    open_pr_url: pullRequest.html_url,
+    ahead_count: aheadCount,
+    behind_count: behindCount,
+    requested_lane_type: requestedLaneType as CanonicalLaneType,
+    executor: requestedExecutor as LaneExecutor,
+    file_scope: [...fileScope].sort(),
+    previous_lane_type: metadata?.lane_type ?? null,
+    no_worktree: true,
+    no_active_lease: true,
+    no_active_merge_mutex: true,
+  };
+}
+
+function readCurrentRepository(): string | null {
+  const result = spawnSync('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
+  return result.status === 0 && result.stdout.trim() ? result.stdout.trim() : null;
+}
+
+function readOpenPullRequests(repository: string, branch: string): OpenPullRequest[] {
+  const owner = repository.split('/')[0] ?? '';
+  const result = spawnSync(
+    'gh',
+    [
+      'api',
+      '--method',
+      'GET',
+      `repos/${repository}/pulls`,
+      '-f',
+      'state=open',
+      '-f',
+      `head=${owner}:${branch}`,
+    ],
+    { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
+  );
+  if (result.status !== 0) {
+    return [];
+  }
+  try {
+    return JSON.parse(result.stdout) as OpenPullRequest[];
+  } catch {
+    return [];
+  }
+}
+
+function readExistingBranchMetadata(targetRef: string, issueId: string): ExistingBranchMetadata | null {
+  const result = git(['show', `${targetRef}:docs/06_status/lanes/${issueId}.json`]);
+  if (!result.ok) {
+    return null;
+  }
+  try {
+    return JSON.parse(result.stdout) as ExistingBranchMetadata;
+  } catch {
+    return { issue_id: '__malformed__', branch: '__malformed__', lane_type: '__malformed__' };
+  }
+}
+
 function runRepoChecks(
   issueId: string,
   branch: string,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
+  readmitExistingBranch = false,
+  readmissionContext: ExistingBranchReadmissionContext | null = null,
 ): void {
   addCheck('PG1', 'pass', 'git repo root resolved');
 
@@ -481,7 +942,16 @@ function runRepoChecks(
     }
   }
 
-  if (!branchExists(branch)) {
+  if (readmitExistingBranch) {
+    const currentBranch = git(['branch', '--show-current']);
+    if (!currentBranch.ok) {
+      addCheck('PG4', 'fail', `failed to determine current branch: ${currentBranch.stderr || 'unknown error'}`);
+    } else if (currentBranch.stdout !== 'main') {
+      addCheck('PG4', 'fail', `existing-branch readmission must run from main, got ${currentBranch.stdout || '(detached)'}`);
+    } else {
+      addCheck('PG4', 'pass', 'existing-branch readmission is running from the main control checkout');
+    }
+  } else if (!branchExists(branch)) {
     addCheck('PG4', 'pass', `branch ${branch} does not yet exist locally`);
   } else {
     const currentBranch = git(['branch', '--show-current']);
@@ -494,7 +964,17 @@ function runRepoChecks(
     }
   }
 
-  if (!branchExists(branch)) {
+  if (readmitExistingBranch) {
+    if (readmissionContext) {
+      addCheck(
+        'PG5',
+        'pass',
+        `existing branch divergence recorded: ahead=${readmissionContext.ahead_count}, behind=${readmissionContext.behind_count}`,
+      );
+    } else {
+      addCheck('PG5', 'fail', 'existing branch divergence could not be validated');
+    }
+  } else if (!branchExists(branch)) {
     addCheck('PG5', 'pass', `branch ${branch} does not exist locally yet`);
   } else {
     const relation = git(['rev-list', '--left-right', '--count', `main...${branch}`]);
@@ -680,7 +1160,9 @@ async function runLinearChecks(
   candidateFiles: string[],
   refresh: boolean,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
-): Promise<{ labels: string[] }> {
+  readmitExistingBranch = false,
+  branch = '',
+): Promise<{ labels: string[]; stateName: string }> {
   const token = env?.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
   if (!token) {
     addCheck('PE2', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY must be present and non-empty');
@@ -690,7 +1172,7 @@ async function runLinearChecks(
     addCheck('PL4', 'infra_error', 'Linear issue unavailable');
     addCheck('PL5', 'infra_error', 'Linear issue unavailable');
     addCheck('PL6', 'skip', 'PL6 skipped without issue context');
-    return { labels: [] };
+    return { labels: [], stateName: '' };
   }
 
   const issue = await fetchLinearIssue(issueId, token, addCheck);
@@ -700,7 +1182,7 @@ async function runLinearChecks(
     addCheck('PL4', 'skip', 'PL4 skipped because the issue could not be resolved');
     addCheck('PL5', 'skip', 'PL5 skipped because the issue could not be resolved');
     addCheck('PL6', 'skip', 'PL6 skipped without issue context');
-    return { labels: [] };
+    return { labels: [], stateName: '' };
   }
 
   const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
@@ -730,7 +1212,13 @@ async function runLinearChecks(
     'In Codex Review',
     'Needs Standard',
   ]);
-  if (startableStates.has(stateName)) {
+  if (readmitExistingBranch && isTerminalLinearState(stateName)) {
+    addCheck('PL3', 'fail', `terminal issue state ${stateName} cannot be readmitted`);
+  } else if (readmitExistingBranch && isContinuationEligibleLinearState(stateName)) {
+    addCheck('PL3', 'pass', `issue state ${stateName} is explicitly continuation-eligible`);
+  } else if (readmitExistingBranch) {
+    addCheck('PL3', 'fail', `issue state ${stateName || 'Unknown'} is not continuation-eligible`);
+  } else if (startableStates.has(stateName)) {
     addCheck('PL3', 'pass', `issue state ${stateName} is startable`);
   } else if (stateName === 'Backlog' && refresh) {
     addCheck('PL3', 'waived', 'issue state Backlog tolerated via --refresh');
@@ -747,7 +1235,17 @@ async function runLinearChecks(
   const conflictingManifest = readAllManifests().find(
     (manifest) => manifest.issue_id === issueId && manifest.status !== 'done',
   );
-  if (conflictingManifest) {
+  if (
+    readmitExistingBranch &&
+    conflictingManifest &&
+    conflictingManifest.branch === branch
+  ) {
+    addCheck(
+      'PL5',
+      'pass',
+      `existing metadata matches readmission issue and branch (status ${conflictingManifest.status})`,
+    );
+  } else if (conflictingManifest) {
     addCheck('PL5', 'fail', `active manifest already exists with status ${conflictingManifest.status}`);
   } else {
     addCheck('PL5', 'pass', 'no active manifest owns this issue');
@@ -759,6 +1257,7 @@ async function runLinearChecks(
     const normalizedFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
     const overlap = readAllManifests()
       .filter((manifest) => ['started', 'in_progress', 'in_review', 'blocked', 'reopened'].includes(manifest.status))
+      .filter((manifest) => !readmitExistingBranch || manifest.issue_id !== issueId)
       .find((manifest) => normalizedFiles.some((filePath) => (manifest.file_scope_lock ?? []).includes(filePath)));
     if (overlap) {
       addCheck('PL6', 'fail', `candidate file scope overlaps with active manifest ${overlap.issue_id}`);
@@ -767,7 +1266,7 @@ async function runLinearChecks(
     }
   }
 
-  return { labels };
+  return { labels, stateName };
 }
 
 function runRequiredDocChecks(
@@ -956,9 +1455,10 @@ function createToken(
   waivers: PreflightWaiver[],
   baselineCacheHit: boolean,
   requiredDocsChecked: string[],
-): PreflightToken {
+  readmissionContext: ExistingBranchReadmissionContext | null = null,
+): PreflightToken | ExistingBranchReadmissionToken {
   const ttlMinutes = tier === 'T1' ? 15 : 30;
-  return {
+  const token: PreflightToken = {
     schema_version: 1,
     branch,
     head_sha: headSha,
@@ -977,6 +1477,7 @@ function createToken(
     preflight_run_id: crypto.randomUUID(),
     required_docs_checked: requiredDocsChecked,
   };
+  return readmissionContext ? { ...token, ...readmissionContext } : token;
 }
 
 function collectCheckedDocs(
