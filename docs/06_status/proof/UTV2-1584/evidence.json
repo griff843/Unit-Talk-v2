@@ -4,14 +4,13 @@
   "title": "Safe existing-branch readmission for interrupted lanes",
   "tier": "T1",
   "lane_type": "governance",
-  "generated_at": "2026-07-24T10:12:22Z",
-  "head_sha": "26a4d86211a69950d8a323f38a20d9d6731b46af",
-  "merge_sha": null,
+  "generated_at": "2026-07-24T10:43:10Z",
+  "head_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
   "sha_binding": {
-    "verified_source_sha": "26a4d86211a69950d8a323f38a20d9d6731b46af",
+    "verified_source_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
     "verified_source_note": "Final substantive implementation commit; subsequent commits are limited to proof and lane metadata.",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-24T10:12:22Z",
+    "bound_at": "2026-07-24T10:43:10Z",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
     "merge_sha": null
@@ -26,7 +25,7 @@
       "command": "pnpm verify",
       "status": "PASS",
       "exit_code": 0,
-      "verified_source_sha": "26a4d86211a69950d8a323f38a20d9d6731b46af",
+      "verified_source_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
       "steps": {
         "ops_sync_check": "PASS",
         "ops_system_alignment_check": "PASS",
@@ -45,15 +44,15 @@
       {
         "command": "npx tsx --test scripts/ops/preflight.test.ts",
         "status": "PASS",
-        "tests": 25,
-        "pass": 25,
+        "tests": 26,
+        "pass": 26,
         "fail": 0
       },
       {
         "command": "npx tsx --test scripts/ops/lane-start.test.ts",
         "status": "PASS",
-        "tests": 22,
-        "pass": 22,
+        "tests": 23,
+        "pass": 23,
         "fail": 0
       }
     ],
@@ -73,7 +72,7 @@
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "duration_ms": 101993.470691,
+      "duration_ms": 104574.894577,
       "supabase_project": "zfzdnfwdarxucxtaojxm"
     },
     "t1_live_suite": {
@@ -119,32 +118,32 @@
     "row_counts": [
       {
         "table": "distribution_outbox",
-        "count": 201,
+        "count": 202,
         "filter": "status=pending",
         "status": "observed"
       },
       {
         "table": "distribution_outbox",
-        "count": 799,
+        "count": 798,
         "filter": "status=processing",
         "status": "observed"
       },
       {
         "table": "distribution_outbox",
-        "count": 3623,
+        "count": 3625,
         "filter": "status=sent",
         "status": "observed"
       }
     ],
-    "row_counts_captured_at": "2026-07-24T10:12:00Z",
+    "row_counts_captured_at": "2026-07-24T10:39:00Z",
     "lane_specific_mutations": 0,
     "pipeline_health_observation": {
       "command": "pnpm pipeline:health -- --json",
       "status": "DOWN",
       "lane_caused": false,
       "worker_heartbeats_in_10m": 0,
-      "processing_over_stale_claim_threshold": 791,
-      "pending_over_silent_stranding_threshold": 197,
+      "processing_over_stale_claim_threshold": 790,
+      "pending_over_silent_stranding_threshold": 194,
       "note": "Pre-existing worker/backlog condition documented in the lane packet; unrelated to the readmission tooling diff and not treated as a passing runtime claim."
     }
   },
@@ -152,8 +151,10 @@
     "explicit_opt_in_only": "PASS",
     "fail_closed_preflight_for_branch_pr_lease_lock_scope_and_continuation_state": "PASS",
     "existing_branch_reconstructed_without_new_branch_creation": "PASS",
+    "branch_only_scope_validated_against_existing_branch_ref": "PASS",
     "fresh_lease_manifest_sync_and_worktree_metadata": "PASS",
     "rollback_removes_partial_state_and_preserves_existing_branch": "PASS",
+    "non_pass_preflight_invalidates_stale_readmission_token": "PASS",
     "fresh_admission_and_normal_resume_unchanged": "PASS",
     "adversarial_test_matrix": "PASS",
     "operator_runbook": "PASS"
