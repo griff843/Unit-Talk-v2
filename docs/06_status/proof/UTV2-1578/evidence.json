@@ -1,0 +1,198 @@
+{
+  "$schema": "https://unit-talk.dev/schemas/evidence_bundle_v1.schema.json",
+  "schema_version": 1,
+  "issue_id": "UTV2-1578",
+  "title": "AUT-2: Deterministic autonomy control-plane kernel",
+  "tier": "T1",
+  "lane_type": "hygiene",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1303",
+  "generated_at": "2026-07-23T19:33:04.281Z",
+  "head_sha": "3516d3db45920f172a535b2a5c8f5b24d8e486a3",
+  "sha_binding": {
+    "verified_source_sha": "3516d3db45920f172a535b2a5c8f5b24d8e486a3",
+    "verified_source_note": "Pre-proof implementation commit. Post-merge closeout must rebind this bundle to the authoritative merge SHA.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-23T19:33:04.281Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1578-runtime-proof",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical implementer proof only. Linear requires independent Claude review, and T1 merge authority still requires the repository's owner approval artifacts."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "scope": "verify:static plus test:live-db"
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "aggregate_tests": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "autonomy_tests": {
+      "command": "npx tsx --test scripts/autonomy/autonomy.test.ts",
+      "status": "PASS",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0,
+      "test_file": "scripts/autonomy/autonomy.test.ts"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none",
+      "artifact_requirements": []
+    }
+  },
+  "runtime_proof": {
+    "command": "npx tsx scripts/autonomy/runtime-proof.ts",
+    "status": "PASS",
+    "contract_source": "AUT-1 PR #1302 head 43257000a016fc3bc96d9fde51a86d5d0be4d4d5",
+    "fail_closed_default": {
+      "mode": "halted",
+      "valid": false,
+      "reason_codes": [
+        "AUTONOMY_CEILINGS_MISSING",
+        "AUTONOMY_MODE_MISSING",
+        "OWNER_HALT_SIGNAL_MISSING"
+      ]
+    },
+    "scenario_outcomes": {
+      "no_op": "PASS",
+      "queue": "PASS",
+      "dispatch": "PASS",
+      "blocked": "PASS",
+      "escalation": "PASS"
+    },
+    "event_chains_valid": true,
+    "dispatch_packets_valid": true,
+    "cycles_returned_idle": true,
+    "t1_packet_tier_representable": false,
+    "pnpm_test_db": "pass",
+    "test_db_command": "pnpm test:db",
+    "test_db_tests": 7,
+    "test_db_pass": 7,
+    "test_db_fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database-smoke.test.ts persists and cleans up a live submission through the repository bundle"
+      },
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts persists, settles, and cleans up a live pick through the canonical repository path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts verifies invalid atomic operations do not leave lifecycle events"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts verifies invalid enqueue and delivery confirmation roll back outbox mutations"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "database-smoke.test.ts verifies invalid delivery confirmation leaves no receipt"
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts verifies invalid settlement rollback and additive correction semantics"
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts verifies invalid atomic operations leave no audit side effects"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "pick_lifecycle",
+        "count": 0,
+        "status": "expected_fixture_delta_after_invalid_atomic_operation"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "expected_fixture_delta_after_invalid_atomic_operation"
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "expected_fixture_delta_after_invalid_atomic_operation"
+      },
+      {
+        "table": "settlement_records",
+        "count": 0,
+        "status": "expected_fixture_delta_after_invalid_atomic_operation"
+      }
+    ],
+    "row_counts_note": "Fixture-scoped deltas asserted by the live DB smoke suite; these are not whole-table production counts.",
+    "live_pipeline_observation": {
+      "command": "pnpm pipeline:health",
+      "status": "PREEXISTING_UNHEALTHY_OUTSIDE_LANE_SCOPE",
+      "distribution_outbox": {
+        "processing": 798,
+        "pending": 202,
+        "sent": 3618
+      },
+      "worker_verdict": "DOWN",
+      "note": "The packet's repo brief lists worker DOWN during proof work as known pre-existing debt and explicitly excludes it from this autonomy-kernel lane. No production rows were mutated in response."
+    }
+  },
+  "acceptance_criteria": {
+    "mode_and_halt_evaluation": "PASS",
+    "fail_closed_missing_configuration": "PASS",
+    "single_run_concurrency_state": "PASS",
+    "durable_execution_record": "PASS",
+    "crash_safe_resume_state_machine": "PASS",
+    "cycle_time_retry_and_budget_ceilings": "PASS",
+    "candidate_decision_object": "PASS",
+    "immutable_dispatch_packet_generation": "PASS",
+    "exact_blocker_classifier": "PASS",
+    "structured_outcomes": "PASS",
+    "append_only_json_event_log": "PASS",
+    "deterministic_transition_tests": "PASS"
+  },
+  "scope": {
+    "implementation_paths": [
+      "schemas/autonomy/**",
+      "scripts/autonomy/**"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1578/evidence.json",
+      "docs/06_status/proof/UTV2-1578/model-routing.json"
+    ],
+    "forbidden_paths_touched": false,
+    "new_any_casts": false
+  },
+  "merge_order": {
+    "dependency": "PR #1302 (UTV2-1577 / AUT-1)",
+    "required_order": "UTV2-1578 must merge after PR #1302 because the kernel implements and pins that contract head.",
+    "dependency_state_at_proof": "OPEN"
+  },
+  "owner_boundary": {
+    "github_tier_label": "tier:T1_applied",
+    "independent_claude_review": "required_not_yet_recorded",
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "AUT-1 PR #1302 is open and must merge before this dependent kernel PR.",
+    "Independent Claude review required by Linear has not yet been recorded.",
+    "The evidence bundle is bound to the pre-proof implementation commit and must be rebound to the authoritative merge SHA after merge."
+  ],
+  "verdict": "READY_FOR_INDEPENDENT_REVIEW"
+}
