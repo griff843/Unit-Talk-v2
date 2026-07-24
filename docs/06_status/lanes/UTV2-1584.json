@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1584-existing-branch-readmission",
   "base_branch": "main",
   "commit_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1304",
   "files_changed": [
     "docs/05_operations/EXISTING_BRANCH_READMISSION.md",
     "scripts/ops/lane-start.test.ts",
@@ -28,9 +28,9 @@
     "docs/06_status/proof/UTV2-1584/model-routing.json",
     "docs/06_status/proof/UTV2-1584/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-24T09:23:51.092Z",
-  "heartbeat_at": "2026-07-24T10:43:10.000Z",
+  "heartbeat_at": "2026-07-24T10:54:48.841Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1584-existing-branch-readmission.json",
