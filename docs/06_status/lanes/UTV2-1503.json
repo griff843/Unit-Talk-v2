@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1503",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1503-continuation",
+  "branch": "claude/utv2-1503-continuation",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1290",
+  "files_changed": [
+    ".ops/sync/UTV2-1503.yml",
+    "docs/06_status/audits/UTV2-1503-orchestrator-standing-authority-narrowing.md",
+    "docs/06_status/lanes/UTV2-1503.json",
+    "docs/06_status/proof/UTV2-1503/evidence.json",
+    "docs/06_status/proof/UTV2-1503/verification.md"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1503.yml",
+    "docs/06_status/audits/UTV2-1503-orchestrator-standing-authority-narrowing.md",
+    "docs/06_status/lanes/UTV2-1503.json",
+    "docs/06_status/proof/UTV2-1503/evidence.json",
+    "docs/06_status/proof/UTV2-1503/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1503/evidence.json",
+    "docs/06_status/proof/UTV2-1503/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-21T20:00:00.000Z",
+  "heartbeat_at": "2026-07-21T20:15:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1503-continuation.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [
+    {
+      "timestamp": "2026-07-21T20:00:00.000Z",
+      "reasons": [
+        "PM triage: prior PR #1232 exceeded the T1 CHANGES_REQUIRED bounce limit (4). Substantive audit content and exact-head evidence were approved on that PR's final head, but the protected-base Merge Gate correctly rejects bounce-limited PRs regardless of verdict. PM directed a clean continuation lane from current main carrying the approved five-file result forward without additional scope."
+      ],
+      "detected_by": "pm-triage"
+    }
+  ],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1503-continuation",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
