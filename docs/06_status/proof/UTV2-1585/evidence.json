@@ -4,14 +4,14 @@
   "title": "Merge Gate: canonical single check-run identity per PR head SHA",
   "tier": "T1",
   "status": "ready_for_pm_review",
-  "generated_at": "2026-07-24T15:32:24Z",
+  "generated_at": "2026-07-24T16:10:00Z",
   "sha_binding": {
-    "verified_source_sha": "63095cf585989b94b3361bd8c5c3e4f3a1ffc830",
-    "verified_source_note": "Substantive implementation commit. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "verified_source_sha": "0e020c36c742fa4a584f55ab789f5b3e3d41789d",
+    "verified_source_note": "Substantive implementation commit (includes the independent-review correction to the check-adoption match filter). Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-24T15:32:24Z",
+    "bound_at": "2026-07-24T16:10:00Z",
     "pr_number": 1305,
     "approved_head_sha": null
   },
@@ -46,11 +46,11 @@
     "focused_tests": {
       "command": "npx tsx --test scripts/ops/workflow-hardening.test.ts",
       "status": "PASS",
-      "tests": 43,
-      "pass": 43,
+      "tests": 44,
+      "pass": 44,
       "fail": 0,
       "skipped": 0,
-      "detail": "Exercises the workflow script against mocked GitHub event/API state rather than relying on text-only YAML assertions."
+      "detail": "Exercises the workflow script against mocked GitHub event/API state rather than relying on text-only YAML assertions. Includes a regression mirroring PR #1304's actual six-check polluted head (independent-review finding)."
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -76,6 +76,7 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
+    "duration_ms": 109909.776482,
     "target_supabase_project": "zfzdnfwdarxucxtaojxm",
     "classification": "Governance workflow change; the live DB suite is the required T1 runtime gate and does not exercise the GitHub Actions policy directly.",
     "production_mutation_by_lane": false,
@@ -132,6 +133,11 @@
       "evidence": "Duplicate same-external-id check runs are completed neutral while the newest canonical check carries the current policy conclusion."
     },
     {
+      "criterion": "Older same-name failures created before this fix existed (no canonical external_id) also cannot continue blocking the head, once this evaluator runs against it.",
+      "status": "PASS",
+      "evidence": "Independent-review finding: the original match filter required exact external_id equality, which never matches pre-fix check-runs (verified directly against PR #1304's live head SHA: 6 existing checks, 4 failure, none with the merge-gate:<pr>:<sha> format). Corrected to match on name+head_sha+app only, preferring an already-canonical external_id and falling back to the most recent check otherwise, then adopting it by setting the canonical external_id on update. New focused test mirrors PR #1304's exact six-check state and asserts all five non-canonical checks go neutral and none remain failure."
+    },
+    {
       "criterion": "T2 approval removal and dismissal re-evaluate to failure.",
       "status": "PASS",
       "evidence": "Review triggers include edited and dismissed; the focused T2 sequence observes failure, success, then failure on one check."
@@ -149,7 +155,8 @@
   ],
   "known_limitations": [
     "The repair PR itself is evaluated by the pre-fix workflow from main and may require the issue-authorized narrow bootstrap merge exception if normal merge is blocked solely by stale duplicate Merge Gate checks.",
-    "PR 1304 must receive a fresh head and fresh exact-head approval artifacts after this repair reaches main."
+    "PR #1304's existing t1-approved label and PM_VERDICT: APPROVED comment are already bound to its current exact head SHA. Once this fix merges and any event re-evaluates that same head, the corrected adoption logic is expected to neutralize the 6 existing checks and re-evaluate to success using the existing valid approval artifacts, without requiring a rebase -- this has not yet been observed live post-merge and should be confirmed before relying on it; a fresh head (rebase) remains the fallback if it does not hold in practice.",
+    "The residual, pre-existing (not introduced by this issue) risk that the final checks.update() call to a terminal conclusion could itself throw and leave the canonical check dangling in_progress is not addressed by this fix -- flagged by independent review, judged non-blocking since it predates this change and requires a GitHub API-level failure at that exact instant."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
