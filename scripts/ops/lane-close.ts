@@ -1014,10 +1014,19 @@ async function main(): Promise<void> {
       validatedPr = validation.pr;
     }
 
+    // Snapshot before auto-acquiring the merge mutex. If any later repair step
+    // fails, rollback must restore the caller's pre-invocation coordination
+    // state rather than preserve a mutex acquired only for this failed run.
+    if (repairMerged) {
+      transaction = createRepairRollbackTransaction(issueId);
+    }
+
     const lock = ensureCloseoutMergeLock(manifest, {
       acquireLock: !bools.has('no-acquire-lock'),
     });
     if (!lock.ok) {
+      transaction?.rollback();
+      transaction = null;
       emitJson({
         ok: false,
         code: lock.code,
@@ -1032,7 +1041,6 @@ async function main(): Promise<void> {
     }
 
     if (repairMerged) {
-      transaction = createRepairRollbackTransaction(issueId);
       const repair = repairMergedLaneManifest(manifest, {
         releaseLocksIfAlreadyDone: true,
         validatedPr,

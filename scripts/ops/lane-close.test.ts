@@ -1548,6 +1548,16 @@ test('UTV2-1586 #12 failed truth-check rollback restores null PR binding and pro
     assert.strictEqual(fs.readFileSync(syncPath, 'utf8'), 'entities:\n  issues: [UTV2-1585]\n');
     assert.strictEqual(fs.readFileSync(leasePath, 'utf8'), '{"status":"active"}\n');
     assert.strictEqual(fs.readFileSync(mergeLockPath, 'utf8'), '{"status":"held"}\n');
+
+    fs.rmSync(mergeLockPath);
+    const beforeAutoAcquire = createRepairRollbackTransaction(issueId, repoRoot);
+    fs.writeFileSync(mergeLockPath, '{"status":"acquired-for-failed-repair"}\n');
+    beforeAutoAcquire.rollback();
+    assert.strictEqual(
+      fs.existsSync(mergeLockPath),
+      false,
+      'rollback removes a mutex acquired after the pre-invocation snapshot',
+    );
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }
