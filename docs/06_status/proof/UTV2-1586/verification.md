@@ -1,6 +1,6 @@
 # PROOF: UTV2-1586
 
-MERGE_SHA: 52ff083536d1e120e39c4b21a87c9241041a5920
+MERGE_SHA: 1397ed887fa2c64ea6d836ed8eaac03e9fcd6830
 
 ## Summary
 
@@ -24,8 +24,33 @@ ASSERTIONS:
   mutex, and safe worktree cleanup.
 - [x] The post-merge workflow stages a sync-file deletion after lane-close
   removes the working-tree file.
+- [x] A candidate repair PR containing only the lane manifest and declared
+  proof artifacts (no real implementation file) is rejected as a substitution
+  attempt.
 
 EVIDENCE:
+
+## Independent review finding and correction
+
+A fresh-context, independent Claude adversarial review (no prior involvement
+in this implementation) returned APPROVE_WITH_NOTES with one real, verified
+finding: `validateTrustedPostMergeRepair`'s substitution defense only checked
+that a candidate PR's file list contained the lane manifest path and every
+declared `expected_proof_paths` entry -- it never checked for any actual
+implementation file. A forged PR containing only those two categories of file
+(with zero real implementation content) would have passed every check, as
+long as its branch name and title matched the target issue.
+
+Corrected in commit `1397ed887fa2c64ea6d836ed8eaac03e9fcd6830`: added
+`hasDeclaredImplementationFile()`, which requires at least one file in the
+candidate PR to match the lane's own `file_scope_lock` (glob-aware for `/**`
+entries) outside that lane's proof directory. A new focused test asserts a
+manifest-and-proof-only candidate PR is rejected with `repair_pr_substitution`.
+Exploiting the original gap still required genuine merge access to `main` on
+the real repository (the same trust tier as every other path this lane
+guards), so it was not a low-privilege bypass, but it was a real gap against
+the design intent stated in this issue ("the supplied PR is the implementation
+PR, not a later repair PR").
 
 ## Verification
 
@@ -46,9 +71,9 @@ The following commands were executed on the substantive branch head:
 
 ```text
 Focused lane close
-1..108
-# tests 108
-# pass 108
+1..109
+# tests 109
+# pass 109
 # fail 0
 # skipped 0
 

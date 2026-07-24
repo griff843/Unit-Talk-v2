@@ -6,12 +6,12 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-24T21:05:19Z",
   "sha_binding": {
-    "verified_source_sha": "52ff083536d1e120e39c4b21a87c9241041a5920",
-    "verified_source_note": "Final substantive implementation commit, including rollback-safe coordination snapshots, control-plane filtering from files_changed, and staging of the terminal sync-file deletion. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "verified_source_sha": "1397ed887fa2c64ea6d836ed8eaac03e9fcd6830",
+    "verified_source_note": "Final substantive implementation commit, including the independent-review-driven fix requiring a declared implementation file in any trusted repair PR. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-24T21:05:19Z",
+    "bound_at": "2026-07-24T21:30:00Z",
     "pr_number": null,
     "approved_head_sha": null
   },
@@ -47,11 +47,11 @@
     "focused_lane_close_tests": {
       "command": "npx tsx --test scripts/ops/lane-close.test.ts",
       "status": "PASS",
-      "tests": 108,
-      "pass": 108,
+      "tests": 109,
+      "pass": 109,
       "fail": 0,
       "skipped": 0,
-      "detail": "Includes all 17 required trusted repair cases, transaction rollback, terminal cleanup, control-plane filtering, sync-deletion staging, regression guards, workflow forwarding, and the real UTV2-1585 PR #1305 fixture."
+      "detail": "Includes all 17 required trusted repair cases, transaction rollback, terminal cleanup, control-plane filtering, sync-deletion staging, regression guards, workflow forwarding, the real UTV2-1585 PR #1305 fixture, and an independent-review-driven regression rejecting a manifest-and-proof-only substitution PR."
     },
     "focused_workflow_tests": {
       "command": "npx tsx --test scripts/ops/workflow-hardening.test.ts",
@@ -168,7 +168,7 @@
     {
       "criterion": "Reject repair substitution and missing implementation artifacts distinctly.",
       "status": "PASS",
-      "evidence": "The candidate must contain the issue lane manifest plus every expected_proof_path; missing manifest and missing proof paths emit separate repair_pr_substitution and missing_implementation_artifacts codes."
+      "evidence": "The candidate must contain the issue lane manifest plus every expected_proof_path, and at least one file matching the lane's own file_scope_lock outside its proof directory; missing manifest, missing proof paths, and manifest-and-proof-only fabrications each emit repair_pr_substitution or missing_implementation_artifacts as appropriate. The file_scope_lock check was added after independent review found a manifest-and-proof-only PR would otherwise pass."
     },
     {
       "criterion": "Trusted workflow dispatch accepts an optional exact PR and forwards it only to the trusted repair command.",
@@ -183,12 +183,13 @@
     {
       "criterion": "All 17 required cases, including the UTV2-1585/#1305 fixture, are covered.",
       "status": "PASS",
-      "evidence": "Focused lane-close suite passes 108/108 and contains numbered UTV2-1586 cases 1 through 17 using merge SHA 97527b791fc37acce41f4f46fd88699dce054b66."
+      "evidence": "Focused lane-close suite passes 109/109 and contains numbered UTV2-1586 cases 1 through 17 using merge SHA 97527b791fc37acce41f4f46fd88699dce054b66, plus one additional independent-review-driven regression test."
     }
   ],
   "known_limitations": [
     "The trusted hosted runner can remove only a worktree present on that runner. A recorded path from another machine is treated as already absent there; the required local orchestration reconciliation remains the authority for machine-local stale worktrees.",
-    "The UTV2-1585 live workflow replay is explicitly a post-merge follow-up and is not performed by this implementation PR."
+    "The UTV2-1585 live workflow replay is explicitly a post-merge follow-up and is not performed by this implementation PR.",
+    "scripts/ops/lane-close.ts is outside the TypeScript project-references graph declared in tsconfig.json (pre-existing repo-wide condition affecting all of scripts/ops/, not introduced by this issue), so pnpm type-check does not directly type-check it; runtime behavior is verified instead via the focused test suite and pnpm test:db."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
