@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "status": "PRE_MERGE_VERIFIED",
+  "issue_id": "UTV2-1584",
+  "title": "Safe existing-branch readmission for interrupted lanes",
+  "tier": "T1",
+  "lane_type": "governance",
+  "generated_at": "2026-07-24T13:48:54Z",
+  "head_sha": "5cbe30fcc8535eb2caa8f1c7e94520438ee02789",
+  "sha_binding": {
+    "verified_source_sha": "5cbe30fcc8535eb2caa8f1c7e94520438ee02789",
+    "verified_source_note": "Final substantive implementation commit (PM CHANGES_REQUIRED correction: PR base-ref binding, fixing head 33e9dba5d0c44289f471e2dbb3caaa471cbfb0f2); subsequent commits are limited to proof and lane metadata.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-07-24T13:48:54Z",
+    "evidence_commit_sha": null,
+    "current_pr_head_sha": null,
+    "merge_sha": null,
+    "ci_sentinels": {
+      "verify": "pass_locally_pending_ci",
+      "merge_gate": "pending"
+    }
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1584",
+    "role": "implementer",
+    "independent_owner_certifier": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "verified_source_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS",
+        "test_live_db": "PASS"
+      }
+    },
+    "focused_tests": [
+      {
+        "command": "npx tsx --test scripts/ops/preflight.test.ts",
+        "status": "PASS",
+        "tests": 28,
+        "pass": 28,
+        "fail": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ops/lane-start.test.ts",
+        "status": "PASS",
+        "tests": 28,
+        "pass": 28,
+        "fail": 0
+      }
+    ],
+    "new_adversarial_tests": 27,
+    "pm_correction": {
+      "prior_head_reviewed": "33e9dba5d0c44289f471e2dbb3caaa471cbfb0f2",
+      "verdict": "CHANGES_REQUIRED",
+      "finding": "readmission authority check verified PR head/base repository but never verified the PR base ref was main",
+      "tests_added_in_correction": 7
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "note": "Governance/tooling lane with no application-runtime or database implementation changes. Live Supabase verification is required by the T1 packet and completed through the repository's real DB and T1 proof suites.",
+    "command": "pnpm verify",
+    "status": "PASS",
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "duration_ms": 112720.776897,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    },
+    "t1_live_suite": {
+      "command": "pnpm test:t1-proof:live",
+      "status": "PASS",
+      "environmental_skips": [
+        {
+          "test": "findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)",
+          "reason": "The most recent provider_offer_history row was older than the 72-hour lookback. The test classified this as stale provider data, not a code regression."
+        }
+      ]
+    },
+    "queries": [
+      {
+        "table": "picks",
+        "description": "live submission, lifecycle transition, settlement, and cleanup assertions"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "live valid transition inserts and invalid transition rollback assertions"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "live enqueue and delivery-confirmation atomic rollback assertions"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "live invalid delivery receipt rollback assertions"
+      },
+      {
+        "table": "settlement_records",
+        "description": "live additive settlement correction and original-row immutability assertions"
+      },
+      {
+        "table": "audit_log",
+        "description": "live enqueue, delivery, and settlement audit rollback assertions"
+      },
+      {
+        "table": "participants",
+        "description": "live participant upsert duplicate-prevention assertion"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_outbox",
+        "count": 202,
+        "filter": "status=pending",
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 798,
+        "filter": "status=processing",
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 3625,
+        "filter": "status=sent",
+        "status": "observed"
+      }
+    ],
+    "row_counts_captured_at": "2026-07-24T10:39:00Z",
+    "lane_specific_mutations": 0,
+    "pipeline_health_observation": {
+      "command": "pnpm pipeline:health -- --json",
+      "status": "DOWN",
+      "lane_caused": false,
+      "worker_heartbeats_in_10m": 0,
+      "processing_over_stale_claim_threshold": 790,
+      "pending_over_silent_stranding_threshold": 194,
+      "note": "Pre-existing worker/backlog condition documented in the lane packet; unrelated to the readmission tooling diff and not treated as a passing runtime claim."
+    }
+  },
+  "acceptance_criteria": {
+    "explicit_opt_in_only": "PASS",
+    "fail_closed_preflight_for_branch_pr_lease_lock_scope_and_continuation_state": "PASS",
+    "existing_branch_reconstructed_without_new_branch_creation": "PASS",
+    "branch_only_scope_validated_against_existing_branch_ref": "PASS",
+    "fresh_lease_manifest_sync_and_worktree_metadata": "PASS",
+    "rollback_removes_partial_state_and_preserves_existing_branch": "PASS",
+    "non_pass_preflight_invalidates_stale_readmission_token": "PASS",
+    "pr_base_ref_bound_and_independently_reverified_at_lane_start": "PASS",
+    "fresh_admission_and_normal_resume_unchanged": "PASS",
+    "adversarial_test_matrix": "PASS",
+    "operator_runbook": "PASS"
+  },
+  "owner_boundary": {
+    "independent_claude_review": "requested_after_pr_open",
+    "t1_approved_label": "not_applied_by_executor",
+    "pm_verdict_v1": "not_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "Live pipeline health is DOWN because the worker has no recent heartbeat and historical outbox rows remain stranded; the issue packet identifies worker DOWN as pre-existing and this governance-only lane does not modify delivery runtime.",
+    "The UTV2-1282 live proof skipped its window-content assertion because the newest provider_offer_history row is older than 72 hours; the test classifies this as stale provider data, not a code regression."
+  ],
+  "verdict": "READY_FOR_REVIEW"
+}

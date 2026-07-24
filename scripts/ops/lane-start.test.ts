@@ -1,8 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ROOT } from './shared.js';
+import {
+  type ExistingBranchReadmissionToken,
+  findMissingReadmissionScopePaths,
+  isPermittedControlRegistryPath,
+  mirrorPreflightTokenToWorktree,
+  validateReadmissionTokenRequest,
+} from './lane-start.js';
+
+function readmissionToken(): ExistingBranchReadmissionToken {
+  return {
+    schema_version: 1,
+    branch: 'codex/utv2-1584-existing-branch-readmission',
+    head_sha: 'a'.repeat(40),
+    tier: 'T1',
+    issue_id: 'UTV2-1584',
+    generated_at: '2026-07-24T00:00:00.000Z',
+    expires_at: '2026-07-24T00:15:00.000Z',
+    checks: { git: 'pass', env: 'pass', deps: 'pass' },
+    status: 'pass',
+    mode: 'existing-branch-readmission',
+    branch_head_sha: 'b'.repeat(40),
+    origin_main_sha: 'a'.repeat(40),
+    open_pr_number: 1303,
+    open_pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1303',
+    open_pr_base_ref: 'main',
+    ahead_count: 9,
+    behind_count: 4,
+    requested_lane_type: 'governance',
+    executor: 'codex-cli',
+    file_scope: ['scripts/ops/lane-start.ts', 'scripts/ops/preflight.ts'],
+    previous_lane_type: 'hygiene',
+    no_worktree: true,
+    no_active_lease: true,
+    no_active_merge_mutex: true,
+  };
+}
 
 // UTV2-1492: lane-start.ts now owns declared-proof-path validation for T1
 // (moved out of preflight.ts's removed PX5 check) and scaffolds the empty
@@ -274,4 +311,303 @@ test('lane-start exits non-zero (refuses) when delegation is suspended', () => {
   );
   assert.match(delegationBlock, /delegation_suspended/);
   assert.match(delegationBlock, /process\.exit\(1\)/);
+});
+
+test('readmission 25: the PR base-ref revalidation only exists inside the readmission branch, never on fresh admission or ordinary resume', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const mainHeadIndex = source.indexOf('const mainHead = assertCleanMainControlCheckout();');
+  const readmissionBlockStart = source.lastIndexOf('if (readmitExistingBranch) {', mainHeadIndex);
+  assert.notStrictEqual(readmissionBlockStart, -1, 'expected the main control checkout assertion to live inside a readmitExistingBranch-gated block');
+  const callSite = source.indexOf('exactOpenPullRequest(repository, branch)');
+  assert.ok(callSite > readmissionBlockStart && callSite > mainHeadIndex, 'exactOpenPullRequest (and its base-ref check) must only run inside the readmission branch');
+  assert.equal(
+    (source.match(/exactOpenPullRequest\(/g) ?? []).length,
+    2,
+    'exactOpenPullRequest should have exactly one definition and one call site -- it must not be reachable from fresh admission or resume',
+  );
+});
+
+test('readmission 11: ordinary resume remains a separate lane_resumed path', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /if \(branchAlreadyExists && worktreeAlreadyExists\) \{[\s\S]*if \(readmitExistingBranch\)/,
+  );
+  assert.match(source, /code: 'lane_resumed'/);
+});
+
+test('readmission 12: existing branch plus missing worktree still fails without the flag', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /if \(!readmitExistingBranch && branchAlreadyExists && !worktreeAlreadyExists\) \{\s*throw new Error\('Branch exists but worktree does not exist; Phase 1 fails closed'\)/,
+  );
+});
+
+test('readmission 13: changed branch head invalidates the token', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: 'c'.repeat(40),
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
+  });
+  assert.deepEqual(errors, ['branch head changed after preflight']);
+});
+
+test('readmission 14: changed main head invalidates both token head bindings', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: 'd'.repeat(40),
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
+  });
+  assert.deepEqual(errors, ['main head changed after preflight']);
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const readmissionStart = source.indexOf('if (readmitExistingBranch) {', source.indexOf('let modelRouting'));
+  const refreshMain = source.indexOf("git(['fetch', 'origin', 'main'])", readmissionStart);
+  const readOriginMain = source.indexOf("git(['rev-parse', 'origin/main'])", readmissionStart);
+  assert.ok(
+    refreshMain !== -1 && refreshMain < readOriginMain,
+    'lane-start must refresh origin/main before comparing it with the token-bound main SHA',
+  );
+});
+
+test('readmission 15: reconstructed worktree uses the existing branch without a new-branch flag', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const start = source.indexOf('function createWorktreeFromExistingBranch(');
+  const end = source.indexOf('function removeReadmissionWorktree(', start);
+  const block = source.slice(start, end);
+  assert.match(block, /git\(\['worktree', 'add', worktreePath, branch\]\)/);
+  assert.doesNotMatch(block, /'worktree', 'add'[\s\S]*'-b'/);
+  assert.match(block, /reconstructedHead !== branchState\.sha/);
+});
+
+test('readmission 16: fresh manifest records requested governance and prior hygiene only as history', () => {
+  const token = readmissionToken();
+  const valid = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: 'governance',
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
+  });
+  assert.deepEqual(valid, []);
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /lane_type: canonicalLaneType/);
+  assert.match(source, /previous_lane_type=\$\{token\.previous_lane_type \?\? 'unknown'\}/);
+  assert.doesNotMatch(source, /^\s*lane_type:\s*token\.previous_lane_type/m);
+});
+
+test('readmission 17: mismatched scope, executor, lane type, tier, or PR cannot reuse a token', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: 'T2',
+    laneType: 'hygiene',
+    executor: 'claude',
+    fileScope: ['scripts/ops/preflight.ts'],
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: 999,
+    openPrBaseRef: 'main',
+  });
+  assert.deepEqual(errors, [
+    'token tier does not match request',
+    'token lane type does not match request',
+    'token executor does not match request',
+    'token file scope does not match request',
+    'open PR identity changed after preflight',
+  ]);
+});
+
+test('readmission 21: a request that matches the token exactly, including base ref main, produces no errors', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('readmission 22: a PR retargeted away from main after preflight invalidates the token', () => {
+  const token = readmissionToken();
+  assert.equal(token.open_pr_base_ref, 'main');
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: 'release',
+  });
+  assert.deepEqual(errors, ['open PR base ref changed after preflight']);
+});
+
+test('readmission 23: a malformed or tampered token that itself claims a non-main base ref cannot be reused, even if the live re-fetch happens to match it', () => {
+  const token = { ...readmissionToken(), open_pr_base_ref: 'staging' };
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: 'staging',
+  });
+  assert.deepEqual(errors, ['open PR base ref changed after preflight']);
+});
+
+test('readmission 24: lane-start independently re-fetches and rejects a non-main PR before it ever consults the token', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const fnStart = source.indexOf('function exactOpenPullRequest(');
+  const fnEnd = source.indexOf('\n}\n', fnStart);
+  const fnBody = source.slice(fnStart, fnEnd);
+  assert.match(
+    fnBody,
+    /if \(pullRequest\.base\.ref !== 'main'\)/,
+    'exactOpenPullRequest must independently reject a non-main base ref -- it never receives or reads the token',
+  );
+  assert.match(fnBody, /open PR base ref changed after preflight/);
+
+  const callSite = source.indexOf('const pullRequest = exactOpenPullRequest(repository, branch);');
+  const tokenReadSite = source.indexOf('const token = preflight.token as ExistingBranchReadmissionToken;');
+  assert.ok(
+    callSite >= 0 && tokenReadSite > callSite,
+    'the live PR re-fetch and its own base-ref rejection must happen before the token is even read',
+  );
+});
+
+test('readmission 18: post-worktree failures release lease, remove worktree, and restore root metadata', () => {
+  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'readmission-token-'));
+  const sourceToken = path.join(testRoot, 'source.json');
+  const worktree = path.join(testRoot, 'worktree');
+  fs.writeFileSync(sourceToken, '{"status":"pass"}\n', 'utf8');
+  const mirrored = mirrorPreflightTokenToWorktree(
+    sourceToken,
+    '.out/ops/preflight/codex/utv2-1584.json',
+    worktree,
+  );
+  assert.equal(
+    mirrored,
+    path.join(worktree, '.out/ops/preflight/codex/utv2-1584.json'),
+  );
+  assert.equal(fs.readFileSync(mirrored, 'utf8'), '{"status":"pass"}\n');
+  assert.throws(
+    () => mirrorPreflightTokenToWorktree(sourceToken, '../outside.json', worktree),
+    /Parent traversal is not allowed/,
+  );
+  fs.rmSync(testRoot, { recursive: true, force: true });
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const transactionStart = source.indexOf('const manifestSnapshot = snapshotFile(manifestPath);');
+  const transactionEnd = source.indexOf("if (!branchAlreadyExists && !worktreeAlreadyExists) {", transactionStart);
+  const block = source.slice(transactionStart, transactionEnd);
+  assert.match(block, /mirrorPreflightTokenToWorktree\(/);
+  assert.match(block, /releaseLease\(\{/);
+  assert.match(block, /removeReadmissionWorktree\(branch, worktreePath, localBranchCreated\)/);
+  assert.match(block, /restoreFile\(manifestSnapshot\)/);
+  assert.match(block, /restoreFile\(syncSnapshot\)/);
+});
+
+test('readmission 19: root checkout is checked as clean main and never switched to the lane branch', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(source, /function assertCleanMainControlCheckout\(\)/);
+  assert.match(source, /currentBranch\.stdout !== 'main'/);
+  assert.doesNotMatch(source, /git\(\['checkout', branch\]/);
+  assert.doesNotMatch(source, /git\(\['switch', branch\]/);
+
+  assert.equal(isPermittedControlRegistryPath('.ops/sync/UTV2-1584.yml'), true);
+  assert.equal(isPermittedControlRegistryPath('docs/06_status/lanes/UTV2-1584.json'), true);
+  assert.equal(isPermittedControlRegistryPath('.ops/sync/arbitrary.txt'), false);
+  assert.equal(isPermittedControlRegistryPath('docs/06_status/lanes/UTV2-1584.json.bak'), false);
+});
+
+test('readmission 20: generic unsafe force cannot substitute for explicit readmission mode', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const legacyFailure = source.indexOf(
+    "throw new Error('Branch exists but worktree does not exist; Phase 1 fails closed')",
+  );
+  assert.notEqual(legacyFailure, -1);
+  const nearby = source.slice(Math.max(0, legacyFailure - 160), legacyFailure + 160);
+  assert.match(nearby, /!readmitExistingBranch/);
+  assert.doesNotMatch(nearby, /forceUnsafeSubstrate/);
+  assert.match(source, /code: 'lane_readmitted_existing_branch'/);
+});
+
+test('readmission validates branch-only file scope against the target branch, not main', () => {
+  const branchOnlyScope = [
+    'scripts/autonomy/kernel.ts',
+    'scripts/autonomy/**',
+    'docs/06_status/proof/UTV2-1578/evidence.json',
+  ];
+  const existingTargetObjects = new Map<string, 'file' | 'directory'>([
+    ['scripts/autonomy/kernel.ts', 'file'],
+    ['scripts/autonomy', 'directory'],
+  ]);
+
+  assert.deepEqual(
+    findMissingReadmissionScopePaths(
+      branchOnlyScope,
+      (repoRelativePath, kind) => existingTargetObjects.get(repoRelativePath) === kind,
+    ),
+    [],
+    'new implementation paths and proof intent paths should be valid when present only on the target branch',
+  );
+  assert.deepEqual(
+    findMissingReadmissionScopePaths(
+      ['scripts/autonomy/missing.ts'],
+      (repoRelativePath, kind) => existingTargetObjects.get(repoRelativePath) === kind,
+    ),
+    ['scripts/autonomy/missing.ts'],
+    'a path absent from the target branch must still fail closed',
+  );
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /readmitExistingBranch\s*\?\s*normalizeRepoRelativePaths\(fileArgs\)\s*:\s*normalizeFileScope\(fileArgs\)/,
+    'readmission must not require branch-only paths to exist on the main control checkout',
+  );
+  assert.match(
+    source,
+    /assertReadmissionScopeExistsAtRef\(branchState\.sourceRef, normalizedFiles\)/,
+    'branch-only scope must be checked against the exact existing branch before side effects',
+  );
 });
