@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ROOT } from './shared.js';
 import {
   type ExistingBranchReadmissionToken,
   isPermittedControlRegistryPath,
+  mirrorPreflightTokenToWorktree,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
 
@@ -421,10 +423,31 @@ test('readmission 17: mismatched scope, executor, lane type, tier, or PR cannot 
 });
 
 test('readmission 18: post-worktree failures release lease, remove worktree, and restore root metadata', () => {
+  const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'readmission-token-'));
+  const sourceToken = path.join(testRoot, 'source.json');
+  const worktree = path.join(testRoot, 'worktree');
+  fs.writeFileSync(sourceToken, '{"status":"pass"}\n', 'utf8');
+  const mirrored = mirrorPreflightTokenToWorktree(
+    sourceToken,
+    '.out/ops/preflight/codex/utv2-1584.json',
+    worktree,
+  );
+  assert.equal(
+    mirrored,
+    path.join(worktree, '.out/ops/preflight/codex/utv2-1584.json'),
+  );
+  assert.equal(fs.readFileSync(mirrored, 'utf8'), '{"status":"pass"}\n');
+  assert.throws(
+    () => mirrorPreflightTokenToWorktree(sourceToken, '../outside.json', worktree),
+    /Parent traversal is not allowed/,
+  );
+  fs.rmSync(testRoot, { recursive: true, force: true });
+
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
   const transactionStart = source.indexOf('const manifestSnapshot = snapshotFile(manifestPath);');
   const transactionEnd = source.indexOf("if (!branchAlreadyExists && !worktreeAlreadyExists) {", transactionStart);
   const block = source.slice(transactionStart, transactionEnd);
+  assert.match(block, /mirrorPreflightTokenToWorktree\(/);
   assert.match(block, /releaseLease\(\{/);
   assert.match(block, /removeReadmissionWorktree\(branch, worktreePath, localBranchCreated\)/);
   assert.match(block, /restoreFile\(manifestSnapshot\)/);

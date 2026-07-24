@@ -27,6 +27,7 @@ import {
   issueToManifestPath,
   manifestExists,
   normalizeFileScope,
+  normalizeRepoRelativePath,
   parseArgs,
   readAllManifests,
   readManifest,
@@ -291,6 +292,30 @@ function restoreFile(snapshot: FileSnapshot): void {
   } else if (fs.existsSync(snapshot.path)) {
     fs.rmSync(snapshot.path, { force: true });
   }
+}
+
+export function mirrorPreflightTokenToWorktree(
+  sourceTokenPath: string,
+  tokenRelativePath: string,
+  worktreePath: string,
+): string {
+  if (!fs.existsSync(sourceTokenPath) || !fs.statSync(sourceTokenPath).isFile()) {
+    throw new Error(`validated preflight token is unavailable: ${sourceTokenPath}`);
+  }
+  const normalizedTokenPath = normalizeRepoRelativePath(tokenRelativePath);
+  if (normalizedTokenPath !== tokenRelativePath) {
+    throw new Error(`preflight token path is not canonical: ${tokenRelativePath}`);
+  }
+  const destinationTokenPath = path.join(worktreePath, normalizedTokenPath);
+  fs.mkdirSync(path.dirname(destinationTokenPath), { recursive: true });
+  fs.copyFileSync(sourceTokenPath, destinationTokenPath);
+  if (
+    !fs.existsSync(destinationTokenPath) ||
+    fs.readFileSync(destinationTokenPath, 'utf8') !== fs.readFileSync(sourceTokenPath, 'utf8')
+  ) {
+    throw new Error(`failed to mirror preflight token into reconstructed worktree: ${tokenRelativePath}`);
+  }
+  return destinationTokenPath;
 }
 
 function branchContainsExactIssue(branch: string, issueId: string): boolean {
@@ -945,6 +970,11 @@ function main(): void {
         const worktree = createWorktreeFromExistingBranch(branch, worktreePath, branchState);
         localBranchCreated = worktree.localBranchCreated;
         worktreeCreated = true;
+        mirrorPreflightTokenToWorktree(
+          preflight.tokenPath,
+          preflight.tokenRelativePath,
+          worktreePath,
+        );
         linkWorktreeEnv(worktreePath);
 
         const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
