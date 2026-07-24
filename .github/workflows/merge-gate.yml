@@ -155,14 +155,27 @@ jobs:
               }
             );
             const canonicalExternalId = `merge-gate:${prNumber}:${headSha}`;
+            // Match on name + exact head SHA + app only -- NOT external_id.
+            // Check-runs created by the former create-on-every-event behavior
+            // never had an external_id set, so requiring one here would let
+            // those legacy duplicates survive untouched and keep blocking
+            // branch protection forever. Any same-name check already docked
+            // to this exact head is adoptable as the canonical one; prefer a
+            // check that already carries the canonical external_id (stable
+            // across repeated runs once adopted), otherwise fall back to the
+            // most recently created same-head check.
             const matchingChecks = existingChecks
               .filter(run =>
                 run.name === 'Merge Gate' &&
                 run.head_sha === headSha &&
-                run.app?.slug === 'github-actions' &&
-                run.external_id === canonicalExternalId
+                run.app?.slug === 'github-actions'
               )
-              .sort((a, b) => b.id - a.id);
+              .sort((a, b) => {
+                const aCanonical = a.external_id === canonicalExternalId ? 1 : 0;
+                const bCanonical = b.external_id === canonicalExternalId ? 1 : 0;
+                if (aCanonical !== bCanonical) return bCanonical - aCanonical;
+                return b.id - a.id;
+              });
 
             let check = matchingChecks[0];
             if (!check) {
@@ -176,9 +189,13 @@ jobs:
               });
               check = created.data;
             } else {
+              // Adopt (or re-affirm) the canonical external_id on update so a
+              // legacy check without one is bound to this identity going
+              // forward, and so subsequent runs pick it deterministically.
               await github.rest.checks.update({
                 owner, repo,
                 check_run_id: check.id,
+                external_id: canonicalExternalId,
                 status: 'in_progress',
                 started_at: new Date().toISOString(),
                 output: {

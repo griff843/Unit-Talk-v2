@@ -137,6 +137,7 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
           assert.ok(check, `check ${String(params.check_run_id)} must exist before update`);
           if (typeof params.status === 'string') check.status = params.status;
           if (typeof params.conclusion === 'string') check.conclusion = params.conclusion;
+          if (typeof params.external_id === 'string') check.external_id = params.external_id;
           if (params.status === 'in_progress') check.conclusion = null;
           if (params.output && typeof params.output === 'object') {
             check.output = params.output as MockCheckRun['output'];
@@ -554,7 +555,7 @@ test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical
   assert.strictEqual(harness.checks.length, 1);
 });
 
-test('UTV2-1585: legacy duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
+test('UTV2-1585: same-identity duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
   const headSha = '1585158515851585158515851585158515851585';
   const harnessPrNumber = 1585;
   const harness = await createMergeGateHarness('T3', [
@@ -586,6 +587,42 @@ test('UTV2-1585: legacy duplicate exact-head failures are neutralized and cannot
   assert.ok(
     harness.checks.every((check) => check.conclusion !== 'failure'),
     'no older same-name failure may remain capable of blocking the unchanged head',
+  );
+});
+
+// UTV2-1585 (adversarial review finding): true pre-fix duplicates -- the ones
+// actually left on already-polluted heads like PR #1304's, created by the
+// former create-on-every-event behavior -- never had a canonical (or any
+// matching) external_id set. Matching on external_id alone would let those
+// survive untouched forever. Adoption must work by name + exact head SHA +
+// app alone, regardless of external_id.
+test('UTV2-1585: pre-fix legacy duplicates without a canonical external_id are adopted and neutralized, not left blocking', async () => {
+  const headSha = '1585158515851585158515851585158515851585';
+  const harnessPrNumber = 1585;
+  // Mirrors the real state observed on PR #1304's head after the former
+  // create-on-every-event behavior: six same-head "Merge Gate" checks, none
+  // carrying the canonical external_id format, four of them failure.
+  const harness = await createMergeGateHarness('T3', [
+    { id: 100, name: 'Merge Gate', head_sha: headSha, external_id: '3dd4c479-23c0-58a9-94de-3da9c130d6a9', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 101, name: 'Merge Gate', head_sha: headSha, external_id: 'ea2023ef-0e17-54d1-a5ec-18c7a0431972', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 102, name: 'Merge Gate', head_sha: headSha, external_id: '066178b1-5a03-5e40-a62d-aae8aa550458', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 103, name: 'Merge Gate', head_sha: headSha, external_id: 'ee820f51-4b9a-58ba-b049-ba1e6ee02988', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 104, name: 'Merge Gate', head_sha: headSha, external_id: 'af7bb44a-f42d-58a9-b23f-66a41ffb4dd8', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
+    { id: 105, name: 'Merge Gate', head_sha: headSha, external_id: '', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
+  ]);
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.createCount(), 0, 'a same-head legacy check must be adopted, not duplicated with a 7th check');
+  assert.strictEqual(harness.checks.length, 6, 'no new check-run is created when six legacy same-head checks already exist');
+  const canonical = harness.checks.find((check) => check.id === 105);
+  assert.strictEqual(canonical?.external_id, `merge-gate:${harnessPrNumber}:${headSha}`, 'the adopted legacy check (highest id among non-canonical matches) must be bound to the canonical external_id going forward');
+  for (const legacyId of [100, 101, 102, 103, 104]) {
+    assert.strictEqual(harness.checks.find((check) => check.id === legacyId)?.conclusion, 'neutral', `legacy check ${legacyId} must be neutralized, not left as failure`);
+  }
+  assert.ok(
+    harness.checks.every((check) => check.conclusion !== 'failure'),
+    'no pre-fix legacy failure may remain capable of blocking an already-polluted head once this evaluator runs',
   );
 });
 
