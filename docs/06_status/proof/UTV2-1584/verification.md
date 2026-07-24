@@ -51,7 +51,8 @@ $ pnpm test:db
 # tests 7
 # pass 7
 # fail 0
-# duration_ms 104574.894577
+# skipped 0
+# duration_ms 107671.908971
 ```
 
 ```text

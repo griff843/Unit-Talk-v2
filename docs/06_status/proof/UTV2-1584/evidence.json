@@ -4,13 +4,13 @@
   "title": "Safe existing-branch readmission for interrupted lanes",
   "tier": "T1",
   "lane_type": "governance",
-  "generated_at": "2026-07-24T10:43:10Z",
+  "generated_at": "2026-07-24T11:06:41Z",
   "head_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
   "sha_binding": {
     "verified_source_sha": "1f356895fcaffe12fdee8e94946d9af661e083d6",
     "verified_source_note": "Final substantive implementation commit; subsequent commits are limited to proof and lane metadata.",
     "sha_type": "branch_head",
-    "bound_at": "2026-07-24T10:43:10Z",
+    "bound_at": "2026-07-24T11:06:41Z",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
     "merge_sha": null
@@ -72,7 +72,7 @@
       "tests": 7,
       "pass": 7,
       "fail": 0,
-      "duration_ms": 104574.894577,
+      "duration_ms": 107671.908971,
       "supabase_project": "zfzdnfwdarxucxtaojxm"
     },
     "t1_live_suite": {
