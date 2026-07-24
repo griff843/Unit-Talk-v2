@@ -1500,6 +1500,22 @@ test('UTV2-1586 missing declared implementation proof fails distinctly', () => {
   assert.strictEqual(result.code, 'missing_implementation_artifacts');
 });
 
+test('UTV2-1586 fabricated PR with only the manifest and proof artifacts cannot substitute for the real implementation', () => {
+  const manifest = createMissingBindingManifest();
+  const result = validateTrustedPostMergeRepair(manifest, '1305', {
+    repairMerged: true,
+    trustedPostMerge: true,
+    fetchPr: () => createTrustedRepairPr(manifest, {
+      files: [
+        `docs/06_status/lanes/${manifest.issue_id}.json`,
+        ...manifest.expected_proof_paths,
+      ],
+    }),
+    isMergeReachable: () => true,
+  });
+  assert.strictEqual(result.code, 'repair_pr_substitution');
+});
+
 test('UTV2-1586 #11 changed or unreachable merge SHA fails closed', () => {
   const staleManifest = createMissingBindingManifest({ commit_sha: 'caller-changed-sha' });
   const mismatch = validateTrustedPostMergeRepair(staleManifest, '1305', {

@@ -311,6 +311,43 @@ export function implementationFilesFromTrustedRepair(
   return files.filter((file) => !controlPlanePaths.has(file));
 }
 
+function fileScopeLockEntryMatches(lockEntry: string, file: string): boolean {
+  if (lockEntry.endsWith('/**')) {
+    return file.startsWith(lockEntry.slice(0, -2));
+  }
+  return lockEntry === file;
+}
+
+/**
+ * Confirms a candidate repair PR's file list contains at least one file
+ * belonging to the lane's own declared file_scope_lock, outside that lane's
+ * own proof directory. A forged PR that only ever contains the lane manifest
+ * plus every declared proof artifact (see the manifestPath/expected_proof_paths
+ * checks above) would otherwise pass validation with zero real implementation
+ * content -- this closes that gap.
+ */
+function hasDeclaredImplementationFile(manifest: LaneManifest, files: string[]): boolean {
+  const proofDirPrefix = `docs/06_status/proof/${manifest.issue_id}/`;
+  const candidateFiles = implementationFilesFromTrustedRepair(manifest, files).filter(
+    (file) => !file.startsWith(proofDirPrefix),
+  );
+  if (candidateFiles.length === 0) {
+    return false;
+  }
+  const scopeEntries = (manifest.file_scope_lock ?? []).filter(
+    (entry) => !entry.startsWith(proofDirPrefix),
+  );
+  if (scopeEntries.length === 0) {
+    // Nothing outside the proof directory was ever declared in scope (a
+    // pure docs/proof lane) -- there is no implementation-file invariant to
+    // check beyond what the manifest/proof checks above already enforce.
+    return true;
+  }
+  return candidateFiles.some((file) =>
+    scopeEntries.some((entry) => fileScopeLockEntryMatches(entry, file)),
+  );
+}
+
 /**
  * Validates an explicit historical implementation PR before any tracked lane
  * state is changed. The caller passes the result of
@@ -401,6 +438,16 @@ export function validateTrustedPostMergeRepair(
   }
   if (manifest.expected_proof_paths.some((proofPath) => !files.includes(proofPath))) {
     return blocked('missing_implementation_artifacts', pr);
+  }
+  // A PR can legitimately contain the lane manifest and every declared proof
+  // artifact while never touching any real implementation file -- e.g. a
+  // fabricated/forged PR authored purely to satisfy the two checks above.
+  // Require at least one file matching the lane's own declared
+  // file_scope_lock (outside its own proof directory, which is already
+  // covered above) so a manifest-and-proof-only PR cannot substitute for the
+  // genuine implementation PR.
+  if (!hasDeclaredImplementationFile(manifest, files)) {
+    return blocked('repair_pr_substitution', pr);
   }
   if (manifest.commit_sha && manifest.commit_sha !== pr.mergeSha) {
     return blocked('pr_sha_mismatch', pr);
