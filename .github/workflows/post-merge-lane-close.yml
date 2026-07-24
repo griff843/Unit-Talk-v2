@@ -173,11 +173,46 @@ jobs:
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve merge SHA
+        # UTV2-1567: github.sha is only correct for the push trigger, where it
+        # genuinely is the new merge commit. For a workflow_dispatch replay
+        # (e.g. re-closing an already-merged ghost lane), github.sha resolves
+        # to whatever commit is checked out at dispatch time -- today's main
+        # HEAD -- not the historical merge SHA of the target issue's actual
+        # PR. Resolve the real merge SHA from the manifest's own pr_url via
+        # the GitHub API instead, so proof binds to the right commit either
+        # way. Falls back to github.sha if the PR lookup fails for any reason
+        # (e.g. missing/malformed pr_url) so a push-triggered close is never
+        # blocked by this step.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        id: resolve_sha
+        env:
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            pr_url=$(jq -r '.pr_url // empty' "$MANIFEST_PATH")
+            pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$' || true)
+            merge_sha=""
+            if [ -n "$pr_number" ]; then
+              merge_sha=$(gh pr view "$pr_number" --json mergeCommit -q '.mergeCommit.oid // empty' 2>/dev/null || true)
+            fi
+            if [ -n "$merge_sha" ]; then
+              echo "::notice title=post-merge-lane-close::workflow_dispatch replay resolved merge SHA $merge_sha from PR #$pr_number (not github.sha)."
+              echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning title=post-merge-lane-close::Could not resolve merge SHA from manifest.pr_url ($pr_url) — falling back to github.sha, which may be wrong for a workflow_dispatch replay."
+              echo "merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Bind proof artifacts to merge SHA
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
-          MERGE_SHA: ${{ github.sha }}
+          MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
