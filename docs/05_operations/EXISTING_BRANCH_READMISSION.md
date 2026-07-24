@@ -55,6 +55,8 @@ Any changed SHA, PR identity, divergence, authority input, or absence fact makes
 
 Lane-start re-fetches `origin/main` and the exact target branch, then revalidates the token and current external state before side effects. It adds a worktree from the existing branch without `git checkout`/`git switch` in the root checkout and without creating a replacement branch from `main`. Existing implementation commits and proof files remain intact.
 
+File-scope paths are resolved against the existing target branch during readmission, so files or directory globs introduced by that branch do not need to exist on `main`. A declared non-proof path that is absent from the target branch still fails closed before worktree or lease creation.
+
 The reconstructed lane receives an identical local copy of the validated preflight token at its manifest-referenced path, isolated pnpm state, a fresh lease, a fresh manifest using the newly requested lane type, and a fresh sync record. Prior lane type is recorded as history and is never inherited as current authority. Only regenerated lane metadata is committed. Success returns:
 
 ```text

@@ -510,6 +510,15 @@ async function main(): Promise<number> {
     return 1;
   }
 
+  // A prior passing readmission token must not survive a later terminal,
+  // non-startable, or infrastructure result. Lane-start deliberately does not
+  // call Linear again, so leaving that token in place would allow stale
+  // continuation authority to remain usable until its TTL expires. Preserve
+  // normal-mode behavior; this stricter invalidation belongs to the explicit
+  // readmission contract.
+  if (readmitExistingBranch && !dryRun) {
+    removeFileIfExists(tokenPath);
+  }
   writeOutput(result, json);
   return result.verdict === 'NOT_APPLICABLE' ? 2 : 3;
 }

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ROOT } from './shared.js';
 import {
   type ExistingBranchReadmissionToken,
+  findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
   mirrorPreflightTokenToWorktree,
   validateReadmissionTokenRequest,
@@ -477,4 +478,45 @@ test('readmission 20: generic unsafe force cannot substitute for explicit readmi
   assert.match(nearby, /!readmitExistingBranch/);
   assert.doesNotMatch(nearby, /forceUnsafeSubstrate/);
   assert.match(source, /code: 'lane_readmitted_existing_branch'/);
+});
+
+test('readmission validates branch-only file scope against the target branch, not main', () => {
+  const branchOnlyScope = [
+    'scripts/autonomy/kernel.ts',
+    'scripts/autonomy/**',
+    'docs/06_status/proof/UTV2-1578/evidence.json',
+  ];
+  const existingTargetObjects = new Map<string, 'file' | 'directory'>([
+    ['scripts/autonomy/kernel.ts', 'file'],
+    ['scripts/autonomy', 'directory'],
+  ]);
+
+  assert.deepEqual(
+    findMissingReadmissionScopePaths(
+      branchOnlyScope,
+      (repoRelativePath, kind) => existingTargetObjects.get(repoRelativePath) === kind,
+    ),
+    [],
+    'new implementation paths and proof intent paths should be valid when present only on the target branch',
+  );
+  assert.deepEqual(
+    findMissingReadmissionScopePaths(
+      ['scripts/autonomy/missing.ts'],
+      (repoRelativePath, kind) => existingTargetObjects.get(repoRelativePath) === kind,
+    ),
+    ['scripts/autonomy/missing.ts'],
+    'a path absent from the target branch must still fail closed',
+  );
+
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  assert.match(
+    source,
+    /readmitExistingBranch\s*\?\s*normalizeRepoRelativePaths\(fileArgs\)\s*:\s*normalizeFileScope\(fileArgs\)/,
+    'readmission must not require branch-only paths to exist on the main control checkout',
+  );
+  assert.match(
+    source,
+    /assertReadmissionScopeExistsAtRef\(branchState\.sourceRef, normalizedFiles\)/,
+    'branch-only scope must be checked against the exact existing branch before side effects',
+  );
 });

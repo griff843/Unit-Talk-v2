@@ -28,6 +28,7 @@ import {
   manifestExists,
   normalizeFileScope,
   normalizeRepoRelativePath,
+  normalizeRepoRelativePaths,
   parseArgs,
   readAllManifests,
   readManifest,
@@ -323,6 +324,34 @@ function branchContainsExactIssue(branch: string, issueId: string): boolean {
   return new RegExp(`(?:^|[/_-])${escaped}(?:$|[/_-])`).test(branch.toLowerCase());
 }
 
+type ReadmissionScopePathKind = 'file' | 'directory';
+
+export function findMissingReadmissionScopePaths(
+  fileScope: string[],
+  existsAtTarget: (repoRelativePath: string, kind: ReadmissionScopePathKind) => boolean,
+): string[] {
+  return fileScope.filter((filePath) => {
+    if (filePath.startsWith('docs/06_status/proof/')) {
+      return false;
+    }
+    const directoryGlob = filePath.endsWith('/**');
+    const targetPath = directoryGlob ? filePath.slice(0, -3) : filePath;
+    return !existsAtTarget(targetPath, directoryGlob ? 'directory' : 'file');
+  });
+}
+
+function assertReadmissionScopeExistsAtRef(sourceRef: string, fileScope: string[]): void {
+  const missing = findMissingReadmissionScopePaths(fileScope, (repoRelativePath, kind) => {
+    const object = git(['cat-file', '-t', `${sourceRef}:${repoRelativePath}`]);
+    return object.ok && object.stdout === (kind === 'directory' ? 'tree' : 'blob');
+  });
+  if (missing.length > 0) {
+    throw new Error(
+      `Readmission file scope does not exist on ${sourceRef}: ${missing.join(', ')}`,
+    );
+  }
+}
+
 export function isPermittedControlRegistryPath(filePath: string): boolean {
   const normalized = filePath.trim().replaceAll('\\', '/');
   return (
@@ -580,7 +609,13 @@ function main(): void {
 
     const tier = validateTier(tierInput);
     validateBranchName(branch);
-    const normalizedFiles = normalizeFileScope(fileArgs);
+    // Existing implementation branches can introduce files/directories that do
+    // not exist on main. Readmission therefore performs structural normalization
+    // here and validates existence against the target branch below. Normal
+    // admission/resume retains the original main-worktree existence check.
+    const normalizedFiles = readmitExistingBranch
+      ? normalizeRepoRelativePaths(fileArgs)
+      : normalizeFileScope(fileArgs);
 
     if (docsOnlyFastPath) {
       const nonDocsFiles = normalizedFiles.filter((filePath) => !isDocsOnlyFastPathFile(filePath));
@@ -898,6 +933,7 @@ function main(): void {
       }
 
       const branchState = resolveExistingBranchSha(branch);
+      assertReadmissionScopeExistsAtRef(branchState.sourceRef, normalizedFiles);
       const mergeBase = git(['merge-base', 'origin/main', branchState.sourceRef]);
       if (!mergeBase.ok || !mergeBase.stdout) {
         throw new Error(`existing branch ${branch} no longer has related history with origin/main`);

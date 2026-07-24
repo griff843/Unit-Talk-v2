@@ -334,3 +334,22 @@ test('readmission 10: token captures immutable branch, main, PR, divergence, aut
     assert.match(source, new RegExp(`${field}:`), field);
   }
 });
+
+test('readmission invalidates a prior token after terminal or infrastructure preflight results', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  const nonPassReadmissionCleanup = source.indexOf(
+    'if (readmitExistingBranch && !dryRun) {',
+    source.indexOf("if (result.verdict === 'FAIL')"),
+  );
+  const cleanupCall = source.indexOf('removeFileIfExists(tokenPath);', nonPassReadmissionCleanup);
+  const finalReturn = source.indexOf(
+    "return result.verdict === 'NOT_APPLICABLE' ? 2 : 3;",
+    nonPassReadmissionCleanup,
+  );
+
+  assert.ok(nonPassReadmissionCleanup >= 0, 'expected readmission-only non-PASS token cleanup');
+  assert.ok(
+    cleanupCall > nonPassReadmissionCleanup && cleanupCall < finalReturn,
+    'a stale readmission token must be removed before NOT_APPLICABLE or INFRA returns',
+  );
+});
