@@ -82,6 +82,7 @@ export interface ExistingBranchReadmissionToken extends PreflightToken {
   origin_main_sha: string;
   open_pr_number: number;
   open_pr_url: string;
+  open_pr_base_ref: string;
   ahead_count: number;
   behind_count: number;
   requested_lane_type: CanonicalLaneType;
@@ -103,6 +104,7 @@ export interface ReadmissionTokenRequest {
   currentMainSha: string;
   currentBranchSha: string;
   openPrNumber: number;
+  openPrBaseRef: string;
 }
 
 export function validateReadmissionTokenRequest(
@@ -126,6 +128,9 @@ export function validateReadmissionTokenRequest(
     errors.push('branch head changed after preflight');
   }
   if (token.open_pr_number !== request.openPrNumber) errors.push('open PR identity changed after preflight');
+  if (token.open_pr_base_ref !== request.openPrBaseRef || token.open_pr_base_ref !== 'main') {
+    errors.push('open PR base ref changed after preflight');
+  }
   if (
     token.no_worktree !== true ||
     token.no_active_lease !== true ||
@@ -275,7 +280,7 @@ interface FileSnapshot {
 interface ExactOpenPr {
   number: number;
   head: { ref: string; sha: string; repo: { full_name: string } | null };
-  base: { repo: { full_name: string } | null };
+  base: { ref: string; repo: { full_name: string } | null };
 }
 
 function snapshotFile(filePath: string): FileSnapshot {
@@ -445,6 +450,13 @@ function exactOpenPullRequest(repository: string, branch: string): ExactOpenPr {
     pullRequest.base.repo?.full_name !== repository
   ) {
     throw new Error('open PR identity or repository changed after preflight');
+  }
+  // Independent of anything the preflight token claims: a PR that was
+  // retargeted away from main between preflight and lane-start must fail
+  // closed here too, so a malformed or tampered token cannot substitute for
+  // a live re-check of the actual PR.
+  if (pullRequest.base.ref !== 'main') {
+    throw new Error(`open PR base ref changed after preflight (now ${pullRequest.base.ref})`);
   }
   return pullRequest;
 }
@@ -975,6 +987,7 @@ function main(): void {
         currentMainSha: mainHead,
         currentBranchSha: branchState.sha,
         openPrNumber: pullRequest.number,
+        openPrBaseRef: pullRequest.base.ref,
       });
       if (token.ahead_count !== ahead || token.behind_count !== behind) {
         tokenErrors.push('branch divergence changed after preflight');

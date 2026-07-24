@@ -76,6 +76,7 @@ export interface ExistingBranchReadmissionContext {
   origin_main_sha: string;
   open_pr_number: number;
   open_pr_url: string;
+  open_pr_base_ref: string;
   ahead_count: number;
   behind_count: number;
   requested_lane_type: CanonicalLaneType;
@@ -102,7 +103,7 @@ interface OpenPullRequest {
   body: string;
   state: string;
   head: { ref: string; sha: string; repo: { full_name: string } | null };
-  base: { repo: { full_name: string } | null };
+  base: { ref: string; repo: { full_name: string } | null };
 }
 
 const CANONICAL_READMISSION_LANE_TYPES = new Set<CanonicalLaneType>([
@@ -815,6 +816,13 @@ function runExistingBranchReadmissionChecks(input: {
     `PR head, PR base, and branch resolve to ${repository}`,
     'PR and branch do not resolve to the same repository',
   );
+  const observedBaseRef = pullRequest?.base.ref ?? null;
+  check(
+    'PRA17',
+    Boolean(pullRequest && observedBaseRef === 'main'),
+    'PR base ref is main',
+    `PR base ref is ${observedBaseRef ?? 'unknown'}, expected main`,
+  );
 
   const branchMetadata = targetRef ? readExistingBranchMetadata(targetRef, issueId) : null;
   const controlMetadata = readAllManifests().find((manifest) => manifest.issue_id === issueId) ?? null;
@@ -851,6 +859,7 @@ function runExistingBranchReadmissionChecks(input: {
     origin_main_sha: originMainSha.stdout,
     open_pr_number: pullRequest.number,
     open_pr_url: pullRequest.html_url,
+    open_pr_base_ref: pullRequest.base.ref,
     ahead_count: aheadCount,
     behind_count: behindCount,
     requested_lane_type: requestedLaneType as CanonicalLaneType,

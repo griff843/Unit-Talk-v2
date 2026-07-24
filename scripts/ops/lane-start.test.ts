@@ -28,6 +28,7 @@ function readmissionToken(): ExistingBranchReadmissionToken {
     origin_main_sha: 'a'.repeat(40),
     open_pr_number: 1303,
     open_pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1303',
+    open_pr_base_ref: 'main',
     ahead_count: 9,
     behind_count: 4,
     requested_lane_type: 'governance',
@@ -312,6 +313,20 @@ test('lane-start exits non-zero (refuses) when delegation is suspended', () => {
   assert.match(delegationBlock, /process\.exit\(1\)/);
 });
 
+test('readmission 25: the PR base-ref revalidation only exists inside the readmission branch, never on fresh admission or ordinary resume', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const mainHeadIndex = source.indexOf('const mainHead = assertCleanMainControlCheckout();');
+  const readmissionBlockStart = source.lastIndexOf('if (readmitExistingBranch) {', mainHeadIndex);
+  assert.notStrictEqual(readmissionBlockStart, -1, 'expected the main control checkout assertion to live inside a readmitExistingBranch-gated block');
+  const callSite = source.indexOf('exactOpenPullRequest(repository, branch)');
+  assert.ok(callSite > readmissionBlockStart && callSite > mainHeadIndex, 'exactOpenPullRequest (and its base-ref check) must only run inside the readmission branch');
+  assert.equal(
+    (source.match(/exactOpenPullRequest\(/g) ?? []).length,
+    2,
+    'exactOpenPullRequest should have exactly one definition and one call site -- it must not be reachable from fresh admission or resume',
+  );
+});
+
 test('readmission 11: ordinary resume remains a separate lane_resumed path', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
   assert.match(
@@ -341,6 +356,7 @@ test('readmission 13: changed branch head invalidates the token', () => {
     currentMainSha: token.origin_main_sha,
     currentBranchSha: 'c'.repeat(40),
     openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
   });
   assert.deepEqual(errors, ['branch head changed after preflight']);
 });
@@ -357,6 +373,7 @@ test('readmission 14: changed main head invalidates both token head bindings', (
     currentMainSha: 'd'.repeat(40),
     currentBranchSha: token.branch_head_sha,
     openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
   });
   assert.deepEqual(errors, ['main head changed after preflight']);
 
@@ -392,6 +409,7 @@ test('readmission 16: fresh manifest records requested governance and prior hygi
     currentMainSha: token.origin_main_sha,
     currentBranchSha: token.branch_head_sha,
     openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
   });
   assert.deepEqual(valid, []);
 
@@ -413,6 +431,7 @@ test('readmission 17: mismatched scope, executor, lane type, tier, or PR cannot 
     currentMainSha: token.origin_main_sha,
     currentBranchSha: token.branch_head_sha,
     openPrNumber: 999,
+    openPrBaseRef: 'main',
   });
   assert.deepEqual(errors, [
     'token tier does not match request',
@@ -421,6 +440,78 @@ test('readmission 17: mismatched scope, executor, lane type, tier, or PR cannot 
     'token file scope does not match request',
     'open PR identity changed after preflight',
   ]);
+});
+
+test('readmission 21: a request that matches the token exactly, including base ref main, produces no errors', () => {
+  const token = readmissionToken();
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: token.open_pr_base_ref,
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('readmission 22: a PR retargeted away from main after preflight invalidates the token', () => {
+  const token = readmissionToken();
+  assert.equal(token.open_pr_base_ref, 'main');
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: 'release',
+  });
+  assert.deepEqual(errors, ['open PR base ref changed after preflight']);
+});
+
+test('readmission 23: a malformed or tampered token that itself claims a non-main base ref cannot be reused, even if the live re-fetch happens to match it', () => {
+  const token = { ...readmissionToken(), open_pr_base_ref: 'staging' };
+  const errors = validateReadmissionTokenRequest(token, {
+    issueId: token.issue_id,
+    branch: token.branch,
+    tier: token.tier,
+    laneType: token.requested_lane_type,
+    executor: token.executor,
+    fileScope: token.file_scope,
+    currentMainSha: token.origin_main_sha,
+    currentBranchSha: token.branch_head_sha,
+    openPrNumber: token.open_pr_number,
+    openPrBaseRef: 'staging',
+  });
+  assert.deepEqual(errors, ['open PR base ref changed after preflight']);
+});
+
+test('readmission 24: lane-start independently re-fetches and rejects a non-main PR before it ever consults the token', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const fnStart = source.indexOf('function exactOpenPullRequest(');
+  const fnEnd = source.indexOf('\n}\n', fnStart);
+  const fnBody = source.slice(fnStart, fnEnd);
+  assert.match(
+    fnBody,
+    /if \(pullRequest\.base\.ref !== 'main'\)/,
+    'exactOpenPullRequest must independently reject a non-main base ref -- it never receives or reads the token',
+  );
+  assert.match(fnBody, /open PR base ref changed after preflight/);
+
+  const callSite = source.indexOf('const pullRequest = exactOpenPullRequest(repository, branch);');
+  const tokenReadSite = source.indexOf('const token = preflight.token as ExistingBranchReadmissionToken;');
+  assert.ok(
+    callSite >= 0 && tokenReadSite > callSite,
+    'the live PR re-fetch and its own base-ref rejection must happen before the token is even read',
+  );
 });
 
 test('readmission 18: post-worktree failures release lease, remove worktree, and restore root metadata', () => {

@@ -291,6 +291,42 @@ test('readmission 06: missing, duplicate, mismatched, or cross-repository PRs ar
   assert.match(source, /pullRequest\?\.base\.repo\?\.full_name === repository/);
 });
 
+test('readmission 21: PRA17 requires the open PR to target main and fails closed for any other base ref, including release or staging', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  const checkIndex = source.indexOf("'PRA17'");
+  assert.notStrictEqual(checkIndex, -1, 'expected a dedicated PRA17 check for the PR base ref');
+  const checkBlock = source.slice(checkIndex - 200, checkIndex + 400);
+  assert.match(
+    checkBlock,
+    /observedBaseRef === 'main'/,
+    'PRA17 must compare the live PR base ref exactly against main, not against branch-specific literals like release or staging',
+  );
+  assert.match(
+    checkBlock,
+    /PR base ref is \$\{observedBaseRef \?\? 'unknown'\}, expected main/,
+    'PRA17 failure detail must explicitly state the observed base ref, e.g. "PR base ref is release, expected main"',
+  );
+  assert.match(
+    source,
+    /const observedBaseRef = pullRequest\?\.base\.ref \?\? null;/,
+    'the observed base ref must be read directly off the live-fetched PR object, never inferred or hardcoded as main',
+  );
+});
+
+test('readmission 22: the readmission context binds open_pr_base_ref from the live PR object, not a literal', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'preflight.ts'), 'utf8');
+  assert.match(
+    source,
+    /open_pr_base_ref: pullRequest\.base\.ref,/,
+    'the token must bind whatever base ref the live PR actually reports',
+  );
+  assert.doesNotMatch(
+    source,
+    /open_pr_base_ref: 'main'/,
+    'the token must never hardcode main for open_pr_base_ref -- PRA17 already fails closed before this point if it is not main',
+  );
+});
+
 test('readmission 07: terminal Linear states are rejected', () => {
   for (const state of ['Done', 'Canceled', 'Cancelled', 'Failed', 'Duplicate']) {
     assert.equal(isTerminalLinearState(state), true, state);
@@ -321,6 +357,7 @@ test('readmission 10: token captures immutable branch, main, PR, divergence, aut
     'branch_head_sha',
     'origin_main_sha',
     'open_pr_number',
+    'open_pr_base_ref',
     'ahead_count',
     'behind_count',
     'requested_lane_type',
