@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: e83edefb5fde6302ba38317f17b172d3ff9d58e9
+MERGE_SHA: 661bb9c735c036fd3189c661d0285328f4ffd0e4
 
 ## Summary
 
@@ -320,6 +320,19 @@ the real PR #1305/PR #1306 historical fixtures -- read from their
 actual committed sidecar files, not synthesized stand-ins -- still bind
 successfully against their real, agreeing manifest routing records.
 
+## Ninth finding (fixed): historical fixture tests were tautological on the manifest side
+
+A further independent review found that while the fixture tests
+correctly read the real committed *sidecar* file, they constructed the
+comparison `manifest.model_routing` by copying fields straight out of
+that same sidecar object, rather than reading the real lane manifest
+file (`docs/06_status/lanes/<issue>.json`). This made the manifest-side
+half of the comparison tautological -- it could never fail, and
+couldn't catch a future drift between the two real,
+independently-authored files. Fixed: both fixture tests now
+`fs.readFileSync` the real lane manifest file directly and use its
+actual `model_routing` block.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of every finding across all review rounds.
 
@@ -328,7 +341,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`e83edefb5fde6302ba38317f17b172d3ff9d58e9`:
+`661bb9c735c036fd3189c661d0285328f4ffd0e4`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
