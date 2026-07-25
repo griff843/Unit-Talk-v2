@@ -14,6 +14,8 @@
     "docs/06_status/proof/UTV2-1589/evidence.json",
     "docs/06_status/proof/UTV2-1589/model-routing.json",
     "docs/06_status/proof/UTV2-1589/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
     "scripts/ops/proof-generate.test.ts",
     "scripts/ops/proof-generate.ts",
     "scripts/ops/truth-check-lib.test.ts"

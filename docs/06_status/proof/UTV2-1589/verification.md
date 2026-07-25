@@ -1,13 +1,17 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 828c07532dead3ab7d12aa61e25b8c2ee64e5388
+MERGE_SHA: 7ceba92579dff046cdf9eef3c4fee7ec5962215b
 
 ## Summary
 
 Post-merge proof generation now SHA-binds `model-routing.json` without
 destroying the immutable model execution provenance recorded before merge.
 The specialized rebind is idempotent, conflict-safe, and preflighted before
-any proof artifact is written.
+any proof artifact is written. Under a PM-authorized same-lane scope
+expansion, the trusted `scripts/ops/lane-close.ts --repair-merged` path
+(`rebindRepairedLaneProof()`) now also performs this same specialized rebind,
+so a real trusted replay -- not just `generateProofArtifacts()` -- binds
+`model-routing.json`.
 
 ASSERTIONS:
 
@@ -24,6 +28,24 @@ ASSERTIONS:
 - [x] A thrown `ModelRoutingRebindError` in the CLI is caught and reported as a
   structured `{ok:false, code, issue_id, proof_path, message}` result with
   exit code 1, not an uncaught crash.
+- [x] `rebindRepairedLaneProof()` (the trusted `--repair-merged` path) binds
+  every declared `model-routing.json` sidecar the same way, validating all of
+  them (write:false) before writing evidence.json/verification.md or any
+  sidecar, so a failing sidecar leaves zero proof mutation.
+- [x] `main()` in `lane-close.ts` catches `ModelRoutingRebindError` distinctly
+  (before the generic infra_error fallback) and emits a `model_routing_rebind_failed`
+  closeout code carrying `model_routing_error_code`, `proof_path`, and `message`;
+  the existing unconditional `transaction?.rollback()` at the top of that catch
+  block restores the manifest and the entire proof directory (evidence.json,
+  verification.md, and model-routing.json together, since
+  `createRepairRollbackTransaction()` already snapshots the whole directory).
+- [x] The real UTV2-1585/#1305 and UTV2-1586/#1306 fixtures bind correctly
+  through the actual `rebindRepairedLaneProof()` path (not just through
+  `rebindModelRoutingJsonSha()` called directly), are idempotent on replay,
+  and satisfy the C4 closeout gate and P3's merge-SHA-reference predicate
+  through that same real path.
+- [x] A lane with no declared `model-routing.json` sidecar is unaffected --
+  ordinary (non-model-routing) closeout behavior is unchanged.
 
 ## Independent review finding and correction
 
@@ -65,21 +87,39 @@ A third finding from the same automated review -- that the trusted
 model-routing rebind during a trusted post-merge replay -- was
 independently verified TRUE and is a real, severe defect: it means
 replaying UTV2-1585/UTV2-1586 through the trusted repair path will still
-fail P3/C4 on `model-routing.json` even after this PR merges. Fixing it
-requires touching `lane-close.ts`, which is outside this issue's
-authorized file scope (PM explicitly excluded "lane-close PR-binding
-behavior"). This is being returned to PM as a scope-expansion stop
-condition rather than fixed unilaterally. See the PR thread for the
-reviewer's exact finding.
+fail P3/C4 on `model-routing.json` even after this PR merges. This was
+returned to PM as a scope-expansion stop condition rather than fixed
+unilaterally, since fixing it required touching `lane-close.ts`, outside
+this issue's originally authorized file scope.
+
+**PM authorized a narrow same-lane scope expansion** adding
+`scripts/ops/lane-close.ts` and `scripts/ops/lane-close.test.ts` to this
+issue. `rebindRepairedLaneProof()` now validates (write:false) every
+`model-routing.json` path declared in `manifest.expected_proof_paths`
+before writing evidence.json/verification.md or any sidecar -- mirroring
+`generateProofArtifacts()`'s atomic validate-then-write ordering -- then
+binds each one. `main()`'s catch block now special-cases
+`ModelRoutingRebindError` into a distinct `model_routing_rebind_failed`
+closeout code (carrying the underlying error code, proof path, and
+message) instead of the generic `infra_error` fallback; the existing
+unconditional `transaction?.rollback()` already restores the manifest and
+the entire proof directory on any thrown error, so no new rollback
+mechanism was needed. 14 new focused tests in `scripts/ops/lane-close.test.ts`
+prove this against the real UTV2-1585/#1305 and UTV2-1586/#1306
+identities, idempotent replay, conflicting PR, conflicting SHA, invalid
+JSON, wrong/missing issue identity, a missing required sidecar, a lane
+with no declared sidecar (unaffected), the C4/P3 gates passing through
+the real path, and rollback of the manifest and every proof file when the
+rebind fails.
 
 EVIDENCE:
 
 ## Verification
 
 The following commands were executed on substantive commit
-`828c07532dead3ab7d12aa61e25b8c2ee64e5388`:
+`7ceba92579dff046cdf9eef3c4fee7ec5962215b`:
 
-- `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts`
+- `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `pnpm type-check`
 - `pnpm test`
 - `pnpm test:db`
@@ -91,8 +131,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 90
-# pass 90
+# tests 211
+# pass 211
 # fail 0
 # skipped 0
 
@@ -108,8 +148,12 @@ exit 0
 Manifest validation
 {"ok":true,"code":"manifest_valid","errors":[]}
 
+diff-check
+exit 0
+
 R-level
 Verdict: PASS
+Changed files: 10
 Rules matched: (none)
 ```
 
@@ -127,6 +171,14 @@ rows.
 | UTV2-1585 | `started`; sidecar lacks binding | PR #1305 / `97527b791fc37acce41f4f46fd88699dce054b66` | Replay trusted post-merge closeout with explicit PR #1305 after UTV2-1589 merges |
 | UTV2-1586 | `in_review`; sidecar lacks binding | PR #1306 / `fe09f637a7eeebf216e062dd4a003d7e38932d1a` | Replay trusted post-merge closeout using its recorded PR after UTV2-1589 merges |
 | UTV2-1589 | `started`; active premerge lane | Pending implementation PR | Close normally through the repaired path after merge |
+
+A pre-replay audit against every current truth-check requirement (Linear
+state, PR/merge identity, declared implementation files, evidence
+structure, verifier independence, sync/lease/worktree state) found no
+blocker for either UTV2-1585 or UTV2-1586 other than the model-routing.json
+SHA-binding gap this PR closes; both replays are expected to succeed once
+this PR merges. R1-R3 (live Supabase row-count assertions) were not
+statically verifiable and remain to be confirmed by the actual replay run.
 
 The candidate inventory is intentionally narrow: Codex T1 manifests that are
 not done and declare a `model-routing.json` proof. UTV2-1585 and UTV2-1586 are
