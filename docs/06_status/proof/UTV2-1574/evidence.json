@@ -8,10 +8,10 @@
   "head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": null,
+    "verified_source_sha": "18de0721cd5a8577de18147bbeb18bef8fc43d77",
     "verified_source_note": "Filled in at commit time by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-22T14:30:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-25T03:41:27.527Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "not_yet_run"
@@ -36,7 +36,31 @@
     }
   },
   "runtime_proof": {
-    "note": "Pure documentation change -- no code, workflow, or branch-protection modification in this diff. No runtime-observable behavior to verify."
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      "database repository bundle persists a submission and settlement when Supabase is configured",
+      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+      "UTV2-883: no duplicate participants for the same external_id and sport",
+      "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+      "UTV2-996: correction chain is additive -- original settlement row is not mutated"
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 101737, "status": "observed" },
+      { "table": "pick_lifecycle", "count": 145277, "status": "observed" },
+      { "table": "distribution_outbox", "count": 10191, "status": "observed" },
+      { "table": "audit_log", "count": 244298, "status": "observed" },
+      { "table": "settlement_records", "count": 34956, "status": "observed" }
+    ],
+    "row_counts_captured_at": "2026-07-25T03:47:00Z",
+    "note": "This lane's own diff (docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md) changed no code, workflow, or branch-protection configuration and has no runtime behavior of its own to exercise. This database-smoke result satisfies the mandatory T1 runtime-evidence policy (a live, real-Supabase pass with non-empty queries and monitored-table row counts) -- it does not claim the governance document itself altered runtime behavior."
   },
   "scope": {
     "implementation_paths": [
