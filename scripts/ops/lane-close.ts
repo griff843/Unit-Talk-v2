@@ -710,6 +710,7 @@ export function rebindRepairedLaneProof(
           write: false,
           relPath: modelRoutingPath,
           expectedIssueId: manifest.issue_id,
+          manifestModelRouting: manifest.model_routing,
         },
       );
     }
@@ -730,6 +731,7 @@ export function rebindRepairedLaneProof(
             write: true,
             relPath: modelRoutingPath,
             expectedIssueId: manifest.issue_id,
+            manifestModelRouting: manifest.model_routing,
           },
         ),
       );

@@ -13,6 +13,7 @@ import {
   requireIssueId,
   type LaneManifest,
 } from './shared.js';
+import type { ModelRoutingBlock } from './model-routing.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
@@ -58,7 +59,8 @@ export type ModelRoutingRebindErrorCode =
   | 'malformed_required_sidecar'
   | 'missing_pr_url'
   | 'missing_required_sidecar'
-  | 'sidecar_identity_mismatch';
+  | 'sidecar_identity_mismatch'
+  | 'sidecar_manifest_routing_mismatch';
 
 /**
  * Fields a required model-routing sidecar must carry as non-empty strings
@@ -66,13 +68,34 @@ export type ModelRoutingRebindErrorCode =
  * truncated or tampered sidecar that retains a matching `issue_id` but drops
  * these -- e.g. `{"issue_id":"UTV2-1586"}` -- would otherwise pass identity
  * validation and get bound despite providing no evidence of which model
- * actually executed the lane (independent review finding). Deliberately
- * narrow to the two fields that directly answer "which model, at what
- * effort, executed this lane" -- `model_profile`/`policy_version` are
- * administrative metadata, not execution provenance, and requiring them
- * would reject legitimate historical sidecars that never carried them.
+ * actually executed the lane (independent review finding).
  */
 const REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS = ['model', 'reasoning_effort'] as const;
+
+/**
+ * Canonical manifest-side routing fields, keyed by their MATCHING sidecar
+ * field name (which is not always the same key -- the manifest's
+ * ModelRoutingBlock.profile corresponds to the sidecar's model_profile).
+ * `always` fields must agree whenever a manifest model_routing block is
+ * supplied at all (execution identity: which model, at what effort).
+ * `whenBothPresent` fields are administrative metadata that must still
+ * agree if both sides happen to carry them, but their absence on either
+ * side is not itself a failure (PM directive, UTV2-1589).
+ */
+const ALWAYS_MATCHED_ROUTING_FIELDS: ReadonlyArray<{
+  sidecarField: string;
+  manifestField: keyof ModelRoutingBlock;
+}> = [
+  { sidecarField: 'model', manifestField: 'model' },
+  { sidecarField: 'reasoning_effort', manifestField: 'reasoning_effort' },
+];
+const OPTIONALLY_MATCHED_ROUTING_FIELDS: ReadonlyArray<{
+  sidecarField: string;
+  manifestField: keyof ModelRoutingBlock;
+}> = [
+  { sidecarField: 'model_profile', manifestField: 'profile' },
+  { sidecarField: 'policy_version', manifestField: 'policy_version' },
+];
 
 export class ModelRoutingRebindError extends Error {
   constructor(
@@ -395,7 +418,13 @@ export function rebindModelRoutingJsonSha(
   mergeSha: string,
   generatedAt: string,
   prUrl: string | null,
-  options: { required?: boolean; write?: boolean; relPath?: string; expectedIssueId?: string } = {},
+  options: {
+    required?: boolean;
+    write?: boolean;
+    relPath?: string;
+    expectedIssueId?: string;
+    manifestModelRouting?: ModelRoutingBlock | null;
+  } = {},
 ): ShaRebindOutcome {
   const relPath = options.relPath ?? absolutePath;
   const required = options.required ?? false;
@@ -463,6 +492,45 @@ export function rebindModelRoutingJsonSha(
         relPath,
         `Required model-routing sidecar is missing execution-provenance fields (${missingOrEmpty.join(', ')}): ${relPath}`,
       );
+    }
+  }
+
+  if (required && options.manifestModelRouting) {
+    const manifestRouting = options.manifestModelRouting;
+
+    for (const { sidecarField, manifestField } of ALWAYS_MATCHED_ROUTING_FIELDS) {
+      const manifestValue = manifestRouting[manifestField];
+      if (typeof manifestValue !== 'string' || manifestValue.trim() === '') {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Manifest model_routing.${manifestField} is missing or empty; cannot validate sidecar routing field "${sidecarField}": ${relPath}`,
+        );
+      }
+      const sidecarValue = parsed[sidecarField];
+      if (sidecarValue !== manifestValue) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar ${sidecarField} ${JSON.stringify(sidecarValue)} does not match manifest ` +
+            `model_routing.${manifestField} ${JSON.stringify(manifestValue)}: ${relPath}`,
+        );
+      }
+    }
+
+    for (const { sidecarField, manifestField } of OPTIONALLY_MATCHED_ROUTING_FIELDS) {
+      const sidecarValue = parsed[sidecarField];
+      const manifestValue = manifestRouting[manifestField];
+      const sidecarPresent = typeof sidecarValue === 'string' && sidecarValue.trim() !== '';
+      const manifestPresent = typeof manifestValue === 'string' && manifestValue.trim() !== '';
+      if (sidecarPresent && manifestPresent && sidecarValue !== manifestValue) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar ${sidecarField} ${JSON.stringify(sidecarValue)} does not match manifest ` +
+            `model_routing.${manifestField} ${JSON.stringify(manifestValue)}: ${relPath}`,
+        );
+      }
     }
   }
 
@@ -578,7 +646,13 @@ export function generateProofArtifacts(
         input.gitTruth.merge_sha,
         input.generatedAt,
         input.manifest.pr_url,
-        { required: true, write: false, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
+        {
+          required: true,
+          write: false,
+          relPath: modelRoutingPath,
+          expectedIssueId: input.manifest.issue_id,
+          manifestModelRouting: input.manifest.model_routing,
+        },
       );
     }
   }
@@ -642,7 +716,13 @@ export function generateProofArtifacts(
         input.gitTruth.merge_sha,
         input.generatedAt,
         input.manifest.pr_url,
-        { required: true, write: shouldWrite, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
+        {
+          required: true,
+          write: shouldWrite,
+          relPath: modelRoutingPath,
+          expectedIssueId: input.manifest.issue_id,
+          manifestModelRouting: input.manifest.model_routing,
+        },
       );
       if (outcome.status === 'updated') {
         pushUnique(updatedPaths, outcome.path);

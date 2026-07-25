@@ -784,17 +784,31 @@ for (const fixture of [
 ]) {
   test(`rebindRepairedLaneProof binds the real ${fixture.issueId}/${fixture.prUrl.split('/').pop()} trusted-repair fixture to its authoritative merge SHA`, () => {
     withTempRepairState(({ repoRoot }) => {
-      const routingPath = writeModelRoutingFixture(
-        repoRoot,
-        fixture.issueId,
-        preMergeModelRoutingJson({ issue_id: fixture.issueId }),
+      // Real committed sidecar, not a synthesized stand-in, so this proves
+      // the actual historical record survives the new manifest-agreement
+      // validation through the real repair path (UTV2-1589 PM directive).
+      const realSidecarContent = fs.readFileSync(
+        path.join(process.cwd(), 'docs/06_status/proof', fixture.issueId, 'model-routing.json'),
+        'utf8',
       );
+      const routingPath = writeModelRoutingFixture(repoRoot, fixture.issueId, realSidecarContent);
+      const realSidecar = JSON.parse(realSidecarContent) as Record<string, unknown>;
 
       const manifest = createManifest({
         issue_id: fixture.issueId,
         commit_sha: fixture.mergeSha,
         pr_url: fixture.prUrl,
         expected_proof_paths: [`docs/06_status/proof/${fixture.issueId}/model-routing.json`],
+        // The real lane manifest's model_routing block for both lanes
+        // (verified against docs/06_status/lanes/*.json) agrees exactly
+        // with the real sidecar read above.
+        model_routing: {
+          profile: realSidecar['model_profile'] as string,
+          model: realSidecar['model'] as string,
+          reasoning_effort: realSidecar['reasoning_effort'] as string,
+          selected_by: 'three-brain',
+          policy_version: realSidecar['policy_version'] as string,
+        },
       });
 
       rebindRepairedLaneProof(manifest, { repoRoot, now: new Date('2026-07-25T12:00:00.000Z') });
@@ -1142,6 +1156,94 @@ test('a failed model-routing rebind rolls back the manifest and every proof file
       JSON.parse(fs.readFileSync(routingPath, 'utf8')).closeout_binding.pr_url.endsWith('/9999'),
       'model-routing.json is restored to its pre-repair conflicting-binding state, not left partially rebound',
     );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('a sidecar/manifest routing mismatch through the real repair path rolls back manifest, evidence, verification, sidecar, and sync/lease/merge-lock state', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1589-routing-mismatch-rollback-'));
+  const issueId = 'UTV2-1001';
+  const manifestPath = path.join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
+  const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
+  const evidencePath = path.join(proofDir, 'evidence.json');
+  const verificationPath = path.join(proofDir, 'verification.md');
+  const routingPath = path.join(proofDir, 'model-routing.json');
+  const syncPath = path.join(repoRoot, '.ops', 'sync', `${issueId}.yml`);
+  const leasePath = path.join(repoRoot, '.ops', 'leases', `${issueId}.json`);
+  const mergeLockPath = path.join(repoRoot, '.ops', 'merge-lock.json');
+  try {
+    const original = createManifest({
+      issue_id: issueId,
+      status: 'merged',
+      commit_sha: 'pre-repair-sha',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1200',
+      expected_proof_paths: [`docs/06_status/proof/${issueId}/model-routing.json`],
+      model_routing: {
+        profile: 'codex-sol-high',
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'high',
+        selected_by: 'three-brain',
+        policy_version: '1.0.0',
+      },
+    });
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+    fs.mkdirSync(path.dirname(leasePath), { recursive: true });
+    fs.writeFileSync(manifestPath, `${JSON.stringify(original, null, 2)}\n`);
+    fs.writeFileSync(evidencePath, '{"sha":"pre-repair"}\n');
+    fs.writeFileSync(verificationPath, '| Commit SHA(s) | `pre-repair` (merge SHA) |\n');
+    fs.writeFileSync(syncPath, 'entities:\n  issues: [UTV2-1001]\n');
+    fs.writeFileSync(leasePath, '{"status":"active"}\n');
+    fs.writeFileSync(mergeLockPath, '{"status":"held"}\n');
+    // The sidecar carries a DIFFERENT model than the lane manifest's own
+    // model_routing.model -- a mismatch that must fail closed before any
+    // proof write, distinct from the binding_conflict case above.
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: issueId, model: 'claude-sonnet-5' }),
+    );
+
+    const transaction = createRepairRollbackTransaction(issueId, repoRoot);
+
+    const repairedManifest = {
+      ...original,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+    };
+    fs.writeFileSync(manifestPath, `${JSON.stringify(repairedManifest, null, 2)}\n`);
+    fs.rmSync(syncPath);
+    fs.writeFileSync(leasePath, '{"status":"released"}\n');
+    fs.writeFileSync(mergeLockPath, '{"status":"released"}\n');
+
+    let threw = false;
+    try {
+      rebindRepairedLaneProof(repairedManifest, { repoRoot });
+    } catch (error) {
+      threw = true;
+      assert.ok(error instanceof ModelRoutingRebindError);
+      assert.strictEqual(error.code, 'sidecar_manifest_routing_mismatch');
+    }
+    assert.strictEqual(threw, true);
+    transaction.rollback();
+
+    const restoredManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as LaneManifest;
+    assert.strictEqual(restoredManifest.commit_sha, 'pre-repair-sha');
+    assert.strictEqual(restoredManifest.pr_url, 'https://github.com/griff843/Unit-Talk-v2/pull/1200');
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), '{"sha":"pre-repair"}\n');
+    assert.strictEqual(
+      fs.readFileSync(verificationPath, 'utf8'),
+      '| Commit SHA(s) | `pre-repair` (merge SHA) |\n',
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(routingPath, 'utf8')).model,
+      'claude-sonnet-5',
+      'model-routing.json is restored to its pre-repair (mismatched, unbound) content, not left partially rebound',
+    );
+    assert.strictEqual(fs.readFileSync(syncPath, 'utf8'), 'entities:\n  issues: [UTV2-1001]\n');
+    assert.strictEqual(fs.readFileSync(leasePath, 'utf8'), '{"status":"active"}\n');
+    assert.strictEqual(fs.readFileSync(mergeLockPath, 'utf8'), '{"status":"held"}\n');
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }
