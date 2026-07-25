@@ -172,6 +172,22 @@ or job was added or removed; trusted-context validation
 (`isTrustedPostMergeAutomation`) and Merge Gate/branch protection are
 unchanged.
 
+A second fresh-context independent Claude review of this workflow fix
+(traced the full `main()` call graph, checked the real UTV2-1585/UTV2-1586
+proof state still in the repo, inspected the `on:` block for any other
+trigger this deadlock could still occur under, and tried to construct a
+subtly-wrong condition that would still pass the new regression test)
+found no blocking defect and confirmed the push case is genuinely
+unaffected. It noted one accepted, currently-inert theoretical gap: the
+now-skipped early bind step used to also *create* `diff-summary.md`/
+`verification.md` from scratch via the full `ops:proof-generate` CLI when
+missing entirely; `rebindRepairedLaneProof()`'s `rebindMergeSha()` only
+rebinds those files if they already exist. Not a live issue -- both
+UTV2-1585 and UTV2-1586 already have populated `evidence.json`/
+`verification.md` in the repository today -- but documented in
+`evidence.json`'s `known_limitations` for a future lane that reached a
+`workflow_dispatch` replay having never had proof generated at all.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of each.
 
