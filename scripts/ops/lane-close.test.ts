@@ -2148,6 +2148,24 @@ test('UTV2-1586 #16 workflow dispatch forwards PR only to trusted repair command
   assert.doesNotMatch(workflow, /if \[ -f "\$per_issue_sync" \]/);
 });
 
+test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts to merge SHA" step', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const bindStepIndex = workflow.indexOf('Bind proof artifacts to merge SHA');
+  assert.notStrictEqual(bindStepIndex, -1);
+  const bindStepIfLine = workflow.slice(bindStepIndex).match(/^ {8}if: (.+)$/mu);
+  assert.ok(bindStepIfLine, 'expected an `if:` condition immediately following the step name');
+  assert.match(
+    bindStepIfLine[1],
+    /&& github\.event_name == 'push'$/u,
+    'this step must be push-only -- on workflow_dispatch, github.sha is not the historical lane\'s ' +
+      'authoritative merge SHA, and binding model-routing.json to it here (before the next step\'s ' +
+      '--repair-merged resolves the real SHA) would permanently deadlock the repair via binding_conflict',
+  );
+});
+
 test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact merge SHA', () => {
   const manifest = createMissingBindingManifest();
   const pr = createTrustedRepairPr(manifest, {

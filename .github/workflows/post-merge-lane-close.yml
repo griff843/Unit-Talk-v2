@@ -182,7 +182,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Bind proof artifacts to merge SHA
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        # UTV2-1589: restricted to `push` events only. `github.sha` on a
+        # `workflow_dispatch` run is whatever ref the dispatch targeted (main's
+        # tip at dispatch time), NOT the historical lane's actual merge SHA --
+        # unlike evidence.json/verification.md's unconditional last-write-wins
+        # rebind, model-routing.json's closeout_binding is intentionally
+        # immutable-once-bound (conflict-checked), so binding it here to a
+        # wrong SHA during a `--repair-merged` replay dispatch would
+        # permanently deadlock the very repair this workflow exists to run:
+        # the correct SHA that `ops:lane-close --repair-merged` resolves next
+        # would then conflict with this step's already-written wrong one. On
+        # `workflow_dispatch`, `rebindRepairedLaneProof()` (called by the next
+        # step, `ops:lane-close --repair-merged`) is what binds model-routing.json,
+        # using the authoritative PR/SHA it resolves itself -- this early,
+        # ordinary-push-only bind is not needed there and must not run.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MERGE_SHA: ${{ github.sha }}
