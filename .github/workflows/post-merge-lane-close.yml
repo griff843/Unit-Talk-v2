@@ -194,19 +194,21 @@ jobs:
         # resolves next would then conflict with this step's already-written
         # wrong one. The `github.event_name == 'push'` condition alone is not
         # sufficient: a governed manifest-only repair PR (produced by
-        # buildRepairRequiredViaPrPacket for a lane whose pr_url is already
-        # set, e.g. UTV2-1586) is merged via an ordinary `push`, and that
-        # repair commit's own `github.sha` is NOT the lane's original
-        # implementation merge SHA either -- but the manifest checked out by
-        # THIS push already carries the correct historical commit_sha (the
-        # repair PR's whole point). The script below additionally skips when
-        # the checked-out manifest already has a commit_sha that disagrees
-        # with this push's SHA, which covers exactly that case. On both
-        # skipped paths, `rebindRepairedLaneProof()` (called by the next
-        # step, `ops:lane-close --repair-merged`) is what binds
-        # model-routing.json, using the authoritative PR/SHA it resolves
-        # itself -- this early bind is only ever needed, and only ever
-        # correct, for a lane's own first-time ordinary closeout push.
+        # buildRepairRequiredViaPrPacket for any lane whose pr_url is already
+        # set -- this is a precondition any such lane can be in, not a claim
+        # about which exact path UTV2-1585/UTV2-1586's own recovery takes)
+        # is merged via an ordinary `push`, and that repair commit's own
+        # `github.sha` is NOT the lane's original implementation merge SHA
+        # either -- but the manifest checked out by THIS push already
+        # carries the correct historical commit_sha (the repair PR's whole
+        # point). The script below additionally skips when the checked-out
+        # manifest already has a commit_sha that disagrees with this push's
+        # SHA, which covers exactly that case. On both skipped paths,
+        # `rebindRepairedLaneProof()` (called by the next step,
+        # `ops:lane-close --repair-merged`) is what binds model-routing.json,
+        # using the authoritative PR/SHA it resolves itself -- this early
+        # bind is only ever needed, and only ever correct, for a lane's own
+        # first-time ordinary closeout push.
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
