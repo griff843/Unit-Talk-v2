@@ -54,10 +54,25 @@ export interface ShaRebindOutcome {
 
 export type ModelRoutingRebindErrorCode =
   | 'binding_conflict'
+  | 'incomplete_required_sidecar'
   | 'malformed_required_sidecar'
   | 'missing_pr_url'
   | 'missing_required_sidecar'
   | 'sidecar_identity_mismatch';
+
+/**
+ * Fields a required model-routing sidecar must carry as non-empty strings
+ * before it is eligible to receive an authoritative closeout_binding. A
+ * truncated or tampered sidecar that retains a matching `issue_id` but drops
+ * these -- e.g. `{"issue_id":"UTV2-1586"}` -- would otherwise pass identity
+ * validation and get bound despite providing no evidence of which model
+ * actually executed the lane (independent review finding). Deliberately
+ * narrow to the two fields that directly answer "which model, at what
+ * effort, executed this lane" -- `model_profile`/`policy_version` are
+ * administrative metadata, not execution provenance, and requiring them
+ * would reject legitimate historical sidecars that never carried them.
+ */
+const REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS = ['model', 'reasoning_effort'] as const;
 
 export class ModelRoutingRebindError extends Error {
   constructor(
@@ -434,6 +449,19 @@ export function rebindModelRoutingJsonSha(
         relPath,
         `Model-routing sidecar issue_id ${JSON.stringify(sidecarIssueId)} does not match ` +
           `expected lane ${options.expectedIssueId}: ${relPath}`,
+      );
+    }
+  }
+
+  if (required) {
+    const missingOrEmpty = REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS.filter(
+      (field) => typeof parsed[field] !== 'string' || parsed[field].trim() === '',
+    );
+    if (missingOrEmpty.length > 0) {
+      throw new ModelRoutingRebindError(
+        'incomplete_required_sidecar',
+        relPath,
+        `Required model-routing sidecar is missing execution-provenance fields (${missingOrEmpty.join(', ')}): ${relPath}`,
       );
     }
   }

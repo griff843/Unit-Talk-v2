@@ -730,6 +730,77 @@ test('rebindModelRoutingJsonSha rejects an identity-less sidecar (e.g. {}) even 
   }
 });
 
+test('rebindModelRoutingJsonSha rejects a required sidecar truncated to only issue_id, even with a matching issue_id', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-truncated-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Matches the lane's issue_id but was truncated/tampered so it carries no
+    // execution-provenance fields at all -- the exact attack an independent
+    // review flagged: this must not silently receive an authoritative binding.
+    const content = `${JSON.stringify({ issue_id: 'UTV2-1170' })}\n`;
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'incomplete_required_sidecar' &&
+        error.message.includes('model') &&
+        error.message.includes('reasoning_effort'),
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects a required sidecar with model present but reasoning_effort blank', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-blank-effort-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ issue_id: 'UTV2-1170', reasoning_effort: '   ' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'incomplete_required_sidecar',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha does not require execution-provenance fields for an optional (non-required) sidecar', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-optional-truncated-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, `${JSON.stringify({ issue_id: 'UTV2-1170' })}\n`, 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { expectedIssueId: 'UTV2-1170' },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('rebindModelRoutingJsonSha accepts a sidecar whose issue_id matches the lane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-identity-match-'));
   try {
