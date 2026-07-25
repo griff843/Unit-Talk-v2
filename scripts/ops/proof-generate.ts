@@ -677,7 +677,32 @@ function main(argv = process.argv.slice(2)): number {
     }),
     runtimeResult: (getFlag(flags, 'runtime-result') as ProofGenerateInput['runtimeResult']) ?? 'not_run',
   };
-  const result = generateProofArtifacts(input, { root: ROOT, write: !bools.has('dry-run') });
+
+  let result: ProofGenerateResult;
+  try {
+    result = generateProofArtifacts(input, { root: ROOT, write: !bools.has('dry-run') });
+  } catch (error) {
+    if (error instanceof ModelRoutingRebindError) {
+      // A required model-routing sidecar was missing, malformed, or already bound
+      // to conflicting historical authority. No proof artifact was mutated (the
+      // routing-sidecar validation runs before any write). Fail with a structured,
+      // parseable result rather than an uncaught crash, per UTV2-1589.
+      const failure = {
+        ok: false as const,
+        code: error.code,
+        issue_id: issueId,
+        proof_path: error.proofPath,
+        message: error.message,
+      };
+      if (bools.has('json')) {
+        emitJson(failure);
+      } else {
+        process.stderr.write(`${failure.code}: ${failure.message}\n`);
+      }
+      return 1;
+    }
+    throw error;
+  }
 
   if (bools.has('json')) {
     emitJson(result);
