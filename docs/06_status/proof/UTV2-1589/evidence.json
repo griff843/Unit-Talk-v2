@@ -6,12 +6,12 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-25T05:00:19Z",
   "sha_binding": {
-    "verified_source_sha": "470cde76f7bbf51bffc5edda2178e8eb796eb46f",
-    "verified_source_note": "Final substantive implementation commit, including the independent-review-verified fix so the CLI reports a structured nonzero failure instead of an uncaught crash on a model-routing binding conflict. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "verified_source_sha": "828c07532dead3ab7d12aa61e25b8c2ee64e5388",
+    "verified_source_note": "Final substantive implementation commit, including two independent-review-driven fixes: (1) the CLI reports a structured nonzero failure instead of an uncaught crash on a model-routing binding conflict; (2) rebindModelRoutingJsonSha rejects an identity-less or wrong-lane sidecar (issue_id mismatch, including {}) instead of silently binding it. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-25T05:36:00Z",
+    "bound_at": "2026-07-25T06:05:00Z",
     "pr_number": null,
     "approved_head_sha": null
   },
@@ -47,8 +47,8 @@
     "focused_proof_tests": {
       "command": "npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts",
       "status": "PASS",
-      "tests": 87,
-      "pass": 87,
+      "tests": 90,
+      "pass": 90,
       "fail": 0,
       "skipped": 0,
       "detail": "Covers provenance preservation, idempotency, PR/SHA conflicts, malformed and missing sidecars, optional sidecars, atomic preflight, the UTV2-1585/#1305 and UTV2-1586/#1306 fixtures, and P3/C4 before-and-after behavior."
@@ -186,7 +186,8 @@
   ],
   "known_limitations": [
     "Historical replay of UTV2-1585 and UTV2-1586 is a post-merge follow-up and is not performed by this implementation PR.",
-    "The T1 approval label and PM verdict remain independent external merge requirements."
+    "The T1 approval label and PM verdict remain independent external merge requirements.",
+    "KNOWN GAP, not fixed by this PR: scripts/ops/lane-close.ts's rebindRepairedLaneProof() (the trusted --repair-merged path used for the UTV2-1585/UTV2-1586 replay) calls only rebindMergeSha(), never generateProofArtifacts(), so it never invokes this issue's model-routing rebind. A trusted replay will therefore still fail P3/C4 on model-routing.json unless lane-close.ts is also updated to route through (or otherwise call) the new model-routing rebind. Found by independent Codex review; fixing it requires touching lane-close.ts, which is outside this issue's authorized file scope -- returned to PM as a scope-expansion stop condition rather than fixed here."
   ],
   "sign_off": {
     "static_proof_status": "PASS",

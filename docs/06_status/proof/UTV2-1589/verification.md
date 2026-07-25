@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 470cde76f7bbf51bffc5edda2178e8eb796eb46f
+MERGE_SHA: 828c07532dead3ab7d12aa61e25b8c2ee64e5388
 
 ## Summary
 
@@ -43,12 +43,41 @@ rebind behavior) and independently re-derived the historical-repair
 inventory below by grepping all lane manifests directly, confirming it
 exactly.
 
+The automated Codex PR review then independently found two further real
+issues, both fixed:
+
+1. **CLI crash on conflict (fixed in `470cde76`, verified above).**
+2. **Identity-less sidecar acceptance (fixed in `828c0753`)**:
+   `rebindModelRoutingJsonSha` accepted any valid JSON object -- including
+   `{}` or a sidecar belonging to a different lane -- as long as it had no
+   conflicting `closeout_binding`, so a corrupted or substituted sidecar
+   could receive an authoritative binding without containing real
+   execution provenance for the correct lane. Fixed by requiring the
+   sidecar's `issue_id` to match the manifest's `issue_id`
+   (case-insensitive) before any binding. Three new focused tests cover
+   rejection of a mismatched `issue_id`, rejection of `{}`, and acceptance
+   of a genuinely matching sidecar.
+
+A third finding from the same automated review -- that the trusted
+`ops:lane-close --repair-merged` path (`rebindRepairedLaneProof` in
+`scripts/ops/lane-close.ts`) calls only `rebindMergeSha`, never
+`generateProofArtifacts`, and therefore never invokes this issue's new
+model-routing rebind during a trusted post-merge replay -- was
+independently verified TRUE and is a real, severe defect: it means
+replaying UTV2-1585/UTV2-1586 through the trusted repair path will still
+fail P3/C4 on `model-routing.json` even after this PR merges. Fixing it
+requires touching `lane-close.ts`, which is outside this issue's
+authorized file scope (PM explicitly excluded "lane-close PR-binding
+behavior"). This is being returned to PM as a scope-expansion stop
+condition rather than fixed unilaterally. See the PR thread for the
+reviewer's exact finding.
+
 EVIDENCE:
 
 ## Verification
 
 The following commands were executed on substantive commit
-`470cde76f7bbf51bffc5edda2178e8eb796eb46f`:
+`828c07532dead3ab7d12aa61e25b8c2ee64e5388`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts`
 - `pnpm type-check`
@@ -62,8 +91,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 87
-# pass 87
+# tests 90
+# pass 90
 # fail 0
 # skipped 0
 
