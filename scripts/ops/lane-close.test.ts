@@ -792,23 +792,22 @@ for (const fixture of [
         'utf8',
       );
       const routingPath = writeModelRoutingFixture(repoRoot, fixture.issueId, realSidecarContent);
-      const realSidecar = JSON.parse(realSidecarContent) as Record<string, unknown>;
+      // Read the REAL lane manifest's own model_routing block too -- not
+      // derived from the sidecar just read, which would make this
+      // comparison tautological and unable to catch a future drift between
+      // the two real, independently-authored files (independent review
+      // finding on the first version of this fixture).
+      const realManifest = JSON.parse(
+        fs.readFileSync(path.join(process.cwd(), 'docs/06_status/lanes', `${fixture.issueId}.json`), 'utf8'),
+      ) as LaneManifest;
+      assert.ok(realManifest.model_routing, `${fixture.issueId} manifest must declare model_routing`);
 
       const manifest = createManifest({
         issue_id: fixture.issueId,
         commit_sha: fixture.mergeSha,
         pr_url: fixture.prUrl,
         expected_proof_paths: [`docs/06_status/proof/${fixture.issueId}/model-routing.json`],
-        // The real lane manifest's model_routing block for both lanes
-        // (verified against docs/06_status/lanes/*.json) agrees exactly
-        // with the real sidecar read above.
-        model_routing: {
-          profile: realSidecar['model_profile'] as string,
-          model: realSidecar['model'] as string,
-          reasoning_effort: realSidecar['reasoning_effort'] as string,
-          selected_by: 'three-brain',
-          policy_version: realSidecar['policy_version'] as string,
-        },
+        model_routing: realManifest.model_routing,
       });
 
       rebindRepairedLaneProof(manifest, { repoRoot, now: new Date('2026-07-25T12:00:00.000Z') });
