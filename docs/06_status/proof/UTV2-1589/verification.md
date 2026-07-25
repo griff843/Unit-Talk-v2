@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 0861755aa7806c9bed312731854dab9f94800aa0
+MERGE_SHA: 46c55ad009f5db3110982b236f8e058a26f34f08
 
 ## Summary
 
@@ -266,15 +266,32 @@ still-null `pr_url`). It flagged one wording-only nitpick in the
 workflow comment, fixed in a comment-only follow-up commit with no
 behavior change.
 
+## Seventh finding (fixed): generateProofArtifacts only bound the first sidecar
+
+Two P2 review threads landed after the sixth review closed. One
+(cross-checking sidecar fields against the manifest) restates an
+already-documented accepted follow-up. The other -- `generateProofArtifacts`
+(`proof-generate.ts`) used `.find()` to locate a manifest's
+`model-routing.json` path, binding only the first match when
+`expected_proof_paths` declares more than one -- was a real correctness
+defect: the truth gate evaluates every expected proof artifact, so a
+second sidecar would stay permanently unbound even after a
+reported-successful proof-generate run, and it was inconsistent with
+`rebindRepairedLaneProof()` (`lane-close.ts`), which already bound
+every match via `.filter()`. Fixed by changing both the validate-pass
+and write-pass loops in `generateProofArtifacts` to iterate every
+match via `.filter()`, matching the repair path. A regression test
+proves two sidecars in different subdirectories both get bound.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
-for the full text of each finding across all six review rounds.
+for the full text of every finding across all review rounds.
 
 EVIDENCE:
 
 ## Verification
 
 The following commands were executed on substantive commit
-`0861755aa7806c9bed312731854dab9f94800aa0`:
+`46c55ad009f5db3110982b236f8e058a26f34f08`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
@@ -289,8 +306,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 217
-# pass 217
+# tests 218
+# pass 218
 # fail 0
 # skipped 0
 
