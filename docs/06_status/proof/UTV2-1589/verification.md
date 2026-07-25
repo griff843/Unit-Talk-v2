@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 3c1bbdb3df142a4714c7cfc5fceb30074274bd41
+MERGE_SHA: e83edefb5fde6302ba38317f17b172d3ff9d58e9
 
 ## Summary
 
@@ -268,12 +268,10 @@ behavior change.
 
 ## Seventh finding (fixed): generateProofArtifacts only bound the first sidecar
 
-Two P2 review threads landed after the sixth review closed. One
-(cross-checking sidecar fields against the manifest) restates an
-already-documented accepted follow-up. The other -- `generateProofArtifacts`
+Two P2 review threads landed after the sixth review closed. `generateProofArtifacts`
 (`proof-generate.ts`) used `.find()` to locate a manifest's
 `model-routing.json` path, binding only the first match when
-`expected_proof_paths` declares more than one -- was a real correctness
+`expected_proof_paths` declares more than one -- a real correctness
 defect: the truth gate evaluates every expected proof artifact, so a
 second sidecar would stay permanently unbound even after a
 reported-successful proof-generate run, and it was inconsistent with
@@ -283,6 +281,45 @@ and write-pass loops in `generateProofArtifacts` to iterate every
 match via `.filter()`, matching the repair path. A regression test
 proves two sidecars in different subdirectories both get bound.
 
+The second P2 thread (cross-checking sidecar fields against the
+manifest) was initially treated as a deferred follow-up -- see the
+eighth finding below, where PM corrected that judgment.
+
+## Eighth finding (fixed, PM-directed correction): sidecar/manifest routing agreement is release-blocking
+
+PM determined the sidecar-vs-manifest cross-check finding is
+release-blocking, not a deferred follow-up: `rebindModelRoutingJsonSha`
+required only that a sidecar carry non-empty `model`/`reasoning_effort`
+values, not that those values actually agree with the lane manifest's
+own `model_routing` block -- so a sidecar with well-formed but
+fabricated or copy-pasted values from a different lane would still
+receive an authoritative binding. Fixed: the function now requires
+exact agreement between the sidecar and `manifest.model_routing` for
+`model` and `reasoning_effort` whenever the manifest supplies a
+`model_routing` block at all, and additionally validates
+`model_profile`/`policy_version` whenever both sides carry a value for
+them (administrative metadata, not required, but must still agree if
+both present). A mismatch, or a manifest-side field missing or blank,
+fails closed with a new `sidecar_manifest_routing_mismatch` code
+identifying the offending field, before any proof write -- neither
+record is rewritten. When the manifest has no `model_routing` block at
+all (a Claude-authored or `schema_version 1` lane), the cross-check is
+skipped entirely; ordinary closeout for such lanes is unaffected.
+
+Wired into both `generateProofArtifacts` and `rebindRepairedLaneProof`
+so the ordinary post-merge path and the trusted `--repair-merged` path
+enforce the same agreement. Nine new focused tests cover: exact match
+binds; `model`/`reasoning_effort`/`model_profile`/`policy_version`
+mismatches each fail closed; `model_profile`/`policy_version` absent
+from only one side does not fail; a manifest-side blank field fails
+closed; a lane with no manifest `model_routing` block at all is
+unaffected; a mismatch through the actual trusted repair path rolls
+back the manifest, evidence, verification, sidecar, and
+sync/lease/merge-lock state via the existing repair transaction; and
+the real PR #1305/PR #1306 historical fixtures -- read from their
+actual committed sidecar files, not synthesized stand-ins -- still bind
+successfully against their real, agreeing manifest routing records.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of every finding across all review rounds.
 
@@ -291,7 +328,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`3c1bbdb3df142a4714c7cfc5fceb30074274bd41`:
+`e83edefb5fde6302ba38317f17b172d3ff9d58e9`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
@@ -306,8 +343,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 218
-# pass 218
+# tests 227
+# pass 227
 # fail 0
 # skipped 0
 
