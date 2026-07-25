@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 786380b8f1b653be64989b6485e2e51047db4cc8
+MERGE_SHA: 377b5a2dcfed40287983c6be159263e90a932a3c
 
 ## Summary
 
@@ -350,32 +350,66 @@ replay -- the exact same failure shape as the workflow_dispatch and
 repair-PR-push deadlocks, but triggered by PR identity instead of
 merge SHA.
 
-Fixed by adding a `--skip-model-routing` option to
-`ops:proof-generate`/`generateProofArtifacts` that skips
+Fixed (in an interim commit) by adding a `--skip-model-routing` option
+to `ops:proof-generate`/`generateProofArtifacts` that skips
 `model-routing.json` entirely while still binding
 `evidence.json`/`verification.md`. The workflow's early bind step now
 always passes it. `ops:lane-close --repair-merged` always runs
 afterward regardless of trigger, and already binds `model-routing.json`
 itself via `rebindRepairedLaneProof()` using its own validated PR/SHA
-resolution -- so `model-routing.json` is now bound exclusively by that
-validated path, closing this entire class of "early bind trusts
-unvalidated identity" risk at once (not just the two specific variants
-already fixed).
+resolution -- so `model-routing.json` is bound exclusively by that
+validated path for the workflow's own closeout.
 
 ## Eleventh finding (fixed): legacy top-level merge_sha could silently conflict
 
 The same review found that `rebindModelRoutingJsonSha`'s object spread
 preserves an existing sidecar's fields untouched, including a legacy
-top-level `merge_sha` field still present in real historical sidecars
-(`docs/06_status/proof/UTV2-1531/model-routing.json` and 13 others).
-If that legacy value disagreed with the authoritative SHA being bound,
-the resulting file would assert two different merge identities --
-undetected, since P3/C4 only require the authoritative SHA to appear
-somewhere in the file, not that the file is internally consistent.
-Fixed: a legacy top-level `merge_sha` that disagrees with the
-authoritative SHA now fails closed with a new `legacy_binding_conflict`
-code before any proof write; one that already agrees is preserved and
-the `closeout_binding` is still appended normally.
+top-level `merge_sha` field still present in 14 real historical
+sidecars in the repo. If that legacy value disagreed with the
+authoritative SHA being bound, the resulting file would assert two
+different merge identities -- undetected, since P3/C4 only require the
+authoritative SHA to appear somewhere in the file, not that the file is
+internally consistent. Fixed: a legacy top-level `merge_sha` that
+disagrees with the authoritative SHA now fails closed with a new
+`legacy_binding_conflict` code before any proof write; one that
+already agrees is preserved and the `closeout_binding` is still
+appended normally.
+
+## Twelfth finding (fixed): the CLI default still bound model-routing.json for any caller
+
+A further review found the interim `--skip-model-routing` fix above
+only closed the risk for the one call site given the flag -- the
+workflow's own early-bind step. `ops:proof-generate`'s own *default*
+behavior, used by any OTHER caller (e.g. an operator manually running
+`ops:proof-generate --merge-sha <sha>` after `proof-repair.ts` prints
+that as a remediation instruction), still bound `model-routing.json`
+from the same unvalidated `manifest.pr_url`, with no `--pr`/`--pr-url`
+override and no independent GitHub validation -- the identical risk
+described in the tenth finding, just reachable through a different
+caller. Fixed by flipping the default entirely: `generateProofArtifacts`/
+`ops:proof-generate` now require an explicit `bindModelRouting` option
+/ `--bind-model-routing` CLI flag before touching `model-routing.json`
+at all. No legitimate caller currently needs to set it -- the trusted
+repair path (`rebindRepairedLaneProof`) calls `rebindModelRoutingJsonSha`
+directly, never through this function, so it is unaffected. Every
+existing test and the workflow-assertion test were updated for the new
+default; a new test proves the explicit opt-in still works correctly.
+
+## Thirteenth finding (fixed): manual-override provenance was not cross-checked
+
+The same review found that the sidecar/manifest routing cross-check
+(seventh finding) validated `model`/`reasoning_effort`/`model_profile`/
+`policy_version`, but not manual-override provenance: a sidecar could
+claim `override_used: false` (or name a different authorizer) while the
+manifest's `model_routing.selected_by` records `manual-override`, and
+the file would still pass P3/C4 once bound -- misrepresenting who
+actually authorized the execution. Fixed: the sidecar's `override_used`
+must agree with whether the manifest records a manual override, and
+when it does, `override_authorized_by` must match the manifest's own
+`override.authorized_by` exactly, before any proof write. Five new
+focused tests cover disagreement on each field, a manifest recording a
+manual override with no `override.authorized_by`, a sidecar missing
+`override_used` entirely, and correct agreement binding successfully.
 
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of every finding across all review rounds.
@@ -385,7 +419,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`786380b8f1b653be64989b6485e2e51047db4cc8`:
+`377b5a2dcfed40287983c6be159263e90a932a3c`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
@@ -400,8 +434,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 232
-# pass 232
+# tests 238
+# pass 238
 # fail 0
 # skipped 0
 
