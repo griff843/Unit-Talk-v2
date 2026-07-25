@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 661bb9c735c036fd3189c661d0285328f4ffd0e4
+MERGE_SHA: 81e9e27f1c77b98ab322826d006509c1254d12c5
 
 ## Summary
 
@@ -333,6 +333,50 @@ independently-authored files. Fixed: both fixture tests now
 `fs.readFileSync` the real lane manifest file directly and use its
 actual `model_routing` block.
 
+## Tenth finding (fixed): model-routing.json deferred entirely to the trusted repair path
+
+A further automated Codex review found that even on a genuine
+first-time closeout (`github.sha` correct, `commit_sha` not yet set),
+the early "Bind proof artifacts to merge SHA" step resolves
+`manifest.pr_url` from disk with no GitHub-backed validation -- no
+`--pr`/`--pr-url` override is ever passed at that call site. Binding
+`model-routing.json`'s **immutable** `closeout_binding` from that
+unvalidated identity risks baking in a stale or incorrect PR (e.g.
+after a PR rename/reopen -- a real, recurring failure mode this repo
+has hit before) *before* `createRepairRollbackTransaction`'s "clean"
+snapshot is even taken. A later mismatch's rollback would then just
+restore the already-wrong state, permanently blocking every future
+replay -- the exact same failure shape as the workflow_dispatch and
+repair-PR-push deadlocks, but triggered by PR identity instead of
+merge SHA.
+
+Fixed by adding a `--skip-model-routing` option to
+`ops:proof-generate`/`generateProofArtifacts` that skips
+`model-routing.json` entirely while still binding
+`evidence.json`/`verification.md`. The workflow's early bind step now
+always passes it. `ops:lane-close --repair-merged` always runs
+afterward regardless of trigger, and already binds `model-routing.json`
+itself via `rebindRepairedLaneProof()` using its own validated PR/SHA
+resolution -- so `model-routing.json` is now bound exclusively by that
+validated path, closing this entire class of "early bind trusts
+unvalidated identity" risk at once (not just the two specific variants
+already fixed).
+
+## Eleventh finding (fixed): legacy top-level merge_sha could silently conflict
+
+The same review found that `rebindModelRoutingJsonSha`'s object spread
+preserves an existing sidecar's fields untouched, including a legacy
+top-level `merge_sha` field still present in real historical sidecars
+(`docs/06_status/proof/UTV2-1531/model-routing.json` and 13 others).
+If that legacy value disagreed with the authoritative SHA being bound,
+the resulting file would assert two different merge identities --
+undetected, since P3/C4 only require the authoritative SHA to appear
+somewhere in the file, not that the file is internally consistent.
+Fixed: a legacy top-level `merge_sha` that disagrees with the
+authoritative SHA now fails closed with a new `legacy_binding_conflict`
+code before any proof write; one that already agrees is preserved and
+the `closeout_binding` is still appended normally.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of every finding across all review rounds.
 
@@ -341,7 +385,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`661bb9c735c036fd3189c661d0285328f4ffd0e4`:
+`81e9e27f1c77b98ab322826d006509c1254d12c5`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
@@ -356,8 +400,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 227
-# pass 227
+# tests 232
+# pass 232
 # fail 0
 # skipped 0
 
