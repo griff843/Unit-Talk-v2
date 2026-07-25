@@ -44,13 +44,26 @@
     "supabase_project": "zfzdnfwdarxucxtaojxm",
     "target_supabase_project": "zfzdnfwdarxucxtaojxm",
     "queries": [
-      "database repository bundle persists a submission and settlement when Supabase is configured",
-      "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
-      "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
-      "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
-      "UTV2-883: no duplicate participants for the same external_id and sport",
-      "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
-      "UTV2-996: correction chain is additive -- original settlement row is not mutated"
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts persists a submission and settlement through the live database repository bundle and cleans up its fixtures."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts (UTV2-920) verifies invalid atomic enqueue, delivery confirmation, and settlement operations leave no partial lifecycle-event writes."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts (UTV2-920) verifies invalid atomic enqueue and delivery confirmation leave no partial outbox row or status mutation."
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts (UTV2-920) verifies rollback behavior on invalid writes leaves no partial audit row; UTV2-996 verifies additive correction audit writes."
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts (UTV2-883) verifies no duplicate participants for the same external_id/sport; (UTV2-996) verifies re-settlement creates an additive correction without mutating the original settlement row."
+      }
     ],
     "row_counts": [
       { "table": "picks", "count": 101737, "status": "observed" },
