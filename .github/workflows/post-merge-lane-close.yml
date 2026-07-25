@@ -183,7 +183,11 @@ jobs:
 
       - name: Bind proof artifacts to merge SHA
         # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
-        # the script below, PLUS --skip-model-routing on every invocation.
+        # the script below. ops:proof-generate never binds model-routing.json
+        # by default (bindModelRouting defaults to false -- see
+        # ProofGenerateOptions in scripts/ops/proof-generate.ts), so this
+        # call was never at risk of that regardless; the notes below explain
+        # why it would have been unsafe if it ever opted in.
         # `github.sha` on a `workflow_dispatch` run is whatever ref the
         # dispatch targeted (main's tip at dispatch time), NOT the historical
         # lane's actual merge SHA -- unlike evidence.json/verification.md's
@@ -206,10 +210,11 @@ jobs:
         # all when the checked-out manifest already has a commit_sha that
         # disagrees with this push's SHA, which covers exactly that case.
         #
-        # `--skip-model-routing` closes a further, independent gap: even on a
-        # genuine first-time closeout (github.sha correct, commit_sha not yet
-        # set), this call resolves `manifest.pr_url` from disk with no
-        # `--pr`/`--pr-url` override -- i.e. without the GitHub-backed
+        # There is a further, independent reason model-routing.json must
+        # never be bound here even if a future flag ever opted back in: even
+        # on a genuine first-time closeout (github.sha correct, commit_sha
+        # not yet set), this call resolves `manifest.pr_url` from disk with
+        # no `--pr`/`--pr-url` override -- i.e. without the GitHub-backed
         # validation `ops:lane-close --repair-merged` performs next. If
         # `pr_url` were ever stale (e.g. after a PR rename/reopen), binding
         # model-routing.json's IMMUTABLE closeout_binding here would bake in
@@ -238,9 +243,11 @@ jobs:
             # Regenerate proof files with the verified merge SHA so the inline
             # "Merge SHA:" field is correct, not just appended at the end.
             # --merge-sha overrides manifest.commit_sha; idempotent if SHA already present.
-            # --skip-model-routing: model-routing.json is bound only by the
-            # validated ops:lane-close --repair-merged step below, never here.
-            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --skip-model-routing --json \
+            # model-routing.json is never bound here: ops:proof-generate only
+            # binds it when explicitly passed --bind-model-routing, which
+            # this invocation deliberately never does -- it is bound only by
+            # the validated ops:lane-close --repair-merged step below.
+            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
               && echo "::notice title=post-merge-lane-close::Proof artifacts (evidence/verification only) regenerated with merge SHA for $ISSUE_ID." \
               || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
           fi

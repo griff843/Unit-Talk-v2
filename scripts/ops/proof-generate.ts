@@ -113,23 +113,29 @@ export interface ProofGenerateOptions {
   root?: string;
   write?: boolean;
   /**
-   * Skip binding model-routing.json entirely, touching only evidence.json/
-   * verification.md. For an ordinary first-time closeout, manifest.pr_url
-   * has not yet been independently validated against GitHub at this call
-   * site (no --pr/--pr-url override is passed, so it falls back to
-   * whatever's on disk) -- writing model-routing.json's IMMUTABLE
-   * closeout_binding from that unvalidated value risks baking in a stale or
-   * incorrect PR identity (e.g. after a PR rename/reopen) that the later,
-   * properly-validated ops:lane-close --repair-merged path can then never
-   * correct, since createRepairRollbackTransaction's snapshot is taken
-   * after this already ran (independent review finding, UTV2-1589). The
-   * trusted repair path always runs afterward for every closeout -- push or
-   * workflow_dispatch -- and already binds model-routing.json itself using
-   * its own validated PR/SHA resolution, so this option lets a caller (the
-   * post-merge-lane-close.yml early-bind step) defer that binding entirely
-   * rather than attempt it twice with different trust levels.
+   * Explicit opt-in required to bind model-routing.json at all; the default
+   * is to leave it untouched (only evidence.json/verification.md are bound).
+   * Any caller of this function or the ops:proof-generate CLI resolves
+   * manifest.pr_url from disk with no independent GitHub validation unless
+   * it explicitly supplies --pr/--pr-url itself -- and even then, that
+   * value is not verified against the real PR/merge state the way
+   * ops:lane-close --repair-merged's fetchMergedPrInfo/validateTrustedPostMergeRepair
+   * do. Writing model-routing.json's IMMUTABLE closeout_binding from an
+   * unvalidated PR/SHA (whether from an untrusted CLI invocation, e.g. an
+   * operator following proof-repair.ts's printed remediation command, or
+   * any other caller) risks baking in a stale or incorrect identity that
+   * the later, properly-validated repair path can then never correct,
+   * since createRepairRollbackTransaction's snapshot is taken after this
+   * already ran (independent review findings, UTV2-1589). The trusted
+   * repair path (scripts/ops/lane-close.ts's rebindRepairedLaneProof) is
+   * the sole caller with real validated authority, and it does not go
+   * through this function at all -- it calls rebindModelRoutingJsonSha
+   * directly. There is currently no legitimate caller that needs to set
+   * this to true; it exists only so a future genuinely-trusted caller has
+   * an explicit, auditable way to opt in rather than model-routing binding
+   * being the silent default for anyone who calls this function or CLI.
    */
-  skipModelRouting?: boolean;
+  bindModelRouting?: boolean;
 }
 
 export interface ProofManifestOverrides {
@@ -551,6 +557,51 @@ export function rebindModelRoutingJsonSha(
         );
       }
     }
+
+    // Manual-override provenance must agree too: a sidecar recording
+    // override_used: false (or a mismatched authorizer) while the manifest's
+    // model_routing.selected_by is 'manual-override' would let the bound
+    // routing evidence misrepresent who actually authorized the execution --
+    // model/reasoning_effort/profile/policy_version agreement alone does not
+    // catch this (independent review finding). Every real sidecar in the
+    // repo carries override_used, so its absence is itself a failure here,
+    // matching the always-required model/reasoning_effort fields above.
+    const sidecarOverrideUsed = parsed['override_used'];
+    if (typeof sidecarOverrideUsed !== 'boolean') {
+      throw new ModelRoutingRebindError(
+        'sidecar_manifest_routing_mismatch',
+        relPath,
+        `Sidecar override_used must be a boolean to validate against manifest model_routing.selected_by: ${relPath}`,
+      );
+    }
+    const manifestOverrideUsed = manifestRouting.selected_by === 'manual-override';
+    if (sidecarOverrideUsed !== manifestOverrideUsed) {
+      throw new ModelRoutingRebindError(
+        'sidecar_manifest_routing_mismatch',
+        relPath,
+        `Sidecar override_used ${sidecarOverrideUsed} does not match manifest ` +
+          `model_routing.selected_by ${JSON.stringify(manifestRouting.selected_by)}: ${relPath}`,
+      );
+    }
+    if (manifestOverrideUsed) {
+      const manifestAuthorizedBy = manifestRouting.override?.authorized_by;
+      if (typeof manifestAuthorizedBy !== 'string' || manifestAuthorizedBy.trim() === '') {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Manifest model_routing.selected_by is manual-override but override.authorized_by is missing or empty: ${relPath}`,
+        );
+      }
+      const sidecarAuthorizedBy = parsed['override_authorized_by'];
+      if (sidecarAuthorizedBy !== manifestAuthorizedBy) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar override_authorized_by ${JSON.stringify(sidecarAuthorizedBy)} does not match ` +
+            `manifest model_routing.override.authorized_by ${JSON.stringify(manifestAuthorizedBy)}: ${relPath}`,
+        );
+      }
+    }
   }
 
   // Some historical sidecars (pre-dating closeout_binding) carry a legacy
@@ -675,7 +726,7 @@ export function generateProofArtifacts(
   // have every one bound -- the truth gate evaluates every expected proof
   // artifact, so leaving a second match unbound would permanently block
   // closeout even though this function reported success.
-  if (input.gitTruth.merge_sha && !options.skipModelRouting) {
+  if (input.gitTruth.merge_sha && options.bindModelRouting) {
     for (const modelRoutingPath of modelRoutingPaths) {
       rebindModelRoutingJsonSha(
         safeRepoPath(root, modelRoutingPath),
@@ -745,7 +796,7 @@ export function generateProofArtifacts(
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
   }
 
-  if (input.gitTruth.merge_sha && !options.skipModelRouting) {
+  if (input.gitTruth.merge_sha && options.bindModelRouting) {
     for (const modelRoutingPath of modelRoutingPaths) {
       const outcome = rebindModelRoutingJsonSha(
         safeRepoPath(root, modelRoutingPath),
@@ -860,7 +911,7 @@ function main(argv = process.argv.slice(2)): number {
     result = generateProofArtifacts(input, {
       root: ROOT,
       write: !bools.has('dry-run'),
-      skipModelRouting: bools.has('skip-model-routing'),
+      bindModelRouting: bools.has('bind-model-routing'),
     });
   } catch (error) {
     if (error instanceof ModelRoutingRebindError) {

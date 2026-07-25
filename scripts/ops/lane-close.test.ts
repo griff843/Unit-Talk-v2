@@ -2312,9 +2312,11 @@ test('UTV2-1589 "Bind proof artifacts to merge SHA" never binds model-routing.js
   // stale/incorrect pr_url (e.g. after a PR rename/reopen) get baked in
   // permanently. model-routing.json must only ever be bound by the
   // validated ops:lane-close --repair-merged step that always runs next.
+  // ops:proof-generate defaults to never binding model-routing.json
+  // (bindModelRouting defaults to false); this invocation must not opt in.
   const proofGenerateLine = stepBody.match(/^ {12}pnpm ops:proof-generate.*$/mu);
   assert.ok(proofGenerateLine, 'expected the pnpm ops:proof-generate invocation line');
-  assert.match(proofGenerateLine[0], /--skip-model-routing\b/u);
+  assert.doesNotMatch(proofGenerateLine[0], /--bind-model-routing\b/u);
 });
 
 test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact merge SHA', () => {

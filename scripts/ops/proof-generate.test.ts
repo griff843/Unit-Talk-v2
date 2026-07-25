@@ -999,7 +999,12 @@ test('rebindModelRoutingJsonSha does not fail on profile/policy_version absent f
     // required fields -- so exercise the other direction: sidecar omits them.
     fs.writeFileSync(
       routingPath,
-      `${JSON.stringify({ issue_id: 'UTV2-1170', model: 'gpt-5.6-sol', reasoning_effort: 'high' })}\n`,
+      `${JSON.stringify({
+        issue_id: 'UTV2-1170',
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'high',
+        override_used: false,
+      })}\n`,
       'utf8',
     );
 
@@ -1034,6 +1039,160 @@ test('rebindModelRoutingJsonSha fails closed when the manifest model_routing blo
           // Malformed manifest content: model present but blank.
           manifestModelRouting: matchingManifestRouting({ model: '   ' }),
         },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar override_used disagrees with manifest selected_by', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Sidecar claims no override was used; manifest says one was.
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: false, override_authorized_by: null }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: {
+            ...matchingManifestRouting(),
+            selected_by: 'manual-override',
+            override: { authorized_by: 'griff843', reason: 'urgent capacity swap' },
+          },
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar override_authorized_by disagrees with manifest override.authorized_by', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-authorizer-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: true, override_authorized_by: 'someone-else' }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: {
+            ...matchingManifestRouting(),
+            selected_by: 'manual-override',
+            override: { authorized_by: 'griff843', reason: 'urgent capacity swap' },
+          },
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when manifest selected_by is manual-override but override.authorized_by is missing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-manifest-incomplete-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: true, override_authorized_by: 'griff843' }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: {
+            ...matchingManifestRouting(),
+            selected_by: 'manual-override',
+            // No `override` object at all -- malformed manifest.
+          },
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha binds when sidecar override provenance agrees with a manual-override manifest', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-agree-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: true, override_authorized_by: 'griff843' }),
+      'utf8',
+    );
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      {
+        required: true,
+        expectedIssueId: 'UTV2-1170',
+        manifestModelRouting: {
+          ...matchingManifestRouting(),
+          selected_by: 'manual-override',
+          override: { authorized_by: 'griff843', reason: 'urgent capacity swap' },
+        },
+      },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar is missing override_used entirely', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-used-absent-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = JSON.parse(preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }));
+    delete content.override_used;
+    fs.writeFileSync(routingPath, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170', manifestModelRouting: matchingManifestRouting() },
       ),
       (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
     );
@@ -1151,7 +1310,7 @@ for (const fixture of [
         diff_base_ref: `${fixture.mergeSha}^1`,
         diff_target_ref: fixture.mergeSha,
       });
-      generateProofArtifacts(fixtureInput, { root });
+      generateProofArtifacts(fixtureInput, { root, bindModelRouting: true });
 
       assert.deepStrictEqual(
         JSON.parse(fs.readFileSync(routingPath, 'utf8')).closeout_binding,
@@ -1193,7 +1352,7 @@ test('generateProofArtifacts validates required model-routing authority before a
             'docs/06_status/proof/UTV2-1170/model-routing.json',
           ],
         }),
-        { root },
+        { root, bindModelRouting: true },
       ),
       (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
     );
@@ -1204,7 +1363,7 @@ test('generateProofArtifacts validates required model-routing authority before a
   }
 });
 
-test('generateProofArtifacts with skipModelRouting binds evidence/verification but never touches model-routing.json', () => {
+test('generateProofArtifacts does not bind model-routing.json by default -- bindModelRouting must be explicitly opted into', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-skip-routing-'));
   try {
     const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
@@ -1216,7 +1375,7 @@ test('generateProofArtifacts with skipModelRouting binds evidence/verification b
 
     const result = generateProofArtifacts(
       input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
-      { root, skipModelRouting: true },
+      { root },
     );
 
     assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
@@ -1225,14 +1384,14 @@ test('generateProofArtifacts with skipModelRouting binds evidence/verification b
     assert.strictEqual(
       fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'),
       routingContent,
-      'model-routing.json is byte-for-byte untouched when skipModelRouting is set',
+      'model-routing.json is byte-for-byte untouched when bindModelRouting is not set',
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('generateProofArtifacts with skipModelRouting does not validate or throw on an otherwise-conflicting sidecar', () => {
+test('generateProofArtifacts does not validate or throw on an otherwise-conflicting sidecar when bindModelRouting is not set', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-skip-routing-no-validate-'));
   try {
     const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
@@ -1252,8 +1411,28 @@ test('generateProofArtifacts with skipModelRouting does not validate or throw on
 
     assert.doesNotThrow(() => generateProofArtifacts(
       input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
-      { root, skipModelRouting: true },
+      { root },
     ));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts binds model-routing.json only when bindModelRouting is explicitly true (CLI --bind-model-routing)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-explicit-bind-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'model-routing.json'), preMergeModelRoutingJson(), 'utf8');
+
+    const result = generateProofArtifacts(
+      input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
+      { root, bindModelRouting: true },
+    );
+
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/model-routing.json'));
+    const rebound = JSON.parse(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1284,7 +1463,7 @@ test('generateProofArtifacts binds every declared model-routing.json sidecar, no
           'docs/06_status/proof/UTV2-1170/secondary-executor/model-routing.json',
         ],
       }),
-      { root },
+      { root, bindModelRouting: true },
     );
 
     assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/model-routing.json'));
