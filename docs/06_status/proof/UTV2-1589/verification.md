@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 7ceba92579dff046cdf9eef3c4fee7ec5962215b
+MERGE_SHA: 6dfbb457ddc1708e8053f6ffbea24a967db72d7c
 
 ## Summary
 
@@ -112,12 +112,43 @@ with no declared sidecar (unaffected), the C4/P3 gates passing through
 the real path, and rollback of the manifest and every proof file when the
 rebind fails.
 
+A fresh-context independent Claude review of this fix (blind to the prior
+conversation, instructed to actively try to break it) traced the
+validate-then-write ordering, the `main()` catch-block wiring and
+rollback coverage, and the new tests against the real
+`rebindRepairedLaneProof()` function, and confirmed no blocking defect.
+It raised one real, low-severity, actionable finding and two accepted
+theoretical ones:
+
+- **Fixed**: `rebindRepairedLaneProof()` resolved manifest-declared
+  `model-routing.json` paths via a bare `path.resolve()` with no
+  repo-root escape check, unlike `generateProofArtifacts()`'s
+  `safeRepoPath()` guard for the same kind of manifest-declared path.
+  `safeRepoPath` is now exported from `proof-generate.ts` and reused in
+  `lane-close.ts`, with a new regression test proving an escaping path
+  (e.g. `../../../../tmp/...`) is refused.
+- **Accepted, not fixed**: `generateProofArtifacts()` binds only the
+  first `model-routing.json` match (`.find()`) when a manifest declares
+  more than one, while the fixed `rebindRepairedLaneProof()` binds every
+  match (`.filter()`) -- a theoretical divergence, since no lane in
+  practice declares more than one such sidecar, and changing
+  `generateProofArtifacts()`'s own already-shipped behavior was judged
+  outside this issue's authorized scope.
+- **Accepted, not fixed**: the repair rollback transaction's whole-directory
+  snapshot implicitly assumes every bound sidecar lives under
+  `docs/06_status/proof/<issueId>/`, true under the sanctioned lane
+  lifecycle but not independently enforced -- gated behind an
+  already-abnormal manifest the sanctioned lifecycle does not produce.
+
+See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
+for the full text of each.
+
 EVIDENCE:
 
 ## Verification
 
 The following commands were executed on substantive commit
-`7ceba92579dff046cdf9eef3c4fee7ec5962215b`:
+`6dfbb457ddc1708e8053f6ffbea24a967db72d7c`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `pnpm type-check`
@@ -131,8 +162,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 211
-# pass 211
+# tests 212
+# pass 212
 # fail 0
 # skipped 0
 
