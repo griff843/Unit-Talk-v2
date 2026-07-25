@@ -15,7 +15,12 @@ import {
   type TruthCheckResult,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
-import { rebindMergeSha, type ShaRebindOutcome } from './proof-generate.js';
+import {
+  ModelRoutingRebindError,
+  rebindMergeSha,
+  rebindModelRoutingJsonSha,
+  type ShaRebindOutcome,
+} from './proof-generate.js';
 import {
   acquireMergeLock,
   defaultMergeLockOwner,
@@ -54,7 +59,8 @@ export type CloseoutFailureCode =
   | 'repair_pr_substitution' // candidate PR never contained this issue's lane manifest
   | 'missing_implementation_artifacts' // candidate PR omitted declared proof artifacts
   | 'unreachable_merge_sha' // GitHub merge SHA is not reachable from current main
-  | 'repair_required_via_pr'; // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
+  | 'repair_required_via_pr' // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
+  | 'model_routing_rebind_failed'; // required model-routing.json sidecar rebind failed (UTV2-1589)
 
 export type CloseoutOutcome = 'closed' | 'already_closed' | 'closed_with_warnings' | 'blocked';
 
@@ -166,6 +172,10 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'ops:lane-close --repair-merged produced tracked-file changes while running from a checkout on main. ' +
         'These changes must NOT be committed or pushed directly to main (see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md) -- ' +
         'a repair packet was written instead. See the repair_packet_path and commands fields for the governed branch/PR repair path.';
+    case 'model_routing_rebind_failed':
+      return 'A required model-routing.json sidecar could not be bound to the authoritative merge SHA/PR ' +
+        '(missing, malformed, wrong lane identity, or conflicting prior binding). No proof or manifest state was ' +
+        'left partially bound -- see model_routing_error_code and proof_path for the specific cause.';
     case 'lane_closed':
       return '';
   }
@@ -650,23 +660,82 @@ export interface RepairRequiredViaPrResult {
   remediation: string;
 }
 
+function modelRoutingSidecarPaths(manifest: LaneManifest): string[] {
+  return manifest.expected_proof_paths.filter(
+    (proofPath) => path.posix.basename(proofPath) === 'model-routing.json',
+  );
+}
+
 /**
  * Post-merge automation initially sees the repair PR's merge SHA, but
  * --repair-merged resolves the implementation PR recorded in manifest.pr_url.
  * Rebind proof to that authoritative implementation SHA before truth-check so
  * manifest and proof cannot diverge when a historical lane is repaired.
+ *
+ * UTV2-1589: `generateProofArtifacts()` binds every declared model-routing.json
+ * sidecar the same way it binds evidence.json/verification.md, but the trusted
+ * `--repair-merged` path (this function) never called it -- only rebindMergeSha()
+ * -- so a real replay of UTV2-1585/UTV2-1586 through this path left
+ * model-routing.json unbound and P3/C4 blocked the close. Every required
+ * sidecar is validated (write:false) before ANY proof file is mutated, mirroring
+ * generateProofArtifacts()'s atomic validate-then-write ordering, so a
+ * conflicting/malformed/identity-mismatched sidecar fails this repair with zero
+ * proof mutation rather than a partially-bound bundle. The caller (`main()`)
+ * still owns rollback of whatever this function *did* write (manifest, sync,
+ * lease, merge-lock, and the whole proof directory) via
+ * `createRepairRollbackTransaction()`.
  */
 export function rebindRepairedLaneProof(
   manifest: LaneManifest,
   options: { repoRoot?: string; now?: Date } = {},
 ): ShaRebindOutcome[] {
-  return rebindMergeSha(
-    options.repoRoot ?? process.cwd(),
-    manifest.issue_id,
-    manifest.commit_sha,
-    (options.now ?? new Date()).toISOString(),
-    manifest.pr_url,
-  );
+  const repoRoot = options.repoRoot ?? process.cwd();
+  const generatedAt = (options.now ?? new Date()).toISOString();
+  const mergeSha = manifest.commit_sha;
+  const modelRoutingPaths = modelRoutingSidecarPaths(manifest);
+
+  if (mergeSha) {
+    // Validate-only pass first: throws ModelRoutingRebindError before any
+    // proof artifact (including evidence.json/verification.md below) is
+    // written, so a failing sidecar never leaves a partially-rebound bundle.
+    for (const modelRoutingPath of modelRoutingPaths) {
+      rebindModelRoutingJsonSha(
+        path.resolve(repoRoot, modelRoutingPath),
+        mergeSha,
+        generatedAt,
+        manifest.pr_url,
+        {
+          required: true,
+          write: false,
+          relPath: modelRoutingPath,
+          expectedIssueId: manifest.issue_id,
+        },
+      );
+    }
+  }
+
+  const outcomes = rebindMergeSha(repoRoot, manifest.issue_id, mergeSha, generatedAt, manifest.pr_url);
+
+  if (mergeSha) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      outcomes.push(
+        rebindModelRoutingJsonSha(
+          path.resolve(repoRoot, modelRoutingPath),
+          mergeSha,
+          generatedAt,
+          manifest.pr_url,
+          {
+            required: true,
+            write: true,
+            relPath: modelRoutingPath,
+            expectedIssueId: manifest.issue_id,
+          },
+        ),
+      );
+    }
+  }
+
+  return outcomes;
 }
 
 /**
@@ -1233,6 +1302,20 @@ async function main(): Promise<void> {
         outcome: 'blocked' satisfies CloseoutOutcome,
         remediation: remediationForCode('truth_check_drift'),
         issue_id: issueId,
+        message: error.message,
+      });
+      process.exit(1);
+    }
+
+    if (error instanceof ModelRoutingRebindError) {
+      emitJson({
+        ok: false,
+        code: 'model_routing_rebind_failed' as CloseoutFailureCode,
+        outcome: 'blocked' satisfies CloseoutOutcome,
+        remediation: remediationForCode('model_routing_rebind_failed'),
+        issue_id: issueId,
+        model_routing_error_code: error.code,
+        proof_path: error.proofPath,
         message: error.message,
       });
       process.exit(1);

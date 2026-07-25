@@ -25,6 +25,8 @@ import {
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import { readAllLeases, reserveLease } from './lease-registry.js';
+import { ModelRoutingRebindError } from './proof-generate.js';
+import { evaluateCloseoutTruthGate } from './truth-check-lib.js';
 import {
   MANIFEST_DIR,
   readManifest,
@@ -699,6 +701,434 @@ test('repair mode rebinds proof from the repair PR SHA to the implementation PR 
     assert.match(verification, /pull\/1291/);
     assert.doesNotMatch(verification, /repair-pr-merge-sha|pull\/1296/);
   });
+});
+
+// ── UTV2-1589: model-routing sidecar rebind through the actual repair path ───
+
+function preMergeModelRoutingJson(overrides: Record<string, unknown> = {}): string {
+  return `${JSON.stringify(
+    {
+      issue_id: 'UTV2-1001',
+      model_profile: 'codex-sol-high',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      policy_version: '1.0.0',
+      generated_at: '2026-05-25T10:00:00.000Z',
+      ...overrides,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function writeModelRoutingFixture(
+  repoRoot: string,
+  issueId: string,
+  content: string,
+): string {
+  const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
+  fs.mkdirSync(proofDir, { recursive: true });
+  const routingPath = path.join(proofDir, 'model-routing.json');
+  fs.writeFileSync(routingPath, content);
+  return routingPath;
+}
+
+test('rebindRepairedLaneProof binds a declared model-routing.json sidecar in addition to evidence/verification', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const routingPath = writeModelRoutingFixture(repoRoot, 'UTV2-1001', preMergeModelRoutingJson());
+    const proofDir = path.dirname(routingPath);
+    fs.writeFileSync(
+      path.join(proofDir, 'evidence.json'),
+      `${JSON.stringify({
+        status: 'merged',
+        sha_binding: { verified_source_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
+      }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(proofDir, 'verification.md'),
+      ['| Commit SHA(s) | `stale` (merge SHA) |', '', '## Merge SHA Binding', '', 'Merge SHA: `stale`', 'PR: N/A', ''].join('\n'),
+    );
+
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({
+        commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+        pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+        expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+      }),
+      { repoRoot, now: new Date('2026-07-25T12:00:00.000Z') },
+    );
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
+    const routing = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.deepStrictEqual(routing.closeout_binding, {
+      sha_type: 'merge_sha',
+      merge_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      bound_at: '2026-07-25T12:00:00.000Z',
+    });
+    assert.strictEqual(routing.model, 'gpt-5.6-sol', 'pre-merge execution provenance is preserved');
+  });
+});
+
+for (const fixture of [
+  {
+    issueId: 'UTV2-1585',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
+  },
+  {
+    issueId: 'UTV2-1586',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1306',
+    mergeSha: 'fe09f637a7eeebf216e062dd4a003d7e38932d1a',
+  },
+]) {
+  test(`rebindRepairedLaneProof binds the real ${fixture.issueId}/${fixture.prUrl.split('/').pop()} trusted-repair fixture to its authoritative merge SHA`, () => {
+    withTempRepairState(({ repoRoot }) => {
+      const routingPath = writeModelRoutingFixture(
+        repoRoot,
+        fixture.issueId,
+        preMergeModelRoutingJson({ issue_id: fixture.issueId }),
+      );
+
+      const manifest = createManifest({
+        issue_id: fixture.issueId,
+        commit_sha: fixture.mergeSha,
+        pr_url: fixture.prUrl,
+        expected_proof_paths: [`docs/06_status/proof/${fixture.issueId}/model-routing.json`],
+      });
+
+      rebindRepairedLaneProof(manifest, { repoRoot, now: new Date('2026-07-25T12:00:00.000Z') });
+
+      const routing = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+      assert.strictEqual(routing.closeout_binding.merge_sha, fixture.mergeSha);
+      assert.strictEqual(routing.closeout_binding.pr_url, fixture.prUrl);
+
+      // Same PR/SHA replayed through the identical repair path is an idempotent no-op.
+      const replay = rebindRepairedLaneProof(manifest, {
+        repoRoot,
+        now: new Date('2026-07-25T13:00:00.000Z'),
+      });
+      assert.ok(replay.some((outcome) => outcome.status === 'unchanged'));
+      const afterReplay = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+      assert.deepStrictEqual(afterReplay.closeout_binding, routing.closeout_binding);
+    });
+  });
+}
+
+test('rebindRepairedLaneProof through the real repair path satisfies the C4 closeout gate, and the bound sidecar satisfies P3', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const mergeSha = 'fe09f637a7eeebf216e062dd4a003d7e38932d1a';
+    const prUrl = 'https://github.com/griff843/Unit-Talk-v2/pull/1306';
+    const routingPath = writeModelRoutingFixture(
+      repoRoot,
+      'UTV2-1586',
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1586' }),
+    );
+    const expectedProofPaths = ['docs/06_status/proof/UTV2-1586/model-routing.json'];
+
+    const preRebind = fs.readFileSync(routingPath, 'utf8');
+    const c4Before = evaluateCloseoutTruthGate({
+      manifest: {
+        issue_id: 'UTV2-1586',
+        status: 'merged',
+        commit_sha: mergeSha,
+        pr_url: prUrl,
+        files_changed: [],
+        expected_proof_paths: expectedProofPaths,
+        created_by: 'codex-cli',
+      },
+      linear_state: 'Done',
+      pr_merged: true,
+      pr_merge_sha: mergeSha,
+      pr_head_sha: 'head456',
+      proof_artifacts: [{ path: routingPath, content: preRebind, mtime_ms: 2000 }],
+      merge_timestamp_ms: 1000,
+      runtime_proof_required: false,
+      transition_age_ms: 0,
+    }).filter((check) => check.status === 'fail').map((check) => check.id);
+    assert.deepStrictEqual(c4Before, ['C4']);
+
+    rebindRepairedLaneProof(
+      createManifest({
+        issue_id: 'UTV2-1586',
+        commit_sha: mergeSha,
+        pr_url: prUrl,
+        expected_proof_paths: expectedProofPaths,
+      }),
+      { repoRoot, now: new Date('2026-07-25T00:00:00.000Z') },
+    );
+
+    const postRebind = fs.readFileSync(routingPath, 'utf8');
+    // P3 (scripts/ops/truth-check-lib.ts) considers a proof file stale unless its
+    // content includes the literal merge SHA or a `merge_sha: <sha>` reference --
+    // this is the exact predicate P3 applies, evaluated directly against what the
+    // real repair path wrote (P3 itself reads from ROOT-relative paths only, so it
+    // is not separately invokable in a temp-root unit test).
+    const p3Passes = postRebind.includes(mergeSha) || new RegExp(`merge_sha:\\s*${mergeSha}`, 'i').test(postRebind);
+    assert.strictEqual(p3Passes, true);
+
+    const c4After = evaluateCloseoutTruthGate({
+      manifest: {
+        issue_id: 'UTV2-1586',
+        status: 'merged',
+        commit_sha: mergeSha,
+        pr_url: prUrl,
+        files_changed: [],
+        expected_proof_paths: expectedProofPaths,
+        created_by: 'codex-cli',
+      },
+      linear_state: 'Done',
+      pr_merged: true,
+      pr_merge_sha: mergeSha,
+      pr_head_sha: 'head456',
+      proof_artifacts: [{ path: routingPath, content: postRebind, mtime_ms: 2000 }],
+      merge_timestamp_ms: 1000,
+      runtime_proof_required: false,
+      transition_age_ms: 0,
+    }).filter((check) => check.status === 'fail').map((check) => check.id);
+    assert.deepStrictEqual(c4After, []);
+  });
+});
+
+test('rebindRepairedLaneProof fails closed on a conflicting prior PR binding and mutates nothing', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const routingPath = writeModelRoutingFixture(
+      repoRoot,
+      'UTV2-1001',
+      preMergeModelRoutingJson({
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          bound_at: '2026-07-24T00:00:00.000Z',
+        },
+      }),
+    );
+    const evidencePath = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001', 'evidence.json');
+    fs.writeFileSync(evidencePath, `${JSON.stringify({
+      status: 'merged',
+      sha_binding: { verified_source_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
+    }, null, 2)}\n`);
+    const routingBefore = fs.readFileSync(routingPath, 'utf8');
+    const evidenceBefore = fs.readFileSync(evidencePath, 'utf8');
+
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: 'different-merge-sha',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
+    );
+
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), routingBefore, 'conflicting sidecar is never mutated');
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), evidenceBefore, 'evidence.json is never written when validation fails first');
+  });
+});
+
+test('rebindRepairedLaneProof fails closed on a conflicting prior SHA binding for the same PR', () => {
+  withTempRepairState(({ repoRoot }) => {
+    writeModelRoutingFixture(
+      repoRoot,
+      'UTV2-1001',
+      preMergeModelRoutingJson({
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: 'sha-a',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          bound_at: '2026-07-24T00:00:00.000Z',
+        },
+      }),
+    );
+
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: 'sha-b',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
+    );
+  });
+});
+
+test('rebindRepairedLaneProof fails closed on invalid JSON in a required sidecar', () => {
+  withTempRepairState(({ repoRoot }) => {
+    writeModelRoutingFixture(repoRoot, 'UTV2-1001', '{ not valid json');
+
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'malformed_required_sidecar',
+    );
+  });
+});
+
+test('rebindRepairedLaneProof fails closed on a required sidecar whose issue_id belongs to another lane', () => {
+  withTempRepairState(({ repoRoot }) => {
+    writeModelRoutingFixture(
+      repoRoot,
+      'UTV2-1001',
+      preMergeModelRoutingJson({ issue_id: 'UTV2-9999' }),
+    );
+
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_identity_mismatch',
+    );
+  });
+});
+
+test('rebindRepairedLaneProof fails closed on an identity-less sidecar (e.g. {})', () => {
+  withTempRepairState(({ repoRoot }) => {
+    writeModelRoutingFixture(repoRoot, 'UTV2-1001', '{}\n');
+
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_identity_mismatch',
+    );
+  });
+});
+
+test('rebindRepairedLaneProof fails closed when a required model-routing.json sidecar is missing from disk', () => {
+  withTempRepairState(({ repoRoot }) => {
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['docs/06_status/proof/UTV2-1001/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'missing_required_sidecar',
+    );
+  });
+});
+
+test('rebindRepairedLaneProof is unaffected for a lane with no required model-routing sidecar (ordinary closeout behavior unchanged)', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'evidence.json'),
+      `${JSON.stringify({
+        status: 'merged',
+        sha_binding: { verified_source_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
+      }, null, 2)}\n`,
+    );
+
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({
+        commit_sha: 'ordinary-merge-sha',
+        pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1400',
+        expected_proof_paths: [],
+      }),
+      { repoRoot },
+    );
+
+    // verification.md was never created for this lane -- rebindMergeSha() reports
+    // it 'missing' (not an error) exactly as it did before this change; only
+    // evidence.json exists and is rebound. No model-routing outcome is present at
+    // all since expected_proof_paths declares no such sidecar.
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'missing']);
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, 'ordinary-merge-sha');
+  });
+});
+
+test('a failed model-routing rebind rolls back the manifest and every proof file through the existing repair transaction', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1589-rollback-'));
+  const issueId = 'UTV2-1001';
+  const manifestPath = path.join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
+  const evidencePath = path.join(repoRoot, 'docs', '06_status', 'proof', issueId, 'evidence.json');
+  const routingPath = path.join(repoRoot, 'docs', '06_status', 'proof', issueId, 'model-routing.json');
+  try {
+    const original = createManifest({
+      issue_id: issueId,
+      status: 'merged',
+      commit_sha: 'pre-repair-sha',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1200',
+      expected_proof_paths: [`docs/06_status/proof/${issueId}/model-routing.json`],
+    });
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
+    fs.writeFileSync(manifestPath, `${JSON.stringify(original, null, 2)}\n`);
+    fs.writeFileSync(evidencePath, '{"sha":"pre-repair"}\n');
+    // A sidecar already bound to a DIFFERENT PR than the one this repair will
+    // attempt -- rebindRepairedLaneProof must throw binding_conflict.
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({
+        issue_id: issueId,
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: 'conflicting-sha',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/9999',
+          bound_at: '2026-07-20T00:00:00.000Z',
+        },
+      }),
+    );
+
+    const transaction = createRepairRollbackTransaction(issueId, repoRoot);
+
+    // Simulate what main() does on the repair path: write the repaired manifest,
+    // then attempt the proof rebind, which fails.
+    const repairedManifest = {
+      ...original,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+    };
+    fs.writeFileSync(manifestPath, `${JSON.stringify(repairedManifest, null, 2)}\n`);
+
+    let threw = false;
+    try {
+      rebindRepairedLaneProof(repairedManifest, { repoRoot });
+    } catch (error) {
+      threw = true;
+      assert.ok(error instanceof ModelRoutingRebindError);
+      assert.strictEqual(error.code, 'binding_conflict');
+    }
+    assert.strictEqual(threw, true);
+    transaction.rollback();
+
+    const restoredManifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')) as LaneManifest;
+    assert.strictEqual(restoredManifest.commit_sha, 'pre-repair-sha');
+    assert.strictEqual(restoredManifest.pr_url, 'https://github.com/griff843/Unit-Talk-v2/pull/1200');
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), '{"sha":"pre-repair"}\n');
+    assert.ok(
+      JSON.parse(fs.readFileSync(routingPath, 'utf8')).closeout_binding.pr_url.endsWith('/9999'),
+      'model-routing.json is restored to its pre-repair conflicting-binding state, not left partially rebound',
+    );
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test('repair merged lane does not touch lease/merge-lock state for an already done lane by default', () => {
