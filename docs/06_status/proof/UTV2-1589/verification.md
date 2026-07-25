@@ -206,6 +206,22 @@ tests cover a truncated `{issue_id}`-only sidecar, a sidecar with
 `reasoning_effort` present but blank, and confirm optional (non-required)
 sidecars remain unaffected.
 
+A third fresh-context independent Claude review of this provenance-field
+fix (traced every branch for a bypass via the existingBinding path,
+confirmed both call sites share the identical validation with no drift,
+ran the full 216-test suite plus type-check, and independently read the
+real UTV2-1585/UTV2-1586 committed `model-routing.json` files plus all
+17 such files in the repo) found no blocking defect and no bypass. It
+noted two accepted, non-blocking items: the check requires `model`/
+`reasoning_effort` to be non-empty but does not cross-check them
+against the manifest's own identically-named `model_routing.model`/
+`model_routing.reasoning_effort` fields (a well-formed but fabricated
+value would still pass); and the existing UTV2-1585/UTV2-1586 fixture
+tests synthesize an equivalent payload rather than reading the real
+committed files directly (verified independently to still pass, not a
+live regression). Both left as follow-up items rather than folded into
+this already-multiply-amended PR.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of each.
 
