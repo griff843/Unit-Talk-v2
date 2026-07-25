@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 6dfbb457ddc1708e8053f6ffbea24a967db72d7c
+MERGE_SHA: fa652c980a937d98eb157c57a67d94c27ef3f753
 
 ## Summary
 
@@ -140,6 +140,38 @@ theoretical ones:
   lifecycle but not independently enforced -- gated behind an
   already-abnormal manifest the sanctioned lifecycle does not produce.
 
+The same review separately found a second, more severe defect while
+mapping the actual replay path for UTV2-1585/UTV2-1586:
+`post-merge-lane-close.yml`'s "Bind proof artifacts to merge SHA" step
+runs on both `push` and `workflow_dispatch`, passing `github.sha` as
+`--merge-sha`. `workflow_dispatch` is the *only* way to run the trusted
+`--repair-merged` replay (a local shell can never satisfy
+`isTrustedPostMergeAutomation()`), and on that trigger `github.sha` is
+just main's current tip at dispatch time -- not the historical lane's
+authoritative merge SHA. Because `model-routing.json`'s
+`closeout_binding` is intentionally immutable-once-bound (unlike
+`evidence.json`/`verification.md`'s last-write-wins rebind, which this
+same step ordering never broke), this step would have bound
+`model-routing.json` to the wrong SHA on any `workflow_dispatch` replay
+attempt, and the immediately-following `--repair-merged` step's own
+attempt to bind the real SHA would then fail closed with
+`binding_conflict` -- permanently deadlocking the exact replay
+UTV2-1585 and UTV2-1586 are queued for, the whole reason this issue
+exists.
+
+**PM authorized a second narrow scope amendment** adding
+`.github/workflows/post-merge-lane-close.yml` to this issue. The "Bind
+proof artifacts to merge SHA" step now runs on `push` events only
+(`github.event_name == 'push'`); `--repair-merged`'s own
+`rebindRepairedLaneProof()` (this issue's fix) already binds
+`model-routing.json` authoritatively on the trusted repair path, so the
+early bind is unneeded and actively harmful there. A regression test in
+`scripts/ops/lane-close.test.ts` asserts the step's `if:` condition
+requires `github.event_name == 'push'`. No trigger, permission, secret,
+or job was added or removed; trusted-context validation
+(`isTrustedPostMergeAutomation`) and Merge Gate/branch protection are
+unchanged.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of each.
 
@@ -148,9 +180,10 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`6dfbb457ddc1708e8053f6ffbea24a967db72d7c`:
+`fa652c980a937d98eb157c57a67d94c27ef3f753`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
+- `npx tsx --test scripts/ops/workflow-hardening.test.ts`
 - `pnpm type-check`
 - `pnpm test`
 - `pnpm test:db`
@@ -162,8 +195,14 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 212
-# pass 212
+# tests 213
+# pass 213
+# fail 0
+# skipped 0
+
+Existing workflow-hardening suite (unaffected)
+# tests 44
+# pass 44
 # fail 0
 # skipped 0
 
