@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 679b8af4ff1b048230cf1cb3c295d484b2a32014
+MERGE_SHA: 0861755aa7806c9bed312731854dab9f94800aa0
 
 ## Summary
 
@@ -245,15 +245,36 @@ lane's own first-time closeout. A regression test in
 the `pnpm ops:proof-generate` call is gated behind it (inside the
 `else` branch), not run unconditionally alongside it.
 
+## Final consolidated review
+
+A sixth, final fresh-context independent Claude review did a
+from-scratch adversarial pass over the entire diff, specifically
+hunting for a sixth variant of the deadlock class the five prior fixes
+addressed: a bot-actor self-retrigger, a stale-but-coincidentally-matching
+`commit_sha`, concurrent/overlapping workflow runs, and interaction
+between the new guards and the workflow's other two safety steps (the
+tracked-changes scope guard and the commit/push step). It ran the full
+261-test suite, `pnpm type-check`, and `pnpm lint`, and confirmed the
+diff's scope is exactly the claimed files with no changes to
+`truth-check-lib.ts`, `merge-gate.yml`, or `docs/governance/`. It found
+no blocking issue and no further deadlock variant: every path traced
+either resolves safely by design (`repairMergedLaneManifest()` always
+re-resolves the authoritative PR/SHA from GitHub before any write, and
+nothing reaches `main` unless `ops:lane-close` exits 0) or reduces to
+an already-known, differently-classified failure (`infra_error` for a
+still-null `pr_url`). It flagged one wording-only nitpick in the
+workflow comment, fixed in a comment-only follow-up commit with no
+behavior change.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
-for the full text of each.
+for the full text of each finding across all six review rounds.
 
 EVIDENCE:
 
 ## Verification
 
 The following commands were executed on substantive commit
-`679b8af4ff1b048230cf1cb3c295d484b2a32014`:
+`0861755aa7806c9bed312731854dab9f94800aa0`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
