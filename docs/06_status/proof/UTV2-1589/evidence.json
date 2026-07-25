@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1589",
+  "title": "Bind model-routing provenance to the authoritative merge SHA",
+  "tier": "T1",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-25T05:00:19Z",
+  "sha_binding": {
+    "verified_source_sha": "26ccfa76de2394ac6bd79799b8ce59b4fbae5d41",
+    "verified_source_note": "Substantive implementation commit. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-07-25T05:00:19Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex/utv2-1589-model-routing-sha-bind",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification."
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/proof-generate.ts",
+      "scripts/ops/proof-generate.test.ts",
+      "scripts/ops/truth-check-lib.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1589/evidence.json",
+      "docs/06_status/proof/UTV2-1589/model-routing.json",
+      "docs/06_status/proof/UTV2-1589/verification.md"
+    ],
+    "runtime_change": false,
+    "workflow_change": false,
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Environment validation, lint, project-reference type checking, build, aggregate tests, live database smoke tests, and the T1 live-proof battery passed."
+    },
+    "focused_proof_tests": {
+      "command": "npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts",
+      "status": "PASS",
+      "tests": 87,
+      "pass": 87,
+      "fail": 0,
+      "skipped": 0,
+      "detail": "Covers provenance preservation, idempotency, PR/SHA conflicts, malformed and missing sidecars, optional sidecars, atomic preflight, the UTV2-1585/#1305 and UTV2-1586/#1306 fixtures, and P3/C4 before-and-after behavior."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "root_test": {
+      "command": "pnpm test",
+      "status": "PASS"
+    },
+    "manifest_validation": {
+      "command": "npx tsx scripts/ops/lane-manifest.ts validate UTV2-1589 --json",
+      "status": "PASS",
+      "code": "manifest_valid"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "pnpm_test_db": "pass",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "classification": "Operations proof-tooling change; the mandatory T1 live database and runtime-proof gates passed without lane-authored database mutation.",
+    "production_mutation_by_lane": false,
+    "queries": [
+      {
+        "table": "picks",
+        "description": "The live database smoke suite persisted and settled a unique submission through the repository abstraction, then cleaned up its fixture."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "The live database smoke suite verified invalid atomic operations leave no partial lifecycle writes."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "The live database smoke suite verified atomic claim and invalid delivery paths do not double-claim or leave partial outbox mutation."
+      },
+      {
+        "table": "audit_log",
+        "description": "The live suites exercised additive audit behavior and rollback assertions through existing test paths."
+      },
+      {
+        "table": "settlement_records",
+        "description": "The live database smoke suite verified corrections remain additive and do not mutate the original settlement."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 196,
+        "status": "preexisting_awaiting_approval_rows_observed"
+      }
+    ],
+    "row_counts_captured_at": "2026-07-25T04:58:58Z",
+    "row_counts_note": "The existing T1 proof battery reported 196 pre-existing stranded awaiting_approval rows. This lane did not update, delete, or backfill them.",
+    "broader_live_proof": {
+      "command": "pnpm test:t1-proof:live",
+      "status": "PASS",
+      "fail": 0,
+      "skipped": 1,
+      "skip_reason": "The latest provider snapshot was older than the bounded lookback window; the test classifies this as stale provider data rather than a code failure."
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Post-merge proof generation appends an authoritative closeout binding without replacing execution provenance.",
+      "status": "PASS",
+      "evidence": "rebindModelRoutingJsonSha preserves every parsed top-level field, including unknown fields, and adds only closeout_binding with sha_type, merge_sha, pr_url, and bound_at."
+    },
+    {
+      "criterion": "Rebinding is idempotent for the same PR/SHA and fails closed for a different PR or SHA.",
+      "status": "PASS",
+      "evidence": "Focused tests prove exact reruns preserve the original bound_at and conflicting PR or merge SHA values throw binding_conflict before any proof write."
+    },
+    {
+      "criterion": "Required missing or malformed model-routing sidecars fail, while optional missing sidecars remain unaffected.",
+      "status": "PASS",
+      "evidence": "Focused tests cover required missing, invalid JSON, malformed object, missing PR URL, and optional missing cases with distinct fail-closed outcomes."
+    },
+    {
+      "criterion": "Existing evidence and verification rebinding behavior remains unchanged.",
+      "status": "PASS",
+      "evidence": "The specialized model-routing preflight is composed with the existing evidence.json and verification Markdown rebinders; the aggregate proof suite passes."
+    },
+    {
+      "criterion": "P3 and C4 fail before closeout binding and pass after authoritative binding.",
+      "status": "PASS",
+      "evidence": "truth-check-lib focused tests exercise the same sidecar before and after closeout_binding and retain the existing P3/C4 interpretation."
+    },
+    {
+      "criterion": "Historical repair fixtures use the real UTV2-1585 and UTV2-1586 merge identities.",
+      "status": "PASS",
+      "evidence": "Focused tests use UTV2-1585 PR #1305 at 97527b791fc37acce41f4f46fd88699dce054b66 and UTV2-1586 PR #1306 at fe09f637a7eeebf216e062dd4a003d7e38932d1a."
+    }
+  ],
+  "historical_repair_inventory": [
+    {
+      "issue_id": "UTV2-1585",
+      "manifest_status": "started",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1305",
+      "merge_sha": "97527b791fc37acce41f4f46fd88699dce054b66",
+      "sidecar_state": "present_without_closeout_binding",
+      "recovery": "Replay trusted post-merge closeout after UTV2-1589 merges, supplying PR #1305 explicitly."
+    },
+    {
+      "issue_id": "UTV2-1586",
+      "manifest_status": "in_review",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1306",
+      "merge_sha": "fe09f637a7eeebf216e062dd4a003d7e38932d1a",
+      "sidecar_state": "present_without_closeout_binding",
+      "recovery": "Replay trusted post-merge closeout after UTV2-1589 merges; the recorded PR identity is sufficient."
+    },
+    {
+      "issue_id": "UTV2-1589",
+      "manifest_status": "started",
+      "pr_url": null,
+      "merge_sha": null,
+      "sidecar_state": "premerge_provenance_present",
+      "recovery": "Close normally through the repaired post-merge path after this implementation PR merges."
+    }
+  ],
+  "known_limitations": [
+    "Historical replay of UTV2-1585 and UTV2-1586 is a post-merge follow-up and is not performed by this implementation PR.",
+    "The T1 approval label and PM verdict remain independent external merge requirements."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true
+  }
+}
