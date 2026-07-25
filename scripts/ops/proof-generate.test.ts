@@ -680,6 +680,77 @@ test('rebindModelRoutingJsonSha fails without an authoritative PR URL', () => {
   }
 });
 
+test('rebindModelRoutingJsonSha rejects a required sidecar whose issue_id does not match the lane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-identity-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ issue_id: 'UTV2-9999' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'sidecar_identity_mismatch',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects an identity-less sidecar (e.g. {}) even though it is otherwise valid JSON', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-empty-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = `${JSON.stringify({})}\n`;
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'sidecar_identity_mismatch',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha accepts a sidecar whose issue_id matches the lane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-identity-match-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true, expectedIssueId: 'UTV2-1170' },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('rebindModelRoutingJsonSha leaves an optional missing sidecar unaffected', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-optional-'));
   try {

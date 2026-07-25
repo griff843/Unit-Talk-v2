@@ -56,7 +56,8 @@ export type ModelRoutingRebindErrorCode =
   | 'binding_conflict'
   | 'malformed_required_sidecar'
   | 'missing_pr_url'
-  | 'missing_required_sidecar';
+  | 'missing_required_sidecar'
+  | 'sidecar_identity_mismatch';
 
 export class ModelRoutingRebindError extends Error {
   constructor(
@@ -379,7 +380,7 @@ export function rebindModelRoutingJsonSha(
   mergeSha: string,
   generatedAt: string,
   prUrl: string | null,
-  options: { required?: boolean; write?: boolean; relPath?: string } = {},
+  options: { required?: boolean; write?: boolean; relPath?: string; expectedIssueId?: string } = {},
 ): ShaRebindOutcome {
   const relPath = options.relPath ?? absolutePath;
   const required = options.required ?? false;
@@ -420,6 +421,21 @@ export function rebindModelRoutingJsonSha(
       relPath,
       `Required model-routing sidecar must be a JSON object: ${relPath}`,
     );
+  }
+
+  if (options.expectedIssueId !== undefined) {
+    const sidecarIssueId = parsed['issue_id'];
+    if (
+      typeof sidecarIssueId !== 'string' ||
+      sidecarIssueId.trim().toUpperCase() !== options.expectedIssueId.trim().toUpperCase()
+    ) {
+      throw new ModelRoutingRebindError(
+        'sidecar_identity_mismatch',
+        relPath,
+        `Model-routing sidecar issue_id ${JSON.stringify(sidecarIssueId)} does not match ` +
+          `expected lane ${options.expectedIssueId}: ${relPath}`,
+      );
+    }
   }
 
   const existingBinding = parsed['closeout_binding'];
@@ -528,7 +544,7 @@ export function generateProofArtifacts(
       input.gitTruth.merge_sha,
       input.generatedAt,
       input.manifest.pr_url,
-      { required: true, write: false, relPath: modelRoutingPath },
+      { required: true, write: false, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
     );
   }
 
@@ -590,7 +606,7 @@ export function generateProofArtifacts(
       input.gitTruth.merge_sha,
       input.generatedAt,
       input.manifest.pr_url,
-      { required: true, write: shouldWrite, relPath: modelRoutingPath },
+      { required: true, write: shouldWrite, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
     );
     if (outcome.status === 'updated') {
       pushUnique(updatedPaths, outcome.path);
