@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: fa652c980a937d98eb157c57a67d94c27ef3f753
+MERGE_SHA: 5c0da1552bb538ad68e2746400037ecffe684837
 
 ## Summary
 
@@ -188,6 +188,24 @@ UTV2-1585 and UTV2-1586 already have populated `evidence.json`/
 `evidence.json`'s `known_limitations` for a future lane that reached a
 `workflow_dispatch` replay having never had proof generated at all.
 
+A fourth finding from the automated Codex reviewer: `rebindModelRoutingJsonSha`
+accepted any required sidecar with a matching `issue_id`, regardless of
+whether it carried real execution-provenance fields -- a truncated or
+tampered sidecar such as `{"issue_id":"UTV2-1586"}` would receive an
+authoritative `closeout_binding` despite providing no evidence of which
+model actually executed the lane. Fixed by requiring non-empty `model`
+and `reasoning_effort` string fields on any required sidecar, checked
+after identity validation and before the existing conflict check.
+Deliberately narrowed to these two fields (not also
+`model_profile`/`policy_version`, which are administrative metadata
+rather than execution provenance) so legitimate historical sidecars
+that never carried the latter two are not rejected -- the real
+UTV2-1585 and UTV2-1586 fixtures, and every existing sidecar fixture in
+this test suite, already carry both required fields. Three new focused
+tests cover a truncated `{issue_id}`-only sidecar, a sidecar with
+`reasoning_effort` present but blank, and confirm optional (non-required)
+sidecars remain unaffected.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of each.
 
@@ -196,7 +214,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`fa652c980a937d98eb157c57a67d94c27ef3f753`:
+`5c0da1552bb538ad68e2746400037ecffe684837`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
@@ -211,8 +229,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 213
-# pass 213
+# tests 216
+# pass 216
 # fail 0
 # skipped 0
 
