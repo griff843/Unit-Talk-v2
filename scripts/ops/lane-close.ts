@@ -19,6 +19,7 @@ import {
   ModelRoutingRebindError,
   rebindMergeSha,
   rebindModelRoutingJsonSha,
+  safeRepoPath,
   type ShaRebindOutcome,
 } from './proof-generate.js';
 import {
@@ -700,7 +701,7 @@ export function rebindRepairedLaneProof(
     // written, so a failing sidecar never leaves a partially-rebound bundle.
     for (const modelRoutingPath of modelRoutingPaths) {
       rebindModelRoutingJsonSha(
-        path.resolve(repoRoot, modelRoutingPath),
+        safeRepoPath(repoRoot, modelRoutingPath),
         mergeSha,
         generatedAt,
         manifest.pr_url,
@@ -720,7 +721,7 @@ export function rebindRepairedLaneProof(
     for (const modelRoutingPath of modelRoutingPaths) {
       outcomes.push(
         rebindModelRoutingJsonSha(
-          path.resolve(repoRoot, modelRoutingPath),
+          safeRepoPath(repoRoot, modelRoutingPath),
           mergeSha,
           generatedAt,
           manifest.pr_url,

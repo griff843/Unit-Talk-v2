@@ -667,7 +667,15 @@ function normalizePrUrl(value: string | null): string | null {
   return normalized || null;
 }
 
-function safeRepoPath(root: string, repoRelativePath: string): string {
+/**
+ * Resolves a repo-relative proof path and refuses to return one that escapes
+ * `root` (e.g. a manifest.expected_proof_paths entry containing `../../`).
+ * Exported so callers outside this module -- e.g. lane-close.ts's trusted
+ * `--repair-merged` path, which resolves the same manifest-declared
+ * model-routing.json paths -- get the identical guard rather than a bare
+ * path.resolve() with no escape check (UTV2-1589 independent review).
+ */
+export function safeRepoPath(root: string, repoRelativePath: string): string {
   const resolvedRoot = path.resolve(root);
   const absolutePath = path.resolve(resolvedRoot, repoRelativePath);
   if (!absolutePath.startsWith(resolvedRoot + path.sep)) {

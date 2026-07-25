@@ -1032,6 +1032,22 @@ test('rebindRepairedLaneProof fails closed when a required model-routing.json si
   });
 });
 
+test('rebindRepairedLaneProof refuses a declared model-routing.json path that escapes the repo root', () => {
+  withTempRepairState(({ repoRoot }) => {
+    assert.throws(
+      () => rebindRepairedLaneProof(
+        createManifest({
+          commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+          expected_proof_paths: ['../../../../tmp/escaped/model-routing.json'],
+        }),
+        { repoRoot },
+      ),
+      /escapes repo root/,
+    );
+  });
+});
+
 test('rebindRepairedLaneProof is unaffected for a lane with no required model-routing sidecar (ordinary closeout behavior unchanged)', () => {
   withTempRepairState(({ repoRoot }) => {
     const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001');
