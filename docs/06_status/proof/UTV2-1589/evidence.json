@@ -6,12 +6,12 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-25T05:00:19Z",
   "sha_binding": {
-    "verified_source_sha": "26ccfa76de2394ac6bd79799b8ce59b4fbae5d41",
-    "verified_source_note": "Substantive implementation commit. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "verified_source_sha": "470cde76f7bbf51bffc5edda2178e8eb796eb46f",
+    "verified_source_note": "Final substantive implementation commit, including the independent-review-verified fix so the CLI reports a structured nonzero failure instead of an uncaught crash on a model-routing binding conflict. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-25T05:00:19Z",
+    "bound_at": "2026-07-25T05:36:00Z",
     "pr_number": null,
     "approved_head_sha": null
   },

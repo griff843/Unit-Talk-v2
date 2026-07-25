@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 26ccfa76de2394ac6bd79799b8ce59b4fbae5d41
+MERGE_SHA: 470cde76f7bbf51bffc5edda2178e8eb796eb46f
 
 ## Summary
 
@@ -21,11 +21,32 @@ ASSERTIONS:
 - [x] A missing optional sidecar remains unaffected.
 - [x] Evidence JSON and verification Markdown rebinding remain unchanged.
 - [x] Truth checks P3 and C4 fail before closeout binding and pass afterward.
+- [x] A thrown `ModelRoutingRebindError` in the CLI is caught and reported as a
+  structured `{ok:false, code, issue_id, proof_path, message}` result with
+  exit code 1, not an uncaught crash.
+
+## Independent review finding and correction
+
+A fresh-context, independent Claude adversarial review found that my own
+follow-on fix (catching `ModelRoutingRebindError` in `main()` instead of
+letting it crash uncaught) existed only as a local commit and had not been
+pushed to the PR branch, so it was not actually part of what was under
+review. Pushed in `470cde76f7bbf51bffc5edda2178e8eb796eb46f`. The reviewer
+re-verified the fix's design against the pushed commit (catches only
+`ModelRoutingRebindError`, re-throws everything else, emits the correct
+JSON shape, returns exit 1) and found no other defects. The reviewer also
+independently confirmed the authority-validation threat model (this module
+trusts its caller's SHA/PR inputs; independent GitHub-backed validation is
+`lane-close.ts`'s `validateTrustedPostMergeRepair`'s responsibility, not
+this one's -- unchanged from the pre-existing evidence.json/verification.md
+rebind behavior) and independently re-derived the historical-repair
+inventory below by grepping all lane manifests directly, confirming it
+exactly.
 
 ## Verification
 
 The following commands were executed on substantive commit
-`26ccfa76de2394ac6bd79799b8ce59b4fbae5d41`:
+`470cde76f7bbf51bffc5edda2178e8eb796eb46f`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts`
 - `pnpm type-check`
