@@ -2166,6 +2166,33 @@ test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts 
   );
 });
 
+test('UTV2-1589 "Bind proof artifacts to merge SHA" also skips when a governed manifest-only repair PR merges via push', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const bindStepIndex = workflow.indexOf('Bind proof artifacts to merge SHA');
+  assert.notStrictEqual(bindStepIndex, -1);
+  const nextStepIndex = workflow.indexOf('\n      - name:', bindStepIndex + 1);
+  const stepBody = workflow.slice(bindStepIndex, nextStepIndex === -1 ? undefined : nextStepIndex);
+
+  // A manifest-only repair PR (buildRepairRequiredViaPrPacket's recommended
+  // path for a lane whose pr_url is already set, e.g. UTV2-1586) merges via
+  // an ordinary push whose own github.sha is NOT that lane's original
+  // implementation merge SHA either -- github.event_name == 'push' alone
+  // does not distinguish this from a lane's own first-time closeout push.
+  // The step must additionally compare the checked-out manifest's own
+  // commit_sha against this push's SHA and skip the bind when they disagree.
+  assert.match(stepBody, /jq -r '\.commit_sha \/\/ empty' "\$MANIFEST_PATH"/u);
+  assert.match(stepBody, /if \[ -n "\$existing_commit_sha" \] && \[ "\$existing_commit_sha" != "\$MERGE_SHA" \]/u);
+  assert.match(stepBody, /Skipping early proof-generate bind/u);
+  // The actual pnpm ops:proof-generate call must live inside the negative
+  // (else) branch of that guard, not run unconditionally alongside it.
+  const guardIndex = stepBody.indexOf('existing_commit_sha" != "$MERGE_SHA"');
+  const proofGenerateIndex = stepBody.indexOf('pnpm ops:proof-generate');
+  assert.ok(guardIndex !== -1 && proofGenerateIndex > guardIndex);
+});
+
 test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact merge SHA', () => {
   const manifest = createMissingBindingManifest();
   const pr = createTrustedRepairPr(manifest, {
