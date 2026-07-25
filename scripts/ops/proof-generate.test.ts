@@ -507,6 +507,53 @@ test('rebindModelRoutingJsonSha adds closeout binding and preserves all executio
   }
 });
 
+test('rebindModelRoutingJsonSha rejects a legacy top-level merge_sha that conflicts with the authoritative SHA', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-legacy-conflict-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Real historical shape (e.g. docs/06_status/proof/UTV2-1531/model-routing.json):
+    // a top-level merge_sha field pre-dating closeout_binding.
+    const content = preMergeModelRoutingJson({ merge_sha: 'a-different-legacy-sha' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'legacy_binding_conflict',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content, 'no proof mutation on legacy conflict');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha accepts a legacy top-level merge_sha that already agrees with the authoritative SHA', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-legacy-agree-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ merge_sha: MERGE_SHA }), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.strictEqual(rebound.merge_sha, MERGE_SHA, 'legacy field is preserved, not overwritten');
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('rebindModelRoutingJsonSha replay is idempotent and preserves the original bound_at', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-idempotent-'));
   try {
@@ -1152,6 +1199,61 @@ test('generateProofArtifacts validates required model-routing authority before a
     );
     assert.strictEqual(fs.existsSync(path.join(proofDir, 'diff-summary.md')), false);
     assert.strictEqual(fs.existsSync(path.join(proofDir, 'verification.md')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts with skipModelRouting binds evidence/verification but never touches model-routing.json', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-skip-routing-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'evidence.json'), preMergeEvidenceJson(), 'utf8');
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), preMergeVerificationMd(), 'utf8');
+    const routingContent = preMergeModelRoutingJson();
+    fs.writeFileSync(path.join(proofDir, 'model-routing.json'), routingContent, 'utf8');
+
+    const result = generateProofArtifacts(
+      input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
+      { root, skipModelRouting: true },
+    );
+
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
+    assert.ok(!result.updated_paths.some((p) => p.endsWith('model-routing.json')));
+    assert.strictEqual(
+      fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'),
+      routingContent,
+      'model-routing.json is byte-for-byte untouched when skipModelRouting is set',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts with skipModelRouting does not validate or throw on an otherwise-conflicting sidecar', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-skip-routing-no-validate-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'model-routing.json'),
+      preMergeModelRoutingJson({
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: '3333333333333333333333333333333333333333',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+          bound_at: '2026-05-26T00:00:00.000Z',
+        },
+      }),
+      'utf8',
+    );
+
+    assert.doesNotThrow(() => generateProofArtifacts(
+      input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
+      { root, skipModelRouting: true },
+    ));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

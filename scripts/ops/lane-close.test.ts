@@ -2294,6 +2294,29 @@ test('UTV2-1589 "Bind proof artifacts to merge SHA" also skips when a governed m
   assert.ok(guardIndex !== -1 && proofGenerateIndex > guardIndex);
 });
 
+test('UTV2-1589 "Bind proof artifacts to merge SHA" never binds model-routing.json itself -- only the trusted repair step does', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const bindStepIndex = workflow.indexOf('Bind proof artifacts to merge SHA');
+  assert.notStrictEqual(bindStepIndex, -1);
+  const nextStepIndex = workflow.indexOf('\n      - name:', bindStepIndex + 1);
+  const stepBody = workflow.slice(bindStepIndex, nextStepIndex === -1 ? undefined : nextStepIndex);
+
+  // On a genuine first-time closeout (github.sha correct, commit_sha not yet
+  // set), this call still resolves manifest.pr_url from disk with no
+  // GitHub-backed validation -- binding model-routing.json's immutable
+  // closeout_binding from that unvalidated identity here, before the
+  // trusted repair step's rollback snapshot is even taken, would let a
+  // stale/incorrect pr_url (e.g. after a PR rename/reopen) get baked in
+  // permanently. model-routing.json must only ever be bound by the
+  // validated ops:lane-close --repair-merged step that always runs next.
+  const proofGenerateLine = stepBody.match(/^ {12}pnpm ops:proof-generate.*$/mu);
+  assert.ok(proofGenerateLine, 'expected the pnpm ops:proof-generate invocation line');
+  assert.match(proofGenerateLine[0], /--skip-model-routing\b/u);
+});
+
 test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact merge SHA', () => {
   const manifest = createMissingBindingManifest();
   const pr = createTrustedRepairPr(manifest, {

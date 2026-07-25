@@ -56,6 +56,7 @@ export interface ShaRebindOutcome {
 export type ModelRoutingRebindErrorCode =
   | 'binding_conflict'
   | 'incomplete_required_sidecar'
+  | 'legacy_binding_conflict'
   | 'malformed_required_sidecar'
   | 'missing_pr_url'
   | 'missing_required_sidecar'
@@ -111,6 +112,24 @@ export class ModelRoutingRebindError extends Error {
 export interface ProofGenerateOptions {
   root?: string;
   write?: boolean;
+  /**
+   * Skip binding model-routing.json entirely, touching only evidence.json/
+   * verification.md. For an ordinary first-time closeout, manifest.pr_url
+   * has not yet been independently validated against GitHub at this call
+   * site (no --pr/--pr-url override is passed, so it falls back to
+   * whatever's on disk) -- writing model-routing.json's IMMUTABLE
+   * closeout_binding from that unvalidated value risks baking in a stale or
+   * incorrect PR identity (e.g. after a PR rename/reopen) that the later,
+   * properly-validated ops:lane-close --repair-merged path can then never
+   * correct, since createRepairRollbackTransaction's snapshot is taken
+   * after this already ran (independent review finding, UTV2-1589). The
+   * trusted repair path always runs afterward for every closeout -- push or
+   * workflow_dispatch -- and already binds model-routing.json itself using
+   * its own validated PR/SHA resolution, so this option lets a caller (the
+   * post-merge-lane-close.yml early-bind step) defer that binding entirely
+   * rather than attempt it twice with different trust levels.
+   */
+  skipModelRouting?: boolean;
 }
 
 export interface ProofManifestOverrides {
@@ -534,6 +553,23 @@ export function rebindModelRoutingJsonSha(
     }
   }
 
+  // Some historical sidecars (pre-dating closeout_binding) carry a legacy
+  // top-level merge_sha field. The object spread below preserves it
+  // untouched, so if it disagrees with the authoritative SHA being bound
+  // here, the file would end up asserting two different merge identities --
+  // and P3/C4 would both still pass, since they only require the
+  // authoritative SHA to appear somewhere in the file, not that the file is
+  // internally consistent (independent review finding).
+  const legacyMergeSha = parsed['merge_sha'];
+  if (typeof legacyMergeSha === 'string' && legacyMergeSha.trim() !== '' && legacyMergeSha !== mergeSha) {
+    throw new ModelRoutingRebindError(
+      'legacy_binding_conflict',
+      relPath,
+      `Sidecar legacy top-level merge_sha ${JSON.stringify(legacyMergeSha)} conflicts with the ` +
+        `authoritative merge SHA ${JSON.stringify(mergeSha)}: ${relPath}`,
+    );
+  }
+
   const existingBinding = parsed['closeout_binding'];
   if (existingBinding !== undefined) {
     if (
@@ -639,7 +675,7 @@ export function generateProofArtifacts(
   // have every one bound -- the truth gate evaluates every expected proof
   // artifact, so leaving a second match unbound would permanently block
   // closeout even though this function reported success.
-  if (input.gitTruth.merge_sha) {
+  if (input.gitTruth.merge_sha && !options.skipModelRouting) {
     for (const modelRoutingPath of modelRoutingPaths) {
       rebindModelRoutingJsonSha(
         safeRepoPath(root, modelRoutingPath),
@@ -709,7 +745,7 @@ export function generateProofArtifacts(
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
   }
 
-  if (input.gitTruth.merge_sha) {
+  if (input.gitTruth.merge_sha && !options.skipModelRouting) {
     for (const modelRoutingPath of modelRoutingPaths) {
       const outcome = rebindModelRoutingJsonSha(
         safeRepoPath(root, modelRoutingPath),
@@ -821,7 +857,11 @@ function main(argv = process.argv.slice(2)): number {
 
   let result: ProofGenerateResult;
   try {
-    result = generateProofArtifacts(input, { root: ROOT, write: !bools.has('dry-run') });
+    result = generateProofArtifacts(input, {
+      root: ROOT,
+      write: !bools.has('dry-run'),
+      skipModelRouting: bools.has('skip-model-routing'),
+    });
   } catch (error) {
     if (error instanceof ModelRoutingRebindError) {
       // A required model-routing sidecar was missing, malformed, or already bound

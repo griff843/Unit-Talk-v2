@@ -183,32 +183,46 @@ jobs:
 
       - name: Bind proof artifacts to merge SHA
         # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
-        # the script below. `github.sha` on a `workflow_dispatch` run is
-        # whatever ref the dispatch targeted (main's tip at dispatch time),
-        # NOT the historical lane's actual merge SHA -- unlike
-        # evidence.json/verification.md's unconditional last-write-wins
-        # rebind, model-routing.json's closeout_binding is intentionally
-        # immutable-once-bound (conflict-checked), so binding it here to a
-        # wrong SHA would permanently deadlock the very repair this workflow
-        # exists to run: the correct SHA that `ops:lane-close --repair-merged`
-        # resolves next would then conflict with this step's already-written
-        # wrong one. The `github.event_name == 'push'` condition alone is not
-        # sufficient: a governed manifest-only repair PR (produced by
+        # the script below, PLUS --skip-model-routing on every invocation.
+        # `github.sha` on a `workflow_dispatch` run is whatever ref the
+        # dispatch targeted (main's tip at dispatch time), NOT the historical
+        # lane's actual merge SHA -- unlike evidence.json/verification.md's
+        # unconditional last-write-wins rebind, model-routing.json's
+        # closeout_binding is intentionally immutable-once-bound
+        # (conflict-checked), so binding it here to a wrong SHA would
+        # permanently deadlock the very repair this workflow exists to run:
+        # the correct SHA that `ops:lane-close --repair-merged` resolves next
+        # would then conflict with this step's already-written wrong one. The
+        # `github.event_name == 'push'` condition alone is not sufficient: a
+        # governed manifest-only repair PR (produced by
         # buildRepairRequiredViaPrPacket for any lane whose pr_url is already
         # set -- this is a precondition any such lane can be in, not a claim
-        # about which exact path UTV2-1585/UTV2-1586's own recovery takes)
-        # is merged via an ordinary `push`, and that repair commit's own
+        # about which exact path any specific lane's own recovery takes) is
+        # merged via an ordinary `push`, and that repair commit's own
         # `github.sha` is NOT the lane's original implementation merge SHA
         # either -- but the manifest checked out by THIS push already
         # carries the correct historical commit_sha (the repair PR's whole
-        # point). The script below additionally skips when the checked-out
-        # manifest already has a commit_sha that disagrees with this push's
-        # SHA, which covers exactly that case. On both skipped paths,
-        # `rebindRepairedLaneProof()` (called by the next step,
-        # `ops:lane-close --repair-merged`) is what binds model-routing.json,
-        # using the authoritative PR/SHA it resolves itself -- this early
-        # bind is only ever needed, and only ever correct, for a lane's own
-        # first-time ordinary closeout push.
+        # point). The script below additionally skips regenerating proof at
+        # all when the checked-out manifest already has a commit_sha that
+        # disagrees with this push's SHA, which covers exactly that case.
+        #
+        # `--skip-model-routing` closes a further, independent gap: even on a
+        # genuine first-time closeout (github.sha correct, commit_sha not yet
+        # set), this call resolves `manifest.pr_url` from disk with no
+        # `--pr`/`--pr-url` override -- i.e. without the GitHub-backed
+        # validation `ops:lane-close --repair-merged` performs next. If
+        # `pr_url` were ever stale (e.g. after a PR rename/reopen), binding
+        # model-routing.json's IMMUTABLE closeout_binding here would bake in
+        # that unvalidated identity before `createRepairRollbackTransaction`
+        # ever takes its "clean" snapshot -- so a later mismatch's rollback
+        # would just restore the already-wrong state, permanently blocking
+        # every future replay. `ops:lane-close --repair-merged` (the next
+        # step) always runs regardless of trigger and already binds
+        # model-routing.json itself via `rebindRepairedLaneProof()`, using
+        # its own validated PR/SHA resolution -- so model-routing.json is
+        # never bound here at all; only evidence.json/verification.md (which
+        # are never immutable, and are unconditionally corrected again by
+        # that same next step) are.
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
@@ -219,13 +233,15 @@ jobs:
         run: |
           existing_commit_sha=$(jq -r '.commit_sha // empty' "$MANIFEST_PATH")
           if [ -n "$existing_commit_sha" ] && [ "$existing_commit_sha" != "$MERGE_SHA" ]; then
-            echo "::notice title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) already differs from this push's SHA ($MERGE_SHA) -- this push is a manifest/proof repair commit, not $ISSUE_ID's own implementation merge. Skipping early proof-generate bind; ops:lane-close --repair-merged will bind model-routing.json using the authoritative SHA it resolves itself."
+            echo "::notice title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) already differs from this push's SHA ($MERGE_SHA) -- this push is a manifest/proof repair commit, not $ISSUE_ID's own implementation merge. Skipping early proof-generate bind; ops:lane-close --repair-merged will bind evidence/verification/model-routing using the authoritative SHA and PR it resolves itself."
           else
             # Regenerate proof files with the verified merge SHA so the inline
             # "Merge SHA:" field is correct, not just appended at the end.
             # --merge-sha overrides manifest.commit_sha; idempotent if SHA already present.
-            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
-              && echo "::notice title=post-merge-lane-close::Proof artifacts regenerated with merge SHA for $ISSUE_ID." \
+            # --skip-model-routing: model-routing.json is bound only by the
+            # validated ops:lane-close --repair-merged step below, never here.
+            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --skip-model-routing --json \
+              && echo "::notice title=post-merge-lane-close::Proof artifacts (evidence/verification only) regenerated with merge SHA for $ISSUE_ID." \
               || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
           fi
 
