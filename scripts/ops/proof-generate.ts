@@ -52,6 +52,23 @@ export interface ShaRebindOutcome {
   status: 'updated' | 'unchanged' | 'missing';
 }
 
+export type ModelRoutingRebindErrorCode =
+  | 'binding_conflict'
+  | 'malformed_required_sidecar'
+  | 'missing_pr_url'
+  | 'missing_required_sidecar';
+
+export class ModelRoutingRebindError extends Error {
+  constructor(
+    public readonly code: ModelRoutingRebindErrorCode,
+    public readonly proofPath: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ModelRoutingRebindError';
+  }
+}
+
 export interface ProofGenerateOptions {
   root?: string;
   write?: boolean;
@@ -352,6 +369,105 @@ export function rebindVerificationMdSha(
   return { path: relPath, status: 'updated' };
 }
 
+/**
+ * Appends authoritative post-merge identity to an immutable Codex model-routing
+ * sidecar. Existing execution provenance is preserved; an existing binding may
+ * only be replayed for the exact same PR and merge SHA.
+ */
+export function rebindModelRoutingJsonSha(
+  absolutePath: string,
+  mergeSha: string,
+  generatedAt: string,
+  prUrl: string | null,
+  options: { required?: boolean; write?: boolean; relPath?: string } = {},
+): ShaRebindOutcome {
+  const relPath = options.relPath ?? absolutePath;
+  const required = options.required ?? false;
+  if (!fs.existsSync(absolutePath)) {
+    if (required) {
+      throw new ModelRoutingRebindError(
+        'missing_required_sidecar',
+        relPath,
+        `Required model-routing sidecar is missing: ${relPath}`,
+      );
+    }
+    return { path: relPath, status: 'missing' };
+  }
+
+  const normalizedPrUrl = normalizePrUrl(prUrl);
+  if (!normalizedPrUrl) {
+    throw new ModelRoutingRebindError(
+      'missing_pr_url',
+      relPath,
+      `Cannot bind model-routing sidecar without an authoritative PR URL: ${relPath}`,
+    );
+  }
+
+  const previousContent = fs.readFileSync(absolutePath, 'utf8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(previousContent);
+  } catch {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Required model-routing sidecar is not valid JSON: ${relPath}`,
+    );
+  }
+  if (!isJsonObject(parsed)) {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Required model-routing sidecar must be a JSON object: ${relPath}`,
+    );
+  }
+
+  const existingBinding = parsed['closeout_binding'];
+  if (existingBinding !== undefined) {
+    if (
+      !isJsonObject(existingBinding) ||
+      existingBinding['sha_type'] !== 'merge_sha' ||
+      typeof existingBinding['merge_sha'] !== 'string' ||
+      typeof existingBinding['pr_url'] !== 'string' ||
+      typeof existingBinding['bound_at'] !== 'string' ||
+      !isIsoTimestamp(existingBinding['bound_at'])
+    ) {
+      throw new ModelRoutingRebindError(
+        'malformed_required_sidecar',
+        relPath,
+        `Existing model-routing closeout binding is malformed: ${relPath}`,
+      );
+    }
+
+    const boundMergeSha = existingBinding['merge_sha'];
+    const boundPrUrl = normalizePrUrl(existingBinding['pr_url']);
+    if (boundMergeSha !== mergeSha || boundPrUrl !== normalizedPrUrl) {
+      throw new ModelRoutingRebindError(
+        'binding_conflict',
+        relPath,
+        `Existing model-routing closeout binding conflicts with PR ${normalizedPrUrl} at ${mergeSha}: ${relPath}`,
+      );
+    }
+
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  const nextParsed = {
+    ...parsed,
+    closeout_binding: {
+      sha_type: 'merge_sha',
+      merge_sha: mergeSha,
+      pr_url: normalizedPrUrl,
+      bound_at: generatedAt,
+    },
+  };
+  const nextContent = `${JSON.stringify(nextParsed, null, 2)}\n`;
+  if (options.write ?? true) {
+    fs.writeFileSync(absolutePath, nextContent, 'utf8');
+  }
+  return { path: relPath, status: 'updated' };
+}
+
 /** Rebinds evidence.json + verification.md for an issue if they exist. No-op without a merge SHA. */
 export function rebindMergeSha(
   root: string,
@@ -400,6 +516,21 @@ export function generateProofArtifacts(
     }
   };
   const requiredShas = [input.gitTruth.head_sha, input.gitTruth.merge_sha].filter(isPresent);
+  const modelRoutingPath = input.manifest.expected_proof_paths.find(
+    (proofPath) => path.posix.basename(proofPath) === 'model-routing.json',
+  );
+
+  // Validate the required routing sidecar before mutating any proof artifact so
+  // conflicts and malformed historical authority fail as one atomic operation.
+  if (input.gitTruth.merge_sha && modelRoutingPath) {
+    rebindModelRoutingJsonSha(
+      safeRepoPath(root, modelRoutingPath),
+      input.gitTruth.merge_sha,
+      input.generatedAt,
+      input.manifest.pr_url,
+      { required: true, write: false, relPath: modelRoutingPath },
+    );
+  }
 
   for (const proofFile of STANDARD_PROOF_FILES) {
     const proofPath = paths[proofFile];
@@ -453,6 +584,22 @@ export function generateProofArtifacts(
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
   }
 
+  if (input.gitTruth.merge_sha && modelRoutingPath) {
+    const outcome = rebindModelRoutingJsonSha(
+      safeRepoPath(root, modelRoutingPath),
+      input.gitTruth.merge_sha,
+      input.generatedAt,
+      input.manifest.pr_url,
+      { required: true, write: shouldWrite, relPath: modelRoutingPath },
+    );
+    if (outcome.status === 'updated') {
+      pushUnique(updatedPaths, outcome.path);
+      pushUnique(stalePathsReplaced, outcome.path);
+    } else if (outcome.status === 'unchanged') {
+      pushUnique(unchangedPaths, outcome.path);
+    }
+  }
+
   return {
     ok: true,
     code: 'proof_generated',
@@ -489,6 +636,19 @@ function fenced(content: string): string {
 
 function isPresent(value: string | null): value is string {
   return value !== null && value.trim() !== '';
+}
+
+function isIsoTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value)) && /^\d{4}-\d{2}-\d{2}T/.test(value);
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizePrUrl(value: string | null): string | null {
+  const normalized = value?.trim().replace(/\/+$/, '') ?? '';
+  return normalized || null;
 }
 
 function safeRepoPath(root: string, repoRelativePath: string): string {

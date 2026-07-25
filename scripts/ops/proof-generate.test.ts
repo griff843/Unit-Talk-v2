@@ -12,8 +12,10 @@ import {
   generateProofArtifacts,
   rebindEvidenceJsonSha,
   rebindMergeSha,
+  rebindModelRoutingJsonSha,
   rebindVerificationMdSha,
   standardProofPaths,
+  ModelRoutingRebindError,
   type ProofGitTruth,
 } from './proof-generate.js';
 import type { LaneManifest } from './shared.js';
@@ -303,6 +305,29 @@ function preMergeVerificationMd(): string {
   ].join('\n');
 }
 
+function preMergeModelRoutingJson(overrides: Record<string, unknown> = {}): string {
+  return `${JSON.stringify(
+    {
+      issue_id: 'UTV2-1170',
+      manifest_schema_version: 2,
+      model_profile: 'codex-sol-high',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      policy_version: '1.0.0',
+      codex_cli_version: 'codex-cli 0.145.0',
+      legacy_compatibility_used: false,
+      override_used: false,
+      override_authorized_by: null,
+      codex_exit_code: 0,
+      generated_at: '2026-05-25T10:00:00.000Z',
+      forward_compatible_field: { retained: true },
+      ...overrides,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 test('rebindEvidenceJsonSha rewrites sha_binding to the merge SHA and flips pre-merge status', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-evidence-'));
   try {
@@ -446,6 +471,316 @@ test('rebindMergeSha reports missing for lanes with no evidence.json/verificatio
       outcomes.map((o) => o.status),
       ['missing', 'missing'],
     );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha adds closeout binding and preserves all execution provenance', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const original = JSON.parse(preMergeModelRoutingJson());
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson(), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    const { closeout_binding: closeoutBinding, ...preserved } = rebound;
+    assert.deepStrictEqual(preserved, original);
+    assert.deepStrictEqual(closeoutBinding, {
+      sha_type: 'merge_sha',
+      merge_sha: MERGE_SHA,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      bound_at: '2026-05-26T00:00:00.000Z',
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha replay is idempotent and preserves the original bound_at', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-idempotent-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson(), 'utf8');
+
+    rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true },
+    );
+    const afterFirst = fs.readFileSync(routingPath, 'utf8');
+    const second = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-27T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170/',
+      { required: true },
+    );
+
+    assert.strictEqual(second.status, 'unchanged');
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), afterFirst);
+    assert.strictEqual(
+      JSON.parse(afterFirst).closeout_binding.bound_at,
+      '2026-05-26T00:00:00.000Z',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const conflict of [
+  {
+    name: 'merge SHA',
+    closeoutBinding: {
+      sha_type: 'merge_sha',
+      merge_sha: '3333333333333333333333333333333333333333',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      bound_at: '2026-05-26T00:00:00.000Z',
+    },
+  },
+  {
+    name: 'PR URL',
+    closeoutBinding: {
+      sha_type: 'merge_sha',
+      merge_sha: MERGE_SHA,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/9999',
+      bound_at: '2026-05-26T00:00:00.000Z',
+    },
+  },
+]) {
+  test(`rebindModelRoutingJsonSha fails closed on a conflicting ${conflict.name}`, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-conflict-'));
+    try {
+      const routingPath = path.join(root, 'model-routing.json');
+      const content = preMergeModelRoutingJson({ closeout_binding: conflict.closeoutBinding });
+      fs.writeFileSync(routingPath, content, 'utf8');
+
+      assert.throws(
+        () => rebindModelRoutingJsonSha(
+          routingPath,
+          MERGE_SHA,
+          '2026-05-27T00:00:00.000Z',
+          'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+          { required: true },
+        ),
+        (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
+      );
+      assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('rebindModelRoutingJsonSha rejects invalid JSON without overwriting it', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-invalid-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = '{ invalid json\n';
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'malformed_required_sidecar',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects malformed JSON objects without overwriting them', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-malformed-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ closeout_binding: { sha_type: 'merge_sha' } });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'malformed_required_sidecar',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails when a required sidecar is missing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-missing-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'missing_required_sidecar',
+    );
+    assert.strictEqual(fs.existsSync(routingPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails without an authoritative PR URL', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-no-pr-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson();
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        null,
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'missing_pr_url',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha leaves an optional missing sidecar unaffected', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-optional-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+    );
+    assert.deepStrictEqual(outcome, { path: routingPath, status: 'missing' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const fixture of [
+  {
+    issueId: 'UTV2-1586',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1306',
+    mergeSha: 'fe09f637a7eeebf216e062dd4a003d7e38932d1a',
+  },
+  {
+    issueId: 'UTV2-1585',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
+  },
+]) {
+  test(`${fixture.issueId} fixture binds to its authoritative PR and merge SHA`, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-real-fixture-'));
+    try {
+      const proofDir = path.join(root, 'docs/06_status/proof', fixture.issueId);
+      const routingPath = path.join(proofDir, 'model-routing.json');
+      fs.mkdirSync(proofDir, { recursive: true });
+      fs.writeFileSync(
+        routingPath,
+        preMergeModelRoutingJson({ issue_id: fixture.issueId }),
+        'utf8',
+      );
+
+      const fixtureInput = input({
+        issue_id: fixture.issueId,
+        commit_sha: fixture.mergeSha,
+        pr_url: fixture.prUrl,
+        expected_proof_paths: [
+          `docs/06_status/proof/${fixture.issueId}/model-routing.json`,
+        ],
+      });
+      fixtureInput.gitTruth = gitTruth({
+        merge_sha: fixture.mergeSha,
+        diff_base_ref: `${fixture.mergeSha}^1`,
+        diff_target_ref: fixture.mergeSha,
+      });
+      generateProofArtifacts(fixtureInput, { root });
+
+      assert.deepStrictEqual(
+        JSON.parse(fs.readFileSync(routingPath, 'utf8')).closeout_binding,
+        {
+          sha_type: 'merge_sha',
+          merge_sha: fixture.mergeSha,
+          pr_url: fixture.prUrl,
+          bound_at: '2026-05-25T16:00:00.000Z',
+        },
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('generateProofArtifacts validates required model-routing authority before any write', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-routing-atomic-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'model-routing.json'),
+      preMergeModelRoutingJson({
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: '3333333333333333333333333333333333333333',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+          bound_at: '2026-05-26T00:00:00.000Z',
+        },
+      }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => generateProofArtifacts(
+        input({
+          expected_proof_paths: [
+            'docs/06_status/proof/UTV2-1170/model-routing.json',
+          ],
+        }),
+        { root },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
+    );
+    assert.strictEqual(fs.existsSync(path.join(proofDir, 'diff-summary.md')), false);
+    assert.strictEqual(fs.existsSync(path.join(proofDir, 'verification.md')), false);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
