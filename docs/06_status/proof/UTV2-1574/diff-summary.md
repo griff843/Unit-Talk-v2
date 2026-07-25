@@ -1,21 +1,42 @@
-# Diff Summary: UTV2-1574
+# UTV2-1574 Diff Summary
 
-## Files changed
+Generated at: 2026-07-25T03:41:27.527Z
+Issue: UTV2-1574
+Tier: T1
+Lane type: governance
+Branch: claude/utv2-1574-sole-owner-governance-ratification
+PR URL: N/A
+Head SHA: fe09f637a7eeebf216e062dd4a003d7e38932d1a
+Merge SHA: 18de0721cd5a8577de18147bbeb18bef8fc43d77
+Diff base: 18de0721cd5a8577de18147bbeb18bef8fc43d77^1
+Diff target: 18de0721cd5a8577de18147bbeb18bef8fc43d77
 
-| File | Change |
-| --- | --- |
-| `docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md` | New. Records griff843's ruling on the nine Griff-decision rows in `SOLE_OWNER_GOVERNANCE_CONVERGENCE_PROPOSAL.md` §7: rows 1-7 and 9 ratified as their Converged rec.; row 8 explicitly deferred. Authorizes starting PR1 of the five-PR migration only. |
-| `docs/06_status/lanes/UTV2-1574.json`, `.ops/sync/UTV2-1574.yml`, `docs/06_status/proof/UTV2-1574/*` | This lane's own manifest, sync record, and proof bundle. |
+## Git Diff Stat
+```
+.ops/sync/UTV2-1574.yml                            | 10 +++
+ ...OLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md | 62 +++++++++++++++++++
+ docs/06_status/lanes/UTV2-1574.json                | 39 ++++++++++++
+ docs/06_status/proof/UTV2-1574/.gitkeep            |  0
+ docs/06_status/proof/UTV2-1574/diff-summary.md     | 21 +++++++
+ docs/06_status/proof/UTV2-1574/evidence.json       | 71 ++++++++++++++++++++++
+ docs/06_status/proof/UTV2-1574/verification.md     | 62 +++++++++++++++++++
+ 7 files changed, 265 insertions(+)
+```
 
-## Not changed
+## Git Name Status
+```
+A	.ops/sync/UTV2-1574.yml
+A	docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md
+A	docs/06_status/lanes/UTV2-1574.json
+A	docs/06_status/proof/UTV2-1574/.gitkeep
+A	docs/06_status/proof/UTV2-1574/diff-summary.md
+A	docs/06_status/proof/UTV2-1574/evidence.json
+A	docs/06_status/proof/UTV2-1574/verification.md
+```
 
-- `docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md` -- amended by reference per the convergence proposal's own §8 supersession plan, not edited directly.
-- Branch protection, workflow files, product/runtime code -- none touched.
+## Manifest Files Changed
+- No files_changed entries recorded.
 
-## Why
-
-Griff instructed via chat: "Ratify the nine Sole-Owner decisions." This PR is the durable, governed decision
-record for that instruction -- consistent with this repo's standing rule that governance/gating decisions take
-effect via a real PR, never chat alone.
-
-Full rationale: `verification.md`.
+## SHA Binding
+Head SHA: fe09f637a7eeebf216e062dd4a003d7e38932d1a
+Merge SHA: 18de0721cd5a8577de18147bbeb18bef8fc43d77
