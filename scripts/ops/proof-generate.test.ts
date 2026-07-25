@@ -928,6 +928,46 @@ test('generateProofArtifacts validates required model-routing authority before a
   }
 });
 
+test('generateProofArtifacts binds every declared model-routing.json sidecar, not just the first', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-routing-multi-'));
+  try {
+    const primaryDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    const secondaryDir = path.join(root, 'docs/06_status/proof/UTV2-1170/secondary-executor');
+    fs.mkdirSync(primaryDir, { recursive: true });
+    fs.mkdirSync(secondaryDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(primaryDir, 'model-routing.json'),
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }),
+      'utf8',
+    );
+    fs.writeFileSync(
+      path.join(secondaryDir, 'model-routing.json'),
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', model: 'claude-sonnet-5' }),
+      'utf8',
+    );
+
+    const result = generateProofArtifacts(
+      input({
+        expected_proof_paths: [
+          'docs/06_status/proof/UTV2-1170/model-routing.json',
+          'docs/06_status/proof/UTV2-1170/secondary-executor/model-routing.json',
+        ],
+      }),
+      { root },
+    );
+
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/model-routing.json'));
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/secondary-executor/model-routing.json'));
+
+    const primary = JSON.parse(fs.readFileSync(path.join(primaryDir, 'model-routing.json'), 'utf8'));
+    const secondary = JSON.parse(fs.readFileSync(path.join(secondaryDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(primary.closeout_binding.merge_sha, MERGE_SHA);
+    assert.strictEqual(secondary.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('generateProofArtifacts rebinds evidence.json and verification.md when a merge SHA is present', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-rebind-'));
   try {

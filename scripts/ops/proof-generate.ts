@@ -560,20 +560,27 @@ export function generateProofArtifacts(
     }
   };
   const requiredShas = [input.gitTruth.head_sha, input.gitTruth.merge_sha].filter(isPresent);
-  const modelRoutingPath = input.manifest.expected_proof_paths.find(
+  const modelRoutingPaths = input.manifest.expected_proof_paths.filter(
     (proofPath) => path.posix.basename(proofPath) === 'model-routing.json',
   );
 
-  // Validate the required routing sidecar before mutating any proof artifact so
-  // conflicts and malformed historical authority fail as one atomic operation.
-  if (input.gitTruth.merge_sha && modelRoutingPath) {
-    rebindModelRoutingJsonSha(
-      safeRepoPath(root, modelRoutingPath),
-      input.gitTruth.merge_sha,
-      input.generatedAt,
-      input.manifest.pr_url,
-      { required: true, write: false, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
-    );
+  // Validate every required routing sidecar before mutating any proof artifact
+  // so conflicts and malformed historical authority fail as one atomic
+  // operation. A manifest declaring more than one model-routing.json (not
+  // used by any lane today, but not disallowed by the schema either) must
+  // have every one bound -- the truth gate evaluates every expected proof
+  // artifact, so leaving a second match unbound would permanently block
+  // closeout even though this function reported success.
+  if (input.gitTruth.merge_sha) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      rebindModelRoutingJsonSha(
+        safeRepoPath(root, modelRoutingPath),
+        input.gitTruth.merge_sha,
+        input.generatedAt,
+        input.manifest.pr_url,
+        { required: true, write: false, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
+      );
+    }
   }
 
   for (const proofFile of STANDARD_PROOF_FILES) {
@@ -628,19 +635,21 @@ export function generateProofArtifacts(
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
   }
 
-  if (input.gitTruth.merge_sha && modelRoutingPath) {
-    const outcome = rebindModelRoutingJsonSha(
-      safeRepoPath(root, modelRoutingPath),
-      input.gitTruth.merge_sha,
-      input.generatedAt,
-      input.manifest.pr_url,
-      { required: true, write: shouldWrite, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
-    );
-    if (outcome.status === 'updated') {
-      pushUnique(updatedPaths, outcome.path);
-      pushUnique(stalePathsReplaced, outcome.path);
-    } else if (outcome.status === 'unchanged') {
-      pushUnique(unchangedPaths, outcome.path);
+  if (input.gitTruth.merge_sha) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      const outcome = rebindModelRoutingJsonSha(
+        safeRepoPath(root, modelRoutingPath),
+        input.gitTruth.merge_sha,
+        input.generatedAt,
+        input.manifest.pr_url,
+        { required: true, write: shouldWrite, relPath: modelRoutingPath, expectedIssueId: input.manifest.issue_id },
+      );
+      if (outcome.status === 'updated') {
+        pushUnique(updatedPaths, outcome.path);
+        pushUnique(stalePathsReplaced, outcome.path);
+      } else if (outcome.status === 'unchanged') {
+        pushUnique(unchangedPaths, outcome.path);
+      }
     }
   }
 
