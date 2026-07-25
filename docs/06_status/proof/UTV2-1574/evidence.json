@@ -11,7 +11,7 @@
     "verified_source_sha": "18de0721cd5a8577de18147bbeb18bef8fc43d77",
     "verified_source_note": "Filled in at commit time by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
     "sha_type": "merge_sha",
-    "bound_at": "2026-07-25T03:41:27.527Z",
+    "bound_at": "2026-07-25T04:28:49.187Z",
     "ci_sentinels": {
       "verify": "pass",
       "merge_gate": "not_yet_run"
@@ -66,11 +66,31 @@
       }
     ],
     "row_counts": [
-      { "table": "picks", "count": 101737, "status": "observed" },
-      { "table": "pick_lifecycle", "count": 145277, "status": "observed" },
-      { "table": "distribution_outbox", "count": 10191, "status": "observed" },
-      { "table": "audit_log", "count": 244298, "status": "observed" },
-      { "table": "settlement_records", "count": 34956, "status": "observed" }
+      {
+        "table": "picks",
+        "count": 101737,
+        "status": "observed"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 145277,
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 10191,
+        "status": "observed"
+      },
+      {
+        "table": "audit_log",
+        "count": 244298,
+        "status": "observed"
+      },
+      {
+        "table": "settlement_records",
+        "count": 34956,
+        "status": "observed"
+      }
     ],
     "row_counts_captured_at": "2026-07-25T03:47:00Z",
     "note": "This lane's own diff (docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md) changed no code, workflow, or branch-protection configuration and has no runtime behavior of its own to exercise. This database-smoke result satisfies the mandatory T1 runtime-evidence policy (a live, real-Supabase pass with non-empty queries and monitored-table row counts) -- it does not claim the governance document itself altered runtime behavior."
