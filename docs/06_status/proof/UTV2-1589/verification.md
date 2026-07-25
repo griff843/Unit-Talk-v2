@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 5c0da1552bb538ad68e2746400037ecffe684837
+MERGE_SHA: 679b8af4ff1b048230cf1cb3c295d484b2a32014
 
 ## Summary
 
@@ -222,6 +222,29 @@ committed files directly (verified independently to still pass, not a
 live regression). Both left as follow-up items rather than folded into
 this already-multiply-amended PR.
 
+## Fifth finding (fixed): the push-only restriction was incomplete
+
+A further automated Codex review found the second scope amendment's
+`github.event_name == 'push'` restriction did not cover every deadlock
+path: a governed manifest-only repair PR (`buildRepairRequiredViaPrPacket`'s
+recommended path for a lane whose `pr_url` is already set, e.g.
+UTV2-1586) merges via an ordinary `push`, and that push's own
+`github.sha` is the repair PR's own merge commit -- not the lane's
+original implementation merge SHA -- even though `github.event_name ==
+'push'` is true. The manifest checked out by that same push already
+carries the correct historical `commit_sha` (the repair PR's whole
+point), so the early bind step would still write the wrong SHA and hit
+the identical `binding_conflict` deadlock later in the same run.
+
+Fixed by additionally reading the checked-out manifest's own
+`commit_sha` inside the step's script and skipping the early
+`ops:proof-generate` bind whenever it already disagrees with this
+push's SHA -- the signal that this push is a repair commit, not the
+lane's own first-time closeout. A regression test in
+`scripts/ops/lane-close.test.ts` asserts the guard is present and that
+the `pnpm ops:proof-generate` call is gated behind it (inside the
+`else` branch), not run unconditionally alongside it.
+
 See `docs/06_status/proof/UTV2-1589/evidence.json`'s `known_limitations`
 for the full text of each.
 
@@ -230,7 +253,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`5c0da1552bb538ad68e2746400037ecffe684837`:
+`679b8af4ff1b048230cf1cb3c295d484b2a32014`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
@@ -245,8 +268,8 @@ The following commands were executed on substantive commit
 
 ```text
 Focused proof generation and truth checks
-# tests 216
-# pass 216
+# tests 217
+# pass 217
 # fail 0
 # skipped 0
 
