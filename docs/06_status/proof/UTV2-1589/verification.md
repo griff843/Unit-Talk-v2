@@ -1,6 +1,6 @@
 # PROOF: UTV2-1589
 
-MERGE_SHA: 46c55ad009f5db3110982b236f8e058a26f34f08
+MERGE_SHA: 3c1bbdb3df142a4714c7cfc5fceb30074274bd41
 
 ## Summary
 
@@ -291,7 +291,7 @@ EVIDENCE:
 ## Verification
 
 The following commands were executed on substantive commit
-`46c55ad009f5db3110982b236f8e058a26f34f08`:
+`3c1bbdb3df142a4714c7cfc5fceb30074274bd41`:
 
 - `npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts`
 - `npx tsx --test scripts/ops/workflow-hardening.test.ts`
