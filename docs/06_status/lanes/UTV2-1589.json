@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1589-model-routing-sha-bind",
   "branch": "codex/utv2-1589-model-routing-sha-bind",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "6f0c3616be06ae86d7ca48da8430109a776193a5",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1308",
   "files_changed": [],
   "file_scope_lock": [
@@ -25,14 +25,37 @@
     "docs/06_status/proof/UTV2-1589/evidence.json",
     "docs/06_status/proof/UTV2-1589/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-25T04:33:37.178Z",
-  "heartbeat_at": "2026-07-25T05:18:23.872Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-26T00:19:57.206Z",
+  "closed_at": "2026-07-26T00:19:57.206Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1589-model-routing-sha-bind.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-26T00:19:54.270Z",
+      "verdict": "pass",
+      "merge_sha": "6f0c3616be06ae86d7ca48da8430109a776193a5",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1308",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-26T00:19:54.280Z",
+      "verdict": "pass",
+      "merge_sha": "6f0c3616be06ae86d7ca48da8430109a776193a5",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

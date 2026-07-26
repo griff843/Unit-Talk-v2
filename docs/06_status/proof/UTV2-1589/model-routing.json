@@ -10,5 +10,11 @@
   "override_used": false,
   "override_authorized_by": null,
   "codex_exit_code": 0,
-  "generated_at": "2026-07-25T05:22:07.405Z"
+  "generated_at": "2026-07-25T05:22:07.405Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "6f0c3616be06ae86d7ca48da8430109a776193a5",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1308",
+    "bound_at": "2026-07-26T00:19:54.276Z"
+  }
 }

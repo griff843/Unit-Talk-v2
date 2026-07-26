@@ -496,10 +496,5 @@ lane and is not a historical replay candidate.
 
 ## Merge SHA Binding
 
-The value above is the substantive premerge commit used for verification.
-Trusted post-merge proof generation must replace it with the authoritative
-GitHub merge SHA and append the matching `closeout_binding` to
-`model-routing.json`.
-
-This is executor-produced evidence for independent review. It is not a PM
-verdict, does not add `t1-approved`, and does not authorize merge.
+Merge SHA: `6f0c3616be06ae86d7ca48da8430109a776193a5`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1308
