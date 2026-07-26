@@ -1,0 +1,240 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1570",
+  "title": "Implement Tier C authorization gate + singleton approval record (UTV2-1451 child)",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "PARKED_BY_PM",
+  "source_sha": "333c0d041f2e345b41fc1e5608dda4121ef2050a",
+  "reviewed_head_sha": null,
+  "evidence_commit_sha": "set-by-ci",
+  "current_head_sha": "set-by-ci",
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "333c0d041f2e345b41fc1e5608dda4121ef2050a",
+    "verified_source_note": "Pre-push local head at proof-authoring time (full 40-char SHA required by pre-proof-validator.sh). PR head SHA and merge SHA will be bound post-push/merge per standard proof-SHA-binding automation (post-merge-lane-close.yml runs ops:proof-generate --merge-sha).",
+    "sha_type": "pre_push_local_head",
+    "bound_at": "2026-07-21T22:30:00.000Z",
+    "ci_sentinels": {
+      "verify": "pending",
+      "merge_gate": "pending",
+      "tier_c_authorization_gate": "pending_first_run"
+    },
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1570",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "Mechanical checks only. Not independent Griff review, t1-approved, or a pm-verdict/v1 owner artifact."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "unit_tests_new": [
+      {
+        "command": "npx tsx --test scripts/ci/tier-c-approval-comment-parser.test.ts",
+        "status": "PASS",
+        "tests": 8,
+        "pass": 8,
+        "fail": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ci/tier-c-authorization-gate.test.ts",
+        "status": "PASS",
+        "tests": 10,
+        "pass": 10,
+        "fail": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ops/singleton-approval.test.ts",
+        "status": "PASS",
+        "tests": 19,
+        "pass": 19,
+        "fail": 0
+      }
+    ],
+    "hook_integration_proof": {
+      "command": "pnpm test:hooks",
+      "script": ".claude/hooks/tier-c-path-guard.test.sh",
+      "status": "PASS",
+      "assertions": 11,
+      "pass": 11,
+      "fail": 0,
+      "note": "Invokes the hook binary directly with a manifest-authorized PreToolUse stdin payload, captures real stdout, asserts valid JSON with hookSpecificOutput.permissionDecision/additionalContext + top-level systemMessage present and non-empty. Also asserts the un-authorized-block (exit 2) and non-Tier-C-passthrough (exit 0, no output) paths are unchanged. This is the acceptance-criteria integration test / captured-behavior proof, not a design assertion."
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "note": "Includes test:ops (1135 tests, 0 fail, includes the 37 new tests above) and the new test:hooks script (11/11), plus every pre-existing suite."
+    },
+    "r_level": {
+      "note": "Not run standalone as a separate command; pnpm verify's full green run covers the same gates. No R-level artifacts required for this diff (pure hook/CI/ops-script change, no lifecycle/settlement/promotion path touched)."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "note": "This lane changes only a local Claude Code hook, CI gate scripts, and a pure Linear-GraphQL validator module (its schema is documented in that module's own header comment); no production code path or migration touched. Live smoke run (apps/api/src/database-smoke.test.ts) regardless per T1 policy, same reasoning as a prior lane's proof for an equally out-of-domain CI/governance change.",
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "INSERT via processSubmission \u2014 one row per synthetic pick, in the 6 of 7 tests that create a pick (all except the read-only UTV2-883 participants test)"
+      },
+      {
+        "table": "picks",
+        "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests (UTV2-920 invalid enqueue/delivery/settlement) to assert zero rows were written for a specific to_state after a rejected atomic operation"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "INSERT via one successful enqueueDistributionAtomic call (UTV2-920 invalid-delivery test setup); UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt (UTV2-920 invalid-enqueue test) is rejected and asserted via findByIdempotencyKey returning null"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call \u2014 no receipt row is created anywhere in this test run"
+      },
+      {
+        "table": "settlement_records",
+        "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call (UTV2-920 invalid settlement) is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record (corrects_id null) and that a correction does not mutate the original row"
+      },
+      {
+        "table": "audit_log",
+        "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation (enqueue/delivery/settlement), and by one test to assert at least two audit rows exist for a successful settlement plus its correction"
+      },
+      {
+        "table": "participants",
+        "description": "read-only SELECT (listByType('player')) scanning the full live table for the UTV2-883 duplicate (external_id, sport, participant_type) invariant \u2014 no writes"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 6
+      },
+      {
+        "table": "submissions",
+        "count": 6
+      },
+      {
+        "table": "settlement_records",
+        "count": 5
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 1
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0
+      },
+      {
+        "table": "participants",
+        "count": 0
+      }
+    ]
+  },
+  "linear_graphql_verification": {
+    "note": "Introspected Linear's live GraphQL schema (not assumed from docs, which do not document these fields) to confirm Issue.creator and Comment.{id,url,body,user,botActor} field names before designing singleton-approval.ts. Queried the real UTV2-1570 issue and its own comments to confirm the actual comment URL format and discover that the #comment-<id> URL fragment is a truncated 8-character prefix of the full comment UUID, not the full ID -- this is why the validator matches by exact url equality against the comment's own canonical field rather than reconstructing an ID from the ref string.",
+    "queries_run": [
+      "introspection: __type(name: \"Issue\") { fields { name } } \u2014 confirmed 'creator' field",
+      "introspection: __type(name: \"Comment\") { fields { name type { name kind } } } \u2014 confirmed id/url/body/user/botActor fields",
+      "live query: issue(id: \"UTV2-1570\") { creator { id name email } comments(first: 10) { nodes { id url body user { id name email } botActor { id } } } } \u2014 confirmed real URL format and truncated fragment"
+    ]
+  },
+  "scope": {
+    "implementation_paths": [
+      ".claude/hooks/tier-c-path-guard.sh",
+      ".claude/hooks/tier-c-path-guard.test.sh",
+      "docs/05_operations/schemas/tier-c-approval-v1.md",
+      "scripts/ci/tier-c-approval-comment-parser.ts",
+      "scripts/ci/tier-c-approval-comment-parser.test.ts",
+      "scripts/ci/tier-c-authorization-gate.ts",
+      "scripts/ci/tier-c-authorization-gate.test.ts",
+      ".github/workflows/tier-c-authorization-gate.yml",
+      "docs/05_operations/REQUIRED_CI_CHECKS.md",
+      "scripts/ops/singleton-approval.ts",
+      "scripts/ops/singleton-approval.test.ts",
+      "package.json"
+    ],
+    "followup_paths": [
+      "scripts/ops/lane-start.ts (wire --singleton-approval-ref into the existing flag check; blocked by concurrent UTV2-1569 file-scope lock at authoring time)",
+      "scripts/ops/lane-start.test.ts (new/updated cases for the wired-in validator)"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "manifest_authorized_case_stays_exit_0": "PASS",
+    "no_local_hook_block_reintroduced": "PASS",
+    "structured_pretooluse_json_not_naive_stdout": "PASS",
+    "integration_test_or_captured_behavior_proof_for_hook_output": "PASS",
+    "tier_c_approval_v1_schema_mirrors_scope_override_v1": "PASS",
+    "tier_c_approval_exact_head_bound": "PASS",
+    "tier_c_approval_codeowners_human_only": "PASS",
+    "ci_gate_reuses_canonical_isTierCPath_no_second_list": "PASS",
+    "ci_gate_fails_closed_for_non_t1_tier_c_without_authority": "PASS",
+    "singleton_approval_ref_replaces_bare_flag": "PARTIAL \u2014 validator built and tested; lane-start.ts wiring deferred (documented gap, see known_gaps)",
+    "singleton_approval_validates_schema_issue_paths_author": "PASS",
+    "singleton_approval_author_matched_against_real_issue_owner": "PASS (live Linear GraphQL query, not a config allowlist)",
+    "legacy_flag_deprecation_warning_not_sufficient_alone": "DESIGNED_IN_SCHEMA_DOC \u2014 not yet enforced at the lane-start.ts call site (same wiring gap)",
+    "fail_closed_stable_error_codes": "PASS",
+    "tests_wired_into_pnpm_verify": "PASS",
+    "test_db_run_with_nonempty_queries_and_row_counts": "PASS",
+    "file_scope_declared_before_implementation": "PASS (declared via lane manifest before implementation; a mid-implementation attempt to extend scope for a new singleton-approval-v1.md schema doc was reverted after discovering CI's file-scope-guard freezes scope to the lane's first manifest commit -- the doc content was folded into an already-declared file instead, see known_gaps)"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "scripts/ops/lane-start.ts is NOT wired to call the new singleton-approval.ts validator in this PR. That file (and scripts/ops/lane-start.test.ts) are currently held by another active, unrelated concurrent T1 lane's declared file_scope_lock (UTV2-1569's Fable-pilot-routing lane, PR #1292, still open, mergeStateStatus BLOCKED, awaiting its own PM review as of this writing). Touching either file here would create a hard file-scope-lock conflict, mechanically enforced by both ops:lane-start's own concurrency check at lane-creation time and CI's file-scope-lock-check.yml at PR-diff time -- forcing it through would either break my own lane-start invocation or fail CI on one of the two concurrent PRs. This means the bare --singleton-approved flag remains the only mechanism actually reachable from lane-start.ts today: the singleton self-authorization loophole is NOT yet mechanically closed end-to-end, only the validator half of it (the validator module itself, its Linear-comment schema, and its full 19-test suite are complete, tested, and ready to wire in). The wiring is a small, mechanical change (replace the current `flags.has('singleton-approved') || bools.has('singleton-approved')` check with a call into validateSingletonApprovalRef, emit a deprecation warning for the bare flag, fail closed with a stable error code) once the conflicting lane merges or closes. Recommend a fast, narrow follow-up lane once UTV2-1569 clears.",
+    "The Tier C Authorization Gate workflow is registered as a required-check CANDIDATE in REQUIRED_CI_CHECKS.md (\u00a75.6), not yet flipped live in GitHub branch protection -- same rollout pattern used for Proof Auditor Gate (candidate first, promoted to required after a confirmed green run on a Tier-C-touching PR). Live branch protection today lists only: verify, Executor Result Validation, Merge Gate, P0 Protocol (confirmed via `gh api repos/.../branches/main/protection` at authoring time) -- several other 'always_required' entries already in REQUIRED_CI_CHECKS.md (e.g. proof-regression) are also not live-configured, so this gap is consistent with existing repo practice, not a new shortfall introduced by this lane. Promoting it to a live required check is a deliberate follow-up action, not something this PR performs unilaterally.",
+    "The bootstrap fallback in tier-c-authorization-gate.yml (falling back to this PR's own copy of tier-c-authorization-gate.ts / tier-c-approval-comment-parser.ts when origin/main has neither yet) is exercised on THIS PR's own first CI run by construction -- expected and self-resolving once this PR merges, same pattern file-scope-lock-check.yml used for file-scope-guard.ts under UTV2-1521.",
+    "docs/05_operations/schemas/singleton-approval-v1.md was drafted, then removed and folded into scripts/ops/singleton-approval.ts's own header comment. CI's file-scope-guard.ts freezes a lane's declared file_scope_lock to the content of the FIRST commit that added its manifest (resolveTrustedManifests), specifically so a PR cannot widen its own scope in a later commit -- a genuinely new file discovered mid-implementation has no forward-only path around that freeze short of an externally-authored scope-override/v1 PR comment, which this lane cannot fabricate for itself. No content was dropped, only relocated into an already-declared file.",
+    "PRE-EXISTING, NOT INTRODUCED BY THIS LANE: CI's File scope lock check fails on this PR's package.json edit -- 'package.json locked by UTV2-1550 (claude/utv2-1550-executor-result-required-check-identity, package.json)'. UTV2-1550's manifest on main still lists package.json in its file_scope_lock even though its implementation fully merged (PR #1239); its status is 'merged', which the guard's ACTIVE_STATUSES set still treats as active for cross-lane conflict purposes. This is a known 'ghost lane' gap -- independently discovered and already attempted to be fixed in a separate, already-closed PR (#1288, branch claude/utv2-1550-scope-reconcile) that narrowed UTV2-1550's manifest, but that PR never merged. Resolving it requires either merging a scope-reconciliation fix for UTV2-1550's manifest to main, or an operator decision on how to unblock package.json edits generally -- it is outside this lane's own file scope and authority to fix within this PR. This blocks the File scope lock required check until resolved externally."
+  ],
+  "codex_review": {
+    "requested_at": "2026-07-21T22:35:00.000Z",
+    "round_1": {
+      "finding": "P2: issue_comment-triggered re-evaluation (posting TIER_C_APPROVAL after an earlier failing pull_request run) never created or updated a Checks API run bound to the PR's head_sha -- only the job's own native per-trigger status was produced, which branch protection would not associate with the PR's head SHA for the pull_request-triggered failure. A later valid approval comment would not actually unblock the PR without a manual rerun or new push.",
+      "fix": "Restructured the workflow to explicitly create a Checks API run (checks.create) bound to the PR's headSha at the start of every evaluation (regardless of trigger event), and explicitly complete it (checks.update) with the correct conclusion at the end -- mirroring merge-gate.yml's own established checks.create/checks.update pattern exactly. The 'Evaluate Tier C authorization' step now uses continue-on-error so the completion step always runs and the explicit check never gets stuck in_progress; core.setFailed() still marks the job itself failed on a BLOCKED verdict for Actions-tab visibility.",
+      "status": "addressed"
+    },
+    "round_2_and_pm_review": {
+      "reviewed_at": "2026-07-21T23:11:32.000Z",
+      "codex_findings": [
+        "P1: privileged job (checks:write/issues:write/pull-requests:write) ran pnpm install against the PR's own (attacker-controlled) checkout on pull_request events -- a malicious PR could run arbitrary code with this job's write-scoped token via a malicious postinstall script or modified pnpm-lock.yaml.",
+        "P2: if the collect step's post-check-creation logic threw (malformed manifest, transient API failure listing files/comments, etc.), the completion step was skipped, leaving the explicit check stuck in_progress on the PR head forever."
+      ],
+      "pm_review": {
+        "author": "griff843",
+        "verbatim": "PM exact-head review: approval is withheld and this implementation is parked. The parent design #1289 is not approved; the singleton validator is not wired into lane-start; the privileged gate executes PR-controlled install scripts with write permissions; approval-comment reruns do not reliably publish a passing check to the PR head; and an error after explicit check creation can leave the check stuck in progress.",
+        "disposition": "PARKED -- approval explicitly withheld by the human PM. This is the authoritative status of this PR as of this proof revision; do not treat any later CI green state as overriding it. Two of the five points raised (privileged install scripts; check stuck in progress) are fixed in this revision -- see fixes below. The remaining three (parent design #1289 not yet approved; singleton validator not wired into lane-start; whether approval-comment reruns now reliably publish, given the round-1 fix) are not resolvable by this executor alone and require either the parent design PR's own approval, the conflicting UTV2-1569 lane clearing, or a live re-test of the issue_comment re-evaluation path against a real PR."
+      },
+      "fixes_applied": [
+        "Pinned the workflow's initial Checkout step to github.event.pull_request.base.sha (immutable, never PR-supplied) for pull_request events, matching merge-gate.yml's own established checkout-ref-pin pattern -- pnpm install now always resolves dependencies from trusted base-branch state, never the PR's own package.json/pnpm-lock.yaml. The two new-file bootstrap fallbacks in 'Resolve trusted gate script' now fetch text content (never executed as raw bytes) from the PR head SHA via the GitHub Contents API instead of reading a local working-tree copy, since that checkout no longer contains the PR's own new files.",
+        "Wrapped the collect step's post-check-creation logic (tier resolution, changed-files/approval-comment collection) in try/catch: any error now completes the explicit check as a failure with the error message before rethrowing, so the check always reaches a terminal state instead of getting stuck in_progress."
+      ],
+      "not_addressed_by_this_executor": [
+        "Parent design PR #1289's own approval status -- outside this lane's scope; tracked in Linear.",
+        "Singleton validator wiring into lane-start.ts -- blocked by the concurrent UTV2-1569 lane's active file-scope lock (see known_gaps above); requires that lane to clear first.",
+        "Whether the round-1 check-run-binding fix now reliably publishes a passing check on an approval-comment rerun -- not yet exercised against a live PR with a real TIER_C_APPROVAL comment; the fix is code-reviewed and logically sound but not runtime-proven in this exact scenario."
+      ]
+    }
+  },
+  "verdict": "PARKED_BY_PM_NOT_READY_TO_MERGE"
+}

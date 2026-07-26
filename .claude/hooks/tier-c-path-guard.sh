@@ -1,20 +1,40 @@
 #!/usr/bin/env bash
 # .claude/hooks/tier-c-path-guard.sh
 # PreToolUse hook (matcher: Write|Edit): warns before writing to Tier C sensitive paths.
-# Exit 0 = allow silently. Exit 2 = non-blocking warning surfaced to Claude.
+# Exit 0 = allow. A JSON object on stdout is processed by Claude Code only on exit 0.
+# Exit 2 = BLOCKS the tool call outright (confirmed empirically, twice, this session --
+# not a "non-blocking warning" despite what an earlier revision of this comment claimed).
 #
-# Tier C paths are defined in docs/05_operations/DELEGATION_POLICY.md sensitive-path matrix.
-# These paths require PM plan approval + PM merge approval before any change.
+# Tier C paths are defined in docs/05_operations/DELEGATION_POLICY.md sensitive-path
+# matrix, mirroring scripts/ops/merge-risk.ts's isTierCPath()/TIER_C_EXACT_PATHS/
+# TIER_C_PATH_PREFIXES (the canonical single source of truth for what Tier C means --
+# this hook's own grep patterns below are a real-time editing convenience, not a second
+# authoritative list; the CI gate that actually blocks non-T1 merges,
+# scripts/ci/tier-c-authorization-gate.ts, imports isTierCPath() directly).
+# These paths require PM plan approval + PM merge approval before any change, UNLESS
+# manifest-authorized (below).
 #
-# MANIFEST-AUTHORIZED BYPASS (UTV2-961):
+# MANIFEST-AUTHORIZED BYPASS (UTV2-961, notice mechanism corrected by UTV2-1570):
 # If the path is in an active lane manifest's file_scope_lock, the write is
-# pre-authorized for that lane. The warning is still emitted (exit 2) but
-# includes authorization context so Claude can proceed without PM confirmation.
+# pre-authorized for that lane. This case MUST stay exit 0 -- exit 2 here would
+# re-block every legitimate T1 Tier C lane, which is exactly the failure mode this
+# bypass exists to avoid. The bypass must not be silent either: on exit 0, this hook
+# emits a structured JSON object on stdout using the documented PreToolUse hook output
+# schema (hookSpecificOutput.permissionDecision/additionalContext + top-level
+# systemMessage) so the authorization is actually visible in-transcript and to the
+# user, not merely a bare non-JSON stdout string (Claude Code only parses stdout as
+# JSON on exit 0, and only recognized fields are ever surfaced anywhere -- arbitrary
+# plain-text stdout is silently discarded). See
+# docs/05_operations/schemas/tier-c-approval-v1.md and
+# .claude/hooks/tier-c-path-guard.test.sh for the captured-behavior proof of this
+# exact JSON shape.
+#
 # Authorization requirements:
 #   1. docs/06_status/lanes/UTV2-NNN.json exists with status != done/closed
 #   2. The file path appears in file_scope_lock
 #   3. The branch matches the lane's branch field
-# All three must be true; otherwise the standard Tier C warning applies.
+# All three must be true; otherwise the standard Tier C warning applies (exit 2,
+# blocking -- the non-manifest-authorized case is unchanged by this revision).
 
 input=$(cat)
 
@@ -129,8 +149,27 @@ PYEOF
 
   if [ -n "$manifest_authorized" ]; then
     # Manifest-authorized: file is in an active lane's file_scope_lock.
-    # Exit 0 so the write proceeds without user confirmation.
-    # (Exit 2 was previously used here but Claude Code blocks on any non-zero exit.)
+    # Exit 0 so the write proceeds without user confirmation -- but emit the
+    # structured PreToolUse JSON notice (UTV2-1570) instead of silence or a
+    # naive stdout echo, so the authorization is actually visible.
+    if command -v python3 >/dev/null 2>&1; then
+      python3 - "$file_path" "$reason" "$manifest_authorized" <<'PYEOF'
+import json, sys
+
+file_path, reason, issue_id = sys.argv[1], sys.argv[2], sys.argv[3]
+notice = f"TIER-C NOTICE: {file_path} — {reason} — authorized via active lane manifest {issue_id} file_scope_lock"
+payload = {
+    "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "allow",
+        "permissionDecisionReason": f"Manifest-authorized Tier C write ({issue_id} file_scope_lock)",
+        "additionalContext": notice,
+    },
+    "systemMessage": notice,
+}
+print(json.dumps(payload))
+PYEOF
+    fi
     exit 0
   fi
 

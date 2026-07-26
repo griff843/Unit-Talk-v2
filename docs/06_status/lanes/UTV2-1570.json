@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1570",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1570-implement-tier-c-authorization-gate-singleton-approval",
+  "branch": "griffadavi/utv2-1570-implement-tier-c-authorization-gate-singleton-approval",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/hooks/tier-c-path-guard.sh",
+    ".claude/hooks/tier-c-path-guard.test.sh",
+    ".github/workflows/tier-c-authorization-gate.yml",
+    "docs/05_operations/REQUIRED_CI_CHECKS.md",
+    "docs/05_operations/schemas/tier-c-approval-v1.md",
+    "docs/06_status/proof/UTV2-1570/diff-summary.md",
+    "docs/06_status/proof/UTV2-1570/evidence.json",
+    "docs/06_status/proof/UTV2-1570/verification.md",
+    "package.json",
+    "scripts/ci/tier-c-approval-comment-parser.test.ts",
+    "scripts/ci/tier-c-approval-comment-parser.ts",
+    "scripts/ci/tier-c-authorization-gate.test.ts",
+    "scripts/ci/tier-c-authorization-gate.ts",
+    "scripts/ops/singleton-approval.test.ts",
+    "scripts/ops/singleton-approval.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1570/.gitkeep",
+    "docs/06_status/proof/UTV2-1570/correction-plan.md",
+    "docs/06_status/proof/UTV2-1570/diff-summary.md",
+    "docs/06_status/proof/UTV2-1570/evidence.json",
+    "docs/06_status/proof/UTV2-1570/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-21T21:56:53.581Z",
+  "heartbeat_at": "2026-07-21T21:56:53.581Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1570-implement-tier-c-authorization-gate-singleton-approval.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1570-implement-tier-c-authorization-gate-singleton-approval",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

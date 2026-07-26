@@ -153,7 +153,16 @@ The following workflows exist under `.github/workflows/` but are intentionally *
 - **Why excluded:** post-merge automation, triggered by `push` to `main` (i.e. after the merge has already happened). Cannot be a required check for PR merge.
 - **Status:** permanently excluded by design. Do not add.
 
-### 5.6 `Proof Auditor Gate` (`proof-auditor-gate.yml`) — required check candidate
+### 5.6 `Tier C Authorization Gate` (`tier-c-authorization-gate.yml`) — required check candidate
+
+- **Job:** `gate`
+- **Trigger:** `pull_request` (opened, synchronize, reopened, labeled, ready_for_review), `issue_comment` (created, edited) when the comment contains `TIER_C_APPROVAL:`
+- **What it does:** Resolves the PR's authoritative tier from its lane manifest (same source `merge-gate.yml` treats as authoritative), collects changed files via the GitHub API, filters them through `isTierCPath()` (imported from `scripts/ops/merge-risk.ts` -- not a second Tier C path list), and for non-T1 lanes touching any matched path, requires a valid `tier-c-approval/v1` PR comment (`docs/05_operations/schemas/tier-c-approval-v1.md`) from an authorized CODEOWNERS human, exact-head-bound, covering every matched path. Runs the gate script (`scripts/ci/tier-c-authorization-gate.ts`) and its full import graph (`scripts/ci/tier-c-approval-comment-parser.ts`, `scripts/ops/merge-risk.ts`, `scripts/ops/shared.ts`, `scripts/ops/concurrency-config.ts`) from a trusted `origin/main` mirror, not the PR's own copies, so a diff cannot widen its own Tier C authority in the same commit set that touches a Tier C path.
+- **Required on main:** candidate — promote to required after the first full green run is confirmed on a Tier-C-touching PR, same rollout pattern used for Proof Auditor Gate below.
+- **Merge relevance:** closes the loophole where `.claude/hooks/tier-c-path-guard.sh` (a local, real-time editing guard a session can route around entirely) was the only check on Tier C self-authorization for non-T1 lanes. T1 lanes are exempt: `t1-approved` + `pm-verdict/v1` (already enforced by `merge-gate.yml`) is PM sign-off bound to the exact head, which necessarily covers whatever the diff touches.
+- **Notes:** Origin UTV2-1570 (implementation child of UTV2-1451). Only runs its blocking check when the diff actually touches a Tier C path for a non-T1 lane; PRs that don't are unaffected (gate passes trivially).
+
+### 5.7 `Proof Auditor Gate` (`proof-auditor-gate.yml`) — required check candidate
 
 - **Job:** `proof-auditor-gate`
 - **Trigger:** `pull_request` (opened, synchronize, reopened, labeled) when `docs/06_status/proof/**`, `docs/06_status/*EVIDENCE*`, or `docs/06_status/*PROOF*` paths change
