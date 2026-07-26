@@ -8,16 +8,20 @@ import {
   checkCommitReachableFromMain,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
+  evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
+  fetchCommitChecks,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
   isLinearStatePermittedForL3,
+  normalizeRequiredChecks,
   parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
   type EvidenceBundleV1,
+  type GitHubCheckRun,
 } from './truth-check-lib.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import type { CheckResult, TruthCheckResult } from './shared.js';
@@ -159,8 +163,8 @@ test('G4 admin-merge recovery fails closed when non-governance checks are missin
   });
 
   assert.strictEqual(result.passed, false);
-  assert.strictEqual(result.checkedSha, 'merge');
-  assert.deepStrictEqual(result.missing, ['verify', 'Executor Result Validation', 'Merge Gate']);
+  assert.strictEqual(result.checkedSha, 'head');
+  assert.deepStrictEqual(result.missing, ['verify', 'Merge Gate']);
 });
 
 test('G4 admin-merge recovery is disabled unless caller confirms merged PR context', async () => {
@@ -177,7 +181,255 @@ test('G4 admin-merge recovery is disabled unless caller confirms merged PR conte
   });
 
   assert.strictEqual(result.passed, false);
-  assert.strictEqual(result.checkedSha, 'merge');
+  assert.strictEqual(result.checkedSha, 'head');
+});
+
+test('G4 historical PR #1305 fixture selects the latest exact required check failure', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: [{ context: 'Executor Result Validation', app_id: 15368 }],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 89531830423,
+        name: 'Executor Result Validator',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:17:54Z',
+        app: { id: 15368 },
+      },
+      {
+        id: 89533838816,
+        name: 'Executor Result Validation',
+        status: 'completed',
+        conclusion: 'failure',
+        completed_at: '2026-07-24T16:27:48Z',
+        details_url: 'https://github.com/griff843/Unit-Talk-v2/runs/89533838816',
+        app: { id: 15368 },
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.deepStrictEqual(result.missing, ['Executor Result Validation']);
+  assert.deepStrictEqual(result.evidence, [
+    {
+      context: 'Executor Result Validation',
+      required_app_id: 15368,
+      matched: true,
+      source: 'check_run',
+      candidate_id: 89533838816,
+      candidate_name: 'Executor Result Validation',
+      candidate_app_id: 15368,
+      state: 'completed',
+      conclusion: 'failure',
+      timestamp: '2026-07-24T16:27:48Z',
+      passed: false,
+      details_url: 'https://github.com/griff843/Unit-Talk-v2/runs/89533838816',
+      selection_reason: 'latest result with exact required context and app identity',
+    },
+  ]);
+});
+
+test('G4 newer failure beats older success for the same exact context', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: ['verify'],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 1,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:00:00Z',
+      },
+      {
+        id: 2,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        completed_at: '2026-07-24T16:10:00Z',
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 2);
+  assert.strictEqual(result.evidence?.[0]?.conclusion, 'failure');
+});
+
+test('G4 newer success beats older failure for the same exact context', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: ['verify'],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 1,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        completed_at: '2026-07-24T16:00:00Z',
+      },
+      {
+        id: 2,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:10:00Z',
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 2);
+  assert.strictEqual(result.evidence?.[0]?.conclusion, 'success');
+});
+
+test('G4 app-bound required check rejects a successful same-name run from another app', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: [{ context: 'verify', app_id: 42 }],
+    statuses: [
+      {
+        id: 99,
+        context: 'verify',
+        state: 'success',
+        updated_at: '2026-07-24T16:20:00Z',
+      },
+    ],
+    checkRuns: [
+      {
+        id: 100,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:20:00Z',
+        app: { id: 43 },
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.evidence?.[0]?.matched, false);
+  assert.strictEqual(result.evidence?.[0]?.required_app_id, 42);
+});
+
+test('G4 missing exact required context fails even when a similarly named check passes', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: ['Executor Result Validation'],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 1,
+        name: 'Executor Result Validator',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:17:54Z',
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.evidence?.[0]?.matched, false);
+});
+
+test('G4 paginates beyond 100 check runs before evaluating required contexts', async () => {
+  const requestedUrls: string[] = [];
+  const firstPage: GitHubCheckRun[] = Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    name: `unrelated-${index + 1}`,
+    status: 'completed',
+    conclusion: 'success',
+    completed_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.includes('/statuses?')) return [] as T;
+    if (url.endsWith('page=1')) return { check_runs: firstPage } as T;
+    if (url.endsWith('page=2')) {
+      return {
+        check_runs: [{
+          id: 101,
+          name: 'Executor Result Validation',
+          status: 'completed',
+          conclusion: 'success',
+          completed_at: '2026-07-24T16:30:00Z',
+        }],
+      } as T;
+    }
+    return { check_runs: [] } as T;
+  };
+
+  const result = await fetchCommitChecks({
+    owner: 'griff843',
+    repo: 'Unit-Talk-v2',
+    sha: '9425e96f91cc7c525cb1a71336b6806e5dac059d',
+    token: 'test-token',
+    requiredChecks: ['Executor Result Validation'],
+    fetchPage,
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 101);
+  assert.ok(requestedUrls.some((url) => url.includes('/check-runs?filter=all&per_page=100&page=2')));
+});
+
+test('G4 paginates beyond 100 commit statuses before evaluating required contexts', async () => {
+  const requestedUrls: string[] = [];
+  const firstPage: Array<{
+    id: number;
+    context: string;
+    state: string;
+    updated_at: string;
+  }> = Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    context: `unrelated-${index + 1}`,
+    state: 'success',
+    updated_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.includes('/check-runs?')) return { check_runs: [] } as T;
+    if (url.endsWith('page=1')) return firstPage as T;
+    if (url.endsWith('page=2')) {
+      return [{
+        id: 101,
+        context: 'classic-required',
+        state: 'success',
+        updated_at: '2026-07-24T16:30:00Z',
+      }] as T;
+    }
+    return [] as T;
+  };
+
+  const result = await fetchCommitChecks({
+    owner: 'griff843',
+    repo: 'Unit-Talk-v2',
+    sha: '9425e96f91cc7c525cb1a71336b6806e5dac059d',
+    token: 'test-token',
+    requiredChecks: ['classic-required'],
+    fetchPage,
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 101);
+  assert.strictEqual(result.evidence?.[0]?.source, 'status');
+  assert.ok(requestedUrls.some((url) => url.includes('/statuses?per_page=100&page=2')));
+});
+
+test('branch-protection required checks preserve app identity and suppress legacy duplicates', () => {
+  assert.deepStrictEqual(
+    normalizeRequiredChecks({
+      contexts: ['verify', 'Executor Result Validation', 'classic-only'],
+      checks: [
+        { context: 'verify', app_id: 42 },
+        { context: 'Executor Result Validation', app_id: 43 },
+      ],
+    }),
+    [
+      { context: 'verify', app_id: 42 },
+      { context: 'Executor Result Validation', app_id: 43 },
+      { context: 'classic-only', app_id: null },
+    ],
+  );
 });
 
 test('required check fallback parses branch-protection script contexts', () => {
@@ -922,6 +1174,10 @@ test('L3: accepts the actual workspace PM-review state "In PM Review"', () => {
   assert.strictEqual(isLinearStatePermittedForL3('In PM Review'), true);
 });
 
+test('L3: accepts the canonical "Ready to Close" state', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('Ready to Close'), true);
+});
+
 test('L3: accepts "Done"', () => {
   assert.strictEqual(isLinearStatePermittedForL3('Done'), true);
 });
@@ -931,7 +1187,18 @@ test('L3: rejects the stale "In Review" state that does not exist in this worksp
 });
 
 test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abandoned)', () => {
-  for (const state of ['Backlog', 'Blocked', 'Cancelled', 'Abandoned', 'Todo', 'In Progress']) {
+  for (const state of [
+    'Backlog',
+    'Blocked',
+    'Blocked Internal',
+    'Cancelled',
+    'Abandoned',
+    'Todo',
+    'In Progress',
+    'In Codex',
+    'In Claude',
+    'In Proof',
+  ]) {
     assert.strictEqual(isLinearStatePermittedForL3(state), false, `expected ${state} to fail closed`);
   }
 });
