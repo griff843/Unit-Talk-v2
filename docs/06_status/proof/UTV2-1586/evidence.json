@@ -6,12 +6,12 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-24T21:05:19Z",
   "sha_binding": {
-    "verified_source_sha": "1397ed887fa2c64ea6d836ed8eaac03e9fcd6830",
+    "verified_source_sha": "fe09f637a7eeebf216e062dd4a003d7e38932d1a",
     "verified_source_note": "Final substantive implementation commit, including the independent-review-driven fix requiring a declared implementation file in any trusted repair PR. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-07-24T21:30:00Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-26T23:00:00.134Z",
     "pr_number": null,
     "approved_head_sha": null
   },
