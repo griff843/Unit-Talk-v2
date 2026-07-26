@@ -12,10 +12,10 @@ function shaMatches(a: string | null | undefined, b: string | null | undefined):
   return shorter.length >= 7 && /^[0-9a-f]+$/i.test(shorter) && longer.toLowerCase().startsWith(shorter.toLowerCase());
 }
 
-// UTV2-1475: This workspace's PM-review state is named "In PM Review", not the
-// generic "In Review" this check used to reference (a state that does not exist
-// in this workspace). L3 accepts that state plus the terminal "Done" state only.
-const L3_PERMITTED_LINEAR_STATES = new Set(['In PM Review', 'Done']);
+// UTV2-1590: WORKFLOW_SPEC defines Ready to Close as a canonical closeout
+// state. L3 accepts exactly the three closeout states below and fails closed
+// for every execution, backlog, blocked, cancelled, or unknown state.
+const L3_PERMITTED_LINEAR_STATES = new Set(['Ready to Close', 'In PM Review', 'Done']);
 
 export function isLinearStatePermittedForL3(stateName: string | null | undefined): boolean {
   return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
@@ -89,6 +89,51 @@ export interface CommitCheckResult {
   passed: boolean;
   missing: string[];
   bypassed?: string[];
+  evidence?: RequiredCheckEvidence[];
+}
+
+export interface RequiredCheckIdentity {
+  context: string;
+  app_id: number | null;
+}
+
+export interface RequiredCheckEvidence {
+  context: string;
+  required_app_id: number | null;
+  matched: boolean;
+  source: 'status' | 'check_run' | null;
+  candidate_id: number | null;
+  candidate_name: string | null;
+  candidate_app_id: number | null;
+  state: string | null;
+  conclusion: string | null;
+  timestamp: string | null;
+  passed: boolean;
+  details_url: string | null;
+  selection_reason: string;
+}
+
+export interface GitHubCommitStatus {
+  id?: number;
+  context?: string;
+  state?: string;
+  created_at?: string;
+  updated_at?: string;
+  target_url?: string | null;
+}
+
+export interface GitHubCheckRun {
+  id?: number;
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  created_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  details_url?: string | null;
+  app?: {
+    id?: number | null;
+  } | null;
 }
 
 export interface CloseoutProofArtifact {
@@ -457,7 +502,7 @@ export async function runTruthCheck(
 
     const stateName = linearIssue.state?.name ?? '';
     if (!isLinearStatePermittedForL3(stateName)) {
-      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not In PM Review or Done`);
+      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not Ready to Close, In PM Review, or Done`);
     } else {
       addCheck('L3', 'pass', `Linear state ${stateName} is permitted`);
     }
@@ -545,21 +590,32 @@ export async function runTruthCheck(
         mergeSha &&
         pullRequest.merge_commit_sha === mergeSha,
       ),
-      fetchChecks: (sha) => fetchCommitChecks(prRef.owner, prRef.repo, sha, githubToken),
+      fetchChecks: (sha) => fetchCommitChecks({
+        owner: prRef.owner,
+        repo: prRef.repo,
+        sha,
+        token: githubToken,
+        requiredChecks,
+      }),
     });
+    const evidence = JSON.stringify(requiredCheckResult.evidence ?? []);
     if (requiredCheckResult.passed) {
       const detail = requiredCheckResult.checkedSha === 'head-admin-merge'
-        ? `admin-merged PR accepted: non-governance required checks are green on PR head SHA; bypassed stuck checks: ${(requiredCheckResult.bypassed ?? []).join(', ')}`
+        ? `admin-merged PR accepted: non-governance required checks are green on PR head SHA; bypassed stuck checks: ${(requiredCheckResult.bypassed ?? []).join(', ')}; evidence=${evidence}`
         : requiredCheckResult.checkedSha === 'head'
-          ? 'required GitHub checks are green on PR head SHA'
-          : 'required GitHub checks are green on merge SHA';
+          ? `required GitHub checks are green on PR head SHA; evidence=${evidence}`
+          : `required GitHub checks are green on merge SHA; evidence=${evidence}`;
       addCheck(
         'G4',
         'pass',
         detail,
       );
     } else {
-      addCheck('G4', 'fail', `required checks missing or failing: ${requiredCheckResult.missing.join(', ')}`);
+      addCheck(
+        'G4',
+        'fail',
+        `required checks missing or failing on ${requiredCheckResult.checkedSha} SHA: ${requiredCheckResult.missing.join(', ')}; evidence=${evidence}`,
+      );
     }
 
     if (tier === 'T1') {
@@ -1274,19 +1330,50 @@ function isBranchProtectionReadBlocked(error: unknown): boolean {
   return /\b(403 Forbidden|404 Not Found)\b/.test(message);
 }
 
+export function normalizeRequiredChecks(input: {
+  contexts?: string[];
+  checks?: Array<{ context?: string; app_id?: number | null }>;
+}): RequiredCheckIdentity[] {
+  const normalized: RequiredCheckIdentity[] = [];
+  const seen = new Set<string>();
+  const checks = input.checks ?? [];
+
+  for (const check of checks) {
+    const context = check.context?.trim();
+    if (!context) continue;
+    const appId = check.app_id === -1 ? null : check.app_id ?? null;
+    const key = `${context}\0${appId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ context, app_id: appId });
+  }
+
+  const checkContexts = new Set(normalized.map((check) => check.context));
+  for (const rawContext of input.contexts ?? []) {
+    const context = rawContext.trim();
+    if (!context || checkContexts.has(context)) continue;
+    const key = `${context}\0`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ context, app_id: null });
+  }
+
+  return normalized;
+}
+
 async function fetchRequiredChecks(
   owner: string,
   repo: string,
   token: string,
-): Promise<string[]> {
+): Promise<RequiredCheckIdentity[]> {
   let response: {
     contexts?: string[];
-    checks?: Array<{ context?: string }>;
+    checks?: Array<{ context?: string; app_id?: number | null }>;
   };
   try {
     response = await fetchJson<{
       contexts?: string[];
-      checks?: Array<{ context?: string }>;
+      checks?: Array<{ context?: string; app_id?: number | null }>;
     }>(`https://api.github.com/repos/${owner}/${repo}/branches/main/protection/required_status_checks`, {
       headers: githubHeaders(token),
     });
@@ -1299,63 +1386,178 @@ async function fetchRequiredChecks(
     if (fallbackChecks.length === 0) {
       throw error;
     }
-    return fallbackChecks;
+    return fallbackChecks.map((context) => ({ context, app_id: null }));
   }
 
-  const contexts = response.contexts ?? [];
-  const checks = (response.checks ?? [])
-    .map((entry) => entry.context?.trim())
-    .filter((entry): entry is string => Boolean(entry));
-  return [...new Set([...contexts, ...checks])];
+  return normalizeRequiredChecks(response);
 }
 
-async function fetchCommitChecks(
-  owner: string,
-  repo: string,
-  sha: string,
-  token: string,
-): Promise<CommitCheckResult> {
-  const [statusPayload, checksPayload] = await Promise.all([
-    fetchJson<{
-      statuses?: Array<{ context?: string; state?: string }>;
-    }>(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`, {
-      headers: githubHeaders(token),
-    }),
-    fetchJson<{
-      check_runs?: Array<{ name?: string; conclusion?: string | null; status?: string }>;
-    }>(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=100`, {
-      headers: {
-        ...githubHeaders(token),
-        Accept: 'application/vnd.github+json',
-      },
-    }),
-  ]);
+type JsonPageFetcher = <T>(url: string, init: RequestInit) => Promise<T>;
+type RequiredCheckInput = string | RequiredCheckIdentity;
 
-  const requiredChecks = await fetchRequiredChecks(owner, repo, token);
-  if (requiredChecks.length === 0) {
-    return { passed: true, missing: [] };
-  }
+function normalizeRequiredCheckInput(check: RequiredCheckInput): RequiredCheckIdentity {
+  return typeof check === 'string'
+    ? { context: check, app_id: null }
+    : check;
+}
 
-  const statusMap = new Map<string, boolean>();
-  for (const status of statusPayload.statuses ?? []) {
-    if (status.context) {
-      statusMap.set(status.context, status.state === 'success');
-    }
-  }
-  for (const checkRun of checksPayload.check_runs ?? []) {
-    if (checkRun.name) {
-      const isPassed = checkRun.status === 'completed' && checkRun.conclusion === 'success';
-      if (isPassed || !statusMap.has(checkRun.name)) {
-        statusMap.set(checkRun.name, isPassed);
+function parseCandidateTime(value: string | null): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function evaluateRequiredCheckResults(input: {
+  requiredChecks: RequiredCheckInput[];
+  statuses: GitHubCommitStatus[];
+  checkRuns: GitHubCheckRun[];
+}): CommitCheckResult {
+  const evidence = input.requiredChecks.map((rawCheck): RequiredCheckEvidence => {
+    const required = normalizeRequiredCheckInput(rawCheck);
+    const candidates: Array<RequiredCheckEvidence & { sort_time: number }> = [];
+
+    if (required.app_id === null) {
+      for (const status of input.statuses) {
+        if (status.context !== required.context) continue;
+        const timestamp = status.updated_at ?? status.created_at ?? null;
+        candidates.push({
+          context: required.context,
+          required_app_id: null,
+          matched: true,
+          source: 'status',
+          candidate_id: status.id ?? null,
+          candidate_name: status.context ?? null,
+          candidate_app_id: null,
+          state: status.state ?? null,
+          conclusion: null,
+          timestamp,
+          passed: status.state === 'success',
+          details_url: status.target_url ?? null,
+          selection_reason: 'latest result with exact required context identity',
+          sort_time: parseCandidateTime(timestamp),
+        });
       }
     }
-  }
 
-  const missing = requiredChecks.filter((check) => statusMap.get(check) !== true);
+    for (const checkRun of input.checkRuns) {
+      if (checkRun.name !== required.context) continue;
+      const appId = checkRun.app?.id ?? null;
+      if (required.app_id !== null && appId !== required.app_id) continue;
+      const timestamp = checkRun.completed_at ?? checkRun.started_at ?? checkRun.created_at ?? null;
+      candidates.push({
+        context: required.context,
+        required_app_id: required.app_id,
+        matched: true,
+        source: 'check_run',
+        candidate_id: checkRun.id ?? null,
+        candidate_name: checkRun.name ?? null,
+        candidate_app_id: appId,
+        state: checkRun.status ?? null,
+        conclusion: checkRun.conclusion ?? null,
+        timestamp,
+        passed: checkRun.status === 'completed' && checkRun.conclusion === 'success',
+        details_url: checkRun.details_url ?? null,
+        selection_reason: required.app_id === null
+          ? 'latest result with exact required context identity'
+          : 'latest result with exact required context and app identity',
+        sort_time: parseCandidateTime(timestamp),
+      });
+    }
+
+    candidates.sort((a, b) =>
+      b.sort_time - a.sort_time ||
+      (b.candidate_id ?? 0) - (a.candidate_id ?? 0) ||
+      (b.source === 'check_run' ? 1 : 0) - (a.source === 'check_run' ? 1 : 0),
+    );
+    const selected = candidates[0];
+    if (!selected) {
+      return {
+        context: required.context,
+        required_app_id: required.app_id,
+        matched: false,
+        source: null,
+        candidate_id: null,
+        candidate_name: null,
+        candidate_app_id: null,
+        state: null,
+        conclusion: null,
+        timestamp: null,
+        passed: false,
+        details_url: null,
+        selection_reason: required.app_id === null
+          ? 'no result matched the exact required context identity'
+          : 'no result matched the exact required context and app identity',
+      };
+    }
+
+    const { sort_time: _sortTime, ...result } = selected;
+    return result;
+  });
+
+  const missing = [...new Set(evidence.filter((entry) => !entry.passed).map((entry) => entry.context))];
   return {
     passed: missing.length === 0,
     missing,
+    evidence,
   };
+}
+
+async function fetchAllPages<T>(
+  buildUrl: (page: number) => string,
+  readItems: (payload: T) => unknown[],
+  fetchPage: JsonPageFetcher,
+  init: RequestInit,
+): Promise<unknown[]> {
+  const items: unknown[] = [];
+  for (let page = 1; ; page += 1) {
+    const payload = await fetchPage<T>(buildUrl(page), init);
+    const pageItems = readItems(payload);
+    items.push(...pageItems);
+    if (pageItems.length < 100) break;
+  }
+  return items;
+}
+
+export async function fetchCommitChecks(input: {
+  owner: string;
+  repo: string;
+  sha: string;
+  token: string;
+  requiredChecks: RequiredCheckInput[];
+  fetchPage?: JsonPageFetcher;
+}): Promise<CommitCheckResult> {
+  if (input.requiredChecks.length === 0) {
+    return { passed: true, missing: [], evidence: [] };
+  }
+
+  const fetchPage = input.fetchPage ?? fetchJson;
+  const [statuses, checkRuns] = await Promise.all([
+    fetchAllPages<GitHubCommitStatus[]>(
+      (page) =>
+        `https://api.github.com/repos/${input.owner}/${input.repo}/commits/${input.sha}/statuses?per_page=100&page=${page}`,
+      (payload) => payload,
+      fetchPage,
+      { headers: githubHeaders(input.token) },
+    ),
+    fetchAllPages<{ check_runs?: GitHubCheckRun[] }>(
+      (page) =>
+        `https://api.github.com/repos/${input.owner}/${input.repo}/commits/${input.sha}/check-runs?filter=all&per_page=100&page=${page}`,
+      (payload) => payload.check_runs ?? [],
+      fetchPage,
+      {
+        headers: {
+          ...githubHeaders(input.token),
+          Accept: 'application/vnd.github+json',
+        },
+      },
+    ),
+  ]);
+
+  return evaluateRequiredCheckResults({
+    requiredChecks: input.requiredChecks,
+    statuses: statuses as GitHubCommitStatus[],
+    checkRuns: checkRuns as GitHubCheckRun[],
+  });
 }
 
 export interface G3ReachabilityResult {
@@ -1426,13 +1628,17 @@ function safeRead(filePath: string): string {
 export async function evaluateRequiredChecksWithHeadFallback(input: {
   mergeSha: string | null;
   headSha?: string | null;
-  requiredChecks: string[];
+  requiredChecks: RequiredCheckInput[];
   allowAdminMergeGateBypass?: boolean;
   fetchChecks: (sha: string) => Promise<CommitCheckResult>;
 }): Promise<CommitCheckResult & { checkedSha: 'merge' | 'head' | 'head-admin-merge' | 'none' }> {
   const mergeChecks = input.mergeSha
     ? await input.fetchChecks(input.mergeSha)
-    : { passed: false, missing: input.requiredChecks };
+    : {
+        passed: false,
+        missing: input.requiredChecks.map((check) => normalizeRequiredCheckInput(check).context),
+        evidence: [],
+      };
   if (mergeChecks.passed) {
     return { ...mergeChecks, checkedSha: 'merge' };
   }
@@ -1448,9 +1654,11 @@ export async function evaluateRequiredChecksWithHeadFallback(input: {
         passed: true,
         missing: [],
         bypassed: headChecks.missing,
+        evidence: headChecks.evidence,
         checkedSha: 'head-admin-merge',
       };
     }
+    return { ...headChecks, checkedSha: 'head' };
   }
 
   return { ...mergeChecks, checkedSha: input.mergeSha ? 'merge' : 'none' };

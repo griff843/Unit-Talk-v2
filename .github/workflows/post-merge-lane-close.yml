@@ -150,13 +150,20 @@ jobs:
         id: status
         env:
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          EVENT_NAME: ${{ github.event_name }}
+          EXPLICIT_PR: ${{ steps.extract.outputs.pr_input }}
         run: |
           status=$(jq -r '.status' "$MANIFEST_PATH")
           echo "::notice title=post-merge-lane-close::Manifest status: $status"
 
           if [ "$status" = "done" ]; then
-            echo "::notice title=post-merge-lane-close::Lane already done. Skipping."
-            echo "closeable=false" >> "$GITHUB_OUTPUT"
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$EXPLICIT_PR" ]; then
+              echo "::notice title=post-merge-lane-close::Trusted terminal cleanup replay requested with explicit PR."
+              echo "closeable=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice title=post-merge-lane-close::Lane already done. Push handling remains a no-op; manual cleanup replay requires an explicit PR."
+              echo "closeable=false" >> "$GITHUB_OUTPUT"
+            fi
           elif [ "$status" = "in_review" ] || [ "$status" = "merged" ] || [ "$status" = "started" ] || [ "$status" = "in_progress" ] || [ "$status" = "reopened" ]; then
             echo "closeable=true" >> "$GITHUB_OUTPUT"
           else
