@@ -41,7 +41,7 @@ on:
     # BLOCKED status a truly fresh PR should show.
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, edited, dismissed]
   issue_comment:
     types: [created, edited]
 
@@ -53,10 +53,14 @@ permissions:
 
 jobs:
   gate:
-    name: Merge Gate
+    # The required branch-protection identity is the custom check run managed
+    # below. The native Actions job check must never share that name.
+    name: Merge Gate Evaluator
     concurrency:
-      group: merge-gate-${{ github.event.pull_request.number || github.event.issue.number }}
-      cancel-in-progress: true
+      group: merge-gate-${{ github.event.pull_request.number || github.event.issue.number || inputs.pull_number }}
+      # Every event updates the same exact-head check. Queue evaluations so an
+      # older run cannot be cancelled while that canonical check is in_progress.
+      cancel-in-progress: false
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'pull_request' ||
@@ -137,16 +141,89 @@ jobs:
               prTitle = pr.title || '';
             }
 
-            // ── 2. Create pending check run ────────────────────────────
-            const { data: check } = await github.rest.checks.create({
-              owner, repo,
-              name: 'Merge Gate',
-              head_sha: headSha,
-              status: 'in_progress',
-              started_at: new Date().toISOString()
-            });
+            // ── 2. Upsert the canonical exact-head check run ───────────
+            // Identity is repository + PR + exact head SHA. PR serialization
+            // above makes this read/create sequence race-free across events.
+            const existingChecks = await github.paginate(
+              github.rest.checks.listForRef,
+              {
+                owner, repo,
+                ref: headSha,
+                check_name: 'Merge Gate',
+                filter: 'all',
+                per_page: 100,
+              }
+            );
+            const canonicalExternalId = `merge-gate:${prNumber}:${headSha}`;
+            // Match on name + exact head SHA + app only -- NOT external_id.
+            // Check-runs created by the former create-on-every-event behavior
+            // never had an external_id set, so requiring one here would let
+            // those legacy duplicates survive untouched and keep blocking
+            // branch protection forever. Any same-name check already docked
+            // to this exact head is adoptable as the canonical one; prefer a
+            // check that already carries the canonical external_id (stable
+            // across repeated runs once adopted), otherwise fall back to the
+            // most recently created same-head check.
+            const matchingChecks = existingChecks
+              .filter(run =>
+                run.name === 'Merge Gate' &&
+                run.head_sha === headSha &&
+                run.app?.slug === 'github-actions'
+              )
+              .sort((a, b) => {
+                const aCanonical = a.external_id === canonicalExternalId ? 1 : 0;
+                const bCanonical = b.external_id === canonicalExternalId ? 1 : 0;
+                if (aCanonical !== bCanonical) return bCanonical - aCanonical;
+                return b.id - a.id;
+              });
+
+            let check = matchingChecks[0];
+            if (!check) {
+              const created = await github.rest.checks.create({
+                owner, repo,
+                name: 'Merge Gate',
+                head_sha: headSha,
+                external_id: canonicalExternalId,
+                status: 'in_progress',
+                started_at: new Date().toISOString()
+              });
+              check = created.data;
+            } else {
+              // Adopt (or re-affirm) the canonical external_id on update so a
+              // legacy check without one is bound to this identity going
+              // forward, and so subsequent runs pick it deterministically.
+              await github.rest.checks.update({
+                owner, repo,
+                check_run_id: check.id,
+                external_id: canonicalExternalId,
+                status: 'in_progress',
+                started_at: new Date().toISOString(),
+                output: {
+                  title: 'Merge Gate: EVALUATING',
+                  summary: `Re-evaluating merge policy for PR #${prNumber} at ${headSha}.`
+                }
+              });
+            }
+
+            // One-time repair for heads polluted by the former create-on-every-
+            // event behavior. Superseded failures become neutral so only the
+            // newest exact-head check can govern branch protection.
+            for (const duplicate of matchingChecks.slice(1)) {
+              await github.rest.checks.update({
+                owner, repo,
+                check_run_id: duplicate.id,
+                status: 'completed',
+                conclusion: 'neutral',
+                completed_at: new Date().toISOString(),
+                output: {
+                  title: 'Merge Gate: SUPERSEDED',
+                  summary: `Superseded by canonical Merge Gate check run ${check.id} for PR #${prNumber} at ${headSha}.`
+                }
+              });
+            }
 
             const errors = [];
+            let evaluatorError = null;
 
             try {
               // ── 3. Get PR labels ───────────────────────────────────
@@ -234,109 +311,91 @@ jobs:
                 );
               }
 
-              if (errors.length > 0) {
-                // Can't proceed without valid tier / kill switch
-                throw new Error('Tier validation failed');
-              }
+              if (errors.length === 0) {
+                const tier = authoritativeTier;
 
-              const tier = authoritativeTier;
+                // ── 5. T3: auto-pass ──────────────────────────────────
+                // T3 has no tier-specific policy errors. CI and executor
+                // result validation remain separate required checks.
 
-              // ── 5. T3: auto-pass ────────────────────────────────────
-              // T3 merges on green CI + valid executor result (separate
-              // required checks). No PM verdict needed.
-              if (tier === 'T3') {
-                await github.rest.checks.update({
-                  owner, repo,
-                  check_run_id: check.id,
-                  status: 'completed',
-                  conclusion: 'success',
-                  completed_at: new Date().toISOString(),
-                  output: {
-                    title: 'Merge Gate: T3 AUTO-PASS',
-                    summary: 'T3 tier — PM verdict not required. CI and executor result validation are separate required checks.'
+                // ── 6. T2: pm-verdict/v1 is the canonical approval path (UTV2-979, 2026-05-18) ──
+                // GitHub PR review approval is also accepted. Either satisfies the gate.
+                //
+                // A third path (UTV2-1523) recognizes a valid EXECUTOR_RESULT/v1 comment from an
+                // AUTHORIZED_REVIEWERS member as sufficient self-attestation. This exists because
+                // GitHub blocks `gh pr review --approve` when the reviewing account is also the PR
+                // author -- true for every executor in this repo, since Claude and Codex both open
+                // PRs under the same griff843 identity. CLAUDE.md already documents self-approval as
+                // intended to satisfy T2 with no PM presence required; this makes that mechanically
+                // possible instead of requiring an --admin merge for every T2 PR.
+                if (tier === 'T2') {
+                  const { data: reviews } = await github.rest.pulls.listReviews({
+                    owner, repo, pull_number: prNumber, per_page: 100
+                  });
+                  const approvals = reviews.filter(r => r.state === 'APPROVED');
+                  if (approvals.length === 0) {
+                    const { data: comments } = await github.rest.issues.listComments({
+                      owner, repo, issue_number: prNumber, per_page: 100
+                    });
+                    // Check for pm-verdict/v1 APPROVED from an authorized CODEOWNERS member
+                    const hasPmVerdictApproval = comments.some(c => {
+                      if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
+                      const body = (c.body || '').replace(/\\n/g, '\n');
+                      const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                      return lines[0] === 'PM_VERDICT: APPROVED' && lines[1] === 'schema: pm-verdict/v1';
+                    });
+                    // Check for a valid executor-result/v1 self-attestation from an authorized member
+                    const hasExecutorResultAttestation = comments.some(c => {
+                      if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
+                      const body = (c.body || '').replace(/\\n/g, '\n');
+                      const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                      return lines[0] === 'EXECUTOR_RESULT: READY_FOR_REVIEW' && lines[1] === 'schema: executor-result/v1';
+                    });
+                    if (!hasPmVerdictApproval && !hasExecutorResultAttestation) {
+                      errors.push(
+                        'T2 requires a pm-verdict/v1 APPROVED comment from a CODEOWNERS member, ' +
+                        'a GitHub PR review approval, or an executor-result/v1 self-attestation comment ' +
+                        'from a CODEOWNERS member.'
+                      );
+                    }
                   }
-                });
-                return;
-              }
+                }
 
-              // ── 6. T2: pm-verdict/v1 is the canonical approval path (UTV2-979, 2026-05-18) ──
-              // GitHub PR review approval is also accepted. Either satisfies the gate.
-              //
-              // A third path (UTV2-1523) recognizes a valid EXECUTOR_RESULT/v1 comment from an
-              // AUTHORIZED_REVIEWERS member as sufficient self-attestation. This exists because
-              // GitHub blocks `gh pr review --approve` when the reviewing account is also the PR
-              // author -- true for every executor in this repo, since Claude and Codex both open
-              // PRs under the same griff843 identity. CLAUDE.md already documents self-approval as
-              // intended to satisfy T2 with no PM presence required; this makes that mechanically
-              // possible instead of requiring an --admin merge for every T2 PR.
-              if (tier === 'T2') {
-                const { data: reviews } = await github.rest.pulls.listReviews({
-                  owner, repo, pull_number: prNumber, per_page: 100
-                });
-                const approvals = reviews.filter(r => r.state === 'APPROVED');
-                if (approvals.length === 0) {
+                // ── 7. T1: PM verdict + t1-approved label ────────────
+                if (tier === 'T1') {
                   const { data: comments } = await github.rest.issues.listComments({
                     owner, repo, issue_number: prNumber, per_page: 100
                   });
-                  // Check for pm-verdict/v1 APPROVED from an authorized CODEOWNERS member
-                  const hasPmVerdictApproval = comments.some(c => {
-                    if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
-                    const body = (c.body || '').replace(/\\n/g, '\n');
-                    const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                    return lines[0] === 'PM_VERDICT: APPROVED' && lines[1] === 'schema: pm-verdict/v1';
-                  });
-                  // Check for a valid executor-result/v1 self-attestation from an authorized member
-                  const hasExecutorResultAttestation = comments.some(c => {
-                    if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
-                    const body = (c.body || '').replace(/\\n/g, '\n');
-                    const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                    return lines[0] === 'EXECUTOR_RESULT: READY_FOR_REVIEW' && lines[1] === 'schema: executor-result/v1';
-                  });
-                  if (!hasPmVerdictApproval && !hasExecutorResultAttestation) {
+
+                  const verdicts = comments
+                    .map(c => ({
+                      user: c.user?.login,
+                      userType: c.user?.type,
+                      parsed: parseVerdict(c.body),
+                      createdAt: c.created_at,
+                    }))
+                    .filter(v => v.parsed !== null);
+
+                  // UTV2-1543: also requires PR: and Head SHA: to match this
+                  // exact PR/head, fail-closed on stale/mismatched verdicts —
+                  // see scripts/ops/merge-gate-verdict.cjs and its test suite.
+                  errors.push(...validateT1Verdicts(verdicts, {
+                    prNumber,
+                    headSha,
+                    authorizedReviewers: AUTHORIZED_REVIEWERS,
+                  }));
+
+                  if (!labels.includes('t1-approved')) {
                     errors.push(
-                      'T2 requires a pm-verdict/v1 APPROVED comment from a CODEOWNERS member, ' +
-                      'a GitHub PR review approval, or an executor-result/v1 self-attestation comment ' +
-                      'from a CODEOWNERS member.'
+                      'T1 requires "t1-approved" label on the PR. PM must apply this label after review.'
                     );
                   }
                 }
               }
 
-              // ── 7. T1: PM verdict + t1-approved label ──────────────
-              if (tier === 'T1') {
-                const { data: comments } = await github.rest.issues.listComments({
-                  owner, repo, issue_number: prNumber, per_page: 100
-                });
-
-                const verdicts = comments
-                  .map(c => ({
-                    user: c.user?.login,
-                    userType: c.user?.type,
-                    parsed: parseVerdict(c.body),
-                    createdAt: c.created_at,
-                  }))
-                  .filter(v => v.parsed !== null);
-
-                // UTV2-1543: also requires PR: and Head SHA: to match this
-                // exact PR/head, fail-closed on stale/mismatched verdicts —
-                // see scripts/ops/merge-gate-verdict.cjs and its test suite.
-                errors.push(...validateT1Verdicts(verdicts, {
-                  prNumber,
-                  headSha,
-                  authorizedReviewers: AUTHORIZED_REVIEWERS,
-                }));
-
-                if (!labels.includes('t1-approved')) {
-                  errors.push(
-                    'T1 requires "t1-approved" label on the PR. PM must apply this label after review.'
-                  );
-                }
-              }
-
             } catch (e) {
-              if (e.message !== 'Tier validation failed') {
-                errors.push(`Internal error: ${e.message}`);
-              }
+              evaluatorError = e;
+              errors.push(`Internal error: ${e.message}`);
             }
 
             // ── 10. Complete check run ─────────────────────────────────
@@ -371,7 +430,13 @@ jobs:
                   'Address the above before merge is authorized.'
                 ].join('\n')
               });
-              core.setFailed('Merge gate blocked.');
+            }
+
+            // Policy denial is the expected fail-closed outcome and is fully
+            // represented by the custom check. Only evaluator malfunction
+            // fails this non-required Actions job.
+            if (evaluatorError) {
+              throw evaluatorError;
             }
 
   # ── WFR-v2 Validators ──────────────────────────────────────────────────────

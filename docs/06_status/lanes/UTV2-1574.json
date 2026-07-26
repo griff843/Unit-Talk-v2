@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1574-sole-owner-governance-ratification",
   "branch": "claude/utv2-1574-sole-owner-governance-ratification",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "18de0721cd5a8577de18147bbeb18bef8fc43d77",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1298",
+  "files_changed": [
+    "docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md",
+    "docs/06_status/proof/UTV2-1574/.gitkeep",
+    "docs/06_status/proof/UTV2-1574/diff-summary.md",
+    "docs/06_status/proof/UTV2-1574/evidence.json",
+    "docs/06_status/proof/UTV2-1574/verification.md"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1574/.gitkeep",
     "docs/06_status/proof/UTV2-1574/diff-summary.md",
@@ -20,14 +26,39 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1574/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-22T14:26:46.696Z",
-  "heartbeat_at": "2026-07-22T14:26:46.696Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-25T04:28:53.910Z",
+  "closed_at": "2026-07-25T04:28:53.910Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1574-sole-owner-governance-ratification.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-25T04:28:49.182Z",
+      "verdict": "pass",
+      "merge_sha": "18de0721cd5a8577de18147bbeb18bef8fc43d77",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1298",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "pr_url",
+        "files_changed",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-25T04:28:49.190Z",
+      "verdict": "pass",
+      "merge_sha": "18de0721cd5a8577de18147bbeb18bef8fc43d77",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

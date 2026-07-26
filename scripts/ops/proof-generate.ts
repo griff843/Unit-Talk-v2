@@ -13,6 +13,7 @@ import {
   requireIssueId,
   type LaneManifest,
 } from './shared.js';
+import type { ModelRoutingBlock } from './model-routing.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
@@ -52,9 +53,89 @@ export interface ShaRebindOutcome {
   status: 'updated' | 'unchanged' | 'missing';
 }
 
+export type ModelRoutingRebindErrorCode =
+  | 'binding_conflict'
+  | 'incomplete_required_sidecar'
+  | 'legacy_binding_conflict'
+  | 'malformed_required_sidecar'
+  | 'missing_pr_url'
+  | 'missing_required_sidecar'
+  | 'sidecar_identity_mismatch'
+  | 'sidecar_manifest_routing_mismatch';
+
+/**
+ * Fields a required model-routing sidecar must carry as non-empty strings
+ * before it is eligible to receive an authoritative closeout_binding. A
+ * truncated or tampered sidecar that retains a matching `issue_id` but drops
+ * these -- e.g. `{"issue_id":"UTV2-1586"}` -- would otherwise pass identity
+ * validation and get bound despite providing no evidence of which model
+ * actually executed the lane (independent review finding).
+ */
+const REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS = ['model', 'reasoning_effort'] as const;
+
+/**
+ * Canonical manifest-side routing fields, keyed by their MATCHING sidecar
+ * field name (which is not always the same key -- the manifest's
+ * ModelRoutingBlock.profile corresponds to the sidecar's model_profile).
+ * `always` fields must agree whenever a manifest model_routing block is
+ * supplied at all (execution identity: which model, at what effort).
+ * `whenBothPresent` fields are administrative metadata that must still
+ * agree if both sides happen to carry them, but their absence on either
+ * side is not itself a failure (PM directive, UTV2-1589).
+ */
+const ALWAYS_MATCHED_ROUTING_FIELDS: ReadonlyArray<{
+  sidecarField: string;
+  manifestField: keyof ModelRoutingBlock;
+}> = [
+  { sidecarField: 'model', manifestField: 'model' },
+  { sidecarField: 'reasoning_effort', manifestField: 'reasoning_effort' },
+];
+const OPTIONALLY_MATCHED_ROUTING_FIELDS: ReadonlyArray<{
+  sidecarField: string;
+  manifestField: keyof ModelRoutingBlock;
+}> = [
+  { sidecarField: 'model_profile', manifestField: 'profile' },
+  { sidecarField: 'policy_version', manifestField: 'policy_version' },
+];
+
+export class ModelRoutingRebindError extends Error {
+  constructor(
+    public readonly code: ModelRoutingRebindErrorCode,
+    public readonly proofPath: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ModelRoutingRebindError';
+  }
+}
+
 export interface ProofGenerateOptions {
   root?: string;
   write?: boolean;
+  /**
+   * Explicit opt-in required to bind model-routing.json at all; the default
+   * is to leave it untouched (only evidence.json/verification.md are bound).
+   * Any caller of this function or the ops:proof-generate CLI resolves
+   * manifest.pr_url from disk with no independent GitHub validation unless
+   * it explicitly supplies --pr/--pr-url itself -- and even then, that
+   * value is not verified against the real PR/merge state the way
+   * ops:lane-close --repair-merged's fetchMergedPrInfo/validateTrustedPostMergeRepair
+   * do. Writing model-routing.json's IMMUTABLE closeout_binding from an
+   * unvalidated PR/SHA (whether from an untrusted CLI invocation, e.g. an
+   * operator following proof-repair.ts's printed remediation command, or
+   * any other caller) risks baking in a stale or incorrect identity that
+   * the later, properly-validated repair path can then never correct,
+   * since createRepairRollbackTransaction's snapshot is taken after this
+   * already ran (independent review findings, UTV2-1589). The trusted
+   * repair path (scripts/ops/lane-close.ts's rebindRepairedLaneProof) is
+   * the sole caller with real validated authority, and it does not go
+   * through this function at all -- it calls rebindModelRoutingJsonSha
+   * directly. There is currently no legitimate caller that needs to set
+   * this to true; it exists only so a future genuinely-trusted caller has
+   * an explicit, auditable way to opt in rather than model-routing binding
+   * being the silent default for anyone who calls this function or CLI.
+   */
+  bindModelRouting?: boolean;
 }
 
 export interface ProofManifestOverrides {
@@ -352,6 +433,240 @@ export function rebindVerificationMdSha(
   return { path: relPath, status: 'updated' };
 }
 
+/**
+ * Appends authoritative post-merge identity to an immutable Codex model-routing
+ * sidecar. Existing execution provenance is preserved; an existing binding may
+ * only be replayed for the exact same PR and merge SHA.
+ */
+export function rebindModelRoutingJsonSha(
+  absolutePath: string,
+  mergeSha: string,
+  generatedAt: string,
+  prUrl: string | null,
+  options: {
+    required?: boolean;
+    write?: boolean;
+    relPath?: string;
+    expectedIssueId?: string;
+    manifestModelRouting?: ModelRoutingBlock | null;
+  } = {},
+): ShaRebindOutcome {
+  const relPath = options.relPath ?? absolutePath;
+  const required = options.required ?? false;
+  if (!fs.existsSync(absolutePath)) {
+    if (required) {
+      throw new ModelRoutingRebindError(
+        'missing_required_sidecar',
+        relPath,
+        `Required model-routing sidecar is missing: ${relPath}`,
+      );
+    }
+    return { path: relPath, status: 'missing' };
+  }
+
+  const normalizedPrUrl = normalizePrUrl(prUrl);
+  if (!normalizedPrUrl) {
+    throw new ModelRoutingRebindError(
+      'missing_pr_url',
+      relPath,
+      `Cannot bind model-routing sidecar without an authoritative PR URL: ${relPath}`,
+    );
+  }
+
+  const previousContent = fs.readFileSync(absolutePath, 'utf8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(previousContent);
+  } catch {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Required model-routing sidecar is not valid JSON: ${relPath}`,
+    );
+  }
+  if (!isJsonObject(parsed)) {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Required model-routing sidecar must be a JSON object: ${relPath}`,
+    );
+  }
+
+  if (options.expectedIssueId !== undefined) {
+    const sidecarIssueId = parsed['issue_id'];
+    if (
+      typeof sidecarIssueId !== 'string' ||
+      sidecarIssueId.trim().toUpperCase() !== options.expectedIssueId.trim().toUpperCase()
+    ) {
+      throw new ModelRoutingRebindError(
+        'sidecar_identity_mismatch',
+        relPath,
+        `Model-routing sidecar issue_id ${JSON.stringify(sidecarIssueId)} does not match ` +
+          `expected lane ${options.expectedIssueId}: ${relPath}`,
+      );
+    }
+  }
+
+  if (required) {
+    const missingOrEmpty = REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS.filter(
+      (field) => typeof parsed[field] !== 'string' || parsed[field].trim() === '',
+    );
+    if (missingOrEmpty.length > 0) {
+      throw new ModelRoutingRebindError(
+        'incomplete_required_sidecar',
+        relPath,
+        `Required model-routing sidecar is missing execution-provenance fields (${missingOrEmpty.join(', ')}): ${relPath}`,
+      );
+    }
+  }
+
+  if (required && options.manifestModelRouting) {
+    const manifestRouting = options.manifestModelRouting;
+
+    for (const { sidecarField, manifestField } of ALWAYS_MATCHED_ROUTING_FIELDS) {
+      const manifestValue = manifestRouting[manifestField];
+      if (typeof manifestValue !== 'string' || manifestValue.trim() === '') {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Manifest model_routing.${manifestField} is missing or empty; cannot validate sidecar routing field "${sidecarField}": ${relPath}`,
+        );
+      }
+      const sidecarValue = parsed[sidecarField];
+      if (sidecarValue !== manifestValue) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar ${sidecarField} ${JSON.stringify(sidecarValue)} does not match manifest ` +
+            `model_routing.${manifestField} ${JSON.stringify(manifestValue)}: ${relPath}`,
+        );
+      }
+    }
+
+    for (const { sidecarField, manifestField } of OPTIONALLY_MATCHED_ROUTING_FIELDS) {
+      const sidecarValue = parsed[sidecarField];
+      const manifestValue = manifestRouting[manifestField];
+      const sidecarPresent = typeof sidecarValue === 'string' && sidecarValue.trim() !== '';
+      const manifestPresent = typeof manifestValue === 'string' && manifestValue.trim() !== '';
+      if (sidecarPresent && manifestPresent && sidecarValue !== manifestValue) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar ${sidecarField} ${JSON.stringify(sidecarValue)} does not match manifest ` +
+            `model_routing.${manifestField} ${JSON.stringify(manifestValue)}: ${relPath}`,
+        );
+      }
+    }
+
+    // Manual-override provenance must agree too: a sidecar recording
+    // override_used: false (or a mismatched authorizer) while the manifest's
+    // model_routing.selected_by is 'manual-override' would let the bound
+    // routing evidence misrepresent who actually authorized the execution --
+    // model/reasoning_effort/profile/policy_version agreement alone does not
+    // catch this (independent review finding). Every real sidecar in the
+    // repo carries override_used, so its absence is itself a failure here,
+    // matching the always-required model/reasoning_effort fields above.
+    const sidecarOverrideUsed = parsed['override_used'];
+    if (typeof sidecarOverrideUsed !== 'boolean') {
+      throw new ModelRoutingRebindError(
+        'sidecar_manifest_routing_mismatch',
+        relPath,
+        `Sidecar override_used must be a boolean to validate against manifest model_routing.selected_by: ${relPath}`,
+      );
+    }
+    const manifestOverrideUsed = manifestRouting.selected_by === 'manual-override';
+    if (sidecarOverrideUsed !== manifestOverrideUsed) {
+      throw new ModelRoutingRebindError(
+        'sidecar_manifest_routing_mismatch',
+        relPath,
+        `Sidecar override_used ${sidecarOverrideUsed} does not match manifest ` +
+          `model_routing.selected_by ${JSON.stringify(manifestRouting.selected_by)}: ${relPath}`,
+      );
+    }
+    if (manifestOverrideUsed) {
+      const manifestAuthorizedBy = manifestRouting.override?.authorized_by;
+      if (typeof manifestAuthorizedBy !== 'string' || manifestAuthorizedBy.trim() === '') {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Manifest model_routing.selected_by is manual-override but override.authorized_by is missing or empty: ${relPath}`,
+        );
+      }
+      const sidecarAuthorizedBy = parsed['override_authorized_by'];
+      if (sidecarAuthorizedBy !== manifestAuthorizedBy) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar override_authorized_by ${JSON.stringify(sidecarAuthorizedBy)} does not match ` +
+            `manifest model_routing.override.authorized_by ${JSON.stringify(manifestAuthorizedBy)}: ${relPath}`,
+        );
+      }
+    }
+  }
+
+  // Some historical sidecars (pre-dating closeout_binding) carry a legacy
+  // top-level merge_sha field. The object spread below preserves it
+  // untouched, so if it disagrees with the authoritative SHA being bound
+  // here, the file would end up asserting two different merge identities --
+  // and P3/C4 would both still pass, since they only require the
+  // authoritative SHA to appear somewhere in the file, not that the file is
+  // internally consistent (independent review finding).
+  const legacyMergeSha = parsed['merge_sha'];
+  if (typeof legacyMergeSha === 'string' && legacyMergeSha.trim() !== '' && legacyMergeSha !== mergeSha) {
+    throw new ModelRoutingRebindError(
+      'legacy_binding_conflict',
+      relPath,
+      `Sidecar legacy top-level merge_sha ${JSON.stringify(legacyMergeSha)} conflicts with the ` +
+        `authoritative merge SHA ${JSON.stringify(mergeSha)}: ${relPath}`,
+    );
+  }
+
+  const existingBinding = parsed['closeout_binding'];
+  if (existingBinding !== undefined) {
+    if (
+      !isJsonObject(existingBinding) ||
+      existingBinding['sha_type'] !== 'merge_sha' ||
+      typeof existingBinding['merge_sha'] !== 'string' ||
+      typeof existingBinding['pr_url'] !== 'string' ||
+      typeof existingBinding['bound_at'] !== 'string' ||
+      !isIsoTimestamp(existingBinding['bound_at'])
+    ) {
+      throw new ModelRoutingRebindError(
+        'malformed_required_sidecar',
+        relPath,
+        `Existing model-routing closeout binding is malformed: ${relPath}`,
+      );
+    }
+
+    const boundMergeSha = existingBinding['merge_sha'];
+    const boundPrUrl = normalizePrUrl(existingBinding['pr_url']);
+    if (boundMergeSha !== mergeSha || boundPrUrl !== normalizedPrUrl) {
+      throw new ModelRoutingRebindError(
+        'binding_conflict',
+        relPath,
+        `Existing model-routing closeout binding conflicts with PR ${normalizedPrUrl} at ${mergeSha}: ${relPath}`,
+      );
+    }
+
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  const nextParsed = {
+    ...parsed,
+    closeout_binding: {
+      sha_type: 'merge_sha',
+      merge_sha: mergeSha,
+      pr_url: normalizedPrUrl,
+      bound_at: generatedAt,
+    },
+  };
+  const nextContent = `${JSON.stringify(nextParsed, null, 2)}\n`;
+  if (options.write ?? true) {
+    fs.writeFileSync(absolutePath, nextContent, 'utf8');
+  }
+  return { path: relPath, status: 'updated' };
+}
+
 /** Rebinds evidence.json + verification.md for an issue if they exist. No-op without a merge SHA. */
 export function rebindMergeSha(
   root: string,
@@ -400,6 +715,34 @@ export function generateProofArtifacts(
     }
   };
   const requiredShas = [input.gitTruth.head_sha, input.gitTruth.merge_sha].filter(isPresent);
+  const modelRoutingPaths = input.manifest.expected_proof_paths.filter(
+    (proofPath) => path.posix.basename(proofPath) === 'model-routing.json',
+  );
+
+  // Validate every required routing sidecar before mutating any proof artifact
+  // so conflicts and malformed historical authority fail as one atomic
+  // operation. A manifest declaring more than one model-routing.json (not
+  // used by any lane today, but not disallowed by the schema either) must
+  // have every one bound -- the truth gate evaluates every expected proof
+  // artifact, so leaving a second match unbound would permanently block
+  // closeout even though this function reported success.
+  if (input.gitTruth.merge_sha && options.bindModelRouting) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      rebindModelRoutingJsonSha(
+        safeRepoPath(root, modelRoutingPath),
+        input.gitTruth.merge_sha,
+        input.generatedAt,
+        input.manifest.pr_url,
+        {
+          required: true,
+          write: false,
+          relPath: modelRoutingPath,
+          expectedIssueId: input.manifest.issue_id,
+          manifestModelRouting: input.manifest.model_routing,
+        },
+      );
+    }
+  }
 
   for (const proofFile of STANDARD_PROOF_FILES) {
     const proofPath = paths[proofFile];
@@ -453,6 +796,30 @@ export function generateProofArtifacts(
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
   }
 
+  if (input.gitTruth.merge_sha && options.bindModelRouting) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      const outcome = rebindModelRoutingJsonSha(
+        safeRepoPath(root, modelRoutingPath),
+        input.gitTruth.merge_sha,
+        input.generatedAt,
+        input.manifest.pr_url,
+        {
+          required: true,
+          write: shouldWrite,
+          relPath: modelRoutingPath,
+          expectedIssueId: input.manifest.issue_id,
+          manifestModelRouting: input.manifest.model_routing,
+        },
+      );
+      if (outcome.status === 'updated') {
+        pushUnique(updatedPaths, outcome.path);
+        pushUnique(stalePathsReplaced, outcome.path);
+      } else if (outcome.status === 'unchanged') {
+        pushUnique(unchangedPaths, outcome.path);
+      }
+    }
+  }
+
   return {
     ok: true,
     code: 'proof_generated',
@@ -491,7 +858,28 @@ function isPresent(value: string | null): value is string {
   return value !== null && value.trim() !== '';
 }
 
-function safeRepoPath(root: string, repoRelativePath: string): string {
+function isIsoTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value)) && /^\d{4}-\d{2}-\d{2}T/.test(value);
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizePrUrl(value: string | null): string | null {
+  const normalized = value?.trim().replace(/\/+$/, '') ?? '';
+  return normalized || null;
+}
+
+/**
+ * Resolves a repo-relative proof path and refuses to return one that escapes
+ * `root` (e.g. a manifest.expected_proof_paths entry containing `../../`).
+ * Exported so callers outside this module -- e.g. lane-close.ts's trusted
+ * `--repair-merged` path, which resolves the same manifest-declared
+ * model-routing.json paths -- get the identical guard rather than a bare
+ * path.resolve() with no escape check (UTV2-1589 independent review).
+ */
+export function safeRepoPath(root: string, repoRelativePath: string): string {
   const resolvedRoot = path.resolve(root);
   const absolutePath = path.resolve(resolvedRoot, repoRelativePath);
   if (!absolutePath.startsWith(resolvedRoot + path.sep)) {
@@ -517,7 +905,36 @@ function main(argv = process.argv.slice(2)): number {
     }),
     runtimeResult: (getFlag(flags, 'runtime-result') as ProofGenerateInput['runtimeResult']) ?? 'not_run',
   };
-  const result = generateProofArtifacts(input, { root: ROOT, write: !bools.has('dry-run') });
+
+  let result: ProofGenerateResult;
+  try {
+    result = generateProofArtifacts(input, {
+      root: ROOT,
+      write: !bools.has('dry-run'),
+      bindModelRouting: bools.has('bind-model-routing'),
+    });
+  } catch (error) {
+    if (error instanceof ModelRoutingRebindError) {
+      // A required model-routing sidecar was missing, malformed, or already bound
+      // to conflicting historical authority. No proof artifact was mutated (the
+      // routing-sidecar validation runs before any write). Fail with a structured,
+      // parseable result rather than an uncaught crash, per UTV2-1589.
+      const failure = {
+        ok: false as const,
+        code: error.code,
+        issue_id: issueId,
+        proof_path: error.proofPath,
+        message: error.message,
+      };
+      if (bools.has('json')) {
+        emitJson(failure);
+      } else {
+        process.stderr.write(`${failure.code}: ${failure.message}\n`);
+      }
+      return 1;
+    }
+    throw error;
+  }
 
   if (bools.has('json')) {
     emitJson(result);

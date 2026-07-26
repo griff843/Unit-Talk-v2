@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
@@ -16,6 +19,7 @@ import {
   type CommitCheckResult,
   type EvidenceBundleV1,
 } from './truth-check-lib.js';
+import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import type { CheckResult, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
@@ -592,6 +596,70 @@ test('closeout truth gate requires merge SHA binding when merge SHA is available
     ),
     ['C4'],
   );
+});
+
+test('P3/C4 fail before model-routing rebind and pass after genuine merge binding', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-truth-gate-'));
+  try {
+    const mergeSha = 'fe09f637a7eeebf216e062dd4a003d7e38932d1a';
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      `${JSON.stringify({
+        issue_id: 'UTV2-1586',
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'high',
+        generated_at: '2026-07-24T21:17:17.042Z',
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const p3Passes = (content: string): boolean =>
+      content.includes(mergeSha) ||
+      new RegExp(`merge_sha:\\s*${mergeSha}`, 'i').test(content);
+    const before = fs.readFileSync(routingPath, 'utf8');
+    assert.strictEqual(p3Passes(before), false);
+    assert.deepStrictEqual(
+      failedCloseoutIds(
+        closeoutInput({
+          manifest: {
+            ...closeoutInput().manifest,
+            commit_sha: mergeSha,
+            expected_proof_paths: ['docs/06_status/proof/UTV2-1586/model-routing.json'],
+          },
+          pr_merge_sha: mergeSha,
+          proof_artifacts: [{ path: routingPath, content: before, mtime_ms: 2000 }],
+        }),
+      ),
+      ['C4'],
+    );
+
+    rebindModelRoutingJsonSha(
+      routingPath,
+      mergeSha,
+      '2026-07-25T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1306',
+      { required: true },
+    );
+    const after = fs.readFileSync(routingPath, 'utf8');
+    assert.strictEqual(p3Passes(after), true);
+    assert.deepStrictEqual(
+      failedCloseoutIds(
+        closeoutInput({
+          manifest: {
+            ...closeoutInput().manifest,
+            commit_sha: mergeSha,
+            expected_proof_paths: ['docs/06_status/proof/UTV2-1586/model-routing.json'],
+          },
+          pr_merge_sha: mergeSha,
+          proof_artifacts: [{ path: routingPath, content: after, mtime_ms: 2000 }],
+        }),
+      ),
+      [],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('closeout truth gate can use head SHA only when no merge SHA is available', () => {
