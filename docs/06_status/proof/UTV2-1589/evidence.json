@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1589",
+  "title": "Bind model-routing provenance to the authoritative merge SHA",
+  "tier": "T1",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-25T23:15:00Z",
+  "sha_binding": {
+    "verified_source_sha": "377b5a2dcfed40287983c6be159263e90a932a3c",
+    "verified_source_note": "Final substantive implementation commit. Chain of fixes across seven independent-review rounds, all in scripts/ops/proof-generate.ts, scripts/ops/lane-close.ts, and .github/workflows/post-merge-lane-close.yml: (1) the trusted --repair-merged path now binds every declared model-routing.json sidecar (previously only evidence.json/verification.md), propagating malformed/missing/identity-mismatch/conflicting-binding failures as model_routing_rebind_failed; (2) that path reuses safeRepoPath's repo-root escape guard; (3) post-merge-lane-close.yml's early proof-bind step is restricted to push events, since workflow_dispatch's github.sha is not the historical lane's authoritative SHA; (4) rebindModelRoutingJsonSha requires non-empty model/reasoning_effort fields on any required sidecar, rejecting a truncated or identity-only sidecar; (5) the same workflow step also skips when the checked-out manifest's own commit_sha already disagrees with this push's SHA, closing a second deadlock variant (a governed manifest-only repair PR merging via ordinary push); (6) generateProofArtifacts binds every declared sidecar via .filter(), matching the repair path, instead of only the first via .find(); (7) PM-directed release-blocking correction: rebindModelRoutingJsonSha now validates a required sidecar's model/reasoning_effort exactly against the lane manifest's own model_routing block, and validates model_profile/policy_version whenever both sides carry a value, failing closed with a new sidecar_manifest_routing_mismatch code identifying the offending field before any proof write; (8) a follow-up independent review found the historical fixture tests' manifest-side comparison was tautological (derived from the sidecar it had just read rather than the real lane manifest file) -- both fixture tests now read the real docs/06_status/lanes/<issue>.json manifest directly; (9) an ordinary first-time closeout resolved manifest.pr_url from disk with no GitHub-backed validation before binding model-routing.json's immutable closeout_binding, unlike the trusted repair step that always runs afterward -- a stale/incorrect pr_url (e.g. after a PR rename/reopen) would get baked in permanently before the repair transaction's rollback snapshot is even taken; fixed via a --skip-model-routing option so the workflow's early bind step never touches model-routing.json at all (superseded by (11) below, which closes this for every caller, not just the workflow); (10) rebindModelRoutingJsonSha spread an existing sidecar's fields (including a legacy top-level merge_sha field present in real historical sidecars) unchecked, so a conflicting legacy value could coexist with a newly-appended closeout_binding.merge_sha while P3/C4 both still passed; fixed by failing closed with a new legacy_binding_conflict code when a legacy top-level merge_sha disagrees with the authoritative SHA; (11) the same unvalidated-pr_url risk from (9) still existed for ANY other caller of ops:proof-generate (e.g. an operator manually following proof-repair.ts's printed remediation command), since only the workflow had been given --skip-model-routing; fixed by flipping generateProofArtifacts/ops:proof-generate's default so model-routing.json is never bound unless the caller explicitly opts in with --bind-model-routing (bindModelRouting), which no legitimate caller currently does; (12) the sidecar/manifest routing cross-check from (7) did not validate manual-override provenance, so a sidecar could claim override_used: false (or a different authorizer) while the manifest recorded a manual override and still bind; fixed by requiring the sidecar's override_used/override_authorized_by to agree with the manifest's model_routing.selected_by/override.authorized_by. Post-merge proof generation rebinds this field to the authoritative GitHub merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-07-25T23:15:00Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex/utv2-1589-model-routing-sha-bind",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/post-merge-lane-close.yml",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-close.test.ts",
+      "scripts/ops/proof-generate.ts",
+      "scripts/ops/proof-generate.test.ts",
+      "scripts/ops/truth-check-lib.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1589/evidence.json",
+      "docs/06_status/proof/UTV2-1589/model-routing.json",
+      "docs/06_status/proof/UTV2-1589/verification.md"
+    ],
+    "runtime_change": false,
+    "workflow_change": true,
+    "workflow_change_note": "PM-authorized second scope amendment: one-line `if:` condition added to post-merge-lane-close.yml's 'Bind proof artifacts to merge SHA' step (restricts it to push events). No new triggers, permissions, secrets, or jobs added; existing trusted-context validation (isTrustedPostMergeAutomation) and Merge Gate/branch protection are unchanged.",
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Environment validation, lint, project-reference type checking, build, aggregate tests, live database smoke tests, and the T1 live-proof battery passed."
+    },
+    "focused_proof_tests": {
+      "command": "npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts",
+      "status": "PASS",
+      "tests": 238,
+      "pass": 238,
+      "fail": 0,
+      "skipped": 0,
+      "detail": "Covers provenance preservation, idempotency, PR/SHA conflicts, malformed and missing sidecars, optional sidecars, atomic preflight, the UTV2-1585/#1305 and UTV2-1586/#1306 fixtures, and P3/C4 before-and-after behavior in scripts/ops/proof-generate.test.ts and scripts/ops/truth-check-lib.test.ts. scripts/ops/lane-close.test.ts additionally proves the trusted --repair-merged path itself (rebindRepairedLaneProof) binds every declared model-routing.json sidecar -- not just evidence.json/verification.md -- against the real UTV2-1585/#1305 and UTV2-1586/#1306 identities, is idempotent on replay, fails closed (with zero proof mutation) on a conflicting PR, conflicting SHA, invalid JSON, wrong/missing issue identity, and a missing required sidecar, leaves a lane with no declared sidecar unaffected, satisfies the C4 closeout gate and P3's merge-SHA-reference predicate through that same real path, and that a failed rebind rolls back the manifest and every proof file (including model-routing.json) through the existing repair rollback transaction."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "root_test": {
+      "command": "pnpm test",
+      "status": "PASS"
+    },
+    "manifest_validation": {
+      "command": "npx tsx scripts/ops/lane-manifest.ts validate UTV2-1589 --json",
+      "status": "PASS",
+      "code": "manifest_valid"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "pnpm_test_db": "pass",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "classification": "Operations proof-tooling change; the mandatory T1 live database and runtime-proof gates passed without lane-authored database mutation.",
+    "production_mutation_by_lane": false,
+    "queries": [
+      {
+        "table": "picks",
+        "description": "The live database smoke suite persisted and settled a unique submission through the repository abstraction, then cleaned up its fixture."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "The live database smoke suite verified invalid atomic operations leave no partial lifecycle writes."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "The live database smoke suite verified atomic claim and invalid delivery paths do not double-claim or leave partial outbox mutation."
+      },
+      {
+        "table": "audit_log",
+        "description": "The live suites exercised additive audit behavior and rollback assertions through existing test paths."
+      },
+      {
+        "table": "settlement_records",
+        "description": "The live database smoke suite verified corrections remain additive and do not mutate the original settlement."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 196,
+        "status": "preexisting_awaiting_approval_rows_observed"
+      }
+    ],
+    "row_counts_captured_at": "2026-07-25T04:58:58Z",
+    "row_counts_note": "The existing T1 proof battery reported 196 pre-existing stranded awaiting_approval rows. This lane did not update, delete, or backfill them.",
+    "broader_live_proof": {
+      "command": "pnpm test:t1-proof:live",
+      "status": "PASS",
+      "fail": 0,
+      "skipped": 1,
+      "skip_reason": "The latest provider snapshot was older than the bounded lookback window; the test classifies this as stale provider data rather than a code failure."
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Post-merge proof generation appends an authoritative closeout binding without replacing execution provenance.",
+      "status": "PASS",
+      "evidence": "rebindModelRoutingJsonSha preserves every parsed top-level field, including unknown fields, and adds only closeout_binding with sha_type, merge_sha, pr_url, and bound_at."
+    },
+    {
+      "criterion": "Rebinding is idempotent for the same PR/SHA and fails closed for a different PR or SHA.",
+      "status": "PASS",
+      "evidence": "Focused tests prove exact reruns preserve the original bound_at and conflicting PR or merge SHA values throw binding_conflict before any proof write."
+    },
+    {
+      "criterion": "Required missing or malformed model-routing sidecars fail, while optional missing sidecars remain unaffected.",
+      "status": "PASS",
+      "evidence": "Focused tests cover required missing, invalid JSON, malformed object, missing PR URL, and optional missing cases with distinct fail-closed outcomes."
+    },
+    {
+      "criterion": "Existing evidence and verification rebinding behavior remains unchanged.",
+      "status": "PASS",
+      "evidence": "The specialized model-routing preflight is composed with the existing evidence.json and verification Markdown rebinders; the aggregate proof suite passes."
+    },
+    {
+      "criterion": "P3 and C4 fail before closeout binding and pass after authoritative binding.",
+      "status": "PASS",
+      "evidence": "truth-check-lib focused tests exercise the same sidecar before and after closeout_binding and retain the existing P3/C4 interpretation."
+    },
+    {
+      "criterion": "Historical repair fixtures use the real UTV2-1585 and UTV2-1586 merge identities.",
+      "status": "PASS",
+      "evidence": "Focused tests use UTV2-1585 PR #1305 at 97527b791fc37acce41f4f46fd88699dce054b66 and UTV2-1586 PR #1306 at fe09f637a7eeebf216e062dd4a003d7e38932d1a."
+    },
+    {
+      "criterion": "PM scope amendment: the trusted scripts/ops/lane-close.ts --repair-merged path binds every required model-routing.json sidecar before truth-check, not just evidence.json/verification.md.",
+      "status": "PASS",
+      "evidence": "rebindRepairedLaneProof() now validates (write:false) every model-routing.json path declared in expected_proof_paths before writing any proof artifact, then binds it alongside the existing evidence/verification rebind. scripts/ops/lane-close.test.ts proves this against the real UTV2-1585/#1305 and UTV2-1586/#1306 identities, idempotent replay, binding_conflict on a different PR or SHA, malformed_required_sidecar on invalid JSON, sidecar_identity_mismatch on wrong/missing issue_id, missing_required_sidecar when the declared file is absent, no effect on a lane with no declared sidecar, C4/P3 passing through the real path, and rollback of the manifest and every proof file (via the existing createRepairRollbackTransaction, which already snapshots the whole proof directory) when the rebind fails."
+    },
+    {
+      "criterion": "A model-routing rebind failure during trusted repair fails closed with a distinct, propagated error rather than a generic infra_error or silent partial bind.",
+      "status": "PASS",
+      "evidence": "main()'s catch block now special-cases ModelRoutingRebindError (checked before the generic fallback) and emits a model_routing_rebind_failed closeout code carrying the underlying model_routing_error_code, proof_path, and message, with transaction.rollback() already invoked unconditionally at the top of that catch block."
+    },
+    {
+      "criterion": "The trusted workflow_dispatch replay path for UTV2-1585/UTV2-1586 does not deadlock model-routing.json's immutable closeout_binding against a non-authoritative SHA before --repair-merged can bind the real one.",
+      "status": "PASS",
+      "evidence": "post-merge-lane-close.yml's 'Bind proof artifacts to merge SHA' step is now restricted to push events (github.event_name == 'push'); a workflow-assertion test in scripts/ops/lane-close.test.ts confirms this condition is present."
+    },
+    {
+      "criterion": "A required model-routing sidecar cannot receive an authoritative closeout_binding unless it carries real execution-provenance fields, not merely a matching issue_id.",
+      "status": "PASS",
+      "evidence": "rebindModelRoutingJsonSha now requires non-empty model and reasoning_effort string fields on any required sidecar (checked after identity validation, before the existing conflict check). Three new focused tests cover a truncated {issue_id}-only sidecar, a sidecar with reasoning_effort present but blank, and confirm optional (non-required) sidecars remain unaffected."
+    },
+    {
+      "criterion": "A governed manifest-only repair PR merging via an ordinary push (not just a workflow_dispatch replay) does not re-trigger the model-routing deadlock.",
+      "status": "PASS",
+      "evidence": "The 'Bind proof artifacts to merge SHA' step now additionally reads the checked-out manifest's own commit_sha and skips the early proof-generate bind whenever it already disagrees with this push's SHA -- the signal that this push is a repair commit (e.g. from buildRepairRequiredViaPrPacket's recommended path), not the lane's own first-time implementation merge. A workflow-assertion test confirms the guard is present and that the pnpm ops:proof-generate call is gated behind it, not run unconditionally alongside it."
+    },
+    {
+      "criterion": "generateProofArtifacts binds every declared model-routing.json sidecar, matching the repair path's already-correct behavior, so a manifest declaring more than one such sidecar cannot get permanently stuck with an unbound second file after a reported-successful proof-generate run.",
+      "status": "PASS",
+      "evidence": "Both the validate-pass and write-pass loops in generateProofArtifacts (proof-generate.ts) now iterate every model-routing.json match via .filter() instead of binding only the first via .find(). A regression test proves two sidecars in different subdirectories both receive the closeout_binding."
+    },
+    {
+      "criterion": "A required model-routing sidecar cannot receive an authoritative closeout_binding unless its execution-provenance fields agree with the lane manifest's own model_routing block (PM directive: release-blocking, not a deferred follow-up).",
+      "status": "PASS",
+      "evidence": "rebindModelRoutingJsonSha now requires exact agreement between the sidecar and manifest.model_routing for model and reasoning_effort whenever a manifest model_routing block is supplied, and additionally validates model_profile/policy_version whenever both sides carry a value for them. A mismatch or a manifest-side blank field fails closed with a new sidecar_manifest_routing_mismatch code identifying the offending field, before any proof write. Wired into both generateProofArtifacts and rebindRepairedLaneProof. Nine new focused tests cover: exact match binds; model/reasoning_effort/profile/policy_version mismatches each fail closed; profile/policy_version absent from only one side does not fail; a manifest-side blank field fails closed; a lane with no manifest model_routing block at all is unaffected (ordinary closeout unchanged); a mismatch through the actual trusted repair path rolls back the manifest, evidence, verification, sidecar, and sync/lease/merge-lock state; and the real PR #1305/PR #1306 historical fixtures (read from their actual committed sidecar files) still bind successfully against their real, agreeing manifest routing records."
+    },
+    {
+      "criterion": "model-routing.json's immutable closeout_binding is never written from an unvalidated manifest.pr_url; only the trusted, GitHub-validated repair path binds it, for ANY caller of ops:proof-generate, not just the workflow.",
+      "status": "PASS",
+      "evidence": "generateProofArtifacts/ops:proof-generate now default to never binding model-routing.json at all -- binding requires an explicit bindModelRouting option / --bind-model-routing CLI flag, which no current caller sets. (An interim --skip-model-routing flag closed this only for the workflow's own early-bind step; superseded by this default-flip, which closes it for every caller, including a manual operator invocation of the CLI following proof-repair.ts's remediation instructions.) model-routing.json is bound exclusively by ops:lane-close --repair-merged's rebindRepairedLaneProof(), which calls rebindModelRoutingJsonSha directly (not through generateProofArtifacts) using its own GitHub-validated PR/SHA resolution. Focused tests prove the default (no option) never binds or validates model-routing.json, an explicit opt-in still binds correctly, and a workflow-assertion test confirms the early bind step's invocation never passes --bind-model-routing."
+    },
+    {
+      "criterion": "A legacy top-level merge_sha field in a historical sidecar cannot coexist with a conflicting closeout_binding.merge_sha.",
+      "status": "PASS",
+      "evidence": "rebindModelRoutingJsonSha now fails closed with a new legacy_binding_conflict code when a sidecar's legacy top-level merge_sha field disagrees with the authoritative merge SHA being bound, before any proof write. A sidecar whose legacy field already agrees is preserved untouched and the closeout_binding is appended normally. Focused tests cover both the conflict (zero mutation) and the agreement case, verified against the real legacy shape present in 14 historical sidecars in the repo."
+    },
+    {
+      "criterion": "A required model-routing sidecar cannot receive an authoritative closeout_binding if its manual-override provenance (override_used, override_authorized_by) misrepresents the lane manifest's own model_routing.selected_by/override.authorized_by.",
+      "status": "PASS",
+      "evidence": "rebindModelRoutingJsonSha now requires the sidecar's override_used to agree with whether manifest.model_routing.selected_by is 'manual-override', and when it is, requires override_authorized_by to match manifest.model_routing.override.authorized_by exactly, before any proof write. Five new focused tests cover: override_used disagreement, authorizer disagreement, a manifest recording manual-override with no override.authorized_by, a sidecar missing override_used entirely, and correct agreement binding successfully."
+    }
+  ],
+  "historical_repair_inventory": [
+    {
+      "issue_id": "UTV2-1585",
+      "manifest_status": "started",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1305",
+      "merge_sha": "97527b791fc37acce41f4f46fd88699dce054b66",
+      "sidecar_state": "present_without_closeout_binding",
+      "recovery": "Replay trusted post-merge closeout after UTV2-1589 merges, supplying PR #1305 explicitly."
+    },
+    {
+      "issue_id": "UTV2-1586",
+      "manifest_status": "in_review",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1306",
+      "merge_sha": "fe09f637a7eeebf216e062dd4a003d7e38932d1a",
+      "sidecar_state": "present_without_closeout_binding",
+      "recovery": "Replay trusted post-merge closeout after UTV2-1589 merges; the recorded PR identity is sufficient."
+    },
+    {
+      "issue_id": "UTV2-1589",
+      "manifest_status": "started",
+      "pr_url": null,
+      "merge_sha": null,
+      "sidecar_state": "premerge_provenance_present",
+      "recovery": "Close normally through the repaired post-merge path after this implementation PR merges."
+    }
+  ],
+  "known_limitations": [
+    "Historical replay of UTV2-1585 and UTV2-1586 is a post-merge follow-up and is not performed by this implementation PR.",
+    "The T1 approval label and PM verdict remain independent external merge requirements.",
+    "RESOLVED (was a KNOWN GAP): scripts/ops/lane-close.ts's rebindRepairedLaneProof() previously called only rebindMergeSha(), never invoking this issue's model-routing rebind, so a trusted --repair-merged replay of UTV2-1585/UTV2-1586 would still have failed P3/C4 on model-routing.json even after this PR merged. Found by independent Codex review; fixed under a PM-authorized same-lane scope expansion adding scripts/ops/lane-close.ts and scripts/ops/lane-close.test.ts to this issue's file scope. rebindRepairedLaneProof() now validates and binds every declared model-routing.json sidecar before writing any proof artifact, propagating malformed/missing/identity-mismatch/conflicting-binding failures as a new model_routing_rebind_failed closeout code before truth-check runs.",
+    "RESOLVED: a fresh independent review of the trusted-repair fix found rebindRepairedLaneProof() resolved manifest-declared model-routing.json paths via a bare path.resolve() with no repo-root escape check, unlike generateProofArtifacts()'s safeRepoPath() guard for the same kind of manifest-declared path. Fixed by exporting and reusing safeRepoPath in lane-close.ts, with a regression test proving an escaping path (e.g. ../../../../tmp/...) is refused.",
+    "RESOLVED (was ACCEPTED, not fixed): an independent review first noted that generateProofArtifacts() (proof-generate.ts) bound only the first model-routing.json match via .find() when a manifest declares more than one such sidecar, while rebindRepairedLaneProof() (this PR's earlier fix) bound every match via .filter() -- an inconsistency between the two code paths. Initially left as accepted/deferred since no lane in practice declares more than one such sidecar. A later automated Codex review flagged the same gap as a real correctness defect (the truth gate evaluates every expected proof artifact, so a second sidecar would stay unbound and permanently block closeout even though proof generation reported success), so it was fixed: both the validate-pass and write-pass loops in generateProofArtifacts() now iterate every model-routing.json match via .filter(), matching the repair path. A regression test proves two sidecars under different subdirectories both get bound.",
+    "ACCEPTED, not fixed: createRepairRollbackTransaction() snapshots the whole docs/06_status/proof/<issueId>/ directory and relies on every bound model-routing.json sidecar living inside it -- true under the sanctioned lane lifecycle (lane-start.ts always writes proof paths under that directory) but not independently enforced by rebindRepairedLaneProof() or the rollback transaction itself. Combined with the now-fixed path-escape guard, an out-of-directory-but-still-in-repo sidecar path remains a theoretical gap gated behind an already-abnormal, non-lane-start-produced manifest; not fixed here to avoid expanding scope beyond the repair path itself.",
+    "RESOLVED (was a second, more severe finding from the same independent review): post-merge-lane-close.yml's 'Bind proof artifacts to merge SHA' step ran unconditionally on both push and workflow_dispatch, passing github.sha as --merge-sha. On workflow_dispatch (the only way to run the trusted --repair-merged replay for UTV2-1585/UTV2-1586) github.sha is main's current tip, not the historical lane's authoritative merge SHA. Because model-routing.json's closeout_binding is intentionally immutable-once-bound (unlike evidence.json/verification.md's last-write-wins rebind), this step would have bound model-routing.json to the wrong SHA on any workflow_dispatch replay attempt, and the immediately-following --repair-merged step's attempt to bind the real SHA would then fail closed with binding_conflict -- permanently deadlocking the exact replay UTV2-1585/UTV2-1586 are queued for. PM authorized a second narrow scope amendment: the step now runs on push events only (github.event_name == 'push'); --repair-merged's own rebindRepairedLaneProof (this issue's fix) already binds model-routing.json authoritatively on the trusted repair path, so the early bind is unneeded there. A regression test asserts the step's if: condition requires github.event_name == 'push'.",
+    "ACCEPTED, not fixed: a second fresh-context independent review of the workflow fix noted that the now-skipped-on-workflow_dispatch early bind step used to run the full ops:proof-generate CLI (generateProofArtifacts), which creates diff-summary.md/verification.md from scratch when missing -- unlike rebindRepairedLaneProof()'s rebindMergeSha(), which only rebinds evidence.json/verification.md if they already exist and otherwise reports 'missing' without creating them. A lane that reached a workflow_dispatch --repair-merged replay having never had proof-generate run against it at all (not merely missing SHA binding) would now stay without those files. Not a live issue: both actual replay candidates, UTV2-1585 and UTV2-1586, already have populated evidence.json (with an existing sha_binding object) and verification.md in the repository today, so rebindMergeSha correctly updates them. Left undocumented-until-now theoretical gap for a future lane that skipped normal proof generation entirely before merge -- an already-abnormal state, not fixed here to avoid expanding scope beyond the repair path and the one workflow condition.",
+    "RESOLVED: an automated Codex review found rebindModelRoutingJsonSha accepted any required sidecar with a matching issue_id regardless of whether it carried real execution-provenance fields -- a truncated/tampered sidecar such as {\"issue_id\":\"UTV2-1586\"} would receive an authoritative closeout_binding despite providing no evidence of which model executed the lane. Fixed by requiring non-empty model and reasoning_effort string fields on any required sidecar, checked after identity validation and before the existing conflict check. Deliberately narrowed to these two fields (not also model_profile/policy_version, which are administrative metadata rather than execution provenance) so legitimate historical sidecars that never carried the latter two are not rejected; the real UTV2-1585 and UTV2-1586 fixtures and all existing sidecar fixtures in this test suite already carry both required fields and are unaffected.",
+    "RESOLVED (was ACCEPTED, not fixed -- PM correction: this is release-blocking, not a deferred follow-up): a third fresh-context independent review of the provenance-field fix confirmed no bypass, but noted the check only required model/reasoning_effort to be non-empty strings, not that they match the lane manifest's own model_routing.model/model_routing.reasoning_effort fields -- so a sidecar with well-formed but fabricated/copy-pasted values from a different lane would still pass. Initially deferred as a follow-up; PM directed that this be fixed in this PR. rebindModelRoutingJsonSha now requires exact agreement between the sidecar and manifest.model_routing for model/reasoning_effort whenever the manifest supplies a model_routing block, and additionally validates model_profile/policy_version whenever both sides carry a value for them, failing closed with a new sidecar_manifest_routing_mismatch code identifying the offending field before any proof write. When the manifest has no model_routing block at all, the cross-check is skipped -- ordinary closeout for lanes without one is unaffected.",
+    "RESOLVED (was ACCEPTED, not fixed): the same review noted the historical fixture tests in scripts/ops/proof-generate.test.ts synthesized an equivalent payload via preMergeModelRoutingJson() rather than reading the real committed model-routing.json files directly. This was fixed incidentally while implementing the sidecar/manifest routing cross-check (both fixture tests now fs.readFileSync the real committed sidecar). A later independent review found the manifest-side half of that same fix was still tautological: the fixture constructed its comparison manifest.model_routing by copying fields out of the sidecar it had just read, rather than reading the real docs/06_status/lanes/<issue>.json manifest file -- unable to catch a future drift between the two real, independently-authored files even though it looked like a real-data test. Fixed: both fixture tests now read the real lane manifest file directly and use its actual model_routing block.",
+    "RESOLVED (a fifth review finding, showing the second scope amendment was incomplete): an automated Codex review found the push-only restriction on 'Bind proof artifacts to merge SHA' did not cover every case -- a governed manifest-only repair PR (buildRepairRequiredViaPrPacket's recommended path for a lane whose pr_url is already set, e.g. UTV2-1586) merges via an ordinary push, and that push's own github.sha is the repair PR's merge commit, not the lane's original implementation merge SHA, even though github.event_name == 'push' is true. The manifest checked out by that same push already carries the correct historical commit_sha (the repair PR's whole point), so the step would still bind model-routing.json to the wrong SHA and hit the identical binding_conflict deadlock later in the same run. Fixed by additionally comparing the checked-out manifest's own commit_sha against this push's SHA and skipping the early bind when they already disagree -- the signal that this push is a repair commit, not the lane's own first-time closeout.",
+    "CLOSED: a sixth, final fresh-context independent review did a from-scratch adversarial pass over the full diff specifically hunting for a sixth variant of the same deadlock class (bot-actor self-retrigger, a stale-but-coincidentally-matching commit_sha, concurrent/overlapping workflow runs, interaction with the workflow's other two guard steps), ran the full 261-test suite plus type-check plus lint, and confirmed scope is clean (no changes to truth-check-lib.ts, merge-gate.yml, or docs/governance/). It found no blocking issue and no further deadlock variant -- every path it traced either resolves safely by design (repairMergedLaneManifest always re-resolves the authoritative PR/SHA from GitHub before any write, and nothing reaches main unless ops:lane-close exits 0) or reduces to an already-known, differently-classified failure (infra_error for a still-null pr_url). It flagged one wording-only nitpick in the workflow comment (the illustrative 'e.g. UTV2-1586' read as a claim about that lane's specific recovery path rather than the general precondition), fixed in a comment-only follow-up commit with no behavior change."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true
+  }
+}
