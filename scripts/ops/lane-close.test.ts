@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   buildRepairRequiredViaPrPacket,
+  completeAlreadyClosedLaneCleanup,
   completeSuccessfulLaneClose,
   createRepairRollbackTransaction,
   ensureCloseoutMergeLock,
@@ -575,6 +576,95 @@ test('repair merged lane releases an active lease for an already done lane and i
 
     assert.doesNotThrow(() => repairMergedLaneManifest(manifest, options));
   });
+});
+
+test('UTV2-1589 trusted done-lane replay validates PR and performs idempotent cleanup without rewriting terminal truth', () => {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1589-terminal-cleanup-'));
+  const mergeSha = '8f4a4dba64c49b68aa3fbd8135be5d4f42996bd5';
+  const manifest = createManifest({
+    issue_id: 'UTV2-1589',
+    status: 'done',
+    branch: 'codex/utv2-1589-proof-sha-binding',
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1308',
+    commit_sha: mergeSha,
+    closed_at: '2026-07-26T01:00:00.000Z',
+    expected_proof_paths: [
+      'docs/06_status/proof/UTV2-1589/evidence.json',
+      'docs/06_status/proof/UTV2-1589/model-routing.json',
+    ],
+    file_scope_lock: ['scripts/ops/lane-close.ts'],
+    truth_check_history: [{
+      checked_at: '2026-07-26T00:59:00.000Z',
+      verdict: 'pass',
+      merge_sha: mergeSha,
+      failures: [],
+      runner: 'ops:lane-close',
+    }],
+  });
+  const pr = createTrustedRepairPr(manifest, {
+    url: manifest.pr_url ?? '',
+    number: 1308,
+    mergeSha,
+    headRefName: manifest.branch,
+    title: `feat(ops): ${manifest.issue_id} proof SHA binding`,
+    files: [
+      `docs/06_status/lanes/${manifest.issue_id}.json`,
+      ...manifest.expected_proof_paths,
+      'scripts/ops/lane-close.ts',
+    ],
+  });
+  const syncPath = path.join(repoRoot, '.ops', 'sync', `${manifest.issue_id}.yml`);
+  fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+  fs.writeFileSync(syncPath, 'entities:\n  issues: [UTV2-1589]\n');
+  const before = structuredClone(manifest);
+  const cleanupCalls: string[] = [];
+  let cleanupCount = 0;
+
+  try {
+    const validation = validateTrustedPostMergeRepair(manifest, '#1308', {
+      repairMerged: true,
+      trustedPostMerge: true,
+      fetchPr: () => pr,
+      isMergeReachable: () => true,
+    });
+    assert.strictEqual(validation.ok, true);
+
+    const repair = repairMergedLaneManifest(manifest, {
+      validatedPr: validation.pr ?? undefined,
+    });
+    assert.strictEqual(repair.code, 'already_closed');
+
+    const cleanupOptions = {
+      repoRoot,
+      releaseLocks: (issueId: string, branch: string) => {
+        cleanupCalls.push(`locks:${issueId}:${branch}`);
+        return { warnings: [] };
+      },
+      cleanupWorktree: () => {
+        cleanupCount += 1;
+        cleanupCalls.push('worktree');
+        return cleanupCount === 1 ? 'removed' as const : 'already_absent' as const;
+      },
+    };
+    const first = completeAlreadyClosedLaneCleanup(manifest, cleanupOptions);
+    const second = completeAlreadyClosedLaneCleanup(manifest, cleanupOptions);
+
+    assert.deepStrictEqual(manifest, before);
+    assert.strictEqual(first.manifest, manifest);
+    assert.strictEqual(first.sync_removed, true);
+    assert.strictEqual(first.worktree_cleanup, 'removed');
+    assert.strictEqual(second.sync_removed, false);
+    assert.strictEqual(second.worktree_cleanup, 'already_absent');
+    assert.strictEqual(fs.existsSync(syncPath), false);
+    assert.deepStrictEqual(cleanupCalls, [
+      `locks:${manifest.issue_id}:${manifest.branch}`,
+      'worktree',
+      `locks:${manifest.issue_id}:${manifest.branch}`,
+      'worktree',
+    ]);
+  } finally {
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
 });
 
 test('UTV2-1564: repair merged lane is a true no-op when the manifest already reflects the PR\'s authoritative state', () => {
@@ -2247,6 +2337,27 @@ test('UTV2-1586 #16 workflow dispatch forwards PR only to trusted repair command
   assert.match(workflow, /git ls-files -- "\$per_issue_sync"/);
   assert.match(workflow, /git add -A -- "\$per_issue_sync"/);
   assert.doesNotMatch(workflow, /if \[ -f "\$per_issue_sync" \]/);
+});
+
+test('UTV2-1590 done push remains skipped while explicit workflow dispatch reaches cleanup', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const statusStepIndex = workflow.indexOf('- name: Check manifest status');
+  const nextStepIndex = workflow.indexOf('\n      - name:', statusStepIndex + 1);
+  const statusStep = workflow.slice(statusStepIndex, nextStepIndex);
+
+  assert.match(statusStep, /EVENT_NAME: \$\{\{ github\.event_name \}\}/u);
+  assert.match(statusStep, /EXPLICIT_PR: \$\{\{ steps\.extract\.outputs\.pr_input \}\}/u);
+  assert.match(
+    statusStep,
+    /if \[ "\$EVENT_NAME" = "workflow_dispatch" \] && \[ -n "\$EXPLICIT_PR" \]; then/u,
+  );
+  assert.match(statusStep, /Trusted terminal cleanup replay requested with explicit PR/u);
+  assert.match(statusStep, /Push handling remains a no-op; manual cleanup replay requires an explicit PR/u);
+  assert.match(statusStep, /echo "closeable=true" >> "\$GITHUB_OUTPUT"/u);
+  assert.match(statusStep, /echo "closeable=false" >> "\$GITHUB_OUTPUT"/u);
 });
 
 test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts to merge SHA" step', () => {

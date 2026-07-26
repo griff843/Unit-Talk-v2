@@ -999,6 +999,46 @@ export interface SuccessfulLaneCloseResult {
 }
 
 /**
+ * Replays only the residual cleanup portion of closeout for a lane whose
+ * terminal manifest and proof authority are already correct. The caller must
+ * validate the explicit historical PR before entering this function.
+ *
+ * This path deliberately never writes the manifest, transitions Linear, or
+ * rebinds proof. It only removes the per-issue sync record, releases supported
+ * coordination state, and removes the exact clean recorded worktree.
+ */
+export function completeAlreadyClosedLaneCleanup(
+  manifest: LaneManifest,
+  options: {
+    repoRoot?: string;
+    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+    cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
+  } = {},
+): SuccessfulLaneCloseResult {
+  const syncPath = path.join(
+    options.repoRoot ?? process.cwd(),
+    '.ops',
+    'sync',
+    `${manifest.issue_id}.yml`,
+  );
+  const syncRemoved = fs.existsSync(syncPath);
+  fs.rmSync(syncPath, { force: true });
+
+  const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
+    manifest.issue_id,
+    manifest.branch,
+  );
+  const worktreeCleanup = (options.cleanupWorktree ?? cleanupClosedLaneWorktree)(manifest);
+
+  return {
+    manifest,
+    warnings: closeoutLocks.warnings,
+    sync_removed: syncRemoved,
+    worktree_cleanup: worktreeCleanup,
+  };
+}
+
+/**
  * Completes the terminal closeout sequence after a passing truth-check. The
  * injected operations keep the full success path testable without contacting
  * Linear or mutating the developer's real lease/worktree state.
@@ -1174,7 +1214,7 @@ async function main(): Promise<void> {
 
     if (repairMerged) {
       const repair = repairMergedLaneManifest(manifest, {
-        releaseLocksIfAlreadyDone: true,
+        releaseLocksIfAlreadyDone: !validatedPr,
         validatedPr,
       });
       if (!repair.ok) {
@@ -1191,13 +1231,14 @@ async function main(): Promise<void> {
         process.exit(1);
       }
       if (repair.code === 'already_closed') {
-        let worktreeCleanup: LaneWorktreeCleanup = 'not_requested';
-        let syncRemoved = false;
+        let cleanup: SuccessfulLaneCloseResult = {
+          manifest,
+          warnings: [],
+          sync_removed: false,
+          worktree_cleanup: 'not_requested',
+        };
         if (validatedPr) {
-          const syncPath = path.join(process.cwd(), '.ops', 'sync', `${issueId}.yml`);
-          syncRemoved = fs.existsSync(syncPath);
-          fs.rmSync(syncPath, { force: true });
-          worktreeCleanup = cleanupClosedLaneWorktree(manifest);
+          cleanup = completeAlreadyClosedLaneCleanup(manifest);
         }
         transaction.commit();
         transaction = null;
@@ -1208,8 +1249,9 @@ async function main(): Promise<void> {
           issue_id: issueId,
           status: manifest.status,
           remediation: repair.remediation,
-          sync_removed: syncRemoved,
-          worktree_cleanup: worktreeCleanup,
+          warnings: cleanup.warnings,
+          sync_removed: cleanup.sync_removed,
+          worktree_cleanup: cleanup.worktree_cleanup,
         });
         process.exit(0);
       }
