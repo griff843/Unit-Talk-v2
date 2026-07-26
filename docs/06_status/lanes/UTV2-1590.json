@@ -10,13 +10,7 @@
   "commit_sha": null,
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1309",
   "files_changed": [],
-  "file_scope_lock": [
-    ".github/workflows/post-merge-lane-close.yml",
-    "scripts/ops/lane-close.test.ts",
-    "scripts/ops/lane-close.ts",
-    "scripts/ops/truth-check-lib.test.ts",
-    "scripts/ops/truth-check-lib.ts"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1590/evidence.json",
     "docs/06_status/proof/UTV2-1590/model-routing.json",
