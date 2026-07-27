@@ -3,9 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   buildMergeCommand,
+  runAuthorizedPrMerge,
   runMergeWrapper,
+  runPreMergeAuthorizationCheck,
   MAIN_SYNC_STASH_MESSAGE,
   MAIN_SYNC_STASH_PATHS,
   type CommandRunner,
@@ -45,6 +48,50 @@ function failRunner(calls: string[][]): CommandRunner {
       status: 1,
       stdout: Buffer.from(''),
       stderr: Buffer.from('failed'),
+      error: undefined,
+    };
+  };
+}
+
+const PRE_MERGE_AUTH_COMMAND = ['pnpm', 'exec', 'tsx', 'scripts/ops/pre-merge-authorization.ts'];
+
+function isPreMergeAuthorizationCall(command: string, args: string[]): boolean {
+  return [command, ...args].slice(0, PRE_MERGE_AUTH_COMMAND.length).every(
+    (value, index) => value === PRE_MERGE_AUTH_COMMAND[index],
+  );
+}
+
+/**
+ * A CommandRunner for `pr-merge` tests that intercepts the pre-merge
+ * authorization subprocess call (UTV2-1592) and answers it with a fixed
+ * `authorized` receipt, while delegating every other command (the actual
+ * `gh pr merge`, etc.) to a plain ok/fail runner. This lets existing
+ * pr-merge tests (written before the authorization gate existed) keep
+ * asserting on the merge command itself without a real network call.
+ */
+function prMergeRunner(options: { authorized: boolean; reason?: string; calls: string[][] }): CommandRunner {
+  return (command, args) => {
+    options.calls.push([command, ...args]);
+    if (isPreMergeAuthorizationCall(command, args)) {
+      const receipt = {
+        prNumber: 761,
+        headSha: 'deadbeef',
+        requiredChecks: [],
+        pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: options.authorized },
+        authorized: options.authorized,
+        ...(options.reason ? { reason: options.reason } : {}),
+      };
+      return {
+        status: options.authorized ? 0 : 1,
+        stdout: Buffer.from(JSON.stringify(receipt)),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    return {
+      status: 0,
+      stdout: Buffer.from('ok'),
+      stderr: Buffer.from(''),
       error: undefined,
     };
   };
@@ -305,7 +352,7 @@ test('wrapper records deferred auto-merge after releasing the lock', () => {
       {
         lockPath,
         deferredDir,
-        runner: okRunner(calls),
+        runner: prMergeRunner({ authorized: true, calls }),
         now: new Date('2026-05-18T18:00:00.000Z'),
       },
     );
@@ -320,6 +367,7 @@ test('wrapper records deferred auto-merge after releasing the lock', () => {
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.code, 'merge_wrapper_deferred');
     assert.deepStrictEqual(calls, [
+      ['pnpm', 'exec', 'tsx', 'scripts/ops/pre-merge-authorization.ts', '--owner', 'griff843', '--repo', 'Unit-Talk-v2', '--pr', '761'],
       ['gh', 'pr', 'merge', '761', '--squash', '--auto'],
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
@@ -334,4 +382,228 @@ test('wrapper records deferred auto-merge after releasing the lock', () => {
     ]);
     assert.match(record.note, /Reconciler or closeout must verify/);
   });
+});
+
+test('UTV2-1592: pr-merge invokes the merge runner when pre-merge authorization succeeds', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runMergeWrapper(
+      {
+        ...BASE_INPUT,
+        operation: 'pr-merge',
+        merge_method: 'squash',
+      },
+      { lockPath, deferredDir, runner: prMergeRunner({ authorized: true, calls }) },
+    );
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.ok && result.code, 'merge_wrapper_completed');
+    assert.strictEqual(calls.length, 2);
+    assert.deepStrictEqual(calls[1], ['gh', 'pr', 'merge', '761', '--squash']);
+  });
+});
+
+test('UTV2-1592: pr-merge refuses to invoke the merge runner when pre-merge authorization fails', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runMergeWrapper(
+      {
+        ...BASE_INPUT,
+        operation: 'pr-merge',
+        merge_method: 'squash',
+      },
+      {
+        lockPath,
+        deferredDir,
+        runner: prMergeRunner({
+          authorized: false,
+          reason: 'required checks missing or failing on head deadbeef: Executor Result Validation',
+          calls,
+        }),
+      },
+    );
+    const lock = readMergeLock(lockPath);
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(!result.ok && result.code, 'merge_wrapper_authorization_failed');
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].slice(0, 3), ['pnpm', 'exec', 'tsx']);
+    assert.match(!result.ok ? result.message : '', /Executor Result Validation/);
+    // The mutex must still be released even though the merge never ran.
+    assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+  });
+});
+
+test('UTV2-1592: pre-merge authorization gate does not apply to pr-update-branch or main-sync', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    // A runner that would fail the authorization JSON contract if the gate
+    // were (incorrectly) applied to a non-pr-merge operation -- proves the
+    // gate is scoped to pr-merge only.
+    const result = runMergeWrapper(
+      { ...BASE_INPUT, operation: 'pr-update-branch' },
+      { lockPath, deferredDir, runner: okRunner(calls) },
+    );
+
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(calls, [
+      ['gh', 'api', 'repos/{owner}/{repo}/pulls/761/update-branch', '-X', 'PUT'],
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1592 PM amendment: runPreMergeAuthorizationCheck / runAuthorizedPrMerge
+// fail-closed hardening (nonzero exit, timeout/signal, malformed/missing
+// output) and the shared authorization-and-merge primitive itself.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1592 amendment: an authorized:true receipt is refused when the subprocess exits non-zero', () => {
+  const runner: CommandRunner = () => ({
+    status: 1,
+    stdout: Buffer.from(
+      JSON.stringify({
+        authorized: true,
+        prNumber: 761,
+        headSha: 'deadbeef',
+        requiredChecks: [],
+        pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: true },
+      }),
+    ),
+    stderr: Buffer.from(''),
+    error: undefined,
+  });
+
+  const result = runPreMergeAuthorizationCheck('761', runner, process.cwd());
+
+  assert.strictEqual(result.authorized, false);
+  assert.match(result.reason ?? '', /non-zero status/);
+});
+
+test('UTV2-1592 amendment: a subprocess timeout/signal (run.error set) fails closed', () => {
+  const runner: CommandRunner = () => ({
+    status: null,
+    stdout: Buffer.from(''),
+    stderr: Buffer.from(''),
+    error: Object.assign(new Error('spawnSync pnpm ETIMEDOUT'), { code: 'ETIMEDOUT' }),
+  });
+
+  const result = runPreMergeAuthorizationCheck('761', runner, process.cwd());
+
+  assert.strictEqual(result.authorized, false);
+  assert.match(result.reason ?? '', /failed to execute/);
+});
+
+test('UTV2-1592 amendment: malformed JSON output fails closed', () => {
+  const runner: CommandRunner = () => ({
+    status: 0,
+    stdout: Buffer.from('not valid json{{{'),
+    stderr: Buffer.from(''),
+    error: undefined,
+  });
+
+  const result = runPreMergeAuthorizationCheck('761', runner, process.cwd());
+
+  assert.strictEqual(result.authorized, false);
+  assert.match(result.reason ?? '', /no valid receipt/);
+});
+
+test('UTV2-1592 amendment: missing output (a silently killed subprocess) fails closed', () => {
+  const runner: CommandRunner = () => ({
+    status: null,
+    stdout: Buffer.from(''),
+    stderr: Buffer.from(''),
+    error: undefined,
+  });
+
+  const result = runPreMergeAuthorizationCheck('761', runner, process.cwd());
+
+  assert.strictEqual(result.authorized, false);
+  assert.match(result.reason ?? '', /no valid receipt/);
+});
+
+test('UTV2-1592 amendment: runPreMergeAuthorizationCheck passes a bounded (non-zero) timeout to the runner', () => {
+  let capturedOptions: { cwd: string; timeoutMs?: number } | undefined;
+  const runner: CommandRunner = (_command, _args, options) => {
+    capturedOptions = options;
+    return {
+      status: 0,
+      stdout: Buffer.from(JSON.stringify({ authorized: true })),
+      stderr: Buffer.from(''),
+      error: undefined,
+    };
+  };
+
+  runPreMergeAuthorizationCheck('761', runner, process.cwd());
+
+  assert.ok(
+    typeof capturedOptions?.timeoutMs === 'number' && capturedOptions.timeoutMs > 0,
+    'expected a bounded (>0) timeoutMs to be passed to the runner',
+  );
+});
+
+test('UTV2-1592 amendment: runAuthorizedPrMerge never invokes the merge command when authorization is denied', () => {
+  const calls: string[][] = [];
+  const runner: CommandRunner = (command, args) => {
+    calls.push([command, ...args]);
+    return {
+      status: 1,
+      stdout: Buffer.from(JSON.stringify({ authorized: false, reason: 'denied' })),
+      stderr: Buffer.from(''),
+      error: undefined,
+    };
+  };
+
+  const result = runAuthorizedPrMerge({ pr: '761', merge_method: 'squash' }, runner, process.cwd());
+
+  assert.strictEqual(result.authorized, false);
+  assert.strictEqual(result.run, undefined);
+  assert.strictEqual(calls.length, 1, 'the merge command must never run after a denial');
+  assert.deepStrictEqual(calls[0]?.slice(0, 3), ['pnpm', 'exec', 'tsx']);
+});
+
+test('UTV2-1592 amendment: runAuthorizedPrMerge invokes the merge command only after authorization succeeds', () => {
+  const calls: string[][] = [];
+  const runner: CommandRunner = (command, args) => {
+    calls.push([command, ...args]);
+    if (command === 'pnpm') {
+      return {
+        status: 0,
+        stdout: Buffer.from(JSON.stringify({ authorized: true })),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    return { status: 0, stdout: Buffer.from('merged'), stderr: Buffer.from(''), error: undefined };
+  };
+
+  const result = runAuthorizedPrMerge({ pr: '761', merge_method: 'squash' }, runner, process.cwd());
+
+  assert.strictEqual(result.authorized, true);
+  assert.ok(result.run);
+  assert.strictEqual(calls.length, 2);
+  assert.deepStrictEqual(calls[1], ['gh', 'pr', 'merge', '761', '--squash']);
+});
+
+test('UTV2-1592: buildMergeCommand({ operation: "pr-merge" }) is never executed anywhere outside runAuthorizedPrMerge', () => {
+  const dirname = path.dirname(fileURLToPath(import.meta.url));
+  const mergeWrapperSource = fs.readFileSync(path.join(dirname, 'merge-wrapper.ts'), 'utf8');
+  const opsMergeWrapperSource = fs.readFileSync(path.join(dirname, 'ops-merge-wrapper.ts'), 'utf8');
+
+  // merge-train's drain (ops-merge-wrapper.ts) must not construct its own
+  // 'pr-merge' command directly -- it must go through the shared primitive.
+  assert.doesNotMatch(opsMergeWrapperSource, /buildMergeCommand\(\{\s*\n?\s*operation:\s*'pr-merge'/);
+  assert.match(opsMergeWrapperSource, /runAuthorizedPrMerge\(/);
+
+  // runAuthorizedPrMerge must be called exactly once in merge-wrapper.ts
+  // beyond its own declaration (inside runMergeWrapper's pr-merge branch).
+  // If a second direct pr-merge execution path is ever added here, this
+  // count changes and the test fails -- the mechanical proxy for "every
+  // buildMergeCommand()-for-pr-merge execution path is authorization-gated".
+  const occurrences = mergeWrapperSource.match(/runAuthorizedPrMerge\(/g) ?? [];
+  assert.strictEqual(
+    occurrences.length,
+    2,
+    `expected exactly 2 occurrences of "runAuthorizedPrMerge(" (1 declaration + 1 call site), found ${occurrences.length}`,
+  );
 });

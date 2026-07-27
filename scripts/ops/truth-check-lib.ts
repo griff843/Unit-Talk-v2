@@ -1212,7 +1212,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
   return payload.data.issue;
 }
 
-function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
+export function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
   const url = new URL(prUrl);
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
   if (!match) {
@@ -1226,7 +1226,7 @@ function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; numb
   };
 }
 
-async function fetchGitHubPullRequest(
+export async function fetchGitHubPullRequest(
   owner: string,
   repo: string,
   number: number,
@@ -1251,16 +1251,25 @@ interface GitHubIssueComment {
   created_at?: string;
 }
 
-async function fetchGitHubPullRequestComments(
+export async function fetchGitHubPullRequestComments(
   owner: string,
   repo: string,
   number: number,
   token: string,
+  fetchPage: JsonPageFetcher = fetchJson,
 ): Promise<GitHubIssueComment[]> {
-  return fetchJson<GitHubIssueComment[]>(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+  // UTV2-1592 amendment: a PR/issue with more than 100 comments used to
+  // silently drop everything past page 1 -- including, potentially, the
+  // latest pm-verdict/v1 comment. Paginate the same way fetchCommitChecks
+  // already does for statuses/check-runs (fetchAllPages below), rather than
+  // reimplementing pagination a third time.
+  return fetchAllPages<GitHubIssueComment[]>(
+    (page) =>
+      `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+    (payload) => payload,
+    fetchPage,
     { headers: githubHeaders(token) },
-  );
+  ) as Promise<GitHubIssueComment[]>;
 }
 
 const PM_VERDICT_CODEOWNERS = new Set(['griff843']);
@@ -1361,7 +1370,7 @@ export function normalizeRequiredChecks(input: {
   return normalized;
 }
 
-async function fetchRequiredChecks(
+export async function fetchRequiredChecks(
   owner: string,
   repo: string,
   token: string,
@@ -1867,7 +1876,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   throw new Error(`Request failed for ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
-function githubHeaders(token: string): HeadersInit {
+export function githubHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
