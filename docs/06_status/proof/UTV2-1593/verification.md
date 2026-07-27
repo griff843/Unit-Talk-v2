@@ -6,14 +6,14 @@ MERGE_SHA: 0e6c0c1a1f09873d542ea94c11cbd486c48e45f1
 
 A parametrized real-fixture test in `scripts/ops/proof-generate.test.ts` hardcoded a literal `bound_at` timestamp, assuming the real committed sidecar it reads always starts unbound. Once one of the covered lanes closed via its own governed replay, its real sidecar already carried a genuine `bound_at`, and `rebindModelRoutingJsonSha` correctly treats that as idempotent-unchanged — the hardcoded literal stopped matching reality, breaking `pnpm test` on main repo-wide. Fix: assert against the real sidecar's own `closeout_binding` when already bound to the exact merge SHA under test, falling back to the injected fixture timestamp only when it isn't. This is a test-only change (`scripts/ops/proof-generate.test.ts`), zero implementation-code risk.
 
-## ASSERTIONS
+## ASSERTIONS:
 
 - [x] Focused test `npx tsx --test scripts/ops/proof-generate.test.ts` passes 58/58.
 - [x] Full `pnpm verify` (env:check, lint, type-check, build, root test, live `pnpm test:db`, T1 live-proof suite) passes.
 - [x] R-level check: PASS, no artifacts required for this diff.
 - [x] Diff confined to `scripts/ops/proof-generate.test.ts` plus this issue's own proof artifact.
 
-## EVIDENCE
+## EVIDENCE:
 
 Focused test run:
 ```
