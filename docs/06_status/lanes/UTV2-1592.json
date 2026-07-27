@@ -26,6 +26,8 @@
     "scripts/ops/truth-check-lib.ts"
   ],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1592.yml",
+    "docs/06_status/lanes/UTV2-1592.json",
     "package.json",
     "scripts/ops/merge-wrapper.test.ts",
     "scripts/ops/merge-wrapper.ts",
@@ -38,12 +40,11 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1592/evidence.json",
-    "docs/06_status/proof/UTV2-1592/verification.md",
-    "docs/06_status/proof/UTV2-1592/.gitkeep"
+    "docs/06_status/proof/UTV2-1592/verification.md"
   ],
   "status": "merged",
   "started_at": "2026-07-27T04:11:15.770Z",
-  "heartbeat_at": "2026-07-27T19:55:08.224Z",
+  "heartbeat_at": "2026-07-27T22:25:38.116Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1592-pre-merge-authorization.json",
@@ -62,6 +63,25 @@
         "commit_sha",
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-27T22:25:13.383Z",
+      "verdict": "fail",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [
+        "L3",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-27T22:25:38.116Z",
+      "verdict": "fail",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [
+        "L3"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
