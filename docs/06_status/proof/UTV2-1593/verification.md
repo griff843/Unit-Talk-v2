@@ -1,6 +1,6 @@
 # PROOF: UTV2-1593 — stale hardcoded bound_at assertion in real-fixture test
 
-MERGE_SHA: pending
+MERGE_SHA: 0e6c0c1a1f09873d542ea94c11cbd486c48e45f1
 
 ## Summary
 
@@ -8,9 +8,10 @@ A parametrized real-fixture test in `scripts/ops/proof-generate.test.ts` hardcod
 
 ## ASSERTIONS
 
-- Focused test `npx tsx --test scripts/ops/proof-generate.test.ts` passes 58/58.
-- Full `pnpm verify` (env:check, lint, type-check, build, root test, live `pnpm test:db`, T1 live-proof suite) passes.
-- R-level check: PASS, no artifacts required for this diff.
+- [x] Focused test `npx tsx --test scripts/ops/proof-generate.test.ts` passes 58/58.
+- [x] Full `pnpm verify` (env:check, lint, type-check, build, root test, live `pnpm test:db`, T1 live-proof suite) passes.
+- [x] R-level check: PASS, no artifacts required for this diff.
+- [x] Diff confined to `scripts/ops/proof-generate.test.ts` plus this issue's own proof artifact.
 
 ## EVIDENCE
 
@@ -22,8 +23,6 @@ npx tsx --test scripts/ops/proof-generate.test.ts
 # pass 58
 # fail 0
 ```
-
-## Verification
 
 `pnpm test:db` (executed as part of the full `pnpm verify` run on this branch):
 ```
@@ -54,6 +53,8 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 # skipped 0
 # todo 0
 ```
+
+## Verification
 
 R-level check:
 ```
