@@ -1256,11 +1256,20 @@ export async function fetchGitHubPullRequestComments(
   repo: string,
   number: number,
   token: string,
+  fetchPage: JsonPageFetcher = fetchJson,
 ): Promise<GitHubIssueComment[]> {
-  return fetchJson<GitHubIssueComment[]>(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+  // UTV2-1592 amendment: a PR/issue with more than 100 comments used to
+  // silently drop everything past page 1 -- including, potentially, the
+  // latest pm-verdict/v1 comment. Paginate the same way fetchCommitChecks
+  // already does for statuses/check-runs (fetchAllPages below), rather than
+  // reimplementing pagination a third time.
+  return fetchAllPages<GitHubIssueComment[]>(
+    (page) =>
+      `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+    (payload) => payload,
+    fetchPage,
     { headers: githubHeaders(token) },
-  );
+  ) as Promise<GitHubIssueComment[]>;
 }
 
 const PM_VERDICT_CODEOWNERS = new Set(['griff843']);

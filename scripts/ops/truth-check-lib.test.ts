@@ -13,6 +13,7 @@ import {
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
+  fetchGitHubPullRequestComments,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
@@ -413,6 +414,47 @@ test('G4 paginates beyond 100 commit statuses before evaluating required context
   assert.strictEqual(result.evidence?.[0]?.candidate_id, 101);
   assert.strictEqual(result.evidence?.[0]?.source, 'status');
   assert.ok(requestedUrls.some((url) => url.includes('/statuses?per_page=100&page=2')));
+});
+
+test('UTV2-1592 amendment: fetchGitHubPullRequestComments paginates beyond 100 comments before returning', async () => {
+  // Reproduces the same class of gap G4's pagination tests above guard
+  // against, but for PR/issue comments: a PM verdict posted after the 100th
+  // comment used to be silently dropped because this fetch only ever
+  // requested page 1.
+  const requestedUrls: string[] = [];
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({
+    body: `unrelated comment #${index + 1}`,
+    user: { login: 'someone', type: 'User' },
+    html_url: `https://github.com/griff843/Unit-Talk-v2/pull/1592#issuecomment-${index + 1}`,
+    created_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.endsWith('page=1')) return firstPage as T;
+    if (url.endsWith('page=2')) {
+      return [
+        {
+          body: 'PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: UTV2-1592\nPR: 1592\nHead SHA: deadbeef',
+          user: { login: 'griff843', type: 'User' },
+          html_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1592#issuecomment-101',
+          created_at: '2026-07-24T16:30:00Z',
+        },
+      ] as T;
+    }
+    return [] as T;
+  };
+
+  const comments = await fetchGitHubPullRequestComments(
+    'griff843',
+    'Unit-Talk-v2',
+    1592,
+    'test-token',
+    fetchPage,
+  );
+
+  assert.strictEqual(comments.length, 101);
+  assert.match(comments[100]?.body ?? '', /PM_VERDICT: APPROVED/);
+  assert.ok(requestedUrls.some((url) => url.includes('/issues/1592/comments?per_page=100&page=2')));
 });
 
 test('branch-protection required checks preserve app identity and suppress legacy duplicates', () => {

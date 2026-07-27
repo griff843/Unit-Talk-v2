@@ -13,8 +13,11 @@
   "file_scope_lock": [
     "scripts/ops/merge-wrapper.test.ts",
     "scripts/ops/merge-wrapper.ts",
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    "scripts/ops/ops-merge-wrapper.ts",
     "scripts/ops/pre-merge-authorization.test.ts",
     "scripts/ops/pre-merge-authorization.ts",
+    "scripts/ops/truth-check-lib.test.ts",
     "scripts/ops/truth-check-lib.ts"
   ],
   "expected_proof_paths": [

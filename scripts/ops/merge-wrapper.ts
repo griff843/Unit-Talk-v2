@@ -59,7 +59,7 @@ export interface DeferredMergeRecord {
 export type CommandRunner = (
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeoutMs?: number },
 ) => Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'>;
 
 export type MergeWrapperResult =
@@ -135,6 +135,16 @@ export const MAIN_SYNC_STASH_MESSAGE = 'ops-merge-wrapper:main-sync:autostash';
 export const PRE_MERGE_AUTHORIZATION_OWNER = 'griff843';
 export const PRE_MERGE_AUTHORIZATION_REPO = 'Unit-Talk-v2';
 const PRE_MERGE_AUTHORIZATION_SCRIPT = path.join('scripts', 'ops', 'pre-merge-authorization.ts');
+
+// Bounded timeout for the authorization subprocess (UTV2-1592 amendment).
+// The subprocess only does a handful of live GitHub REST round-trips
+// (required checks, paginated commit statuses/check-runs, paginated PR
+// comments, head SHA) -- 30s is generous headroom above that without
+// letting a wedged/hanging subprocess block a merge indefinitely. spawnSync's
+// own `timeout` option sends SIGTERM and sets `.error` (ETIMEDOUT) when
+// exceeded, which runPreMergeAuthorizationCheck below already treats as a
+// fail-closed "could not execute" result.
+const PRE_MERGE_AUTHORIZATION_TIMEOUT_MS = 30_000;
 
 export interface PreMergeAuthorizationCheckResult {
   authorized: boolean;
@@ -250,9 +260,12 @@ export function runPreMergeAuthorizationCheck(
       '--pr',
       pr,
     ],
-    { cwd },
+    { cwd, timeoutMs: PRE_MERGE_AUTHORIZATION_TIMEOUT_MS },
   );
 
+  // Fail closed on any transport-level failure: a thrown error, a signal
+  // (including the bounded timeout above firing), or a subprocess spawn
+  // failure all surface as `run.error`.
   if (run.error) {
     return {
       authorized: false,
@@ -281,10 +294,83 @@ export function runPreMergeAuthorizationCheck(
     };
   }
 
+  // Fail closed even on an affirmative receipt: pre-merge-authorization.ts's
+  // own CLI entry point sets `process.exitCode = receipt.authorized ? 0 : 1`,
+  // so those two facts (exit code, receipt.authorized) must always agree. A
+  // non-zero exit alongside `authorized: true` can only mean the process
+  // crashed, was killed, or was tampered with after printing the receipt --
+  // never treat that as "skip the exit-code check because the payload looks
+  // fine".
+  if (run.status !== 0) {
+    return {
+      authorized: false,
+      reason:
+        `pre-merge authorization subprocess exited with non-zero status ${run.status ?? 'unknown'} ` +
+        `(receipt reported authorized:${String(receipt.authorized)}); refusing to trust a receipt from a ` +
+        `subprocess that did not exit successfully: ${stderr || stdout || 'no output'}`,
+    };
+  }
+
   return {
     authorized: receipt.authorized,
     reason: typeof receipt.reason === 'string' ? receipt.reason : undefined,
   };
+}
+
+export interface RunAuthorizedPrMergeInput {
+  pr: string;
+  merge_method?: MergeMethod;
+  auto?: boolean;
+}
+
+export interface RunAuthorizedPrMergeResult {
+  authorized: boolean;
+  reason?: string;
+  command: MergeCommand;
+  run?: Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'>;
+}
+
+/**
+ * The SOLE path allowed to execute a `pr-merge` command anywhere in this
+ * codebase (UTV2-1592 amendment). `runMergeWrapper`'s direct `pr-merge`
+ * operation below and merge-train's per-candidate merge step
+ * (ops-merge-wrapper.ts's runMergeTrainEntry) both call this function
+ * instead of building and running a `gh pr merge` command themselves --
+ * that unification is what makes it structurally impossible for either
+ * caller to bypass re-authorization. It re-evaluates required checks and
+ * the PM verdict against the PR's live head SHA (via
+ * runPreMergeAuthorizationCheck) immediately before running the merge
+ * command, and never invokes the merge command when authorization is
+ * denied.
+ */
+export function runAuthorizedPrMerge(
+  input: RunAuthorizedPrMergeInput,
+  runner: CommandRunner,
+  cwd: string,
+): RunAuthorizedPrMergeResult {
+  const pr = requirePr(input.pr);
+  const command = buildMergeCommand({
+    operation: 'pr-merge',
+    issue_id: '',
+    branch: '',
+    pr,
+    merge_method: input.merge_method,
+    auto: input.auto,
+  });
+
+  const authorization = runPreMergeAuthorizationCheck(pr, runner, cwd);
+  if (!authorization.authorized) {
+    return {
+      authorized: false,
+      reason:
+        authorization.reason ??
+        'pre-merge authorization check rejected this merge; see the authorization receipt for details.',
+      command,
+    };
+  }
+
+  const run = runner(command.command, command.args, { cwd });
+  return { authorized: true, command, run };
 }
 
 export function buildMergeCommand(input: MergeWrapperInput): MergeCommand {
@@ -426,11 +512,18 @@ export function runMergeWrapper(
   // UTV2-1592: pr-merge must never invoke the actual merge command without
   // first re-authorizing against the PR's live head SHA. This runs AFTER the
   // lock is held (so the window between authorization and the merge command
-  // itself is minimized) but BEFORE the runner call that would actually
-  // invoke `gh pr merge`.
+  // itself is minimized) but BEFORE the merge command itself is invoked.
+  // Routed through the single runAuthorizedPrMerge primitive -- shared with
+  // merge-train's per-candidate merge step in ops-merge-wrapper.ts -- so this
+  // is the only place in the codebase a `pr-merge` gh command can execute.
+  let run: ReturnType<CommandRunner>;
   if (input.operation === 'pr-merge') {
-    const authorization = runPreMergeAuthorizationCheck(requirePr(input.pr), runner, cwd);
-    if (!authorization.authorized) {
+    const authorizedMerge = runAuthorizedPrMerge(
+      { pr: requirePr(input.pr), merge_method: input.merge_method, auto: input.auto },
+      runner,
+      cwd,
+    );
+    if (!authorizedMerge.authorized || !authorizedMerge.run) {
       const release = releaseMergeLock(
         { issue_id: issueId, branch: input.branch },
         { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
@@ -444,13 +537,14 @@ export function runMergeWrapper(
         lock,
         release,
         message:
-          authorization.reason ??
+          authorizedMerge.reason ??
           'pre-merge authorization check rejected this merge; see the authorization receipt for details.',
       };
     }
+    run = authorizedMerge.run;
+  } else {
+    run = runner(command.command, command.args, { cwd });
   }
-
-  const run = runner(command.command, command.args, { cwd });
   const stdout = bufferToText(run.stdout);
   const stderr = bufferToText(run.stderr);
 
@@ -617,11 +711,12 @@ function requirePr(pr: string | null | undefined): string {
 function defaultRunner(
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeoutMs?: number },
 ): Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'> {
   return spawnSync(command, args, {
     cwd: options.cwd,
     stdio: 'pipe',
+    ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
   });
 }
 
