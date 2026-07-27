@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1592",
+  "sha_binding": {
+    "verified_source_sha": "b567c2132da204f59235fe6197361cb3cc63b17c",
+    "verified_source_note": "Implementation commit: truth-check-lib.ts export additions, pre-merge-authorization.ts (new), pre-merge-authorization.test.ts (new), merge-wrapper.ts gate wiring, merge-wrapper.test.ts, ops-merge-wrapper.test.ts fixture updates",
+    "merge_sha": "b567c2132da204f59235fe6197361cb3cc63b17c",
+    "evidence_commit_sha": "b567c2132da204f59235fe6197361cb3cc63b17c",
+    "current_pr_head_sha": "b567c2132da204f59235fe6197361cb3cc63b17c"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "pnpm verify:static (env:check, lint, type-check, build, test, verify:commands) plus test:live-db all green"
+    },
+    "type_check": { "status": "PASS" },
+    "lint": { "status": "PASS" },
+    "build": { "status": "PASS" },
+    "test": {
+      "status": "PASS",
+      "note": "Full pnpm test suite green, including scripts/ops/truth-check-lib.test.ts, scripts/ops/merge-wrapper.test.ts (13 tests), scripts/ops/pre-merge-authorization.test.ts (9 tests, new), and scripts/ops/ops-merge-wrapper.test.ts (35 tests)"
+    },
+    "test_run_logs": [
+      { "path": "scripts/ops/pre-merge-authorization.test.ts", "merge_sha": "b567c2132da204f59235fe6197361cb3cc63b17c" },
+      { "path": "scripts/ops/merge-wrapper.test.ts", "merge_sha": "b567c2132da204f59235fe6197361cb3cc63b17c" },
+      { "path": "scripts/ops/ops-merge-wrapper.test.ts", "merge_sha": "b567c2132da204f59235fe6197361cb3cc63b17c" },
+      { "path": "scripts/ops/truth-check-lib.test.ts", "merge_sha": "b567c2132da204f59235fe6197361cb3cc63b17c" }
+    ],
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 9,
+      "rules_matched": "none — no R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 100244,
+    "queries": [
+      "database repository bundle persists a submission and settlement against live Supabase",
+      "atomic enqueue rollback verification (no lifecycle event or outbox row on invalid enqueue)",
+      "atomic delivery confirmation rollback (outbox status, receipt, lifecycle, audit)",
+      "atomic settlement rollback (no settlement, lifecycle event, or audit row on invalid settlement)",
+      "no-duplicate-participants check for the same external_id and sport",
+      "re-settlement correction chain integrity (no true duplicate base rows; original row not mutated)"
+    ],
+    "row_counts": [
+      { "table": "submissions", "note": "database-smoke.test.ts: submission + settlement persisted round-trip" },
+      { "table": "outbox", "note": "atomic enqueue/delivery-confirmation rollback tests" },
+      { "table": "participants", "note": "no-duplicate-participants test" },
+      { "table": "settlement_records", "note": "correction-chain additive-write tests" }
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 100244,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase; this lane is ops/governance tooling (no DB schema/query changes) — pnpm test:db verifies broader live-DB suite integrity is undisturbed by the merge-wrapper/truth-check-lib changes."
+      }
+    ]
+  }
+}
