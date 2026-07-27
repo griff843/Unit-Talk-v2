@@ -50,6 +50,50 @@ function failRunner(calls: string[][]): CommandRunner {
   };
 }
 
+const PRE_MERGE_AUTH_COMMAND = ['pnpm', 'exec', 'tsx', 'scripts/ops/pre-merge-authorization.ts'];
+
+function isPreMergeAuthorizationCall(command: string, args: string[]): boolean {
+  return [command, ...args].slice(0, PRE_MERGE_AUTH_COMMAND.length).every(
+    (value, index) => value === PRE_MERGE_AUTH_COMMAND[index],
+  );
+}
+
+/**
+ * A CommandRunner for `pr-merge` tests that intercepts the pre-merge
+ * authorization subprocess call (UTV2-1592) and answers it with a fixed
+ * `authorized` receipt, while delegating every other command (the actual
+ * `gh pr merge`, etc.) to a plain ok/fail runner. This lets existing
+ * pr-merge tests (written before the authorization gate existed) keep
+ * asserting on the merge command itself without a real network call.
+ */
+function prMergeRunner(options: { authorized: boolean; reason?: string; calls: string[][] }): CommandRunner {
+  return (command, args) => {
+    options.calls.push([command, ...args]);
+    if (isPreMergeAuthorizationCall(command, args)) {
+      const receipt = {
+        prNumber: 761,
+        headSha: 'deadbeef',
+        requiredChecks: [],
+        pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: options.authorized },
+        authorized: options.authorized,
+        ...(options.reason ? { reason: options.reason } : {}),
+      };
+      return {
+        status: options.authorized ? 0 : 1,
+        stdout: Buffer.from(JSON.stringify(receipt)),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    return {
+      status: 0,
+      stdout: Buffer.from('ok'),
+      stderr: Buffer.from(''),
+      error: undefined,
+    };
+  };
+}
+
 const BASE_INPUT = {
   issue_id: 'UTV2-1061',
   branch: 'codex/utv2-1061-merge-wrapper',
@@ -305,7 +349,7 @@ test('wrapper records deferred auto-merge after releasing the lock', () => {
       {
         lockPath,
         deferredDir,
-        runner: okRunner(calls),
+        runner: prMergeRunner({ authorized: true, calls }),
         now: new Date('2026-05-18T18:00:00.000Z'),
       },
     );
@@ -320,6 +364,7 @@ test('wrapper records deferred auto-merge after releasing the lock', () => {
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.code, 'merge_wrapper_deferred');
     assert.deepStrictEqual(calls, [
+      ['pnpm', 'exec', 'tsx', 'scripts/ops/pre-merge-authorization.ts', '--owner', 'griff843', '--repo', 'Unit-Talk-v2', '--pr', '761'],
       ['gh', 'pr', 'merge', '761', '--squash', '--auto'],
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
@@ -333,5 +378,73 @@ test('wrapper records deferred auto-merge after releasing the lock', () => {
       '--auto',
     ]);
     assert.match(record.note, /Reconciler or closeout must verify/);
+  });
+});
+
+test('UTV2-1592: pr-merge invokes the merge runner when pre-merge authorization succeeds', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runMergeWrapper(
+      {
+        ...BASE_INPUT,
+        operation: 'pr-merge',
+        merge_method: 'squash',
+      },
+      { lockPath, deferredDir, runner: prMergeRunner({ authorized: true, calls }) },
+    );
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.ok && result.code, 'merge_wrapper_completed');
+    assert.strictEqual(calls.length, 2);
+    assert.deepStrictEqual(calls[1], ['gh', 'pr', 'merge', '761', '--squash']);
+  });
+});
+
+test('UTV2-1592: pr-merge refuses to invoke the merge runner when pre-merge authorization fails', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runMergeWrapper(
+      {
+        ...BASE_INPUT,
+        operation: 'pr-merge',
+        merge_method: 'squash',
+      },
+      {
+        lockPath,
+        deferredDir,
+        runner: prMergeRunner({
+          authorized: false,
+          reason: 'required checks missing or failing on head deadbeef: Executor Result Validation',
+          calls,
+        }),
+      },
+    );
+    const lock = readMergeLock(lockPath);
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(!result.ok && result.code, 'merge_wrapper_authorization_failed');
+    assert.strictEqual(calls.length, 1);
+    assert.deepStrictEqual(calls[0].slice(0, 3), ['pnpm', 'exec', 'tsx']);
+    assert.match(!result.ok ? result.message : '', /Executor Result Validation/);
+    // The mutex must still be released even though the merge never ran.
+    assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+  });
+});
+
+test('UTV2-1592: pre-merge authorization gate does not apply to pr-update-branch or main-sync', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    // A runner that would fail the authorization JSON contract if the gate
+    // were (incorrectly) applied to a non-pr-merge operation -- proves the
+    // gate is scoped to pr-merge only.
+    const result = runMergeWrapper(
+      { ...BASE_INPUT, operation: 'pr-update-branch' },
+      { lockPath, deferredDir, runner: okRunner(calls) },
+    );
+
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(calls, [
+      ['gh', 'api', 'repos/{owner}/{repo}/pulls/761/update-branch', '-X', 'PUT'],
+    ]);
   });
 });

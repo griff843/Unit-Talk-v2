@@ -74,6 +74,37 @@ function failRunner(calls: string[][]): CommandRunner {
   };
 }
 
+// UTV2-1592: `pr-merge` now runs a mandatory pre-merge authorization check
+// (a `pnpm exec tsx scripts/ops/pre-merge-authorization.ts` subprocess call,
+// via the same injectable CommandRunner) immediately before the actual merge
+// command. Tests below that exercise the merge command's own success/failure
+// path (not the authorization gate itself, which is covered in
+// scripts/ops/pre-merge-authorization.test.ts and
+// scripts/ops/merge-wrapper.test.ts) wrap their runner with this helper so
+// the authorization subprocess call always answers "authorized", and every
+// other command is delegated to the wrapped runner unchanged.
+function withAuthorizedPreMerge(runner: CommandRunner): CommandRunner {
+  return (command, args, options) => {
+    if (command === 'pnpm' && args[0] === 'exec' && args[1] === 'tsx' && args[2] === 'scripts/ops/pre-merge-authorization.ts') {
+      return {
+        status: 0,
+        stdout: Buffer.from(
+          JSON.stringify({
+            prNumber: 766,
+            headSha: 'deadbeef',
+            requiredChecks: [],
+            pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: true },
+            authorized: true,
+          }),
+        ),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    return runner(command, args, options);
+  };
+}
+
 const STASH_PUSH_ARGS = [
   'stash',
   'push',
@@ -419,7 +450,7 @@ test('pr-merge releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'pr-merge', pr: '766', merge_method: 'squash' },
-      { lockPath, deferredDir, runner: failRunner(calls) },
+      { lockPath, deferredDir, runner: withAuthorizedPreMerge(failRunner(calls)) },
     );
     const lock = readMergeLock(lockPath);
 
@@ -449,7 +480,7 @@ test('deferred auto-merge records deferred state and releases the lock', () => {
       {
         lockPath,
         deferredDir,
-        runner: okRunner(calls),
+        runner: withAuthorizedPreMerge(okRunner(calls)),
         now: new Date('2026-05-18T18:00:00.000Z'),
       },
     );

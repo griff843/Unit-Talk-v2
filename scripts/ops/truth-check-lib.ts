@@ -1212,7 +1212,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
   return payload.data.issue;
 }
 
-function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
+export function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
   const url = new URL(prUrl);
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
   if (!match) {
@@ -1226,7 +1226,7 @@ function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; numb
   };
 }
 
-async function fetchGitHubPullRequest(
+export async function fetchGitHubPullRequest(
   owner: string,
   repo: string,
   number: number,
@@ -1251,7 +1251,7 @@ interface GitHubIssueComment {
   created_at?: string;
 }
 
-async function fetchGitHubPullRequestComments(
+export async function fetchGitHubPullRequestComments(
   owner: string,
   repo: string,
   number: number,
@@ -1361,7 +1361,7 @@ export function normalizeRequiredChecks(input: {
   return normalized;
 }
 
-async function fetchRequiredChecks(
+export async function fetchRequiredChecks(
   owner: string,
   repo: string,
   token: string,
@@ -1867,7 +1867,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   throw new Error(`Request failed for ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
-function githubHeaders(token: string): HeadersInit {
+export function githubHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',
