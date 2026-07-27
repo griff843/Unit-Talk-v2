@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "package.json",
     "scripts/ops/merge-wrapper.test.ts",
     "scripts/ops/merge-wrapper.ts",
     "scripts/ops/ops-merge-wrapper.test.ts",
@@ -21,7 +22,9 @@
     "scripts/ops/truth-check-lib.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1592/evidence.json"
+    "docs/06_status/proof/UTV2-1592/evidence.json",
+    "docs/06_status/proof/UTV2-1592/verification.md",
+    "docs/06_status/proof/UTV2-1592/.gitkeep"
   ],
   "status": "started",
   "started_at": "2026-07-27T04:11:15.770Z",
