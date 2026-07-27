@@ -45,26 +45,12 @@
   ],
   "status": "merged",
   "started_at": "2026-07-27T04:11:15.770Z",
-  "heartbeat_at": "2026-07-27T22:25:38.116Z",
+  "heartbeat_at": "2026-07-27T22:50:43.650Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1592-pre-merge-authorization.json",
   "created_by": "claude",
   "truth_check_history": [
-    {
-      "checked_at": "2026-07-27T19:55:08.224Z",
-      "verdict": "pass",
-      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
-      "failures": [],
-      "runner": "ops:lane-close --repair-merged",
-      "source": "github_pr_merge_commit_repair",
-      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1311",
-      "repaired_fields": [
-        "status",
-        "commit_sha",
-        "truth_check_history"
-      ]
-    },
     {
       "checked_at": "2026-07-27T22:25:13.383Z",
       "verdict": "fail",
@@ -82,6 +68,13 @@
       "failures": [
         "L3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-27T22:50:43.650Z",
+      "verdict": "pass",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [],
       "runner": "manual"
     }
   ],
