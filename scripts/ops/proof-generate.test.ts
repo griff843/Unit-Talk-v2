@@ -1312,13 +1312,23 @@ for (const fixture of [
       });
       generateProofArtifacts(fixtureInput, { root, bindModelRouting: true });
 
+      // The real committed sidecar may already be bound to this exact merge
+      // SHA (once a lane's own governed closeout replay has run for real) --
+      // rebindModelRoutingJsonSha treats that as idempotent-unchanged and
+      // preserves the sidecar's own bound_at rather than overwriting it with
+      // this fixture's injected generatedAt. Assert against whichever of the
+      // two is actually correct for the real file's current state, instead
+      // of a fixed literal that goes stale the moment the real lane closes.
+      const realClosoutBinding = JSON.parse(realSidecarContent).closeout_binding;
+      const alreadyBoundToThisMergeSha =
+        realClosoutBinding?.sha_type === 'merge_sha' && realClosoutBinding?.merge_sha === fixture.mergeSha;
       assert.deepStrictEqual(
         JSON.parse(fs.readFileSync(routingPath, 'utf8')).closeout_binding,
         {
           sha_type: 'merge_sha',
           merge_sha: fixture.mergeSha,
           pr_url: fixture.prUrl,
-          bound_at: '2026-05-25T16:00:00.000Z',
+          bound_at: alreadyBoundToThisMergeSha ? realClosoutBinding.bound_at : '2026-05-25T16:00:00.000Z',
         },
       );
     } finally {
