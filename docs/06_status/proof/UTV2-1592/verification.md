@@ -1,5 +1,5 @@
 # PROOF: UTV2-1592
-MERGE_SHA: 92d16d56e6d255f73afe723df8b78fa5555be2db
+MERGE_SHA: c26646b9215cea2bddaa7473f7ebb24c74709924
 
 ## Summary
 
@@ -15,7 +15,7 @@ reimplemented). The admin-merge-gate-bypass path is hard-disabled here since
 it must never apply pre-merge. If authorization is rejected, the merge
 command is never invoked.
 
-**This amendment (head 92d16d56) is a PM changes-requested revision of the
+**This amendment (final head c26646b9) is a PM changes-requested revision of the
 originally reviewed head (b567c213 / PR #1311).** PM review of that head
 found three release-blocking gaps, all closed here:
 
@@ -41,6 +41,23 @@ found three release-blocking gaps, all closed here:
    and the subprocess call carries a bounded 30s timeout
    (`spawnSync`'s own `timeout` option, whose ETIMEDOUT firing already
    surfaces as a fail-closed `run.error`).
+
+**A second fix-up commit (c26646b9)** closed two further gaps the automated
+PR review packet (`scripts/ops/pr-review-packet.ts`) surfaced once the
+`tier:T1` label was applied to this PR (its earlier run against the
+originally reviewed head short-circuited before the label existed, so
+neither had been caught):
+
+4. **Missing test wiring** — `scripts/ops/pre-merge-authorization.test.ts`'s
+   9 tests were never added to `package.json`'s `test:ops` script (an
+   explicit file list, not a glob), so `pnpm test`/`pnpm verify` had never
+   actually run them despite the file existing since the original commit.
+   Fixed by adding the path to `test:ops`.
+5. **Proof-directory scope-declaration gap** — `verification.md` and
+   `.gitkeep` under `docs/06_status/proof/UTV2-1592/` were never declared in
+   the lane manifest's `expected_proof_paths` (only `evidence.json` was),
+   so the review packet's scope check flagged them as scope bleed. Fixed by
+   adding both paths to `expected_proof_paths`.
 
 ## ASSERTIONS:
 
@@ -102,15 +119,28 @@ found three release-blocking gaps, all closed here:
       dry-run/timing tests) pass unmodified — the only change to their
       shared fixture (`buildFakeRunner`) is an added branch that answers the
       new authorization subprocess call; no existing assertion changed.
+- [x] **NEW** — `scripts/ops/pre-merge-authorization.test.ts`'s 9 tests are
+      now wired into `package.json`'s `test:ops` script (they were never run
+      by `pnpm test`/`pnpm verify` before this fix, despite the file
+      existing since the original commit); `pnpm test:ops` totals 1242/1242
+      passing with it included.
+- [x] **NEW** — `docs/06_status/proof/UTV2-1592/verification.md` and
+      `.gitkeep` are now declared in the lane manifest's
+      `expected_proof_paths`, closing a scope-bleed false positive the
+      automated review packet raised once `tier:T1` was applied.
 - [x] `pnpm verify:parallel` is green on this commit (lint + type-check in
       parallel, then build + full test suite).
 - [x] `pnpm test:db` is green against live Supabase (7/7).
 - [x] `scripts/ci/r-level-check.ts` reports PASS with no R-level artifacts
-      required for this diff (13 changed files).
+      required for this diff (14 changed files).
+- [x] `scripts/ops/pr-review-packet.ts --issue UTV2-1592 --pr 1311 --json`
+      run locally reports `verdict: PASS` with all 6 structural checks
+      (`scope`, `test_wiring`, `dropped_tests`, `sync_metadata`, `r_level`,
+      `proof`) at PASS.
 
 ## EVIDENCE:
 
-### pnpm test — touched ops test files (final totals on 92d16d56)
+### pnpm test — touched ops test files (final totals on c26646b9)
 
 ```
 === scripts/ops/merge-wrapper.test.ts ===
@@ -229,7 +259,7 @@ ok 7 - UTV2-996: correction chain is additive — original settlement row is not
 ```
 tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 13
+Changed files: 14
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
@@ -266,7 +296,9 @@ guards against a future direct execution path being reintroduced.
       build + full test suite
 - [x] `pnpm test:db`: PASS — 7/7 against live Supabase (see above)
 - [x] `scripts/ci/r-level-check.ts`: PASS — no R-level artifacts required
+- [x] `scripts/ops/pr-review-packet.ts`: PASS — verdict PASS, all 6 checks
+      PASS (scope, test_wiring, dropped_tests, sync_metadata, r_level, proof)
 
 ## SHA Binding
-Head SHA: 92d16d56e6d255f73afe723df8b78fa5555be2db
-Merge SHA: 92d16d56e6d255f73afe723df8b78fa5555be2db
+Head SHA: c26646b9215cea2bddaa7473f7ebb24c74709924
+Merge SHA: c26646b9215cea2bddaa7473f7ebb24c74709924
