@@ -28,6 +28,7 @@
   "file_scope_lock": [
     ".ops/sync/UTV2-1592.yml",
     "docs/06_status/lanes/UTV2-1592.json",
+    "docs/06_status/proof/UTV2-1592/.gitkeep",
     "package.json",
     "scripts/ops/merge-wrapper.test.ts",
     "scripts/ops/merge-wrapper.ts",
