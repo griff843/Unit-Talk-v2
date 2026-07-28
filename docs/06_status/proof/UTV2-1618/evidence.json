@@ -54,9 +54,22 @@
     }
   },
   "runtime_proof": {
-    "command": "read-only production diagnostic",
+    "command": "pnpm test:db",
     "status": "PASS",
-    "note": "The diagnostic executed against production read-only and returned containment verified, container-internal health pass, host endpoint unreachable (advisory, separate defect class). No production mutation occurred."
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 84746,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 84746,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase. CI/ops workflow lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed."
+      }
+    ],
+    "production_diagnostic": "The read-only diagnostic executed against production and returned containment verified, container-internal health pass, host endpoint unreachable (advisory, separate defect class). No production mutation occurred."
   },
   "blast_radius": {
     "production_mutation_on_merge": false,
