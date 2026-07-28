@@ -13,14 +13,18 @@
     ".github/workflows/ops-p0-containment.yml",
     ".ops/sync/UTV2-1612.yml",
     "docs/06_status/lanes/UTV2-1612.json",
+    "docs/06_status/proof/UTV2-1612/.gitkeep",
     "docs/06_status/proof/UTV2-1612/evidence.json",
     "docs/06_status/proof/UTV2-1612/model-routing.json",
     "docs/06_status/proof/UTV2-1612/verification.md",
+    "package.json",
     "scripts/ci/ops-p0-containment-workflow.test.ts"
   ],
   "file_scope_lock": [
     ".github/workflows/ops-p0-containment.yml",
     "scripts/ci/ops-p0-containment-workflow.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1612/.gitkeep",
     "docs/06_status/proof/UTV2-1612/evidence.json",
     "docs/06_status/proof/UTV2-1612/model-routing.json",
     "docs/06_status/proof/UTV2-1612/verification.md"

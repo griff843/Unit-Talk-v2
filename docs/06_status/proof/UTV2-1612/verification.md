@@ -1,4 +1,8 @@
-# UTV2-1612 — Governed P0 containment workflow
+# PROOF: UTV2-1612
+MERGE_SHA: adefa059bf4abda21eba10a9a6c7f1d556e2b904
+
+Governed P0 containment workflow. `MERGE_SHA` is pinned to the current PR head at the
+time of writing and is rebound to the authoritative merge SHA at closeout.
 
 ## Summary
 
@@ -11,7 +15,26 @@ capability boundary statically.
 No production mutation occurs from merging this PR. Execution additionally requires PM
 dispatch **and** human approval of the `production` environment gate.
 
-## Evidence
+## ASSERTIONS:
+
+1. The workflow can be triggered only by `workflow_dispatch`, only with the exact
+   confirmation string, and only after a human approves the `production` environment.
+2. Both containment variables are hardcoded to `false` and are never accepted as inputs.
+3. Only the `api` service is recreated, with `--no-deps`, at the image already recorded in
+   `.unit-talk-release`. No pull, build, or tag change occurs.
+4. `.env.production` is backed up to a timestamped file before any mutation, and a failure
+   before the restart restores it automatically.
+5. Each containment key occurs exactly once and equals `false`, verified before the
+   restart; any deviation aborts with the API not restarted.
+6. The remote script cannot be silently truncated: every remote command is redirected from
+   `/dev/null`, and the runner asserts a completion sentinel emitted as the final statement.
+7. No workflow context is interpolated into any shell body, so the operator-supplied
+   confirmation string cannot reach a command.
+8. The workflow performs no database mutation, no credential rotation, no distribution
+   change, no migration, and no control of any non-API service.
+9. Merging this PR performs no production mutation whatsoever.
+
+## EVIDENCE:
 
 ### Capability boundary — enforced, not documented
 
@@ -114,6 +137,17 @@ Merge SHA: pending merge. This bundle is bound to the code head
 in-scope files — and is rebound to the merge SHA at closeout. The proof commit itself is
 necessarily a later SHA; embedding it here is the known circular dependency the proof
 auditor treats as advisory.
+
+### Static verification
+
+```
+$ pnpm verify:parallel
+(lint + type-check in parallel, then build + full test suite)
+exit code 0
+```
+
+`pnpm verify` covers lint, type-check, build and the full test suite. The contract suite
+below is wired into `test:ops`, so `pnpm verify` executes it.
 
 ### Contract suite
 

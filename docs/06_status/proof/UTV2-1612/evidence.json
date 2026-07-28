@@ -23,7 +23,7 @@
     "build": { "status": "PASS" },
     "test": {
       "status": "PASS",
-      "note": "scripts/ci/ops-p0-containment-workflow.test.ts: 18/18 pass (raised from 9). New coverage: stdin redirection of every remote docker/curl call, completion sentinel presence and runner assertion, restore-on-failure trap ordering, trailing-newline guard, workflow-context interpolation, network egress targets, bare docker verbs, non-API services including grading-cron, database/credential/distribution surfaces, and bash -n syntax validation of every run block."
+      "note": "scripts/ci/ops-p0-containment-workflow.test.ts: 18/18 pass (raised from 9). The file was NOT wired into any package script as delivered, so pnpm test/pnpm verify would never have run it — the same silently-unwired-test defect found and closed under UTV2-1592. It is now listed in package.json test:ops, which raises that suite from 1242 to 1260 tests, all passing. New coverage: stdin redirection of every remote docker/curl call, completion sentinel presence and runner assertion, restore-on-failure trap ordering, trailing-newline guard, workflow-context interpolation, network egress targets, bare docker verbs, non-API services including grading-cron, database/credential/distribution surfaces, and bash -n syntax validation of every run block."
     },
     "test_run_logs": [
       { "path": "scripts/ci/ops-p0-containment-workflow.test.ts", "merge_sha": null }
