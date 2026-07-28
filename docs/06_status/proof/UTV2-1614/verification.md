@@ -1,12 +1,13 @@
 # PROOF: UTV2-1614
-MERGE_SHA: e829d2bb1d0af0c61476e620304f2307090f26b5
+MERGE_SHA: 408454a4323e43f121556d6c5ed0525bf68545ae
 
-Bound to `e829d2bb1d0af0c61476e620304f2307090f26b5`, the commit carrying the
+Bound to `408454a4323e43f121556d6c5ed0525bf68545ae`, the commit carrying the
 final state of every in-scope file. Code and proof are separate commits so the
 proof names a SHA that actually contains the code it describes. The production
 change landed in the code-only commit `60c9598ab1fcba915938986daa1bd50bd9b15d74`;
-`e829d2bb` is a test-only follow-up (see "CI-only repair" below). No production
-code differs between them.
+`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `408454a4323e43f121556d6c5ed0525bf68545ae`
+closes every finding of two successive adversarial exact-head reviews (see
+"Adversarial exact-head review" below).
 
 ## Summary
 
@@ -177,7 +178,7 @@ $ pnpm test:db
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 89363.166772
+# duration_ms 92891.552247
 ```
 
 Live Supabase project `zfzdnfwdarxucxtaojxm`. This lane ships ops tooling with
@@ -185,13 +186,13 @@ no DB schema or query changes; `pnpm test:db` establishes that the live-DB suite
 remains undisturbed. The suite writes its own fixture rows, which are test
 artifacts and must be excluded from any production pick or settlement count.
 
-Recorded honestly: the first run on this head failed 1 of 7 —
+Recorded honestly: an earlier run on this branch failed 1 of 7 —
 `UTV2-883: no duplicate participants for the same external_id and sport` with
 `Failed to list participants by type: TypeError: fetch failed`, a transport-level
 failure reaching Supabase. No file in this lane's scope touches the DB layer.
-The immediate re-run above passed 7/7 with no code change. The failing run is not
-claimed as a pass; the passing run is the runtime proof, and CI on the merge SHA
-is authoritative.
+Every subsequent run, including the one above, passed 7/7 with no code change.
+The failing run is not claimed as a pass; the passing run is the runtime proof,
+and CI on the merge SHA is authoritative.
 
 ### Static verification
 
@@ -203,13 +204,13 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1308
-# pass 1308
+# tests 1318
+# pass 1318
 # fail 0
 # skipped 0
 ```
 
-`test:ops` rose from 1299 to 1308 as the proof-rebind suite went from 36 to 45
+`test:ops` rose from 1299 to 1318 as the proof-rebind suite went from 36 to 55
 assertions. `pnpm verify` covers lint, type-check, build and the full test suite.
 Stages run sequentially because `verify:parallel` was OOM-killed locally
 (exit 137); that is not a waiver, and CI on the merge SHA is authoritative.
@@ -242,6 +243,69 @@ keeps the post-rebind branch from ever being dead code.
 
 Re-verified on `e829d2bb`: `pnpm type-check` clean, `pnpm lint` clean,
 `pnpm test:ops` 1308 pass / 0 fail. No production code changed.
+
+### Adversarial exact-head review of `e550a7cd`, and what it changed
+
+An independent exact-head review (`codex exec`, `gpt-5.6-sol`, effort `high`,
+run in a detached worktree pinned to `e550a7cd`, prompted to refute every claim
+and to default to REJECT) returned **REJECT** with six P1 defects, one P2, and
+three tests it measured as tautological. Every one is closed on this head. The
+review confirmed four of the eight claims were already sound: the original
+top-level `MERGE_SHA:` capture, both canonical artifacts always being requested,
+directory open/fsync propagation, and the single-pass rollback partition.
+
+| Finding | Closed by |
+|---|---|
+| P1 a binding row inside a fenced code block is rewritten, and the mask hides it because it neutralises the same line on both sides | fenced lines are never writable; a fence-only row refuses as a missing required row, a fenced example beside a real row is neither rewritten nor counted as a duplicate, an unterminated fence fails closed |
+| P1 invalid UTF-8 is silently normalised, so `sha256_before` describes text that was never on disk and a write-back would rewrite bytes outside every binding region | reads are strict; a lossy decode refuses with no checksum recorded and the bytes untouched |
+| P1 a duplicate key spelled with a JSON escape bypasses raw duplicate detection | the scanner decodes escapes, so both spellings count as one key, with no false positive for escapes inside narrative values |
+| P1 malformed JSON binding values are overwritten without validation | JSON fields follow the same rule the markdown rows already did, including a named-type refusal for non-strings |
+| P1 unbalanced markdown ticks are accepted and erased | ticks are stripped only when balanced; otherwise the value stays unstripped and classifies malformed |
+| P1 an unvalidated `--issue` permits path traversal outside `docs/06_status/proof` | the CLI requires `UTV2-NNN` or `UNI-NNN` |
+| P2 the canonical PR URL shape accepts noncanonical owner/repo components | tightened to real GitHub owner/repo character classes and a non-zero-padded PR number |
+| Tautological: deleting the mask comparison, and deleting the changed-line guard's planner call, each left the suite green at 45/45 | both guards are exported and driven with real mutations; the source-text assertion about the mask's shape is deleted |
+
+On the last item, stated plainly rather than papered over: neither guard can be
+tripped from the production path — the planner only edits regions the mask
+neutralises, and a token replacement never changes more lines than it declares.
+So a test that runs the planner and asserts no error proves nothing. Their
+BEHAVIOUR is now proven behaviourally against mutated documents, and their being
+CALLED is proven by asserting the planner bodies contain the calls. Running the
+review's own two mutations (`mut-mask`, `mut-line`) against this head now fails
+the suite where it previously passed 45/45.
+
+One review line needs context: `worktree-clean=no` reported `?? node_modules`.
+That is a symlink created by the harness to give the detached review worktree a
+dependency tree; it is not part of the PR and no tracked file was modified.
+
+### Second adversarial exact-head review, and what it changed
+
+The fixes above were re-reviewed independently at the next head under the same
+protocol, with the reviewer explicitly asked to re-run its own two prior
+mutations and to hunt for defects the fixes had introduced. It returned
+**REJECT** again, and it was right to: four of the fixes were themselves
+fail-open at their edges. All are closed here, each mutation-verified.
+
+| Finding | Closed by |
+|---|---|
+| P1 a longer opening code fence could be closed by a SHORTER line, so rows genuinely still inside the fence read as writable | a closing fence must use the same character, be at least as long as the opening run, and carry nothing but whitespace |
+| P1 a row inside a FOUR-SPACE INDENTED code block was writable | writable rows are capped at three spaces of indent, matching markdown's own rule that four spaces begins a code block |
+| P1 an INDENTED next-section heading did not end the binding section, so a row belonging to a LATER section became writable | section-heading detection allows the three leading spaces markdown permits |
+| P1 array bindings bypassed the malformed-value rule the dotted fields enforce, so prose in `test_run_logs[].merge_sha` was overwritten with zero errors | the array loop applies the identical rule |
+| P2 the exported byte guard normalised line endings, so a CRLF-to-LF rewrite of non-binding bytes masked identically on both sides and the guard returned null | the mask preserves line terminators exactly; the planner's separate CRLF check was covering this only inside the planner |
+| P2 the canonical PR URL accepted invalid owner forms such as `a_b` and `a-` | owner and repository use GitHub's real character classes |
+| Tautological: the changed-line guard's OWN test stayed green when the planner call was deleted — only a separate test caught it | each guard now carries its own wiring assertion, so deleting either call fails the test that claims to cover it |
+
+The review confirmed ten of the sixteen claims held outright, including all
+seven carried forward from the first review's confirmations. The planner and the
+mask now share one row pattern and one heading rule, so the region the edit may
+touch and the region the mask compares cannot drift apart — which is what let
+three of these four cases exist in the first place.
+
+Two of these were found and closed before the review reported them, by probing
+the same surfaces it named while it was still running; the review's independent
+findings are what confirmed them, and its remaining findings are what this head
+adds. Recording that rather than presenting all of them as review-driven.
 
 ### Scope
 
