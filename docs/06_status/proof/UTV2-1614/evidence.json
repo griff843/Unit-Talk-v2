@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1614",
+  "sha_binding": {
+    "verified_source_sha": "dffed9ea5dc336b047054490c8acc976ef375424",
+    "merge_sha": null,
+    "evidence_commit_sha": "dffed9ea5dc336b047054490c8acc976ef375424",
+    "current_pr_head_sha": "dffed9ea5dc336b047054490c8acc976ef375424",
+    "verified_source_note": "Bound to the code-only commit carrying the final state of every in-scope file."
+  },
+  "verifier": {
+    "identity": "claude-opus-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "type-check, lint and test:ops clean on dffed9ea5dc336b047054490c8acc976ef375424, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
+    },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "build": {
+      "status": "PASS"
+    },
+    "test": {
+      "status": "PASS",
+      "note": "test:ops 1296 passing, including 33 proof-rebind assertions."
+    },
+    "test_run_logs": [
+      {
+        "path": "scripts/ops/proof-rebind.test.ts",
+        "merge_sha": null
+      }
+    ],
+    "mutation_verification": {
+      "status": "PASS",
+      "method": "spot-verified",
+      "note": "Twelve guards reverted individually on scratch copies; every one fails the suite."
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 7,
+      "rules_matched": "ops tooling + its test + test wiring only; no application, domain, package or migration path touched"
+    }
+  },
+  "runtime_proof": {
+    "command": "ops:proof-rebind preview against live bundles",
+    "status": "PASS",
+    "note": "Both real bundles previewed; both refused for distinct, correct reasons; all bundle files verified byte-identical afterwards. No bundle rebound."
+  },
+  "blast_radius": {
+    "production_mutation_on_merge": false,
+    "note": "Merging adds a CLI that defaults to preview and cannot write without a completed PR identity validation."
+  }
+}
