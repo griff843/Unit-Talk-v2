@@ -29,7 +29,7 @@
     },
     "test": {
       "status": "PASS",
-      "note": "test:ops 1296 passing, including 33 proof-rebind assertions."
+      "note": "test:ops 1299 passing, including 36 proof-rebind assertions."
     },
     "test_run_logs": [
       {
@@ -40,7 +40,7 @@
     "mutation_verification": {
       "status": "PASS",
       "method": "spot-verified",
-      "note": "Twelve guards reverted individually on scratch copies; every one fails the suite."
+      "note": "Fourteen guards reverted individually on scratch copies; every one fails the suite, including narrative stripping and weakening the byte-for-byte guard to mask the whole section body."
     },
     "r_level_check": {
       "status": "PASS",
@@ -73,7 +73,7 @@
         "note": "Live Supabase. Ops tooling lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed. Fixture rows written by the suite are test artifacts and must be excluded from production counts."
       }
     ],
-    "additional": "ops:proof-rebind preview run against two live bundles; both refused for distinct correct reasons; all bundle files verified byte-identical afterwards. No bundle rebound."
+    "additional": "ops:proof-rebind preview run against two live bundles. The destructive-regeneration fixture bundle refuses (canonical section absent). The containment lane bundle returns proof_rebind_preview with five binding changes; byte-level verification shows 286 lines before and after, exactly two changed lines, narrative preserved verbatim, trailing-newline state unchanged. All bundle files verified byte-identical afterwards; no bundle rebound."
   },
   "blast_radius": {
     "production_mutation_on_merge": false,

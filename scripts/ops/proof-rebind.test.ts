@@ -423,58 +423,86 @@ test('P0: a duplicate binding section is refused so no stale section survives', 
   assert.ok(errors.some((e) => /sections — ambiguous/.test(e)));
 });
 
-test('P0: the ENTIRE binding section is validated before it is replaced', () => {
-  const section = (body: string): string => md('body\n') + '\n## Merge SHA Binding\n' + body;
+test('each canonical row is its own writable region; every other byte survives', () => {
+  const section = (body) => md('body\n') + '\n## Merge SHA Binding\n' + body;
 
-  // Nothing canonical at all: missing both required rows AND unrelated content.
-  const junk = planVerificationRebind('v.md', section('\nnothing canonical here\n'), SHAS, null).errors;
-  assert.ok(junk.some((e) => /missing its required "Merge SHA:" row/.test(e)));
-  assert.ok(junk.some((e) => /missing its required "PR:" row/.test(e)));
-  assert.ok(junk.some((e) => /unrelated line\(s\) that a rebind would destroy/.test(e)));
-
-  // Missing only the PR row.
-  const noPr = planVerificationRebind('v.md', section('\nMerge SHA: pending merge\n'), SHAS, null).errors;
+  // Required rows missing -> refuse. Optional rows are never invented.
+  const noMerge = planVerificationRebind('v.md', section('\nPR: https://x/pull/1\n'), SHAS, 'https://x/pull/1').errors;
+  assert.ok(noMerge.some((e) => /missing its required "Merge SHA:" row/.test(e)));
+  const noPr = planVerificationRebind('v.md', section('\nMerge SHA: pending merge\n'), SHAS, 'https://x/pull/1').errors;
   assert.ok(noPr.some((e) => /missing its required "PR:" row/.test(e)));
 
-  // Missing only the merge row.
-  const noMerge = planVerificationRebind('v.md', section('\nPR: https://x/pull/1\n'), SHAS, null).errors;
-  assert.ok(noMerge.some((e) => /missing its required "Merge SHA:" row/.test(e)));
+  // Duplicate row -> refuse.
+  const dup = planVerificationRebind(
+    'v.md', section('\nMerge SHA: a\nMerge SHA: b\nPR: https://x/pull/1\n'), SHAS, 'https://x/pull/1').errors;
+  assert.ok(dup.some((e) => /has 2 "Merge SHA:" rows — duplicate/.test(e)));
 
-  // Duplicate required row.
-  const dupRow = planVerificationRebind(
-    'v.md',
-    section('\nMerge SHA: a\nMerge SHA: b\nPR: https://x/pull/1\n'),
-    SHAS,
-    null,
-  ).errors;
-  assert.ok(dupRow.some((e) => /has 2 "Merge SHA:" rows — duplicate/.test(e)));
+  // Malformed (valueless) row -> refuse.
+  const empty = planVerificationRebind(
+    'v.md', section('\nMerge SHA:\nPR: https://x/pull/1\n'), SHAS, 'https://x/pull/1').errors;
+  assert.ok(empty.some((e) => /has no value — malformed/.test(e)));
 
-  // Duplicate optional row.
-  const dupOpt = planVerificationRebind(
-    'v.md',
-    section('\nMerge SHA: a\nApproved PR head: x\nApproved PR head: y\nPR: https://x/pull/1\n'),
-    SHAS,
-    null,
-  ).errors;
-  assert.ok(dupOpt.some((e) => /duplicate "Approved PR head:" rows/.test(e)));
+  // Contradictory concrete SHAs between the row and the top-level line -> refuse.
+  const contradictory =
+    '# P\nMERGE_SHA: ' + 'a'.repeat(40) + '\n\n## Merge SHA Binding\n\nMerge SHA: ' + 'b'.repeat(40) +
+    '\nPR: https://x/pull/1\n';
+  const contra = planVerificationRebind('v.md', contradictory, SHAS, 'https://x/pull/1').errors;
+  assert.ok(contra.some((e) => /contradicts the top-level MERGE_SHA:/.test(e)));
+});
 
-  // Unrelated narrative inside the writable span must not be silently destroyed.
-  const narrative = planVerificationRebind(
-    'v.md',
-    section('\nMerge SHA: a\nPR: https://x/pull/1\n\nOperator note: do not lose this.\n'),
-    SHAS,
-    null,
-  ).errors;
-  assert.ok(narrative.some((e) => /unrelated line\(s\) that a rebind would destroy/.test(e)));
+test('NARRATIVE PRESERVATION: additional lines in the section survive byte-for-byte', () => {
+  const doc =
+    md('body\n') +
+    '\n## Merge SHA Binding\n' +
+    '\nMerge SHA: pending merge\n' +
+    'PR: https://x/pull/1\n' +
+    '\n' +
+    'This section is the machine-rebindable anchor `ops:proof-generate` rewrites\n' +
+    '   at closeout. Indented continuation line with  double  spaces.\n' +
+    '\n' +
+    'Operator note: do not lose this.\n';
 
-  // A fully canonical section is accepted.
-  const ok = planVerificationRebind(
-    'v.md',
-    section('\nMerge SHA: pending merge\nApproved PR head: x\nPR: https://x/pull/1\n'),
-    SHAS,
-    null,
-  ).errors;
-  assert.deepStrictEqual(ok, []);
+  const { next, changes, errors } = planVerificationRebind('v.md', doc, SHAS, 'https://x/pull/1');
+  assert.deepStrictEqual(errors, [], 'narrative must be preserved, not refused');
+
+  // Exactly two writable regions changed: the top-level line and the section's
+  // Merge SHA row. The PR row already carried the correct value.
+  assert.deepStrictEqual(changes.map((c) => c.locator), [
+    'line 2 (MERGE_SHA:)',
+    '## Merge SHA Binding > Merge SHA (line 10)',
+  ]);
+
+  for (const preserved of [
+    'This section is the machine-rebindable anchor `ops:proof-generate` rewrites',
+    '   at closeout. Indented continuation line with  double  spaces.',
+    'Operator note: do not lose this.',
+  ]) {
+    assert.ok(next.includes(preserved), `narrative line destroyed: ${preserved}`);
+  }
+
+  // Line order, count and blank lines are identical; exactly one line differs.
+  const a = doc.split('\n');
+  const b = next.split('\n');
+  assert.strictEqual(a.length, b.length, 'line count must not change');
+  const differing = a.map((l, i) => (l !== b[i] ? i : -1)).filter((i) => i !== -1);
+  assert.strictEqual(differing.length, 2, 'only the two binding rows may differ');
+  assert.match(b[differing[0]], /^MERGE_SHA: 2822b709c74c43dc24a50dc6df35597e1a0463fe$/);
+  assert.match(b[differing[1]], /^Merge SHA: 2822b709c74c43dc24a50dc6df35597e1a0463fe$/);
+  assert.ok(next.endsWith('\n'), 'trailing-newline state preserved');
+});
+
+test('NARRATIVE PRESERVATION holds under CRLF and without a trailing newline', () => {
+  const base =
+    md('body\n') + '\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: https://x/pull/1\n' +
+    '\nKeep this narrative.\n';
+  const crlf = base.replace(/\n/g, '\r\n').replace(/\r\n$/, '');
+  assert.ok(!crlf.endsWith('\n'));
+
+  const { next, errors } = planVerificationRebind('v.md', crlf, SHAS, 'https://x/pull/1');
+  assert.deepStrictEqual(errors, []);
+  assert.ok(next.includes('Keep this narrative.'), 'narrative must survive');
+  assert.ok(!/(^|[^\r])\n/.test(next), 'CRLF convention preserved');
+  assert.ok(!next.endsWith('\n'), 'absent trailing newline preserved');
 });
 
 test('P0: duplicate MERGE_SHA: lines are refused as ambiguous', () => {
@@ -692,4 +720,25 @@ test('the recovery guidance is present as a section, not merely mentioned', () =
   assert.ok(occurrences >= 2, 'must be both cross-referenced and present as a heading');
   const heading = source.indexOf(' * PARTIAL-BUNDLE RECOVERY\n * -----');
   assert.ok(heading >= 0, 'the recovery section heading must exist');
+});
+
+test('the byte-for-byte guard masks individual rows, never the whole section body', () => {
+  // Defence in depth: the production path preserves narrative, so this guard is
+  // never tripped in normal operation and cannot be exercised behaviourally.
+  // Weakening it to mask the whole body would silently permit a future edit to
+  // destroy narrative undetected, so it is asserted structurally.
+  const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts'), 'utf8');
+  const mask = source.slice(source.indexOf('const mask = '), source.indexOf('if (mask(content) !== mask(next))'));
+
+  assert.match(
+    mask,
+    /Merge SHA\|PR\|Approved PR head\|Execution SHA/,
+    'the mask must neutralise only the canonical binding rows',
+  );
+  assert.match(mask, /<<BINDING_ROW>>/);
+  assert.doesNotMatch(
+    mask,
+    /splice\(hi \+ 1, end - \(hi \+ 1\)/,
+    'the mask must not replace the whole section body — narrative would stop being compared',
+  );
 });

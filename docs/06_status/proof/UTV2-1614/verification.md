@@ -17,8 +17,13 @@ destructive) with REBIND (surgical) and has already destroyed a bundle.
 - [x] Every byte outside those regions is proven unchanged, including escape
       sequences, CRLF, and trailing-newline state.
 - [x] Missing, duplicated or malformed canonical binding sections refuse.
-- [x] A binding section containing unrelated narrative refuses rather than
-      destroying it.
+- [x] Each canonical binding row is its own writable region; the section body is
+      never replaced wholesale.
+- [x] Additional narrative inside the section is preserved byte-for-byte, along
+      with line order, blank lines, indentation, EOL convention and
+      trailing-newline state.
+- [x] Missing required rows, duplicate rows, valueless rows and a row
+      contradicting the top-level MERGE_SHA line all refuse.
 - [x] An absent required JSON binding field refuses.
 - [x] The same required key twice inside one object refuses; sibling objects
       sharing a key name do not.
@@ -65,6 +70,8 @@ Twelve guards reverted individually; every one fails the suite:
 | checksum-derived possibly_corrupted | fails |
 | directory fsync | fails |
 | recovery-section documentation | fails |
+| narrative stripped from the section | fails |
+| byte-for-byte guard masks the whole body | fails |
 
 ### Real-bundle receipts (preview only, nothing written)
 
@@ -110,8 +117,8 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1296
-# pass 1296
+# tests 1299
+# pass 1299
 # fail 0
 ```
 

@@ -423,9 +423,9 @@ export function planVerificationRebind(
     .map((line, i) => (line.trim() === MERGE_SHA_BINDING_HEADING ? i : -1))
     .filter((i) => i !== -1);
   if (headingIndices.length === 0) {
-    // Previously this fell through silently: the top-level line was rebound and
-    // the operation reported success while approved-head / execution-SHA / PR
-    // identity were never written. A partial binding must fail closed.
+    // A partial binding must fail closed: previously the top-level line was
+    // rebound while approved-head, execution SHA and PR identity were never
+    // written, and the operation still reported success.
     errors.push(
       `${relPath}: required "${MERGE_SHA_BINDING_HEADING}" section is absent — ` +
         'refusing; a rebind must never invent the canonical binding section',
@@ -441,54 +441,78 @@ export function planVerificationRebind(
     for (let i = headingIndex + 1; i < lines.length; i += 1) {
       if (lines[i].startsWith('## ')) { sectionEnd = i; break; }
     }
-    const previousLines = lines.slice(headingIndex + 1, sectionEnd);
-    const previous = previousLines.join(eol);
-    // The ENTIRE existing section must already be canonical before it is
-    // replaced. Rewriting an arbitrary body would let this tool
-    // repair-by-overwrite — exactly the destructive behaviour it replaces — and
-    // would silently discard any narrative a human had put inside the writable
-    // span. Required rows exactly once, no duplicates, nothing unrelated.
-    const REQUIRED_ROWS = ['Merge SHA:', 'PR:'] as const;
-    const OPTIONAL_ROWS = ['Approved PR head:', 'Execution SHA:'] as const;
-    const meaningful = previousLines.map((l) => l.trim()).filter((l) => l !== '');
-    for (const row of REQUIRED_ROWS) {
-      const n = meaningful.filter((l) => l.startsWith(row)).length;
-      if (n === 0) {
-        errors.push(`${relPath}: binding section is missing its required "${row}" row — refusing`);
-      } else if (n > 1) {
-        errors.push(`${relPath}: binding section has ${n} "${row}" rows — duplicate, refusing`);
-      }
-    }
-    for (const row of OPTIONAL_ROWS) {
-      if (meaningful.filter((l) => l.startsWith(row)).length > 1) {
-        errors.push(`${relPath}: binding section has duplicate "${row}" rows — refusing`);
-      }
-    }
-    const known = [...REQUIRED_ROWS, ...OPTIONAL_ROWS];
-    const unrelated = meaningful.filter((l) => !known.some((row) => l.startsWith(row)));
-    if (unrelated.length > 0) {
-      errors.push(
-        `${relPath}: binding section contains ${unrelated.length} unrelated line(s) that a rebind would ` +
-          `destroy (first: "${unrelated[0].slice(0, 60)}") — refusing`,
-      );
-    }
-    const replacement = [
-      '',
-      `Merge SHA: \`${shas.merge_sha}\``,
-      `Approved PR head: \`${shas.approved_head_sha}\``,
-      ...(shas.execution_sha ? [`Execution SHA: \`${shas.execution_sha}\``] : []),
-      `PR: ${prUrl ?? 'N/A'}`,
-      '',
+
+    // Each canonical row is its own writable region. The section body is NEVER
+    // replaced wholesale: any additional narrative a human put inside the
+    // section is preserved byte-for-byte, along with line order, blank lines,
+    // indentation and the file's EOL convention.
+    const ROWS: Array<{ label: string; value: string | null; required: boolean }> = [
+      { label: 'Merge SHA', value: shas.merge_sha, required: true },
+      { label: 'PR', value: prUrl, required: true },
+      { label: 'Approved PR head', value: shas.approved_head_sha, required: false },
+      { label: 'Execution SHA', value: shas.execution_sha, required: false },
     ];
-    if (previous !== replacement.join(eol)) {
-      lines.splice(headingIndex + 1, sectionEnd - (headingIndex + 1), ...replacement);
-      changes.push({
-        file: relPath,
-        locator: `${MERGE_SHA_BINDING_HEADING} section`,
-        sha_class: 'merge_sha',
-        before: previous.trim() || null,
-        after: shas.merge_sha,
-      });
+
+    for (const row of ROWS) {
+      const matches: number[] = [];
+      for (let i = headingIndex + 1; i < sectionEnd; i += 1) {
+        if (new RegExp(`^\\s*${row.label}:`).test(lines[i])) matches.push(i);
+      }
+
+      if (matches.length === 0) {
+        if (row.required) {
+          errors.push(`${relPath}: binding section is missing its required "${row.label}:" row — refusing`);
+        }
+        // Optional rows are NOT invented — inventing structure is exactly what
+        // this operation must never do.
+        continue;
+      }
+      if (matches.length > 1) {
+        errors.push(
+          `${relPath}: binding section has ${matches.length} "${row.label}:" rows — duplicate, refusing`,
+        );
+        continue;
+      }
+
+      const index = matches[0];
+      const line = lines[index];
+      const indent = (line.match(/^\s*/) ?? [''])[0];
+      const existing = line.replace(new RegExp(`^\\s*${row.label}:\\s*`), '').trim();
+      if (existing === '') {
+        errors.push(`${relPath}: binding section row "${row.label}:" has no value — malformed, refusing`);
+        continue;
+      }
+      if (row.value === null) continue;
+
+      // Contradiction: a row already carrying a DIFFERENT concrete SHA than the
+      // top-level MERGE_SHA line is an inconsistent bundle, not a stale one.
+      if (row.label === 'Merge SHA' && mergeLineIndices.length === 1) {
+        const bare = existing.replace(/[`\s]/g, '');
+        const top = lines[mergeLineIndices[0]].replace(/^MERGE_SHA:\s*/, '').trim();
+        if (/^[0-9a-f]{40}$/.test(bare) && /^[0-9a-f]{40}$/.test(top) && bare !== top) {
+          errors.push(
+            `${relPath}: binding section "Merge SHA:" (${bare}) contradicts the top-level ` +
+              `MERGE_SHA: (${top}) — refusing`,
+          );
+          continue;
+        }
+      }
+
+      const replacement = `${indent}${row.label}: ${row.value}`;
+      if (line !== replacement) {
+        lines[index] = replacement;
+        changes.push({
+          file: relPath,
+          locator: `${MERGE_SHA_BINDING_HEADING} > ${row.label} (line ${index + 1})`,
+          sha_class: row.label === 'Approved PR head'
+            ? 'approved_head_sha'
+            : row.label === 'Execution SHA'
+              ? 'execution_sha'
+              : 'merge_sha',
+          before: existing,
+          after: row.value,
+        });
+      }
     }
   }
 
@@ -509,7 +533,14 @@ export function planVerificationRebind(
       for (let i = hi + 1; i < out.length; i += 1) {
         if (out[i].startsWith('## ')) { end = i; break; }
       }
-      out.splice(hi + 1, end - (hi + 1), '<<MERGE_SHA_BINDING_BODY>>');
+      // Only the canonical ROWS are writable. Every other line in the section —
+      // narrative, blanks, indentation — must compare byte-for-byte, so it is
+      // deliberately NOT masked.
+      for (let i = hi + 1; i < end; i += 1) {
+        if (/^\s*(Merge SHA|PR|Approved PR head|Execution SHA):/.test(out[i])) {
+          out[i] = `<<BINDING_ROW>>`;
+        }
+      }
     }
     return out.join('\n');
   };
