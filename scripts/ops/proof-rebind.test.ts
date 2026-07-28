@@ -7,7 +7,17 @@ import { execFileSync } from 'node:child_process';
 import {
   atomicWrite,
   CANONICAL_PROOF_ARTIFACTS,
+  BINDING_ROW_LABELS,
+  bindingRowPattern,
+  classifyBindingValue,
+  classifyPrRowValue,
   EVIDENCE_BINDING_FIELDS,
+  maskWritableRegions,
+  nonBindingRegionChangeError,
+  readUtf8Strict,
+  fencedLineIndices,
+  isBindingSectionHeading,
+  isSectionHeading,
   validatePrIdentity,
   deriveCanonicalPrUrl,
   duplicateKeysInSameObject,
@@ -164,11 +174,10 @@ test('UTV2-1592 REGRESSION: rebinding never templates over captured evidence', (
   assert.ok(next.split('\n').length >= RICH_VERIFICATION.split('\n').length);
 });
 
-test('refuses when content outside the binding regions would change', () => {
+test('a file with no MERGE_SHA: line is refused rather than invented', () => {
   const { errors } = planVerificationRebind('verification.md', RICH_VERIFICATION, SHAS, null);
   assert.deepStrictEqual(errors, []);
 
-  // A file with no MERGE_SHA: line must be refused rather than invented.
   const noAnchor = '# PROOF: X\n\n## Summary\n\nno binding line here\n';
   const result = planVerificationRebind('verification.md', noAnchor, SHAS, null);
   assert.ok(result.errors.some((e) => /no MERGE_SHA: line/.test(e)));
@@ -437,8 +446,21 @@ test('the changed-line guard refuses a real mutation that touches an undeclared 
     'an appended line must be refused',
   );
 
-  // The guard is wired into the planner, not merely exported: deleting it from
-  // planEvidenceRebind leaves this import unused and the refusal unreachable.
+  // WIRING, asserted in THIS test rather than only in the mask test: the review
+  // measured that deleting the planner's call left this individual test green,
+  // so each guard now carries its own wiring assertion. The call cannot be
+  // exercised behaviourally — a token replacement never changes more lines than
+  // it declares — so it is asserted against the planner's source.
+  const planner = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts'), 'utf8');
+  const planEvidenceBody = planner.slice(
+    planner.indexOf('export function planEvidenceRebind('),
+    planner.indexOf('export function planVerificationRebind('),
+  );
+  assert.match(
+    planEvidenceBody,
+    /undeclaredLineChangeError\(relPath, content, next, changes\.length\)/,
+    'planEvidenceRebind must call the changed-line guard',
+  );
   assert.deepStrictEqual(
     planEvidenceRebind('e.json', '{\n  "sha_binding": {\n    "merge_sha": null,\n    "current_pr_head_sha": null\n  }\n}\n', SHAS).errors,
     [],
@@ -885,27 +907,6 @@ test('the recovery guidance is present as a section, not merely mentioned', () =
   assert.ok(heading >= 0, 'the recovery section heading must exist');
 });
 
-test('the byte-for-byte guard masks individual rows, never the whole section body', () => {
-  // Defence in depth: the production path preserves narrative, so this guard is
-  // never tripped in normal operation and cannot be exercised behaviourally.
-  // Weakening it to mask the whole body would silently permit a future edit to
-  // destroy narrative undetected, so it is asserted structurally.
-  const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts'), 'utf8');
-  const mask = source.slice(source.indexOf('const mask = '), source.indexOf('if (mask(content) !== mask(next))'));
-
-  assert.match(
-    mask,
-    /Merge SHA\|PR\|Approved PR head\|Execution SHA/,
-    'the mask must neutralise only the canonical binding rows',
-  );
-  assert.match(mask, /<<BINDING_ROW>>/);
-  assert.doesNotMatch(
-    mask,
-    /splice\(hi \+ 1, end - \(hi \+ 1\)/,
-    'the mask must not replace the whole section body — narrative would stop being compared',
-  );
-});
-
 // ---------------------------------------------------------------------------
 // Findings from the exact-head review of da298435.
 // ---------------------------------------------------------------------------
@@ -1248,4 +1249,460 @@ test('REAL BUNDLE: UTV2-1612 rebinds exactly five fields and moves no other byte
   assert.deepStrictEqual([...jsonAgain.changes, ...mdAgain.changes], [], 'a second rebind must change nothing');
   assert.strictEqual(jsonAgain.next, json.next);
   assert.strictEqual(mdAgain.next, md.next);
+});
+
+// ---------------------------------------------------------------------------
+// Findings from the adversarial exact-head review of e550a7cd.
+// ---------------------------------------------------------------------------
+
+test('P1: a binding row inside a fenced code block is narrative and is NEVER rewritten', () => {
+  // A proof bundle may legitimately SHOW what closeout writes, inside a fence.
+  // Those lines matched the row regex and were treated as the canonical writable
+  // row, so the rebind rewrote documentation inside a code fence — and the
+  // byte-for-byte mask could not catch it, because it neutralised the very same
+  // line on both sides of the comparison.
+  const fencedOnly = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '',
+    'Example of what closeout writes:', '', '```', 'Merge SHA: pending merge', '```', '',
+    `PR: ${PR_URL}`, '',
+  ].join('\n');
+
+  const only = planVerificationRebind('v.md', fencedOnly, SHAS, PR_URL);
+  // The fenced line is not a row, so the required row is ABSENT — refuse.
+  assert.ok(
+    only.errors.some((e) => /missing its required "Merge SHA:" row/.test(e)),
+    `a fence-only row must refuse as missing, got: ${only.errors.join('|')}`,
+  );
+  assert.strictEqual(
+    only.next.split('\n')[8],
+    'Merge SHA: pending merge',
+    'the fenced line must survive byte-for-byte',
+  );
+  assert.ok(
+    !only.changes.some((c) => c.locator.includes('Merge SHA Binding')),
+    'no change may be planned against a fenced line',
+  );
+
+  // With a REAL row present alongside the fenced example, the real row is the
+  // only match: the example must neither be rewritten nor counted as a duplicate.
+  const withRealRow = fencedOnly.replace(`PR: ${PR_URL}`, `Merge SHA: pending merge\nPR: ${PR_URL}`);
+  const both = planVerificationRebind('v.md', withRealRow, SHAS, PR_URL);
+  assert.deepStrictEqual(both.errors, [], 'a fenced example must not read as a duplicate row');
+  const after = both.next.split('\n');
+  assert.strictEqual(after[8], 'Merge SHA: pending merge', 'the fenced example must not be rewritten');
+  assert.strictEqual(after[11], `Merge SHA: ${MERGE}`, 'the real row must be the one rebound');
+
+  // The same protection applies to the top-level MERGE_SHA: line and to the
+  // section heading itself.
+  const fencedTop = ['# P', '```', `MERGE_SHA: ${'a'.repeat(40)}`, '```', '', '## Merge SHA Binding', '',
+    'Merge SHA: pending merge', `PR: ${PR_URL}`, ''].join('\n');
+  assert.ok(
+    planVerificationRebind('v.md', fencedTop, SHAS, PR_URL).errors.some((e) => /no MERGE_SHA: line/.test(e)),
+    'a fenced top-level line must not be treated as the anchor',
+  );
+  const fencedHeading = ['# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '```', '## Merge SHA Binding', '',
+    'Merge SHA: pending merge', `PR: ${PR_URL}`, '```', ''].join('\n');
+  assert.ok(
+    planVerificationRebind('v.md', fencedHeading, SHAS, PR_URL).errors.some((e) => /section is absent/.test(e)),
+    'a fenced heading must not be treated as the canonical section',
+  );
+
+  // An UNTERMINATED fence marks everything after it as fenced — the
+  // conservative direction, producing a refusal rather than a silent rewrite.
+  const unterminated = ['# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '', '```',
+    'Merge SHA: pending merge', `PR: ${PR_URL}`, ''].join('\n');
+  assert.ok(
+    planVerificationRebind('v.md', unterminated, SHAS, PR_URL).errors.length > 0,
+    'an unterminated fence must fail closed',
+  );
+
+  // Direct coverage of the helper: deleting it makes this import unresolvable.
+  assert.deepStrictEqual(
+    [...fencedLineIndices(['a', '```', 'inside', '```', 'b'])],
+    [2],
+    'only lines strictly inside the fence are protected',
+  );
+  assert.deepStrictEqual([...fencedLineIndices(['a', '~~~', 'x', '~~~'])], [2], '~~~ fences count too');
+});
+
+test('P2: a duplicate key spelled with a JSON escape is still detected', () => {
+  // JSON.parse decodes "merge_sha" to the SAME key as "merge_sha", so a
+  // document can carry both and parse cleanly while the surgical edit rewrites
+  // only one. Comparing raw characters counted them as different keys.
+  const escaped = '{\n  "sha_binding": {\n    "merge\\u005fsha": null,\n    "merge_sha": null,\n' +
+    '    "current_pr_head_sha": null\n  }\n}\n';
+  assert.strictEqual(JSON.parse(escaped).sha_binding.merge_sha, null, 'both spellings are one key to JSON.parse');
+  assert.strictEqual(duplicateKeysInSameObject(escaped, 'merge_sha'), 2);
+  assert.ok(
+    planEvidenceRebind('e.json', escaped, SHAS).errors.some((e) => /"merge_sha" appears 2 times in the same object/.test(e)),
+    'an escaped duplicate must refuse',
+  );
+
+  // Order-independent: the escaped spelling second is equally ambiguous.
+  const escapedLast = '{\n  "sha_binding": {\n    "merge_sha": null,\n    "merge\\u005fsha": null,\n' +
+    '    "current_pr_head_sha": null\n  }\n}\n';
+  assert.strictEqual(duplicateKeysInSameObject(escapedLast, 'merge_sha'), 2);
+
+  // Decoding must not create FALSE positives: an escape inside a narrative VALUE
+  // is still not a key, and a genuinely different key stays different.
+  const narrative = '{\n  "sha_binding": {\n    "merge_sha": null,\n    "current_pr_head_sha": null,\n' +
+    '    "note": "the field \\"merge\\u005fsha\\" was stale"\n  }\n}\n';
+  assert.strictEqual(duplicateKeysInSameObject(narrative, 'merge_sha'), 1);
+  assert.deepStrictEqual(planEvidenceRebind('e.json', narrative, SHAS).errors, []);
+  const other = '{\n  "sha_binding": {\n    "merge_sha": null, "merge\\u005fshb": null,\n' +
+    '    "current_pr_head_sha": null\n  }\n}\n';
+  assert.strictEqual(duplicateKeysInSameObject(other, 'merge_sha'), 1);
+});
+
+test('P1: the byte-for-byte guard is exercised against a real mutation, not asserted from source', () => {
+  // This replaces two tests the review measured as tautological: one ran the
+  // planner and asserted no error (green with the comparison deleted), the other
+  // asserted the mask's SHAPE by reading the module's own source text. The mask
+  // and its comparison are now exported, so both are driven with mutated pairs.
+  const doc = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Summary', '', 'Captured narrative.', '',
+    '## Merge SHA Binding', '', 'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+    'Operator note inside the section.', '',
+  ].join('\n');
+
+  // Rewriting ONLY the writable regions is invisible to the guard, by design.
+  const bindingsOnly = doc
+    .replace(`MERGE_SHA: ${'a'.repeat(40)}`, `MERGE_SHA: ${MERGE}`)
+    .replace('Merge SHA: pending merge', `Merge SHA: ${MERGE}`);
+  assert.strictEqual(nonBindingRegionChangeError('v.md', doc, bindingsOnly), null);
+
+  // MUTATION: a narrative line OUTSIDE the section is rewritten.
+  assert.match(
+    nonBindingRegionChangeError('v.md', doc, doc.replace('Captured narrative.', 'Silently replaced.')) ?? '',
+    /content outside the binding regions would change/,
+  );
+
+  // MUTATION: narrative INSIDE the section is rewritten. This is the case the
+  // deleted source-text test was standing in for — a mask that neutralised the
+  // whole section body instead of the individual rows would miss it.
+  assert.ok(
+    nonBindingRegionChangeError('v.md', doc, doc.replace('Operator note inside the section.', 'gone')) !== null,
+    'narrative inside the section must still be compared',
+  );
+  // Proven directly on the mask: the section body is NOT wholesale-neutralised.
+  assert.ok(
+    maskWritableRegions(doc).includes('Operator note inside the section.'),
+    'the mask must leave section narrative intact',
+  );
+  assert.ok(!maskWritableRegions(doc).includes('Merge SHA: pending merge'), 'canonical rows must be neutralised');
+  assert.ok(!maskWritableRegions(doc).includes(`MERGE_SHA: ${'a'.repeat(40)}`), 'the top-level line must be neutralised');
+
+  // MUTATION: a blank line is removed, and indentation is changed.
+  assert.ok(nonBindingRegionChangeError('v.md', doc, doc.replace('\n\n## Summary', '\n## Summary')) !== null);
+  assert.ok(nonBindingRegionChangeError('v.md', doc, doc.replace('Captured narrative.', '   Captured narrative.')) !== null);
+
+  // WIRING. Neither this guard nor the changed-line guard can be tripped from
+  // the production path — the planner only edits regions the mask neutralises,
+  // and a token replacement never changes more lines than it declares. So the
+  // guards' BEHAVIOUR is proven above, and their being CALLED is proven here by
+  // reading the planner bodies. Deleting either call fails this assertion, which
+  // is exactly the coverage the review found missing.
+  const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts'), 'utf8');
+  const bodyOf = (name: string): string => {
+    const from = source.indexOf(`export function ${name}(`);
+    assert.ok(from >= 0, `${name} must exist`);
+    const to = source.indexOf('\nexport ', from + 1);
+    return source.slice(from, to === -1 ? source.length : to);
+  };
+  assert.match(bodyOf('planVerificationRebind'), /nonBindingRegionChangeError\(relPath, content, next\)/);
+  assert.match(bodyOf('planEvidenceRebind'), /undeclaredLineChangeError\(relPath, content, next, changes\.length\)/);
+});
+
+test('P1: a file that is not valid UTF-8 is refused, and no checksum is claimed for it', () => {
+  // readFileSync(p, 'utf8') replaces invalid bytes with U+FFFD. The receipt's
+  // sha256_before would then describe text that was never on disk, and writing
+  // the decoded string back would rewrite bytes far outside any binding region.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-rebind-utf8-'));
+  const target = path.join(dir, 'verification.md');
+  const invalid = Buffer.concat([
+    Buffer.from(`# P\nMERGE_SHA: ${'a'.repeat(40)}\n\nnarrative `, 'utf8'),
+    Buffer.from([0xff, 0xfe]),
+    Buffer.from(`\n\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: ${PR_URL}\n`, 'utf8'),
+  ]);
+  fs.writeFileSync(target, invalid);
+
+  assert.throws(() => readUtf8Strict(target), /not valid UTF-8/);
+
+  // Through the bundle entry point it is a refusal, not a crash, and the file is
+  // left untouched with no checksum recorded.
+  const result = rebindProofBundle(
+    { issueId: 'X', shas: SHAS, prUrl: PR_URL, root: dir, files: ['verification.md'] },
+    { write: true },
+  );
+  assert.strictEqual(result.code, 'proof_rebind_refused');
+  assert.ok(result.errors.some((e) => /not valid UTF-8/.test(e)), `got: ${result.errors.join('|')}`);
+  assert.deepStrictEqual(result.checksums, [], 'no checksum may be claimed for a file that could not be read faithfully');
+  assert.deepStrictEqual(result.changes, []);
+  assert.ok(fs.readFileSync(target).equals(invalid), 'the bytes on disk must be untouched');
+
+  // A valid UTF-8 file with multi-byte characters must NOT be refused.
+  const validPath = path.join(dir, 'valid.md');
+  fs.writeFileSync(validPath, `# P — café 🎯\nMERGE_SHA: ${'a'.repeat(40)}\n`, 'utf8');
+  assert.ok(readUtf8Strict(validPath).includes('café 🎯'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('P1: a malformed JSON binding value is refused, never overwritten', () => {
+  // The verification.md rows validated their existing value; the JSON fields did
+  // not, so prose or a truncated SHA sitting in sha_binding was silently
+  // replaced — erasing the inconsistency instead of surfacing it.
+  for (const bad of ['not-a-sha', '6718c0de', 'see PR #1313', '']) {
+    const doc = JSON.stringify(
+      { sha_binding: { merge_sha: bad, current_pr_head_sha: null } }, null, 2) + '\n';
+    const { errors, changes } = planEvidenceRebind('e.json', doc, SHAS);
+    assert.ok(
+      errors.some((e) => /binding field "sha_binding.merge_sha" value .* is neither a 40-character SHA/.test(e)),
+      `"${bad}" must be refused, got: ${errors.join('|')}`,
+    );
+    assert.ok(!changes.some((c) => c.locator === 'sha_binding.merge_sha'), 'no change may be planned');
+  }
+
+  // Non-string values are refused with their actual type named.
+  for (const [bad, type] of [[123, 'number'], [true, 'boolean'], [{}, 'object'], [[], 'array']] as const) {
+    const doc = JSON.stringify(
+      { sha_binding: { merge_sha: bad, current_pr_head_sha: null } }, null, 2) + '\n';
+    assert.ok(
+      planEvidenceRebind('e.json', doc, SHAS).errors.some((e) =>
+        new RegExp(`holds a ${type}, not a SHA string`).test(e)),
+      `${type} must be refused`,
+    );
+  }
+
+  // null and a recognised placeholder remain valid pre-merge states.
+  for (const ok of [null, 'pending merge']) {
+    const doc = JSON.stringify(
+      { sha_binding: { merge_sha: ok, current_pr_head_sha: null } }, null, 2) + '\n';
+    assert.deepStrictEqual(planEvidenceRebind('e.json', doc, SHAS).errors, [], `${String(ok)} must be accepted`);
+  }
+
+  // The ARRAY bindings follow the same rule. Applying it only to the dotted
+  // fields left a malformed per-entry value silently overwritten.
+  for (const bad of ['not-a-sha', '6718c0de', 42, true, {}] as const) {
+    const withArray = JSON.stringify({
+      sha_binding: { merge_sha: null, current_pr_head_sha: null },
+      static_proof: { test_run_logs: [{ path: 'x.test.ts', merge_sha: bad }] },
+    }, null, 2) + '\n';
+    const result = planEvidenceRebind('e.json', withArray, SHAS);
+    assert.ok(
+      result.errors.some((e) => /binding field "static_proof\.test_run_logs\[0\]\.merge_sha"/.test(e)),
+      `array entry "${String(bad)}" must be refused, got: ${result.errors.join('|')}`,
+    );
+    assert.ok(
+      !result.changes.some((c) => c.locator === 'static_proof.test_run_logs[0].merge_sha'),
+      'no change may be planned against a malformed array entry',
+    );
+  }
+  // null and an already-bound SHA remain valid in an array entry.
+  const validArray = JSON.stringify({
+    sha_binding: { merge_sha: null, current_pr_head_sha: null },
+    static_proof: { test_run_logs: [{ path: 'x.test.ts', merge_sha: null }, { path: 'y.test.ts', merge_sha: MERGE }] },
+  }, null, 2) + '\n';
+  assert.deepStrictEqual(planEvidenceRebind('e.json', validArray, SHAS).errors, []);
+
+  // A refusal writes zero bytes.
+  const doc = JSON.stringify({ sha_binding: { merge_sha: 'garbage', current_pr_head_sha: null } }, null, 2) + '\n';
+  const { deps, store } = memoryDeps({ '/r/e.json': doc });
+  const snapshot = { ...store };
+  assert.strictEqual(
+    rebindProofBundle({ issueId: 'X', shas: SHAS, prUrl: null, root: '/r', files: ['e.json'] }, { write: true }, deps).code,
+    'proof_rebind_refused',
+  );
+  assert.deepStrictEqual(store, snapshot);
+});
+
+test('P1: unbalanced markdown ticks are malformed, not silently stripped and erased', () => {
+  const doc = (rows: string) => `# P\nMERGE_SHA: ${'a'.repeat(40)}\n\n## Merge SHA Binding\n\n${rows}`;
+
+  // A stray leading tick previously made the value parse as a clean SHA, and the
+  // rewrite then ERASED the tick — a byte change to an unaccounted-for value.
+  const unbalanced = planVerificationRebind(
+    'v.md', doc(`Merge SHA: \`${'b'.repeat(40)}\nPR: ${PR_URL}\n`), SHAS, PR_URL);
+  assert.ok(
+    unbalanced.errors.some((e) => /row "Merge SHA:" value .* is neither a 40-character SHA/.test(e)),
+    `got: ${unbalanced.errors.join('|')}`,
+  );
+  assert.strictEqual(classifyBindingValue(`\`${'b'.repeat(40)}`).kind, 'malformed');
+  assert.strictEqual(classifyBindingValue(`${'b'.repeat(40)}\``).kind, 'malformed');
+  assert.strictEqual(classifyBindingValue('`').kind, 'malformed');
+
+  // The same applies to the top-level line and to the PR row.
+  assert.ok(
+    planVerificationRebind('v.md', `# P\nMERGE_SHA: \`${'a'.repeat(40)}\n\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: ${PR_URL}\n`, SHAS, PR_URL)
+      .errors.some((e) => /top-level MERGE_SHA: value .* is neither a 40-character SHA/.test(e)),
+  );
+  assert.strictEqual(classifyPrRowValue(`\`${PR_URL}`, PR_URL).kind, 'malformed');
+
+  // BALANCED ticks remain a legitimate way to write the value.
+  assert.strictEqual(classifyBindingValue(`\`${'b'.repeat(40)}\``).kind, 'sha');
+  assert.strictEqual(classifyPrRowValue(`\`${PR_URL}\``, PR_URL).kind, 'canonical');
+});
+
+test('P1: an issue ID that could escape the proof directory is refused by the CLI', () => {
+  // The issue ID becomes a path segment; unvalidated it walks the rebind out of
+  // docs/06_status/proof and points it at arbitrary repo files.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-rebind-traversal-'));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  const outside = path.join(dir, 'package.json');
+  fs.writeFileSync(outside, '{"name":"victim"}\n');
+  const digestBefore = sha256(fs.readFileSync(outside, 'utf8'));
+  const script = path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts');
+
+  for (const evil of ['../../../..', 'UTV2-1/../../..', './..']) {
+    let out = '';
+    try {
+      out = execFileSync('npx', ['tsx', script, '--issue', evil, '--merge-sha', MERGE, '--approved-head', HEAD],
+        { cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: process.env.PATH ?? '' } });
+    } catch (error) {
+      out = (error as { stdout?: string }).stdout ?? '';
+    }
+    const parsed = JSON.parse(out);
+    assert.strictEqual(parsed.code, 'proof_rebind_refused', `"${evil}" must refuse`);
+    assert.ok(
+      parsed.errors.some((e: string) => /is not a valid issue ID/.test(e)),
+      `"${evil}": expected an issue-ID refusal, got ${JSON.stringify(parsed.errors)}`,
+    );
+  }
+  assert.strictEqual(sha256(fs.readFileSync(outside, 'utf8')), digestBefore, 'nothing outside the proof dir may be touched');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('P2: the canonical PR URL shape rejects noncanonical repository components', () => {
+  // `[^/]+` accepted query and fragment junk inside the owner/repo segments, so
+  // a URL that is not a real GitHub PR URL could pass as canonical.
+  for (const junk of [
+    'https://github.com/o/r?junk/pull/1',
+    'https://github.com/o/r#f/pull/1',
+    'https://github.com/o/r%2e%2e/pull/1',
+    'https://github.com/o/r/pull/01',
+    'https://github.com/o/r/pull/0',
+    'https://github.com//r/pull/1',
+    'https://github.com/a_b/repo/pull/1',
+    'https://github.com/a-/repo/pull/1',
+    'https://github.com/-a/repo/pull/1',
+  ]) {
+    assert.strictEqual(deriveCanonicalPrUrl(junk, 1), null, `${junk} must not be canonical`);
+    assert.strictEqual(classifyPrRowValue(junk, null).kind, 'malformed', `${junk} must classify malformed`);
+  }
+  // Legitimate owner/repo characters still pass.
+  const dotted = 'https://github.com/griff-843/Unit.Talk_v2/pull/1315';
+  assert.strictEqual(deriveCanonicalPrUrl(dotted, 1315), dotted);
+});
+
+test('P1: fence recognition and row indentation cannot be used to smuggle a rewrite', () => {
+  // A closing fence must use the SAME character, be AT LEAST as long as the
+  // opening run, and carry nothing but whitespace. Accepting a shorter run
+  // closed a longer fence early, so content genuinely still inside the fence
+  // read as writable.
+  assert.deepStrictEqual(
+    [...fencedLineIndices(['a', '````', 'x', '```', 'Merge SHA: pending merge', '````', 'b'])],
+    [2, 3, 4],
+    'a 3-backtick line must not close a 4-backtick fence',
+  );
+  assert.deepStrictEqual(
+    [...fencedLineIndices(['a', '```', 'x', '``` not-a-close', 'y', '```', 'b'])],
+    [2, 3, 4],
+    'a closing fence may not carry trailing text',
+  );
+  // An opening fence MAY carry an info string.
+  assert.deepStrictEqual([...fencedLineIndices(['a', '```json', 'x', '```', 'b'])], [2]);
+  // Mixed delimiters do not close each other.
+  assert.deepStrictEqual([...fencedLineIndices(['a', '```', 'x', '~~~', 'y', '```', 'b'])], [2, 3, 4]);
+  // Four or more leading spaces is an indented code block, not a fence.
+  assert.deepStrictEqual([...fencedLineIndices(['a', '    ```', 'x', '    ```', 'b'])], []);
+
+  // A row inside a 4-space indented code block is verbatim narrative, so the
+  // required row reads as ABSENT and the rebind refuses instead of rewriting it.
+  const indented = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '', 'Example:', '',
+    '    Merge SHA: pending merge', '', `PR: ${PR_URL}`, '',
+  ].join('\n');
+  const result = planVerificationRebind('v.md', indented, SHAS, PR_URL);
+  assert.ok(
+    result.errors.some((e) => /missing its required "Merge SHA:" row/.test(e)),
+    `got: ${result.errors.join('|')}`,
+  );
+  assert.strictEqual(
+    result.next.split('\n')[7],
+    '    Merge SHA: pending merge',
+    'an indented-code-block line must survive byte-for-byte',
+  );
+
+  // Up to three spaces is still a legitimate row indent, and it is preserved.
+  const slightlyIndented = indented.replace('    Merge SHA: pending merge', '  Merge SHA: pending merge');
+  const ok = planVerificationRebind('v.md', slightlyIndented, SHAS, PR_URL);
+  assert.deepStrictEqual(ok.errors, []);
+  assert.strictEqual(ok.next.split('\n')[7], `  Merge SHA: ${MERGE}`, 'row indentation is preserved');
+
+  // The planner and the mask share ONE row pattern, so the region the edit may
+  // touch and the region the mask neutralises cannot drift apart.
+  assert.deepStrictEqual([...BINDING_ROW_LABELS], ['Merge SHA', 'PR', 'Approved PR head', 'Execution SHA']);
+  assert.ok(bindingRowPattern().test('  Merge SHA: x'));
+  assert.ok(!bindingRowPattern().test('    Merge SHA: x'), 'an indented-code-block row is never writable');
+  assert.ok(bindingRowPattern('PR').test('PR: x'));
+  assert.ok(!bindingRowPattern('PR').test('Merge SHA: x'));
+  assert.ok(
+    maskWritableRegions(indented).includes('    Merge SHA: pending merge'),
+    'the mask must leave an indented-code-block row intact so a rewrite of it is detectable',
+  );
+});
+
+test('P1: an INDENTED next-section heading still ends the binding section', () => {
+  // A markdown ATX heading may carry up to three leading spaces. Matching only
+  // an unindented "## " made the binding section appear to run past its real
+  // end, so a row belonging to a LATER section became writable.
+  const doc = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '',
+    'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+    '  ## Appendix', '',
+    'Merge SHA: this row belongs to the appendix and is narrative', '',
+  ].join('\n');
+
+  const result = planVerificationRebind('v.md', doc, SHAS, PR_URL);
+  assert.deepStrictEqual(result.errors, []);
+  const after = result.next.split('\n');
+  assert.strictEqual(after[5], `Merge SHA: ${MERGE}`, 'the real row is rebound');
+  assert.strictEqual(
+    after[10],
+    'Merge SHA: this row belongs to the appendix and is narrative',
+    'a row after the indented next-section heading must not be touched',
+  );
+  assert.ok(isSectionHeading('  ## Appendix'));
+  assert.ok(isSectionHeading('## Appendix'));
+  assert.ok(!isSectionHeading('    ## Indented code block'), 'four spaces is a code block, not a heading');
+  assert.ok(isBindingSectionHeading('  ## Merge SHA Binding'));
+  assert.ok(!isBindingSectionHeading('## Merge SHA Binding extra'), 'a heading with trailing text is not the anchor');
+
+  // The mask uses the same rule, so a rewrite past the section end is detectable.
+  assert.ok(
+    maskWritableRegions(doc).includes('Merge SHA: this row belongs to the appendix and is narrative'),
+  );
+});
+
+test('P2: the exported byte guard is not blind to a line-ending rewrite', () => {
+  // maskWritableRegions split on /\r?\n/ and rejoined with '\n', so a CRLF->LF
+  // rewrite of NON-binding bytes masked to the same string on both sides and the
+  // exported guard reported no change.
+  const lf = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Summary', '', 'Captured narrative.', '',
+    '## Merge SHA Binding', '', 'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+  ].join('\n');
+  const crlf = lf.replace(/\n/g, '\r\n');
+
+  assert.notStrictEqual(maskWritableRegions(crlf), maskWritableRegions(lf), 'the mask must preserve terminators');
+  assert.ok(
+    nonBindingRegionChangeError('v.md', crlf, lf) !== null,
+    'a CRLF -> LF rewrite of non-binding bytes must be detected',
+  );
+  // Terminators are preserved exactly, not merely counted.
+  assert.ok(maskWritableRegions(crlf).includes('Captured narrative.\r\n'));
+  // A pure binding-region rewrite within one convention is still invisible.
+  assert.strictEqual(
+    nonBindingRegionChangeError('v.md', crlf, crlf.replace('Merge SHA: pending merge', `Merge SHA: ${MERGE}`)),
+    null,
+  );
 });

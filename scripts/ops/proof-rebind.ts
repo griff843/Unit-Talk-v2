@@ -142,8 +142,39 @@ export const PRE_MERGE_PLACEHOLDERS = new Set(['pending merge', 'pending', 'tbd'
 
 export type BindingValueKind = 'sha' | 'canonical' | 'placeholder' | 'foreign' | 'empty' | 'malformed';
 
-/** A canonical GitHub pull-request URL and nothing else — no trailing path, no host substitution. */
-const GITHUB_PR_URL = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
+/**
+ * A canonical GitHub pull-request URL and nothing else. The owner/repo classes
+ * are the real GitHub ones: an owner is alphanumerics and hyphens with no
+ * leading or trailing hyphen and no underscore, a repository additionally
+ * allows `.` and `_`. A looser class accepted values like `a_b` or `a-` as an
+ * owner, so a URL that is not a real PR URL could pass as canonical.
+ */
+const GITHUB_PR_OWNER = '[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?';
+const GITHUB_PR_REPO = '[A-Za-z0-9][A-Za-z0-9._-]*';
+const GITHUB_PR_URL = new RegExp(
+  `^https://github\\.com/${GITHUB_PR_OWNER}/${GITHUB_PR_REPO}/pull/[1-9]\\d*$`,
+);
+
+/**
+ * Strips markdown code ticks ONLY when they are balanced. An unbalanced tick —
+ * `` Merge SHA: `<40hex> `` — is malformed: stripping the stray tick makes the
+ * value look valid, and the rewrite then ERASES the tick, which is a byte
+ * change to a value the tool never accounted for.
+ */
+function stripBalancedTicks(raw: string): { bare: string; unbalanced: boolean } {
+  const trimmed = raw.trim();
+  const lead = (trimmed.match(/^`+/) ?? [''])[0].length;
+  const trail = (trimmed.match(/`+$/) ?? [''])[0].length;
+  if (lead === 0 && trail === 0) return { bare: trimmed, unbalanced: false };
+  if (lead > 0 && lead === trail && trimmed.length > lead + trail) {
+    return { bare: trimmed.slice(lead, trimmed.length - trail).trim(), unbalanced: false };
+  }
+  // The load-bearing part is returning the value UNSTRIPPED: it still carries
+  // its stray tick, so it can no longer match a 40-hex SHA or a placeholder and
+  // classification rejects it on its own. The `unbalanced` flag makes that
+  // outcome explicit at the call sites rather than incidental.
+  return { bare: trimmed, unbalanced: true };
+}
 
 export interface BindingValueVerdict {
   kind: BindingValueKind;
@@ -160,8 +191,9 @@ export interface BindingValueVerdict {
  * is refused rather than overwritten.
  */
 export function classifyBindingValue(raw: string): BindingValueVerdict {
-  const bare = raw.trim().replace(/^`+|`+$/g, '').trim();
+  const { bare, unbalanced } = stripBalancedTicks(raw);
   if (bare === '') return { kind: 'empty', bare };
+  if (unbalanced) return { kind: 'malformed', bare };
   if (/^[0-9a-fA-F]{40}$/.test(bare)) return { kind: 'sha', sha: bare.toLowerCase(), bare };
   if (PRE_MERGE_PLACEHOLDERS.has(bare.toLowerCase())) return { kind: 'placeholder', bare };
   return { kind: 'malformed', bare };
@@ -174,12 +206,143 @@ export function classifyBindingValue(raw: string): BindingValueVerdict {
  * bundle into a plausible one that claims approval it never received.
  */
 export function classifyPrRowValue(raw: string, canonicalPrUrl: string | null): BindingValueVerdict {
-  const bare = raw.trim().replace(/^`+|`+$/g, '').trim();
+  const { bare, unbalanced } = stripBalancedTicks(raw);
   if (bare === '') return { kind: 'empty', bare };
+  if (unbalanced) return { kind: 'malformed', bare };
   if (PRE_MERGE_PLACEHOLDERS.has(bare.toLowerCase())) return { kind: 'placeholder', bare };
   if (!GITHUB_PR_URL.test(bare)) return { kind: 'malformed', bare };
   if (canonicalPrUrl !== null && bare !== canonicalPrUrl) return { kind: 'foreign', bare };
   return { kind: 'canonical', bare };
+}
+
+/**
+ * The canonical binding-row labels, and the ONLY indentation a writable row may
+ * carry. Four or more leading spaces is a markdown indented code block, so a
+ * `Merge SHA:` line at that depth is verbatim narrative, not a binding — the
+ * same reasoning that excludes fenced lines. Shared by the planner and the mask
+ * so the region the edit may touch and the region the mask neutralises cannot
+ * drift apart.
+ */
+export const BINDING_ROW_LABELS = ['Merge SHA', 'PR', 'Approved PR head', 'Execution SHA'] as const;
+
+/**
+ * A markdown ATX heading may carry up to three leading spaces. Matching only an
+ * unindented `## ` missed an indented NEXT-SECTION heading, so the binding
+ * section appeared to run past its real end and rows belonging to a later
+ * section became writable — a fail-open.
+ */
+export function isSectionHeading(line: string): boolean {
+  return /^ {0,3}## /.test(line);
+}
+
+/** The canonical binding-section heading, allowing the same legal indentation. */
+export function isBindingSectionHeading(line: string): boolean {
+  return new RegExp(`^ {0,3}${MERGE_SHA_BINDING_HEADING.replace('## ', '## ')}\\s*$`).test(line);
+}
+
+export function bindingRowPattern(label?: string): RegExp {
+  return new RegExp(`^ {0,3}(?:${label ?? BINDING_ROW_LABELS.join('|')}):`);
+}
+
+/** The single refusal message emitted when a non-binding byte would change. */
+export function nonBindingRegionChangeMessage(relPath: string): string {
+  return `${relPath}: refused — content outside the binding regions would change`;
+}
+
+/**
+ * Applies the SAME masking the byte-for-byte guard uses, exported so the guard
+ * can be driven against a genuinely mutated document.
+ *
+ * Like the changed-line guard, this comparison cannot be tripped from the
+ * production path — the planner only ever edits regions the mask neutralises —
+ * so a test that merely runs the planner and asserts no error proves nothing and
+ * stays green with the comparison deleted. Exercising the masking directly with
+ * a mutated pair is the only test that actually fails when it is weakened.
+ */
+export function nonBindingRegionChangeError(
+  relPath: string,
+  before: string,
+  after: string,
+): string | null {
+  return maskWritableRegions(before) === maskWritableRegions(after)
+    ? null
+    : nonBindingRegionChangeMessage(relPath);
+}
+
+/**
+ * Neutralises exactly the regions a rebind may write: the top-level MERGE_SHA
+ * line and the canonical rows inside the binding section. Everything else —
+ * narrative, blanks, indentation, and anything inside a code fence — is left
+ * intact so it compares byte-for-byte.
+ */
+export function maskWritableRegions(text: string): string {
+  // Line TERMINATORS are preserved, not normalised. Splitting on /\r?\n/ and
+  // rejoining with '\n' made a CRLF->LF rewrite of non-binding bytes invisible
+  // to this guard: both sides masked to the same string and it reported no
+  // change. The separate CRLF check in the planner covered that inside the
+  // planner, but the exported guard was wrong on its own.
+  const parts = text.split(/(\r?\n)/);
+  const out = parts.filter((_, i) => i % 2 === 0);
+  const seps = parts.filter((_, i) => i % 2 === 1);
+  const fencedHere = fencedLineIndices(out);
+  const mi = out.findIndex((l, i) => /^MERGE_SHA:\s*/.test(l) && !fencedHere.has(i));
+  if (mi !== -1) out[mi] = '<<MERGE_SHA_LINE>>';
+  const hi = out.findIndex((l, i) => isBindingSectionHeading(l) && !fencedHere.has(i));
+  if (hi !== -1) {
+    let end = out.length;
+    for (let i = hi + 1; i < out.length; i += 1) {
+      if (!fencedHere.has(i) && isSectionHeading(out[i])) { end = i; break; }
+    }
+    for (let i = hi + 1; i < end; i += 1) {
+      if (!fencedHere.has(i) && bindingRowPattern().test(out[i])) {
+        out[i] = `<<BINDING_ROW>>`;
+      }
+    }
+  }
+  return out.map((line, i) => `${line}${seps[i] ?? ''}`).join('');
+}
+
+/**
+ * Line indices that sit INSIDE a fenced code block.
+ *
+ * A ``` or ~~~ fence delimits verbatim content. A line inside one that looks
+ * like a binding row — `Merge SHA: pending merge` shown as an example of what
+ * closeout writes — is illustrative narrative, not a binding. Treating it as
+ * the canonical writable row rewrote documentation inside a code fence, which
+ * is precisely the "never destroy narrative" invariant this tool exists to
+ * enforce, and the byte-for-byte mask could not catch it because the mask
+ * neutralised the same line on both sides of the comparison.
+ *
+ * Fence state is computed from the start of the document so an earlier fence
+ * can never be missed, and an UNTERMINATED fence marks everything after it as
+ * fenced — the conservative direction, since a row that goes unrecognised
+ * becomes a missing-required-row refusal rather than a silent rewrite.
+ */
+export function fencedLineIndices(lines: string[]): Set<number> {
+  const fenced = new Set<number>();
+  let open: { char: string; length: number } | null = null;
+  for (let i = 0; i < lines.length; i += 1) {
+    const match = lines[i].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (open === null) {
+      // An opening fence may carry an info string (```json). Four or more
+      // leading spaces is an indented code block, not a fence, so it is
+      // deliberately not matched here — indented blocks are excluded from
+      // writability by the row pattern instead.
+      if (match) open = { char: match[1][0], length: match[1].length };
+      continue;
+    }
+    // A closing fence must use the SAME character, be AT LEAST as long as the
+    // opening run, and carry nothing but whitespace after it. Accepting a
+    // shorter run closed a longer fence early, so content that is genuinely
+    // still inside the fence read as writable — a fail-open.
+    const closes = match !== null
+      && match[1][0] === open.char
+      && match[1].length >= open.length
+      && match[2].trim() === '';
+    if (closes) { open = null; continue; }
+    fenced.add(i);
+  }
+  return fenced;
 }
 
 /**
@@ -283,6 +446,9 @@ function setPath(obj: Record<string, unknown>, dotted: string, value: unknown): 
  */
 export function duplicateKeysInSameObject(text: string, key: string): number {
   const stack: Array<Map<string, number>> = [];
+  const SIMPLE_ESCAPES: Record<string, string> = {
+    '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t',
+  };
   let max = 0;
   let inString = false;
   let escaped = false;
@@ -292,7 +458,20 @@ export function duplicateKeysInSameObject(text: string, key: string): number {
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i];
     if (inString) {
-      if (escaped) { escaped = false; current += ch; continue; }
+      if (escaped) {
+        escaped = false;
+        // DECODE the escape rather than appending it raw. JSON.parse sees the
+        // DECODED name, so `"merge_sha"` is the same key as `"merge_sha"`
+        // and a document can carry both. Comparing raw characters counted them
+        // as different keys, so that duplicate went undetected here.
+        if (ch === 'u' && /^[0-9a-fA-F]{4}$/.test(text.slice(i + 1, i + 5))) {
+          current += String.fromCharCode(Number.parseInt(text.slice(i + 1, i + 5), 16));
+          i += 4;
+        } else {
+          current += SIMPLE_ESCAPES[ch] ?? ch;
+        }
+        continue;
+      }
       if (ch === '\\') { escaped = true; continue; }
       if (ch === '"') {
         inString = false;
@@ -370,11 +549,39 @@ export function planEvidenceRebind(
     }
   }
 
+  /**
+   * A JSON binding field may only be overwritten when its CURRENT value is
+   * accounted for: absent-as-null (the normal pre-merge state), a 40-character
+   * SHA (stale or already bound), or a recognised pre-merge placeholder string.
+   * Anything else — a truncated SHA, prose, a number, an object — is a
+   * malformed bundle, and blindly overwriting it erases the inconsistency
+   * instead of surfacing it. This is the same rule the verification.md rows
+   * enforce; the JSON side was previously exempt.
+   */
+  const rejectMalformedJsonValue = (locator: string, current: unknown): boolean => {
+    if (current === null) return false;
+    if (typeof current !== 'string') {
+      errors.push(
+        `${relPath}: binding field "${locator}" holds a ${Array.isArray(current) ? 'array' : typeof current}, ` +
+          'not a SHA string — malformed, refusing',
+      );
+      return true;
+    }
+    const verdict = classifyBindingValue(current);
+    if (verdict.kind === 'sha' || verdict.kind === 'placeholder') return false;
+    errors.push(
+      `${relPath}: binding field "${locator}" value "${verdict.bare}" is neither a 40-character SHA ` +
+        'nor a recognised pre-merge placeholder — malformed, refusing',
+    );
+    return true;
+  };
+
   for (const [dotted, shaClass] of Object.entries(EVIDENCE_BINDING_FIELDS)) {
     const current = getPath(parsed, dotted);
     // Absent optional key: nothing to rebind. Absent REQUIRED keys already
     // refused above, so this can never silently skip a required binding.
     if (current === undefined) continue;
+    if (rejectMalformedJsonValue(dotted, current)) continue;
     const target = shaClass === 'merge_sha'
       ? shas.merge_sha
       : shaClass === 'approved_head_sha'
@@ -400,6 +607,10 @@ export function planEvidenceRebind(
       const row = entry as Record<string, unknown>;
       if (!(binding.field in row)) return;
       const current = row[binding.field];
+      // Array bindings are validated exactly like the dotted fields. Applying
+      // the rule only to the dotted fields left a malformed per-entry value —
+      // prose, a truncated SHA — silently overwritten.
+      if (rejectMalformedJsonValue(`${binding.arrayPath}[${index}].${binding.field}`, current)) return;
       if (current === shas.merge_sha) return;
       row[binding.field] = shas.merge_sha;
       changes.push({
@@ -490,6 +701,9 @@ export function planVerificationRebind(
     errors.push(`${relPath}: mixed line endings (${crlfCount} CRLF of ${lfCount} LF) — refusing to rebind`);
   }
   const lines = content.split(/\r?\n/);
+  // Lines inside a fenced code block are verbatim narrative and are never
+  // writable, however much they resemble a binding row.
+  const fenced = fencedLineIndices(lines);
 
   // The ORIGINAL top-level value, captured and validated BEFORE any rewrite.
   // Reading it back out of `lines` after the rewrite (as this previously did)
@@ -500,7 +714,7 @@ export function planVerificationRebind(
   let originalTopMergeSha: BindingValueVerdict | null = null;
 
   const mergeLineIndices = lines
-    .map((line, i) => (/^MERGE_SHA:\s*/.test(line) ? i : -1))
+    .map((line, i) => (/^MERGE_SHA:\s*/.test(line) && !fenced.has(i) ? i : -1))
     .filter((i) => i !== -1);
   if (mergeLineIndices.length === 0) {
     errors.push(`${relPath}: no MERGE_SHA: line — refusing to invent one`);
@@ -531,7 +745,7 @@ export function planVerificationRebind(
   }
 
   const headingIndices = lines
-    .map((line, i) => (line.trim() === MERGE_SHA_BINDING_HEADING ? i : -1))
+    .map((line, i) => (isBindingSectionHeading(line) && !fenced.has(i) ? i : -1))
     .filter((i) => i !== -1);
   if (headingIndices.length === 0) {
     // A partial binding must fail closed: previously the top-level line was
@@ -550,7 +764,7 @@ export function planVerificationRebind(
     const headingIndex = headingIndices[0];
     let sectionEnd = lines.length;
     for (let i = headingIndex + 1; i < lines.length; i += 1) {
-      if (lines[i].startsWith('## ')) { sectionEnd = i; break; }
+      if (!fenced.has(i) && isSectionHeading(lines[i])) { sectionEnd = i; break; }
     }
 
     // Each canonical row is its own writable region. The section body is NEVER
@@ -567,7 +781,8 @@ export function planVerificationRebind(
     for (const row of ROWS) {
       const matches: number[] = [];
       for (let i = headingIndex + 1; i < sectionEnd; i += 1) {
-        if (new RegExp(`^\\s*${row.label}:`).test(lines[i])) matches.push(i);
+        if (fenced.has(i)) continue;
+        if (bindingRowPattern(row.label).test(lines[i])) matches.push(i);
       }
 
       if (matches.length === 0) {
@@ -588,7 +803,7 @@ export function planVerificationRebind(
       const index = matches[0];
       const line = lines[index];
       const indent = (line.match(/^\s*/) ?? [''])[0];
-      const existing = line.replace(new RegExp(`^\\s*${row.label}:\\s*`), '');
+      const existing = line.replace(new RegExp(`^ {0,3}${row.label}:\\s*`), '');
 
       // EVERY existing binding-row value is validated before it can be
       // replaced. A row is only overwritten when its current contents are
@@ -664,32 +879,11 @@ export function planVerificationRebind(
   if (hadTrailingNewline && !next.endsWith(eol)) next = `${next}${eol}`;
   if (!hadTrailingNewline && next.endsWith(eol)) next = next.slice(0, -eol.length);
 
-  // Non-binding regions must be byte-identical. Compare with the writable
-  // regions masked out on BOTH sides, using the same split the edit used.
-  const mask = (text: string): string => {
-    const out = text.split(/\r?\n/);
-    const mi = out.findIndex((l) => /^MERGE_SHA:\s*/.test(l));
-    if (mi !== -1) out[mi] = '<<MERGE_SHA_LINE>>';
-    const hi = out.findIndex((l) => l.trim() === MERGE_SHA_BINDING_HEADING);
-    if (hi !== -1) {
-      let end = out.length;
-      for (let i = hi + 1; i < out.length; i += 1) {
-        if (out[i].startsWith('## ')) { end = i; break; }
-      }
-      // Only the canonical ROWS are writable. Every other line in the section —
-      // narrative, blanks, indentation — must compare byte-for-byte, so it is
-      // deliberately NOT masked.
-      for (let i = hi + 1; i < end; i += 1) {
-        if (/^\s*(Merge SHA|PR|Approved PR head|Execution SHA):/.test(out[i])) {
-          out[i] = `<<BINDING_ROW>>`;
-        }
-      }
-    }
-    return out.join('\n');
-  };
-  if (mask(content) !== mask(next)) {
-    errors.push(`${relPath}: refused — content outside the binding regions would change`);
-  }
+  // Non-binding regions must be byte-identical. ONE implementation of the
+  // masking is used here and by the exported guard, so the tested behaviour and
+  // the production behaviour cannot drift apart.
+  const regionError = nonBindingRegionChangeError(relPath, content, next);
+  if (regionError !== null) errors.push(regionError);
   // Line-ending fidelity is checked explicitly because mask() normalises them.
   // The COUNT legitimately changes (the rewritten section can add lines), so the
   // invariant is consistency: a CRLF document must not gain a bare LF.
@@ -770,7 +964,9 @@ export function validatePrIdentity(
  */
 export function deriveCanonicalPrUrl(recordUrl: string | null, prNumber: number): string | null {
   if (!recordUrl) return null;
-  const match = recordUrl.match(/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)$/);
+  const match = recordUrl.match(
+    new RegExp(`^https://github\\.com/${GITHUB_PR_OWNER}/${GITHUB_PR_REPO}/pull/([1-9]\\d*)$`),
+  );
   if (!match) return null;
   if (Number.parseInt(match[1], 10) !== prNumber) return null;
   return recordUrl;
@@ -851,8 +1047,31 @@ export function atomicWrite(target: string, content: string, ops: AtomicWriteOps
   }
 }
 
+/**
+ * Reads a file as UTF-8 and REFUSES if decoding was lossy.
+ *
+ * `readFileSync(p, 'utf8')` silently replaces invalid byte sequences with
+ * U+FFFD. For a tool whose entire premise is byte fidelity that is fatal in two
+ * ways at once: every checksum in the receipt would describe the DECODED text
+ * rather than the bytes actually on disk — so `sha256_before` names a file that
+ * never existed — and writing the decoded string back would rewrite the invalid
+ * bytes, corrupting content far outside any binding region. Refusing to read is
+ * the only safe outcome; repairing the encoding is a separate governed change.
+ */
+export function readUtf8Strict(absPath: string): string {
+  const raw = fs.readFileSync(absPath);
+  const text = raw.toString('utf8');
+  if (!Buffer.from(text, 'utf8').equals(raw)) {
+    throw new Error(
+      'file is not valid UTF-8 — decoding it is lossy, so every recorded checksum would describe ' +
+        'the decoded text rather than the bytes on disk, and writing it back would corrupt them',
+    );
+  }
+  return text;
+}
+
 const defaultDeps: RebindDeps = {
-  readFile: (p) => fs.readFileSync(p, 'utf8'),
+  readFile: readUtf8Strict,
   writeFile: atomicWrite,
   exists: (p) => fs.existsSync(p),
 };
@@ -893,7 +1112,15 @@ export function rebindProofBundle(
       errors.push(`${rel}: missing — refusing to create a proof artifact during a rebind`);
       continue;
     }
-    const before = deps.readFile(abs);
+    let before: string;
+    try {
+      before = deps.readFile(abs);
+    } catch (error) {
+      // A read that cannot be performed faithfully is a refusal, not a crash,
+      // and it must never be followed by a plan built on lossy content.
+      errors.push(`${rel}: ${(error as Error).message}`);
+      continue;
+    }
     let plan: { next: string; changes: BindingChange[]; errors: string[] };
     if (rel.endsWith('.json')) {
       plan = planEvidenceRebind(rel, before, input.shas);
@@ -1026,6 +1253,20 @@ async function main(): Promise<void> {
         'Missing required argument(s). Example: pnpm ops:proof-rebind --issue UTV2-1612 ' +
         '--merge-sha <40-hex> --approved-head <40-hex> [--execution-sha <40-hex>] ' +
         '[--apply]. Without --apply this previews and writes nothing.',
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  // The issue ID becomes a PATH SEGMENT. Unvalidated, "../../.." walks the
+  // rebind out of docs/06_status/proof entirely and points it at arbitrary repo
+  // files — a tool that rewrites bytes must never accept an unconstrained path.
+  if (!/^(UTV2|UNI)-\d+$/.test(issueId)) {
+    emitJson({
+      ok: false,
+      code: 'proof_rebind_refused',
+      issue_id: issueId,
+      errors: [`--issue "${issueId}" is not a valid issue ID (UTV2-NNN or UNI-NNN) — refusing`],
     });
     process.exitCode = 1;
     return;
