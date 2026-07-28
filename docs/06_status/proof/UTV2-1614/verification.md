@@ -1,12 +1,12 @@
 # PROOF: UTV2-1614
-MERGE_SHA: 4e46becb19815ba53bb42eb996ccbdf4c731e7a7
+MERGE_SHA: 529b26f552b74113fb8b5ad9ce6742613e7c239a
 
-Bound to `4e46becb19815ba53bb42eb996ccbdf4c731e7a7`, the commit carrying the
+Bound to `529b26f552b74113fb8b5ad9ce6742613e7c239a`, the commit carrying the
 final state of every in-scope file. Code and proof are separate commits so the
 proof names a SHA that actually contains the code it describes. The production
 change landed in the code-only commit `60c9598ab1fcba915938986daa1bd50bd9b15d74`;
-`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `4e46becb19815ba53bb42eb996ccbdf4c731e7a7`
-closes every finding of three successive adversarial exact-head reviews (see
+`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `529b26f552b74113fb8b5ad9ce6742613e7c239a`
+closes every finding of four successive adversarial exact-head reviews (see
 the review sections below).
 
 ## Summary
@@ -178,7 +178,7 @@ $ pnpm test:db
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 90710.386503
+# duration_ms 94812.281089
 ```
 
 Live Supabase project `zfzdnfwdarxucxtaojxm`. This lane ships ops tooling with
@@ -204,13 +204,13 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1324
-# pass 1324
+# tests 1329
+# pass 1329
 # fail 0
 # skipped 0
 ```
 
-`test:ops` rose from 1299 to 1324 as the proof-rebind suite went from 36 to 61
+`test:ops` rose from 1299 to 1329 as the proof-rebind suite went from 36 to 66
 assertions. `pnpm verify` covers lint, type-check, build and the full test suite.
 Stages run sequentially because `verify:parallel` was OOM-killed locally
 (exit 137); that is not a waiver, and CI on the merge SHA is authoritative.
@@ -334,21 +334,60 @@ continuation and four or more is an indented code block; rather than try to tell
 them apart, only column zero counts, which is where every real bundle writes its
 rows.
 
-### Regression sweep over every real bundle
 
-The stricter rules could in principle refuse a bundle that previously planned
-cleanly. That was measured rather than assumed. All 397 `verification.md` files
-under `docs/06_status/proof` were re-planned under the previous ruleset and the
-new one — each using its OWN `PR:` row, so PR identity is never the
-differentiator — and the per-bundle refusal sets compared:
+### Fourth adversarial exact-head review, and what it changed
+
+Re-reviewed independently again, with the reviewer asked to attack the
+permissive/strict asymmetry directly and to reproduce the regression sweep
+itself. It returned **REJECT** with three P1s and two P2s. One of them
+invalidated a claim made in the previous head's own proof, corrected below
+rather than restated.
+
+| Finding | Closed by |
+|---|---|
+| P1 SETEXT headings did not end the binding section — a row under `Appendix` / `--------` became writable and the mask concealed it | the section ends at the setext heading's text line; a setext underline inside a verbatim region is not a heading |
+| P1 HTML comments were not verbatim — a binding-looking line inside `<!-- -->` was rewritten with zero errors and masked | comments join code fences and `<pre>` as verbatim regions |
+| P1 an inline-code MENTION of a `<pre>` tag was read as an opening tag, leaving the rest of the document permanently inside an unterminated block | inline code spans are stripped before scanning for HTML tags |
+| P2 the canonical PR owner bounded component repetitions rather than total length, so a 41-character hyphenated owner passed | the cap is on characters |
+| P2 the placeholder set rejected `set-by-ci`, which the repository EXPLICITLY allows and 25 real bundles store | the set is the union of the two canonical sources, asserted by a test that reads both files |
+
+The last one is the most important, because it is the first finding in this
+chain where the tool was too STRICT rather than too permissive, and it was
+reachable only because of a gap in this bundle's own verification. `set-by-ci`
+is a CI-resolved sentinel declared in `packages/invariants/src/merge-sha-binding.ts`
+and `scripts/ci/proof-binding-validator.ts`; both explicitly allow it to be
+stored and resolve it at runtime. Refusing it would have blocked 25 real
+bundles. The alignment is now enforced by a test that reads those two files and
+asserts this set is a superset of both, rather than by a comment.
+
+### Regression sweep — corrected and widened
+
+The previous head claimed "397 of 397 bundles unchanged". That claim was wrong
+in two ways, both found by the review rather than by me, and both are recorded
+here rather than quietly fixed:
+
+1. It covered only `verification.md`. `evidence.json` — where the sentinel
+   values live — was never swept. That is exactly how the `set-by-ci`
+   over-strictness went unnoticed.
+2. It stopped being true for its own head. That head's proof bundle documents
+   the `<pre>` rule and mentions the tag in prose, so the inline-mention defect
+   caused the tool to newly refuse its own bundle.
+
+The sweep now covers all 591 artifacts and classifies each properly, instead of
+reporting any change in the error set as a new refusal:
 
 ```
-bundles compared: 397   unchanged: 397
-NEWLY REFUSED under stricter rules: []
-newly planned: []
+artifacts compared: 591   (verification.md: 397   evidence.json: 194)
+
+  IDENTICAL                    574
+  NEWLY PLANNED                  6   5 bundles carrying set-by-ci, plus this
+                                     lane's own bundle, unblocked by the fixes
+  SAME VERDICT, FEWER ERRORS    11   still refused for a pre-existing structural
+                                     reason; only the set-by-ci class dropped
+  NEWLY REFUSED                  0
 ```
 
-Zero verdict changes. Preview only; nothing was written.
+Preview only; `git status` reported the proof directories clean afterwards.
 
 ### Scope
 

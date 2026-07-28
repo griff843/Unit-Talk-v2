@@ -2,11 +2,11 @@
   "schema_version": 1,
   "issue_id": "UTV2-1614",
   "sha_binding": {
-    "verified_source_sha": "4e46becb19815ba53bb42eb996ccbdf4c731e7a7",
+    "verified_source_sha": "529b26f552b74113fb8b5ad9ce6742613e7c239a",
     "merge_sha": null,
-    "evidence_commit_sha": "4e46becb19815ba53bb42eb996ccbdf4c731e7a7",
-    "current_pr_head_sha": "4e46becb19815ba53bb42eb996ccbdf4c731e7a7",
-    "verified_source_note": "Bound to 4e46becb19815ba53bb42eb996ccbdf4c731e7a7, the commit carrying the final state of every in-scope file. Revision history: da298435 was rejected by exact-head review; 60c9598a closed those ten items; e829d2bb repaired two contract tests that depended on git objects unavailable on a fetch-depth-1 CI checkout; 408454a4 closed the findings of the first two adversarial exact-head reviews; 4e46becb19815ba53bb42eb996ccbdf4c731e7a7 closes the third review's findings. No existing refusal was relaxed by any revision, and a 397-bundle regression sweep confirms the stricter rules refuse nothing that previously planned cleanly."
+    "evidence_commit_sha": "529b26f552b74113fb8b5ad9ce6742613e7c239a",
+    "current_pr_head_sha": "529b26f552b74113fb8b5ad9ce6742613e7c239a",
+    "verified_source_note": "Bound to 529b26f552b74113fb8b5ad9ce6742613e7c239a, the commit carrying the final state of every in-scope file. Revision history: da298435 was rejected by exact-head review; 60c9598a closed those ten items; e829d2bb repaired two contract tests that depended on git objects unavailable on a fetch-depth-1 CI checkout; 408454a4 closed the first two adversarial reviews' findings; 4e46becb closed the third review's; 529b26f552b74113fb8b5ad9ce6742613e7c239a closes the fourth review's. No existing refusal was relaxed except one that was WRONG: rejecting the repository's own CI-resolved sentinels, which 25 real bundles legitimately store."
   },
   "verifier": {
     "identity": "claude-opus-5",
@@ -16,7 +16,7 @@
   "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
-      "note": "type-check, lint and test:ops clean on 4e46becb19815ba53bb42eb996ccbdf4c731e7a7, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
+      "note": "type-check, lint and test:ops clean on 529b26f552b74113fb8b5ad9ce6742613e7c239a, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
     },
     "type_check": {
       "status": "PASS"
@@ -29,7 +29,7 @@
     },
     "test": {
       "status": "PASS",
-      "note": "test:ops 1324 passing, including 61 proof-rebind assertions (was 1299 / 36 at the first rejected head)."
+      "note": "test:ops 1329 passing, including 66 proof-rebind assertions (was 1299 / 36 at the first rejected head)."
     },
     "test_run_logs": [
       {
@@ -40,7 +40,7 @@
     "mutation_verification": {
       "status": "PASS",
       "method": "spot-verified",
-      "note": "Every fix across this revision chain was reverted individually on scratch copies and the suite re-run; every revert fails. Twenty-two verified in total. This revision adds seven: section-heading tab/any-level rule reverted, <pre> block handling removed, duplicate CONTAINER key detection reverted, byte-delta guard disabled, PR owner hyphen/length rules reverted, CLI apply-without-validation gate disabled, and row indent relaxed back to 0-3 spaces. Three of these — the mask comparison, the changed-line planner call, and the CLI apply gate — are mutations the reviews performed themselves and which previously left the suite green."
+      "note": "Every fix across this revision chain was reverted individually on scratch copies and the suite re-run; every revert fails. Twenty-seven verified in total. This revision adds five: setext heading recognition removed, HTML comment verbatim handling removed, inline-code stripping removed, owner total-length cap reverted, and set-by-ci removed from the placeholder set. Three mutations the reviews performed themselves — the mask comparison, the changed-line planner call, and the CLI apply-without-validation gate — previously left the suite green and now each fail the specific test that claims to cover them."
     },
     "r_level_check": {
       "status": "PASS",
@@ -50,9 +50,10 @@
     },
     "regression_sweep": {
       "status": "PASS",
-      "scope": "all 397 verification.md files under docs/06_status/proof",
-      "method": "each bundle re-planned under the previous ruleset and the new one, using its OWN PR row so PR identity is never the differentiator, and the per-bundle refusal sets compared",
-      "result": "397 compared, 397 unchanged, 0 newly refused, 0 newly planned"
+      "scope": "all 591 artifacts under docs/06_status/proof — 397 verification.md and 194 evidence.json",
+      "method": "each artifact re-planned under the previous ruleset and the new one, each verification.md using its OWN PR row so PR identity is never the differentiator, and the per-artifact refusal sets compared",
+      "result": "identical 574; newly planned 6 (5 bundles carrying set-by-ci, plus this lane's own bundle unblocked by the inline-<pre> fix); same verdict with the set-by-ci refusal class removed 11; NEWLY REFUSED 0",
+      "correction": "the previous head claimed 397/397 unchanged. That covered only verification.md — evidence.json, where the sentinel values live, was never swept, which is how the set-by-ci over-strictness went unnoticed. The claim also stopped being true for that head once its own proof bundle documented the <pre> rule and was newly refused by its own tool."
     }
   },
   "runtime_proof": {
@@ -61,7 +62,7 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "duration_ms": 90710,
+    "duration_ms": 94812,
     "queries": [
       "database repository bundle persists a submission and settlement against live Supabase",
       "atomic enqueue rollback verification",
@@ -73,7 +74,7 @@
     "receipts": [
       {
         "supabase_project": "zfzdnfwdarxucxtaojxm",
-        "duration_ms": 90710,
+        "duration_ms": 94812,
         "tests_run": 7,
         "tests_pass": 7,
         "note": "Live Supabase. Ops tooling lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed. 7/7 clean on this head. Earlier on this branch one run failed 1 of 7 with 'Failed to list participants by type: TypeError: fetch failed', a transport-level failure reaching Supabase; no in-scope file touches the DB layer and every subsequent run passed 7/7. That failing run is recorded, not claimed as a pass. Fixture rows written by the suite are test artifacts and must be excluded from production counts."
