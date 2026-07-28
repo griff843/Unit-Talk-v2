@@ -1,0 +1,170 @@
+name: Ops — P0 manual containment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "contain-utv2-1610" to disable the two blind-pick producers'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  contain:
+    name: Disable blind-pick producers and restart API only
+    if: ${{ github.event.inputs.confirm == 'contain-utv2-1610' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate required deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          test -n "$DEPLOY_SSH_KEY" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf 'ERROR: Required deployment secrets are missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+          echo 'Required deployment secrets are present; values remain redacted.'
+
+      - name: Install deployment SSH key
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Contain producers and capture redacted evidence
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PATH_B64="$(printf '%s' "$DEPLOY_PATH" | base64 -w 0)"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' bash -s" <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH_B64" | base64 -d)"
+          cd "$DEPLOY_PATH"
+          ENV_FILE=".env.production"
+
+          if [ ! -f "$ENV_FILE" ]; then
+            echo 'ERROR: .env.production is missing; containment stopped.'
+            exit 1
+          fi
+          if [ ! -f .unit-talk-release ]; then
+            echo 'ERROR: .unit-talk-release is missing; containment stopped.'
+            exit 1
+          fi
+
+          echo '=== PRE-STATE (REDACTED) ==='
+          SYNDICATE_PRE="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true)"
+          BOARD_PRE="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null || true)"
+          printf 'SYNDICATE_MACHINE_ENABLED=%s\n' "${SYNDICATE_PRE:-<unset>}"
+          printf 'BOARD_PICK_WRITER_ENABLED=%s\n' "${BOARD_PRE:-<unset>}"
+          echo '.unit-talk-release:'
+          cat .unit-talk-release
+          echo 'Running container summary:'
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+
+          CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"
+          if [ -z "$CURRENT_IMAGE" ]; then
+            echo 'ERROR: .unit-talk-release is empty; containment stopped.'
+            exit 1
+          fi
+
+          TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP_FILE=".env.production.utv2-1612.${TIMESTAMP}.bak"
+          cp -p -- "$ENV_FILE" "$BACKUP_FILE"
+          printf 'Backup created: %s\n' "$BACKUP_FILE"
+
+          if grep -q '^SYNDICATE_MACHINE_ENABLED=' "$ENV_FILE"; then
+            sed -i 's/^SYNDICATE_MACHINE_ENABLED=.*/SYNDICATE_MACHINE_ENABLED=false/' "$ENV_FILE"
+          else
+            printf '%s\n' 'SYNDICATE_MACHINE_ENABLED=false' >> "$ENV_FILE"
+          fi
+          if grep -q '^BOARD_PICK_WRITER_ENABLED=' "$ENV_FILE"; then
+            sed -i 's/^BOARD_PICK_WRITER_ENABLED=.*/BOARD_PICK_WRITER_ENABLED=false/' "$ENV_FILE"
+          else
+            printf '%s\n' 'BOARD_PICK_WRITER_ENABLED=false' >> "$ENV_FILE"
+          fi
+
+          SYNDICATE_COUNT="$(grep -c '^SYNDICATE_MACHINE_ENABLED=' "$ENV_FILE" || true)"
+          BOARD_COUNT="$(grep -c '^BOARD_PICK_WRITER_ENABLED=' "$ENV_FILE" || true)"
+          if [ "$SYNDICATE_COUNT" -ne 1 ]; then
+            printf 'ERROR: SYNDICATE_MACHINE_ENABLED occurs %s times; expected exactly once. API was not restarted.\n' "$SYNDICATE_COUNT"
+            exit 1
+          fi
+          if [ "$BOARD_COUNT" -ne 1 ]; then
+            printf 'ERROR: BOARD_PICK_WRITER_ENABLED occurs %s times; expected exactly once. API was not restarted.\n' "$BOARD_COUNT"
+            exit 1
+          fi
+          grep -qx 'SYNDICATE_MACHINE_ENABLED=false' "$ENV_FILE" || {
+            echo 'ERROR: SYNDICATE_MACHINE_ENABLED did not normalize to false. API was not restarted.'
+            exit 1
+          }
+          grep -qx 'BOARD_PICK_WRITER_ENABLED=false' "$ENV_FILE" || {
+            echo 'ERROR: BOARD_PICK_WRITER_ENABLED did not normalize to false. API was not restarted.'
+            exit 1
+          }
+
+          UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api
+
+          HEALTH_OK=false
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 10 http://localhost:4000/health >/dev/null; then
+              HEALTH_OK=true
+              break
+            fi
+            sleep 5
+          done
+
+          echo '=== POST-STATE (REDACTED) ==='
+          SYNDICATE_POST="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true)"
+          BOARD_POST="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null || true)"
+          printf 'SYNDICATE_MACHINE_ENABLED=%s\n' "${SYNDICATE_POST:-<unset>}"
+          printf 'BOARD_PICK_WRITER_ENABLED=%s\n' "${BOARD_POST:-<unset>}"
+          docker compose ps api
+          if [ "$SYNDICATE_POST" != 'false' ] || [ "$BOARD_POST" != 'false' ]; then
+            echo 'ERROR: API post-state does not contain both containment flags set to false.'
+            exit 1
+          fi
+          if [ "$HEALTH_OK" != 'true' ]; then
+            echo 'ERROR: API health probe did not pass after the API-only restart.'
+            exit 1
+          fi
+          echo 'API_HEALTH=passed'
+
+          echo '=== REDACTED CONTAINMENT EVIDENCE ==='
+          echo 'issue=UTV2-1612'
+          echo 'confirmation_binding=UTV2-1610'
+          echo 'service=api'
+          echo 'SYNDICATE_MACHINE_ENABLED=false'
+          echo 'BOARD_PICK_WRITER_ENABLED=false'
+          echo 'image=.unit-talk-release current value [REDACTED]'
+          echo 'restart=docker compose up -d --no-deps --force-recreate api'
+          echo 'health=passed'
+          echo 'deployment_secrets=[REDACTED]'
+
+          echo '=== ROLLBACK RECEIPT ==='
+          printf 'backup_file=%s\n' "$BACKUP_FILE"
+          printf 'rollback_working_directory=%s\n' '[REDACTED deployment path]'
+          printf 'rollback_command=cp -- %q .env.production && UNIT_TALK_IMAGE_TAG="$(tr -d '"'"'\\r\\n'"'"' < .unit-talk-release)" docker compose up -d --no-deps --force-recreate api\n' "$BACKUP_FILE"
+          REMOTE_SCRIPT
