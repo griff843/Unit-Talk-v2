@@ -144,12 +144,13 @@ export type BindingValueKind = 'sha' | 'canonical' | 'placeholder' | 'foreign' |
 
 /**
  * A canonical GitHub pull-request URL and nothing else. The owner/repo classes
- * are the real GitHub ones: an owner is alphanumerics and hyphens with no
- * leading or trailing hyphen and no underscore, a repository additionally
- * allows `.` and `_`. A looser class accepted values like `a_b` or `a-` as an
- * owner, so a URL that is not a real PR URL could pass as canonical.
+ * are the real GitHub ones: an owner is alphanumerics and single hyphens, never
+ * leading, trailing or consecutive, and at most 39 characters; a repository
+ * additionally allows `.` and `_`. Looser classes accepted `a_b`, `a-`, `a--b`
+ * and over-length owners, so a URL that is not a real PR URL passed as
+ * canonical.
  */
-const GITHUB_PR_OWNER = '[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?';
+const GITHUB_PR_OWNER = '[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}';
 const GITHUB_PR_REPO = '[A-Za-z0-9][A-Za-z0-9._-]*';
 const GITHUB_PR_URL = new RegExp(
   `^https://github\\.com/${GITHUB_PR_OWNER}/${GITHUB_PR_REPO}/pull/[1-9]\\d*$`,
@@ -216,32 +217,47 @@ export function classifyPrRowValue(raw: string, canonicalPrUrl: string | null): 
 }
 
 /**
- * The canonical binding-row labels, and the ONLY indentation a writable row may
- * carry. Four or more leading spaces is a markdown indented code block, so a
- * `Merge SHA:` line at that depth is verbatim narrative, not a binding — the
- * same reasoning that excludes fenced lines. Shared by the planner and the mask
- * so the region the edit may touch and the region the mask neutralises cannot
- * drift apart.
+ * The canonical binding-row labels. A writable row must be UNINDENTED.
+ *
+ * Any leading whitespace is ambiguous: four or more spaces is a markdown
+ * indented code block, and one to three spaces is a list continuation — both
+ * verbatim narrative that merely resembles a binding row. Rather than try to
+ * tell them apart, only column zero counts, which is where every real bundle
+ * writes its rows. An indented row therefore reads as ABSENT and the rebind
+ * refuses, instead of rewriting narrative.
+ *
+ * Shared by the planner and the mask so the region the edit may touch and the
+ * region the mask neutralises cannot drift apart.
  */
 export const BINDING_ROW_LABELS = ['Merge SHA', 'PR', 'Approved PR head', 'Execution SHA'] as const;
 
 /**
- * A markdown ATX heading may carry up to three leading spaces. Matching only an
- * unindented `## ` missed an indented NEXT-SECTION heading, so the binding
- * section appeared to run past its real end and rows belonging to a later
- * section became writable — a fail-open.
+ * Ends the binding section. A markdown ATX heading may carry up to three
+ * leading spaces, may be any level, and is delimited from its text by a space
+ * OR A TAB. Matching only an unindented `## ` missed both an indented heading
+ * and a tab-delimited one, so the section appeared to run past its real end and
+ * rows belonging to a later section became writable.
+ *
+ * Deliberately permissive: recognising MORE headings ends the section EARLIER,
+ * which shrinks the writable region. Everything that would GROW the writable
+ * region is strict instead — see isBindingSectionHeading and bindingRowPattern.
  */
 export function isSectionHeading(line: string): boolean {
-  return /^ {0,3}## /.test(line);
+  return /^ {0,3}#{1,6}[ \t]/.test(line);
 }
 
-/** The canonical binding-section heading, allowing the same legal indentation. */
+/**
+ * The canonical binding-section anchor. Recognising it GROWS the writable
+ * region, so it is strict: exact text, no indentation, nothing but trailing
+ * whitespace. An indented or decorated variant is not the anchor, and the
+ * rebind refuses for an absent section rather than writing into it.
+ */
 export function isBindingSectionHeading(line: string): boolean {
-  return new RegExp(`^ {0,3}${MERGE_SHA_BINDING_HEADING.replace('## ', '## ')}\\s*$`).test(line);
+  return new RegExp(`^${MERGE_SHA_BINDING_HEADING}[ \\t]*$`).test(line);
 }
 
 export function bindingRowPattern(label?: string): RegExp {
-  return new RegExp(`^ {0,3}(?:${label ?? BINDING_ROW_LABELS.join('|')}):`);
+  return new RegExp(`^(?:${label ?? BINDING_ROW_LABELS.join('|')}):`);
 }
 
 /** The single refusal message emitted when a non-binding byte would change. */
@@ -284,7 +300,7 @@ export function maskWritableRegions(text: string): string {
   const parts = text.split(/(\r?\n)/);
   const out = parts.filter((_, i) => i % 2 === 0);
   const seps = parts.filter((_, i) => i % 2 === 1);
-  const fencedHere = fencedLineIndices(out);
+  const fencedHere = verbatimLineIndices(out);
   const mi = out.findIndex((l, i) => /^MERGE_SHA:\s*/.test(l) && !fencedHere.has(i));
   if (mi !== -1) out[mi] = '<<MERGE_SHA_LINE>>';
   const hi = out.findIndex((l, i) => isBindingSectionHeading(l) && !fencedHere.has(i));
@@ -303,7 +319,9 @@ export function maskWritableRegions(text: string): string {
 }
 
 /**
- * Line indices that sit INSIDE a fenced code block.
+ * Line indices that sit INSIDE a VERBATIM region — a markdown code fence or an
+ * HTML <pre> block. Both render their contents literally, so a line inside one
+ * that looks like a binding row is illustrative narrative, not a binding.
  *
  * A ``` or ~~~ fence delimits verbatim content. A line inside one that looks
  * like a binding row — `Merge SHA: pending merge` shown as an example of what
@@ -318,10 +336,22 @@ export function maskWritableRegions(text: string): string {
  * fenced — the conservative direction, since a row that goes unrecognised
  * becomes a missing-required-row refusal rather than a silent rewrite.
  */
-export function fencedLineIndices(lines: string[]): Set<number> {
+export function verbatimLineIndices(lines: string[]): Set<number> {
   const fenced = new Set<number>();
   let open: { char: string; length: number } | null = null;
+  let preDepth = 0;
   for (let i = 0; i < lines.length; i += 1) {
+    if (open === null) {
+      // An HTML <pre> block is verbatim too. The tag lines themselves are not
+      // content; every line between them is.
+      const opens = (lines[i].match(/<pre[\s>]/gi) ?? []).length;
+      const closes = (lines[i].match(/<\/pre\s*>/gi) ?? []).length;
+      if (opens > 0 || closes > 0) {
+        preDepth = Math.max(0, preDepth + opens - closes);
+        continue;
+      }
+      if (preDepth > 0) { fenced.add(i); continue; }
+    }
     const match = lines[i].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
     if (open === null) {
       // An opening fence may carry an info string (```json). Four or more
@@ -534,10 +564,15 @@ export function planEvidenceRebind(
   // optional execution/evidence SHA fields able to carry a surviving duplicate.
   // Counted per OBJECT SCOPE — the same key name legitimately appears in
   // different objects (e.g. test_run_logs entries also carry merge_sha).
+  // EVERY segment of every binding path, not just the leaf. A duplicated
+  // CONTAINER is exactly as ambiguous as a duplicated leaf — JSON.parse keeps
+  // the last `sha_binding` object, so a document carrying a stale one first and
+  // a bound one second reads as already bound, returns a clean no-op, and
+  // leaves the contradictory stale object sitting in the file.
   const writableBindingKeys = new Set<string>([
-    ...REQUIRED_EVIDENCE_FIELDS.map((dotted) => dotted.split('.').pop() as string),
-    ...Object.keys(EVIDENCE_BINDING_FIELDS).map((dotted) => dotted.split('.').pop() as string),
-    ...EVIDENCE_ARRAY_BINDINGS.map((binding) => binding.field),
+    ...REQUIRED_EVIDENCE_FIELDS.flatMap((dotted) => dotted.split('.')),
+    ...Object.keys(EVIDENCE_BINDING_FIELDS).flatMap((dotted) => dotted.split('.')),
+    ...EVIDENCE_ARRAY_BINDINGS.flatMap((binding) => [...binding.arrayPath.split('.'), binding.field]),
   ]);
   for (const key of [...writableBindingKeys].sort()) {
     const duplicates = duplicateKeysInSameObject(content, key);
@@ -630,6 +665,7 @@ export function planEvidenceRebind(
   // rewrites evidence outside the binding fields, which this operation must
   // never do. Only the exact value tokens being rebound are touched.
   let next = content;
+  let expectedByteDelta = 0;
   for (const change of changes) {
     const key = change.locator.split('.').pop()?.replace(/\[\d+\]$/, '') ?? '';
     const oldToken = `"${key}": ${change.before === null ? 'null' : JSON.stringify(change.before)}`;
@@ -646,6 +682,7 @@ export function planEvidenceRebind(
     // document does not match the intended object. That guard is load-bearing,
     // not redundant — see the adversarial regression test.
     next = next.slice(0, index) + newToken + next.slice(index + oldToken.length);
+    expectedByteDelta += newToken.length - oldToken.length;
   }
 
   // Prove the edit was surgical: the result must parse to exactly the object we
@@ -671,6 +708,16 @@ export function planEvidenceRebind(
   }
   const lineGuardError = undeclaredLineChangeError(relPath, content, next, changes.length);
   if (lineGuardError !== null) errors.push(lineGuardError);
+  // The changed-line guard is LINE-granular, so a byte added or removed on a
+  // line that legitimately changed slips past it. The total byte delta must
+  // therefore equal the sum of the declared token deltas exactly.
+  const actualByteDelta = Buffer.byteLength(next, 'utf8') - Buffer.byteLength(content, 'utf8');
+  if (actualByteDelta !== expectedByteDelta) {
+    errors.push(
+      `${relPath}: refused — the byte delta is ${actualByteDelta} but the declared bindings account ` +
+        `for ${expectedByteDelta}`,
+    );
+  }
 
   return { next, changes, errors };
 }
@@ -703,7 +750,7 @@ export function planVerificationRebind(
   const lines = content.split(/\r?\n/);
   // Lines inside a fenced code block are verbatim narrative and are never
   // writable, however much they resemble a binding row.
-  const fenced = fencedLineIndices(lines);
+  const fenced = verbatimLineIndices(lines);
 
   // The ORIGINAL top-level value, captured and validated BEFORE any rewrite.
   // Reading it back out of `lines` after the rewrite (as this previously did)
@@ -803,7 +850,7 @@ export function planVerificationRebind(
       const index = matches[0];
       const line = lines[index];
       const indent = (line.match(/^\s*/) ?? [''])[0];
-      const existing = line.replace(new RegExp(`^ {0,3}${row.label}:\\s*`), '');
+      const existing = line.replace(new RegExp(`^${row.label}:\\s*`), '');
 
       // EVERY existing binding-row value is validated before it can be
       // replaced. A row is only overwritten when its current contents are
