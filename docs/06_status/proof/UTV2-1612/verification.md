@@ -1,5 +1,5 @@
 # PROOF: UTV2-1612
-MERGE_SHA: 994c11b2a68ca9643b3eb49227061f7628fab310
+MERGE_SHA: 6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb
 
 Governed P0 containment workflow. `MERGE_SHA` is pinned to the current PR head at the
 time of writing and is rebound to the authoritative merge SHA at closeout.
@@ -26,16 +26,18 @@ dispatch **and** human approval of the `production` environment gate.
       failure before the restart restores it automatically.
 - [x] Each containment key occurs exactly once and equals `false`, verified before the
       restart; any deviation aborts with the API not restarted.
-- [x] The remote script cannot be silently truncated: every remote command is redirected
-      from `/dev/null`, and the runner asserts a completion sentinel emitted as the final
-      statement.
+- [x] The remote script cannot be silently truncated: every remote command that could
+      otherwise consume stdin is redirected from `/dev/null` (commands reading an explicit
+      file argument do not), and the runner asserts a completion sentinel emitted as the
+      final statement.
 - [x] No workflow context is interpolated into any shell body, so the operator-supplied
       confirmation string cannot reach a command.
 - [x] The workflow performs no database mutation, no credential rotation, no distribution
       change, no migration, and no control of any non-API service.
-- [x] Containment shares deploy.yml's canonical `production-deploy` concurrency mutex, so
-      it can never interleave with a deploy that rewrites the same `.env.production`, and
-      `cancel-in-progress: false` prevents a run being cancelled between backup and restart.
+- [x] Containment shares deploy.yml's `production-deploy` concurrency mutex, so a
+      containment run and a deploy cannot interleave against the same `.env.production`.
+      `cancel-in-progress: false` protects an in-progress run only — see the mutex section
+      for the pending-run and coverage limits, which are real and stated, not claimed away.
 - [x] Merging this PR performs no production mutation whatsoever.
 
 ## EVIDENCE:
@@ -48,12 +50,12 @@ dispatch **and** human approval of the `production` environment gate.
 | Serialised against deploy.yml | `:33-35` `concurrency: production-deploy`, `cancel-in-progress: false` |
 | Human approval required per run | `:41` `environment: production` |
 | Exact confirmation binding | `:40` `if: ${{ github.event.inputs.confirm == '<literal>' }}` |
-| Both flags hardcoded, never inputs | `:171-179` |
+| Both flags hardcoded, never inputs | `:171-180` |
 | API-only restart, no dependencies | `:204` `docker compose up -d --no-deps --force-recreate api` |
 | Current image reused, never pulled | `:119` `CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"` |
 | Backup precedes any mutation | `:127` `cp -p -- "$ENV_FILE" "$BACKUP_FILE"` |
-| Exactly-once validation, fail closed before restart | `:182-189` `-ne 1` guards |
-| Value normalization asserted | `:192-197` `grep -qx` |
+| Exactly-once validation, fail closed before restart | `:182-191` `-ne 1` guards |
+| Value normalization asserted | `:192-199` `grep -qx` |
 | Rollback receipt emitted | `:254-257` |
 
 Live repository configuration confirms the human gate is real, not merely declared:
@@ -83,7 +85,13 @@ Two limits of this mutex are stated rather than glossed:
   `ops-fix-ingestor-api-key.yml` also mutate `.env.production` on the same host and are not
   on the group. Putting them on it is outside this lane's `file_scope_lock` and is recorded
   as a required follow-up. A contract test enumerates these two as known exceptions, so a
-  *new* off-mutex mutator fails the suite.
+  *new* off-mutex mutator fails the suite. The detector resolves variable-bound paths
+  (`ENV_FILE=".env.production"` … `sed -i … "$ENV_FILE"`) and covers `sed -i`,
+  `sed --in-place`, `perl -i`, `tee`, `mv`, `cp`, `install`, `dd`, `envsubst` and `>`/`>>`
+  redirection. An earlier revision matched only the literal path, which excluded the
+  containment workflow itself and made its own self-check inert; the exact-head review
+  caught that, and the suite now fails if the detector cannot classify the containment
+  workflow at all.
 - **`cancel-in-progress: false` protects an in-progress run only.** GitHub permits a single
   pending run per group, so a later dispatch evicts an earlier queued one, and a job waiting
   on `environment: production` approval holds the group while it waits. A deploy sitting in
@@ -142,7 +150,11 @@ workflow-context interpolation, network egress targets, bare `docker` verbs, non
 services including `grading-cron`, database/credential/distribution surfaces, and
 `bash -n` syntax validation of every `run:` block.
 
-**Mutation-verified non-tautological — 23 of 23 injected bypasses fail the suite:**
+**Mutation-verified non-tautological.** Each case below was injected into a copy of the
+workflow, the suite re-run, and the file restored. The independent exact-head review
+re-ran a subset against its own copies and reproduced the same results; the table is
+spot-verified rather than provable from the repo, since no mutation artifacts are
+committed.
 
 | Injected bypass | Caught |
 |---|---|
@@ -162,7 +174,8 @@ services including `grading-cron`, database/credential/distribution surfaces, an
 | Redirect on an inner `sh -c` only | yes |
 | Syntax error inside the quoted heredoc | yes |
 | `RESTART_DONE=true` set before the restart | yes |
-| A new off-mutex `.env.production` mutator | yes |
+| A new off-mutex `.env.production` mutator (7 spellings) | yes |
+| Detector blinded so the self-check goes vacuous | yes |
 | Remove the concurrency block | yes |
 | Rename the containment mutex group | yes |
 | Set `cancel-in-progress: true` | yes |
@@ -172,12 +185,17 @@ services including `grading-cron`, database/credential/distribution surfaces, an
 
 ## Verification
 
-Merge SHA: pending merge. This bundle is bound to `994c11b2a68ca9643b3eb49227061f7628fab310`,
-the commit that introduced the production-deploy mutex. An earlier revision of this bundle
-was bound to `6c45d45b`, which predates the mutex and therefore did not contain the change
-the bundle described; the independent exact-head review caught that and it is corrected
-here. The proof commit itself is necessarily a later SHA, and the bundle is rebound to the
-authoritative merge SHA at closeout.
+Merge SHA: pending merge. This bundle is bound to `6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb`, which carries the
+final state of both in-scope files — `.github/workflows/ops-p0-containment.yml` and
+`scripts/ci/ops-p0-containment-workflow.test.ts`.
+
+Two earlier revisions of this bundle were bound to SHAs that did not contain the code they
+described (`6c45d45b`, then `994c11b2`, which had 19 tests while the bundle claimed 21).
+Both were caught by independent exact-head review. The cause was structural: writing code
+and proof in a single commit means the proof can only ever name an earlier SHA than the one
+carrying the code. That is fixed here by splitting them — `6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb` is a
+code-only commit, and this proof-only commit binds to it, so every claim below is true at
+the SHA named. The bundle is rebound to the authoritative merge SHA at closeout.
 
 ### Static verification
 
