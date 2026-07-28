@@ -58,7 +58,16 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOY_PATH_B64="$(printf '%s' "$DEPLOY_PATH" | base64 -w 0)"
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' bash -s" <<'REMOTE_SCRIPT'
+          TRANSCRIPT="$RUNNER_TEMP/containment-transcript.log"
+
+          # The remote script is delivered on ssh stdin. Every remote command that
+          # could otherwise consume that stream is explicitly redirected from
+          # /dev/null (docker compose exec keeps stdin attached by default; -T only
+          # disables the TTY). The completion sentinel below is the fail-closed
+          # backstop: if any future command still steals stdin, the remote shell
+          # reaches EOF early and exits 0 having done nothing, and the sentinel
+          # check turns that silent success into a hard failure.
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' bash -s" <<'REMOTE_SCRIPT' | tee "$TRANSCRIPT"
           set -euo pipefail
 
           DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH_B64" | base64 -d)"
@@ -75,14 +84,14 @@ jobs:
           fi
 
           echo '=== PRE-STATE (REDACTED) ==='
-          SYNDICATE_PRE="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true)"
-          BOARD_PRE="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null || true)"
+          SYNDICATE_PRE="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null </dev/null || true)"
+          BOARD_PRE="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null </dev/null || true)"
           printf 'SYNDICATE_MACHINE_ENABLED=%s\n' "${SYNDICATE_PRE:-<unset>}"
           printf 'BOARD_PICK_WRITER_ENABLED=%s\n' "${BOARD_PRE:-<unset>}"
           echo '.unit-talk-release:'
           cat .unit-talk-release
           echo 'Running container summary:'
-          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' </dev/null
 
           CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"
           if [ -z "$CURRENT_IMAGE" ]; then
@@ -94,6 +103,41 @@ jobs:
           BACKUP_FILE=".env.production.utv2-1612.${TIMESTAMP}.bak"
           cp -p -- "$ENV_FILE" "$BACKUP_FILE"
           printf 'Backup created: %s\n' "$BACKUP_FILE"
+
+          # Armed for the whole mutate -> validate -> restart window. Before the
+          # restart a failure restores .env.production from the backup, so the
+          # host can never be left half-mutated. After the restart the contained
+          # file is intentionally kept and the manual rollback command is printed.
+          RESTART_DONE=false
+          on_failure() {
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              return 0
+            fi
+            echo '=== FAILURE ROLLBACK RECEIPT ==='
+            printf 'exit_status=%s\n' "$rc"
+            printf 'backup_file=%s\n' "$BACKUP_FILE"
+            if [ "$RESTART_DONE" = 'false' ]; then
+              if cp -p -- "$BACKUP_FILE" "$ENV_FILE"; then
+                echo 'env_restored=true'
+                echo 'restart_performed=false'
+              else
+                echo 'env_restored=false'
+                echo 'ACTION REQUIRED: restore .env.production from the backup above by hand.'
+              fi
+            else
+              echo 'env_restored=false'
+              echo 'restart_performed=true'
+              printf 'rollback_command=cp -- %q .env.production && UNIT_TALK_IMAGE_TAG="$(tr -d '"'"'\\r\\n'"'"' < .unit-talk-release)" docker compose up -d --no-deps --force-recreate api </dev/null\n' "$BACKUP_FILE"
+            fi
+          }
+          trap on_failure EXIT
+
+          # A file with no trailing newline would otherwise have the appended line
+          # concatenated onto the preceding variable.
+          if [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ]; then
+            printf '\n' >> "$ENV_FILE"
+          fi
 
           if grep -q '^SYNDICATE_MACHINE_ENABLED=' "$ENV_FILE"; then
             sed -i 's/^SYNDICATE_MACHINE_ENABLED=.*/SYNDICATE_MACHINE_ENABLED=false/' "$ENV_FILE"
@@ -125,11 +169,12 @@ jobs:
             exit 1
           }
 
-          UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api
+          RESTART_DONE=true
+          UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api </dev/null
 
           HEALTH_OK=false
           for attempt in $(seq 1 12); do
-            if curl -fsS --max-time 10 http://localhost:4000/health >/dev/null; then
+            if curl -fsS --max-time 10 http://localhost:4000/health >/dev/null </dev/null; then
               HEALTH_OK=true
               break
             fi
@@ -137,11 +182,11 @@ jobs:
           done
 
           echo '=== POST-STATE (REDACTED) ==='
-          SYNDICATE_POST="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true)"
-          BOARD_POST="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null || true)"
+          SYNDICATE_POST="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null </dev/null || true)"
+          BOARD_POST="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null </dev/null || true)"
           printf 'SYNDICATE_MACHINE_ENABLED=%s\n' "${SYNDICATE_POST:-<unset>}"
           printf 'BOARD_PICK_WRITER_ENABLED=%s\n' "${BOARD_POST:-<unset>}"
-          docker compose ps api
+          docker compose ps api </dev/null
           if [ "$SYNDICATE_POST" != 'false' ] || [ "$BOARD_POST" != 'false' ]; then
             echo 'ERROR: API post-state does not contain both containment flags set to false.'
             exit 1
@@ -154,17 +199,38 @@ jobs:
 
           echo '=== REDACTED CONTAINMENT EVIDENCE ==='
           echo 'issue=UTV2-1612'
-          echo 'confirmation_binding=UTV2-1610'
+          echo 'confirmation_binding=exact operator string required by this workflow'
           echo 'service=api'
           echo 'SYNDICATE_MACHINE_ENABLED=false'
           echo 'BOARD_PICK_WRITER_ENABLED=false'
-          echo 'image=.unit-talk-release current value [REDACTED]'
+          echo 'image=reused unchanged from .unit-talk-release (value shown in pre-state above)'
           echo 'restart=docker compose up -d --no-deps --force-recreate api'
           echo 'health=passed'
           echo 'deployment_secrets=[REDACTED]'
 
+          echo '=== CONTAINMENT IS NOT DURABLE — FOLLOW-UP REQUIRED ==='
+          echo 'deploy.yml rewrites .env.production wholesale on every deploy.'
+          echo 'It restores SYNDICATE_MACHINE_ENABLED from the repository secret and'
+          echo 'hard-fails unless that secret is exactly "true", and it does not carry'
+          echo 'BOARD_PICK_WRITER_ENABLED at all, so a deploy would erase that line.'
+          echo 'Any subsequent deploy therefore reverts this containment.'
+          echo 'Set the SYNDICATE_MACHINE_ENABLED repository secret to false and land the'
+          echo 'durable parked-deploy contract before the next deploy is run.'
+
           echo '=== ROLLBACK RECEIPT ==='
           printf 'backup_file=%s\n' "$BACKUP_FILE"
           printf 'rollback_working_directory=%s\n' '[REDACTED deployment path]'
-          printf 'rollback_command=cp -- %q .env.production && UNIT_TALK_IMAGE_TAG="$(tr -d '"'"'\\r\\n'"'"' < .unit-talk-release)" docker compose up -d --no-deps --force-recreate api\n' "$BACKUP_FILE"
+          printf 'rollback_command=cp -- %q .env.production && UNIT_TALK_IMAGE_TAG="$(tr -d '"'"'\\r\\n'"'"' < .unit-talk-release)" docker compose up -d --no-deps --force-recreate api </dev/null\n' "$BACKUP_FILE"
+
+          trap - EXIT
+          echo 'CONTAINMENT_COMPLETE=UTV2-1612'
           REMOTE_SCRIPT
+
+          if ! grep -qx 'CONTAINMENT_COMPLETE=UTV2-1612' "$TRANSCRIPT"; then
+            echo 'ERROR: the remote containment script did not run to completion.'
+            echo 'The completion sentinel is absent, so the remote shell exited early'
+            echo '(most likely a command consumed the script on stdin). Treat this run'
+            echo 'as NO CONTAINMENT PERFORMED and inspect the transcript above.'
+            exit 1
+          fi
+          echo 'Completion sentinel verified: the remote containment script ran to the end.'
