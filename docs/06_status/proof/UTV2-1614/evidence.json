@@ -2,11 +2,11 @@
   "schema_version": 1,
   "issue_id": "UTV2-1614",
   "sha_binding": {
-    "verified_source_sha": "dffed9ea5dc336b047054490c8acc976ef375424",
+    "verified_source_sha": "60c9598ab1fcba915938986daa1bd50bd9b15d74",
     "merge_sha": null,
-    "evidence_commit_sha": "dffed9ea5dc336b047054490c8acc976ef375424",
-    "current_pr_head_sha": "dffed9ea5dc336b047054490c8acc976ef375424",
-    "verified_source_note": "Bound to the code-only commit carrying the final state of every in-scope file."
+    "evidence_commit_sha": "60c9598ab1fcba915938986daa1bd50bd9b15d74",
+    "current_pr_head_sha": "60c9598ab1fcba915938986daa1bd50bd9b15d74",
+    "verified_source_note": "Bound to the code-only commit carrying the final state of every in-scope file. This revision closes the fail-closed defects raised by the exact-head review of the previous head (da298435b80c10b74d8babd16211f492100cdb64): the original top-level MERGE_SHA is captured and validated before any rewrite, every existing binding-row value is validated before replacement, raw duplicate-key detection covers all writable JSON bindings including the optional ones, parent-directory open/fsync failures are propagated instead of swallowed, restored_files and possibly_corrupted are both derived from one final checksum pass, the CLI always requests both canonical artifacts, and the tautological changed-line guard test is replaced by real mutations. No existing refusal was relaxed."
   },
   "verifier": {
     "identity": "claude-opus-5",
@@ -16,7 +16,7 @@
   "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
-      "note": "type-check, lint and test:ops clean on dffed9ea5dc336b047054490c8acc976ef375424, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
+      "note": "type-check, lint and test:ops clean on 60c9598ab1fcba915938986daa1bd50bd9b15d74, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
     },
     "type_check": {
       "status": "PASS"
@@ -29,7 +29,7 @@
     },
     "test": {
       "status": "PASS",
-      "note": "test:ops 1299 passing, including 36 proof-rebind assertions."
+      "note": "test:ops 1308 passing, including 45 proof-rebind assertions (was 1299 / 36)."
     },
     "test_run_logs": [
       {
@@ -40,7 +40,7 @@
     "mutation_verification": {
       "status": "PASS",
       "method": "spot-verified",
-      "note": "Fourteen guards reverted individually on scratch copies; every one fails the suite, including narrative stripping and weakening the byte-for-byte guard to mask the whole section body."
+      "note": "Seven fixes in this revision reverted individually on scratch copies of scripts/ops/proof-rebind.ts; every revert fails the suite: changed-line guard neutralised (1 fail), top-level MERGE_SHA read back after the rewrite (2 fail), duplicate-key scan restricted to required fields (1 fail), directory open/fsync failure swallowed (1 fail), row-value malformed/foreign refusals removed (1 fail), CLI file list filtered to existing files (1 fail), restored_files derived from a non-throwing restore call (1 fail). The guards carried over from the previous revision remain mutation-verified."
     },
     "r_level_check": {
       "status": "PASS",
@@ -55,7 +55,7 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "duration_ms": 96618,
+    "duration_ms": 89363,
     "queries": [
       "database repository bundle persists a submission and settlement against live Supabase",
       "atomic enqueue rollback verification",
@@ -67,13 +67,13 @@
     "receipts": [
       {
         "supabase_project": "zfzdnfwdarxucxtaojxm",
-        "duration_ms": 96618,
+        "duration_ms": 89363,
         "tests_run": 7,
         "tests_pass": 7,
-        "note": "Live Supabase. Ops tooling lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed. Fixture rows written by the suite are test artifacts and must be excluded from production counts."
+        "note": "Live Supabase. Ops tooling lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed. Recorded honestly: the first run on this head failed 1 of 7 (UTV2-883 participants check) with 'Failed to list participants by type: TypeError: fetch failed', a transport-level failure reaching Supabase; no in-scope file touches the DB layer. The immediate re-run recorded here passed 7/7 with no code change. The failing run is not claimed as a pass. Fixture rows written by the suite are test artifacts and must be excluded from production counts."
       }
     ],
-    "additional": "ops:proof-rebind preview run against two live bundles. The destructive-regeneration fixture bundle refuses (canonical section absent). The containment lane bundle returns proof_rebind_preview with five binding changes; byte-level verification shows 286 lines before and after, exactly two changed lines, narrative preserved verbatim, trailing-newline state unchanged. All bundle files verified byte-identical afterwards; no bundle rebound."
+    "additional": "ops:proof-rebind preview run against two real bundles; --apply was never used and git status reported both proof directories clean afterwards. The PR-1311 lane bundle returns proof_rebind_refused (canonical '## Merge SHA Binding' section absent; sha256_before == sha256_after for both artifacts). The PR-1313 lane bundle returns proof_rebind_preview with errors: [] and exactly five binding changes, with the line count unchanged, only the declared lines differing, the verified_source_note narrative byte-identical, and the out-of-section narrative row 'Merge SHA: pending merge. This bundle is bound to ...' untouched. The previous revision's proof described the PR-1313 bundle as refused for carrying explanatory prose; that statement was wrong and is retracted. Both contracts are pinned as tests that read the bundles from commit 2822b709c74c43dc24a50dc6df35597e1a0463fe via git show, so they cannot change meaning if either bundle is later legitimately rebound."
   },
   "blast_radius": {
     "production_mutation_on_merge": false,
