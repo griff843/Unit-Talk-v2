@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1612",
+  "sha_binding": {
+    "verified_source_sha": "6c45d45b2711012ebc5af0962fad0adc91cec947",
+    "verified_source_note": "Head a9c96afd introduced the containment workflow and a 9-test contract suite. Independent Claude Opus 5 exact-head review returned APPROVE-WITH-CHANGES with one release-blocking P0: the remote script is delivered on ssh stdin via `bash -s`, and `docker compose exec` keeps stdin attached by default (-T disables only the TTY), so the first printenv call drained the remainder of the heredoc — the remote shell reached EOF and exited 0 having created no backup, made no edit and performed no restart, while the step reported success. Commit 6c45d45b closes that P0 two independent ways (per-command </dev/null redirection plus a completion sentinel the runner asserts), adds an EXIT restore trap covering the mutate/validate window, surfaces the deploy.yml durability reversion, guards appends against a missing trailing newline, and raises the contract suite from 9 presence checks to 18 assertions verified non-tautological by 12 injected mutations.",
+    "merge_sha": null,
+    "evidence_commit_sha": "6c45d45b2711012ebc5af0962fad0adc91cec947",
+    "current_pr_head_sha": "6c45d45b2711012ebc5af0962fad0adc91cec947"
+  },
+  "verifier": {
+    "identity": "claude-opus-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "pnpm verify:parallel green on 6c45d45b (lint + type-check in parallel, then build + full test suite); pnpm test:db run separately against live Supabase, also green"
+    },
+    "type_check": { "status": "PASS" },
+    "lint": { "status": "PASS" },
+    "build": { "status": "PASS" },
+    "test": {
+      "status": "PASS",
+      "note": "scripts/ci/ops-p0-containment-workflow.test.ts: 18/18 pass (raised from 9). New coverage: stdin redirection of every remote docker/curl call, completion sentinel presence and runner assertion, restore-on-failure trap ordering, trailing-newline guard, workflow-context interpolation, network egress targets, bare docker verbs, non-API services including grading-cron, database/credential/distribution surfaces, and bash -n syntax validation of every run block."
+    },
+    "test_run_logs": [
+      { "path": "scripts/ci/ops-p0-containment-workflow.test.ts", "merge_sha": null }
+    ],
+    "mutation_verification": {
+      "status": "PASS",
+      "injected": 12,
+      "caught": 12,
+      "note": "Each mutation was applied to the workflow, the suite re-run, and the workflow restored. Cases: remove </dev/null from a compose exec (the P0); remove </dev/null from the compose up restart; remove the completion sentinel; docker compose down; bare docker stop of another service; add grading-cron to the restart; docker pull; interpolate the confirm input into a run block; psql delete; webhook curl -X POST; remove the failure-restore trap; mutate before the backup; shell syntax error."
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 2,
+      "rules_matched": "workflow + CI test only; no application, domain, package or migration path touched"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 83651,
+    "queries": [
+      "database repository bundle persists a submission and settlement against live Supabase",
+      "atomic enqueue rollback verification (no lifecycle event or outbox row on invalid enqueue)",
+      "atomic delivery confirmation rollback (outbox status, receipt, lifecycle, audit)",
+      "atomic settlement rollback (no settlement, lifecycle event, or audit row on invalid settlement)",
+      "no-duplicate-participants check for the same external_id and sport",
+      "re-settlement correction chain integrity (no true duplicate base rows; original row not mutated)"
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 83651,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase. This lane ships CI/ops tooling with no DB schema or query changes; test:db establishes the live-DB suite remains undisturbed. The suite writes its own fixture rows, which are test artifacts and must be excluded from any production pick or settlement count."
+      }
+    ]
+  },
+  "environment_protection": {
+    "environment": "production",
+    "required_reviewers": ["griff843"],
+    "can_admins_bypass": true,
+    "prevent_self_review": false,
+    "note": "Verified live via the GitHub environments API, not merely asserted by the workflow YAML. Human approval is required for every containment run. The two permissive settings are surfaced for PM awareness."
+  },
+  "blast_radius": {
+    "production_mutation_on_merge": false,
+    "note": "Merging this PR performs no production mutation. Execution requires PM dispatch and human approval of the production environment gate. The workflow can only set two named flags to false and recreate the api service at its existing image."
+  }
+}
