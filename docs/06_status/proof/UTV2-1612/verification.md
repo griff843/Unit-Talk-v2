@@ -258,11 +258,28 @@ must be excluded from any production pick or settlement count.
 
 ### Scope
 
-Two production-path files, plus lane apparatus:
+Nine files: three production-path, six lane apparatus.
+
+Production-path:
 
 - `.github/workflows/ops-p0-containment.yml` (new)
 - `scripts/ci/ops-p0-containment-workflow.test.ts` (new)
-- `.ops/sync/UTV2-1612.yml`, `docs/06_status/lanes/UTV2-1612.json`,
-  `docs/06_status/proof/UTV2-1612/*` (lane apparatus, no production effect)
+- `package.json` — one line, adding the contract suite to `test:ops` so it actually runs.
+  This is a same-lane scope addition and is declared in the lane manifest's
+  `file_scope_lock`; it requires an externally authored scope override, since a lane cannot
+  authorise its own scope expansion.
+
+Lane apparatus (no production effect): `.ops/sync/UTV2-1612.yml`,
+`docs/06_status/lanes/UTV2-1612.json`, `docs/06_status/proof/UTV2-1612/{.gitkeep,
+evidence.json, model-routing.json, verification.md}`.
 
 No application, domain, package or migration file is touched.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1313
+
+This section is the machine-rebindable anchor `ops:proof-generate --merge-sha` rewrites at
+closeout (`scripts/ops/proof-generate.ts`). Until then the authoritative pre-merge binding
+is the `MERGE_SHA:` field at the top of this file, pinned to `6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb`.

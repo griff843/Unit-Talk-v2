@@ -16,7 +16,7 @@
   "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
-      "note": "pnpm verify:parallel green on 6c45d45b (lint + type-check in parallel, then build + full test suite); pnpm test:db run separately against live Supabase, also green"
+      "note": "pnpm verify:parallel green on 6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb, the bound code commit \u2014 lint + type-check in parallel, then build and the full test suite, which includes scripts/ci/ops-p0-containment-workflow.test.ts via package.json test:ops (1263/1263 pass). An earlier revision of this bundle cited a verify run on 6c45d45b; that SHA predates the test wiring (which landed at 11c69a77), so that run provably did not execute the contract suite. Corrected after the exact-head review flagged it. pnpm test:db was run separately against live Supabase and is recorded under runtime_proof."
     },
     "type_check": {
       "status": "PASS"
@@ -45,8 +45,8 @@
     "r_level_check": {
       "status": "PASS",
       "verdict": "PASS",
-      "changed_files": 2,
-      "rules_matched": "workflow + CI test only; no application, domain, package or migration path touched"
+      "changed_files": 9,
+      "rules_matched": "9 files changed: 3 production-path (.github/workflows/ops-p0-containment.yml, scripts/ci/ops-p0-containment-workflow.test.ts, package.json) and 6 lane apparatus (.ops/sync/UTV2-1612.yml, docs/06_status/lanes/UTV2-1612.json, docs/06_status/proof/UTV2-1612/{.gitkeep,evidence.json,model-routing.json,verification.md}). No application, domain, package or migration path touched. package.json is modified only to add the contract suite to test:ops."
     }
   },
   "runtime_proof": {
@@ -101,7 +101,7 @@
     "reviewer": "claude-opus-5",
     "reviews": [
       {
-        "bound_to_head": "a9c96afddd0dc076e2b329ca66d158e0cffef5ab6",
+        "bound_to_head": "a9c96afdd0dc076e2b329ca66d158e0cffef5ab6",
         "verdict": "APPROVE-WITH-CHANGES",
         "note": "Found the release-blocking stdin-theft P0."
       },
