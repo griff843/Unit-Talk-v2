@@ -1,5 +1,5 @@
 # PROOF: UTV2-1612
-MERGE_SHA: adefa059bf4abda21eba10a9a6c7f1d556e2b904
+MERGE_SHA: 33fe4d85f338beef0ace80818e79cd23a372892f
 
 Governed P0 containment workflow. `MERGE_SHA` is pinned to the current PR head at the
 time of writing and is rebound to the authoritative merge SHA at closeout.
@@ -17,22 +17,23 @@ dispatch **and** human approval of the `production` environment gate.
 
 ## ASSERTIONS:
 
-1. The workflow can be triggered only by `workflow_dispatch`, only with the exact
-   confirmation string, and only after a human approves the `production` environment.
-2. Both containment variables are hardcoded to `false` and are never accepted as inputs.
-3. Only the `api` service is recreated, with `--no-deps`, at the image already recorded in
-   `.unit-talk-release`. No pull, build, or tag change occurs.
-4. `.env.production` is backed up to a timestamped file before any mutation, and a failure
-   before the restart restores it automatically.
-5. Each containment key occurs exactly once and equals `false`, verified before the
-   restart; any deviation aborts with the API not restarted.
-6. The remote script cannot be silently truncated: every remote command is redirected from
-   `/dev/null`, and the runner asserts a completion sentinel emitted as the final statement.
-7. No workflow context is interpolated into any shell body, so the operator-supplied
-   confirmation string cannot reach a command.
-8. The workflow performs no database mutation, no credential rotation, no distribution
-   change, no migration, and no control of any non-API service.
-9. Merging this PR performs no production mutation whatsoever.
+- [x] The workflow can be triggered only by `workflow_dispatch`, only with the exact
+      confirmation string, and only after a human approves the `production` environment.
+- [x] Both containment variables are hardcoded to `false` and are never accepted as inputs.
+- [x] Only the `api` service is recreated, with `--no-deps`, at the image already recorded
+      in `.unit-talk-release`. No pull, build, or tag change occurs.
+- [x] `.env.production` is backed up to a timestamped file before any mutation, and a
+      failure before the restart restores it automatically.
+- [x] Each containment key occurs exactly once and equals `false`, verified before the
+      restart; any deviation aborts with the API not restarted.
+- [x] The remote script cannot be silently truncated: every remote command is redirected
+      from `/dev/null`, and the runner asserts a completion sentinel emitted as the final
+      statement.
+- [x] No workflow context is interpolated into any shell body, so the operator-supplied
+      confirmation string cannot reach a command.
+- [x] The workflow performs no database mutation, no credential rotation, no distribution
+      change, no migration, and no control of any non-API service.
+- [x] Merging this PR performs no production mutation whatsoever.
 
 ## EVIDENCE:
 
