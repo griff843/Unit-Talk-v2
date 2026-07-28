@@ -13,10 +13,12 @@ import {
   classifyPrRowValue,
   EVIDENCE_BINDING_FIELDS,
   maskWritableRegions,
+  PRE_MERGE_PLACEHOLDERS,
   nonBindingRegionChangeError,
   readUtf8Strict,
   verbatimLineIndices,
   isBindingSectionHeading,
+  isSetextHeadingText,
   isSectionHeading,
   validatePrIdentity,
   deriveCanonicalPrUrl,
@@ -1914,4 +1916,140 @@ test('P1: --apply without a completed PR identity validation is refused BY THE C
   assert.strictEqual(sha256(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8')), digests.evidence);
   assert.strictEqual(sha256(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8')), digests.verification);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Findings from the fourth adversarial exact-head review, of 8277bb64.
+// ---------------------------------------------------------------------------
+
+test('P1: a SETEXT heading ends the binding section', () => {
+  // Setext is the other legal way to write a markdown heading: a text line
+  // underlined with = or -. Recognising only ATX left the section running past
+  // an "Appendix / --------" boundary, so the rows after it became writable and
+  // the shared mask concealed the rewrite.
+  const doc = (underline: string) => [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '',
+    'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+    'Appendix', underline, '',
+    `Execution SHA: ${'c'.repeat(40)}`, '',
+  ].join('\n');
+
+  for (const underline of ['--------', '========', '  ---', '-']) {
+    const result = planVerificationRebind('v.md', doc(underline), SHAS, PR_URL);
+    assert.deepStrictEqual(result.errors, [], `underline ${JSON.stringify(underline)}: ${result.errors.join('|')}`);
+    assert.strictEqual(
+      result.next.split('\n')[11],
+      `Execution SHA: ${'c'.repeat(40)}`,
+      `underline ${JSON.stringify(underline)}: the row after the setext heading must not be rewritten`,
+    );
+    assert.ok(
+      maskWritableRegions(doc(underline)).includes(`Execution SHA: ${'c'.repeat(40)}`),
+      'the mask must use the same rule, or the rewrite would be concealed',
+    );
+  }
+
+  const lines = doc('--------').split('\n');
+  const verbatim = verbatimLineIndices(lines);
+  assert.ok(isSetextHeadingText(lines, 8, verbatim), '"Appendix" is the setext heading text line');
+  assert.ok(!isSetextHeadingText(lines, 7, verbatim), 'a blank line is not a setext heading');
+  // A setext underline inside a code fence is not a heading.
+  const fencedUnderline = ['a', '```', 'Appendix', '-----', '```', 'b'];
+  assert.ok(!isSetextHeadingText(fencedUnderline, 2, verbatimLineIndices(fencedUnderline)));
+});
+
+test('P1: an HTML comment is a verbatim region', () => {
+  // Nothing inside <!-- --> renders, so a binding-looking line in a comment is
+  // narrative. It was being rewritten with zero errors, and masked.
+  const doc = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '',
+    '<!--', `MERGE_SHA: ${'b'.repeat(40)}`, 'Merge SHA: pending merge', '-->', '',
+    '## Merge SHA Binding', '', 'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+  ].join('\n');
+
+  const result = planVerificationRebind('v.md', doc, SHAS, PR_URL);
+  assert.deepStrictEqual(result.errors, [], `got: ${result.errors.join('|')}`);
+  const after = result.next.split('\n');
+  assert.strictEqual(after[1], `MERGE_SHA: ${MERGE}`, 'the real top-level line is rebound');
+  assert.strictEqual(after[4], `MERGE_SHA: ${'b'.repeat(40)}`, 'the commented line must survive byte-for-byte');
+  assert.strictEqual(after[5], 'Merge SHA: pending merge', 'the commented row must survive byte-for-byte');
+  assert.ok(maskWritableRegions(doc).includes(`MERGE_SHA: ${'b'.repeat(40)}`), 'the mask must not conceal it');
+
+  assert.deepStrictEqual([...verbatimLineIndices(['a', '<!--', 'x', 'y', '-->', 'b'])], [2, 3]);
+  // A single-line comment encloses nothing.
+  assert.deepStrictEqual([...verbatimLineIndices(['a', '<!-- x -->', 'b'])], []);
+});
+
+test('P1: an inline-code MENTION of <pre> is prose, not an unterminated block', () => {
+  // Treating a backticked `<pre>` mention as an opening tag left the rest of the
+  // document permanently "inside" a block — which newly refused this lane's own
+  // proof bundle, because that bundle documents this very rule.
+  const doc = [
+    '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '',
+    'Narrative that mentions `<pre>` and `</pre>` as inline code.', '',
+    '## Merge SHA Binding', '', 'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+  ].join('\n');
+  const result = planVerificationRebind('v.md', doc, SHAS, PR_URL);
+  assert.deepStrictEqual(result.errors, [], `an inline mention must not hide the section: ${result.errors.join('|')}`);
+  assert.strictEqual(result.next.split('\n')[7], `Merge SHA: ${MERGE}`);
+
+  assert.deepStrictEqual([...verbatimLineIndices(['a', 'see `<pre>` here', 'b'])], [], 'a mention opens nothing');
+  assert.deepStrictEqual([...verbatimLineIndices(['a', '<pre>', 'x', '</pre>', 'b'])], [2], 'real tags still work');
+
+  // THIS LANE'S OWN BUNDLE is the regression case: it must plan cleanly.
+  const own = fs.readFileSync(
+    path.join(process.cwd(), 'docs', '06_status', 'proof', 'UTV2-1614', 'verification.md'), 'utf8');
+  assert.ok(own.includes('`<pre>`'), 'precondition: this bundle mentions <pre> as inline code');
+  const ownPlan = planVerificationRebind('v.md', own, SHAS, 'https://github.com/griff843/Unit-Talk-v2/pull/1315');
+  assert.ok(
+    !ownPlan.errors.some((e) => /section is absent/.test(e)),
+    `this lane's own bundle must not be refused: ${ownPlan.errors.join('|')}`,
+  );
+});
+
+test('P2: the pre-merge placeholder set matches the repository sentinel contract', () => {
+  // These are not invented here. Rejecting them refused 25 real bundles that
+  // legitimately store a CI-resolved sentinel. The alignment is asserted
+  // mechanically, against the two canonical sources, so it cannot drift.
+  const readSet = (file: string, marker: string): string[] => {
+    const src = fs.readFileSync(path.join(process.cwd(), file), 'utf8');
+    const from = src.indexOf(marker);
+    assert.ok(from >= 0, `${file} must still declare ${marker}`);
+    const block = src.slice(from, src.indexOf(']', from));
+    return [...block.matchAll(/'([^']+)'/g)].map((m) => m[1]).filter((v) => v !== '');
+  };
+  for (const [file, marker] of [
+    ['packages/invariants/src/merge-sha-binding.ts', 'const SENTINEL_VALUES = new Set(['],
+    ['scripts/ci/proof-binding-validator.ts', "const SENTINELS = new Set(["],
+  ] as const) {
+    for (const sentinel of readSet(file, marker)) {
+      assert.ok(
+        PRE_MERGE_PLACEHOLDERS.has(sentinel),
+        `${file} allows "${sentinel}" but PRE_MERGE_PLACEHOLDERS rejects it — 25 real bundles carry such values`,
+      );
+    }
+  }
+  // Behaviourally: a real bundle's sentinel is a valid pre-merge value, not malformed.
+  for (const sentinel of ['set-by-ci', 'validated-by-ci-at-runtime']) {
+    assert.strictEqual(classifyBindingValue(sentinel).kind, 'placeholder', sentinel);
+    const doc = JSON.stringify({
+      sha_binding: { merge_sha: null, current_pr_head_sha: sentinel, evidence_commit_sha: sentinel },
+    }, null, 2) + '\n';
+    assert.deepStrictEqual(planEvidenceRebind('e.json', doc, SHAS).errors, [], sentinel);
+  }
+  // Genuinely malformed values are still refused.
+  assert.strictEqual(classifyBindingValue('set-by-someone').kind, 'malformed');
+});
+
+test('P2: the canonical PR owner is capped at 39 TOTAL characters', () => {
+  // Bounding the component repetitions counted alphanumeric runs, not
+  // characters, so a 41-character hyphenated owner passed as canonical.
+  const hyphenated = (n: number) => Array.from({ length: n }, () => 'a').join('-');
+  const over = `https://github.com/${hyphenated(21)}/repo/pull/1`;
+  assert.ok(hyphenated(21).length > 39, 'precondition: this owner exceeds 39 characters');
+  assert.strictEqual(deriveCanonicalPrUrl(over, 1), null, 'an over-length hyphenated owner must be rejected');
+  assert.strictEqual(classifyPrRowValue(over, null).kind, 'malformed');
+
+  const ok = `https://github.com/${hyphenated(20)}/repo/pull/1`;
+  assert.strictEqual(hyphenated(20).length, 39);
+  assert.strictEqual(deriveCanonicalPrUrl(ok, 1), ok, 'exactly 39 characters is legal');
 });

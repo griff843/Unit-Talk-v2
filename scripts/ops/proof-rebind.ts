@@ -138,7 +138,24 @@ export function sha256(content: string): string {
  * a rebind must never overwrite a value it cannot account for: silently
  * replacing an unrecognised value is indistinguishable from destroying evidence.
  */
-export const PRE_MERGE_PLACEHOLDERS = new Set(['pending merge', 'pending', 'tbd']);
+export const PRE_MERGE_PLACEHOLDERS = new Set([
+  'pending merge',
+  // The repository's canonical CI-resolved sentinels. These are not invented
+  // here: they are the union of SENTINEL_VALUES in
+  // packages/invariants/src/merge-sha-binding.ts and SENTINELS in
+  // scripts/ci/proof-binding-validator.ts, which explicitly ALLOW them to be
+  // stored in evidence.json and resolve them at runtime. Rejecting them would
+  // have refused 25 real bundles. A test asserts this set stays a superset of
+  // both sources, so the alignment is enforced rather than asserted in prose.
+  'set-by-ci',
+  'set_by_ci',
+  'validated-by-ci-at-runtime',
+  'pending',
+  'tbd',
+  'unknown',
+  'null',
+  'undefined',
+]);
 
 export type BindingValueKind = 'sha' | 'canonical' | 'placeholder' | 'foreign' | 'empty' | 'malformed';
 
@@ -150,7 +167,10 @@ export type BindingValueKind = 'sha' | 'canonical' | 'placeholder' | 'foreign' |
  * and over-length owners, so a URL that is not a real PR URL passed as
  * canonical.
  */
-const GITHUB_PR_OWNER = '[A-Za-z0-9](?:-?[A-Za-z0-9]){0,38}';
+// The negative lookahead caps the TOTAL owner length at 39. Bounding the
+// component repetitions instead counted alphanumeric runs, not characters, so a
+// 41-character hyphenated owner passed as canonical.
+const GITHUB_PR_OWNER = '(?![A-Za-z0-9-]{40})[A-Za-z0-9](?:-?[A-Za-z0-9])*';
 const GITHUB_PR_REPO = '[A-Za-z0-9][A-Za-z0-9._-]*';
 const GITHUB_PR_URL = new RegExp(
   `^https://github\\.com/${GITHUB_PR_OWNER}/${GITHUB_PR_REPO}/pull/[1-9]\\d*$`,
@@ -247,6 +267,21 @@ export function isSectionHeading(line: string): boolean {
 }
 
 /**
+ * True when `lines[index]` is the TEXT line of a setext heading — a non-blank
+ * line immediately followed by a run of `=` or `-`. Setext is the other legal
+ * way to write a heading in markdown, and recognising only ATX left a section
+ * running past a `Appendix` / `--------` boundary, so the following rows became
+ * writable. Ends the section AT the text line, which is where the heading
+ * begins.
+ */
+export function isSetextHeadingText(lines: string[], index: number, verbatim: Set<number>): boolean {
+  if (verbatim.has(index) || lines[index].trim() === '') return false;
+  const underline = lines[index + 1];
+  if (underline === undefined || verbatim.has(index + 1)) return false;
+  return /^ {0,3}(?:=+|-+)[ \t]*$/.test(underline);
+}
+
+/**
  * The canonical binding-section anchor. Recognising it GROWS the writable
  * region, so it is strict: exact text, no indentation, nothing but trailing
  * whitespace. An indented or decorated variant is not the anchor, and the
@@ -307,7 +342,8 @@ export function maskWritableRegions(text: string): string {
   if (hi !== -1) {
     let end = out.length;
     for (let i = hi + 1; i < out.length; i += 1) {
-      if (!fencedHere.has(i) && isSectionHeading(out[i])) { end = i; break; }
+      if (fencedHere.has(i)) continue;
+      if (isSectionHeading(out[i]) || isSetextHeadingText(out, i, fencedHere)) { end = i; break; }
     }
     for (let i = hi + 1; i < end; i += 1) {
       if (!fencedHere.has(i) && bindingRowPattern().test(out[i])) {
@@ -340,18 +376,43 @@ export function verbatimLineIndices(lines: string[]): Set<number> {
   const fenced = new Set<number>();
   let open: { char: string; length: number } | null = null;
   let preDepth = 0;
+  let inComment = false;
+  // Inline code spans are stripped before scanning for HTML tags: a line that
+  // merely MENTIONS `<pre>` inside backticks is prose about a tag, not a tag.
+  // Treating the mention as an opening tag left the rest of the document
+  // permanently "inside" an unterminated block — which newly refused this
+  // lane's own proof bundle, because that bundle documents this very rule.
+  const withoutInlineCode = (line: string): string => line.replace(/`+[^`]*`+/g, '');
+
   for (let i = 0; i < lines.length; i += 1) {
+    const bare = withoutInlineCode(lines[i]);
+
+    // HTML comments are verbatim: nothing inside one is rendered, so a
+    // binding-looking line in a comment is narrative that must never be
+    // rewritten.
+    if (inComment) {
+      if (bare.includes('-->')) { inComment = false; continue; }
+      fenced.add(i);
+      continue;
+    }
+    const commentOpen = bare.lastIndexOf('<!--');
+    if (commentOpen !== -1 && !bare.slice(commentOpen).includes('-->')) {
+      inComment = true;
+      continue;
+    }
+
     if (open === null) {
       // An HTML <pre> block is verbatim too. The tag lines themselves are not
       // content; every line between them is.
-      const opens = (lines[i].match(/<pre[\s>]/gi) ?? []).length;
-      const closes = (lines[i].match(/<\/pre\s*>/gi) ?? []).length;
+      const opens = (bare.match(/<pre[\s>]/gi) ?? []).length;
+      const closes = (bare.match(/<\/pre\s*>/gi) ?? []).length;
       if (opens > 0 || closes > 0) {
         preDepth = Math.max(0, preDepth + opens - closes);
         continue;
       }
       if (preDepth > 0) { fenced.add(i); continue; }
     }
+
     const match = lines[i].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
     if (open === null) {
       // An opening fence may carry an info string (```json). Four or more
@@ -811,7 +872,8 @@ export function planVerificationRebind(
     const headingIndex = headingIndices[0];
     let sectionEnd = lines.length;
     for (let i = headingIndex + 1; i < lines.length; i += 1) {
-      if (!fenced.has(i) && isSectionHeading(lines[i])) { sectionEnd = i; break; }
+      if (fenced.has(i)) continue;
+      if (isSectionHeading(lines[i]) || isSetextHeadingText(lines, i, fenced)) { sectionEnd = i; break; }
     }
 
     // Each canonical row is its own writable region. The section body is NEVER
