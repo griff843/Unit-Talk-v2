@@ -14,8 +14,14 @@ interface WorkflowJob {
   steps?: Array<{ name?: string; run?: string; env?: Record<string, string> }>;
 }
 
+interface Concurrency {
+  group?: string;
+  'cancel-in-progress'?: boolean;
+}
+
 interface Workflow {
   on?: Record<string, unknown>;
+  concurrency?: Concurrency | string;
   jobs?: Record<string, WorkflowJob>;
 }
 
@@ -87,6 +93,38 @@ test('the confirm input is referenced exactly twice: its declaration and the job
   const { text } = load();
   const references = text.split('\n').filter((line) => /\bconfirm\b/.test(line));
   assert.strictEqual(references.length, 2, `confirm must appear only in its declaration and the if: guard, found:\n${references.join('\n')}`);
+});
+
+test('serialises against deploy.yml on the canonical production deployment mutex', () => {
+  const { workflow } = load();
+
+  // Read the group from deploy.yml rather than hardcoding it, so the two stay
+  // bound: if deploy.yml renames its mutex, this test fails instead of silently
+  // letting containment and a deploy run concurrently against .env.production.
+  const deployText = fs.readFileSync(path.join(process.cwd(), '.github', 'workflows', 'deploy.yml'), 'utf8');
+  const deploy = YAML.parse(deployText) as Workflow;
+  const deployConcurrency = deploy.concurrency;
+  assert.ok(
+    deployConcurrency && typeof deployConcurrency === 'object',
+    'deploy.yml must declare a workflow-level concurrency block',
+  );
+  const deployGroup = (deployConcurrency as Concurrency).group;
+  assert.strictEqual(deployGroup, 'production-deploy', 'deploy.yml mutex group changed unexpectedly');
+
+  const containment = workflow.concurrency;
+  assert.ok(
+    containment && typeof containment === 'object',
+    'containment must declare a workflow-level concurrency block',
+  );
+  assert.strictEqual(
+    (containment as Concurrency).group,
+    deployGroup,
+    'containment must share deploy.yml\'s production-deploy mutex',
+  );
+
+  // A containment run must never be cancelled between backup and restart.
+  assert.strictEqual((containment as Concurrency)['cancel-in-progress'], false);
+  assert.strictEqual((deployConcurrency as Concurrency)['cancel-in-progress'], false);
 });
 
 test('hardcodes both containment variables to false and never exposes them as inputs', () => {

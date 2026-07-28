@@ -11,6 +11,15 @@ on:
 permissions:
   contents: read
 
+# Canonical production deployment mutex, shared with deploy.yml. Containment
+# rewrites .env.production and recreates the api service, so it must never
+# interleave with a deploy that rewrites the same file from repository secrets.
+# cancel-in-progress is false: a containment run in flight must be allowed to
+# finish rather than be cancelled midway between backup and restart.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   contain:
     name: Disable blind-pick producers and restart API only

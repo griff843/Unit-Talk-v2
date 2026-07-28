@@ -33,6 +33,9 @@ dispatch **and** human approval of the `production` environment gate.
       confirmation string cannot reach a command.
 - [x] The workflow performs no database mutation, no credential rotation, no distribution
       change, no migration, and no control of any non-API service.
+- [x] Containment shares deploy.yml's canonical `production-deploy` concurrency mutex, so
+      it can never interleave with a deploy that rewrites the same `.env.production`, and
+      `cancel-in-progress: false` prevents a run being cancelled between backup and restart.
 - [x] Merging this PR performs no production mutation whatsoever.
 
 ## EVIDENCE:
@@ -42,15 +45,16 @@ dispatch **and** human approval of the `production` environment gate.
 | Constraint | Enforcement site |
 |---|---|
 | `workflow_dispatch` is the only trigger | `ops-p0-containment.yml:3-9` — single `confirm` input |
-| Human approval required per run | `:18` `environment: production` |
-| Exact confirmation binding | `:17` `if: ${{ github.event.inputs.confirm == '<literal>' }}` |
-| Both flags hardcoded, never inputs | `:142-151` |
-| API-only restart, no dependencies | `:173` `docker compose up -d --no-deps --force-recreate api` |
-| Current image reused, never pulled | `:96` `CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"` |
-| Backup precedes any mutation | `:104` `cp -p -- "$ENV_FILE" "$BACKUP_FILE"` |
-| Exactly-once validation, fail closed before restart | `:153-161` `-ne 1` guards |
-| Value normalization asserted | `:163-170` `grep -qx` |
-| Rollback receipt emitted | `:220-223` |
+| Serialised against deploy.yml | `:19-21` `concurrency: production-deploy`, `cancel-in-progress: false` |
+| Human approval required per run | `:27` `environment: production` |
+| Exact confirmation binding | `:26` `if: ${{ github.event.inputs.confirm == '<literal>' }}` |
+| Both flags hardcoded, never inputs | `:151-159` |
+| API-only restart, no dependencies | `:182` `docker compose up -d --no-deps --force-recreate api` |
+| Current image reused, never pulled | `:105` `CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"` |
+| Backup precedes any mutation | `:113` `cp -p -- "$ENV_FILE" "$BACKUP_FILE"` |
+| Exactly-once validation, fail closed before restart | `:162-168` `-ne 1` guards |
+| Value normalization asserted | `:172-177` `grep -qx` |
+| Rollback receipt emitted | `:229-232` |
 
 Live repository configuration confirms the human gate is real, not merely declared:
 
@@ -63,13 +67,23 @@ $ gh api repos/griff843/Unit-Talk-v2/environments/production
 Noted for PM: that environment also reports `can_admins_bypass: true` and
 `prevent_self_review: false`.
 
+### Production deployment mutex
+
+`ops-p0-containment.yml:19-21` declares the same workflow-level concurrency group as
+`deploy.yml:19-21` (`production-deploy`, `cancel-in-progress: false`). Both workflows
+rewrite `.env.production` on the same host, so without a shared mutex a deploy could
+interleave with containment — restoring `SYNDICATE_MACHINE_ENABLED` from the repository
+secret between containment's write and its restart. The parity test reads the group out of
+`deploy.yml` rather than hardcoding it, so a rename on either side fails the suite instead
+of silently unserialising the two.
+
 ### Independent exact-head review — one P0 found and closed
 
 Cross-provider review (Codex CLI implemented; Claude Opus 5 reviewed the exact head)
 returned APPROVE-WITH-CHANGES against head `a9c96afd`, with one release-blocking finding.
 
 **P0 — stdin theft silently truncated the remote script and reported SUCCESS.**
-The remote script is delivered to the host on ssh **stdin** via `bash -s` (`:70`).
+The remote script is delivered to the host on ssh **stdin** via `bash -s` (`:79`).
 `docker compose exec` keeps stdin attached by default — `-T` disables only the TTY — so
 the first `printenv` call drained the remainder of the heredoc. The remote shell then
 reached EOF and **exited 0 having created no backup, made no edit and performed no
@@ -84,13 +98,13 @@ stdin. The defect is specific to the stdin delivery used here.
 Closed two independent ways, either sufficient alone:
 
 1. Every remote `docker`/`curl` invocation is redirected from `/dev/null`.
-2. The remote script emits a completion sentinel as its final statement (`:226`) and the
-   runner asserts it (`:229-236`). Any *future* command that steals stdin therefore turns
+2. The remote script emits a completion sentinel as its final statement (`:235`) and the
+   runner asserts it (`:238-245`). Any *future* command that steals stdin therefore turns
    a silent success into a hard job failure.
 
 **P1 — no restore-on-failure between backup and restart.** A failure in the mutate or
 validate window left `.env.production` edited. An `EXIT` trap is now armed after the
-backup and before the first mutation (`:111-134`); it restores the file when the restart
+backup and before the first mutation (`:120-143`); it restores the file when the restart
 has not yet run and prints the manual rollback command when it has.
 
 **P1 — containment is not durable.** `deploy.yml:302` rewrites `.env.production`
@@ -98,14 +112,14 @@ wholesale, restores `SYNDICATE_MACHINE_ENABLED` from a repository secret, and ha
 unless that secret is exactly `"true"` (`deploy.yml:82`, `:233`, `:407`).
 `BOARD_PICK_WRITER_ENABLED` does not appear in `deploy.yml` at all, so a deploy would
 erase the appended line. Any later deploy therefore reverts containment. The run log now
-states this explicitly and names the required follow-up (`:211-218`); a companion action
+states this explicitly and names the required follow-up (`:220-227`); a companion action
 on the repository secret is still required and is **not** in this lane's scope.
 
 **P2** — appends could concatenate onto a file lacking a trailing newline (guarded at
-`:138-140`); the evidence block no longer claims the image tag is redacted while pre-state
+`:147-149`); the evidence block no longer claims the image tag is redacted while pre-state
 prints it.
 
-### Test suite raised from 9 presence checks to 18 contract assertions
+### Test suite raised from 9 presence checks to 19 contract assertions
 
 The original suite was pure regex-over-text and could not have caught the P0. Added
 coverage: stdin redirection, completion sentinel, restore trap, trailing-newline guard,
@@ -113,7 +127,7 @@ workflow-context interpolation, network egress targets, bare `docker` verbs, non
 services including `grading-cron`, database/credential/distribution surfaces, and
 `bash -n` syntax validation of every `run:` block.
 
-**Mutation-verified non-tautological — 12 of 12 injected bypasses fail the suite:**
+**Mutation-verified non-tautological — 16 of 16 injected bypasses fail the suite:**
 
 | Injected bypass | Caught |
 |---|---|
@@ -128,6 +142,10 @@ services including `grading-cron`, database/credential/distribution surfaces, an
 | `psql -c 'delete from picks'` | yes |
 | Webhook `curl -X POST` egress | yes |
 | Remove the failure-restore trap | yes |
+| Remove the concurrency block | yes |
+| Rename the containment mutex group | yes |
+| Set `cancel-in-progress: true` | yes |
+| Rename deploy.yml's mutex group (drift) | yes |
 | Mutate before the backup | yes |
 | Shell syntax error | yes |
 
@@ -154,10 +172,10 @@ below is wired into `test:ops`, so `pnpm verify` executes it.
 
 ```
 $ tsx --test scripts/ci/ops-p0-containment-workflow.test.ts
-1..18
-# tests 18
+1..19
+# tests 19
 # suites 0
-# pass 18
+# pass 19
 # fail 0
 # cancelled 0
 # skipped 0
