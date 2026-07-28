@@ -1,5 +1,5 @@
 # PROOF: UTV2-1592
-MERGE_SHA: c26646b9215cea2bddaa7473f7ebb24c74709924
+MERGE_SHA: 5f4abb09113f33ec9ca5ba88ab639041c521c00e
 
 ## Summary
 
@@ -15,7 +15,7 @@ reimplemented). The admin-merge-gate-bypass path is hard-disabled here since
 it must never apply pre-merge. If authorization is rejected, the merge
 command is never invoked.
 
-**This amendment (final head c26646b9) is a PM changes-requested revision of the
+**This amendment (implementation commits 92d16d56 then c26646b9; merged to protected main as 5f4abb09113f33ec9ca5ba88ab639041c521c00e) is a PM changes-requested revision of the
 originally reviewed head (b567c213 / PR #1311).** PM review of that head
 found three release-blocking gaps, all closed here:
 
@@ -300,5 +300,5 @@ guards against a future direct execution path being reintroduced.
       PASS (scope, test_wiring, dropped_tests, sync_metadata, r_level, proof)
 
 ## SHA Binding
-Head SHA: c26646b9215cea2bddaa7473f7ebb24c74709924
-Merge SHA: c26646b9215cea2bddaa7473f7ebb24c74709924
+Head SHA: 5f4abb09113f33ec9ca5ba88ab639041c521c00e
+Merge SHA: 5f4abb09113f33ec9ca5ba88ab639041c521c00e
