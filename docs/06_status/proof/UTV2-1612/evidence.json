@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1612",
+  "sha_binding": {
+    "verified_source_sha": "6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb",
+    "verified_source_note": "Bound to 6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb, a CODE-ONLY commit carrying the final state of both in-scope files (.github/workflows/ops-p0-containment.yml, scripts/ci/ops-p0-containment-workflow.test.ts). Two earlier revisions bound to SHAs that did not contain the code they described (6c45d45b, then 994c11b2 which had 19 tests while this bundle claimed 21); both were caught by independent exact-head review. The cause was structural \u2014 code and proof in one commit means the proof can only name an earlier SHA than the code it describes \u2014 and is fixed by splitting code and proof commits. History: head a9c96afd introduced the workflow and a 9-test suite; exact-head review found a release-blocking P0 (the remote script is delivered on ssh stdin via `bash -s`, and docker compose exec keeps stdin attached by default (-T disables only the TTY), so the first printenv drained the heredoc and the shell exited 0 having performed no containment while the step reported success). That P0 was closed two independent ways \u2014 per-command </dev/null redirection plus a completion sentinel the runner asserts \u2014 and a later exact-head review reproduced the drain and confirmed the sentinel converts it to a hard failure. Subsequent commits added the production-deploy concurrency mutex, an EXIT restore trap, the deploy.yml durability warning, and raised the suite to 21 assertions.",
+    "merge_sha": null,
+    "evidence_commit_sha": "6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb",
+    "current_pr_head_sha": "6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb"
+  },
+  "verifier": {
+    "identity": "claude-opus-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "pnpm verify:parallel green on 6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb, the bound code commit \u2014 lint + type-check in parallel, then build and the full test suite, which includes scripts/ci/ops-p0-containment-workflow.test.ts via package.json test:ops (1263/1263 pass). An earlier revision of this bundle cited a verify run on 6c45d45b; that SHA predates the test wiring (which landed at 11c69a77), so that run provably did not execute the contract suite. Corrected after the exact-head review flagged it. pnpm test:db was run separately against live Supabase and is recorded under runtime_proof."
+    },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "build": {
+      "status": "PASS"
+    },
+    "test": {
+      "status": "PASS",
+      "note": "scripts/ci/ops-p0-containment-workflow.test.ts: 21/21 pass (raised from 9). The file was NOT wired into any package script as delivered, so pnpm test/pnpm verify would never have run it \u2014 the same silently-unwired-test defect closed on an earlier governance lane. It is now listed in package.json test:ops, raising that suite from 1242 to 1263 tests, all passing. Coverage: stdin redirection of every remote command that could consume the script, completion sentinel presence and runner assertion, restore-on-failure trap ordering and its three states, trailing-newline guard, workflow-context interpolation, network egress targets, bare docker verbs, non-API services including grading-cron, database/credential/distribution surfaces, bash -n of every run block AND of the quoted heredoc body separately (a quoted heredoc is literal data to the outer shell, so the run-block check never parsed it), production-deploy mutex parity read out of deploy.yml rather than hardcoded, and mutex coverage across every workflow that writes .env.production with an anti-vacuity guard."
+    },
+    "test_run_logs": [
+      {
+        "path": "scripts/ci/ops-p0-containment-workflow.test.ts",
+        "merge_sha": null
+      }
+    ],
+    "mutation_verification": {
+      "status": "PASS",
+      "note": "Each case was injected into a copy of the workflow, the suite re-run, and the file restored. Cases include: removing a </dev/null redirect (the original P0) and the compose-up redirect; removing the completion sentinel; docker compose down; a bare docker stop of another service; adding grading-cron to the restart; docker pull; interpolating the confirm input into a run block; psql delete; webhook curl -X POST; removing the failure-restore trap; mutating before the backup; a shell syntax error inside the quoted heredoc; printf wrapping an unredirected command substitution; a redirect present only in a trailing comment; a redirect on an inner sh -c only; RESTART_DONE=true set before the restart; dropping containment off the mutex; seven spellings of a new off-mutex .env.production mutator (variable-bound sed -i, variable-bound append, tee -a, mv, perl -i, sed --in-place, prefixed redirect); and blinding the detector so its self-check goes vacuous. Read-only grep/cat access is correctly NOT flagged. No mutation artifacts are committed, so this table is spot-verified rather than provable from the repo; the independent exact-head review reproduced a subset against its own copies with the same results.",
+      "method": "spot-verified"
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 9,
+      "rules_matched": "9 files changed: 3 production-path (.github/workflows/ops-p0-containment.yml, scripts/ci/ops-p0-containment-workflow.test.ts, package.json) and 6 lane apparatus (.ops/sync/UTV2-1612.yml, docs/06_status/lanes/UTV2-1612.json, docs/06_status/proof/UTV2-1612/{.gitkeep,evidence.json,model-routing.json,verification.md}). No application, domain, package or migration path touched. package.json is modified only to add the contract suite to test:ops."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 83651,
+    "queries": [
+      "database repository bundle persists a submission and settlement against live Supabase",
+      "atomic enqueue rollback verification (no lifecycle event or outbox row on invalid enqueue)",
+      "atomic delivery confirmation rollback (outbox status, receipt, lifecycle, audit)",
+      "atomic settlement rollback (no settlement, lifecycle event, or audit row on invalid settlement)",
+      "no-duplicate-participants check for the same external_id and sport",
+      "re-settlement correction chain integrity (no true duplicate base rows; original row not mutated)"
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 83651,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase. This lane ships CI/ops tooling with no DB schema or query changes; test:db establishes the live-DB suite remains undisturbed. The suite writes its own fixture rows, which are test artifacts and must be excluded from any production pick or settlement count."
+      }
+    ]
+  },
+  "environment_protection": {
+    "environment": "production",
+    "required_reviewers": [
+      "griff843"
+    ],
+    "can_admins_bypass": true,
+    "prevent_self_review": false,
+    "note": "Verified live via the GitHub environments API, not merely asserted by the workflow YAML. Human approval is required for every containment run. The two permissive settings are surfaced for PM awareness."
+  },
+  "blast_radius": {
+    "production_mutation_on_merge": false,
+    "note": "Merging this PR performs no production mutation. Execution requires PM dispatch and human approval of the production environment gate. The workflow can only set two named flags to false and recreate the api service at its existing image."
+  },
+  "concurrency_mutex": {
+    "group": "production-deploy",
+    "cancel_in_progress": false,
+    "shared_with": ".github/workflows/deploy.yml:19-21",
+    "note": "Containment and deploy both rewrite .env.production on the same host. The shared workflow-level mutex prevents a deploy from interleaving with containment and restoring SYNDICATE_MACHINE_ENABLED from the repository secret between containment's write and its restart. cancel-in-progress is false so a containment run is never cancelled between backup and restart.",
+    "coverage_limits": [
+      "Covers deploy.yml only. ops-env-patch.yml and ops-fix-ingestor-api-key.yml also mutate .env.production and are NOT on the group; adding them is outside this lane's file_scope_lock and is a required follow-up. A contract test enumerates them as known exceptions and resolves variable-bound paths plus the realistic write verbs, so a new off-mutex mutator fails the suite; an anti-vacuity assertion fails if the detector stops recognising the containment workflow itself.",
+      "cancel-in-progress: false protects an IN-PROGRESS run only. GitHub allows one pending run per group, so a later dispatch evicts an earlier queued one, and a job waiting on environment approval holds the group. A deploy awaiting approval keeps containment queued; a second deploy dispatch would cancel the queued containment with no error annotation. The workflow header carries the operator precondition to check for and cancel a blocking deploy first."
+    ]
+  },
+  "independent_review": {
+    "reviewer": "claude-opus-5",
+    "reviews": [
+      {
+        "bound_to_head": "a9c96afdd0dc076e2b329ca66d158e0cffef5ab6",
+        "verdict": "APPROVE-WITH-CHANGES",
+        "note": "Found the release-blocking stdin-theft P0."
+      },
+      {
+        "bound_to_head": "994c11b2a68ca9643b3eb49227061f7628fab310",
+        "verdict": "APPROVE-WITH-CHANGES",
+        "note": "No P0. Raised incomplete mutex coverage, the pending-run cancellation hazard, and a stale proof SHA binding."
+      },
+      {
+        "bound_to_head": "f4f4decb3318097c2e8e0f045ed01bacc1d415c0",
+        "verdict": "APPROVE-WITH-CHANGES",
+        "note": "No P0. Empirically reproduced the stdin drain and confirmed the sentinel converts it to exit 1; exercised all three trap branches. Raised the recurring stale SHA binding and the vacuous mutex self-check, both fixed here. Its third finding \u2014 that UNIT_TALK_IMAGE_TAG feeds no in-repo compose file \u2014 was checked and is incorrect: deploy/production/docker-compose.yml:14 resolves the api image from ${UNIT_TALK_IMAGE_TAG:?...} and deploy.yml:314 scps that file to the host as docker-compose.yml, so the tag is both correct and required."
+      }
+    ]
+  }
+}
