@@ -1,5 +1,21 @@
 name: Ops — API Diagnose
 
+# UTV2-1610 read-only containment verification.
+#
+# STRICTLY READ-ONLY. No sed, no redirect into any file, no compose
+# up/restart/down, no docker pull, no database access, no secret rotation.
+# Every command reads a file, inspects container state, or probes HTTP.
+#
+# It exists because the containment run (30363396719) could not verify its own
+# result: it exported UNIT_TALK_IMAGE_TAG only on the `compose up` line, so
+# `compose exec` / `compose ps` failed (the compose file requires that variable
+# for every service), and it probed a hardcoded host port while the compose file
+# maps "${UNIT_TALK_API_HOST_PORT:-4000}:4000". Both are corrected here.
+#
+# Only three .env.production keys are read. The previous revision printed the
+# first 20 characters of SUPABASE_SERVICE_ROLE_KEY into the run log; that leak
+# is removed.
+
 on:
   workflow_dispatch:
 
@@ -15,75 +31,130 @@ jobs:
   diagnose:
     name: Diagnose API container
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Validate required secrets
         run: |
+          set -euo pipefail
           missing=()
           test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
           test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
           test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
-          if [ ${#missing[@]} -gt 0 ]; then
-            echo "ERROR: Required secrets not configured: ${missing[*]}"
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf 'ERROR: Required secrets not configured: %s\n' "${missing[*]}"
             exit 1
           fi
+          echo 'Required deployment secrets present; values remain redacted.'
 
       - name: Install SSH key
         env:
           DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
         run: |
-          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          set -euo pipefail
+          test -n "$DEPLOY_SSH_KEY" || { echo 'ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured'; exit 1; }
           install -m 700 -d ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: Run diagnostics
+      - name: Read-only containment verification
         run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
-            DEPLOY_PATH='$DEPLOY_PATH'
-            echo '=== ALL CONTAINER STATUS ==='
-            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+          set -euo pipefail
+          DEPLOY_PATH_B64="$(printf '%s' "$DEPLOY_PATH" | base64 -w 0)"
+          TRANSCRIPT="$RUNNER_TEMP/diagnose.log"
 
-            echo ''
-            echo '=== API CONTAINER INSPECT ==='
-            docker inspect unit-talk-api-1 --format '{{.State.Status}} restarts={{.RestartCount}} exitCode={{.State.ExitCode}} error={{.State.Error}}' 2>/dev/null || echo 'Container not found'
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' bash -s" <<'REMOTE' | tee "$TRANSCRIPT"
+          set -uo pipefail
+          DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH_B64" | base64 -d)"
+          cd "$DEPLOY_PATH"
+          ENV_FILE=".env.production"
+          RC=0
 
-            echo ''
-            echo '=== LAST 100 API LOG LINES ==='
-            docker logs unit-talk-api-1 --tail 100 2>&1 || echo 'No logs available'
+          echo '=== TIMESTAMP ==='
+          date -u +%Y-%m-%dT%H:%M:%SZ
 
-            echo ''
-            echo '=== LAST 50 WORKER LOG LINES ==='
-            docker logs unit-talk-worker-1 --tail 50 2>&1 || echo 'No worker logs available'
+          echo '=== RELEASE TAG ==='
+          if [ ! -f .unit-talk-release ]; then
+            echo 'ERROR: .unit-talk-release missing'
+            echo 'DIAGNOSTIC_COMPLETE=UTV2-1610'
+            exit 1
+          fi
+          UNIT_TALK_IMAGE_TAG="$(tr -d '\r\n' < .unit-talk-release)"
+          export UNIT_TALK_IMAGE_TAG
+          printf 'current_release_tag=%s\n' "$UNIT_TALK_IMAGE_TAG"
 
-            echo ''
-            echo '=== LAST 20 DISCORD-BOT LOG LINES ==='
-            docker logs unit-talk-discord-bot-1 --tail 20 2>&1 || echo 'No discord-bot logs available'
+          echo '=== ENV FILE CONTAINMENT KEYS (exactly-once + value) ==='
+          for key in SYNDICATE_MACHINE_ENABLED BOARD_PICK_WRITER_ENABLED; do
+            count="$(grep -c "^${key}=" "$ENV_FILE" 2>/dev/null || true)"
+            count="${count:-0}"
+            value="$(grep "^${key}=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+            printf '%s occurrences=%s value=%s\n' "$key" "$count" "${value:-<absent>}"
+            if [ "$count" != '1' ]; then
+              echo '  VERDICT: FAIL (expected exactly one occurrence)'; RC=1
+            elif [ "$value" != 'false' ]; then
+              echo '  VERDICT: FAIL (expected false)'; RC=1
+            else
+              echo '  VERDICT: PASS'
+            fi
+          done
 
-            echo ''
-            echo '=== ENV FILE CHECK ==='
-            ls -la \"\$DEPLOY_PATH/.env.production\" 2>/dev/null || echo 'MISSING: .env.production does not exist'
+          HOST_PORT="$(grep '^UNIT_TALK_API_HOST_PORT=' "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+          HOST_PORT="${HOST_PORT:-4000}"
+          printf 'UNIT_TALK_API_HOST_PORT resolved=%s\n' "$HOST_PORT"
 
-            echo ''
-            echo '=== KEY ENV VARS IN .env.production ==='
-            for key in UNIT_TALK_API_RATE_LIMIT_STORE UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY NODE_ENV; do
-              if grep -q \"^\$key=\" \"\$DEPLOY_PATH/.env.production\" 2>/dev/null; then
-                val=\$(grep \"^\$key=\" \"\$DEPLOY_PATH/.env.production\" | cut -d= -f2 | head -c 20)
-                echo \"\$key=\$val...\"
-              else
-                echo \"MISSING: \$key\"
-              fi
-            done
+          echo '=== BACKUP / ROLLBACK STATE ==='
+          ls -1 .env.production.utv2-1612.*.bak 2>/dev/null || echo '(no containment backup found)'
+          printf 'env_file_mtime=%s\n' "$(date -u -r "$ENV_FILE" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
 
-            echo ''
-            echo '=== HEALTH ENDPOINT RESPONSE ==='
-            curl -s --max-time 30 http://localhost:4000/health | python3 -m json.tool 2>/dev/null || echo 'health endpoint unreachable or non-JSON'
-          " | tee api-diagnose-${{ github.run_id }}.txt
+          echo '=== COMPOSE PS (api) ==='
+          docker compose ps api </dev/null || { echo '  compose ps failed'; RC=1; }
 
-      - name: Upload diagnostic artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-diagnose-${{ github.run_id }}.txt
-          path: api-diagnose-${{ github.run_id }}.txt
-          retention-days: 30
+          echo '=== RUNNING API IMAGE / STATUS ==='
+          docker inspect --format 'config_image={{.Config.Image}}' unit-talk-api-1 </dev/null 2>/dev/null || true
+          docker inspect --format 'image_digest={{.Image}}' unit-talk-api-1 </dev/null 2>/dev/null || true
+          docker inspect --format 'status={{.State.Status}} started_at={{.State.StartedAt}} restarts={{.RestartCount}} health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' unit-talk-api-1 </dev/null 2>/dev/null || true
+
+          echo '=== IN-CONTAINER CONTAINMENT VALUES ==='
+          for key in SYNDICATE_MACHINE_ENABLED BOARD_PICK_WRITER_ENABLED; do
+            v="$(docker compose exec -T api printenv "$key" </dev/null 2>/dev/null | tr -d '\r\n' || true)"
+            printf '%s=%s\n' "$key" "${v:-<unset>}"
+            if [ "$v" != 'false' ]; then
+              echo '  VERDICT: FAIL (expected false inside the container)'; RC=1
+            else
+              echo '  VERDICT: PASS'
+            fi
+          done
+
+          echo '=== HOST PORT HEALTH PROBE ==='
+          if curl -fsS --max-time 10 "http://localhost:${HOST_PORT}/health" </dev/null >/dev/null 2>&1; then
+            printf 'host_port_%s_health=PASS\n' "$HOST_PORT"
+          else
+            printf 'host_port_%s_health=FAIL\n' "$HOST_PORT"
+          fi
+
+          echo '=== CONTAINER-INTERNAL HEALTH PROBE ==='
+          if docker compose exec -T api wget -qO- http://localhost:4000/health </dev/null >/dev/null 2>&1; then
+            echo 'container_internal_health=PASS'
+          else
+            echo 'container_internal_health=FAIL'
+          fi
+
+          echo '=== SUMMARY ==='
+          if [ "$RC" -eq 0 ]; then
+            echo 'CONTAINMENT_VERIFIED=true'
+          else
+            echo 'CONTAINMENT_VERIFIED=false'
+          fi
+          echo 'rollback_performed=false (this workflow performs no writes)'
+          echo 'deployment_secrets=[REDACTED]'
+          echo 'DIAGNOSTIC_COMPLETE=UTV2-1610'
+          REMOTE
+
+          if ! grep -qx 'DIAGNOSTIC_COMPLETE=UTV2-1610' "$TRANSCRIPT"; then
+            echo 'ERROR: diagnostic did not run to completion (sentinel absent).'
+            exit 1
+          fi
+          echo 'Sentinel verified: diagnostic ran to completion.'
+          if ! grep -qx 'CONTAINMENT_VERIFIED=true' "$TRANSCRIPT"; then
+            echo '::warning::Containment NOT fully verified — see verdicts above.'
+          fi
