@@ -1111,29 +1111,40 @@ test('P1: the CLI always requests BOTH canonical artifacts, so a missing one ref
 });
 
 // ---------------------------------------------------------------------------
-// Real-bundle contracts. Both bundles are read from a PINNED commit rather than
-// the working tree, so these assertions describe a fixed historical artifact and
-// cannot silently change meaning if either bundle is later legitimately rebound.
+// Real-bundle contracts. These read the two bundles from the WORKING TREE, not
+// from a pinned commit: CI checks out at fetch-depth 1, so `git show <sha>:path`
+// against a commit that is only a shallow boundary is not reliably resolvable
+// there (it passes locally on a full clone and fails on the runner).
+//
+// Reading the working tree raises the opposite hazard — a test that quietly
+// changes meaning once a bundle is legitimately rebound. That is handled by
+// making each contract STATE-AWARE rather than by pinning: the pre-rebind state
+// and the post-rebind state are both asserted, and whichever the bundle is in,
+// the other branch is the one that would have to be wrong. Neither branch can
+// pass vacuously, because the state is derived from the bundle itself.
 // ---------------------------------------------------------------------------
 
-const PINNED_MAIN = '2822b709c74c43dc24a50dc6df35597e1a0463fe';
-
-function showAtPin(relPath: string): string {
-  return execFileSync('git', ['show', `${PINNED_MAIN}:${relPath}`], {
-    cwd: process.cwd(), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-  });
+function readRealBundle(relPath: string): string {
+  const abs = path.join(process.cwd(), relPath);
+  assert.ok(fs.existsSync(abs), `real bundle artifact is missing from the repo: ${relPath}`);
+  return fs.readFileSync(abs, 'utf8');
 }
 
 test('REAL BUNDLE: UTV2-1592 remains refused', () => {
-  const md = showAtPin('docs/06_status/proof/UTV2-1592/verification.md');
+  const rel = 'docs/06_status/proof/UTV2-1592/verification.md';
+  const md = readRealBundle(rel);
   const { errors, changes } = planVerificationRebind(
-    'docs/06_status/proof/UTV2-1592/verification.md',
+    rel,
     md,
     { merge_sha: '5f4abb09113f33ec9ca5ba88ab639041c521c00e', approved_head_sha: HEAD, execution_sha: null },
-    'https://github.com/griff843/Unit-Talk-v2/pull/1311',
+    PR_URL_1311,
   );
-  // Its binding section is headed "## SHA Binding", not the canonical
+  // Its binding block is headed "## SHA Binding", not the canonical
   // "## Merge SHA Binding". A rebind must refuse rather than invent the section.
+  assert.ok(
+    !md.includes('\n## Merge SHA Binding'),
+    'precondition: this bundle lacks the canonical binding section — if that changes, this contract must be re-derived',
+  );
   assert.ok(
     errors.some((e) => /required "## Merge SHA Binding" section is absent/.test(e)),
     `expected the canonical-section refusal, got: ${errors.join('|')}`,
@@ -1141,14 +1152,15 @@ test('REAL BUNDLE: UTV2-1592 remains refused', () => {
   assert.ok(!(errors.length === 0 && changes.length > 0), 'must never report a partial success');
 });
 
-test('REAL BUNDLE: UTV2-1612 previews exactly five binding changes and no other byte', () => {
+test('REAL BUNDLE: UTV2-1612 rebinds exactly five fields and moves no other byte', () => {
   const evidenceRel = 'docs/06_status/proof/UTV2-1612/evidence.json';
   const verificationRel = 'docs/06_status/proof/UTV2-1612/verification.md';
-  const evidence = showAtPin(evidenceRel);
-  const verification = showAtPin(verificationRel);
+  const evidence = readRealBundle(evidenceRel);
+  const verification = readRealBundle(verificationRel);
 
+  const MERGE_1313 = '2822b709c74c43dc24a50dc6df35597e1a0463fe';
   const shas: ShaSet = {
-    merge_sha: PINNED_MAIN,
+    merge_sha: MERGE_1313,
     approved_head_sha: 'e0464b519206ca63f707002ea91d91136750d797',
     execution_sha: '6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb',
   };
@@ -1156,20 +1168,53 @@ test('REAL BUNDLE: UTV2-1612 previews exactly five binding changes and no other 
 
   const json = planEvidenceRebind(evidenceRel, evidence, shas);
   const md = planVerificationRebind(verificationRel, verification, shas, prUrl);
-  assert.deepStrictEqual([...json.errors, ...md.errors], []);
+  assert.deepStrictEqual([...json.errors, ...md.errors], [], 'the bundle must plan cleanly in either state');
 
   const changes = [...json.changes, ...md.changes];
-  assert.strictEqual(changes.length, 5, `expected five binding changes, got:\n${changes.map((c) => `${c.file} ${c.locator}`).join('\n')}`);
-  assert.deepStrictEqual(changes.map((c) => c.locator), [
-    'sha_binding.merge_sha',
-    'sha_binding.current_pr_head_sha',
-    'static_proof.test_run_logs[0].merge_sha',
-    'line 2 (MERGE_SHA:)',
-    '## Merge SHA Binding > Merge SHA (line 280)',
-  ]);
+  const alreadyBound = (JSON.parse(evidence) as { sha_binding: { merge_sha: string | null } })
+    .sha_binding.merge_sha !== null;
 
-  // Every non-binding byte survives: exactly the declared lines differ, the line
-  // count is unchanged, and the explanatory narrative is byte-identical.
+  if (alreadyBound) {
+    // POST-REBIND CONTRACT: rebinding an already-bound bundle to the same SHAs
+    // is a clean no-op. A rebind is idempotent; a second run must never rewrite.
+    assert.deepStrictEqual(changes, [], 'an already-bound bundle must be a no-op, not a rewrite');
+    assert.strictEqual(json.next, evidence);
+    assert.strictEqual(md.next, verification);
+  } else {
+    // PRE-REBIND CONTRACT: exactly five binding fields change, and nothing else.
+    assert.strictEqual(
+      changes.length,
+      5,
+      `expected five binding changes, got:\n${changes.map((c) => `${c.file} ${c.locator}`).join('\n')}`,
+    );
+    assert.deepStrictEqual(
+      changes.map((c) => c.locator.replace(/ \(line \d+\)$/, '').replace(/^line \d+ /, '')),
+      [
+        'sha_binding.merge_sha',
+        'sha_binding.current_pr_head_sha',
+        'static_proof.test_run_logs[0].merge_sha',
+        '(MERGE_SHA:)',
+        '## Merge SHA Binding > Merge SHA',
+      ],
+    );
+    assert.deepStrictEqual(
+      changes.map((c) => c.after),
+      [MERGE_1313, shas.approved_head_sha, MERGE_1313, MERGE_1313, MERGE_1313],
+    );
+    // The out-of-section narrative row that RESEMBLES a binding row must not be
+    // among the changes: it sits outside "## Merge SHA Binding" and is narrative.
+    assert.ok(
+      verification.includes('Merge SHA: pending merge. This bundle is bound to'),
+      'precondition: the bundle carries a narrative line resembling a binding row',
+    );
+    assert.ok(
+      md.next.includes('Merge SHA: pending merge. This bundle is bound to'),
+      'a narrative line resembling a binding row but outside the section must survive',
+    );
+  }
+
+  // Holds in BOTH states: every non-binding byte survives. Exactly the declared
+  // lines differ, and the line count never changes.
   for (const [before, after, declared] of [
     [evidence, json.next, json.changes.length],
     [verification, md.next, md.changes.length],
@@ -1181,23 +1226,26 @@ test('REAL BUNDLE: UTV2-1612 previews exactly five binding changes and no other 
     assert.strictEqual(differing.length, declared, 'only the declared binding lines may differ');
   }
 
-  // The narrative that the destructive generate path used to template over.
-  for (const preserved of [
-    'the remote script is delivered on ssh stdin via `bash -s`',
-    'PR: https://github.com/griff843/Unit-Talk-v2/pull/1313',
-  ]) {
-    assert.ok(verification.includes(preserved) === md.next.includes(preserved), `narrative changed: ${preserved}`);
-  }
-  // The `verified_source_note` — a long explanatory field that shares no key
-  // with any binding — must come through untouched.
+  // The long explanatory field shares no key with any binding and must come
+  // through byte-identical.
   assert.strictEqual(
-    JSON.parse(json.next).sha_binding.verified_source_note,
-    JSON.parse(evidence).sha_binding.verified_source_note,
+    (JSON.parse(json.next) as { sha_binding: { verified_source_note: string } }).sha_binding.verified_source_note,
+    (JSON.parse(evidence) as { sha_binding: { verified_source_note: string } }).sha_binding.verified_source_note,
   );
-  // The line-188 "Merge SHA: pending merge. This bundle is bound to ..." row
-  // sits OUTSIDE the binding section and must not be rewritten.
   assert.ok(
-    md.next.includes('Merge SHA: pending merge. This bundle is bound to'),
-    'a narrative line resembling a binding row but outside the section must survive',
+    md.next.includes('The remote script is delivered to the host on ssh **stdin** via `bash -s`'),
+    'captured narrative must survive',
   );
+
+  // IDEMPOTENCY, exercised on every run regardless of which state the bundle is
+  // in: feeding the planned output back in must produce a clean no-op. This is
+  // what makes interrupted-run recovery safe (re-running --apply completes the
+  // transaction without double-applying), and it keeps the post-rebind branch
+  // above from ever being dead code.
+  const jsonAgain = planEvidenceRebind(evidenceRel, json.next, shas);
+  const mdAgain = planVerificationRebind(verificationRel, md.next, shas, prUrl);
+  assert.deepStrictEqual([...jsonAgain.errors, ...mdAgain.errors], [], 'a rebound bundle must still plan cleanly');
+  assert.deepStrictEqual([...jsonAgain.changes, ...mdAgain.changes], [], 'a second rebind must change nothing');
+  assert.strictEqual(jsonAgain.next, json.next);
+  assert.strictEqual(mdAgain.next, md.next);
 });
