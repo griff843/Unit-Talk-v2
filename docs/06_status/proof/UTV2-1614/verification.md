@@ -1,9 +1,12 @@
 # PROOF: UTV2-1614
-MERGE_SHA: 60c9598ab1fcba915938986daa1bd50bd9b15d74
+MERGE_SHA: e829d2bb1d0af0c61476e620304f2307090f26b5
 
-Bound to the code-only commit carrying the final state of every in-scope file.
-Code and proof are separate commits so the proof names a SHA that actually
-contains the code it describes.
+Bound to `e829d2bb1d0af0c61476e620304f2307090f26b5`, the commit carrying the
+final state of every in-scope file. Code and proof are separate commits so the
+proof names a SHA that actually contains the code it describes. The production
+change landed in the code-only commit `60c9598ab1fcba915938986daa1bd50bd9b15d74`;
+`e829d2bb` is a test-only follow-up (see "CI-only repair" below). No production
+code differs between them.
 
 ## Summary
 
@@ -210,6 +213,35 @@ $ pnpm test:ops
 assertions. `pnpm verify` covers lint, type-check, build and the full test suite.
 Stages run sequentially because `verify:parallel` was OOM-killed locally
 (exit 137); that is not a waiver, and CI on the merge SHA is authoritative.
+
+### CI-only repair after the first CI run
+
+The first CI run on this branch failed `verify` with 2 of 1308 tests erroring.
+Both were the real-bundle contract tests, and the cause was the tests, not the
+tool: they read the two bundles via `git show <pinned-commit>:path` so they would
+describe a fixed historical artifact rather than whatever the working tree
+happens to hold. That resolves on a full local clone and does NOT resolve on the
+CI runner, where `actions/checkout@v4` defaults to `fetch-depth: 1` and the
+pinned commit is only a shallow boundary — both tests errored with
+`exists on disk, but not in <sha>`.
+
+The self-invalidation hazard those tests were guarding against is real: a test
+that reads the working tree quietly changes meaning once the bundle it describes
+is legitimately rebound. That is now handled by making each contract
+STATE-AWARE rather than pinned. The pre-rebind state asserts exactly five binding
+changes with their locators and target SHAs; the post-rebind state asserts a
+clean no-op. Whichever state the bundle is in, the other branch is the one that
+would have to be wrong, and the state is derived from the bundle itself, so
+neither branch can pass vacuously.
+
+An idempotency round-trip now also runs unconditionally: the planned output is
+fed straight back in and must yield zero changes and zero errors. That is a
+direct proof of the recovery path documented under PARTIAL-BUNDLE RECOVERY — a
+re-run completes an interrupted transaction without double-applying — and it
+keeps the post-rebind branch from ever being dead code.
+
+Re-verified on `e829d2bb`: `pnpm type-check` clean, `pnpm lint` clean,
+`pnpm test:ops` 1308 pass / 0 fail. No production code changed.
 
 ### Scope
 

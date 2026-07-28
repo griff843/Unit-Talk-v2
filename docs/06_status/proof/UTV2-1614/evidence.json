@@ -2,11 +2,11 @@
   "schema_version": 1,
   "issue_id": "UTV2-1614",
   "sha_binding": {
-    "verified_source_sha": "60c9598ab1fcba915938986daa1bd50bd9b15d74",
+    "verified_source_sha": "e829d2bb1d0af0c61476e620304f2307090f26b5",
     "merge_sha": null,
-    "evidence_commit_sha": "60c9598ab1fcba915938986daa1bd50bd9b15d74",
-    "current_pr_head_sha": "60c9598ab1fcba915938986daa1bd50bd9b15d74",
-    "verified_source_note": "Bound to the code-only commit carrying the final state of every in-scope file. This revision closes the fail-closed defects raised by the exact-head review of the previous head (da298435b80c10b74d8babd16211f492100cdb64): the original top-level MERGE_SHA is captured and validated before any rewrite, every existing binding-row value is validated before replacement, raw duplicate-key detection covers all writable JSON bindings including the optional ones, parent-directory open/fsync failures are propagated instead of swallowed, restored_files and possibly_corrupted are both derived from one final checksum pass, the CLI always requests both canonical artifacts, and the tautological changed-line guard test is replaced by real mutations. No existing refusal was relaxed."
+    "evidence_commit_sha": "e829d2bb1d0af0c61476e620304f2307090f26b5",
+    "current_pr_head_sha": "e829d2bb1d0af0c61476e620304f2307090f26b5",
+    "verified_source_note": "Bound to e829d2bb1d0af0c61476e620304f2307090f26b5, the commit carrying the final state of every in-scope file. The preceding code-only commit 60c9598ab1fcba915938986daa1bd50bd9b15d74 carried the production change; e829d2bb1d0af0c61476e620304f2307090f26b5 is a test-only follow-up that repaired two real-bundle contract tests which depended on `git show` against a pinned commit — resolvable on a full local clone but not on the CI runner, which checks out at fetch-depth 1. No production code differs between the two. This revision closes the fail-closed defects raised by the exact-head review of the previous head (da298435b80c10b74d8babd16211f492100cdb64): the original top-level MERGE_SHA is captured and validated before any rewrite, every existing binding-row value is validated before replacement, raw duplicate-key detection covers all writable JSON bindings including the optional ones, parent-directory open/fsync failures are propagated instead of swallowed, restored_files and possibly_corrupted are both derived from one final checksum pass, the CLI always requests both canonical artifacts, and the tautological changed-line guard test is replaced by real mutations. No existing refusal was relaxed."
   },
   "verifier": {
     "identity": "claude-opus-5",
@@ -16,7 +16,7 @@
   "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
-      "note": "type-check, lint and test:ops clean on 60c9598ab1fcba915938986daa1bd50bd9b15d74, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
+      "note": "type-check, lint and test:ops clean on e829d2bb1d0af0c61476e620304f2307090f26b5, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
     },
     "type_check": {
       "status": "PASS"
