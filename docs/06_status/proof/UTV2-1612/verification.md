@@ -1,5 +1,5 @@
 # PROOF: UTV2-1612
-MERGE_SHA: 33fe4d85f338beef0ace80818e79cd23a372892f
+MERGE_SHA: 994c11b2a68ca9643b3eb49227061f7628fab310
 
 Governed P0 containment workflow. `MERGE_SHA` is pinned to the current PR head at the
 time of writing and is rebound to the authoritative merge SHA at closeout.
@@ -45,16 +45,16 @@ dispatch **and** human approval of the `production` environment gate.
 | Constraint | Enforcement site |
 |---|---|
 | `workflow_dispatch` is the only trigger | `ops-p0-containment.yml:3-9` — single `confirm` input |
-| Serialised against deploy.yml | `:19-21` `concurrency: production-deploy`, `cancel-in-progress: false` |
-| Human approval required per run | `:27` `environment: production` |
-| Exact confirmation binding | `:26` `if: ${{ github.event.inputs.confirm == '<literal>' }}` |
-| Both flags hardcoded, never inputs | `:151-159` |
-| API-only restart, no dependencies | `:182` `docker compose up -d --no-deps --force-recreate api` |
-| Current image reused, never pulled | `:105` `CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"` |
-| Backup precedes any mutation | `:113` `cp -p -- "$ENV_FILE" "$BACKUP_FILE"` |
-| Exactly-once validation, fail closed before restart | `:162-168` `-ne 1` guards |
-| Value normalization asserted | `:172-177` `grep -qx` |
-| Rollback receipt emitted | `:229-232` |
+| Serialised against deploy.yml | `:33-35` `concurrency: production-deploy`, `cancel-in-progress: false` |
+| Human approval required per run | `:41` `environment: production` |
+| Exact confirmation binding | `:40` `if: ${{ github.event.inputs.confirm == '<literal>' }}` |
+| Both flags hardcoded, never inputs | `:171-179` |
+| API-only restart, no dependencies | `:204` `docker compose up -d --no-deps --force-recreate api` |
+| Current image reused, never pulled | `:119` `CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"` |
+| Backup precedes any mutation | `:127` `cp -p -- "$ENV_FILE" "$BACKUP_FILE"` |
+| Exactly-once validation, fail closed before restart | `:182-189` `-ne 1` guards |
+| Value normalization asserted | `:192-197` `grep -qx` |
+| Rollback receipt emitted | `:254-257` |
 
 Live repository configuration confirms the human gate is real, not merely declared:
 
@@ -69,7 +69,7 @@ Noted for PM: that environment also reports `can_admins_bypass: true` and
 
 ### Production deployment mutex
 
-`ops-p0-containment.yml:19-21` declares the same workflow-level concurrency group as
+`ops-p0-containment.yml:33-35` declares the same workflow-level concurrency group as
 `deploy.yml:19-21` (`production-deploy`, `cancel-in-progress: false`). Both workflows
 rewrite `.env.production` on the same host, so without a shared mutex a deploy could
 interleave with containment — restoring `SYNDICATE_MACHINE_ENABLED` from the repository
@@ -77,13 +77,28 @@ secret between containment's write and its restart. The parity test reads the gr
 `deploy.yml` rather than hardcoding it, so a rename on either side fails the suite instead
 of silently unserialising the two.
 
+Two limits of this mutex are stated rather than glossed:
+
+- **Coverage is deploy.yml only, not repo-wide.** `ops-env-patch.yml` and
+  `ops-fix-ingestor-api-key.yml` also mutate `.env.production` on the same host and are not
+  on the group. Putting them on it is outside this lane's `file_scope_lock` and is recorded
+  as a required follow-up. A contract test enumerates these two as known exceptions, so a
+  *new* off-mutex mutator fails the suite.
+- **`cancel-in-progress: false` protects an in-progress run only.** GitHub permits a single
+  pending run per group, so a later dispatch evicts an earlier queued one, and a job waiting
+  on `environment: production` approval holds the group while it waits. A deploy sitting in
+  `waiting` therefore keeps containment queued rather than running, and a second deploy
+  dispatch would cancel the queued containment with no error annotation. The workflow header
+  (`:23-28`) carries the operator precondition: before dispatching containment during an
+  incident, confirm no Deploy run is in progress or awaiting approval, and cancel it first.
+
 ### Independent exact-head review — one P0 found and closed
 
 Cross-provider review (Codex CLI implemented; Claude Opus 5 reviewed the exact head)
 returned APPROVE-WITH-CHANGES against head `a9c96afd`, with one release-blocking finding.
 
 **P0 — stdin theft silently truncated the remote script and reported SUCCESS.**
-The remote script is delivered to the host on ssh **stdin** via `bash -s` (`:79`).
+The remote script is delivered to the host on ssh **stdin** via `bash -s` (`:93`).
 `docker compose exec` keeps stdin attached by default — `-T` disables only the TTY — so
 the first `printenv` call drained the remainder of the heredoc. The remote shell then
 reached EOF and **exited 0 having created no backup, made no edit and performed no
@@ -98,13 +113,13 @@ stdin. The defect is specific to the stdin delivery used here.
 Closed two independent ways, either sufficient alone:
 
 1. Every remote `docker`/`curl` invocation is redirected from `/dev/null`.
-2. The remote script emits a completion sentinel as its final statement (`:235`) and the
-   runner asserts it (`:238-245`). Any *future* command that steals stdin therefore turns
+2. The remote script emits a completion sentinel as its final statement (`:260`) and the
+   runner asserts it (`:263-270`). Any *future* command that steals stdin therefore turns
    a silent success into a hard job failure.
 
 **P1 — no restore-on-failure between backup and restart.** A failure in the mutate or
 validate window left `.env.production` edited. An `EXIT` trap is now armed after the
-backup and before the first mutation (`:120-143`); it restores the file when the restart
+backup and before the first mutation (`:134-163`); it restores the file when the restart
 has not yet run and prints the manual rollback command when it has.
 
 **P1 — containment is not durable.** `deploy.yml:302` rewrites `.env.production`
@@ -112,14 +127,14 @@ wholesale, restores `SYNDICATE_MACHINE_ENABLED` from a repository secret, and ha
 unless that secret is exactly `"true"` (`deploy.yml:82`, `:233`, `:407`).
 `BOARD_PICK_WRITER_ENABLED` does not appear in `deploy.yml` at all, so a deploy would
 erase the appended line. Any later deploy therefore reverts containment. The run log now
-states this explicitly and names the required follow-up (`:220-227`); a companion action
+states this explicitly and names the required follow-up (`:245-252`); a companion action
 on the repository secret is still required and is **not** in this lane's scope.
 
 **P2** — appends could concatenate onto a file lacking a trailing newline (guarded at
-`:147-149`); the evidence block no longer claims the image tag is redacted while pre-state
+`:167-168`); the evidence block no longer claims the image tag is redacted while pre-state
 prints it.
 
-### Test suite raised from 9 presence checks to 19 contract assertions
+### Test suite raised from 9 presence checks to 21 contract assertions
 
 The original suite was pure regex-over-text and could not have caught the P0. Added
 coverage: stdin redirection, completion sentinel, restore trap, trailing-newline guard,
@@ -127,7 +142,7 @@ workflow-context interpolation, network egress targets, bare `docker` verbs, non
 services including `grading-cron`, database/credential/distribution surfaces, and
 `bash -n` syntax validation of every `run:` block.
 
-**Mutation-verified non-tautological — 16 of 16 injected bypasses fail the suite:**
+**Mutation-verified non-tautological — 23 of 23 injected bypasses fail the suite:**
 
 | Injected bypass | Caught |
 |---|---|
@@ -142,6 +157,12 @@ services including `grading-cron`, database/credential/distribution surfaces, an
 | `psql -c 'delete from picks'` | yes |
 | Webhook `curl -X POST` egress | yes |
 | Remove the failure-restore trap | yes |
+| `printf "$(docker compose exec ...)"` unredirected | yes |
+| Redirect present only in a trailing comment | yes |
+| Redirect on an inner `sh -c` only | yes |
+| Syntax error inside the quoted heredoc | yes |
+| `RESTART_DONE=true` set before the restart | yes |
+| A new off-mutex `.env.production` mutator | yes |
 | Remove the concurrency block | yes |
 | Rename the containment mutex group | yes |
 | Set `cancel-in-progress: true` | yes |
@@ -151,11 +172,12 @@ services including `grading-cron`, database/credential/distribution surfaces, an
 
 ## Verification
 
-Merge SHA: pending merge. This bundle is bound to the code head
-`6c45d45b2711012ebc5af0962fad0adc91cec947` — the commit carrying the final state of both
-in-scope files — and is rebound to the merge SHA at closeout. The proof commit itself is
-necessarily a later SHA; embedding it here is the known circular dependency the proof
-auditor treats as advisory.
+Merge SHA: pending merge. This bundle is bound to `994c11b2a68ca9643b3eb49227061f7628fab310`,
+the commit that introduced the production-deploy mutex. An earlier revision of this bundle
+was bound to `6c45d45b`, which predates the mutex and therefore did not contain the change
+the bundle described; the independent exact-head review caught that and it is corrected
+here. The proof commit itself is necessarily a later SHA, and the bundle is rebound to the
+authoritative merge SHA at closeout.
 
 ### Static verification
 
@@ -172,10 +194,10 @@ below is wired into `test:ops`, so `pnpm verify` executes it.
 
 ```
 $ tsx --test scripts/ci/ops-p0-containment-workflow.test.ts
-1..19
-# tests 19
+1..21
+# tests 21
 # suites 0
-# pass 19
+# pass 21
 # fail 0
 # cancelled 0
 # skipped 0

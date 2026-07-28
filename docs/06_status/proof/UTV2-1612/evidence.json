@@ -2,11 +2,11 @@
   "schema_version": 1,
   "issue_id": "UTV2-1612",
   "sha_binding": {
-    "verified_source_sha": "6c45d45b2711012ebc5af0962fad0adc91cec947",
-    "verified_source_note": "Head a9c96afd introduced the containment workflow and a 9-test contract suite. Independent Claude Opus 5 exact-head review returned APPROVE-WITH-CHANGES with one release-blocking P0: the remote script is delivered on ssh stdin via `bash -s`, and `docker compose exec` keeps stdin attached by default (-T disables only the TTY), so the first printenv call drained the remainder of the heredoc \u2014 the remote shell reached EOF and exited 0 having created no backup, made no edit and performed no restart, while the step reported success. Commit 6c45d45b closes that P0 two independent ways (per-command </dev/null redirection plus a completion sentinel the runner asserts), adds an EXIT restore trap covering the mutate/validate window, surfaces the deploy.yml durability reversion, guards appends against a missing trailing newline, and raises the contract suite from 9 presence checks to 18 assertions. A final PM-directed amendment adds the canonical production-deploy concurrency mutex shared with deploy.yml and its parity test, taking the suite to 19 assertions verified non-tautological by 16 injected mutations.",
+    "verified_source_sha": "994c11b2a68ca9643b3eb49227061f7628fab310",
+    "verified_source_note": "Head a9c96afd introduced the containment workflow and a 9-test contract suite. Independent Claude Opus 5 exact-head review returned APPROVE-WITH-CHANGES with one release-blocking P0: the remote script is delivered on ssh stdin via `bash -s`, and `docker compose exec` keeps stdin attached by default (-T disables only the TTY), so the first printenv call drained the remainder of the heredoc \u2014 the remote shell reached EOF and exited 0 having created no backup, made no edit and performed no restart, while the step reported success. Commit 6c45d45b closes that P0 two independent ways (per-command </dev/null redirection plus a completion sentinel the runner asserts), adds an EXIT restore trap covering the mutate/validate window, surfaces the deploy.yml durability reversion, guards appends against a missing trailing newline, and raises the contract suite from 9 presence checks to 18 assertions. A final PM-directed amendment adds the canonical production-deploy concurrency mutex shared with deploy.yml and its parity test, taking the suite to 19 assertions verified non-tautological by 16 injected mutations. REBIND: an earlier revision of this bundle bound to 6c45d45b, which predates the production-deploy mutex and therefore did not contain the change the bundle described. The independent exact-head Opus 5 review of 994c11b2 caught that (P1-3) and it is corrected here.",
     "merge_sha": null,
-    "evidence_commit_sha": "6c45d45b2711012ebc5af0962fad0adc91cec947",
-    "current_pr_head_sha": "6c45d45b2711012ebc5af0962fad0adc91cec947"
+    "evidence_commit_sha": "994c11b2a68ca9643b3eb49227061f7628fab310",
+    "current_pr_head_sha": "994c11b2a68ca9643b3eb49227061f7628fab310"
   },
   "verifier": {
     "identity": "claude-opus-5",
@@ -29,7 +29,7 @@
     },
     "test": {
       "status": "PASS",
-      "note": "scripts/ci/ops-p0-containment-workflow.test.ts: 19/19 pass (raised from 9). The file was NOT wired into any package script as delivered, so pnpm test/pnpm verify would never have run it \u2014 the same silently-unwired-test defect found and closed under UTV2-1592. It is now listed in package.json test:ops, which raises that suite from 1242 to 1260 tests, all passing. New coverage: stdin redirection of every remote docker/curl call, completion sentinel presence and runner assertion, restore-on-failure trap ordering, trailing-newline guard, workflow-context interpolation, network egress targets, bare docker verbs, non-API services including grading-cron, database/credential/distribution surfaces, and bash -n syntax validation of every run block. Final amendment adds a production-deploy concurrency mutex parity test that reads the group out of deploy.yml rather than hardcoding it, so a rename on either side fails the suite."
+      "note": "scripts/ci/ops-p0-containment-workflow.test.ts: 21/21 pass (raised from 9). The file was NOT wired into any package script as delivered, so pnpm test/pnpm verify would never have run it \u2014 the same silently-unwired-test defect found and closed under UTV2-1592. It is now listed in package.json test:ops, which raises that suite from 1242 to 1263 tests, all passing. New coverage: stdin redirection of every remote docker/curl call, completion sentinel presence and runner assertion, restore-on-failure trap ordering, trailing-newline guard, workflow-context interpolation, network egress targets, bare docker verbs, non-API services including grading-cron, database/credential/distribution surfaces, and bash -n syntax validation of every run block. Final amendment adds a production-deploy concurrency mutex parity test that reads the group out of deploy.yml rather than hardcoding it, so a rename on either side fails the suite. Exact-head review remediation added two tests: the remote heredoc body is now syntax-checked on its own (a quoted heredoc is literal data to the outer shell, so bash -n on the run: block never parsed it \u2014 proven by experiment), and every workflow that mutates .env.production must be on the production-deploy mutex, with the two known off-mutex mutators enumerated as explicit exceptions."
     },
     "test_run_logs": [
       {
@@ -39,9 +39,9 @@
     ],
     "mutation_verification": {
       "status": "PASS",
-      "injected": 16,
-      "caught": 16,
-      "note": "Each mutation was applied to the workflow, the suite re-run, and the workflow restored. Cases: remove </dev/null from a compose exec (the P0); remove </dev/null from the compose up restart; remove the completion sentinel; docker compose down; bare docker stop of another service; add grading-cron to the restart; docker pull; interpolate the confirm input into a run block; psql delete; webhook curl -X POST; remove the failure-restore trap; mutate before the backup; shell syntax error. Concurrency mutations added: remove the concurrency block; rename the containment mutex group; set cancel-in-progress true; rename deploy.yml's mutex group (drift)."
+      "injected": 23,
+      "caught": 23,
+      "note": "Each mutation was applied to the workflow, the suite re-run, and the workflow restored. Cases: remove </dev/null from a compose exec (the P0); remove </dev/null from the compose up restart; remove the completion sentinel; docker compose down; bare docker stop of another service; add grading-cron to the restart; docker pull; interpolate the confirm input into a run block; psql delete; webhook curl -X POST; remove the failure-restore trap; mutate before the backup; shell syntax error. Concurrency mutations added: remove the concurrency block; rename the containment mutex group; set cancel-in-progress true; rename deploy.yml's mutex group (drift). Review-remediation mutations added: printf wrapping an unredirected command substitution; redirect present only in a trailing comment; redirect on an inner sh -c only; syntax error inside the quoted heredoc; RESTART_DONE=true set before the restart; containment dropped off the mutex; a new off-mutex .env.production mutator."
     },
     "r_level_check": {
       "status": "PASS",
@@ -92,6 +92,16 @@
     "group": "production-deploy",
     "cancel_in_progress": false,
     "shared_with": ".github/workflows/deploy.yml:19-21",
-    "note": "Containment and deploy both rewrite .env.production on the same host. The shared workflow-level mutex prevents a deploy from interleaving with containment and restoring SYNDICATE_MACHINE_ENABLED from the repository secret between containment's write and its restart. cancel-in-progress is false so a containment run is never cancelled between backup and restart."
+    "note": "Containment and deploy both rewrite .env.production on the same host. The shared workflow-level mutex prevents a deploy from interleaving with containment and restoring SYNDICATE_MACHINE_ENABLED from the repository secret between containment's write and its restart. cancel-in-progress is false so a containment run is never cancelled between backup and restart.",
+    "coverage_limits": [
+      "Covers deploy.yml only. ops-env-patch.yml and ops-fix-ingestor-api-key.yml also mutate .env.production and are NOT on the group; adding them is outside this lane's file_scope_lock and is a required follow-up. A contract test enumerates them as known exceptions so a new off-mutex mutator fails the suite.",
+      "cancel-in-progress: false protects an IN-PROGRESS run only. GitHub allows one pending run per group, so a later dispatch evicts an earlier queued one, and a job waiting on environment approval holds the group. A deploy awaiting approval keeps containment queued; a second deploy dispatch would cancel the queued containment with no error annotation. The workflow header carries the operator precondition to check for and cancel a blocking deploy first."
+    ]
+  },
+  "independent_review": {
+    "reviewer": "claude-opus-5",
+    "bound_to_head": "994c11b2a68ca9643b3eb49227061f7628fab310",
+    "verdict": "APPROVE-WITH-CHANGES",
+    "note": "No P0. Prior stdin-theft P0 re-verified as genuinely closed; concurrency mutex confirmed correct against deploy.yml. Three P1s raised: incomplete mutex coverage, pending-run cancellation hazard, and stale proof SHA binding. All three are addressed here \u2014 the first two as explicit stated limits plus an enforcing test, the third by rebinding. P2s addressed: RESTART_DONE ordering, stdin-check bypasses, the bash -n heredoc blind spot, mutex coverage test, health-check ordering, and citation ranges."
   }
 }

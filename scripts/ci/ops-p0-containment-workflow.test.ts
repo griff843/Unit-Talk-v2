@@ -174,20 +174,96 @@ test('every remote command that could consume the script on stdin is redirected 
   // stdin attached by default (-T only disables the TTY), so an unredirected
   // call drains the rest of the script, bash reaches EOF and exits 0 having
   // performed no containment at all.
-  const stdinConsumers = remote
+  // Reduce each line to what the shell would actually EXECUTE. For echo/printf,
+  // that is only the command substitutions — the surrounding literal text is
+  // data (e.g. the printed rollback command). For every other line it is the
+  // whole line. This keeps the reviewer's bypass closed: a
+  // `printf '%s' "$(docker compose exec ...)"` still executes an exec and is
+  // still checked, while a printf that merely *prints* the words is not.
+  // A command substitution is parsed in a fresh shell context, so its body is
+  // evaluated as its own segment rather than inheriting the surrounding quotes.
+  const executable = remote
     .split('\n')
+    // Strip comments first so a trailing "# </dev/null" cannot satisfy the check.
+    .map((line) => line.replace(/#.*$/, ''))
+    .flatMap((line) => {
+      const substitutions = [...line.matchAll(/\$\(([^)]*)\)/g)].map((m) => m[1]);
+      // For echo/printf the surrounding literal is data, not a command.
+      if (/^\s*(?:echo|printf)\b/.test(line)) return substitutions;
+      return [line.replace(/\$\([^)]*\)/g, '$SUBST'), ...substitutions];
+    });
+
+  const stdinConsumers = executable
     .filter((line) => /\b(?:docker|curl|ssh|xargs|read)\b/.test(line))
-    .filter((line) => !line.trim().startsWith('#'))
-    .filter((line) => !/^\s*(?:echo|printf)\b/.test(line.trim()));
+    // Commands given an explicit file argument do not read stdin.
+    .filter((line) => !/\b(?:tr|cat|wc|head|tail|sort)\b[^|]*<\s*[.\w/]/.test(line));
 
   assert.ok(stdinConsumers.length > 0, 'expected remote docker/curl commands to exist');
+
+  // The redirect must apply to the command actually being run, so it has to sit
+  // outside any quoting. A redirect nested inside `sh -c '... </dev/null'`
+  // protects only the inner shell and must not satisfy this check.
+  const hasUnquotedRedirect = (segment: string): boolean => {
+    let single = false;
+    let double = false;
+    for (let i = 0; i < segment.length; i += 1) {
+      const ch = segment[i];
+      if (ch === "'" && !double) single = !single;
+      else if (ch === '"' && !single) double = !double;
+      else if (ch === '<' && !single && !double && /^<\s*\/dev\/null/.test(segment.slice(i))) return true;
+    }
+    return false;
+  };
+
   for (const line of stdinConsumers) {
-    assert.match(
-      line,
-      /<\s*\/dev\/null/,
-      `remote command may steal the script from stdin; redirect it from /dev/null: ${line.trim()}`,
+    assert.ok(
+      hasUnquotedRedirect(line),
+      `remote command may steal the script from stdin; redirect the outer command from /dev/null: ${line.trim()}`,
     );
   }
+});
+
+test('the remote script body is itself syntax-checked', () => {
+  const { job } = load();
+  const remote = remoteScript(job);
+
+  // A quoted heredoc (<<'REMOTE_SCRIPT') is literal data to the outer shell, so
+  // `bash -n` on the run: block never parses the remote script — the highest-risk
+  // code in this workflow. It must be extracted and checked on its own.
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'p0-remote-')), 'remote.sh');
+  fs.writeFileSync(file, remote);
+  const result = spawnSync('bash', ['-n', file], { encoding: 'utf8' });
+  assert.strictEqual(result.status, 0, `remote script is not valid shell:\n${result.stderr}`);
+});
+
+test('every workflow that mutates .env.production is on the production-deploy mutex', () => {
+  const dir = path.join(process.cwd(), '.github', 'workflows');
+
+  // Known off-mutex mutators, outside this lane's file scope. Listing them here
+  // makes the gap explicit and fails the moment a NEW off-mutex mutator appears.
+  const knownExceptions = new Set(['ops-env-patch.yml', 'ops-fix-ingestor-api-key.yml']);
+
+  const offMutex: string[] = [];
+  for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
+    const text = fs.readFileSync(path.join(dir, name), 'utf8');
+    if (!text.includes('.env.production')) continue;
+    // Mutation, not inspection: an in-place edit or a redirect into the file.
+    const mutates = /sed -i[^\n]*\.env\.production/.test(text) || />>?\s*'?[^'\n]*\.env\.production/.test(text);
+    if (!mutates) continue;
+    const parsed = YAML.parse(text) as Workflow;
+    const group = typeof parsed.concurrency === 'object' ? parsed.concurrency?.group : undefined;
+    if (group !== 'production-deploy') offMutex.push(name);
+  }
+
+  assert.deepStrictEqual(
+    offMutex.filter((n) => !knownExceptions.has(n)),
+    [],
+    'a workflow mutating .env.production is not on the production-deploy mutex',
+  );
+  assert.ok(
+    !offMutex.includes('ops-p0-containment.yml'),
+    'the containment workflow itself must be on the mutex',
+  );
 });
 
 test('a truncated remote script fails the job instead of reporting success', () => {
@@ -239,9 +315,12 @@ test('restores env.production automatically if anything fails before the restart
   assert.match(remote, /RESTART_DONE=false/, 'restart state must be tracked');
   assert.match(remote, /cp -p -- "\$BACKUP_FILE" "\$ENV_FILE"/, 'the trap must restore from the backup');
 
-  const restartFlag = remote.indexOf('RESTART_DONE=true');
+  const attempted = remote.indexOf('RESTART_DONE=attempted');
   const restart = remote.indexOf('UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up');
-  assert.ok(restartFlag >= 0 && restartFlag < restart, 'RESTART_DONE must be set before the restart is attempted');
+  const confirmed = remote.indexOf('RESTART_DONE=true');
+  assert.ok(attempted >= 0 && attempted < restart, 'restart must be marked attempted before it is tried');
+  assert.ok(confirmed > restart, 'RESTART_DONE=true must only be set after compose returns success');
+  assert.match(remote, /elif \[ "\$RESTART_DONE" = 'attempted' \]/, 'a failed restart must be reported distinctly');
 });
 
 test('never appends onto a file that lacks a trailing newline', () => {
