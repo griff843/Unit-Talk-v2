@@ -50,9 +50,30 @@
     }
   },
   "runtime_proof": {
-    "command": "ops:proof-rebind preview against live bundles",
+    "command": "pnpm test:db",
     "status": "PASS",
-    "note": "Both real bundles previewed; both refused for distinct, correct reasons; all bundle files verified byte-identical afterwards. No bundle rebound."
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 96618,
+    "queries": [
+      "database repository bundle persists a submission and settlement against live Supabase",
+      "atomic enqueue rollback verification",
+      "atomic delivery confirmation rollback",
+      "atomic settlement rollback",
+      "no-duplicate-participants check",
+      "re-settlement correction chain integrity"
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 96618,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase. Ops tooling lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed. Fixture rows written by the suite are test artifacts and must be excluded from production counts."
+      }
+    ],
+    "additional": "ops:proof-rebind preview run against two live bundles; both refused for distinct correct reasons; all bundle files verified byte-identical afterwards. No bundle rebound."
   },
   "blast_radius": {
     "production_mutation_on_merge": false,

@@ -80,6 +80,28 @@ All bundle files verified byte-identical after both runs.
 
 ## Verification
 
+### Live-DB runtime proof
+
+```
+$ pnpm test:db
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 96618.57088
+```
+
+Live Supabase project `zfzdnfwdarxucxtaojxm`. This lane ships ops tooling with
+no DB schema or query changes; `pnpm test:db` establishes that the live-DB suite
+remains undisturbed. The suite writes its own fixture rows, which are test
+artifacts and must be excluded from any production pick or settlement count.
+
+### Static verification
+
 ```
 $ pnpm type-check
 (clean)
