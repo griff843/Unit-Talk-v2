@@ -236,33 +236,70 @@ test('the remote script body is itself syntax-checked', () => {
   assert.strictEqual(result.status, 0, `remote script is not valid shell:\n${result.stderr}`);
 });
 
+/**
+ * Does this workflow WRITE .env.production (as opposed to inspecting it)?
+ *
+ * Matching the literal path is not enough: workflows routinely bind it to a
+ * variable first (`ENV_FILE=".env.production"` … `sed -i … "$ENV_FILE"`), which
+ * is exactly the style this repo's own containment workflow uses. Assignments
+ * are therefore resolved to path tokens before matching, and the write verbs
+ * cover the realistic ways a file gets rewritten in place.
+ */
+export function mutatesEnvProduction(text: string): boolean {
+  if (!text.includes('.env.production')) return false;
+
+  const pathTokens = ['\\.env\\.production'];
+  for (const [, name] of text.matchAll(/(\w+)=["']?[^"'\s]*\.env\.production["']?/g)) {
+    pathTokens.push(`\\$\\{?${name}\\}?`);
+  }
+  // A leading directory prefix is allowed: the file is usually referenced as
+  // "$DEPLOY_PATH/.env.production" or /srv/app/.env.production, not bare.
+  const target = `(?:"|')?[^\\s"']*(?:${pathTokens.join('|')})`;
+
+  const writeVerb = /(?:sed\s+(?:-i|--in-place)|perl\s+-i|\btee\b|\bmv\b|\bcp\b|\binstall\b|\bdd\b|envsubst)/;
+  for (const line of text.split('\n')) {
+    // Redirection into the file: `> f`, `>> f`, or `tee f`.
+    if (new RegExp(`>>?\\s*${target}`).test(line)) return true;
+    // In-place edit or copy-over, where the file is an argument.
+    if (writeVerb.test(line) && new RegExp(target).test(line)) return true;
+  }
+  return false;
+}
+
 test('every workflow that mutates .env.production is on the production-deploy mutex', () => {
   const dir = path.join(process.cwd(), '.github', 'workflows');
 
-  // Known off-mutex mutators, outside this lane's file scope. Listing them here
-  // makes the gap explicit and fails the moment a NEW off-mutex mutator appears.
+  // Known off-mutex mutators. Putting them on the group is outside this lane's
+  // file_scope_lock; the gap is tracked as a follow-up. Enumerating them here
+  // makes it explicit and fails the moment a NEW off-mutex mutator appears.
   const knownExceptions = new Set(['ops-env-patch.yml', 'ops-fix-ingestor-api-key.yml']);
 
+  const mutators: string[] = [];
   const offMutex: string[] = [];
   for (const name of fs.readdirSync(dir).filter((f) => f.endsWith('.yml'))) {
     const text = fs.readFileSync(path.join(dir, name), 'utf8');
-    if (!text.includes('.env.production')) continue;
-    // Mutation, not inspection: an in-place edit or a redirect into the file.
-    const mutates = /sed -i[^\n]*\.env\.production/.test(text) || />>?\s*'?[^'\n]*\.env\.production/.test(text);
-    if (!mutates) continue;
+    if (!mutatesEnvProduction(text)) continue;
+    mutators.push(name);
     const parsed = YAML.parse(text) as Workflow;
     const group = typeof parsed.concurrency === 'object' ? parsed.concurrency?.group : undefined;
     if (group !== 'production-deploy') offMutex.push(name);
   }
 
-  assert.deepStrictEqual(
-    offMutex.filter((n) => !knownExceptions.has(n)),
-    [],
-    'a workflow mutating .env.production is not on the production-deploy mutex',
+  // Guard against a vacuous pass: the containment workflow writes .env.production
+  // via "$ENV_FILE", so if the detector cannot see it, the whole check is inert
+  // and would silently approve anything.
+  assert.ok(
+    mutators.includes('ops-p0-containment.yml'),
+    'detector failed to classify the containment workflow as a mutator — this check would be vacuous',
   );
   assert.ok(
     !offMutex.includes('ops-p0-containment.yml'),
     'the containment workflow itself must be on the mutex',
+  );
+  assert.deepStrictEqual(
+    offMutex.filter((n) => !knownExceptions.has(n)),
+    [],
+    'a workflow mutating .env.production is not on the production-deploy mutex',
   );
 });
 
