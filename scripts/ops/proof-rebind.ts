@@ -133,6 +133,87 @@ export function sha256(content: string): string {
 }
 
 /**
+ * The ONLY non-SHA values a binding row may legitimately carry before the merge
+ * commit exists. Anything else in a SHA-valued row is malformed, not stale, and
+ * a rebind must never overwrite a value it cannot account for: silently
+ * replacing an unrecognised value is indistinguishable from destroying evidence.
+ */
+export const PRE_MERGE_PLACEHOLDERS = new Set(['pending merge', 'pending', 'tbd']);
+
+export type BindingValueKind = 'sha' | 'canonical' | 'placeholder' | 'foreign' | 'empty' | 'malformed';
+
+/** A canonical GitHub pull-request URL and nothing else — no trailing path, no host substitution. */
+const GITHUB_PR_URL = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
+
+export interface BindingValueVerdict {
+  kind: BindingValueKind;
+  /** Normalised 40-hex value; only set when `kind` is `sha`. */
+  sha?: string;
+  /** The raw value with surrounding whitespace and markdown ticks removed. */
+  bare: string;
+}
+
+/**
+ * Classifies an existing SHA-valued binding value (the top-level `MERGE_SHA:`
+ * line or a canonical row inside the binding section) BEFORE it is replaced.
+ * A value that is neither a 40-hex SHA nor a recognised pre-merge placeholder
+ * is refused rather than overwritten.
+ */
+export function classifyBindingValue(raw: string): BindingValueVerdict {
+  const bare = raw.trim().replace(/^`+|`+$/g, '').trim();
+  if (bare === '') return { kind: 'empty', bare };
+  if (/^[0-9a-fA-F]{40}$/.test(bare)) return { kind: 'sha', sha: bare.toLowerCase(), bare };
+  if (PRE_MERGE_PLACEHOLDERS.has(bare.toLowerCase())) return { kind: 'placeholder', bare };
+  return { kind: 'malformed', bare };
+}
+
+/**
+ * Classifies an existing `PR:` row value before it can be replaced. The row is
+ * writable, so a value that names a DIFFERENT pull request must refuse rather
+ * than be silently repointed: overwriting it would convert an inconsistent
+ * bundle into a plausible one that claims approval it never received.
+ */
+export function classifyPrRowValue(raw: string, canonicalPrUrl: string | null): BindingValueVerdict {
+  const bare = raw.trim().replace(/^`+|`+$/g, '').trim();
+  if (bare === '') return { kind: 'empty', bare };
+  if (PRE_MERGE_PLACEHOLDERS.has(bare.toLowerCase())) return { kind: 'placeholder', bare };
+  if (!GITHUB_PR_URL.test(bare)) return { kind: 'malformed', bare };
+  if (canonicalPrUrl !== null && bare !== canonicalPrUrl) return { kind: 'foreign', bare };
+  return { kind: 'canonical', bare };
+}
+
+/**
+ * Refuses when the edited document differs from the original on more lines than
+ * bindings were declared — a last-line defence against any future edit path that
+ * rewrites content it never declared.
+ *
+ * Exported as a pure function ON PURPOSE. The surgical text edit replaces exact
+ * value tokens and therefore cannot, by construction, trip this guard from the
+ * production path; asserting "the production path does not trip its own guard"
+ * is tautological and proves nothing. Exercising the guard directly against a
+ * real mutated document — an undeclared line rewritten, or a line deleted — is
+ * the only test that actually fails when the guard is weakened or removed.
+ */
+export function undeclaredLineChangeError(
+  relPath: string,
+  before: string,
+  after: string,
+  declaredChanges: number,
+): string | null {
+  const a = before.split('\n');
+  const b = after.split('\n');
+  const span = Math.max(a.length, b.length);
+  let changedLines = 0;
+  for (let i = 0; i < span; i += 1) {
+    if (a[i] !== b[i]) changedLines += 1;
+  }
+  if (changedLines > declaredChanges) {
+    return `${relPath}: refused — ${changedLines} lines would change but only ${declaredChanges} bindings were declared`;
+  }
+  return null;
+}
+
+/**
  * Evidence-bundle fields that may be rewritten, keyed by dotted path. Anything
  * absent from this map is never touched, so a future schema addition cannot be
  * silently rebound without an explicit code change and its own review.
@@ -162,6 +243,13 @@ export const EVIDENCE_ARRAY_BINDINGS = [
 
 export const MERGE_SHA_LINE = /^(MERGE_SHA:\s*)([0-9a-fA-F]{7,40}|pending merge.*)$/m;
 export const MERGE_SHA_BINDING_HEADING = '## Merge SHA Binding';
+
+/**
+ * The proof artifacts a rebind must ALWAYS consider. Both are canonical: a
+ * bundle missing either is malformed, and rebinding only the survivor is a
+ * partial rebind reported as a complete one.
+ */
+export const CANONICAL_PROOF_ARTIFACTS = ['evidence.json', 'verification.md'] as const;
 
 function getPath(obj: unknown, dotted: string): unknown {
   return dotted.split('.').reduce<unknown>((acc, key) => {
@@ -257,16 +345,26 @@ export function planEvidenceRebind(
     if (getPath(parsed, dotted) === undefined) {
       errors.push(`${relPath}: required binding field "${dotted}" is absent — refusing to rebind a malformed bundle`);
     }
-    // JSON.parse silently keeps the LAST of duplicated keys, so a document can
-    // parse cleanly while carrying two conflicting bindings while the surgical
-    // edit rewrites the first occurrence and leaves the stale one behind.
-    // Counted per OBJECT SCOPE — the same key name legitimately appears in
-    // different objects (e.g. test_run_logs entries also carry merge_sha).
-    const key = dotted.split('.').pop() as string;
+  }
+
+  // JSON.parse silently keeps the LAST of duplicated keys, so a document can
+  // parse cleanly while carrying two conflicting bindings while the surgical
+  // edit rewrites the FIRST occurrence and leaves the stale one behind. The scan
+  // therefore runs over the RAW TEXT, and covers EVERY writable binding key —
+  // required and optional alike. Restricting it to the required keys left the
+  // optional execution/evidence SHA fields able to carry a surviving duplicate.
+  // Counted per OBJECT SCOPE — the same key name legitimately appears in
+  // different objects (e.g. test_run_logs entries also carry merge_sha).
+  const writableBindingKeys = new Set<string>([
+    ...REQUIRED_EVIDENCE_FIELDS.map((dotted) => dotted.split('.').pop() as string),
+    ...Object.keys(EVIDENCE_BINDING_FIELDS).map((dotted) => dotted.split('.').pop() as string),
+    ...EVIDENCE_ARRAY_BINDINGS.map((binding) => binding.field),
+  ]);
+  for (const key of [...writableBindingKeys].sort()) {
     const duplicates = duplicateKeysInSameObject(content, key);
     if (duplicates > 1) {
       errors.push(
-        `${relPath}: required binding key "${key}" appears ${duplicates} times in the same object — ` +
+        `${relPath}: writable binding key "${key}" appears ${duplicates} times in the same object — ` +
           'ambiguous, refusing',
       );
     }
@@ -360,12 +458,8 @@ export function planEvidenceRebind(
   } catch (error) {
     errors.push(`${relPath}: refused — edit produced invalid JSON (${(error as Error).message})`);
   }
-  const changedLines = content.split('\n').filter((line, i) => line !== next.split('\n')[i]).length;
-  if (changedLines > changes.length) {
-    errors.push(
-      `${relPath}: refused — ${changedLines} lines would change but only ${changes.length} bindings were declared`,
-    );
-  }
+  const lineGuardError = undeclaredLineChangeError(relPath, content, next, changes.length);
+  if (lineGuardError !== null) errors.push(lineGuardError);
 
   return { next, changes, errors };
 }
@@ -397,6 +491,14 @@ export function planVerificationRebind(
   }
   const lines = content.split(/\r?\n/);
 
+  // The ORIGINAL top-level value, captured and validated BEFORE any rewrite.
+  // Reading it back out of `lines` after the rewrite (as this previously did)
+  // compares the section row against the value just written, so a bundle whose
+  // top-level line and section row carried the SAME stale SHA — the normal,
+  // valid rebind input — was refused as contradictory, while a section row that
+  // had already been bound past a stale top-level line passed silently.
+  let originalTopMergeSha: BindingValueVerdict | null = null;
+
   const mergeLineIndices = lines
     .map((line, i) => (/^MERGE_SHA:\s*/.test(line) ? i : -1))
     .filter((i) => i !== -1);
@@ -406,14 +508,23 @@ export function planVerificationRebind(
     errors.push(`${relPath}: ${mergeLineIndices.length} MERGE_SHA: lines — ambiguous, refusing`);
   } else {
     const index = mergeLineIndices[0];
-    const current = lines[index].replace(/^MERGE_SHA:\s*/, '').trim();
-    if (current !== shas.merge_sha) {
+    const current = lines[index].replace(/^MERGE_SHA:\s*/, '');
+    const verdict = classifyBindingValue(current);
+    originalTopMergeSha = verdict;
+    if (verdict.kind === 'empty') {
+      errors.push(`${relPath}: top-level MERGE_SHA: line has no value — malformed, refusing`);
+    } else if (verdict.kind === 'malformed') {
+      errors.push(
+        `${relPath}: top-level MERGE_SHA: value "${verdict.bare}" is neither a 40-character SHA nor a ` +
+          'recognised pre-merge placeholder — malformed, refusing',
+      );
+    } else if (verdict.bare !== shas.merge_sha) {
       lines[index] = `MERGE_SHA: ${shas.merge_sha}`;
       changes.push({
         file: relPath,
         locator: `line ${index + 1} (MERGE_SHA:)`,
         sha_class: 'merge_sha',
-        before: current || null,
+        before: verdict.bare,
         after: shas.merge_sha,
       });
     }
@@ -477,26 +588,58 @@ export function planVerificationRebind(
       const index = matches[0];
       const line = lines[index];
       const indent = (line.match(/^\s*/) ?? [''])[0];
-      const existing = line.replace(new RegExp(`^\\s*${row.label}:\\s*`), '').trim();
-      if (existing === '') {
+      const existing = line.replace(new RegExp(`^\\s*${row.label}:\\s*`), '');
+
+      // EVERY existing binding-row value is validated before it can be
+      // replaced. A row is only overwritten when its current contents are
+      // accounted for: a valid SHA (stale or already bound) or a recognised
+      // pre-merge placeholder for a SHA row, and the canonical validated PR URL
+      // or a placeholder for the PR row. A malformed nonempty value refuses —
+      // blindly overwriting it would erase an inconsistency instead of
+      // surfacing it.
+      const verdict = row.label === 'PR'
+        ? classifyPrRowValue(existing, prUrl)
+        : classifyBindingValue(existing);
+      if (verdict.kind === 'empty') {
         errors.push(`${relPath}: binding section row "${row.label}:" has no value — malformed, refusing`);
         continue;
       }
-      if (row.value === null) continue;
+      if (verdict.kind === 'malformed') {
+        errors.push(
+          row.label === 'PR'
+            ? `${relPath}: binding section row "PR:" value "${verdict.bare}" is neither a canonical ` +
+              'GitHub pull-request URL nor a recognised pre-merge placeholder — malformed, refusing'
+            : `${relPath}: binding section row "${row.label}:" value "${verdict.bare}" is neither a ` +
+              '40-character SHA nor a recognised pre-merge placeholder — malformed, refusing',
+        );
+        continue;
+      }
+      if (verdict.kind === 'foreign') {
+        errors.push(
+          `${relPath}: binding section row "PR:" (${verdict.bare}) names a different pull request than ` +
+            `the validated one (${prUrl}) — refusing`,
+        );
+        continue;
+      }
 
       // Contradiction: a row already carrying a DIFFERENT concrete SHA than the
-      // top-level MERGE_SHA line is an inconsistent bundle, not a stale one.
-      if (row.label === 'Merge SHA' && mergeLineIndices.length === 1) {
-        const bare = existing.replace(/[`\s]/g, '');
-        const top = lines[mergeLineIndices[0]].replace(/^MERGE_SHA:\s*/, '').trim();
-        if (/^[0-9a-f]{40}$/.test(bare) && /^[0-9a-f]{40}$/.test(top) && bare !== top) {
-          errors.push(
-            `${relPath}: binding section "Merge SHA:" (${bare}) contradicts the top-level ` +
-              `MERGE_SHA: (${top}) — refusing`,
-          );
-          continue;
-        }
+      // ORIGINAL top-level MERGE_SHA line is an inconsistent bundle, not a stale
+      // one. Matching stale values are valid rebind input and must pass.
+      if (
+        row.label === 'Merge SHA' &&
+        verdict.kind === 'sha' &&
+        originalTopMergeSha !== null &&
+        originalTopMergeSha.kind === 'sha' &&
+        verdict.sha !== originalTopMergeSha.sha
+      ) {
+        errors.push(
+          `${relPath}: binding section "Merge SHA:" (${verdict.sha}) contradicts the top-level ` +
+            `MERGE_SHA: (${originalTopMergeSha.sha}) — refusing`,
+        );
+        continue;
       }
+
+      if (row.value === null) continue;
 
       const replacement = `${indent}${row.label}: ${row.value}`;
       if (line !== replacement) {
@@ -509,7 +652,7 @@ export function planVerificationRebind(
             : row.label === 'Execution SHA'
               ? 'execution_sha'
               : 'merge_sha',
-          before: existing,
+          before: verdict.bare,
           after: row.value,
         });
       }
@@ -655,29 +798,57 @@ export interface RebindDeps {
  * a fully-written, fsynced replacement exists, and the swap is atomic within
  * the filesystem.
  */
-function atomicWrite(target: string, content: string): void {
+export interface AtomicWriteOps {
+  openSync: (target: string, flags: string) => number;
+  writeFileSync: (fd: number, data: string, encoding: BufferEncoding) => void;
+  fsyncSync: (fd: number) => void;
+  closeSync: (fd: number) => void;
+  renameSync: (from: string, to: string) => void;
+  unlinkSync: (target: string) => void;
+}
+
+const nodeAtomicWriteOps: AtomicWriteOps = {
+  openSync: (target, flags) => fs.openSync(target, flags),
+  writeFileSync: (fd, data, encoding) => fs.writeFileSync(fd, data, encoding),
+  fsyncSync: (fd) => fs.fsyncSync(fd),
+  closeSync: (fd) => fs.closeSync(fd),
+  renameSync: (from, to) => fs.renameSync(from, to),
+  unlinkSync: (target) => fs.unlinkSync(target),
+};
+
+export function atomicWrite(target: string, content: string, ops: AtomicWriteOps = nodeAtomicWriteOps): void {
   const dir = path.dirname(target);
   const temp = path.join(dir, `.${path.basename(target)}.rebind-${process.pid}.tmp`);
-  const handle = fs.openSync(temp, 'w');
+  const handle = ops.openSync(temp, 'w');
   try {
-    fs.writeFileSync(handle, content, 'utf8');
-    fs.fsyncSync(handle);
+    ops.writeFileSync(handle, content, 'utf8');
+    ops.fsyncSync(handle);
   } finally {
-    fs.closeSync(handle);
+    ops.closeSync(handle);
   }
   try {
-    fs.renameSync(temp, target);
+    ops.renameSync(temp, target);
   } catch (error) {
-    try { fs.unlinkSync(temp); } catch { /* best effort */ }
+    try { ops.unlinkSync(temp); } catch { /* best effort */ }
     throw error;
   }
   // Durability of the rename itself lives in the containing directory's own
   // metadata. Without this fsync the replacement can be complete on disk while
   // the directory entry still points at the old inode after a host crash.
+  //
+  // A failure to open or fsync the directory is PROPAGATED, never swallowed.
+  // Swallowing it meant the run could report `proof_rebind_applied` — a receipt
+  // asserting a durable rebind — over a rename whose durability was never
+  // proven. Propagating drops the run into the rollback path instead, which
+  // restores the original bytes and reports the failure. The rename has already
+  // taken effect in the page cache, so restoring is still meaningful; what is
+  // withheld is only the unearned success claim.
+  const dirHandle = ops.openSync(dir, 'r');
   try {
-    const dirHandle = fs.openSync(dir, 'r');
-    try { fs.fsyncSync(dirHandle); } finally { fs.closeSync(dirHandle); }
-  } catch { /* some filesystems disallow directory fsync; the rename still applied */ }
+    ops.fsyncSync(dirHandle);
+  } finally {
+    ops.closeSync(dirHandle);
+  }
 }
 
 const defaultDeps: RebindDeps = {
@@ -784,23 +955,26 @@ export function rebindProofBundle(
     }
   } catch (error) {
     const candidates = [...written, ...(failing ? [failing] : [])];
-    const restored: string[] = [];
     for (const entry of candidates) {
       try {
         if (sha256(deps.readFile(entry.abs)) !== sha256(entry.before)) {
           deps.writeFile(entry.abs, entry.before);
         }
-        restored.push(entry.rel);
-      } catch { /* verified below by checksum, not by whether restore threw */ }
+      } catch { /* the outcome is decided by the checksum pass below, not by whether restore threw */ }
     }
-    // possibly_corrupted is derived from a FINAL checksum verification of every
-    // touched file, not from whether the restore call threw. A restore that
-    // returns without error but leaves different bytes must still be reported.
-    const unrecovered = candidates
-      .filter((entry) => {
-        try { return sha256(deps.readFile(entry.abs)) !== sha256(entry.before); } catch { return true; }
-      })
-      .map((entry) => entry.rel);
+    // BOTH sets are derived from one FINAL checksum verification of every
+    // touched file — never from whether a restore call threw. Deriving
+    // restored_files from a non-throwing restore reported a file as restored
+    // while the same file appeared in possibly_corrupted, so a single receipt
+    // asserted both recovery and corruption. Partitioning one verification pass
+    // makes the two sets mutually exclusive and exhaustive by construction.
+    const restored: string[] = [];
+    const unrecovered: string[] = [];
+    for (const entry of candidates) {
+      let matches = false;
+      try { matches = sha256(deps.readFile(entry.abs)) === sha256(entry.before); } catch { matches = false; }
+      (matches ? restored : unrecovered).push(entry.rel);
+    }
     const checksumsMatch = unrecovered.length === 0;
     return {
       ...base,
@@ -858,9 +1032,12 @@ async function main(): Promise<void> {
   }
 
   const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId);
-  const files = ['evidence.json', 'verification.md']
-    .map((name) => path.posix.join(proofRoot, name))
-    .filter((rel) => fs.existsSync(path.join(ROOT, rel)));
+  // BOTH canonical artifacts are always requested. Filtering the list down to
+  // the files that happen to exist meant a bundle missing evidence.json or
+  // verification.md was rebound "successfully" on whatever survived — a partial
+  // rebind reported as a complete one. `rebindProofBundle` refuses on a missing
+  // artifact, and that refusal happens before any byte is written.
+  const files = CANONICAL_PROOF_ARTIFACTS.map((name) => path.posix.join(proofRoot, name));
 
   const shas: ShaSet = { merge_sha: mergeSha, approved_head_sha: approvedHead, execution_sha: executionSha };
 

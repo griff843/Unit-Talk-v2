@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
+  atomicWrite,
+  CANONICAL_PROOF_ARTIFACTS,
   EVIDENCE_BINDING_FIELDS,
   validatePrIdentity,
   deriveCanonicalPrUrl,
@@ -14,7 +16,9 @@ import {
   planVerificationRebind,
   rebindProofBundle,
   sha256,
+  undeclaredLineChangeError,
   validateShaSet,
+  type AtomicWriteOps,
   type RebindDeps,
   type ShaSet,
 } from './proof-rebind.js';
@@ -23,6 +27,12 @@ const MERGE = '2822b709c74c43dc24a50dc6df35597e1a0463fe';
 const HEAD = 'e0464b519206ca63f707002ea91d91136750d797';
 const EXEC = '6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb';
 const SHAS: ShaSet = { merge_sha: MERGE, approved_head_sha: HEAD, execution_sha: EXEC };
+
+// The PR row is only ever bound to the canonical URL derived from the validated
+// PR record, so the fixtures use canonical URLs — an abbreviated stand-in is now
+// itself a refusal case (see the malformed/foreign PR-row tests below).
+const PR_URL = 'https://github.com/griff843/Unit-Talk-v2/pull/1';
+const PR_URL_1311 = 'https://github.com/griff843/Unit-Talk-v2/pull/1311';
 
 /**
  * A verification.md carrying real captured evidence — TAP output, a live-DB
@@ -132,7 +142,7 @@ test('UTV2-1592 REGRESSION: rebinding never templates over captured evidence', (
   // The destructive path replaced verification.md with buildRuntimeVerification()
   // output, destroying the TAP block, the live-DB receipt and reviewer findings.
   // Rebinding must touch only the two binding regions.
-  const { next, changes } = planVerificationRebind('verification.md', RICH_VERIFICATION, SHAS, 'https://x/pull/1311');
+  const { next, changes } = planVerificationRebind('verification.md', RICH_VERIFICATION, SHAS, PR_URL_1311);
 
   for (const preserved of [
     '# PROOF: UTV2-1592',
@@ -175,7 +185,7 @@ test('preview writes nothing and enumerates every field and file that would chan
     {
       issueId: 'UTV2-1592',
       shas: SHAS,
-      prUrl: 'https://x/pull/1311',
+      prUrl: PR_URL_1311,
       root: '/r',
       files: ['docs/06_status/proof/UTV2-1592/evidence.json', 'docs/06_status/proof/UTV2-1592/verification.md'],
     },
@@ -392,11 +402,47 @@ test('BYTE-FIDELITY: escape sequences outside the binding fields are preserved e
   assert.strictEqual(Buffer.byteLength(next) - Buffer.byteLength(withEscapes), expectedDelta);
 });
 
-test('refuses if more lines would change than bindings were declared', () => {
-  // Guards against any future edit path that rewrites unrelated content.
-  const doc = '{\n  "sha_binding": {\n    "merge_sha": null,\n    "current_pr_head_sha": null\n  }\n}\n';
-  const { errors } = planEvidenceRebind('e.json', doc, SHAS);
-  assert.deepStrictEqual(errors, [], 'the surgical path must not trip its own guard');
+test('the changed-line guard refuses a real mutation that touches an undeclared line', () => {
+  // This replaces a tautological predecessor which only asserted that the
+  // production path does not trip its own guard — true by construction, and
+  // equally true with the guard deleted. The guard is a pure function precisely
+  // so it can be driven with a genuinely mutated document.
+  const before = '{\n  "sha_binding": {\n    "merge_sha": null\n  },\n  "note": "captured narrative"\n}\n';
+  const declaredOnly = before.replace('"merge_sha": null', `"merge_sha": "${MERGE}"`);
+
+  // The surgical, correct edit: one declared binding, one changed line.
+  assert.strictEqual(undeclaredLineChangeError('e.json', before, declaredOnly, 1), null);
+
+  // MUTATION 1 — the declared binding is rewritten AND an undeclared narrative
+  // line is rewritten alongside it. Two lines change; one binding was declared.
+  const alsoRewritesNarrative = declaredOnly.replace('"captured narrative"', '"silently replaced"');
+  assert.match(
+    undeclaredLineChangeError('e.json', before, alsoRewritesNarrative, 1) ?? '',
+    /2 lines would change but only 1 bindings were declared/,
+    'a rewritten undeclared line must be refused',
+  );
+
+  // MUTATION 2 — a line is DELETED. Every subsequent line shifts up, so the
+  // guard must compare across the longer of the two documents; comparing only
+  // over the original's indices let a tail deletion go uncounted.
+  const deletesNarrative = declaredOnly.replace('  "note": "captured narrative"\n', '');
+  const deletionError = undeclaredLineChangeError('e.json', before, deletesNarrative, 1);
+  assert.ok(deletionError !== null, 'a deleted line must be refused');
+  assert.match(deletionError, /lines would change but only 1 bindings were declared/);
+
+  // MUTATION 3 — a line is APPENDED past the end of the original document.
+  const appends = `${declaredOnly}injected trailing line\n`;
+  assert.ok(
+    undeclaredLineChangeError('e.json', before, appends, 1) !== null,
+    'an appended line must be refused',
+  );
+
+  // The guard is wired into the planner, not merely exported: deleting it from
+  // planEvidenceRebind leaves this import unused and the refusal unreachable.
+  assert.deepStrictEqual(
+    planEvidenceRebind('e.json', '{\n  "sha_binding": {\n    "merge_sha": null,\n    "current_pr_head_sha": null\n  }\n}\n', SHAS).errors,
+    [],
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -404,7 +450,7 @@ test('refuses if more lines would change than bindings were declared', () => {
 // is reverted; every refusal must also write zero bytes.
 // ---------------------------------------------------------------------------
 
-const SECTION = '\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: https://x/pull/1\n';
+const SECTION = '\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: https://github.com/griff843/Unit-Talk-v2/pull/1\n';
 
 function md(body: string): string {
   return `# PROOF: X\nMERGE_SHA: 0000000000000000000000000000000000000000\n\n## Summary\n\n${body}`;
@@ -427,26 +473,26 @@ test('each canonical row is its own writable region; every other byte survives',
   const section = (body) => md('body\n') + '\n## Merge SHA Binding\n' + body;
 
   // Required rows missing -> refuse. Optional rows are never invented.
-  const noMerge = planVerificationRebind('v.md', section('\nPR: https://x/pull/1\n'), SHAS, 'https://x/pull/1').errors;
+  const noMerge = planVerificationRebind('v.md', section('\nPR: https://github.com/griff843/Unit-Talk-v2/pull/1\n'), SHAS, PR_URL).errors;
   assert.ok(noMerge.some((e) => /missing its required "Merge SHA:" row/.test(e)));
-  const noPr = planVerificationRebind('v.md', section('\nMerge SHA: pending merge\n'), SHAS, 'https://x/pull/1').errors;
+  const noPr = planVerificationRebind('v.md', section('\nMerge SHA: pending merge\n'), SHAS, PR_URL).errors;
   assert.ok(noPr.some((e) => /missing its required "PR:" row/.test(e)));
 
   // Duplicate row -> refuse.
   const dup = planVerificationRebind(
-    'v.md', section('\nMerge SHA: a\nMerge SHA: b\nPR: https://x/pull/1\n'), SHAS, 'https://x/pull/1').errors;
+    'v.md', section('\nMerge SHA: a\nMerge SHA: b\nPR: https://github.com/griff843/Unit-Talk-v2/pull/1\n'), SHAS, PR_URL).errors;
   assert.ok(dup.some((e) => /has 2 "Merge SHA:" rows — duplicate/.test(e)));
 
   // Malformed (valueless) row -> refuse.
   const empty = planVerificationRebind(
-    'v.md', section('\nMerge SHA:\nPR: https://x/pull/1\n'), SHAS, 'https://x/pull/1').errors;
+    'v.md', section('\nMerge SHA:\nPR: https://github.com/griff843/Unit-Talk-v2/pull/1\n'), SHAS, PR_URL).errors;
   assert.ok(empty.some((e) => /has no value — malformed/.test(e)));
 
   // Contradictory concrete SHAs between the row and the top-level line -> refuse.
   const contradictory =
     '# P\nMERGE_SHA: ' + 'a'.repeat(40) + '\n\n## Merge SHA Binding\n\nMerge SHA: ' + 'b'.repeat(40) +
-    '\nPR: https://x/pull/1\n';
-  const contra = planVerificationRebind('v.md', contradictory, SHAS, 'https://x/pull/1').errors;
+    '\nPR: https://github.com/griff843/Unit-Talk-v2/pull/1\n';
+  const contra = planVerificationRebind('v.md', contradictory, SHAS, PR_URL).errors;
   assert.ok(contra.some((e) => /contradicts the top-level MERGE_SHA:/.test(e)));
 });
 
@@ -455,14 +501,14 @@ test('NARRATIVE PRESERVATION: additional lines in the section survive byte-for-b
     md('body\n') +
     '\n## Merge SHA Binding\n' +
     '\nMerge SHA: pending merge\n' +
-    'PR: https://x/pull/1\n' +
+    'PR: https://github.com/griff843/Unit-Talk-v2/pull/1\n' +
     '\n' +
     'This section is the machine-rebindable anchor `ops:proof-generate` rewrites\n' +
     '   at closeout. Indented continuation line with  double  spaces.\n' +
     '\n' +
     'Operator note: do not lose this.\n';
 
-  const { next, changes, errors } = planVerificationRebind('v.md', doc, SHAS, 'https://x/pull/1');
+  const { next, changes, errors } = planVerificationRebind('v.md', doc, SHAS, PR_URL);
   assert.deepStrictEqual(errors, [], 'narrative must be preserved, not refused');
 
   // Exactly two writable regions changed: the top-level line and the section's
@@ -493,12 +539,12 @@ test('NARRATIVE PRESERVATION: additional lines in the section survive byte-for-b
 
 test('NARRATIVE PRESERVATION holds under CRLF and without a trailing newline', () => {
   const base =
-    md('body\n') + '\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: https://x/pull/1\n' +
+    md('body\n') + '\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: https://github.com/griff843/Unit-Talk-v2/pull/1\n' +
     '\nKeep this narrative.\n';
   const crlf = base.replace(/\n/g, '\r\n').replace(/\r\n$/, '');
   assert.ok(!crlf.endsWith('\n'));
 
-  const { next, errors } = planVerificationRebind('v.md', crlf, SHAS, 'https://x/pull/1');
+  const { next, errors } = planVerificationRebind('v.md', crlf, SHAS, PR_URL);
   assert.deepStrictEqual(errors, []);
   assert.ok(next.includes('Keep this narrative.'), 'narrative must survive');
   assert.ok(!/(^|[^\r])\n/.test(next), 'CRLF convention preserved');
@@ -701,17 +747,134 @@ test('possibly_corrupted is derived from final checksums, not from whether resto
   assert.strictEqual(sha256(store['/r/e.json']), sha256(EVIDENCE));
 });
 
-test('the rename is durably committed by fsyncing the containing directory', () => {
-  // Without this the replacement can be complete on disk while the directory
-  // entry still points at the old inode after a host crash.
-  const source = fs.readFileSync(path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts'), 'utf8');
-  const atomic = source.slice(source.indexOf('function atomicWrite'), source.indexOf('const defaultDeps'));
-  const renameIndex = atomic.indexOf('fs.renameSync');
-  const dirOpen = atomic.indexOf('fs.openSync(dir');
-  assert.ok(renameIndex >= 0, 'the write must go through rename');
-  assert.ok(dirOpen > renameIndex, 'the containing directory must be fsynced AFTER the rename');
-  assert.match(atomic.slice(dirOpen), /fs\.fsyncSync\(dirHandle\)/);
-  assert.match(atomic, /fs\.fsyncSync\(handle\)/, 'the file itself must be fsynced before rename');
+/**
+ * A real-filesystem `AtomicWriteOps` with a single injected fault. Everything
+ * else goes through node's fs, so the ordering under test is the production
+ * ordering, not a re-implementation of it.
+ */
+function faultyOps(fault: { on: 'dir-open' | 'dir-fsync' }): { ops: AtomicWriteOps; calls: string[] } {
+  const calls: string[] = [];
+  const dirHandles = new Set<number>();
+  return {
+    calls,
+    ops: {
+      openSync: (target, flags) => {
+        // The temp file does not exist yet when it is opened with 'w'.
+        const isDir = fs.existsSync(target) && fs.statSync(target).isDirectory();
+        if (isDir) {
+          calls.push('dir-open');
+          if (fault.on === 'dir-open') throw new Error('simulated directory open failure');
+        }
+        const fd = fs.openSync(target, flags);
+        if (isDir) dirHandles.add(fd);
+        return fd;
+      },
+      writeFileSync: (fd, data, encoding) => { calls.push('write'); fs.writeFileSync(fd, data, encoding); },
+      fsyncSync: (fd) => {
+        const isDir = dirHandles.has(fd);
+        calls.push(isDir ? 'dir-fsync' : 'file-fsync');
+        if (isDir && fault.on === 'dir-fsync') throw new Error('simulated directory fsync failure');
+        fs.fsyncSync(fd);
+      },
+      closeSync: (fd) => { calls.push(dirHandles.has(fd) ? 'dir-close' : 'file-close'); fs.closeSync(fd); },
+      renameSync: (from, to) => { calls.push('rename'); fs.renameSync(from, to); },
+      unlinkSync: (target) => { calls.push('unlink'); fs.unlinkSync(target); },
+    },
+  };
+}
+
+test('a parent-directory open or fsync failure is PROPAGATED, never swallowed', () => {
+  // Without the directory fsync the replacement can be complete on disk while
+  // the directory entry still points at the old inode after a host crash.
+  // Swallowing its failure produced a durability claim that was never earned.
+  for (const on of ['dir-open', 'dir-fsync'] as const) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), `proof-rebind-fsync-${on}-`));
+    const target = path.join(dir, 'evidence.json');
+    fs.writeFileSync(target, EVIDENCE);
+    const { ops, calls } = faultyOps({ on });
+
+    assert.throws(
+      () => atomicWrite(target, 'rebound', ops),
+      new RegExp(`simulated directory ${on === 'dir-open' ? 'open' : 'fsync'} failure`),
+      `${on}: the failure must propagate out of atomicWrite`,
+    );
+
+    // Ordering is the production ordering: the file is fsynced, then renamed,
+    // and only then is the containing directory fsynced.
+    assert.ok(calls.indexOf('file-fsync') < calls.indexOf('rename'), `${on}: file fsync must precede the rename`);
+    assert.ok(calls.indexOf('rename') < calls.indexOf('dir-open'), `${on}: the directory is fsynced AFTER the rename`);
+    // No temp file is left behind for a caller to mistake for the artifact.
+    assert.deepStrictEqual(
+      fs.readdirSync(dir).filter((n) => n.includes('.rebind-')),
+      [],
+      `${on}: no temp file may survive`,
+    );
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a durability failure can never be reported as proof_rebind_applied', () => {
+  // Mirrors what atomicWrite now does when the directory fsync fails: the bytes
+  // land (rename already took effect) and the call then throws. The run must
+  // roll back and report the failure, never emit an applied receipt.
+  const files = { '/r/e.json': EVIDENCE, '/r/v.md': RICH_VERIFICATION };
+  const originals = Object.fromEntries(Object.entries(files).map(([k, v]) => [k, sha256(v)]));
+  const store: Record<string, string> = { ...files };
+  let durabilityFailed = false;
+  const deps: RebindDeps = {
+    exists: (p) => p in store,
+    readFile: (p) => store[p],
+    writeFile: (p, c) => {
+      store[p] = c;
+      if (!durabilityFailed && p === '/r/e.json' && c !== EVIDENCE) {
+        durabilityFailed = true;
+        throw new Error('simulated directory fsync failure');
+      }
+    },
+  };
+
+  const result = rebindProofBundle(
+    { issueId: 'X', shas: SHAS, prUrl: null, root: '/r', files: ['e.json', 'v.md'] },
+    { write: true },
+    deps,
+  );
+
+  assert.notStrictEqual(result.code, 'proof_rebind_applied', 'durability was not proven — applied is a false receipt');
+  assert.strictEqual(result.code, 'proof_rebind_rolled_back');
+  assert.ok(result.errors.some((e) => /simulated directory fsync failure/.test(e)));
+  assert.strictEqual(result.rollback?.checksums_match, true);
+  for (const [file, digest] of Object.entries(originals)) {
+    assert.strictEqual(sha256(store[file]), digest, `${file} must be restored byte-for-byte`);
+  }
+});
+
+test('restored_files and possibly_corrupted are disjoint and both come from the final checksum pass', () => {
+  const files = { '/r/e.json': EVIDENCE, '/r/v.md': RICH_VERIFICATION };
+  const store: Record<string, string> = { ...files };
+  const deps: RebindDeps = {
+    exists: (p) => p in store,
+    readFile: (p) => store[p],
+    // v.md's restore returns cleanly but leaves the wrong bytes.
+    writeFile: (p, c) => { store[p] = p === '/r/v.md' && c === RICH_VERIFICATION ? 'STILL CORRUPT' : c; },
+  };
+
+  const result = rebindProofBundle(
+    { issueId: 'X', shas: SHAS, prUrl: null, root: '/r', files: ['e.json', 'v.md'] },
+    { write: true, simulateWriteFailureFor: 'v.md', simulatePartialWrite: true },
+    deps,
+  );
+
+  const restored = result.rollback?.restored_files ?? [];
+  const corrupted = result.rollback?.possibly_corrupted ?? [];
+  assert.deepStrictEqual(restored, ['e.json'], 'only the file that verified clean may be reported restored');
+  assert.deepStrictEqual(corrupted, ['v.md']);
+  assert.deepStrictEqual(
+    restored.filter((f) => corrupted.includes(f)),
+    [],
+    'a file must never be reported both restored and possibly corrupted',
+  );
+  // Exhaustive: every touched file lands in exactly one of the two sets.
+  assert.deepStrictEqual([...restored, ...corrupted].sort(), ['e.json', 'v.md']);
 });
 
 test('the recovery guidance is present as a section, not merely mentioned', () => {
@@ -740,5 +903,301 @@ test('the byte-for-byte guard masks individual rows, never the whole section bod
     mask,
     /splice\(hi \+ 1, end - \(hi \+ 1\)/,
     'the mask must not replace the whole section body — narrative would stop being compared',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Findings from the exact-head review of da298435.
+// ---------------------------------------------------------------------------
+
+test('P1: the ORIGINAL top-level MERGE_SHA is captured before any rewrite', () => {
+  // The section row was previously compared against the top-level line AFTER
+  // that line had already been rewritten, so the comparison was against the
+  // value being written rather than the value the bundle carried.
+
+  // (a) MATCHING STALE values are valid rebind input. Both carry the same stale
+  //     SHA; both must rebind. Reading the top-level line back after its rewrite
+  //     made this look contradictory and refused a correct bundle.
+  const stale = 'a'.repeat(40);
+  const matching =
+    `# P\nMERGE_SHA: ${stale}\n\n## Merge SHA Binding\n\nMerge SHA: ${stale}\nPR: ${PR_URL}\n`;
+  const okResult = planVerificationRebind('v.md', matching, SHAS, PR_URL);
+  assert.deepStrictEqual(okResult.errors, [], 'matching stale values are valid rebind input');
+  assert.deepStrictEqual(okResult.changes.map((c) => c.before), [stale, stale]);
+  assert.deepStrictEqual(okResult.changes.map((c) => c.after), [MERGE, MERGE]);
+  assert.match(okResult.next, new RegExp(`^MERGE_SHA: ${MERGE}$`, 'm'));
+  assert.match(okResult.next, new RegExp(`^Merge SHA: ${MERGE}$`, 'm'));
+
+  // (b) CONTRADICTORY concrete values refuse.
+  const contradictory =
+    `# P\nMERGE_SHA: ${'a'.repeat(40)}\n\n## Merge SHA Binding\n\nMerge SHA: ${'b'.repeat(40)}\nPR: ${PR_URL}\n`;
+  const contra = planVerificationRebind('v.md', contradictory, SHAS, PR_URL);
+  assert.ok(
+    contra.errors.some((e) => new RegExp(`\\(${'b'.repeat(40)}\\) contradicts the top-level MERGE_SHA: \\(${'a'.repeat(40)}\\)`).test(e)),
+    `expected a contradiction naming BOTH original values, got: ${contra.errors.join('|')}`,
+  );
+
+  // (c) A section row ALREADY bound past a stale top-level line is still a
+  //     contradiction — it must not be masked by rewriting the top line first.
+  const preBound =
+    `# P\nMERGE_SHA: ${'a'.repeat(40)}\n\n## Merge SHA Binding\n\nMerge SHA: ${MERGE}\nPR: ${PR_URL}\n`;
+  assert.ok(
+    planVerificationRebind('v.md', preBound, SHAS, PR_URL).errors.some((e) => /contradicts the top-level/.test(e)),
+    'a section row bound ahead of the top-level line must refuse',
+  );
+});
+
+test('P1: a valueless or malformed top-level MERGE_SHA refuses', () => {
+  const section = `\n## Merge SHA Binding\n\nMerge SHA: pending merge\nPR: ${PR_URL}\n`;
+
+  const empty = planVerificationRebind('v.md', `# P\nMERGE_SHA:\n${section}`, SHAS, PR_URL);
+  assert.ok(empty.errors.some((e) => /top-level MERGE_SHA: line has no value/.test(e)));
+  assert.deepStrictEqual(empty.changes.filter((c) => c.locator.includes('MERGE_SHA:')), [], 'nothing may be planned');
+
+  const whitespace = planVerificationRebind('v.md', `# P\nMERGE_SHA:    \n${section}`, SHAS, PR_URL);
+  assert.ok(whitespace.errors.some((e) => /top-level MERGE_SHA: line has no value/.test(e)));
+
+  for (const bad of ['not-a-sha', '6718c0de', 'TBD tomorrow', 'see PR #1313']) {
+    const result = planVerificationRebind('v.md', `# P\nMERGE_SHA: ${bad}\n${section}`, SHAS, PR_URL);
+    assert.ok(
+      result.errors.some((e) => /top-level MERGE_SHA: value .* is neither a 40-character SHA nor a recognised pre-merge placeholder/.test(e)),
+      `"${bad}" must be refused as malformed, got: ${result.errors.join('|')}`,
+    );
+  }
+
+  // A recognised pre-merge placeholder is the normal state and must NOT refuse.
+  for (const placeholder of ['pending merge', 'pending', 'TBD']) {
+    const result = planVerificationRebind('v.md', `# P\nMERGE_SHA: ${placeholder}\n${section}`, SHAS, PR_URL);
+    assert.deepStrictEqual(result.errors, [], `"${placeholder}" is a valid pre-merge value`);
+  }
+});
+
+test('P1: every existing binding-row value is validated before it can be replaced', () => {
+  const doc = (rows: string) => `# P\nMERGE_SHA: ${'a'.repeat(40)}\n\n## Merge SHA Binding\n\n${rows}`;
+
+  // SHA rows: a malformed nonempty value refuses rather than being overwritten.
+  for (const label of ['Merge SHA', 'Approved PR head', 'Execution SHA']) {
+    const rows = ['Merge SHA: pending merge', `PR: ${PR_URL}`]
+      .filter((r) => !r.startsWith(`${label}:`))
+      .concat(`${label}: 6718c0de`)
+      .join('\n') + '\n';
+    const result = planVerificationRebind('v.md', doc(rows), SHAS, PR_URL);
+    assert.ok(
+      result.errors.some((e) => new RegExp(`row "${label}:" value "6718c0de" is neither a 40-character SHA`).test(e)),
+      `${label}: an abbreviated SHA must be refused, got: ${result.errors.join('|')}`,
+    );
+  }
+
+  // A well-formed SHA and a recognised placeholder are both accepted.
+  const accepted = planVerificationRebind(
+    'v.md',
+    doc(`Merge SHA: ${'a'.repeat(40)}\nPR: ${PR_URL}\nApproved PR head: pending\nExecution SHA: ${EXEC}\n`),
+    SHAS,
+    PR_URL,
+  );
+  assert.deepStrictEqual(accepted.errors, []);
+
+  // PR row: a value that is not a canonical GitHub pull-request URL refuses.
+  for (const bad of ['https://x/pull/1', 'github.com/o/r/pull/1', `${PR_URL}/files`, 'see the PR']) {
+    const result = planVerificationRebind('v.md', doc(`Merge SHA: pending merge\nPR: ${bad}\n`), SHAS, PR_URL);
+    assert.ok(
+      result.errors.some((e) => /row "PR:" value .* is neither a canonical GitHub pull-request URL/.test(e)),
+      `"${bad}" must be refused as malformed, got: ${result.errors.join('|')}`,
+    );
+  }
+
+  // PR row: a canonical URL naming a DIFFERENT pull request refuses rather than
+  // being silently repointed at the validated one.
+  const foreign = planVerificationRebind(
+    'v.md',
+    doc(`Merge SHA: pending merge\nPR: https://github.com/griff843/Unit-Talk-v2/pull/9999\n`),
+    SHAS,
+    PR_URL,
+  );
+  assert.ok(
+    foreign.errors.some((e) => /names a different pull request than the validated one/.test(e)),
+    `expected a foreign-PR refusal, got: ${foreign.errors.join('|')}`,
+  );
+
+  // Every one of these refusals plans zero changes.
+  for (const bad of [
+    doc(`Merge SHA: 6718c0de\nPR: ${PR_URL}\n`),
+    doc(`Merge SHA: pending merge\nPR: https://github.com/griff843/Unit-Talk-v2/pull/9999\n`),
+  ]) {
+    const { deps, store } = memoryDeps({ '/r/v.md': bad });
+    const snapshot = { ...store };
+    const result = rebindProofBundle(
+      { issueId: 'X', shas: SHAS, prUrl: PR_URL, root: '/r', files: ['v.md'] },
+      { write: true },
+      deps,
+    );
+    assert.strictEqual(result.code, 'proof_rebind_refused');
+    assert.deepStrictEqual(store, snapshot, 'a refusal wrote bytes');
+  }
+});
+
+test('P1: duplicate raw keys are detected for EVERY writable JSON binding, optional included', () => {
+  // Restricted to the required fields, the scan left the optional execution and
+  // evidence SHA keys able to carry a duplicate that JSON.parse hides: the
+  // surgical edit rewrites the first occurrence, the stale second one survives,
+  // and the receipt claims a clean rebind.
+  const optionalKeys = ['verified_source_sha', 'evidence_commit_sha'];
+  for (const key of optionalKeys) {
+    assert.ok(
+      Object.keys(EVIDENCE_BINDING_FIELDS).includes(`sha_binding.${key}`),
+      `${key} must be a declared writable binding`,
+    );
+    assert.ok(
+      !REQUIRED_EVIDENCE_FIELDS.includes(`sha_binding.${key}` as (typeof REQUIRED_EVIDENCE_FIELDS)[number]),
+      `${key} must be OPTIONAL — that is what made the gap reachable`,
+    );
+    const doc =
+      '{\n  "sha_binding": {\n    "merge_sha": null,\n    "current_pr_head_sha": null,\n' +
+      `    "${key}": "${'1'.repeat(40)}",\n    "${key}": "${'2'.repeat(40)}"\n  }\n}\n`;
+    assert.strictEqual(duplicateKeysInSameObject(doc, key), 2);
+    const { errors } = planEvidenceRebind('e.json', doc, SHAS);
+    assert.ok(
+      errors.some((e) => new RegExp(`writable binding key "${key}" appears 2 times in the same object`).test(e)),
+      `${key}: a duplicate must refuse, got: ${errors.join('|')}`,
+    );
+  }
+
+  // The array binding's key is covered too, still scoped per object so sibling
+  // test_run_logs entries remain legitimate.
+  const arrayDup =
+    '{\n  "sha_binding": {\n    "merge_sha": null,\n    "current_pr_head_sha": null\n  },\n' +
+    '  "static_proof": {\n    "test_run_logs": [\n      { "merge_sha": null, "merge_sha": null }\n    ]\n  }\n}\n';
+  assert.ok(
+    planEvidenceRebind('e.json', arrayDup, SHAS).errors.some((e) => /"merge_sha" appears 2 times in the same object/.test(e)),
+  );
+});
+
+test('P1: the CLI always requests BOTH canonical artifacts, so a missing one refuses', () => {
+  assert.deepStrictEqual([...CANONICAL_PROOF_ARTIFACTS], ['evidence.json', 'verification.md']);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-rebind-partial-'));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  const proofDir = path.join(dir, 'docs', '06_status', 'proof', 'UTV2-1592');
+  fs.mkdirSync(proofDir, { recursive: true });
+  // verification.md is ABSENT. Filtering the request down to the files that
+  // exist rebound evidence.json alone and reported success — a partial rebind
+  // presented as a complete one.
+  fs.writeFileSync(path.join(proofDir, 'evidence.json'), EVIDENCE);
+  const digestBefore = sha256(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+
+  const script = path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts');
+  let out = '';
+  try {
+    out = execFileSync(
+      'npx',
+      ['tsx', script, '--issue', 'UTV2-1592', '--merge-sha', MERGE, '--approved-head', HEAD],
+      { cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: process.env.PATH ?? '' } },
+    );
+  } catch (error) {
+    out = (error as { stdout?: string }).stdout ?? '';
+  }
+  const parsed = JSON.parse(out);
+  assert.strictEqual(parsed.code, 'proof_rebind_refused');
+  assert.ok(
+    parsed.errors.some((e: string) => /verification\.md: missing — refusing to create a proof artifact/.test(e)),
+    `expected a refusal naming verification.md, got: ${JSON.stringify(parsed.errors)}`,
+  );
+  assert.strictEqual(
+    sha256(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8')),
+    digestBefore,
+    'the surviving artifact must not be partially rebound',
+  );
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Real-bundle contracts. Both bundles are read from a PINNED commit rather than
+// the working tree, so these assertions describe a fixed historical artifact and
+// cannot silently change meaning if either bundle is later legitimately rebound.
+// ---------------------------------------------------------------------------
+
+const PINNED_MAIN = '2822b709c74c43dc24a50dc6df35597e1a0463fe';
+
+function showAtPin(relPath: string): string {
+  return execFileSync('git', ['show', `${PINNED_MAIN}:${relPath}`], {
+    cwd: process.cwd(), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
+  });
+}
+
+test('REAL BUNDLE: UTV2-1592 remains refused', () => {
+  const md = showAtPin('docs/06_status/proof/UTV2-1592/verification.md');
+  const { errors, changes } = planVerificationRebind(
+    'docs/06_status/proof/UTV2-1592/verification.md',
+    md,
+    { merge_sha: '5f4abb09113f33ec9ca5ba88ab639041c521c00e', approved_head_sha: HEAD, execution_sha: null },
+    'https://github.com/griff843/Unit-Talk-v2/pull/1311',
+  );
+  // Its binding section is headed "## SHA Binding", not the canonical
+  // "## Merge SHA Binding". A rebind must refuse rather than invent the section.
+  assert.ok(
+    errors.some((e) => /required "## Merge SHA Binding" section is absent/.test(e)),
+    `expected the canonical-section refusal, got: ${errors.join('|')}`,
+  );
+  assert.ok(!(errors.length === 0 && changes.length > 0), 'must never report a partial success');
+});
+
+test('REAL BUNDLE: UTV2-1612 previews exactly five binding changes and no other byte', () => {
+  const evidenceRel = 'docs/06_status/proof/UTV2-1612/evidence.json';
+  const verificationRel = 'docs/06_status/proof/UTV2-1612/verification.md';
+  const evidence = showAtPin(evidenceRel);
+  const verification = showAtPin(verificationRel);
+
+  const shas: ShaSet = {
+    merge_sha: PINNED_MAIN,
+    approved_head_sha: 'e0464b519206ca63f707002ea91d91136750d797',
+    execution_sha: '6718c0de3c125beaa241bb8eb6937a7fa8e5f0bb',
+  };
+  const prUrl = 'https://github.com/griff843/Unit-Talk-v2/pull/1313';
+
+  const json = planEvidenceRebind(evidenceRel, evidence, shas);
+  const md = planVerificationRebind(verificationRel, verification, shas, prUrl);
+  assert.deepStrictEqual([...json.errors, ...md.errors], []);
+
+  const changes = [...json.changes, ...md.changes];
+  assert.strictEqual(changes.length, 5, `expected five binding changes, got:\n${changes.map((c) => `${c.file} ${c.locator}`).join('\n')}`);
+  assert.deepStrictEqual(changes.map((c) => c.locator), [
+    'sha_binding.merge_sha',
+    'sha_binding.current_pr_head_sha',
+    'static_proof.test_run_logs[0].merge_sha',
+    'line 2 (MERGE_SHA:)',
+    '## Merge SHA Binding > Merge SHA (line 280)',
+  ]);
+
+  // Every non-binding byte survives: exactly the declared lines differ, the line
+  // count is unchanged, and the explanatory narrative is byte-identical.
+  for (const [before, after, declared] of [
+    [evidence, json.next, json.changes.length],
+    [verification, md.next, md.changes.length],
+  ] as const) {
+    const a = before.split('\n');
+    const b = after.split('\n');
+    assert.strictEqual(a.length, b.length, 'line count must not change');
+    const differing = a.map((line, i) => (line !== b[i] ? i : -1)).filter((i) => i !== -1);
+    assert.strictEqual(differing.length, declared, 'only the declared binding lines may differ');
+  }
+
+  // The narrative that the destructive generate path used to template over.
+  for (const preserved of [
+    'the remote script is delivered on ssh stdin via `bash -s`',
+    'PR: https://github.com/griff843/Unit-Talk-v2/pull/1313',
+  ]) {
+    assert.ok(verification.includes(preserved) === md.next.includes(preserved), `narrative changed: ${preserved}`);
+  }
+  // The `verified_source_note` — a long explanatory field that shares no key
+  // with any binding — must come through untouched.
+  assert.strictEqual(
+    JSON.parse(json.next).sha_binding.verified_source_note,
+    JSON.parse(evidence).sha_binding.verified_source_note,
+  );
+  // The line-188 "Merge SHA: pending merge. This bundle is bound to ..." row
+  // sits OUTSIDE the binding section and must not be rewritten.
+  assert.ok(
+    md.next.includes('Merge SHA: pending merge. This bundle is bound to'),
+    'a narrative line resembling a binding row but outside the section must survive',
   );
 });
