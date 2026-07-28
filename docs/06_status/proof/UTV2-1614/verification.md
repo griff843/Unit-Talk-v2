@@ -1,13 +1,13 @@
 # PROOF: UTV2-1614
-MERGE_SHA: 408454a4323e43f121556d6c5ed0525bf68545ae
+MERGE_SHA: 4e46becb19815ba53bb42eb996ccbdf4c731e7a7
 
-Bound to `408454a4323e43f121556d6c5ed0525bf68545ae`, the commit carrying the
+Bound to `4e46becb19815ba53bb42eb996ccbdf4c731e7a7`, the commit carrying the
 final state of every in-scope file. Code and proof are separate commits so the
 proof names a SHA that actually contains the code it describes. The production
 change landed in the code-only commit `60c9598ab1fcba915938986daa1bd50bd9b15d74`;
-`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `408454a4323e43f121556d6c5ed0525bf68545ae`
-closes every finding of two successive adversarial exact-head reviews (see
-"Adversarial exact-head review" below).
+`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `4e46becb19815ba53bb42eb996ccbdf4c731e7a7`
+closes every finding of three successive adversarial exact-head reviews (see
+the review sections below).
 
 ## Summary
 
@@ -178,7 +178,7 @@ $ pnpm test:db
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 92891.552247
+# duration_ms 90710.386503
 ```
 
 Live Supabase project `zfzdnfwdarxucxtaojxm`. This lane ships ops tooling with
@@ -204,13 +204,13 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1318
-# pass 1318
+# tests 1324
+# pass 1324
 # fail 0
 # skipped 0
 ```
 
-`test:ops` rose from 1299 to 1318 as the proof-rebind suite went from 36 to 55
+`test:ops` rose from 1299 to 1324 as the proof-rebind suite went from 36 to 61
 assertions. `pnpm verify` covers lint, type-check, build and the full test suite.
 Stages run sequentially because `verify:parallel` was OOM-killed locally
 (exit 137); that is not a waiver, and CI on the merge SHA is authoritative.
@@ -306,6 +306,49 @@ Two of these were found and closed before the review reported them, by probing
 the same surfaces it named while it was still running; the review's independent
 findings are what confirmed them, and its remaining findings are what this head
 adds. Recording that rather than presenting all of them as review-driven.
+
+### Third adversarial exact-head review, and what it changed
+
+Re-reviewed independently again at the next head, with the reviewer asked to
+re-run its predecessors' mutations and to attack the newly-shared row pattern
+and heading rule directly — that sharing is what three earlier findings had
+exploited. It returned **REJECT** with three P1s, two P2s and one more
+tautological test. All are closed here.
+
+| Finding | Closed by |
+|---|---|
+| P1 a TAB-delimited heading (`##<tab>Appendix`) did not end the binding section, so the appendix's rows became writable and the shared mask concealed the rewrite | section-end detection accepts any ATX level delimited by a space or a tab |
+| P1 binding-looking narrative inside an HTML `<pre>` block, or on an indented list continuation, was rewritten | `<pre>` is a verbatim region alongside code fences, and a writable row must be UNINDENTED |
+| P1 a DUPLICATED CONTAINER evaded duplicate detection, which examined only leaf keys — two `sha_binding` objects read as already-bound, returned a clean no-op, and left the stale one in the file | every segment of every binding path is checked, not just the leaf |
+| P2 the changed-line guard is LINE-granular, so a byte added or removed on a line that legitimately changed slipped past it | the total byte delta must equal the sum of the declared token deltas exactly |
+| P2 the canonical PR owner accepted consecutive hyphens and over-length owners | GitHub's real owner rule: single hyphens, never leading/trailing/consecutive, at most 39 characters |
+| Tautological: "PR identity is validated before any write" exercised only the pure validator, so disabling the CLI's own apply-without-validation gate left it green | the CLI is driven directly — `--apply` with no `--pr`, `--apply --skip-pr-check`, and `--pr-url` all refuse, each asserted to write zero bytes |
+
+The asymmetry this settled is worth stating, because it is the rule that
+prevents the whole class: **anything that SHRINKS the writable region is
+permissive, anything that GROWS it is strict.** Section-END detection accepts
+any heading level, any legal indent, space or tab — recognising more headings
+ends the section earlier. The canonical ANCHOR must be exact and unindented, and
+a writable row must be at column zero. One to three spaces is a list
+continuation and four or more is an indented code block; rather than try to tell
+them apart, only column zero counts, which is where every real bundle writes its
+rows.
+
+### Regression sweep over every real bundle
+
+The stricter rules could in principle refuse a bundle that previously planned
+cleanly. That was measured rather than assumed. All 397 `verification.md` files
+under `docs/06_status/proof` were re-planned under the previous ruleset and the
+new one — each using its OWN `PR:` row, so PR identity is never the
+differentiator — and the per-bundle refusal sets compared:
+
+```
+bundles compared: 397   unchanged: 397
+NEWLY REFUSED under stricter rules: []
+newly planned: []
+```
+
+Zero verdict changes. Preview only; nothing was written.
 
 ### Scope
 
