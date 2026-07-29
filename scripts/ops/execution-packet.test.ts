@@ -204,7 +204,7 @@ test('missing expected_proof_paths does not prevent packet generation', () => {
 });
 
 test('closeout instructions include lane-finalize and current reconcile', () => {
-  const packet = generateExecutionPacket(createTestManifest());
+  const packet = generateExecutionPacket(createTestManifest(), {});
 
   assert.equal(
     packet.closeout_instructions.some((entry) =>
@@ -217,5 +217,122 @@ test('closeout instructions include lane-finalize and current reconcile', () => 
       entry.includes('pnpm ops:orchestration-reconcile --current'),
     ),
     true,
+  );
+});
+
+test('packet defaults to static-only and never restores the unsafe universal verify instruction', () => {
+  const packet = generateExecutionPacket(
+    createTestManifest({
+      file_scope_lock: [
+        'apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts',
+        'scripts/ops/execution-packet.ts',
+        'scripts/ops/execution-packet.test.ts',
+      ],
+    }),
+    {},
+  );
+
+  assert.equal(packet.verification_plan?.mode, 'static-only');
+  assert.equal(packet.verification_plan?.live_db_status, 'blocked-deferred');
+  assert.equal(packet.verification_plan?.writable_live_db_command, null);
+  assert.match(
+    packet.verification_plan?.focused_test_command ?? '',
+    /execution-packet\.test\.ts/,
+  );
+  assert.doesNotMatch(
+    packet.verification_plan?.focused_test_command ?? '',
+    /t1-proof-utv2-1497-outbox-concurrent-claim\.test\.ts/,
+  );
+  assert.equal(
+    packet.closeout_instructions.includes(
+      'Run pnpm verify and ensure it passes',
+    ),
+    false,
+  );
+  assert.equal(
+    packet.closeout_instructions.some((entry) =>
+      entry.includes('pnpm test:live-db'),
+    ),
+    false,
+  );
+  assert.equal(
+    packet.closeout_instructions.some((entry) =>
+      entry.includes('pnpm verify:static'),
+    ),
+    true,
+  );
+});
+
+test('packet authorizes writable live-DB verification only after isolated identity proof', () => {
+  const isolatedRef = 'wgfgqfxnnwjmrbubqhcj';
+  const packet = generateExecutionPacket(
+    createTestManifest({
+      tier: 'T1',
+      file_scope_lock: [
+        'apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts',
+      ],
+    }),
+    {
+      UNIT_TALK_DB_ACCESS_MODE: 'writable-isolated',
+      CI_SUPABASE_PROJECT_REF: isolatedRef,
+      SUPABASE_URL: `https://${isolatedRef}.supabase.co`,
+    },
+  );
+
+  assert.equal(packet.verification_plan?.mode, 'writable-isolated');
+  assert.equal(packet.verification_plan?.live_db_status, 'authorized-isolated');
+  assert.match(
+    packet.verification_plan?.writable_live_db_command ?? '',
+    /--assert-isolated-writable && pnpm test:live-db/,
+  );
+  assert.match(
+    packet.verification_plan?.focused_test_command ?? '',
+    /t1-proof-utv2-1497-outbox-concurrent-claim\.test\.ts/,
+  );
+  assert.equal(
+    packet.closeout_instructions.some((entry) =>
+      entry.includes('guarded isolated writable verification'),
+    ),
+    true,
+  );
+});
+
+test('packet rejects canonical production hidden behind writable variable names', () => {
+  const packet = generateExecutionPacket(createTestManifest({ tier: 'T1' }), {
+    UNIT_TALK_DB_ACCESS_MODE: 'writable-isolated',
+    CI_SUPABASE_PROJECT_REF: 'wgfgqfxnnwjmrbubqhcj',
+    DATABASE_URL:
+      'postgresql://postgres.example@db.zfzdnfwdarxucxtaojxm.supabase.co:5432/postgres',
+  });
+
+  assert.equal(packet.verification_plan?.mode, 'static-only');
+  assert.equal(packet.verification_plan?.live_db_status, 'blocked-deferred');
+  assert.equal(packet.verification_plan?.writable_live_db_command, null);
+  assert.match(
+    packet.verification_plan?.reason ?? '',
+    /Refusing writable DB execution against canonical production/,
+  );
+});
+
+test('packet permits canonical production only as guarded read-only observation', () => {
+  const productionRef = 'zfzdnfwdarxucxtaojxm';
+  const packet = generateExecutionPacket(createTestManifest({ tier: 'T1' }), {
+    UNIT_TALK_DB_ACCESS_MODE: 'production-read-only',
+    SUPABASE_PROJECT_REF: productionRef,
+    SUPABASE_URL: `https://${productionRef}.supabase.co`,
+  });
+
+  assert.equal(packet.verification_plan?.mode, 'production-read-only');
+  assert.equal(packet.verification_plan?.live_db_status, 'read-only-only');
+  assert.equal(packet.verification_plan?.writable_live_db_command, null);
+  assert.match(
+    packet.verification_plan?.production_read_only_guard_command ?? '',
+    /--assert-production-read-only/,
+  );
+  assert.equal(
+    packet.closeout_instructions.some((entry) =>
+      entry.includes('pnpm test:live-db'),
+    ),
+    false,
   );
 });
