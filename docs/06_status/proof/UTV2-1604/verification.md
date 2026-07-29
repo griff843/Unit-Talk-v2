@@ -4,81 +4,80 @@ MERGE_SHA: pending
 
 ## Summary
 
-UTV2-1604 now has one fail-closed scheduler registration policy for all
-fourteen API production schedulers. `SYNDICATE_MACHINE_ENABLED=false`
-selects parked mode and prevents all six syndicate producer stages from
-running at startup or registering an interval. `true` preserves active
-registration. Missing, empty, case-variant, whitespace-padded, and other
-values fail before runtime dependencies or the HTTP server are created.
+UTV2-1604 implements one explicit syndicate-machine mode contract across
+configuration, API scheduler registration, deploy validation, canary,
+production, and post-start container assertions:
 
-This proof covers the bounded scheduler-policy lane only. It does not claim
-the repository secret was created, a parked release was deployed, production
-health passed, or the live blind-pick incident was contained.
+- exact `true` selects `active`;
+- exact `false` selects `parked`;
+- missing, empty, case-variant, padded, or other values fail closed.
 
-ASSERTIONS:
+In parked mode, board scan, candidate scoring, ranked selection, board
+construction, board pick writer, and candidate pick scanner are suppressed.
+The runtime receipt is emitted after registration callbacks and separates
+policy eligibility from whether each scheduler actually started.
 
-- [x] Every API production scheduler is explicitly classified.
-- [x] Every scheduled work function and interval is owned by the canonical policy.
-- [x] Parked mode suppresses board scan, candidate scoring, ranked selection,
-  board construction, board pick writer, and candidate pick scanner.
-- [x] Active mode registers every production scheduler.
-- [x] The board-writer-specific flag cannot bypass canonical parked mode.
-- [x] Invalid or undeclared syndicate-machine values fail closed.
-- [x] Runtime receipts report `active` or `parked` and the resolved decisions.
-- [x] Removing any of the three newly required upstream producer gates fails
-  static verification.
-- [x] Adding a new unclassified interval fails static verification.
-- [x] Full repo verification and live DB/T1 proof gates pass.
+This is implementation evidence only. It does not claim that a GitHub secret
+was created or changed, that a deployment occurred, that a deployed SHA was
+observed, or that production readiness is GREEN. Those actions remain
+Griff-reserved.
 
 ## Verification
 
-### Focused scheduler contract
+### Canonical parked-mode safety suites
 
 Command:
 
 ```text
-npx tsx --test apps/api/src/scheduler-policy.test.ts scripts/ci/scheduler-classification.test.ts
+npx tsx --test scripts/ci/deploy-parked-mode.test.ts scripts/ci/scheduler-classification.test.ts apps/api/src/scheduler-policy.test.ts packages/config/src/env.test.ts
 ```
 
 Result:
 
 ```text
-# tests 10
-# pass 10
+# tests 30
+# pass 30
 # fail 0
 # skipped 0
+# duration_ms 1145.623161
 ```
 
-The negative cases mutate the candidate-scoring, ranked-selection, and
-board-construction registrations independently. Each mutation is detected.
-A fourth mutation appends a new unclassified `setInterval`; it is also
-detected.
+Coverage includes:
+
+- exact active/parked parsing and fail-closed invalid values;
+- all fourteen production schedulers classified;
+- all six producer stages suppressed in parked mode;
+- active behavior preserved;
+- truthful eligible/started/skipped outcomes;
+- workflow value propagation from validation through canary and production;
+- requested/runtime container equality;
+- no hardcoded active receipt;
+- removal mutations for three producer gates;
+- unclassified scheduler mutation;
+- removal mutations for all three required test-command entries.
 
 ### Runtime policy receipt
 
 Command:
 
 ```text
-npx tsx -e "<execute false and true through createSchedulerRegistrationPolicy>"
+npx tsx -e "<run all production scheduler ids through createSchedulerRegistrationPolicy for false and true>"
 ```
 
-Parked result:
+Parked receipt:
 
 ```json
 {
   "requestedValue": "false",
   "mode": "parked",
-  "executed": [
-    "recap",
-    "trial-expiry",
-    "participant-enrichment",
-    "system-pick-scanner",
-    "closing-line-recovery",
-    "market-universe-materializer",
-    "line-movement-detector",
-    "model-health-scanner"
+  "started": 7,
+  "skipped_by_runtime_condition": [
+    {
+      "scheduler": "system-pick-scanner",
+      "reason": "SYSTEM_PICK_SCANNER_ENABLED=false"
+    }
   ],
-  "suppressed": [
+  "suppressed_by_mode": [
     "board-scan",
     "candidate-scoring",
     "ranked-selection",
@@ -89,44 +88,64 @@ Parked result:
 }
 ```
 
-Active result:
+Active receipt:
 
 ```json
 {
   "requestedValue": "true",
   "mode": "active",
-  "executed_count": 14,
-  "suppressed": []
+  "eligible": 14,
+  "started": 13,
+  "skipped_by_runtime_condition": [
+    {
+      "scheduler": "system-pick-scanner",
+      "reason": "SYSTEM_PICK_SCANNER_ENABLED=false"
+    }
+  ],
+  "suppressed_by_mode": []
 }
 ```
 
-### Full repository gate
+This proof calls the policy directly; it does not start the API or any
+production scheduler.
+
+### Existing deploy regressions
 
 Command:
 
 ```text
+npx tsx --test scripts/deploy-check.test.ts scripts/ops/workflow-hardening.test.ts scripts/ci/ops-p0-containment-workflow.test.ts
+```
+
+Result:
+
+```text
+# tests 73
+# pass 73
+# fail 0
+```
+
+### Full repository gate
+
+Commands:
+
+```text
+pnpm type-check
+pnpm test
+pnpm test:db
 pnpm verify
 ```
 
 Result: PASS.
 
-The command completed environment validation, lint, `pnpm type-check`,
-build, `pnpm test`, smart-form verification, command checks, `pnpm test:db`,
-and the full live T1 proof battery.
+`pnpm verify` completed environment checks, lint, `pnpm type-check`, build,
+`pnpm test`, smart-form verification, command checks, `pnpm test:db`, and the
+live T1 proof battery. The DB smoke suite passed 7/7 against Supabase project
+`zfzdnfwdarxucxtaojxm`.
 
-Live database smoke:
-
-```text
-# tests 7
-# pass 7
-# fail 0
-# duration_ms 93706.72273
-```
-
-The broader live T1 battery completed with zero failures. One bounded
-provider-history assertion skipped because the newest provider snapshot was
-older than its 72-hour lookback; the test explicitly classifies that as
-stale provider data rather than a code regression.
+The ignored credential file was exposed to this worktree with
+`scripts/link-worktree-env.ts` as a hardlink for the duration of the command;
+it was not copied or modified.
 
 ### R-level compliance
 
@@ -145,18 +164,20 @@ Rules matched: (none) — no R-level artifacts required for this diff
 
 ## Evidence
 
-- Substantive implementation SHA:
-  `2781c39f26d6bf29fab54f25c37a420d5ec94a61`
-- Structured evidence: `docs/06_status/proof/UTV2-1604/evidence.json`
-- Model routing: `docs/06_status/proof/UTV2-1604/model-routing.json`
-- Supabase project used by the mandatory DB gate: `zfzdnfwdarxucxtaojxm`
+- Verified implementation SHA:
+  `d4dddc66c4b261972731a311ef73220d34328cbd`
+- Structured evidence:
+  `docs/06_status/proof/UTV2-1604/evidence.json`
+- Model routing:
+  `docs/06_status/proof/UTV2-1604/model-routing.json`
 
 ## Outstanding production gates
 
-- Create or confirm the repository secret as exactly
+- Griff creates or confirms the repository secret as exactly
   `SYNDICATE_MACHINE_ENABLED=false`.
-- Complete the governed parked deployment.
-- Bind proof to the deployed/merge SHA.
-- Verify the expected services are healthy in parked mode.
-- Prove no unexpected producer continues creating stale picks.
-- Obtain the required exact-head independent review and T1 PM approval.
+- A governed parked deployment completes.
+- Evidence binds the deployed SHA and confirms expected service health.
+- Runtime observation confirms requested and container values agree and no
+  unexpected producer continues generating stale picks.
+- An independent exact-head review passes.
+- Griff supplies the T1 PM approval and merge authorization.
