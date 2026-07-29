@@ -1,0 +1,206 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1604",
+  "title": "Parked-mode scheduler classification and registration policy",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-29T16:30:03Z",
+  "sha_binding": {
+    "verified_source_sha": "2781c39f26d6bf29fab54f25c37a420d5ec94a61",
+    "verified_source_note": "Code-only commit containing the canonical scheduler inventory, API registration wiring, runtime policy tests, and static mutation tests. Only proof paths may follow this commit before review.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": null
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1604-parked-mode-scheduler-policy",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval, deployment authorization, or independent certification."
+  },
+  "scope": {
+    "implementation_paths": [
+      "apps/api/src/index.ts",
+      "apps/api/src/scheduler-policy.ts",
+      "apps/api/src/scheduler-policy.test.ts",
+      "scripts/ci/scheduler-classification.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1604/evidence.json",
+      "docs/06_status/proof/UTV2-1604/model-routing.json",
+      "docs/06_status/proof/UTV2-1604/verification.md"
+    ],
+    "runtime_change": true,
+    "database_change": false,
+    "deploy_workflow_change": false,
+    "production_mutation_on_merge": false,
+    "does_not_claim": [
+      "No GitHub secret was created or changed.",
+      "No parked production deployment was performed.",
+      "No deployed-SHA, production health, or live producer-containment claim is made.",
+      "Deploy/canary/container equality gates are outside this scheduler-policy lane.",
+      "UTV2-1610 remains authoritative for whether the live blind-pick producer is contained."
+    ]
+  },
+  "scheduler_contract": {
+    "mode_values": {
+      "true": "active",
+      "false": "parked"
+    },
+    "invalid_values_fail_closed": true,
+    "inventory_count": 14,
+    "parked_enabled": [
+      "recap",
+      "trial-expiry",
+      "participant-enrichment",
+      "system-pick-scanner",
+      "closing-line-recovery",
+      "market-universe-materializer",
+      "line-movement-detector",
+      "model-health-scanner"
+    ],
+    "parked_disabled": [
+      "board-scan",
+      "candidate-scoring",
+      "ranked-selection",
+      "board-construction",
+      "board-pick-writer",
+      "candidate-pick-scanner"
+    ],
+    "active_mode_registers_all": true,
+    "board_writer_override_allowed_while_parked": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Sync, system alignment, automation coverage, environment validation, lint, type-check, build, aggregate tests, command verification, DB smoke, and the full live T1 proof battery passed."
+    },
+    "focused_scheduler_tests": {
+      "command": "npx tsx --test apps/api/src/scheduler-policy.test.ts scripts/ci/scheduler-classification.test.ts",
+      "status": "PASS",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "coverage": [
+        "Only exact true/false values are accepted.",
+        "All fourteen production schedulers have one explicit parked-mode classification.",
+        "Parked mode suppresses all six syndicate producer stages.",
+        "Active mode registers every production scheduler.",
+        "BOARD_PICK_WRITER_ENABLED cannot bypass parked mode.",
+        "Every scheduled work function and setInterval in index.ts is owned by the canonical policy.",
+        "Removing the candidate-scoring, ranked-selection, or board-construction gate fails static verification.",
+        "Adding an unclassified interval scheduler fails static verification."
+      ]
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "root_test": {
+      "command": "pnpm test (as part of pnpm verify)",
+      "status": "PASS"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": [],
+      "artifact_requirements": []
+    }
+  },
+  "runtime_proof": {
+    "policy_execution": {
+      "command": "npx tsx -e <execute both scheduler modes through createSchedulerRegistrationPolicy>",
+      "status": "PASS",
+      "parked_receipt": {
+        "requestedValue": "false",
+        "mode": "parked",
+        "executed": [
+          "recap",
+          "trial-expiry",
+          "participant-enrichment",
+          "system-pick-scanner",
+          "closing-line-recovery",
+          "market-universe-materializer",
+          "line-movement-detector",
+          "model-health-scanner"
+        ],
+        "suppressed": [
+          "board-scan",
+          "candidate-scoring",
+          "ranked-selection",
+          "board-construction",
+          "board-pick-writer",
+          "candidate-pick-scanner"
+        ]
+      },
+      "active_receipt": {
+        "requestedValue": "true",
+        "mode": "active",
+        "executed_count": 14,
+        "suppressed": []
+      }
+    },
+    "pnpm_test_db": {
+      "command": "pnpm test:db (as part of pnpm verify)",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "duration_ms": 93706,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    },
+    "broader_live_proof": {
+      "command": "pnpm test:t1-proof:live (as part of pnpm verify)",
+      "status": "PASS",
+      "fail": 0,
+      "skipped": 1,
+      "skip_reason": "The bounded provider-history assertion observed data older than its 72-hour lookback and classified it as known stale provider data, not a code regression."
+    },
+    "production_api_started": false,
+    "production_mutation_by_lane": false
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Use one canonical scheduler-registration decision rather than independent ad hoc checks.",
+      "status": "PASS",
+      "evidence": "Every production scheduling site in apps/api/src/index.ts is registered through schedulerPolicy.register with a scheduler id from SCHEDULER_CLASSIFICATIONS."
+    },
+    {
+      "criterion": "Parked mode does not schedule board scan, candidate scoring, ranked selection, board construction, board pick writer, or candidate pick scanner.",
+      "status": "PASS",
+      "evidence": "The parked runtime receipt suppresses exactly those six scheduler ids; the focused suite independently asserts the same decision set."
+    },
+    {
+      "criterion": "Every production scheduler is explicitly classified as parked-enabled or parked-disabled, and a new unclassified scheduler fails verification.",
+      "status": "PASS",
+      "evidence": "Fourteen-entry inventory assertion plus AST-based static verification of all scheduled work and every setInterval site."
+    },
+    {
+      "criterion": "Removing the board-construction, ranked-selection, or candidate-scoring gate is detected.",
+      "status": "PASS",
+      "evidence": "Three independent source mutations replace each canonical registration with an unchecked registration; all three are rejected by the static auditor."
+    },
+    {
+      "criterion": "Runtime logging reports the actual syndicate-machine mode.",
+      "status": "PASS",
+      "evidence": "index.ts emits scheduler_policy.resolved with schedulerPolicy.mode and all decisions, and includes syndicateMachineMode in the API listening receipt."
+    },
+    {
+      "criterion": "Code merge alone is insufficient; secret creation, parked deploy, deployed-SHA proof, service health, and truthful readiness remain required.",
+      "status": "NOT_CLAIMED",
+      "evidence": "This bundle explicitly limits itself to scheduler-policy runtime behavior and records all production deployment claims as outstanding."
+    }
+  ],
+  "known_limitations": [
+    "The two new focused test files are executed explicitly because package.json is outside this lane's authorized file scope.",
+    "The runtime receipt executes the production policy object without starting the API process; starting the local API would run unrelated parked-enabled DB schedulers against live credentials.",
+    "Production deployment and exact-head independent review remain external approval steps."
+  ]
+}
