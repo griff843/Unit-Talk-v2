@@ -27,7 +27,9 @@
     "scripts/ci/db-writer-inventory.test.ts",
     "scripts/ci/db-writer-inventory.ts",
     "scripts/ci/required-db-smoke.test.ts",
-    "scripts/ci/required-db-smoke.ts"
+    "scripts/ci/required-db-smoke.ts",
+    "scripts/ops/execution-packet.test.ts",
+    "scripts/ops/execution-packet.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1627/evidence.json",
