@@ -1,12 +1,12 @@
 # PROOF: UTV2-1614
-MERGE_SHA: 529b26f552b74113fb8b5ad9ce6742613e7c239a
+MERGE_SHA: 179c3047b475b2551fe8237c03983b927da51c15
 
-Bound to `529b26f552b74113fb8b5ad9ce6742613e7c239a`, the commit carrying the
+Bound to `179c3047b475b2551fe8237c03983b927da51c15`, the commit carrying the
 final state of every in-scope file. Code and proof are separate commits so the
 proof names a SHA that actually contains the code it describes. The production
 change landed in the code-only commit `60c9598ab1fcba915938986daa1bd50bd9b15d74`;
-`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `529b26f552b74113fb8b5ad9ce6742613e7c239a`
-closes every finding of four successive adversarial exact-head reviews (see
+`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `179c3047b475b2551fe8237c03983b927da51c15`
+closes every finding of five successive adversarial exact-head reviews (see
 the review sections below).
 
 ## Summary
@@ -154,15 +154,19 @@ explanatory prose; that statement was wrong and is retracted here. The section
 body is never replaced wholesale — each canonical row is its own writable
 region — so the prose is preserved and the preview succeeds.
 
-Both real-bundle contracts are pinned as tests. They read the two bundles from
-commit `2822b709c74c43dc24a50dc6df35597e1a0463fe` via `git show` rather than from
-the working tree, so the assertions describe fixed historical artifacts and
-cannot change meaning if either bundle is later legitimately rebound. The
-five-change test additionally asserts that the line count is unchanged, that
-exactly the declared lines differ, that the long `verified_source_note` narrative
-is byte-identical, and that a narrative line reading
-`Merge SHA: pending merge. This bundle is bound to …` — which sits OUTSIDE the
-binding section and resembles a binding row — survives untouched.
+Both real-bundle contracts are locked as tests. They read the two bundles from
+the WORKING TREE and are STATE-AWARE: the pre-rebind state asserts exactly five
+binding changes with their locators and target SHAs, the post-rebind state
+asserts a clean no-op, and an idempotency round-trip runs unconditionally. An
+earlier revision pinned them to a commit via `git show` instead; that does not
+resolve on the CI runner's shallow checkout, and the repair is described under
+"CI-only repair" below. The five-change test additionally asserts that the line
+count is unchanged, that exactly the declared lines differ, that the long
+`verified_source_note` narrative is byte-identical, and that a narrative line
+reading `Merge SHA: pending merge. This bundle is bound to …` — which sits
+OUTSIDE the binding section and resembles a binding row — survives untouched.
+
+<!-- CLAIM: fixture-resolution = working-tree -->
 
 ## Verification
 
@@ -178,7 +182,7 @@ $ pnpm test:db
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 94812.281089
+# duration_ms 92747.662803
 ```
 
 Live Supabase project `zfzdnfwdarxucxtaojxm`. This lane ships ops tooling with
@@ -204,13 +208,13 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1329
-# pass 1329
+# tests 1334
+# pass 1334
 # fail 0
 # skipped 0
 ```
 
-`test:ops` rose from 1299 to 1329 as the proof-rebind suite went from 36 to 66
+`test:ops` rose from 1299 to 1334 as the proof-rebind suite went from 36 to 71
 assertions. `pnpm verify` covers lint, type-check, build and the full test suite.
 Stages run sequentially because `verify:parallel` was OOM-killed locally
 (exit 137); that is not a waiver, and CI on the merge SHA is authoritative.
@@ -388,6 +392,50 @@ artifacts compared: 591   (verification.md: 397   evidence.json: 194)
 ```
 
 Preview only; `git status` reported the proof directories clean afterwards.
+
+### Fifth adversarial exact-head review, and what it changed
+
+Re-reviewed independently again. It returned **REJECT** with three P1s and three
+P2s — including two defects in this bundle's own claims, corrected rather than
+restated.
+
+| Finding | Closed by |
+|---|---|
+| P1 FENCE PRECEDENCE — the scanner looked for HTML tags and comment openers BEFORE the fence opener, so a fence whose info string named a tag never opened, every row inside became writable, and the mask agreed so the rewrite was concealed | the scanner is an explicit state machine; a fence opener wins at the top level |
+| P1 EMPTY ATX HEADINGS — a bare hash run with no text is a legal heading, but whitespace was required after it, so the section ran past it | any level, any legal indent, space, tab, or end-of-line |
+| P1 RAW HTML BLOCKS were recognised only for the pre tag — script, style and textarea also render literally | all four literal-content tags are verbatim; div and friends remain ordinary markdown |
+| P2 TEMP FILE CLEANUP — the temp was unlinked only after a RENAME failure, so a failure during write, fsync or close left a stray rebind temp file beside the artifact, unreported and mistakable for evidence | the temp is removed on every failure path |
+| P2 STALE PROOF CLAIMS — this bundle asserted the real-bundle tests resolve fixtures against a pinned commit, true of an earlier revision and false since | checkable claims carry machine-readable tags that a test verifies against the implementation |
+| P2 ARTIFACT DISCOVERY was one level deep, so the sweep reported 591 artifacts when there are 593 | discovery is recursive |
+
+The stale-claim finding deserves its own note, because it is a defect in this
+document rather than in the tool. Prose matching cannot distinguish a live claim
+from an accurate description of what an earlier revision did, so the claims that
+CAN be checked now carry machine-readable tags, and a test verifies each against
+the implementation: the fixture-resolution mechanism, and the proof-rebind
+assertion count in BOTH proof artifacts. That test failed against the live
+narrative when it was written — which is how the stale claim was confirmed
+rather than assumed — and it fails again on any future drift.
+
+### Regression sweep — recursive, 593 artifacts
+
+The previous sweep walked one directory level. Two evidence bundles nest one
+level deeper, so the real artifact count is 593, not 591. Discovery is now
+recursive, and the omission is demonstrated rather than asserted:
+
+```
+RECURSIVE artifacts: 593   (verification.md: 397   evidence.json: 196)
+NON-RECURSIVE would have found: 591
+  -> MISSED: 2 nested evidence.json bundles under a drift-evidence subdirectory
+
+  IDENTICAL                    593
+  NEWLY REFUSED                  0
+  NEWLY PLANNED                  0
+  SAME VERDICT, FEWER ERRORS     0
+```
+
+Every one of the 593 artifacts plans identically before and after this
+revision's fixes. Preview only; nothing was written.
 
 ### Scope
 
