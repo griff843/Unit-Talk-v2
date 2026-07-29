@@ -35,11 +35,11 @@ npx tsx --test scripts/ci/deploy-parked-mode.test.ts scripts/ci/scheduler-classi
 Result:
 
 ```text
-# tests 30
-# pass 30
+# tests 31
+# pass 31
 # fail 0
 # skipped 0
-# duration_ms 1145.623161
+# duration_ms 835.814928
 ```
 
 Coverage includes:
@@ -143,9 +143,10 @@ Result: PASS.
 live T1 proof battery. The DB smoke suite passed 7/7 against Supabase project
 `zfzdnfwdarxucxtaojxm`.
 
-The ignored credential file was exposed to this worktree with
-`scripts/link-worktree-env.ts` as a hardlink for the duration of the command;
-it was not copied or modified.
+The main checkout's current credential environment was sourced into the
+verification process, with `SYSTEM_PICK_SCANNER_ENABLED=false` and
+`SYNDICATE_MACHINE_ENABLED=false` explicitly preserved. No env file was copied
+or modified.
 
 ### R-level compliance
 
@@ -165,7 +166,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ## Evidence
 
 - Verified implementation SHA:
-  `d4dddc66c4b261972731a311ef73220d34328cbd`
+  `8bdb94418cf459dbd21dc9658f08f7f4f3c0b473`
 - Structured evidence:
   `docs/06_status/proof/UTV2-1604/evidence.json`
 - Model routing:
