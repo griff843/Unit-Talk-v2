@@ -22,4 +22,17 @@ Before: commit_sha = null; status = in_review
 After:  commit_sha = 2822b709c74c43dc24a50dc6df35597e1a0463fe; status = merged
 ```
 
+## Verification
+
+The reconciliation implementation is commit
+`7906a61e5662c5a2e2e0db9933338e18e8d3cb9e`.
+
+The PR head containing this additive proof is a descendant of that implementation
+commit, so GitHub comparison from the implementation commit to the PR head must
+report `ahead`.
+
+The historical UTV2-1612 `verification.md` and `evidence.json` remain unchanged.
+This proof verifies only the intermediate merged-state reconciliation and does
+not perform or claim terminal proof rebinding.
+
 This additive proof documents only the merged-state reconciliation. It does not replace, normalize, or rebind the historical implementation proof bundle.
