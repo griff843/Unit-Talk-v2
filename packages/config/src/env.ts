@@ -153,18 +153,19 @@ function parseEnvFileEntries(filePath: string) {
 
   const raw = fs.readFileSync(filePath, 'utf8');
   for (const line of raw.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
+    const content = line.trimStart();
+    if (!content || content.startsWith('#')) {
       continue;
     }
 
-    const separatorIndex = trimmed.indexOf('=');
+    const separatorIndex = content.indexOf('=');
     if (separatorIndex === -1) {
       continue;
     }
 
-    const key = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
+    const key = content.slice(0, separatorIndex).trim();
+    const rawValue = content.slice(separatorIndex + 1);
+    const value = key === 'SYNDICATE_MACHINE_ENABLED' ? rawValue : rawValue.trim();
     entries.push([key, value]);
   }
 
