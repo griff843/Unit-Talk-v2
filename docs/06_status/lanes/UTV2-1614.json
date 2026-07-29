@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1614",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
+  "branch": "claude/utv2-1614-proof-rebind",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1315",
+  "files_changed": [
+    ".ops/sync/UTV2-1614.yml",
+    "docs/06_status/lanes/UTV2-1614.json",
+    "docs/06_status/proof/UTV2-1614/evidence.json",
+    "docs/06_status/proof/UTV2-1614/verification.md",
+    "package.json",
+    "scripts/ops/proof-rebind.test.ts",
+    "scripts/ops/proof-rebind.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/proof-rebind.ts",
+    "scripts/ops/proof-rebind.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1614/evidence.json",
+    "docs/06_status/proof/UTV2-1614/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1614/evidence.json",
+    "docs/06_status/proof/UTV2-1614/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-07-28T14:10:00.000Z",
+  "heartbeat_at": "2026-07-28T14:10:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
