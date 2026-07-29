@@ -13,9 +13,10 @@ import { runRankedSelection } from './ranked-selection-service.js';
 import { runBoardConstruction } from './board-construction-service.js';
 import { runModelHealthScan } from './model-health-scanner.js';
 import { runClosingLineRecovery } from './closing-line-recovery-service.js';
-import { runBoardPickWriter, shouldScheduleBoardPickWriter } from './board-pick-writer.js';
+import { runBoardPickWriter } from './board-pick-writer.js';
 import { runCandidatePickScan } from './candidate-pick-scanner.js';
 import { toRuntimeVersionLogFields } from './runtime-version.js';
+import { createSchedulerRegistrationPolicy } from './scheduler-policy.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const CANDIDATE_PICK_SCANNER_INTERVAL_MS = 60 * 1000; // 60 seconds
@@ -32,6 +33,7 @@ const BOARD_PICK_WRITER_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes — after bo
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
 const environment = loadEnvironment();
+const schedulerPolicy = createSchedulerRegistrationPolicy(environment.SYNDICATE_MACHINE_ENABLED);
 const runtime = createApiRuntimeDependencies({ environment });
 const server = createApiServer({ runtime });
 let stopRecapScheduler: (() => void) | null = null;
@@ -51,136 +53,165 @@ let modelHealthScannerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
-  stopRecapScheduler = startRecapScheduler(runtime.repositories);
-  stopTrialExpiryScheduler = startTrialExpiryScheduler(
-    runtime.repositories.tiers,
-    runtime.repositories.audit,
+  console.log(
+    JSON.stringify({
+      service: 'api',
+      event: 'scheduler_policy.resolved',
+      syndicateMachineMode: schedulerPolicy.mode,
+      decisions: schedulerPolicy.decisions,
+    }),
   );
 
-  // Player enrichment: run once on startup, then every 6 hours
-  const enrichmentDeps = {
-    participants: runtime.repositories.participants,
-    runs: runtime.repositories.runs,
-  };
-  runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
-  runTeamLogoEnrichmentPass(enrichmentDeps).catch(() => {});
-  enrichmentTimer = setInterval(() => {
+  schedulerPolicy.register('recap', () => {
+    stopRecapScheduler = startRecapScheduler(runtime.repositories);
+  });
+
+  schedulerPolicy.register('trial-expiry', () => {
+    stopTrialExpiryScheduler = startTrialExpiryScheduler(
+      runtime.repositories.tiers,
+      runtime.repositories.audit,
+    );
+  });
+
+  schedulerPolicy.register('participant-enrichment', () => {
+    // Player enrichment: run once on startup, then every 6 hours
+    const enrichmentDeps = {
+      participants: runtime.repositories.participants,
+      runs: runtime.repositories.runs,
+    };
     runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
     runTeamLogoEnrichmentPass(enrichmentDeps).catch(() => {});
-  }, 6 * 60 * 60 * 1000);
+    enrichmentTimer = setInterval(() => {
+      runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
+      runTeamLogoEnrichmentPass(enrichmentDeps).catch(() => {});
+    }, 6 * 60 * 60 * 1000);
+  });
 
-  // System pick scanner: materialize opening player prop lines into market_universe
-  // Phase 7B UTV2-495 — retired direct /api/submissions path; now writes to governed upstream
-  const scannerConfig = loadSystemPickScannerConfig(environment);
-  if (scannerConfig.enabled) {
-    const scannerDeps = {
-      providerOffers: runtime.repositories.providerOffers,
-      participants: runtime.repositories.participants,
+  schedulerPolicy.register('system-pick-scanner', () => {
+    // System pick scanner: materialize opening player prop lines into market_universe
+    // Phase 7B UTV2-495 — retired direct /api/submissions path; now writes to governed upstream
+    const scannerConfig = loadSystemPickScannerConfig(environment);
+    if (scannerConfig.enabled) {
+      const scannerDeps = {
+        providerOffers: runtime.repositories.providerOffers,
+        participants: runtime.repositories.participants,
+        events: runtime.repositories.events,
+        marketUniverse: runtime.repositories.marketUniverse,
+      };
+      runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
+      systemPickScannerTimer = setInterval(() => {
+        runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
+      }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
+    }
+  });
+
+  schedulerPolicy.register('closing-line-recovery', () => {
+    // Closing-line recovery: marks is_closing=true for started events, independent of ingestor
+    // UTV2-576 — runs before the materializer so closing values are available to materialize
+    const closingLineRecoveryDeps = {
       events: runtime.repositories.events,
+      providerOffers: runtime.repositories.providerOffers,
+    };
+    runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
+    closingLineRecoveryTimer = setInterval(() => {
+      runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
+    }, CLOSING_LINE_RECOVERY_INTERVAL_MS);
+  });
+
+  schedulerPolicy.register('market-universe-materializer', () => {
+    // Market universe materializer: keep market_universe current from provider_offers
+    // Phase 2 UTV2-461 — continues in parked mode without producing candidates or picks
+    const materializerDeps = {
+      providerOffers: runtime.repositories.providerOffers,
+      marketUniverse: runtime.repositories.marketUniverse,
+      events: runtime.repositories.events,
+      participants: runtime.repositories.participants,
+    };
+    runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
+    marketUniverseMaterializerTimer = setInterval(() => {
+      runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
+    }, MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS);
+  });
+
+  schedulerPolicy.register('line-movement-detector', () => {
+    // Line movement detector: runs after materializer on same 5-minute schedule
+    // Phase 2 UTV2-462 — in-memory only, no DB writes
+    const lineMovementRepo = new DatabaseLineMovementRepository(runtime.repositories.marketUniverse);
+    runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
+    lineMovementDetectorTimer = setInterval(() => {
+      runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
+    }, LINE_MOVEMENT_DETECTOR_INTERVAL_MS);
+  });
+
+  schedulerPolicy.register('board-scan', () => {
+    // Board scan: reads market_universe, writes pick_candidates
+    // Phase 2 UTV2-463 — active mode only.
+    // Hard boundaries: writes ONLY to pick_candidates; pick_id stays NULL;
+    // shadow_mode stays true; model fields stay NULL; does NOT create picks.
+    const boardScanDeps = {
+      marketUniverse: runtime.repositories.marketUniverse,
+      pickCandidates: runtime.repositories.pickCandidates,
+    };
+    runBoardScan(boardScanDeps, { logger: console, enabled: true }).catch(() => {});
+    boardScanTimer = setInterval(() => {
+      runBoardScan(boardScanDeps, { logger: console, enabled: true }).catch(() => {});
+    }, BOARD_SCAN_INTERVAL_MS);
+  });
+
+  schedulerPolicy.register('candidate-scoring', () => {
+    // Candidate scoring: reads pick_candidates with model_score=NULL, computes and writes scores
+    // Phase 3 UTV2-470 — active mode only, after board scan populates candidates
+    // Hard invariants: never sets pick_id, never sets shadow_mode=false, never writes to picks
+    // Phase 7D: scoring reads champion model from registry, trust data, and records shadow comparisons
+    const scoringDeps = {
+      pickCandidates: runtime.repositories.pickCandidates,
+      marketUniverse: runtime.repositories.marketUniverse,
+      marketFamilyTrust: runtime.repositories.marketFamilyTrust,
+      runs: runtime.repositories.runs,
+      ...(runtime.repositories.modelRegistry ? { modelRegistry: runtime.repositories.modelRegistry } : {}),
+      ...(runtime.repositories.experimentLedger ? { experimentLedger: runtime.repositories.experimentLedger } : {}),
+    };
+    // UTV2-725 Gap 3: score both qualified and rejected candidates in shadow mode so
+    // the full candidate pool receives model scores. Rejected candidates are never promoted;
+    // scoring them is informational-only and does not change their rejection status.
+    const shadowScoringOptions = { logger: console, statuses: ['qualified', 'rejected'] };
+    runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
+    candidateScoringTimer = setInterval(() => {
+      runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
+    }, CANDIDATE_SCORING_INTERVAL_MS);
+  });
+
+  schedulerPolicy.register('ranked-selection', () => {
+    // Ranked selection: deterministically ranks qualified+scored candidates by model_score + tier
+    // Phase 4 UTV2-473 — active mode only, after candidate scoring
+    // Hard invariants: never sets pick_id, never sets shadow_mode=false, no scarcity logic
+    const rankingDeps = {
+      pickCandidates: runtime.repositories.pickCandidates,
       marketUniverse: runtime.repositories.marketUniverse,
     };
-    runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
-    systemPickScannerTimer = setInterval(() => {
-      runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
-    }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
-  }
-
-  // Closing-line recovery: marks is_closing=true for started events, independent of ingestor
-  // UTV2-576 — runs before the materializer so closing values are available to materialize
-  const closingLineRecoveryDeps = {
-    events: runtime.repositories.events,
-    providerOffers: runtime.repositories.providerOffers,
-  };
-  runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
-  closingLineRecoveryTimer = setInterval(() => {
-    runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
-  }, CLOSING_LINE_RECOVERY_INTERVAL_MS);
-
-  // Market universe materializer: keep market_universe current from provider_offers
-  // Phase 2 UTV2-461 — always runs (no feature flag; shadow_mode is enforced at candidate layer)
-  const materializerDeps = {
-    providerOffers: runtime.repositories.providerOffers,
-    marketUniverse: runtime.repositories.marketUniverse,
-    events: runtime.repositories.events,
-    participants: runtime.repositories.participants,
-  };
-  runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
-  marketUniverseMaterializerTimer = setInterval(() => {
-    runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
-  }, MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS);
-
-  // Line movement detector: runs after materializer on same 5-minute schedule
-  // Phase 2 UTV2-462 — in-memory only, no DB writes
-  const lineMovementRepo = new DatabaseLineMovementRepository(runtime.repositories.marketUniverse);
-  runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
-  lineMovementDetectorTimer = setInterval(() => {
-    runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
-  }, LINE_MOVEMENT_DETECTOR_INTERVAL_MS);
-
-  // Board scan: reads market_universe, writes pick_candidates
-  // Phase 2 UTV2-463 — gated by SYNDICATE_MACHINE_ENABLED=true (default: false)
-  // Runs after materializer on the same 5-min cadence.
-  // Hard boundaries: writes ONLY to pick_candidates; pick_id stays NULL;
-  // shadow_mode stays true; model fields stay NULL; does NOT create picks.
-  const boardScanDeps = {
-    marketUniverse: runtime.repositories.marketUniverse,
-    pickCandidates: runtime.repositories.pickCandidates,
-  };
-  runBoardScan(boardScanDeps, { logger: console, enabled: environment.SYNDICATE_MACHINE_ENABLED === 'true' }).catch(() => {});
-  boardScanTimer = setInterval(() => {
-    runBoardScan(boardScanDeps, { logger: console, enabled: environment.SYNDICATE_MACHINE_ENABLED === 'true' }).catch(() => {});
-  }, BOARD_SCAN_INTERVAL_MS);
-
-  // Candidate scoring: reads pick_candidates with model_score=NULL, computes and writes scores
-  // Phase 3 UTV2-470 — always runs on 5-min cadence after board scan populates candidates
-  // Hard invariants: never sets pick_id, never sets shadow_mode=false, never writes to picks
-  // Phase 7D: scoring reads champion model from registry, trust data, and records shadow comparisons
-  const scoringDeps = {
-    pickCandidates: runtime.repositories.pickCandidates,
-    marketUniverse: runtime.repositories.marketUniverse,
-    marketFamilyTrust: runtime.repositories.marketFamilyTrust,
-    runs: runtime.repositories.runs,
-    ...(runtime.repositories.modelRegistry ? { modelRegistry: runtime.repositories.modelRegistry } : {}),
-    ...(runtime.repositories.experimentLedger ? { experimentLedger: runtime.repositories.experimentLedger } : {}),
-  };
-  // UTV2-725 Gap 3: score both qualified and rejected candidates in shadow mode so
-  // the full candidate pool receives model scores. Rejected candidates are never promoted;
-  // scoring them is informational-only and does not change their rejection status.
-  const shadowScoringOptions = { logger: console, statuses: ['qualified', 'rejected'] };
-  runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
-  candidateScoringTimer = setInterval(() => {
-    runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
-  }, CANDIDATE_SCORING_INTERVAL_MS);
-
-  // Ranked selection: deterministically ranks qualified+scored candidates by model_score + tier
-  // Phase 4 UTV2-473 — runs after candidate scoring to rank the scored pool
-  // Hard invariants: never sets pick_id, never sets shadow_mode=false, no scarcity logic
-  const rankingDeps = {
-    pickCandidates: runtime.repositories.pickCandidates,
-    marketUniverse: runtime.repositories.marketUniverse,
-  };
-  runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
-  rankedSelectionTimer = setInterval(() => {
     runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
-  }, RANKED_SELECTION_INTERVAL_MS);
+    rankedSelectionTimer = setInterval(() => {
+      runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
+    }, RANKED_SELECTION_INTERVAL_MS);
+  });
 
-  // Board construction: applies scarcity rules to ranked pool, writes to syndicate_board
-  // Phase 4 UTV2-474 — runs after ranked selection on 5-min cadence
-  const boardConstructionDeps = {
-    pickCandidates: runtime.repositories.pickCandidates,
-    marketUniverse: runtime.repositories.marketUniverse,
-    syndicateBoard: runtime.repositories.syndicateBoard,
-  };
-  runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
-  boardConstructionTimer = setInterval(() => {
+  schedulerPolicy.register('board-construction', () => {
+    // Board construction: applies scarcity rules to ranked pool, writes to syndicate_board
+    // Phase 4 UTV2-474 — active mode only, after ranked selection
+    const boardConstructionDeps = {
+      pickCandidates: runtime.repositories.pickCandidates,
+      marketUniverse: runtime.repositories.marketUniverse,
+      syndicateBoard: runtime.repositories.syndicateBoard,
+    };
     runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
-  }, BOARD_CONSTRUCTION_INTERVAL_MS);
+    boardConstructionTimer = setInterval(() => {
+      runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
+    }, BOARD_CONSTRUCTION_INTERVAL_MS);
+  });
 
-  // Board pick writer: promotes syndicate_board entries to picks (10-min cadence, after board-construction)
-  // UTV2-844 — board write is part of the syndicate machine runtime, so it follows the
-  // master SYNDICATE_MACHINE_ENABLED gate. BOARD_PICK_WRITER_ENABLED can still force the
-  // writer on for isolated checks when the broader machine is disabled.
-  if (shouldScheduleBoardPickWriter(environment)) {
+  schedulerPolicy.register('board-pick-writer', () => {
+    // Board pick writer: promotes syndicate_board entries to picks (10-min cadence).
+    // UTV2-1604 — the writer never registers while the syndicate machine is parked.
     const boardPickWriterDeps = {
       syndicateBoard: runtime.repositories.syndicateBoard,
       pickCandidates: runtime.repositories.pickCandidates,
@@ -200,7 +231,7 @@ server.listen(port, () => {
         event: 'board_pick_writer.scheduler_registered',
         cadenceMs: BOARD_PICK_WRITER_INTERVAL_MS,
         actor: boardPickWriterOpts.actor,
-        syndicateMachineEnabled: environment.SYNDICATE_MACHINE_ENABLED === 'true',
+        syndicateMachineMode: schedulerPolicy.mode,
         boardPickWriterEnabled: environment.BOARD_PICK_WRITER_ENABLED === 'true',
       }),
     );
@@ -208,12 +239,12 @@ server.listen(port, () => {
     boardPickWriterTimer = setInterval(() => {
       runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
     }, BOARD_PICK_WRITER_INTERVAL_MS);
-  }
+  });
 
-  // Candidate pick scanner: converts qualified+scored pick_candidates into awaiting_approval picks
-  // UTV2-757 — gated on SYNDICATE_MACHINE_ENABLED (board pipeline must be producing candidates)
-  // Governance brake: source='system-pick-scanner' is in GOVERNANCE_BRAKE_SOURCES — picks land in awaiting_approval
-  if (environment.SYNDICATE_MACHINE_ENABLED === 'true') {
+  schedulerPolicy.register('candidate-pick-scanner', () => {
+    // Candidate pick scanner: converts qualified+scored pick_candidates into awaiting_approval picks
+    // UTV2-757 — active mode only (board pipeline must be producing candidates)
+    // Governance brake: source='system-pick-scanner' is in GOVERNANCE_BRAKE_SOURCES.
     const candidatePickScanDeps = {
       pickCandidates: runtime.repositories.pickCandidates,
       marketUniverse: runtime.repositories.marketUniverse,
@@ -228,20 +259,22 @@ server.listen(port, () => {
     candidatePickScannerTimer = setInterval(() => {
       runCandidatePickScan(candidatePickScanDeps, { logger: console }).catch(() => {});
     }, CANDIDATE_PICK_SCANNER_INTERVAL_MS);
-  }
+  });
 
-  // Model health scanner: evaluate champion model health every 4 hours
-  // UTV2-627 — writes snapshots to model_health_snapshots, alerts on warning/critical transitions
-  if (runtime.repositories.modelRegistry && runtime.repositories.modelHealthSnapshots) {
-    const healthScannerDeps = {
-      modelRegistry: runtime.repositories.modelRegistry,
-      modelHealthSnapshots: runtime.repositories.modelHealthSnapshots,
-    };
-    runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
-    modelHealthScannerTimer = setInterval(() => {
+  schedulerPolicy.register('model-health-scanner', () => {
+    // Model health scanner: evaluate champion model health every 4 hours
+    // UTV2-627 — writes snapshots to model_health_snapshots, alerts on warning/critical transitions
+    if (runtime.repositories.modelRegistry && runtime.repositories.modelHealthSnapshots) {
+      const healthScannerDeps = {
+        modelRegistry: runtime.repositories.modelRegistry,
+        modelHealthSnapshots: runtime.repositories.modelHealthSnapshots,
+      };
       runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
-    }, MODEL_HEALTH_SCANNER_INTERVAL_MS);
-  }
+      modelHealthScannerTimer = setInterval(() => {
+        runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
+      }, MODEL_HEALTH_SCANNER_INTERVAL_MS);
+    }
+  });
 
   console.log(
     JSON.stringify(
@@ -262,6 +295,7 @@ server.listen(port, () => {
         ],
         persistenceMode: runtime.persistenceMode,
         runtimeMode: runtime.runtimeMode,
+        syndicateMachineMode: schedulerPolicy.mode,
         dryRun: false,
         workerTargets: [],
         appVersion:
