@@ -8,22 +8,23 @@
   "branch": "codex/utv2-1604-parked-mode-scheduler-policy",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1319",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/index.ts",
     "apps/api/src/scheduler-policy.test.ts",
     "apps/api/src/scheduler-policy.ts",
     "docs/06_status/proof/UTV2-1604/**",
+    "package.json",
     "scripts/ci/scheduler-classification.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1604/evidence.json",
     "docs/06_status/proof/UTV2-1604/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-29T15:56:57.717Z",
-  "heartbeat_at": "2026-07-29T15:56:57.717Z",
+  "heartbeat_at": "2026-07-29T16:38:40.792Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1604-parked-mode-scheduler-policy.json",
