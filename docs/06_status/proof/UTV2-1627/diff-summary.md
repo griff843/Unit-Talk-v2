@@ -9,4 +9,4 @@
 - Expands execution-packet Tier C warnings for worker and proof-coverage self-amendments.
 - Adds negative tests for production identity, target mismatches, unclassified writers, read-only mutation signals, workflow credential misuse, and missing guards.
 
-Verified implementation SHA: `5cfa98630c4b6051e2f53a54c4ecf422a6790bfa`
+Verified implementation SHA: `076b7356078725288d902a1bd92a2bd9d37c921e`

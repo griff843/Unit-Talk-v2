@@ -57,7 +57,7 @@ R-level output:
 
 ```text
 Verdict: PASS
-Changed files: 23
+Changed files: 24
 Rules matched: lifecycle-fsm
 
 Advisory (PM-gated) artifacts missing:

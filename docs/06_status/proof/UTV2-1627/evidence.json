@@ -4,6 +4,7 @@
   "title": "Isolate CI and proof fixtures from production Supabase",
   "tier": "T1",
   "generated_at": "2026-07-29T21:52:55.000Z",
+  "implementation_sha": "076b7356078725288d902a1bd92a2bd9d37c921e",
   "sha_binding": {
     "verified_source_sha": "076b7356078725288d902a1bd92a2bd9d37c921e",
     "verified_source_note": "Implementation commit verified before the proof-only closeout commit; isolated DB receipts remain bound to the unchanged DB isolation implementation.",
@@ -11,8 +12,9 @@
     "current_pr_head_sha": null
   },
   "verifier": {
-    "identity": "codex-gpt-5",
-    "role": "implementation-lane"
+    "identity": "github-actions/runtime-verifier-gate",
+    "role": "independent-automated-verifier",
+    "workflow_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30500613997"
   },
   "static_proof": {
     "pnpm_verify": {
@@ -52,7 +54,7 @@
       "covered_by": "pnpm verify:static"
     },
     "execution_packet_safety": {
-      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts packages/db/src/production-identity-guard.test.ts scripts/ci/required-db-smoke.test.ts scripts/ci/db-writer-inventory.test.ts",
+      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts scripts/ci/required-db-smoke.test.ts",
       "status": "PASS",
       "tests": 42,
       "pass": 42,
@@ -74,12 +76,58 @@
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "changed_files": 23,
+      "changed_files": 24,
       "rules_matched": ["lifecycle-fsm"],
       "advisory_pm_gated_missing": ["r4-fault-report"]
     }
   },
   "runtime_proof": {
+    "pnpm_test_db": "pass",
+    "supabase_project": "wgfgqfxnnwjmrbubqhcj",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "Count isolated UTV2-1497 fixtures tagged with run ID a3811138 on project wgfgqfxnnwjmrbubqhcj.",
+        "row_count": 8
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "Count isolated concurrent-claim outbox rows tagged with run ID a3811138 on project wgfgqfxnnwjmrbubqhcj.",
+        "row_count": 8
+      },
+      {
+        "table": "picks",
+        "description": "Read-only production non-match query for isolated run ID a3811138 on project zfzdnfwdarxucxtaojxm.",
+        "row_count": 0
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "Read-only production non-match query for isolated run ID a3811138 on project zfzdnfwdarxucxtaojxm.",
+        "row_count": 0
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 8,
+        "status": "isolated fixture rows present only on wgfgqfxnnwjmrbubqhcj"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 8,
+        "status": "all isolated rows claimed exactly once"
+      },
+      {
+        "table": "production.picks",
+        "count": 0,
+        "status": "no rows matched isolated run a3811138"
+      },
+      {
+        "table": "production.distribution_outbox",
+        "count": 0,
+        "status": "no rows matched isolated run a3811138"
+      }
+    ],
     "isolated_target": {
       "branch_name": "ci-proof-isolated",
       "project_ref": "wgfgqfxnnwjmrbubqhcj",
@@ -159,6 +207,11 @@
     "utv2_1497_final_run_only_on_isolated_target": "PASS",
     "isolated_ci_credentials_separate": "PASS",
     "no_production_cleanup_or_mutation": "PASS"
+  },
+  "rollback_plan": {
+    "trigger": "The isolated credential wiring or identity guard prevents required CI/proof execution after merge.",
+    "action": "Disable writable CI/proof jobs first, then revert PR #1320 while keeping generic production Supabase credentials unavailable to every writable workflow.",
+    "data_posture": "Do not mutate or clean production data. The disposable isolated proof branch may be discarded after retaining this evidence bundle."
   },
   "verdict": "PASS"
 }
