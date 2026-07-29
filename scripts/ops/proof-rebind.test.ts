@@ -2053,3 +2053,169 @@ test('P2: the canonical PR owner is capped at 39 TOTAL characters', () => {
   assert.strictEqual(hyphenated(20).length, 39);
   assert.strictEqual(deriveCanonicalPrUrl(ok, 1), ok, 'exactly 39 characters is legal');
 });
+
+// ---------------------------------------------------------------------------
+// Findings from the fifth adversarial exact-head review, of a7ed3b2f.
+// ---------------------------------------------------------------------------
+
+test('P1: a FENCE OPENER wins over tag-looking text in its own info string', () => {
+  // Scanning for <!-- and <pre> before the fence opener consumed ```<pre> as a
+  // tag line, so the fence never opened and every row inside it was writable.
+  for (const info of ['<pre>', '<!--', '<script>', 'html <pre>']) {
+    const doc = [
+      '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '',
+      '```' + info, 'Merge SHA: pending merge', `PR: ${PR_URL}`, '```', '',
+      'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+    ].join('\n');
+    const result = planVerificationRebind('v.md', doc, SHAS, PR_URL);
+    assert.deepStrictEqual(result.errors, [], `info ${JSON.stringify(info)}: ${result.errors.join('|')}`);
+    const after = result.next.split('\n');
+    assert.strictEqual(after[6], 'Merge SHA: pending merge', `info ${info}: fenced row must survive`);
+    assert.strictEqual(after[7], `PR: ${PR_URL}`, `info ${info}: fenced PR row must survive`);
+    assert.strictEqual(after[10], `Merge SHA: ${MERGE}`, `info ${info}: the real row is the one rebound`);
+    assert.ok(
+      maskWritableRegions(doc).includes('```' + info),
+      'the mask must see the same fence, or the rewrite would be concealed',
+    );
+  }
+  assert.deepStrictEqual([...verbatimLineIndices(['a', '```<pre>', 'x', '```', 'b'])], [2]);
+  assert.deepStrictEqual([...verbatimLineIndices(['a', '```<!--', 'x', '```', 'b'])], [2]);
+});
+
+test('P1: an EMPTY ATX heading is still a heading and ends the section', () => {
+  // "###" with no text is a legal ATX heading. Requiring whitespace after the
+  // run left it unrecognised, so rows after it stayed writable.
+  for (const heading of ['###', '#', '######', '  ##']) {
+    const doc = [
+      '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '',
+      'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+      heading, '',
+      `Execution SHA: ${'c'.repeat(40)}`, '',
+    ].join('\n');
+    const result = planVerificationRebind('v.md', doc, SHAS, PR_URL);
+    assert.deepStrictEqual(result.errors, [], `heading ${JSON.stringify(heading)}: ${result.errors.join('|')}`);
+    assert.strictEqual(
+      result.next.split('\n')[10],
+      `Execution SHA: ${'c'.repeat(40)}`,
+      `heading ${JSON.stringify(heading)}: the row after it must not be rewritten`,
+    );
+    assert.ok(isSectionHeading(heading), `${JSON.stringify(heading)} must be a heading`);
+  }
+  assert.ok(!isSectionHeading('#hashtag'), 'a hash run with immediate text is not a heading');
+  assert.ok(!isSectionHeading('    ###'), 'four spaces is a code block');
+});
+
+test('P1: every literal-content HTML block is verbatim, not just <pre>', () => {
+  // <script>, <style> and <textarea> render their contents literally too, so a
+  // binding-looking line inside one is narrative.
+  for (const tag of ['script', 'style', 'textarea', 'pre']) {
+    const doc = [
+      '# P', `MERGE_SHA: ${'a'.repeat(40)}`, '', '## Merge SHA Binding', '',
+      `<${tag}>`, 'Merge SHA: pending merge', `</${tag}>`, '',
+      'Merge SHA: pending merge', `PR: ${PR_URL}`, '',
+    ].join('\n');
+    const result = planVerificationRebind('v.md', doc, SHAS, PR_URL);
+    assert.deepStrictEqual(result.errors, [], `<${tag}>: ${result.errors.join('|')}`);
+    const after = result.next.split('\n');
+    assert.strictEqual(after[6], 'Merge SHA: pending merge', `<${tag}> content must survive byte-for-byte`);
+    assert.strictEqual(after[9], `Merge SHA: ${MERGE}`, `<${tag}>: the real row is the one rebound`);
+    assert.ok(maskWritableRegions(doc).includes('Merge SHA: pending merge'), 'the mask must not conceal it');
+    assert.deepStrictEqual([...verbatimLineIndices(['a', `<${tag}>`, 'x', `</${tag}>`, 'b'])], [2]);
+  }
+  // A non-literal tag is NOT a verbatim block — <div> content is still markdown.
+  assert.deepStrictEqual([...verbatimLineIndices(['a', '<div>', 'x', '</div>', 'b'])], []);
+});
+
+test('P2: a failed write, fsync or close never leaves a temp file behind', () => {
+  // The temp was only unlinked after a RENAME failure, so a failure before the
+  // rename left a stray .rebind-<pid>.tmp beside the artifact — unreported, and
+  // mistakable for evidence by a later reader.
+  for (const failOn of ['write', 'file-fsync', 'file-close'] as const) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), `proof-rebind-temp-${failOn}-`));
+    const target = path.join(dir, 'evidence.json');
+    fs.writeFileSync(target, EVIDENCE);
+    const dirHandles = new Set<number>();
+    const ops: AtomicWriteOps = {
+      openSync: (t, flags) => {
+        const isDir = fs.existsSync(t) && fs.statSync(t).isDirectory();
+        const fd = fs.openSync(t, flags);
+        if (isDir) dirHandles.add(fd);
+        return fd;
+      },
+      writeFileSync: (fd, data, enc) => {
+        if (failOn === 'write') throw new Error('simulated write failure');
+        fs.writeFileSync(fd, data, enc);
+      },
+      fsyncSync: (fd) => {
+        if (failOn === 'file-fsync' && !dirHandles.has(fd)) throw new Error('simulated file fsync failure');
+        fs.fsyncSync(fd);
+      },
+      closeSync: (fd) => {
+        fs.closeSync(fd);
+        if (failOn === 'file-close' && !dirHandles.has(fd)) throw new Error('simulated close failure');
+      },
+      renameSync: (from, to) => fs.renameSync(from, to),
+      unlinkSync: (t) => fs.unlinkSync(t),
+    };
+
+    assert.throws(() => atomicWrite(target, 'rebound', ops), /simulated/, `${failOn}: must propagate`);
+    assert.deepStrictEqual(
+      fs.readdirSync(dir).filter((n) => n.includes('.rebind-')),
+      [],
+      `${failOn}: no temp file may survive`,
+    );
+    assert.strictEqual(fs.readFileSync(target, 'utf8'), EVIDENCE, `${failOn}: the original must be untouched`);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('P2: machine-tagged proof claims are verified against the implementation', () => {
+  // The proof asserted that the real-bundle tests resolve their fixtures with
+  // `git show` against a pinned commit. That was true of an earlier revision and
+  // false of this one — the tests read the working tree. A stale narrative claim
+  // is a proof defect.
+  //
+  // Prose matching cannot tell a live claim from an accurate historical one, so
+  // the checkable claims carry machine-readable TAGS instead, and each tag is
+  // verified against the implementation here. A tag that drifts fails this test;
+  // narrative describing what an earlier revision did is untouched.
+  const root = process.cwd();
+  const suite = fs.readFileSync(path.join(root, 'scripts', 'ops', 'proof-rebind.test.ts'), 'utf8');
+  const narrative = fs.readFileSync(
+    path.join(root, 'docs', '06_status', 'proof', 'UTV2-1614', 'verification.md'), 'utf8');
+  const evidence = fs.readFileSync(
+    path.join(root, 'docs', '06_status', 'proof', 'UTV2-1614', 'evidence.json'), 'utf8');
+
+  const claims = new Map(
+    [...narrative.matchAll(/<!--\s*CLAIM:\s*([a-z-]+)\s*=\s*(.+?)\s*-->/g)].map((m) => [m[1], m[2]]),
+  );
+
+  // CLAIM: how the real-bundle fixtures are resolved.
+  assert.ok(claims.has('fixture-resolution'), 'the proof must tag how real-bundle fixtures are resolved');
+  const suiteUsesGitShow = /execFileSync\('git', \['show'/.test(suite);
+  assert.strictEqual(
+    claims.get('fixture-resolution'),
+    suiteUsesGitShow ? 'git-show' : 'working-tree',
+    'the tagged fixture-resolution claim does not match the suite',
+  );
+
+  // The retired mechanism must not be described in the PRESENT tense anywhere.
+  assert.ok(
+    !/read the two bundles from\s+commit `[0-9a-f]{40}` via `git show`/.test(narrative),
+    'the narrative still describes the retired pinned-commit mechanism as current',
+  );
+
+  // CLAIM: the number of proof-rebind assertions, in BOTH proof artifacts.
+  const actualTestCount = (suite.match(/^test\(/gm) ?? []).length;
+  const claimed = narrative.match(/proof-rebind suite went from 36 to (\d+)\s*\n?assertions/);
+  assert.ok(claimed, 'the narrative must state the proof-rebind assertion count');
+  assert.strictEqual(
+    Number(claimed[1]),
+    actualTestCount,
+    `the narrative claims ${claimed[1]} proof-rebind assertions but the suite has ${actualTestCount}`,
+  );
+  assert.ok(
+    new RegExp(`including ${actualTestCount} proof-rebind assertions`).test(evidence),
+    `evidence.json must state ${actualTestCount} proof-rebind assertions, not a stale count`,
+  );
+});

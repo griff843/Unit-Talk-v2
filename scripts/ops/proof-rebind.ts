@@ -253,8 +253,8 @@ export const BINDING_ROW_LABELS = ['Merge SHA', 'PR', 'Approved PR head', 'Execu
 
 /**
  * Ends the binding section. A markdown ATX heading may carry up to three
- * leading spaces, may be any level, and is delimited from its text by a space
- * OR A TAB. Matching only an unindented `## ` missed both an indented heading
+ * leading spaces, may be any level, is delimited from its text by a space OR A
+ * TAB, and may be EMPTY — a bare `###` is a legal heading. Matching only an unindented `## ` missed both an indented heading
  * and a tab-delimited one, so the section appeared to run past its real end and
  * rows belonging to a later section became writable.
  *
@@ -263,7 +263,7 @@ export const BINDING_ROW_LABELS = ['Merge SHA', 'PR', 'Approved PR head', 'Execu
  * region is strict instead — see isBindingSectionHeading and bindingRowPattern.
  */
 export function isSectionHeading(line: string): boolean {
-  return /^ {0,3}#{1,6}[ \t]/.test(line);
+  return /^ {0,3}#{1,6}(?:[ \t]|$)/.test(line);
 }
 
 /**
@@ -373,67 +373,70 @@ export function maskWritableRegions(text: string): string {
  * becomes a missing-required-row refusal rather than a silent rewrite.
  */
 export function verbatimLineIndices(lines: string[]): Set<number> {
-  const fenced = new Set<number>();
-  let open: { char: string; length: number } | null = null;
-  let preDepth = 0;
-  let inComment = false;
+  const verbatim = new Set<number>();
+  // CommonMark's literal-content HTML blocks. Only <pre> was recognised, so a
+  // binding-looking line inside <script> — or <style>, or <textarea> — was
+  // rewritten as though it were markdown.
+  const HTML_OPEN = /<(?:pre|script|style|textarea)[\s>]/i;
+  const HTML_CLOSE = /<\/(?:pre|script|style|textarea)\s*>/i;
+  const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
   // Inline code spans are stripped before scanning for HTML tags: a line that
   // merely MENTIONS `<pre>` inside backticks is prose about a tag, not a tag.
-  // Treating the mention as an opening tag left the rest of the document
-  // permanently "inside" an unterminated block — which newly refused this
-  // lane's own proof bundle, because that bundle documents this very rule.
   const withoutInlineCode = (line: string): string => line.replace(/`+[^`]*`+/g, '');
 
+  let state: 'none' | 'fence' | 'html' | 'comment' = 'none';
+  let fence: { char: string; length: number } | null = null;
+  let htmlDepth = 0;
+
   for (let i = 0; i < lines.length; i += 1) {
-    const bare = withoutInlineCode(lines[i]);
+    const raw = lines[i];
+    const bare = withoutInlineCode(raw);
 
-    // HTML comments are verbatim: nothing inside one is rendered, so a
-    // binding-looking line in a comment is narrative that must never be
-    // rewritten.
-    if (inComment) {
-      if (bare.includes('-->')) { inComment = false; continue; }
-      fenced.add(i);
-      continue;
-    }
-    const commentOpen = bare.lastIndexOf('<!--');
-    if (commentOpen !== -1 && !bare.slice(commentOpen).includes('-->')) {
-      inComment = true;
+    if (state === 'comment') {
+      if (bare.includes('-->')) state = 'none';
+      else verbatim.add(i);
       continue;
     }
 
-    if (open === null) {
-      // An HTML <pre> block is verbatim too. The tag lines themselves are not
-      // content; every line between them is.
-      const opens = (bare.match(/<pre[\s>]/gi) ?? []).length;
-      const closes = (bare.match(/<\/pre\s*>/gi) ?? []).length;
-      if (opens > 0 || closes > 0) {
-        preDepth = Math.max(0, preDepth + opens - closes);
+    if (state === 'fence') {
+      const match = raw.match(FENCE);
+      // A closing fence must use the SAME character, be AT LEAST as long as the
+      // opening run, and carry nothing but whitespace after it.
+      const closes = match !== null
+        && fence !== null
+        && match[1][0] === fence.char
+        && match[1].length >= fence.length
+        && match[2].trim() === '';
+      if (closes) { state = 'none'; fence = null; continue; }
+      verbatim.add(i);
+      continue;
+    }
+
+    if (state === 'html') {
+      if (HTML_CLOSE.test(bare)) {
+        htmlDepth -= 1;
+        if (htmlDepth <= 0) { state = 'none'; htmlDepth = 0; }
         continue;
       }
-      if (preDepth > 0) { fenced.add(i); continue; }
-    }
-
-    const match = lines[i].match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
-    if (open === null) {
-      // An opening fence may carry an info string (```json). Four or more
-      // leading spaces is an indented code block, not a fence, so it is
-      // deliberately not matched here — indented blocks are excluded from
-      // writability by the row pattern instead.
-      if (match) open = { char: match[1][0], length: match[1].length };
+      if (HTML_OPEN.test(bare)) { htmlDepth += 1; continue; }
+      verbatim.add(i);
       continue;
     }
-    // A closing fence must use the SAME character, be AT LEAST as long as the
-    // opening run, and carry nothing but whitespace after it. Accepting a
-    // shorter run closed a longer fence early, so content that is genuinely
-    // still inside the fence read as writable — a fail-open.
-    const closes = match !== null
-      && match[1][0] === open.char
-      && match[1].length >= open.length
-      && match[2].trim() === '';
-    if (closes) { open = null; continue; }
-    fenced.add(i);
+
+    // state === 'none'. A FENCE OPENER is checked FIRST and wins over any
+    // tag-looking or comment-looking text on the same line: ```<pre> opens a
+    // fence whose info string merely names a tag. Scanning for tags before the
+    // opener consumed that line as a tag line, so the fence never opened and
+    // every row inside it became writable.
+    const opener = raw.match(FENCE);
+    if (opener) { state = 'fence'; fence = { char: opener[1][0], length: opener[1].length }; continue; }
+
+    const commentOpen = bare.lastIndexOf('<!--');
+    if (commentOpen !== -1 && !bare.slice(commentOpen).includes('-->')) { state = 'comment'; continue; }
+
+    if (HTML_OPEN.test(bare) && !HTML_CLOSE.test(bare)) { state = 'html'; htmlDepth = 1; continue; }
   }
-  return fenced;
+  return verbatim;
 }
 
 /**
@@ -1126,10 +1129,19 @@ export function atomicWrite(target: string, content: string, ops: AtomicWriteOps
   const temp = path.join(dir, `.${path.basename(target)}.rebind-${process.pid}.tmp`);
   const handle = ops.openSync(temp, 'w');
   try {
-    ops.writeFileSync(handle, content, 'utf8');
-    ops.fsyncSync(handle);
-  } finally {
-    ops.closeSync(handle);
+    try {
+      ops.writeFileSync(handle, content, 'utf8');
+      ops.fsyncSync(handle);
+    } finally {
+      ops.closeSync(handle);
+    }
+  } catch (error) {
+    // A failure BEFORE the rename previously left the temp file on disk,
+    // unreported: the receipt named the artifact but a stray
+    // `.evidence.json.rebind-<pid>.tmp` sat beside it, and a later reader could
+    // mistake a half-written file for evidence. The temp is always removed.
+    try { ops.unlinkSync(temp); } catch { /* best effort */ }
+    throw error;
   }
   try {
     ops.renameSync(temp, target);
