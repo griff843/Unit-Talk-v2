@@ -122,6 +122,28 @@ export interface AppEnv {
   UNIT_TALK_OPS_ALERT_WEBHOOK_URL?: string | undefined;
 }
 
+export type SyndicateMachineMode = 'active' | 'parked';
+
+export interface SyndicateMachineModeConfig {
+  mode: SyndicateMachineMode;
+  requestedValue: 'true' | 'false';
+}
+
+export function parseSyndicateMachineMode(
+  rawValue: string | undefined,
+): SyndicateMachineModeConfig {
+  if (rawValue === 'true') {
+    return { mode: 'active', requestedValue: 'true' };
+  }
+  if (rawValue === 'false') {
+    return { mode: 'parked', requestedValue: 'false' };
+  }
+
+  throw new Error(
+    'SYNDICATE_MACHINE_ENABLED must be declared as exactly "true" (active) or "false" (parked).',
+  );
+}
+
 function parseEnvFileEntries(filePath: string) {
   const entries: Array<[string, string]> = [];
 

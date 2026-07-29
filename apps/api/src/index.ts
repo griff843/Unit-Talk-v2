@@ -53,17 +53,9 @@ let modelHealthScannerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
-  console.log(
-    JSON.stringify({
-      service: 'api',
-      event: 'scheduler_policy.resolved',
-      syndicateMachineMode: schedulerPolicy.mode,
-      decisions: schedulerPolicy.decisions,
-    }),
-  );
-
   schedulerPolicy.register('recap', () => {
     stopRecapScheduler = startRecapScheduler(runtime.repositories);
+    return { started: true };
   });
 
   schedulerPolicy.register('trial-expiry', () => {
@@ -71,6 +63,7 @@ server.listen(port, () => {
       runtime.repositories.tiers,
       runtime.repositories.audit,
     );
+    return { started: true };
   });
 
   schedulerPolicy.register('participant-enrichment', () => {
@@ -85,24 +78,28 @@ server.listen(port, () => {
       runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
       runTeamLogoEnrichmentPass(enrichmentDeps).catch(() => {});
     }, 6 * 60 * 60 * 1000);
+    return { started: true };
   });
 
   schedulerPolicy.register('system-pick-scanner', () => {
     // System pick scanner: materialize opening player prop lines into market_universe
     // Phase 7B UTV2-495 — retired direct /api/submissions path; now writes to governed upstream
     const scannerConfig = loadSystemPickScannerConfig(environment);
-    if (scannerConfig.enabled) {
-      const scannerDeps = {
-        providerOffers: runtime.repositories.providerOffers,
-        participants: runtime.repositories.participants,
-        events: runtime.repositories.events,
-        marketUniverse: runtime.repositories.marketUniverse,
-      };
-      runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
-      systemPickScannerTimer = setInterval(() => {
-        runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
-      }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
+    if (!scannerConfig.enabled) {
+      return { started: false, reason: 'SYSTEM_PICK_SCANNER_ENABLED=false' };
     }
+
+    const scannerDeps = {
+      providerOffers: runtime.repositories.providerOffers,
+      participants: runtime.repositories.participants,
+      events: runtime.repositories.events,
+      marketUniverse: runtime.repositories.marketUniverse,
+    };
+    runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
+    systemPickScannerTimer = setInterval(() => {
+      runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
+    }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('closing-line-recovery', () => {
@@ -116,6 +113,7 @@ server.listen(port, () => {
     closingLineRecoveryTimer = setInterval(() => {
       runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
     }, CLOSING_LINE_RECOVERY_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('market-universe-materializer', () => {
@@ -131,6 +129,7 @@ server.listen(port, () => {
     marketUniverseMaterializerTimer = setInterval(() => {
       runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
     }, MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('line-movement-detector', () => {
@@ -141,6 +140,7 @@ server.listen(port, () => {
     lineMovementDetectorTimer = setInterval(() => {
       runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
     }, LINE_MOVEMENT_DETECTOR_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('board-scan', () => {
@@ -156,6 +156,7 @@ server.listen(port, () => {
     boardScanTimer = setInterval(() => {
       runBoardScan(boardScanDeps, { logger: console, enabled: true }).catch(() => {});
     }, BOARD_SCAN_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('candidate-scoring', () => {
@@ -179,6 +180,7 @@ server.listen(port, () => {
     candidateScoringTimer = setInterval(() => {
       runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
     }, CANDIDATE_SCORING_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('ranked-selection', () => {
@@ -193,6 +195,7 @@ server.listen(port, () => {
     rankedSelectionTimer = setInterval(() => {
       runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
     }, RANKED_SELECTION_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('board-construction', () => {
@@ -207,6 +210,7 @@ server.listen(port, () => {
     boardConstructionTimer = setInterval(() => {
       runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
     }, BOARD_CONSTRUCTION_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('board-pick-writer', () => {
@@ -232,13 +236,14 @@ server.listen(port, () => {
         cadenceMs: BOARD_PICK_WRITER_INTERVAL_MS,
         actor: boardPickWriterOpts.actor,
         syndicateMachineMode: schedulerPolicy.mode,
-        boardPickWriterEnabled: environment.BOARD_PICK_WRITER_ENABLED === 'true',
+        configuredBoardPickWriterOverride: environment.BOARD_PICK_WRITER_ENABLED === 'true',
       }),
     );
     runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
     boardPickWriterTimer = setInterval(() => {
       runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
     }, BOARD_PICK_WRITER_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('candidate-pick-scanner', () => {
@@ -259,22 +264,37 @@ server.listen(port, () => {
     candidatePickScannerTimer = setInterval(() => {
       runCandidatePickScan(candidatePickScanDeps, { logger: console }).catch(() => {});
     }, CANDIDATE_PICK_SCANNER_INTERVAL_MS);
+    return { started: true };
   });
 
   schedulerPolicy.register('model-health-scanner', () => {
     // Model health scanner: evaluate champion model health every 4 hours
     // UTV2-627 — writes snapshots to model_health_snapshots, alerts on warning/critical transitions
-    if (runtime.repositories.modelRegistry && runtime.repositories.modelHealthSnapshots) {
-      const healthScannerDeps = {
-        modelRegistry: runtime.repositories.modelRegistry,
-        modelHealthSnapshots: runtime.repositories.modelHealthSnapshots,
-      };
-      runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
-      modelHealthScannerTimer = setInterval(() => {
-        runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
-      }, MODEL_HEALTH_SCANNER_INTERVAL_MS);
+    if (!runtime.repositories.modelRegistry || !runtime.repositories.modelHealthSnapshots) {
+      return { started: false, reason: 'model health repositories unavailable' };
     }
+
+    const healthScannerDeps = {
+      modelRegistry: runtime.repositories.modelRegistry,
+      modelHealthSnapshots: runtime.repositories.modelHealthSnapshots,
+    };
+    runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
+    modelHealthScannerTimer = setInterval(() => {
+      runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
+    }, MODEL_HEALTH_SCANNER_INTERVAL_MS);
+    return { started: true };
   });
+
+  console.log(
+    JSON.stringify({
+      service: 'api',
+      event: 'scheduler_policy.resolved',
+      requestedValue: schedulerPolicy.requestedValue,
+      syndicateMachineMode: schedulerPolicy.mode,
+      eligibilityDecisions: schedulerPolicy.decisions,
+      registrationOutcomes: schedulerPolicy.outcomes,
+    }),
+  );
 
   console.log(
     JSON.stringify(

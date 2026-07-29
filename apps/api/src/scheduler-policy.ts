@@ -1,4 +1,9 @@
-export type SyndicateMachineMode = 'active' | 'parked';
+import {
+  parseSyndicateMachineMode,
+  type SyndicateMachineMode,
+} from '@unit-talk/config';
+
+export { parseSyndicateMachineMode, type SyndicateMachineMode } from '@unit-talk/config';
 
 export type ParkedModeClassification = 'parked-enabled' | 'parked-disabled';
 
@@ -28,26 +33,33 @@ export const PRODUCTION_SCHEDULER_IDS = Object.freeze(
 export interface SchedulerRegistrationDecision {
   scheduler: ProductionSchedulerId;
   parkedModeClassification: ParkedModeClassification;
-  registered: boolean;
+  eligible: boolean;
 }
+
+export type SchedulerRegistrationStatus =
+  | 'started'
+  | 'suppressed_by_mode'
+  | 'skipped_by_runtime_condition';
+
+export interface SchedulerRegistrationOutcome extends SchedulerRegistrationDecision {
+  status: SchedulerRegistrationStatus;
+  started: boolean;
+  reason: string | null;
+}
+
+export type SchedulerStartOutcome =
+  | { started: true }
+  | { started: false; reason: string };
 
 export interface SchedulerRegistrationPolicy {
   mode: SyndicateMachineMode;
+  requestedValue: 'true' | 'false';
   decisions: readonly SchedulerRegistrationDecision[];
-  register(scheduler: ProductionSchedulerId, registration: () => void): boolean;
-}
-
-export function parseSyndicateMachineMode(rawValue: string | undefined): SyndicateMachineMode {
-  if (rawValue === 'true') {
-    return 'active';
-  }
-  if (rawValue === 'false') {
-    return 'parked';
-  }
-
-  throw new Error(
-    'SYNDICATE_MACHINE_ENABLED must be declared as exactly "true" (active) or "false" (parked).',
-  );
+  readonly outcomes: readonly SchedulerRegistrationOutcome[];
+  register(
+    scheduler: ProductionSchedulerId,
+    registration: () => SchedulerStartOutcome,
+  ): SchedulerRegistrationOutcome;
 }
 
 export function shouldRegisterProductionScheduler(
@@ -60,24 +72,50 @@ export function shouldRegisterProductionScheduler(
 export function createSchedulerRegistrationPolicy(
   rawSyndicateMachineEnabled: string | undefined,
 ): SchedulerRegistrationPolicy {
-  const mode = parseSyndicateMachineMode(rawSyndicateMachineEnabled);
+  const { mode, requestedValue } = parseSyndicateMachineMode(rawSyndicateMachineEnabled);
   const decisions = Object.freeze(
     PRODUCTION_SCHEDULER_IDS.map((scheduler) => ({
       scheduler,
       parkedModeClassification: SCHEDULER_CLASSIFICATIONS[scheduler],
-      registered: shouldRegisterProductionScheduler(scheduler, mode),
+      eligible: shouldRegisterProductionScheduler(scheduler, mode),
     })),
   );
+  const outcomes: SchedulerRegistrationOutcome[] = [];
 
   return {
     mode,
+    requestedValue,
     decisions,
+    get outcomes() {
+      return outcomes;
+    },
     register(scheduler, registration) {
-      if (!shouldRegisterProductionScheduler(scheduler, mode)) {
-        return false;
+      const parkedModeClassification = SCHEDULER_CLASSIFICATIONS[scheduler];
+      const eligible = shouldRegisterProductionScheduler(scheduler, mode);
+      if (!eligible) {
+        const outcome: SchedulerRegistrationOutcome = {
+          scheduler,
+          parkedModeClassification,
+          eligible,
+          status: 'suppressed_by_mode',
+          started: false,
+          reason: 'syndicate_machine_parked',
+        };
+        outcomes.push(outcome);
+        return outcome;
       }
-      registration();
-      return true;
+
+      const startOutcome = registration();
+      const outcome: SchedulerRegistrationOutcome = {
+        scheduler,
+        parkedModeClassification,
+        eligible,
+        status: startOutcome.started ? 'started' : 'skipped_by_runtime_condition',
+        started: startOutcome.started,
+        reason: startOutcome.started ? null : startOutcome.reason,
+      };
+      outcomes.push(outcome);
+      return outcome;
     },
   };
 }

@@ -8,6 +8,7 @@ import {
   assertProductionRuntimeConfig,
   createRuntimeConfigFailureLogFields,
   loadEnvironment,
+  parseSyndicateMachineMode,
   type AppEnv,
 } from './env.js';
 
@@ -59,6 +60,24 @@ after(() => {
     } else {
       process.env[key] = value;
     }
+  }
+});
+
+test('parseSyndicateMachineMode accepts only exact active and parked declarations', () => {
+  assert.deepEqual(parseSyndicateMachineMode('true'), {
+    mode: 'active',
+    requestedValue: 'true',
+  });
+  assert.deepEqual(parseSyndicateMachineMode('false'), {
+    mode: 'parked',
+    requestedValue: 'false',
+  });
+
+  for (const invalidValue of [undefined, '', 'TRUE', 'False', ' true ', '0', 'enabled']) {
+    assert.throws(
+      () => parseSyndicateMachineMode(invalidValue),
+      /SYNDICATE_MACHINE_ENABLED must be declared as exactly "true".*"false"/,
+    );
   }
 });
 

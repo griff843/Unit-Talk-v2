@@ -11,6 +11,8 @@ import {
 
 const INDEX_PATH = resolve(process.cwd(), 'apps/api/src/index.ts');
 const indexSource = readFileSync(INDEX_PATH, 'utf8');
+const PACKAGE_PATH = resolve(process.cwd(), 'package.json');
+const packageSource = readFileSync(PACKAGE_PATH, 'utf8');
 
 const SCHEDULED_WORK: Readonly<Record<string, ProductionSchedulerId>> = {
   startRecapScheduler: 'recap',
@@ -122,9 +124,60 @@ export function auditSchedulerClassifications(sourceText: string): string[] {
   return violations;
 }
 
+export function auditSchedulerTestWiring(sourceText: string): string[] {
+  const packageJson = JSON.parse(sourceText) as {
+    scripts?: Record<string, string>;
+  };
+  const violations: string[] = [];
+  const apiCoreTests = packageJson.scripts?.['test:apps-api-core'] ?? '';
+  const opsTests = packageJson.scripts?.['test:ops'] ?? '';
+
+  if (!apiCoreTests.includes('apps/api/src/scheduler-policy.test.ts')) {
+    violations.push('test:apps-api-core must run scheduler-policy.test.ts');
+  }
+  if (!opsTests.includes('scripts/ci/scheduler-classification.test.ts')) {
+    violations.push('test:ops must run scheduler-classification.test.ts');
+  }
+  if (!opsTests.includes('scripts/ci/deploy-parked-mode.test.ts')) {
+    violations.push('test:ops must run deploy-parked-mode.test.ts');
+  }
+
+  return violations;
+}
+
 test('every API production scheduler is registered through the canonical classified policy', () => {
   assert.deepEqual(auditSchedulerClassifications(indexSource), []);
 });
+
+test('runtime policy receipt is emitted only after actual scheduler start outcomes are recorded', () => {
+  const receiptIndex = indexSource.indexOf("event: 'scheduler_policy.resolved'");
+  const lastRegistrationIndex = indexSource.lastIndexOf('schedulerPolicy.register(');
+
+  assert.notEqual(receiptIndex, -1);
+  assert.ok(receiptIndex > lastRegistrationIndex);
+  assert.match(indexSource, /eligibilityDecisions: schedulerPolicy\.decisions/);
+  assert.match(indexSource, /registrationOutcomes: schedulerPolicy\.outcomes/);
+});
+
+test('all parked-mode safety suites are wired into the canonical root test path', () => {
+  assert.deepEqual(auditSchedulerTestWiring(packageSource), []);
+});
+
+for (const requiredTest of [
+  'apps/api/src/scheduler-policy.test.ts',
+  'scripts/ci/scheduler-classification.test.ts',
+  'scripts/ci/deploy-parked-mode.test.ts',
+] as const) {
+  test(`required-test wiring audit detects removal of ${requiredTest}`, () => {
+    assert.ok(packageSource.includes(requiredTest), `fixture must contain ${requiredTest}`);
+    const mutatedSource = packageSource.replace(requiredTest, '');
+    assert.ok(
+      auditSchedulerTestWiring(mutatedSource).some((violation) =>
+        violation.includes(requiredTest.split('/').at(-1) ?? requiredTest),
+      ),
+    );
+  });
+}
 
 for (const scheduler of ['candidate-scoring', 'ranked-selection', 'board-construction'] as const) {
   test(`static verification detects removal of the ${scheduler} parked-mode gate`, () => {

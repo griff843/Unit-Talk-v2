@@ -19,8 +19,14 @@ const PARKED_DISABLED_SCHEDULERS: readonly ProductionSchedulerId[] = [
 ];
 
 test('syndicate-machine mode accepts only the two exact declared values', () => {
-  assert.equal(parseSyndicateMachineMode('true'), 'active');
-  assert.equal(parseSyndicateMachineMode('false'), 'parked');
+  assert.deepEqual(parseSyndicateMachineMode('true'), {
+    mode: 'active',
+    requestedValue: 'true',
+  });
+  assert.deepEqual(parseSyndicateMachineMode('false'), {
+    mode: 'parked',
+    requestedValue: 'false',
+  });
 
   for (const invalidValue of [undefined, '', 'TRUE', 'False', ' true ', '0', 'enabled']) {
     assert.throws(
@@ -59,10 +65,14 @@ test('parked mode registers non-producer services but no syndicate producer stag
   const registrations: ProductionSchedulerId[] = [];
 
   for (const scheduler of PRODUCTION_SCHEDULER_IDS) {
-    policy.register(scheduler, () => registrations.push(scheduler));
+    policy.register(scheduler, () => {
+      registrations.push(scheduler);
+      return { started: true };
+    });
   }
 
   assert.equal(policy.mode, 'parked');
+  assert.equal(policy.requestedValue, 'false');
   assert.deepEqual(
     registrations,
     PRODUCTION_SCHEDULER_IDS.filter(
@@ -70,7 +80,13 @@ test('parked mode registers non-producer services but no syndicate producer stag
     ),
   );
   assert.deepEqual(
-    policy.decisions.filter((decision) => !decision.registered).map((decision) => decision.scheduler),
+    policy.decisions.filter((decision) => !decision.eligible).map((decision) => decision.scheduler),
+    PARKED_DISABLED_SCHEDULERS,
+  );
+  assert.deepEqual(
+    policy.outcomes
+      .filter((outcome) => outcome.status === 'suppressed_by_mode')
+      .map((outcome) => outcome.scheduler),
     PARKED_DISABLED_SCHEDULERS,
   );
 });
@@ -80,22 +96,44 @@ test('active mode preserves registration of every production scheduler', () => {
   const registrations: ProductionSchedulerId[] = [];
 
   for (const scheduler of PRODUCTION_SCHEDULER_IDS) {
-    policy.register(scheduler, () => registrations.push(scheduler));
+    policy.register(scheduler, () => {
+      registrations.push(scheduler);
+      return { started: true };
+    });
   }
 
   assert.equal(policy.mode, 'active');
+  assert.equal(policy.requestedValue, 'true');
   assert.deepEqual(registrations, PRODUCTION_SCHEDULER_IDS);
-  assert.ok(policy.decisions.every((decision) => decision.registered));
+  assert.ok(policy.decisions.every((decision) => decision.eligible));
+  assert.ok(policy.outcomes.every((outcome) => outcome.status === 'started'));
 });
 
 test('board writer cannot override the canonical parked-mode decision', () => {
   const policy = createSchedulerRegistrationPolicy('false');
   let writerStarted = false;
 
-  const registered = policy.register('board-pick-writer', () => {
+  const outcome = policy.register('board-pick-writer', () => {
     writerStarted = true;
+    return { started: true };
   });
 
-  assert.equal(registered, false);
+  assert.equal(outcome.started, false);
+  assert.equal(outcome.status, 'suppressed_by_mode');
   assert.equal(writerStarted, false);
+});
+
+test('runtime outcome distinguishes policy eligibility from an actual skipped start', () => {
+  const policy = createSchedulerRegistrationPolicy('true');
+
+  const outcome = policy.register('system-pick-scanner', () => ({
+    started: false,
+    reason: 'SYSTEM_PICK_SCANNER_ENABLED=false',
+  }));
+
+  assert.equal(outcome.eligible, true);
+  assert.equal(outcome.started, false);
+  assert.equal(outcome.status, 'skipped_by_runtime_condition');
+  assert.equal(outcome.reason, 'SYSTEM_PICK_SCANNER_ENABLED=false');
+  assert.deepEqual(policy.outcomes, [outcome]);
 });
