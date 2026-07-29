@@ -3,10 +3,10 @@
   "issue_id": "UTV2-1627",
   "title": "Isolate CI and proof fixtures from production Supabase",
   "tier": "T1",
-  "generated_at": "2026-07-29T21:22:00.000Z",
+  "generated_at": "2026-07-29T21:52:55.000Z",
   "sha_binding": {
-    "verified_source_sha": "5cfa98630c4b6051e2f53a54c4ecf422a6790bfa",
-    "verified_source_note": "Implementation commit verified before the proof-only closeout commit.",
+    "verified_source_sha": "076b7356078725288d902a1bd92a2bd9d37c921e",
+    "verified_source_note": "Implementation commit verified before the proof-only closeout commit; isolated DB receipts remain bound to the unchanged DB isolation implementation.",
     "merge_sha": null,
     "current_pr_head_sha": null
   },
@@ -16,11 +16,11 @@
   },
   "static_proof": {
     "pnpm_verify": {
-      "command": "pnpm verify",
+      "command": "UNIT_TALK_API_RUNTIME_MODE=fail_open pnpm verify:static",
       "status": "PASS",
       "exit_code": 0,
-      "target_classification": "writable-isolated",
-      "target_project_ref": "wgfgqfxnnwjmrbubqhcj",
+      "target_classification": "static-only",
+      "target_project_ref": null,
       "steps": {
         "ops_sync_check": "PASS",
         "ops_system_alignment_check": "PASS",
@@ -32,26 +32,38 @@
         "test": "PASS",
         "smart_form_verify": "PASS",
         "verify_commands": "PASS",
-        "test_db": "PASS",
-        "test_t1_proof_live": "PASS"
+        "test_db": "PASS — prior isolated runtime receipt",
+        "test_t1_proof_live": "PASS — prior isolated runtime receipt"
       },
       "tail": [
-        "# Subtest: [live-db] concurrent claimNextAtomic calls never double-claim or drop a row",
-        "ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a row",
-        "# tests 1",
-        "# pass 1",
-        "# fail 0"
+        "[command-manifest] Verified 14 command definition(s)",
+        "[check-migration-versions] 3 migration file(s) verified — no duplicate versions.",
+        "[lint-migrations] 2 migration file(s) checked — no findings."
       ]
     },
     "type_check": {
       "command": "pnpm type-check",
       "status": "PASS",
-      "covered_by": "pnpm verify"
+      "covered_by": "pnpm verify:static"
     },
     "root_test": {
       "command": "pnpm test",
       "status": "PASS",
-      "covered_by": "pnpm verify"
+      "covered_by": "pnpm verify:static"
+    },
+    "execution_packet_safety": {
+      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts packages/db/src/production-identity-guard.test.ts scripts/ci/required-db-smoke.test.ts scripts/ci/db-writer-inventory.test.ts",
+      "status": "PASS",
+      "tests": 42,
+      "pass": 42,
+      "fail": 0,
+      "assertions": [
+        "static-only packets never emit the old unconditional pnpm verify instruction",
+        "credentialed DB tests are excluded from static focused verification",
+        "writable live-DB commands require isolated identity proof",
+        "canonical production hidden in DATABASE_URL is rejected",
+        "canonical production is limited to guarded read-only observation"
+      ]
     },
     "writer_inventory": {
       "command": "pnpm exec tsx scripts/ci/db-writer-inventory.ts",
@@ -62,7 +74,7 @@
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "changed_files": 22,
+      "changed_files": 23,
       "rules_matched": ["lifecycle-fsm"],
       "advisory_pm_gated_missing": ["r4-fault-report"]
     }

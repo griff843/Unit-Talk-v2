@@ -1,6 +1,6 @@
 # UTV2-1627 Verification
 
-Source SHA: `5cfa98630c4b6051e2f53a54c4ecf422a6790bfa`
+Source SHA: `076b7356078725288d902a1bd92a2bd9d37c921e`
 
 ## Summary
 
@@ -8,9 +8,11 @@ CI, pull-request database smoke, and writable T1 proof workflows now require a s
 
 The database-writer inventory classifies all 49 credentialed test entrypoints plus production read-only proof scripts and workflow execution paths. New unclassified writers, mutation-capable production-observation paths, or writable workflows using generic production secrets fail the inventory gate.
 
+Execution packets now classify verification as `static-only`, `writable-isolated`, or `production-read-only`. The old unconditional `pnpm verify` instruction is removed. Static packets exclude credentialed DB tests, writable packets emit an identity-guarded live-DB command, and production packets permit only read-only observation.
+
 ## Evidence
 
-- Verified implementation commit: `5cfa98630c4b6051e2f53a54c4ecf422a6790bfa`
+- Verified implementation commit: `076b7356078725288d902a1bd92a2bd9d37c921e`
 - Isolated Supabase branch: `ci-proof-isolated`
 - Isolated project ref: `wgfgqfxnnwjmrbubqhcj`
 - Canonical production ref: `zfzdnfwdarxucxtaojxm`
@@ -27,40 +29,35 @@ The isolated branch was built from the checked-in schema baseline and forward mi
 
 | Command                                                              | Result                                    |
 | -------------------------------------------------------------------- | ----------------------------------------- |
-| `pnpm type-check`                                                    | PASS via `pnpm verify`                    |
-| `pnpm test`                                                          | PASS via `pnpm verify`                    |
+| `pnpm type-check`                                                    | PASS via `pnpm verify:static`             |
+| `pnpm test`                                                          | PASS via `pnpm verify:static`             |
+| `UNIT_TALK_API_RUNTIME_MODE=fail_open pnpm verify:static`            | PASS — no writable DB suites executed     |
+| focused UTV2-1627 static tests                                       | PASS — 42 passed, 0 failed                |
 | `pnpm test:db`                                                       | PASS — 7 passed, 0 failed, isolated ref   |
 | `pnpm test:t1-proof:live`                                            | PASS via `pnpm verify`, isolated ref      |
 | `pnpm exec tsx scripts/ci/db-writer-inventory.ts`                    | PASS — 49 classified                      |
 | production identity negative proof                                   | PASS — canonical writable target rejected |
-| `pnpm verify`                                                        | PASS                                      |
+| prior isolated `pnpm verify`                                         | PASS                                      |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS                                      |
 
-Final `pnpm verify` output:
+Final static verification tail:
 
 ```text
-# Subtest: [live-db] concurrent claimNextAtomic calls never double-claim or drop a row
-ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a row
-  ---
-  duration_ms: 1015.878543
-  type: 'test'
-  ...
-1..1
-# tests 1
-# suites 0
-# pass 1
+[command-manifest] Verified 14 command definition(s)
+[check-migration-versions] 3 migration file(s) verified — no duplicate versions.
+[lint-migrations] 2 migration file(s) checked — no findings.
+1..42
+# tests 42
+# pass 42
 # fail 0
-# cancelled 0
 # skipped 0
-# todo 0
-# duration_ms 1859.693807
 ```
 
 R-level output:
 
 ```text
 Verdict: PASS
-Changed files: 22
+Changed files: 23
 Rules matched: lifecycle-fsm
 
 Advisory (PM-gated) artifacts missing:
