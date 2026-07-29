@@ -179,6 +179,7 @@ jobs:
         if: steps.db_check.outputs.has_db == 'true'
         run: |
           mkdir -p artifacts
+          pnpm exec tsx packages/db/src/production-identity-guard.ts --assert-production-read-only
           # Runner prints ProofOutput JSON to stdout; stderr has progress logs.
           # Capture stdout only; let stderr flow to the Actions log.
           if npx tsx scripts/shadow-scoring-runner.ts --dry-run 2>/dev/null > artifacts/shadow-report.json; then
@@ -190,6 +191,7 @@ jobs:
             npx tsx scripts/shadow-scoring-runner.ts --dry-run > artifacts/shadow-report.json 2>&1 || true
           fi
         env:
+          UNIT_TALK_DB_ACCESS_MODE: production-read-only
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           NODE_ENV: production

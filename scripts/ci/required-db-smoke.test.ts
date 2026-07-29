@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import '../../packages/db/src/production-identity-guard.test.js';
+import './db-writer-inventory.test.js';
 import {
+  assertDbSmokePreflight,
   detectDbSmokeSkipped,
   evaluateDbSmokeResult,
   hasSupabaseSmokeCredentials,
@@ -8,11 +11,17 @@ import {
   parseEnvText,
 } from './required-db-smoke.js';
 
+const ISOLATED_REF = 'abcdefghijklmnopqrst';
+const ISOLATED_URL = `https://${ISOLATED_REF}.supabase.co`;
+
 test('parseEnvText reads simple key-value env files', () => {
-  assert.deepEqual(parseEnvText('SUPABASE_URL=https://example.test\n# ignored\nEMPTY=\n'), {
-    SUPABASE_URL: 'https://example.test',
-    EMPTY: '',
-  });
+  assert.deepEqual(
+    parseEnvText('SUPABASE_URL=https://example.test\n# ignored\nEMPTY=\n'),
+    {
+      SUPABASE_URL: 'https://example.test',
+      EMPTY: '',
+    },
+  );
 });
 
 test('hasSupabaseSmokeCredentials requires all smoke keys', () => {
@@ -39,6 +48,58 @@ test('isDbSmokeRequired trips for protected refs and explicit CI flag', () => {
   assert.equal(isDbSmokeRequired({ GITHUB_REF_PROTECTED: 'true' }), true);
   assert.equal(isDbSmokeRequired({ GITHUB_REF: 'refs/heads/main' }), true);
   assert.equal(isDbSmokeRequired({ GITHUB_REF: 'refs/pull/10/merge' }), false);
+});
+
+test('assertDbSmokePreflight rejects production supplied as CI credentials', () => {
+  assert.throws(
+    () =>
+      assertDbSmokePreflight({
+        CI_REQUIRE_DB_SMOKE: 'true',
+        CI_SUPABASE_PROJECT_REF: ISOLATED_REF,
+        SUPABASE_URL: 'https://zfzdnfwdarxucxtaojxm.supabase.co',
+        SUPABASE_ANON_KEY: 'anon',
+        SUPABASE_SERVICE_ROLE_KEY: 'service',
+        UNIT_TALK_DB_ACCESS_MODE: 'writable-isolated',
+      }),
+    /canonical production/,
+  );
+});
+
+test('assertDbSmokePreflight rejects credentials when isolation classification is missing', () => {
+  assert.throws(
+    () =>
+      assertDbSmokePreflight({
+        CI_REQUIRE_DB_SMOKE: 'true',
+        CI_SUPABASE_PROJECT_REF: ISOLATED_REF,
+        SUPABASE_URL: ISOLATED_URL,
+        SUPABASE_ANON_KEY: 'anon',
+        SUPABASE_SERVICE_ROLE_KEY: 'service',
+      }),
+    /UNIT_TALK_DB_ACCESS_MODE=writable-isolated/,
+  );
+});
+
+test('assertDbSmokePreflight accepts isolated credentials with matching identity', () => {
+  const result = assertDbSmokePreflight({
+    CI_REQUIRE_DB_SMOKE: 'true',
+    CI_SUPABASE_PROJECT_REF: ISOLATED_REF,
+    SUPABASE_URL: ISOLATED_URL,
+    SUPABASE_ANON_KEY: 'anon',
+    SUPABASE_SERVICE_ROLE_KEY: 'service',
+    UNIT_TALK_DB_ACCESS_MODE: 'writable-isolated',
+  });
+
+  assert.equal(result.required, true);
+  assert.equal(result.hasCredentials, true);
+  assert.equal(result.identity?.canonicalProduction, false);
+});
+
+test('assertDbSmokePreflight allows an optional credentialless local skip', () => {
+  assert.deepEqual(assertDbSmokePreflight({}), {
+    required: false,
+    hasCredentials: false,
+    identity: null,
+  });
 });
 
 test('detectDbSmokeSkipped recognizes node test skip summaries and smoke skip reason', () => {
@@ -81,7 +142,8 @@ test('evaluateDbSmokeResult fails required smoke when the test run skipped', () 
       ok: false,
       status: 'failed',
       skipped: true,
-      reason: 'DB smoke is required but the test run reported skipped smoke tests',
+      reason:
+        'DB smoke is required but the test run reported skipped smoke tests',
     },
   );
 });

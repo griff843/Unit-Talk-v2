@@ -2,7 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateExecutionCwd } from './lane-execution.js';
-import { ROOT, emitJson, parseArgs, readManifest, type LaneManifest } from './shared.js';
+import {
+  ROOT,
+  emitJson,
+  parseArgs,
+  readManifest,
+  type LaneManifest,
+} from './shared.js';
 
 export interface ExecutionPacket {
   issue_id: string;
@@ -49,7 +55,9 @@ const TIER_VERIFICATION_MAP: Record<string, string[]> = {
   T3: ['type-check', 'test'],
 };
 
-export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket {
+export function generateExecutionPacket(
+  manifest: LaneManifest,
+): ExecutionPacket {
   const issueId = manifest.issue_id;
   const tier = manifest.tier ?? 'unknown';
   const expectedProofPaths = manifest.expected_proof_paths ?? [];
@@ -66,9 +74,13 @@ export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket
     cwd_guard_command: `cd "${manifest.execution_location?.cwd ?? manifest.worktree_path}"`,
     worktree_entrypoint: `cd "${manifest.execution_location?.cwd ?? manifest.worktree_path}" && pnpm install --frozen-lockfile`,
     dependency_setup: {
-      package_install: manifest.execution_location?.package_install ?? 'required',
-      setup_command: manifest.execution_location?.setup_command ?? 'pnpm install --frozen-lockfile',
-      main_checkout_control_only: manifest.execution_location?.main_checkout_control_only ?? true,
+      package_install:
+        manifest.execution_location?.package_install ?? 'required',
+      setup_command:
+        manifest.execution_location?.setup_command ??
+        'pnpm install --frozen-lockfile',
+      main_checkout_control_only:
+        manifest.execution_location?.main_checkout_control_only ?? true,
     },
     allowed_file_scope: [...(manifest.file_scope_lock ?? [])],
     tier_c_warnings: collectTierCWarnings(manifest.file_scope_lock ?? []),
@@ -119,23 +131,59 @@ function collectTierCWarnings(fileScopeLock: string[]): string[] {
   const warnings: string[] = [];
 
   for (const filePath of fileScopeLock) {
+    if (filePath.startsWith('apps/worker/')) {
+      warnings.push(
+        `Tier C path requires PM approval before editing: ${filePath} (apps/worker/)`,
+      );
+      continue;
+    }
+    if (filePath === '.github/workflows/proof-coverage-guard.yml') {
+      warnings.push(
+        `Tier C self-amendment path requires PM approval before editing: ${filePath}`,
+      );
+      continue;
+    }
     if (filePath.startsWith('packages/domain/')) {
-      warnings.push(`Tier C path requires PM approval before editing: ${filePath} (packages/domain/)`);
+      warnings.push(
+        `Tier C path requires PM approval before editing: ${filePath} (packages/domain/)`,
+      );
       continue;
     }
     if (filePath.startsWith('packages/config/')) {
-      warnings.push(`Tier C path requires PM approval before editing: ${filePath} (packages/config/)`);
+      warnings.push(
+        `Tier C path requires PM approval before editing: ${filePath} (packages/config/)`,
+      );
       continue;
     }
     if (/^supabase\/migrations\/[^/]+\.sql$/u.test(filePath)) {
-      warnings.push(`Tier C migration path requires PM approval before editing: ${filePath}`);
+      warnings.push(
+        `Tier C migration path requires PM approval before editing: ${filePath}`,
+      );
+      continue;
+    }
+    if (
+      [
+        'apps/api/src/auth.ts',
+        'apps/api/src/distribution-service.ts',
+        'packages/db/src/database.types.ts',
+        'packages/db/src/lifecycle.ts',
+        'packages/db/src/repositories.ts',
+        'packages/db/src/runtime-repositories.ts',
+      ].includes(filePath)
+    ) {
+      warnings.push(
+        `Tier C path requires PM approval before editing: ${filePath}`,
+      );
     }
   }
 
   return warnings;
 }
 
-function buildRequiredVerification(tier: string, expectedProofPaths: string[]): string[] {
+function buildRequiredVerification(
+  tier: string,
+  expectedProofPaths: string[],
+): string[] {
   const values = [...(TIER_VERIFICATION_MAP[tier] ?? ['type-check', 'test'])];
 
   for (const proofPath of expectedProofPaths) {
@@ -148,7 +196,10 @@ function buildRequiredVerification(tier: string, expectedProofPaths: string[]): 
 }
 
 function loadRepoBrief(): string {
-  if (process.env.UNIT_TALK_TEST_MODE === '1' || process.env.NODE_ENV === 'test') {
+  if (
+    process.env.UNIT_TALK_TEST_MODE === '1' ||
+    process.env.NODE_ENV === 'test'
+  ) {
     return '[test-brief-stub]';
   }
   try {
@@ -160,7 +211,10 @@ function loadRepoBrief(): string {
 }
 
 function packetTimestamp(): string {
-  if (process.env.UNIT_TALK_TEST_MODE === '1' || process.env.NODE_ENV === 'test') {
+  if (
+    process.env.UNIT_TALK_TEST_MODE === '1' ||
+    process.env.NODE_ENV === 'test'
+  ) {
     return TEST_TIMESTAMP;
   }
 
@@ -171,7 +225,9 @@ function main(): void {
   const { positionals, bools } = parseArgs(process.argv.slice(2));
   const issueId = positionals[0];
   if (!issueId) {
-    throw new Error('Usage: npx tsx scripts/ops/execution-packet.ts <ISSUE-ID> [--enforce-cwd]');
+    throw new Error(
+      'Usage: npx tsx scripts/ops/execution-packet.ts <ISSUE-ID> [--enforce-cwd]',
+    );
   }
 
   const packet = generateExecutionPacket(readManifest(issueId));

@@ -239,6 +239,9 @@ jobs:
         id: db_client_boundary
         run: pnpm ci:db-client-boundary
 
+      - name: Enforce DB writer classification
+        run: pnpm exec tsx scripts/ci/db-writer-inventory.ts
+
       # npm's legacy audit endpoint was permanently retired (HTTP 410,
       # 2026-07-14): "This endpoint is being retired. Use the bulk advisory
       # endpoint instead." `pnpm audit` has no bulk-endpoint support in the
