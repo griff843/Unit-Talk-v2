@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1627",
+  "title": "Isolate CI and proof fixtures from production Supabase",
+  "tier": "T1",
+  "generated_at": "2026-07-29T21:22:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "5cfa98630c4b6051e2f53a54c4ecf422a6790bfa",
+    "verified_source_note": "Implementation commit verified before the proof-only closeout commit.",
+    "merge_sha": null,
+    "current_pr_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex-gpt-5",
+    "role": "implementation-lane"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "target_classification": "writable-isolated",
+      "target_project_ref": "wgfgqfxnnwjmrbubqhcj",
+      "steps": {
+        "ops_sync_check": "PASS",
+        "ops_system_alignment_check": "PASS",
+        "ops_automation_coverage_check": "PASS",
+        "env_check": "PASS",
+        "lint": "PASS",
+        "type_check": "PASS",
+        "build": "PASS",
+        "test": "PASS",
+        "smart_form_verify": "PASS",
+        "verify_commands": "PASS",
+        "test_db": "PASS",
+        "test_t1_proof_live": "PASS"
+      },
+      "tail": [
+        "# Subtest: [live-db] concurrent claimNextAtomic calls never double-claim or drop a row",
+        "ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a row",
+        "# tests 1",
+        "# pass 1",
+        "# fail 0"
+      ]
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "covered_by": "pnpm verify"
+    },
+    "root_test": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "covered_by": "pnpm verify"
+    },
+    "writer_inventory": {
+      "command": "pnpm exec tsx scripts/ci/db-writer-inventory.ts",
+      "status": "PASS",
+      "discovered_credentialed_tests": 49,
+      "errors": []
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 22,
+      "rules_matched": ["lifecycle-fsm"],
+      "advisory_pm_gated_missing": ["r4-fault-report"]
+    }
+  },
+  "runtime_proof": {
+    "isolated_target": {
+      "branch_name": "ci-proof-isolated",
+      "project_ref": "wgfgqfxnnwjmrbubqhcj",
+      "parent_project_ref": "zfzdnfwdarxucxtaojxm",
+      "access_mode": "writable-isolated",
+      "schema_source": [
+        "00000000000000_baseline_live_schema.sql",
+        "20260714120000_add_delivery_kill_switch.sql",
+        "20260714130000_bootstrap_delivery_kill_switch_posture.sql"
+      ],
+      "canonical_reference_seed_counts": {
+        "sports": 9,
+        "selection_types": 3,
+        "market_families": 6,
+        "market_types": 133
+      }
+    },
+    "github_secret_purposes": [
+      "CI_SUPABASE_URL",
+      "CI_SUPABASE_ANON_KEY",
+      "CI_SUPABASE_SERVICE_ROLE_KEY",
+      "CI_SUPABASE_PROJECT_REF"
+    ],
+    "negative_identity_proof": {
+      "command": "production-identity-guard.ts --assert-isolated-writable with canonical production URL",
+      "status": "PASS",
+      "expected_result": "rejected",
+      "output": "Refusing writable DB execution against canonical production Supabase project zfzdnfwdarxucxtaojxm"
+    },
+    "live_db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "target_project_ref": "wgfgqfxnnwjmrbubqhcj",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0
+    },
+    "utv2_1497_isolated_receipt": {
+      "command": "pnpm test:t1-proof:live via pnpm verify",
+      "status": "PASS",
+      "run_id": "a3811138",
+      "target_project_ref": "wgfgqfxnnwjmrbubqhcj",
+      "created_at_range": {
+        "first": "2026-07-29T21:16:51.934Z",
+        "last": "2026-07-29T21:16:51.936Z"
+      },
+      "matching_picks": 8,
+      "matching_outbox_rows": 8,
+      "assertions": [
+        "all eight outbox rows were claimed",
+        "no row was double-claimed",
+        "excess workers returned null",
+        "each claimed row recorded one distinct test worker"
+      ]
+    },
+    "production_non_match_receipt": {
+      "access_mode": "production-read-only",
+      "production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "isolated_run_id": "a3811138",
+      "matching_picks": 0,
+      "matching_outbox_rows": 0,
+      "production_mutation": "none",
+      "cleanup_performed": false
+    },
+    "fixture_state_note": {
+      "status": "observed",
+      "detail": "A repeated pre-existing UTV2-1022 live proof reused static selection fields because its UUID is metadata-only. The disposable isolated branch was reset before the final green run. No production rows were reset, deleted, or updated."
+    }
+  },
+  "acceptance_criteria": {
+    "writable_ci_targets_isolated_supabase": "PASS",
+    "canonical_production_writes_fail_closed": "PASS",
+    "actual_target_identity_verified": "PASS",
+    "credentialed_db_writers_inventory_complete": "PASS",
+    "new_unclassified_writer_fails_ci": "PASS",
+    "production_observation_paths_read_only": "PASS",
+    "utv2_1497_final_run_only_on_isolated_target": "PASS",
+    "isolated_ci_credentials_separate": "PASS",
+    "no_production_cleanup_or_mutation": "PASS"
+  },
+  "verdict": "PASS"
+}
