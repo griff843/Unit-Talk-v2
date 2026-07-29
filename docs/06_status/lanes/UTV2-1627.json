@@ -12,6 +12,11 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
+    ".github/workflows/proof-coverage-guard.yml",
+    ".github/workflows/proof-gate.yml",
+    ".github/workflows/proof-regression.yml",
+    ".github/workflows/shadow-parity-required.yml",
+    ".github/workflows/supabase-pr-db-branch.yml",
     ".github/workflows/t1-proof-gate.yml",
     "apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts",
     "docs/05_operations/credential-purpose-inventory.md",
@@ -20,7 +25,9 @@
     "packages/db/src/production-identity-guard.test.ts",
     "packages/db/src/production-identity-guard.ts",
     "scripts/ci/db-writer-inventory.test.ts",
-    "scripts/ci/db-writer-inventory.ts"
+    "scripts/ci/db-writer-inventory.ts",
+    "scripts/ci/required-db-smoke.test.ts",
+    "scripts/ci/required-db-smoke.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1627/evidence.json",
