@@ -13,9 +13,16 @@
   "file_scope_lock": [
     ".github/workflows/ci.yml",
     ".github/workflows/proof-gate.yml",
+    ".github/workflows/proof-regression.yml",
     ".github/workflows/staging-db-proof.yml",
+    ".github/workflows/t1-proof-gate.yml",
+    ".ops/sync/UTV2-1553.yml",
     ".ops/sync/UTV2-1630.yml",
+    "docs/06_status/lanes/UTV2-1553.json",
+    "docs/06_status/lanes/UTV2-1585.json",
+    "docs/06_status/lanes/UTV2-1612.json",
     "docs/06_status/lanes/UTV2-1630.json",
+    "docs/06_status/proof/UTV2-1553/**",
     "docs/06_status/proof/UTV2-1630/**",
     "package.json",
     "scripts/ci/assert-staging-target.ts",
@@ -26,6 +33,9 @@
     "scripts/ci/staging-path-enforcement.test.ts",
     "scripts/ci/verify-db-proof-receipt.test.ts",
     "scripts/ci/verify-db-proof-receipt.ts",
+    "scripts/ci/workflow-production-credential-guard.test.ts",
+    "scripts/ci/workflow-production-credential-guard.ts",
+    "scripts/ops/proof-auditor-gate.test.ts",
     "scripts/ops/proof-auditor-gate.ts"
   ],
   "expected_proof_paths": [
@@ -66,6 +76,38 @@
       "at": "2026-07-30T18:40:00Z",
       "authority": "PM directive 2026-07-30 (absorb the live ci.yml bypass)",
       "reason": "Its runtime-verifier job wrote production SUPABASE_* into local.env and ran pnpm ci:db-smoke. With the staging guard in place that call refuses, so C2 would be permanently red and T1 proof unobtainable. Migrated to the staging-ci environment in-lane rather than shipping a known breakage."
+    },
+    {
+      "path": ".github/workflows/proof-regression.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:20:00Z",
+      "authority": "PM directive 2026-07-30 (production-safe CI recovery)",
+      "reason": "PR-triggered job that handed the PRODUCTION service-role key to proof scripts selected by a grep over the changed-file list \u2014 i.e. to arbitrary writable code, on every PR touching settlement/submission/promotion/distribution source. Same defect class as the ci.yml bypass; found by the workflow credential scanner added in this lane. Migrated to staging-ci and gated on ci:assert-staging."
+    },
+    {
+      "path": ".github/workflows/t1-proof-gate.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:20:00Z",
+      "authority": "PM directive 2026-07-30 (production-safe CI recovery)",
+      "reason": "Disabled by trigger (workflow_dispatch only) but still manually dispatchable, and its C2 step runs pnpm ci:db-smoke with production credentials. A dormant production-write path is one dispatch away from a live one. Migrated to staging-ci."
+    },
+    {
+      "path": "docs/06_status/lanes/UTV2-1553.json",
+      "from_issue": "UTV2-1553",
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:20:00Z",
+      "authority": "PM directive 2026-07-30 (stacked-PR path)",
+      "reason": "Circular dependency: UTV2-1630 removes production credentials from CI, but could not merge until the UTV2-1553 ghost-lock release landed; and UTV2-1553's PR #1322, branched from main, ran main's production-writing ci.yml on every push (192 picks + 171 submissions written 2026-07-30 19:00-20:14:57Z). Resolved by rebasing #1322 onto this branch so it inherits the staging-only workflows, then squashing the repair in here under a UTV2-1630-only commit message. The full UTV2-1553 record is preserved in PR #1322, Linear and this manifest.",
+      "covers": [
+        ".ops/sync/UTV2-1553.yml",
+        "docs/06_status/lanes/UTV2-1553.json",
+        "docs/06_status/lanes/UTV2-1585.json",
+        "docs/06_status/lanes/UTV2-1612.json",
+        "docs/06_status/proof/UTV2-1553/**"
+      ],
+      "follow_up": "UTV2-1553 closes against this merge SHA; PR #1322 is the authoritative repair record."
     }
   ]
 }

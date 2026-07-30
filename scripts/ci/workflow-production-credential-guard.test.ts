@@ -1,0 +1,308 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { parse as parseYaml } from 'yaml';
+import { readFileSync } from 'node:fs';
+import {
+  findProductionCredentialExposures,
+  formatExposures,
+  READ_ONLY_EXEMPTIONS,
+  PRODUCTION_DB_SECRET_NAMES,
+  type CredentialExemption,
+} from './workflow-production-credential-guard.js';
+import { ROOT } from '../ops/shared.js';
+
+const WORKFLOW_DIR = join(ROOT, '.github', 'workflows');
+
+function fixtureDir(files: Record<string, string>): string {
+  const dir = mkdtempSync(join(tmpdir(), 'utv2-1630-wf-'));
+  for (const [name, body] of Object.entries(files)) {
+    writeFileSync(join(dir, name), body);
+  }
+  return dir;
+}
+
+// ── The live assertion ──────────────────────────────────────────────────────
+
+test('no pull-request-triggered job holds an unexempted production DB credential', () => {
+  const exposures = findProductionCredentialExposures(WORKFLOW_DIR);
+  assert.deepEqual(
+    exposures,
+    [],
+    'A pull-request-reachable job references a PRODUCTION Supabase secret.\n' +
+      formatExposures(exposures) +
+      '\n\nCI must never hold a production database credential on a pull request. ' +
+      'Bind `environment: staging-ci` and use CI_SUPABASE_URL / CI_SUPABASE_PUBLISHABLE_KEY / ' +
+      'CI_SUPABASE_SECRET_KEY. If the job genuinely only READS production, add an entry to ' +
+      'READ_ONLY_EXEMPTIONS with a reason — an exemption never licenses a write.',
+  );
+});
+
+test('the workflows this lane migrated are clean without needing an exemption', () => {
+  // Guards the migration itself: if a later change restores production secrets
+  // to any of these, this fails even if someone also adds an exemption for a
+  // different job in the same file.
+  const exposures = findProductionCredentialExposures(WORKFLOW_DIR, []);
+  const migrated = ['ci.yml', 'proof-gate.yml', 'proof-regression.yml'];
+  for (const workflow of migrated) {
+    const hit = exposures.filter((item) => item.workflow === workflow);
+    assert.deepEqual(hit, [], `${workflow} must hold no production DB credential at all`);
+  }
+});
+
+test('every exemption names a workflow, job and secret that actually exist', () => {
+  // A stale exemption is worse than none: it reads as "reviewed and safe" while
+  // guarding nothing, and it silently pre-authorizes the name if it returns.
+  for (const entry of READ_ONLY_EXEMPTIONS) {
+    const doc = parseYaml(readFileSync(join(WORKFLOW_DIR, entry.workflow), 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    const jobs = doc['jobs'] as Record<string, unknown> | undefined;
+    assert.ok(jobs && entry.job in jobs, `exemption references missing job ${entry.workflow}::${entry.job}`);
+
+    const serialized = JSON.stringify(jobs[entry.job]);
+    for (const secret of entry.secrets) {
+      assert.ok(
+        PRODUCTION_DB_SECRET_NAMES.includes(secret as (typeof PRODUCTION_DB_SECRET_NAMES)[number]),
+        `${secret} is not a tracked production secret`,
+      );
+      assert.match(
+        serialized,
+        new RegExp(`secrets\\s*\\.\\s*${secret}\\b`),
+        `${entry.workflow}::${entry.job} no longer uses ${secret} — remove the exemption`,
+      );
+    }
+    assert.ok(entry.reason.trim().length >= 40, `exemption ${entry.workflow}::${entry.job} needs a real reason`);
+  }
+});
+
+// ── Detection behaviour ─────────────────────────────────────────────────────
+
+test('detects a production secret in a step env block', () => {
+  const dir = fixtureDir({
+    'bad.yml': `
+name: Bad
+on:
+  pull_request:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pnpm test:db
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'bad.yml', job: 'leak', secrets: ['SUPABASE_SERVICE_ROLE_KEY'] },
+  ]);
+});
+
+test('detects a production secret interpolated inside inline run text', () => {
+  // This is the shape that actually shipped: a heredoc writing local.env.
+  const dir = fixtureDir({
+    'heredoc.yml': `
+name: Heredoc
+on:
+  pull_request:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          cat <<'EOF' > local.env
+          SUPABASE_URL=\${{ secrets.SUPABASE_URL }}
+          EOF
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'heredoc.yml', job: 'leak', secrets: ['SUPABASE_URL'] },
+  ]);
+});
+
+test('detects a production secret in a job-level env block', () => {
+  const dir = fixtureDir({
+    'joblevel.yml': `
+name: Job level
+on: [pull_request]
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: \${{ secrets.SUPABASE_URL }}
+    steps:
+      - run: echo hi
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'joblevel.yml', job: 'leak', secrets: ['SUPABASE_URL'] },
+  ]);
+});
+
+test('tolerates whitespace inside the expression', () => {
+  const dir = fixtureDir({
+    'spaced.yml': `
+name: Spaced
+on:
+  pull_request:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets . SUPABASE_URL }}"
+`,
+  });
+  assert.equal(findProductionCredentialExposures(dir, []).length, 1);
+});
+
+test('ignores workflows with no pull-request trigger', () => {
+  const dir = fixtureDir({
+    'deploy.yml': `
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), []);
+});
+
+test('accepts staging credentials', () => {
+  const dir = fixtureDir({
+    'good.yml': `
+name: Good
+on:
+  pull_request:
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    environment: staging-ci
+    steps:
+      - run: pnpm ci:assert-staging && pnpm ci:db-smoke
+        env:
+          SUPABASE_URL: \${{ secrets.CI_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.CI_SUPABASE_SECRET_KEY }}
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), []);
+});
+
+test('CI_SUPABASE_URL is not mistaken for SUPABASE_URL', () => {
+  // `secrets.CI_SUPABASE_URL` contains the substring `SUPABASE_URL`; a
+  // substring match would flag every correctly-migrated job and the guard would
+  // be turned off within a day.
+  const dir = fixtureDir({
+    'prefixed.yml': `
+name: Prefixed
+on:
+  pull_request:
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.CI_SUPABASE_URL }} \${{ secrets.CI_SUPABASE_SECRET_KEY }}"
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), []);
+});
+
+test('an exemption covers only the secret it names', () => {
+  const dir = fixtureDir({
+    'partial.yml': `
+name: Partial
+on:
+  pull_request:
+jobs:
+  reader:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_URL }} \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+`,
+  });
+  const exemptions: CredentialExemption[] = [
+    { workflow: 'partial.yml', job: 'reader', secrets: ['SUPABASE_URL'], reason: 'read-only' },
+  ];
+  assert.deepEqual(findProductionCredentialExposures(dir, exemptions), [
+    { workflow: 'partial.yml', job: 'reader', secrets: ['SUPABASE_SERVICE_ROLE_KEY'] },
+  ]);
+});
+
+test('an exemption does not carry across jobs in the same workflow', () => {
+  const dir = fixtureDir({
+    'twojobs.yml': `
+name: Two jobs
+on:
+  pull_request:
+jobs:
+  reader:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_URL }}"
+  writer:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_URL }}"
+`,
+  });
+  const exemptions: CredentialExemption[] = [
+    { workflow: 'twojobs.yml', job: 'reader', secrets: ['SUPABASE_URL'], reason: 'read-only' },
+  ];
+  assert.deepEqual(findProductionCredentialExposures(dir, exemptions), [
+    { workflow: 'twojobs.yml', job: 'writer', secrets: ['SUPABASE_URL'] },
+  ]);
+});
+
+test('pull_request_target is treated as a pull-request trigger', () => {
+  const dir = fixtureDir({
+    'target.yml': `
+name: Target
+on:
+  pull_request_target:
+    types: [opened]
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_DB_URL }}"
+`,
+  });
+  assert.equal(findProductionCredentialExposures(dir, []).length, 1);
+});
+
+test('a workflow mixing push and pull_request is still scanned', () => {
+  const dir = fixtureDir({
+    'mixed.yml': `
+name: Mixed
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_ANON_KEY }}"
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'mixed.yml', job: 'leak', secrets: ['SUPABASE_ANON_KEY'] },
+  ]);
+});
+
+test('the scanner reads real workflows and does not pass vacuously', () => {
+  // If `on:` parsing ever broke, every workflow would be skipped and the live
+  // assertion above would pass while checking nothing.
+  const scanned = findProductionCredentialExposures(WORKFLOW_DIR, []);
+  assert.ok(
+    scanned.length >= READ_ONLY_EXEMPTIONS.length,
+    'scanner found fewer production-credential jobs than there are exemptions — trigger parsing is likely broken',
+  );
+});
