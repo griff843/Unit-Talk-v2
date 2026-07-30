@@ -19,9 +19,25 @@
       "waivers": 0,
       "note": "PT1 validated against the staging project, not production."
     },
-    "type_check": {
-      "command": "pnpm type-check",
-      "status": "PASS"
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PARTIAL",
+      "stages_passed": [
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test"
+      ],
+      "test_totals": {
+        "suites": 96,
+        "tests": 3987,
+        "pass": 3987,
+        "fail": 0
+      },
+      "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
+      "stop_reason": "Refused by the UTV2-1630 staging guard: this workstation holds no staging credential, so the resolved target (host=127.0.0.1) is not xskgrzbteyqdufktjrjx. Correct fail-closed behaviour, not a workaround.",
+      "authoritative_full_run": "the required CI `verify` context, which depends on staging-db-proof and verifies its same-run ci-db-proof-receipt/v2"
     }
   },
   "runtime_proof": {

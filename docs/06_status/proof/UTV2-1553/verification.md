@@ -25,13 +25,30 @@ ASSERTIONS:
 
 ## Verification
 
-Static verification only, which is the whole verification surface this change
-has. The diff is four JSON manifests and one sync file.
+`pnpm verify` was executed on this branch. Every static stage passed; the run
+then stopped at the live-DB stage, refused by the UTV2-1630 guard, because this
+workstation holds no staging credential. That refusal is the correct outcome and
+is reproduced verbatim below rather than worked around.
 
 ```text
-pnpm type-check   PASS
-pnpm lint         PASS
+$ pnpm verify
+env:check    PASS
+lint         PASS
+type-check   PASS
+build        PASS
+test         PASS   96 suites, 3987 tests, 3987 pass, 0 fail
+test:live-db -> test:db -> ci:assert-staging
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL
+                 (host=127.0.0.1). Writable DB verification requires
+                 xskgrzbteyqdufktjrjx.
+exit 1
 ```
+
+The authoritative complete run is the required `verify` context in CI, which
+does hold a staging credential path: it depends on the `staging-db-proof` job and
+verifies that job's same-run `ci-db-proof-receipt/v2`. It is **green on this
+head**.
 
 There is deliberately **no writable-database claim in this document.** Under
 UTV2-1630 a writable DB claim can only be satisfied by a `ci-db-proof-receipt/v2`
