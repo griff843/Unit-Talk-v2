@@ -57,10 +57,16 @@ before(() => {
       import.meta.url,
     ),
   );
+  // UTV2-1627: the guard resolves identity from the repo's env files
+  // (local.env > .env > .env.example) merged over process.env, because
+  // credentials are never exported into the shell. Pin cwd to the repo root so
+  // that resolution cannot depend on where the test runner was invoked from.
+  const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
   const guard = spawnSync(
     process.execPath,
     ['--import', 'tsx', guardPath, '--assert-isolated-writable'],
     {
+      cwd: repoRoot,
       encoding: 'utf8',
       env: process.env,
     },

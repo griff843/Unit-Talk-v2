@@ -110,7 +110,8 @@ jobs:
       - name: Check for live DB credentials
         id: db_check
         run: |
-          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+          # UTV2-1627: gate on the anon key, which is what this job now receives.
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
             echo "has_db=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_db=false" >> "$GITHUB_OUTPUT"
@@ -118,7 +119,8 @@ jobs:
           fi
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # UTV2-1627: anon key only — see the runner step below.
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
       # Advisory comment when secrets are absent — non-blocking.
       - name: Post advisory comment (no DB credentials)
@@ -193,7 +195,13 @@ jobs:
         env:
           UNIT_TALK_DB_ACCESS_MODE: production-read-only
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          # UTV2-1627: the service-role key is NOT provided. This job is
+          # `pull_request`-triggered and the shadow runner is observation-only
+          # (it asserts picksCreated/distributionEnqueued remain 0). Supplying a
+          # service-role key gave it unrestricted RLS-bypassing write capability
+          # that nothing structural prevented it from using. The anon key makes
+          # the read-only constraint enforceable by Postgres.
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           NODE_ENV: production
 
       # Parse the ProofOutput JSON and classify divergences.

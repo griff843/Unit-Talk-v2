@@ -9,8 +9,10 @@ import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   evaluateDatabaseIdentity,
 } from '../../packages/db/src/production-identity-guard.js';
+import { createDatabaseConnectionConfig } from '../../packages/db/src/client.js';
 import {
   type DatabaseWriterInventory,
+  evaluateGuardReachability,
   validateDatabaseWriterInventory,
 } from './db-writer-inventory.js';
 import {
@@ -456,3 +458,231 @@ function writeFixtureFile(
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, source, 'utf8');
 }
+
+// ---------------------------------------------------------------------------
+// UTV2-1627 — regression tests for the exact-head adversarial review.
+// Each test below corresponds to a finding or to a mutation that previously
+// survived (i.e. the behavior was correct but unprotected).
+// ---------------------------------------------------------------------------
+
+// Surviving mutation M4: deleting the "requires an actual database target URL"
+// throw left all tests green.
+test('M4: writable-isolated rejects a config with no database target URL at all', () => {
+  assert.throws(
+    () =>
+      assertIsolatedWritableDatabaseTarget({
+        accessMode: 'writable-isolated',
+        declaredProjectRef: ISOLATED_REF,
+      }),
+    /requires an actual database target URL/,
+  );
+});
+
+// Surviving mutation M7: replacing `value.toLowerCase().includes(...)` with a
+// case-sensitive `includes` left all tests green. Hostnames are
+// case-insensitive, so an uppercased production host is a real production URL.
+test('M7: canonical production is detected case-insensitively in the host', () => {
+  const upper = `https://${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF.toUpperCase()}.supabase.co`;
+
+  assert.equal(
+    evaluateDatabaseIdentity({ supabaseUrl: upper }).canonicalProduction,
+    true,
+  );
+  assert.throws(
+    () =>
+      assertIsolatedWritableDatabaseTarget({
+        accessMode: 'writable-isolated',
+        declaredProjectRef: ISOLATED_REF,
+        supabaseUrl: upper,
+      }),
+    /canonical production/,
+  );
+});
+
+// P1-9: a Supabase custom domain carries no project ref, so the old
+// declared-vs-observed check was skipped and the target was ALLOWED even though
+// it may front production.
+test('P1-9: rejects a custom-domain target whose identity cannot be determined', () => {
+  assert.throws(
+    () =>
+      assertIsolatedWritableDatabaseTarget({
+        accessMode: 'writable-isolated',
+        declaredProjectRef: ISOLATED_REF,
+        supabaseUrl: 'https://db.unit-talk.com',
+      }),
+    /Cannot positively identify/,
+  );
+});
+
+// P1-9: a loopback URL may be an SSH tunnel forwarding to production.
+test('P1-9: rejects a bare loopback target without the explicit local opt-in', () => {
+  assert.throws(
+    () =>
+      assertIsolatedWritableDatabaseTarget({
+        accessMode: 'writable-isolated',
+        declaredProjectRef: ISOLATED_REF,
+        supabaseUrl: 'http://127.0.0.1:54321',
+      }),
+    /Cannot positively identify/,
+  );
+});
+
+test('P1-9: allows loopback only when explicitly opted in', () => {
+  const evaluation = assertIsolatedWritableDatabaseTarget({
+    accessMode: 'writable-isolated',
+    declaredProjectRef: ISOLATED_REF,
+    supabaseUrl: 'http://127.0.0.1:54321',
+    allowLocalSupabase: true,
+  });
+  assert.equal(evaluation.canonicalProduction, false);
+});
+
+test('P1-9: the local opt-in does not extend to a remote host', () => {
+  assert.throws(
+    () =>
+      assertIsolatedWritableDatabaseTarget({
+        accessMode: 'writable-isolated',
+        declaredProjectRef: ISOLATED_REF,
+        supabaseUrl: 'https://db.unit-talk.com',
+        allowLocalSupabase: true,
+      }),
+    /Cannot positively identify/,
+  );
+});
+
+// P1-9: `CI_SUPABASE_PROJECT_REF=x` was normalized but never validated, so it
+// satisfied the "declared" requirement and then vacuously "matched".
+test('P1-9: rejects a malformed declared project ref', () => {
+  assert.throws(
+    () =>
+      assertIsolatedWritableDatabaseTarget({
+        accessMode: 'writable-isolated',
+        declaredProjectRef: 'x',
+        supabaseUrl: 'https://db.unit-talk.com',
+      }),
+    /well-formed 20-character Supabase project ref/,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// P1-4 — the durable boundary. Before UTV2-1627 the guard was invoked by
+// exactly 1 of 49 credentialed tests, so a test process holding production
+// credentials could construct a service-role client and write. These tests
+// assert the boundary itself, which every service-role client passes through.
+// ---------------------------------------------------------------------------
+
+const PRODUCTION_APP_ENV = {
+  SUPABASE_URL: `https://${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`,
+  SUPABASE_ANON_KEY: 'anon-key-fixture',
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-fixture',
+} as unknown as Parameters<typeof createDatabaseConnectionConfig>[0]['env'];
+
+const ISOLATED_APP_ENV = {
+  SUPABASE_URL: ISOLATED_URL,
+  SUPABASE_ANON_KEY: 'anon-key-fixture',
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-fixture',
+} as unknown as Parameters<typeof createDatabaseConnectionConfig>[0]['env'];
+
+test('P1-4: a test runner cannot construct a service-role client against production', () => {
+  const previous = process.env['UNIT_TALK_DB_ACCESS_MODE'];
+  delete process.env['UNIT_TALK_DB_ACCESS_MODE'];
+  try {
+    assert.throws(
+      () =>
+        createDatabaseConnectionConfig({
+          env: PRODUCTION_APP_ENV,
+          useServiceRole: true,
+        }),
+      /Refusing to construct a service-role client against canonical production/,
+    );
+  } finally {
+    if (previous !== undefined) process.env['UNIT_TALK_DB_ACCESS_MODE'] = previous;
+  }
+});
+
+test('P1-4: an anon client against production is still permitted', () => {
+  const config = createDatabaseConnectionConfig({
+    env: PRODUCTION_APP_ENV,
+    useServiceRole: false,
+  });
+  assert.equal(config.role, 'anon');
+});
+
+test('P1-4: a service-role client against an isolated project is permitted', () => {
+  const config = createDatabaseConnectionConfig({
+    env: ISOLATED_APP_ENV,
+    useServiceRole: true,
+  });
+  assert.equal(config.role, 'service_role');
+  assert.equal(config.url, ISOLATED_URL);
+});
+
+test('P1-4: production-read-only intent permits a production service-role client', () => {
+  const previous = process.env['UNIT_TALK_DB_ACCESS_MODE'];
+  process.env['UNIT_TALK_DB_ACCESS_MODE'] = 'production-read-only';
+  try {
+    const config = createDatabaseConnectionConfig({
+      env: PRODUCTION_APP_ENV,
+      useServiceRole: true,
+    });
+    assert.equal(config.role, 'service_role');
+  } finally {
+    if (previous === undefined) delete process.env['UNIT_TALK_DB_ACCESS_MODE'];
+    else process.env['UNIT_TALK_DB_ACCESS_MODE'] = previous;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// P0-2 — the inventory gate must assert guard EXECUTION, not string presence.
+// The real ci.yml pattern below kept this gate green while the guard never ran.
+// ---------------------------------------------------------------------------
+
+test('P0-2: rejects the real ci.yml dead-branch pattern that shipped', () => {
+  const deadBranch = [
+    '      - name: Live DB proof (classified)',
+    '        run: |',
+    '          if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then',
+    '            pnpm exec tsx packages/db/src/production-identity-guard.ts --assert-isolated-writable',
+    '          fi',
+    '          pnpm verify:live-db-verdict',
+  ].join('\n');
+
+  const result = evaluateGuardReachability(deadBranch);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /nested inside a shell conditional/);
+  assert.match(result.reason, /unconditionally/);
+});
+
+test('P0-2: rejects a guard that appears only in a comment', () => {
+  const commentOnly = [
+    '        run: |',
+    '          # pnpm exec tsx guard.ts --assert-isolated-writable',
+    '          pnpm test:db',
+  ].join('\n');
+
+  const result = evaluateGuardReachability(commentOnly);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no uncommented guard invocation/);
+});
+
+test('P0-2: rejects a guard that runs after a mutating command', () => {
+  const afterMutation = [
+    '        run: supabase db push --db-url "$POSTGRES_URL"',
+    '        run: pnpm exec tsx guard.ts --assert-isolated-writable',
+  ].join('\n');
+
+  const result = evaluateGuardReachability(afterMutation);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /after a mutating command/);
+});
+
+test('P0-2: accepts an unconditional guard that precedes every mutation', () => {
+  const correct = [
+    '        run: |',
+    '          set -euo pipefail',
+    '          pnpm exec tsx packages/db/src/production-identity-guard.ts --assert-isolated-writable',
+    '          pnpm verify:live-db-verdict',
+  ].join('\n');
+
+  assert.equal(evaluateGuardReachability(correct).ok, true);
+});

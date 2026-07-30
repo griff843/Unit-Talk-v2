@@ -181,12 +181,16 @@ export function validateDatabaseWriterInventory(
           `writable-isolated workflow is missing CI_SUPABASE credential wiring: ${workflow.path}`,
         );
       }
-      if (
-        !source.includes('--assert-isolated-writable') &&
-        !source.includes('pnpm ci:db-smoke')
-      ) {
+      // UTV2-1627: presence of the guard string proves nothing about whether
+      // the guard EXECUTES. In ci.yml the invocation sat inside
+      // `if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]` — a variable never exported
+      // into that shell — so the branch was permanently dead while this check
+      // stayed green. A comment containing the flag would have satisfied it
+      // equally. Assert reachability and ordering instead.
+      const reachability = evaluateGuardReachability(source);
+      if (!reachability.ok) {
         errors.push(
-          `writable-isolated workflow does not invoke a guarded DB entrypoint: ${workflow.path}`,
+          `writable-isolated workflow does not invoke a guarded DB entrypoint: ${workflow.path} (${reachability.reason})`,
         );
       }
     }
@@ -390,4 +394,100 @@ function main(): void {
 const argv1 = process.argv[1] ?? '';
 if (argv1 && import.meta.url === pathToFileURL(path.resolve(argv1)).href) {
   main();
+}
+
+/**
+ * UTV2-1627 — executable reachability for the isolation guard.
+ *
+ * Replaces a string-presence check that could be satisfied by a comment or by
+ * an invocation inside a permanently-false shell branch. Requires that:
+ *
+ *   1. the guard is invoked in a line that is not commented out; and
+ *   2. that invocation is not nested inside a shell `if` conditional; and
+ *   3. it appears BEFORE the first mutating / live-DB command in the file.
+ *
+ * Ordering matters because `supabase db push` applies DDL — asserting isolation
+ * after a mutation has already run is not containment.
+ */
+export const MUTATING_COMMAND_PATTERNS: readonly RegExp[] = [
+  /supabase\s+db\s+push/u,
+  /pnpm\s+(?:exec\s+)?verify:live-db-verdict/u,
+  /pnpm\s+(?:run\s+)?test:db\b/u,
+  /pnpm\s+(?:run\s+)?test:live-db\b/u,
+  /pnpm\s+(?:run\s+)?test:t1-proof:live\b/u,
+];
+
+const GUARD_INVOCATION = /--assert-isolated-writable|pnpm\s+(?:run\s+)?ci:db-smoke\b/u;
+
+export function evaluateGuardReachability(source: string): {
+  ok: boolean;
+  reason: string;
+} {
+  const lines = source.split(/\r?\n/);
+  let guardLine = -1;
+  let guardDepth = 0;
+  let firstMutation = -1;
+  let unconditionalMutation = -1;
+  // Track shell `if ...; then` nesting within a single run: block.
+  let shellDepth = 0;
+
+  for (const [index, rawLine] of lines.entries()) {
+    const line = rawLine.trim();
+    if (line.startsWith('#')) continue;
+
+    if (/^if\s/u.test(line) || /;\s*then$/u.test(line)) shellDepth += 1;
+    if (/^fi\b/u.test(line) && shellDepth > 0) shellDepth -= 1;
+
+    if (guardLine === -1 && GUARD_INVOCATION.test(line)) {
+      guardLine = index;
+      guardDepth = shellDepth;
+    }
+    // A command name inside quotes is data, not execution:
+    //   --require-executed-command "pnpm test:db"   (an auditor argument)
+    //   echo "| C2 | pnpm test:db executed ... |"   (a summary table)
+    // Both previously registered as mutations. Strip quoted spans and skip
+    // pure output statements before matching.
+    const executable = stripQuotedSpans(line);
+    if (/^(?:echo|printf)\b/u.test(executable)) continue;
+    if (MUTATING_COMMAND_PATTERNS.some((pattern) => pattern.test(executable))) {
+      if (firstMutation === -1) firstMutation = index;
+      if (shellDepth === 0 && unconditionalMutation === -1) {
+        unconditionalMutation = index;
+      }
+    }
+  }
+
+  if (guardLine === -1) {
+    return { ok: false, reason: 'no uncommented guard invocation found' };
+  }
+
+  // A guard inside a conditional is fine ONLY if no mutation can run outside
+  // that conditional. This is the exact ci.yml defect: the guard sat in a
+  // permanently-false `if`, while `pnpm verify:live-db-verdict` ran
+  // unconditionally on the next line. A legitimate if/else that selects between
+  // two guarded proof paths (proof-gate.yml, t1-proof-gate.yml) has no
+  // unconditional mutation and is correctly accepted.
+  if (guardDepth > 0 && unconditionalMutation !== -1) {
+    return {
+      ok: false,
+      reason:
+        `guard invocation at line ${guardLine + 1} is nested inside a shell conditional, ` +
+        `but a mutating command runs unconditionally at line ${unconditionalMutation + 1}`,
+    };
+  }
+  if (firstMutation !== -1 && guardLine > firstMutation) {
+    return {
+      ok: false,
+      reason: `guard runs at line ${guardLine + 1}, after a mutating command at line ${firstMutation + 1}`,
+    };
+  }
+  return {
+    ok: true,
+    reason: 'no mutation can run without the guard having executed',
+  };
+}
+
+/** Remove single- and double-quoted spans so quoted command names read as data. */
+function stripQuotedSpans(line: string): string {
+  return line.replace(/"[^"]*"/gu, '""').replace(/'[^']*'/gu, "''");
 }
