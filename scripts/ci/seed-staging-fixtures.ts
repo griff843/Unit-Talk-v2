@@ -64,6 +64,71 @@ export const STAGING_FIXTURES: SeedRow[] = [
   { table: 'market_types', rows: REFERENCE_FIXTURES['market_types'] ?? [] },
 ];
 
+/**
+ * Mutable tables purged before each run, child-first so foreign keys hold.
+ *
+ * Staging accumulates. A run leaves picks, submissions and system_runs behind;
+ * the NEXT run's alert and distribution paths then re-process those leftovers
+ * and try to insert a `system_runs.idempotency_key` the previous run already
+ * created — `system_runs_idempotency_key_idx` rejects it and the suite fails
+ * with an error that looks like a race but is deterministic once the residue
+ * exists.
+ *
+ * Resetting is safe precisely because this is staging: the project exists to be
+ * overwritten, holds no real data, and is re-seeded from the reference fixtures
+ * immediately below. A run that starts from someone else's leftovers is not a
+ * measurement of this commit.
+ *
+ * The list is deliberately minimal — see INTENTIONALLY_RETAINED below.
+ */
+const MUTABLE_TABLES_CHILD_FIRST = [
+  'distribution_receipts',
+  'distribution_outbox',
+  'system_runs',
+] as const;
+
+/**
+ * Deliberately NOT reset, and why.
+ *
+ * `settlement_records` is append-only, enforced by a database trigger
+ * (`SETTLEMENT_RECORD_IMMUTABLE`) — the settlement ledger is not allowed to
+ * lose history. Attempting the delete raises, and the right response is to
+ * leave the invariant alone rather than disable it for convenience: an
+ * invariant that CI switches off is not an invariant.
+ *
+ * The pick / submission graph is left in place for the same reason it does not
+ * need clearing. The cross-run collision was `system_runs.idempotency_key`, not
+ * the picks themselves: a later run re-processing a leftover pick fails only
+ * because the earlier run's system_runs row still holds the key. Clearing
+ * system_runs lets the re-processing succeed on its own terms, so deleting the
+ * picks buys nothing and would fight the settlement foreign keys.
+ */
+const INTENTIONALLY_RETAINED = ['settlement_records', 'picks', 'submissions'] as const;
+
+async function resetMutableTables(client: ReturnType<typeof createClient>): Promise<void> {
+  console.log(`[seed-staging] retained by design: ${INTENTIONALLY_RETAINED.join(', ')}`);
+  for (const table of MUTABLE_TABLES_CHILD_FIRST) {
+    // `not.is.null` on the primary key matches every row without needing a
+    // value to compare against. PostgREST refuses an unfiltered delete.
+    const { error, count } = await client
+      .from(table)
+      .delete({ count: 'exact' })
+      .not('id', 'is', null);
+    if (error) {
+      // A table absent from staging is not fatal — the schema is replayed from
+      // migrations and may legitimately lag. A delete that FAILS on an existing
+      // table is fatal, because the run would then start dirty.
+      if (/does not exist|schema cache/iu.test(error.message)) {
+        console.log(`[seed-staging] reset ${table}: absent, skipped`);
+        continue;
+      }
+      console.error(`[seed-staging] reset ${table}: ${error.message}`);
+      process.exit(1);
+    }
+    console.log(`[seed-staging] reset ${table}: ${count ?? 0} row(s) deleted`);
+  }
+}
+
 async function main(): Promise<void> {
   // Resolve from the same sources the DB clients use (local.env > .env >
   // .env.example, then process.env). Reading process.env alone is exactly the
@@ -91,6 +156,8 @@ async function main(): Promise<void> {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  await resetMutableTables(client);
+
   for (const { table, rows } of STAGING_FIXTURES) {
     const { error } = await client.from(table).upsert(rows, { onConflict: 'id' });
     if (error) {
@@ -99,7 +166,7 @@ async function main(): Promise<void> {
     }
     console.log(`[seed-staging] ${table}: ${rows.length} synthetic row(s) upserted`);
   }
-  console.log('[seed-staging] done (idempotent — re-running is a no-op)');
+  console.log('[seed-staging] done (mutable tables reset, reference data re-seeded)');
 }
 
 /**

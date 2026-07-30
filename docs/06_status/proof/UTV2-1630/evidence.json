@@ -4,12 +4,12 @@
   "tier": "T1",
   "title": "Every writable CI and T1 database path runs only against the staging project",
   "generated_at": "2026-07-30T21:00:00.000Z",
-  "implementation_sha": null,
+  "implementation_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
   "sha_binding": {
-    "verified_source_sha": null,
+    "verified_source_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
     "current_pr_head_sha": null,
-    "merge_sha": null,
-    "verified_source_note": "Bound post-merge by post-merge-lane-close.yml (ops:proof-generate --merge-sha). The CI receipt below carries its own independent binding to run id, attempt and SHA."
+    "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+    "verified_source_note": "Bound to the merge commit on main. The runtime proof below was produced by CI on the exact head that became this merge SHA (squash of 01775e25); it was not re-run afterwards against a different tree."
   },
   "static_proof": {
     "verify": {
@@ -40,7 +40,20 @@
     "target_project_ref": "xskgrzbteyqdufktjrjx",
     "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
     "targeted_production": false,
-    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP."
+    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP.",
+    "ci_receipt": {
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "commands": [
+        "pnpm test:db",
+        "pnpm test:t1-proof:live"
+      ],
+      "target_project_ref": "xskgrzbteyqdufktjrjx",
+      "verified_in": "the required `verify` context via scripts/ci/verify-db-proof-receipt.ts",
+      "pr": 1321,
+      "head_sha_at_proof": "01775e2576849f4acfaee5fdc71d472e15a55155",
+      "result": "success"
+    }
   },
   "isolation_proof": {
     "definitive_run": "the full writable set \u2014 pnpm test:db plus pnpm test:t1-proof:live (15 suites) \u2014 executed in CI. This is the exact command set that previously wrote to production.",
