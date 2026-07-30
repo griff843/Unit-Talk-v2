@@ -1,4 +1,97 @@
 {
+  "sports": [
+    {
+      "id": "MLB",
+      "display_name": "MLB",
+      "sort_order": 3,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "MMA",
+      "display_name": "MMA",
+      "sort_order": 8,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "NBA",
+      "display_name": "NBA",
+      "sort_order": 1,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "NCAAB",
+      "display_name": "NCAAB",
+      "sort_order": 5,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "NCAAF",
+      "display_name": "NCAAF",
+      "sort_order": 6,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "NFL",
+      "display_name": "NFL",
+      "sort_order": 2,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "NHL",
+      "display_name": "NHL",
+      "sort_order": 4,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "Soccer",
+      "display_name": "Soccer",
+      "sort_order": 7,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    },
+    {
+      "id": "Tennis",
+      "display_name": "Tennis",
+      "sort_order": 9,
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    }
+  ],
+  "cappers": [
+    {
+      "id": "griff843",
+      "display_name": "griff843",
+      "active": true,
+      "metadata": {},
+      "created_at": "2026-04-20T17:33:57.186228+00:00",
+      "updated_at": "2026-04-20T17:33:57.186228+00:00"
+    }
+  ],
   "market_families": [
     {
       "id": "game_prop",

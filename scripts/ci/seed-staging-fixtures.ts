@@ -40,10 +40,14 @@ interface SeedRow {
  * gets it wrong. The T1 live suites failed on
  * `picks_market_type_id_fkey` for exactly that reason.
  *
- * These three tables are pure reference data — 6 families, 3 selection types,
- * 133 market types. No picks, no submissions, no user data. Committing them
- * keeps the seeder self-contained, which matters: CI has no production access
- * by design, so it cannot fetch them at run time.
+ * The set is every reference table `picks` has a foreign key to that is small
+ * and non-entity: sports (9), cappers (1), market_families (6),
+ * selection_types (3), market_types (133). No picks, no submissions, no user
+ * data. `participants` and `players` are entity tables the suites populate
+ * themselves or leave null, so they are deliberately not mirrored.
+ *
+ * Committing them keeps the seeder self-contained, which matters: CI has no
+ * production access by design, so it cannot fetch them at run time.
  *
  * Regenerate by reading the same three tables from production read-only.
  */
@@ -53,6 +57,8 @@ const REFERENCE_FIXTURES = JSON.parse(
 
 /** Insert order matters: children reference their parents. */
 export const STAGING_FIXTURES: SeedRow[] = [
+  { table: 'sports', rows: REFERENCE_FIXTURES['sports'] ?? [] },
+  { table: 'cappers', rows: REFERENCE_FIXTURES['cappers'] ?? [] },
   { table: 'market_families', rows: REFERENCE_FIXTURES['market_families'] ?? [] },
   { table: 'selection_types', rows: REFERENCE_FIXTURES['selection_types'] ?? [] },
   { table: 'market_types', rows: REFERENCE_FIXTURES['market_types'] ?? [] },
