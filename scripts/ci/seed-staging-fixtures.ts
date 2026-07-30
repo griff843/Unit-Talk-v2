@@ -22,6 +22,7 @@ import {
   extractProjectRefFromUrl,
   isApprovedStagingTarget,
 } from './isolated-proof-attestation.js';
+import { collectEffectiveEnv } from './required-db-smoke.js';
 
 interface SeedRow {
   table: string;
@@ -70,8 +71,12 @@ export const STAGING_FIXTURES: SeedRow[] = [
 ];
 
 async function main(): Promise<void> {
-  const url = process.env['SUPABASE_URL'];
-  const key = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+  // Resolve from the same sources the DB clients use (local.env > .env >
+  // .env.example, then process.env). Reading process.env alone is exactly the
+  // defect that made the original CI identity guard a no-op.
+  const env = collectEffectiveEnv();
+  const url = env['SUPABASE_URL'];
+  const key = env['SUPABASE_SERVICE_ROLE_KEY'];
   const { projectRef, host } = extractProjectRefFromUrl(url);
 
   // Identity is asserted BEFORE the client is constructed.
