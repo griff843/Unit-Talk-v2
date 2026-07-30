@@ -56,6 +56,30 @@ jobs:
       # A change to the runner must therefore land through a pull request that
       # carries no production credential, and be rebased in — it cannot execute
       # its own modified version here.
+      #
+      # UTV2-1629: the pinned set is the runner's ENTIRE runtime closure on the
+      # --dry-run path, not just the runner file. The original pin named
+      # shadow-scoring-runner.ts alone while that file statically imported
+      # apps/api/src/server.js — which transitively loads most of apps/api and
+      # packages/domain, i.e. precisely the paths in this workflow's trigger
+      # filter. A PR editing packages/domain therefore ran its own domain code
+      # against production, at import time, before --dry-run was ever parsed.
+      #
+      # That closure cannot be pinned here: it is the code this check exists to
+      # observe, so pinning it would mean the check never runs for the PRs it
+      # targets. It was cut instead — the apps/api imports are now dynamic and
+      # taken only on the non-dry-run path (see the note in the runner), leaving
+      # a closure small enough to pin outright:
+      #   scripts/shadow-scoring-runner.ts  — the runner itself
+      #   scripts/ci/assert-unmodified-vs-base.ts — this guard
+      #   packages/config/src               — @unit-talk/config resolves to src
+      #                                       (its package exports map to .ts),
+      #                                       and it is what reads the credential
+      #   package.json / pnpm-lock.yaml     — `pnpm install` runs PR-supplied
+      #                                       dependency and lifecycle scripts
+      #                                       before any of the above executes
+      # None of these are in this workflow's trigger paths, so pinning them
+      # costs the check nothing: a PR touching both must land them separately.
       - name: Refuse to run PR-modified code against production
         run: |
           set -euo pipefail
@@ -64,7 +88,10 @@ jobs:
             --base "${{ github.event.pull_request.base.sha }}" \
             --head "${{ github.event.pull_request.head.sha }}" \
             scripts/shadow-scoring-runner.ts \
-            scripts/ci/assert-unmodified-vs-base.ts
+            scripts/ci/assert-unmodified-vs-base.ts \
+            packages/config/src \
+            package.json \
+            pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
