@@ -166,6 +166,28 @@ this proof makes no claim about the delta beyond the 34 tests added here
 (17 in `scripts/ci/privileged-db-client-guard.test.ts`, 17 in
 `packages/db/src/privileged-client-boundary.test.ts`).
 
+That authoritative run has now happened, on branch head
+`e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b` (CI run 30591605559):
+
+```text
+verify                                    success
+  Assert the DB proof producer succeeded  success
+  Privileged DB client boundary           success
+  Verify (static)                         success
+  Command Center tests                    success
+  Download staging DB proof receipt       success
+  Verify staging DB proof receipt         Verdict: PASS
+    DB proof verified: run 30591605559 attempt 1
+    @ 293cb776ab79947bbb1c7bd413ba188029d71c74,
+    target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0
+
+staging-db-proof                          success   (96 tests, 96 pass, 0 fail, 0 skipped)
+```
+
+The writable-DB claim is that receipt and nothing in this file. Its structured
+form, including the eight staging row counts the seeder observed and the seven
+live cases `test:db` ran, is in `evidence.json` beside this document.
+
 ## Evidence — the check verified in BOTH directions
 
 EVIDENCE:

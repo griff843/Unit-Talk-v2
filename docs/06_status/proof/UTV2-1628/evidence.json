@@ -15,8 +15,9 @@
     "verified_source_note": "Every measurement below was taken on the implementation commit a35030eb, with the pre-fix comparison taken on a real detached worktree at a55de402. The merge SHA does not exist until the squash merge lands; post-merge-lane-close.yml rebinds it."
   },
   "verifier": {
-    "identity": null,
-    "note": "Bound after CI completes to the GitHub Actions run that produced the ci-db-proof-receipt/v2 and verified it in the required `verify` context. The implementing agent is not the verifier of the writable-DB claim by design."
+    "identity": "github-actions/CI — run 30591605559, job staging-db-proof (producer) and job 91035195309 `verify` (independent receipt verifier)",
+    "method": "scripts/ci/verify-db-proof-receipt.ts re-checked the receipt against its own GITHUB_* values inside the required `verify` context and printed `Verdict: PASS`.",
+    "note": "The implementing agent is not the verifier of the writable-DB claim by design: proof text cannot show which database a run reached, so the verifier is the CI job that holds the credential and the separate job that re-derives the receipt's binding."
   },
   "static_proof": {
     "verify": {
@@ -47,6 +48,22 @@
       "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
       "stop_reason": "No staging credential exists on this workstation, so ci:assert-staging cannot resolve the approved staging project and refuses. That refusal is UTV2-1630's shipped control working as intended, not a gap here.",
       "authoritative_full_run": "the required CI `verify` context on this head"
+    },
+    "ci_verify_context": {
+      "run_id": "30591605559",
+      "job_id": "91035195309",
+      "head_sha": "e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b",
+      "conclusion": "success",
+      "steps": [
+        "Assert the DB proof producer succeeded = success",
+        "Privileged DB client boundary = success",
+        "Audit production dependencies = success",
+        "Verify (static) = success",
+        "Command Center tests = success",
+        "Download staging DB proof receipt (this run) = success",
+        "Verify staging DB proof receipt = success"
+      ],
+      "db_client_boundary_output": "[db-client-boundary] 5 direct driver construction site(s) across 5 file(s) / OK: every site is classified and none is reachable from `pnpm test`"
     }
   },
   "runtime_proof": {
@@ -57,9 +74,80 @@
     "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
     "targeted_production": false,
     "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP.",
-    "queries": [],
-    "row_counts": [],
-    "ci_receipt": {}
+    "queries": [
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "no duplicate participants for the same external_id and sport",
+        "result": "ok 5"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "ok 6"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "correction chain is additive — original settlement row is not mutated",
+        "result": "ok 7"
+      }
+    ],
+    "queries_note": "The seven live cases `pnpm test:db` executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential. Read from the ci-db-proof-receipt/v2 captured_output, whose sha256 the verifier re-derived; not transcribed from a local run.",
+    "row_counts": [
+      { "table": "distribution_receipts", "operation": "reset", "rows": 1 },
+      { "table": "distribution_outbox", "operation": "reset", "rows": 11 },
+      { "table": "system_runs", "operation": "reset", "rows": 1 },
+      { "table": "sports", "operation": "upsert", "rows": 9 },
+      { "table": "cappers", "operation": "upsert", "rows": 1 },
+      { "table": "market_families", "operation": "upsert", "rows": 6 },
+      { "table": "selection_types", "operation": "upsert", "rows": 3 },
+      { "table": "market_types", "operation": "upsert", "rows": 133 }
+    ],
+    "row_counts_note": "Observed on staging xskgrzbteyqdufktjrjx by scripts/ci/seed-staging-fixtures.ts in CI run 30591605559, job staging-db-proof. `reset` rows are the deletions the seeder reported for the mutable tables; `upsert` rows are the reference data it re-seeded. settlement_records, picks and submissions are retained by design and were not reset.",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "github_run_id": "30591605559",
+      "github_run_attempt": "1",
+      "github_sha": "293cb776ab79947bbb1c7bd413ba188029d71c74",
+      "commands": ["pnpm test:db", "pnpm test:t1-proof:live"],
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "exit_code": 0,
+      "test_db_tap": { "tests": 7, "pass": 7, "fail": 0, "skipped": 0 },
+      "job_tap_total": { "tests": 96, "pass": 96, "fail": 0, "skipped": 0 },
+      "repo_migration_head": "20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "fixture_run_id": "utv2-1630-30591605559-1",
+      "output_sha256": "01617270fdb452bc0f64b2e28f8bafcbd773a869448b5e883de2943b02109000",
+      "receipt_sha256": "ff0e2ac924ad372cffc1942d3b12d43e486649e802dcfdee565321be8fa6079c",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30591605559 attempt 1 @ 293cb776ab79947bbb1c7bd413ba188029d71c74, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "pr": 1324,
+      "head_sha_at_proof": "e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1324/merge) GitHub synthesised for that run, not the branch head. The branch head the run evaluated was e8bc33fe; the only tree difference between it and the merged head is this evidence file, which no CI job reads as input.",
+      "result": "success"
+    }
   },
   "boundary_proof": {
     "guard": "scripts/ci/privileged-db-client-guard.ts (pnpm ci:db-client-boundary)",
