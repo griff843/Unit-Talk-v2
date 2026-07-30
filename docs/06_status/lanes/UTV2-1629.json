@@ -1,0 +1,79 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1629",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2-utv2-1629",
+  "branch": "claude/utv2-1629-residual-production-credentials",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/actions/supabase-pooler-url/action.yml",
+    ".github/workflows/live-schema-parity.yml",
+    ".github/workflows/shadow-parity-required.yml",
+    ".github/workflows/supabase-pr-db-branch.yml",
+    ".ops/sync/UTV2-1629.yml",
+    "docs/05_operations/REQUIRED_CI_CHECKS.md",
+    "docs/05_operations/REQUIRED_SECRETS.md",
+    "docs/05_operations/supabase_setup.md",
+    "docs/06_status/lanes/UTV2-1629.json",
+    "docs/06_status/proof/UTV2-1629/**",
+    "docs/ops/SUPABASE_PREVIEW_BRANCH_VALIDATION.md",
+    "package.json",
+    "scripts/ci/workflow-production-credential-guard.test.ts",
+    "scripts/ci/workflow-production-credential-guard.ts",
+    "scripts/ops/ci-proof.ts",
+    "scripts/shadow-scoring-runner.test.ts",
+    "scripts/shadow-scoring-runner.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1629/evidence.json",
+    "docs/06_status/proof/UTV2-1629/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-30T22:10:00.000Z",
+  "heartbeat_at": "2026-07-30T22:10:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2-utv2-1629",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "scope_transfers": [
+    {
+      "path": ".github/workflows/shadow-parity-required.yml + scripts/shadow-scoring-runner.ts",
+      "from_issue": "UTV2-1630",
+      "to_issue": "UTV2-1629",
+      "at": "2026-07-30T22:10:00Z",
+      "authority": "PM directive 2026-07-30 (close the residual production-credential exposure)",
+      "reason": "UTV2-1630 retained this job as a read-only production consumer and pinned scripts/shadow-scoring-runner.ts to the merge base. The pin named one file while that file statically imported apps/api/src/server.js. Measured on origin/main: the runner's static import closure is 220 project files, 129 of which sit inside this workflow's own pull_request trigger paths (65 under apps/api/src, 120 under packages/domain/src). The workflow therefore both fired because a PR edited packages/domain and executed that PR's domain code against production with the service-role key, at module-evaluation time, before --dry-run was parsed. Closed by making the apps/api imports dynamic and confined to the non-dry-run path, reducing the closure to 4 files and 0 trigger-path files, then pinning that whole closure.",
+      "follow_up": "The service-role key cannot simply be downgraded here: all 121 public tables have RLS enabled and pick_candidates/market_universe carry zero policies, so an anon key returns count=0 for exactly the tables the check counts and the workflow treats candidatesScanned=0 as a WARNING. Real reduction needs a pg_read_all_data role on production — a CREATE ROLE the orchestrator owns."
+    },
+    {
+      "path": ".github/workflows/live-schema-parity.yml + .github/actions/supabase-pooler-url/action.yml",
+      "from_issue": "UTV2-1630",
+      "to_issue": "UTV2-1629",
+      "at": "2026-07-30T22:10:00Z",
+      "authority": "PM directive 2026-07-30",
+      "reason": "The job holds a production SUPERUSER Postgres URL and exported it into $GITHUB_ENV, which is job-wide: supabase start, supabase db reset, pg_isready, supabase stop and upload-artifact all inherited a live production connection string they have no use for. The composite action now also publishes the value as a step output, and out-env: '' suppresses the job-wide export, so only the two steps that read the live catalog receive it."
+    },
+    {
+      "path": ".github/workflows/supabase-pr-db-branch.yml",
+      "from_issue": "UTV2-1630",
+      "to_issue": "UTV2-1629",
+      "at": "2026-07-30T22:10:00Z",
+      "authority": "PM directive 2026-07-30",
+      "reason": "Dormant workflow carrying a SUPABASE_ACCESS_TOKEN management-API credential — the broadest credential in the repository, scoped to the whole Supabase organisation rather than one project. Deleted rather than exempted: migration replay is already proven more strongly by live-schema-parity.yml, which applies every repo migration to a fresh local stack. scripts/ops/ci-proof.ts was repointed at that workflow so the control it asserts stays backed by something that exists."
+    }
+  ]
+}
