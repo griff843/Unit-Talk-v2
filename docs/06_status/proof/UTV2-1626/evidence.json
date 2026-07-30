@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1626",
+  "tier": "T1",
+  "title": "The readiness ledger is measured and published, and the gate says which kind of failure it found",
+  "generated_at": "2026-07-30T23:55:00.000Z",
+  "implementation_sha": "1e1197581155864b550c332daa8d93a40447fceb",
+  "sha_binding": {
+    "verified_source_sha": "1e1197581155864b550c332daa8d93a40447fceb",
+    "current_pr_head_sha": null,
+    "merge_sha": null,
+    "verified_source_note": "Bound to the implementation head that carries the generator, the gate, the workflow and the measured ledger. The lane apparatus commit that follows adds only this proof bundle and the lane manifest; the merge SHA is written back by post-merge-lane-close.yml."
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "stages_passed": [
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "note": "pnpm verify cannot complete on a workstation without staging credentials — inherited from UTV2-1630, which pinned every writable DB stage to the staging project. verify:static is the sanctioned local equivalent (verify:local). The authoritative full run is the required `verify` context in CI."
+    },
+    "test_ops": {
+      "command": "pnpm test:ops",
+      "tests": 1447,
+      "pass": 1447,
+      "fail": 0,
+      "skipped": 0,
+      "suites": 6,
+      "duration_ms": 19255.442796
+    },
+    "lane_tests_in_isolation": {
+      "files": [
+        "scripts/ops/readiness-refresh.test.ts",
+        "scripts/ci/readiness-ledger-gate.test.ts",
+        "scripts/ci/readiness-refresh-workflow.test.ts",
+        "scripts/ci/direct-main-push-guard.test.ts"
+      ],
+      "tests": 63,
+      "pass": 63,
+      "fail": 0,
+      "skipped": 0
+    },
+    "workflow_credential_scanner": {
+      "command": "pnpm exec tsx scripts/ci/workflow-production-credential-guard.ts",
+      "exit_code": 0,
+      "note": "readiness-refresh.yml holds a production READ credential and is schedule + workflow_dispatch only, so it creates no pull-request-reachable exposure. The pull-request gate job holds no credential at all."
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "live read-only measurement of canonical production",
+    "target_project_ref": "zfzdnfwdarxucxtaojxm",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": true,
+    "mutated_production": false,
+    "read_only_basis": "The generator's only database surface is the ReadOnlyDb wrapper in scripts/ops/readiness-refresh.ts, which exposes select reads only. There is no insert/update/upsert/delete/rpc path in the file, and readiness-refresh.test.ts scans the source to keep it that way.",
+    "measured_ledger": {
+      "generated_at": "2026-07-30T23:40:39.763Z",
+      "verdict": "RED",
+      "observability": "degraded",
+      "schema_version": 2,
+      "dimensions_observed": 9,
+      "blockers": [
+        "deploy_sha_alignment",
+        "ingestor_health",
+        "worker_outbox_health",
+        "dead_letter_count"
+      ],
+      "unreadable": [
+        "db_tripwires",
+        "constitution_convergence"
+      ],
+      "passing": [
+        "pnpm_verify"
+      ],
+      "failing_non_blocking": [
+        "scheduled_observer_health",
+        "proof_coverage"
+      ]
+    },
+    "blocker_detail": {
+      "deploy_sha_alignment": "Last successful deploy run 28415953590 at 2026-06-30T02:30:15Z (741.2h ago) shipped 8deccaceda9f4af3b5efb17ecf23b5151315ed5d; main HEAD 3f83c87692e2fab106156a8ae01f54fd1bdc31d5 is 357 commits ahead.",
+      "ingestor_health": "latest ingestor.cycle started 2026-06-30T12:55:01.189873+00:00 (43845m old, threshold 30m), status \"failed\"; latest merged provider cycle 2026-06-30T12:24:44.890623+00:00; latest game_results row 2026-06-30T07:27:28.089891+00:00.",
+      "worker_outbox_health": "worker.heartbeat 2026-07-16T03:48:17.780927+00:00 (21352m old, threshold 30m, status succeeded); queue buckets pending=9, processing=32, stale_unknown=32, attempted-and-stuck=0.",
+      "dead_letter_count": "1948 dead_letter rows = 1947 bucket:governance_hold (attempt_count=0) + 1 bucket:true_failure (attempt_count>0). Governance holds do not fail readiness under QUEUE_READINESS_SEMANTICS.md v1.0; the single true delivery failure does."
+    }
+  },
+  "persistence_assertion": {
+    "note": "Exercised in both directions. A one-directional check would be worthless here: the mode exists to catch a run that produced nothing, so it has to be shown failing on that input.",
+    "positive_case": {
+      "input": "the newly measured ledger, against the copy from origin/main",
+      "result": "OK",
+      "exit_code": 0,
+      "output": "[readiness-persistence] OK — ledger rewritten with 9 dimensions, all observed within this run (generated_at 2026-07-30T23:40:39.763Z)"
+    },
+    "negative_case": {
+      "input": "the ledger compared against a byte-identical copy of itself",
+      "result": "NOT_REWRITTEN",
+      "exit_code": 1,
+      "output": "NOT_REWRITTEN: the ledger is byte-identical to the previous version — the generator did not execute, or its output was not published",
+      "significance": "This is the exact shape of the 29 consecutive green refresh runs that left the ledger untouched for 14.8 days. It now fails."
+    }
+  },
+  "gate_classification_proof": {
+    "note": "Same gate, same repository, two inputs — the observer failure and the product condition come back separated and correctly named.",
+    "this_branch_ledger": {
+      "code": "READINESS_RED",
+      "observer_failure": false,
+      "passed": false,
+      "age_hours": 0
+    },
+    "origin_main_ledger": {
+      "code": "LEDGER_STALE",
+      "observer_failure": true,
+      "passed": false,
+      "age_hours": 354.6,
+      "recorded_verdict_in_file": "RED",
+      "significance": "The file says RED, but the gate refuses to report it as READINESS_RED. A stale RED is not evidence of a current RED."
+    }
+  },
+  "defect_being_closed": {
+    "workflow": ".github/workflows/readiness-refresh.yml",
+    "prior_behaviour": "Checked the ledger file's age and opened a GitHub issue. It never invoked a generator, because none existed.",
+    "ledger_generated_at_on_main": "2026-07-16T05:10:24.185Z",
+    "refresh_runs_since_ledger_last_changed": 29,
+    "conclusion_of_those_runs": "success (all 29)",
+    "retained_run_history": "49 runs, 49 successes, oldest 2026-07-07T01:53:12Z",
+    "impact": "The pull-request gate failed every lane on a RED verdict nobody could confirm was still true, and a real regression was indistinguishable from a forgotten artifact. UTV2-1630's proof bundle records the gate as 'red and pre-existing … left red deliberately' — the correct call under the old design, and the signal loss this lane removes."
+  },
+  "self_referential_hazard": {
+    "statement": "This branch changes the Readiness Regression Gate itself, so its status on this pull request is stated explicitly rather than left ambiguous.",
+    "gate_status_on_this_pr": "RED",
+    "reason": "production_genuinely_red",
+    "not_broken_because": "The gate classifies as READINESS_RED with observer_failure=false on a ledger 0h old. All four blocking dimensions are live reads taken today against canonical production.",
+    "is_required_context": false,
+    "blocks_merge": false,
+    "deliberately_not_made_green": "Making it green would require writing a readiness score this lane did not measure, which is exactly the defect this lane exists to remove. The four blockers are production runtime state this diff does not touch.",
+    "follow_up_owners": [
+      "deploy_sha_alignment — main is 357 commits ahead of the last successful deploy (2026-06-30)",
+      "ingestor_health — last ingestor.cycle 2026-06-30, status failed",
+      "worker_outbox_health — worker heartbeat 14.8 days old, 32 rows processing past the 5m window",
+      "dead_letter_count — 1 true delivery failure among 1947 governance holds"
+    ]
+  },
+  "direct_main_push_guard": {
+    "change": "Admitted the scheduled ledger commit as a known automation identity.",
+    "message_pattern": "^ops\\(readiness\\): refresh ledger",
+    "path_scope": [
+      "docs/06_status/readiness/readiness-score.json"
+    ],
+    "rationale": "The ledger has to land on main to be the pull-request gate's input, and it is machine-generated every 6h. Routing it through a pull request would mean either a bot-authored PR every 6h or an artifact that goes stale again. The admission is one exact message pattern and one file, not a widening of the guard."
+  },
+  "known_limitations": [
+    "constitution_convergence and db_tripwires are reported unknown, so observability is degraded even when every readable dimension is fine. Convergence has no generator in this repository; db_tripwires is unreadable because db-health-tripwire.yml is itself failing. Both are recorded as unproven rather than assumed — correct, but it means a fully GREEN verdict is unreachable until a convergence generator exists and the tripwire observer is repaired.",
+    "The scheduled refresher needs SYNC_BOT_TOKEN to push through branch protection. Without it the push step fails — the intended outcome, since a refresh that cannot publish is not a refresh — but it surfaces as an observer-failure issue rather than as a configuration message.",
+    "The persistence assertion proves the ledger is new and was published. It does not prove the numbers inside it are true; that rests on the generator's reads being against the canonical production ref, which is asserted in code and cannot fall back to another target.",
+    "pnpm verify cannot complete on a workstation without staging credentials (inherited from UTV2-1630). Local coverage is verify:static; the authoritative full run is the required `verify` context in CI.",
+    "Live Schema Parity is red and pre-existing: migration-ledger drift tracked under UTV2-1274. This lane touches no migration and the check is not a required context."
+  ],
+  "explicitly_not": [
+    "no production database mutation — every read goes through the select-only ReadOnlyDb wrapper",
+    "no production credential in any pull_request-triggered workflow job; the refresher is schedule + workflow_dispatch only",
+    "no deployment or service restart",
+    "no direct-main push, no admin merge",
+    "no branch-protection change",
+    "no readiness score asserted without measuring it"
+  ]
+}
