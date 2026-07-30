@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { verifyIsolatedProofEvidence } from '../ci/isolated-proof-attestation.js';
 
 type Verdict = 'PASS' | 'FAIL';
 
@@ -192,6 +193,25 @@ function createResult(options: CliOptions): GateResult {
       failures.push(
         `Required executed command lacks node:test pass evidence: ${command} (expected '# pass <n>', '# fail 0', and '# skipped 0')`,
       );
+      continue;
+    }
+
+    // UTV2-1630: TAP output alone proves a test ran — not WHERE it ran. A
+    // receipt produced against production satisfied this gate exactly as well
+    // as one from an isolated project, so "runtime proof" never actually proved
+    // isolation. For DB commands the proof must additionally carry a
+    // machine-checkable attestation naming the project it targeted, and the
+    // verdict is re-derived from the observed ref rather than trusting any
+    // claim in the receipt.
+    if (requiresIsolatedTargetAttestation(command)) {
+      const verdicts = matchingFiles.map(file =>
+        verifyIsolatedProofEvidence(file.content, command),
+      );
+      if (!verdicts.some(verdict => verdict.ok)) {
+        const reason =
+          verdicts.find(verdict => !verdict.ok)?.reason ?? 'no attestation found';
+        failures.push(`Required DB command is not proven isolated: ${reason}`);
+      }
     }
   }
 
@@ -229,13 +249,39 @@ function printHumanReadable(result: GateResult): void {
   console.log(`Verdict: ${result.verdict}`);
 }
 
-const options = parseArgs(process.argv.slice(2));
-const result = createResult(options);
-
-if (options.json) {
-  console.log(JSON.stringify(result));
-} else {
-  printHumanReadable(result);
+// UTV2-1630: run the CLI only when this module IS the entrypoint.
+//
+// Previously the block below executed at module-evaluation time, so merely
+// importing this file ran the gate with no arguments, printed
+// "Missing required argument: --proof-dir" and set a failing exit code. That
+// made the module untestable and unreusable — importing `requiresIsolatedTarget
+// Attestation` from a test aborted the whole test file.
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  return invoked.replace(/\\/g, '/').endsWith('/proof-auditor-gate.ts');
 }
 
-process.exitCode = result.verdict === 'PASS' ? 0 : 1;
+if (isCliEntrypoint()) {
+  const options = parseArgs(process.argv.slice(2));
+  const result = createResult(options);
+
+  if (options.json) {
+    console.log(JSON.stringify(result));
+  } else {
+    printHumanReadable(result);
+  }
+
+  process.exitCode = result.verdict === 'PASS' ? 0 : 1;
+}
+
+/**
+ * Which required commands must additionally prove an isolated target.
+ *
+ * Scoped to commands that actually touch a database. A non-DB required command
+ * has no target to attest, so demanding one would fail closed for the wrong
+ * reason.
+ */
+export function requiresIsolatedTargetAttestation(command: string): boolean {
+  return /\b(test:db|test:live-db|test:t1-proof:live|ci:db-smoke)\b/u.test(command);
+}
