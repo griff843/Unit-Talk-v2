@@ -4,9 +4,9 @@
   "tier": "T1",
   "title": "Release two merged lanes from active capacity and file locks",
   "generated_at": "2026-07-30T20:45:00.000Z",
-  "implementation_sha": "2ca54dd158364c954d184e7768f355e67195d08b",
+  "implementation_sha": "2240a09165fa69c8f3cf5682b68dbe2e36fe6956",
   "sha_binding": {
-    "verified_source_sha": "2ca54dd158364c954d184e7768f355e67195d08b",
+    "verified_source_sha": "2240a09165fa69c8f3cf5682b68dbe2e36fe6956",
     "current_pr_head_sha": null,
     "merge_sha": null,
     "verified_source_note": "State-only change. All receipts executed against this tree. Rebased from 016cca65 onto claude/utv2-1630-isolated-proof-execution so CI runs the staging-only workflows; the rebase does not alter tree content."
