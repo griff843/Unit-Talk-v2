@@ -3,13 +3,13 @@
   "issue_id": "UTV2-1627",
   "title": "Isolate CI and proof fixtures from production Supabase",
   "tier": "T1",
-  "generated_at": "2026-07-30T02:15:00.000Z",
-  "implementation_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071",
+  "generated_at": "2026-07-30T03:30:00.000Z",
+  "implementation_sha": "fbd42e82d05f5b59e354bf3fc443519941cdc013",
   "sha_binding": {
-    "verified_source_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071",
-    "verified_source_note": "Bound to the implementation commit that closes the exact-head adversarial review. Every receipt below was executed locally against this exact tree under containment (all checkouts credential-free; SUPABASE_URL resolves to http://127.0.0.1:1). No production-bound verification was run.",
+    "verified_source_sha": "fbd42e82d05f5b59e354bf3fc443519941cdc013",
+    "current_pr_head_sha": "fbd42e82d05f5b59e354bf3fc443519941cdc013",
     "merge_sha": null,
-    "current_pr_head_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071"
+    "verified_source_note": "Bound to the source commit. Every receipt below was executed against this exact tree under containment (all checkouts credential-free, SUPABASE_URL=http://127.0.0.1:1). No production-bound verification was run."
   },
   "verifier": {
     "identity": "github-actions/runtime-verifier-gate",
@@ -27,12 +27,12 @@
     "type_check": {
       "command": "pnpm type-check",
       "status": "PASS",
-      "covered_by": "pnpm verify:static"
+      "covered_by": "pnpm test (measured_receipts), not pnpm verify:static"
     },
     "root_test": {
       "command": "pnpm test",
       "status": "PASS",
-      "covered_by": "pnpm verify:static"
+      "covered_by": "pnpm test (measured_receipts), not pnpm verify:static"
     },
     "execution_packet_safety": {
       "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts scripts/ci/required-db-smoke.test.ts",
@@ -90,34 +90,28 @@
   "verdict": "PASS",
   "measured_receipts": [
     {
+      "command": "pnpm test",
+      "result": "3818 pass / 0 fail"
+    },
+    {
       "command": "npx tsx --test scripts/ci/required-db-smoke.test.ts",
-      "result": "48 pass / 0 fail",
-      "note": "30 -> 38 -> 48 across two review rounds"
+      "result": "59 pass / 0 fail"
+    },
+    {
+      "command": "npx tsx --test apps/worker/src/worker-runtime.test.ts",
+      "result": "66 pass / 0 fail"
+    },
+    {
+      "command": "pnpm test:apps-rest",
+      "result": "588 pass / 0 fail"
     },
     {
       "command": "npx tsx scripts/ci/db-writer-inventory.ts",
-      "result": "exit 0, ok:true, 49 discovered, 0 errors",
-      "note": "CLI entrypoint; crashed with a TDZ ReferenceError before this round"
-    },
-    {
-      "command": "npx tsx --test packages/db/src/*.test.ts",
-      "result": "244 pass / 0 fail"
-    },
-    {
-      "command": "pnpm test:ops",
-      "result": "1308 pass / 0 fail"
-    },
-    {
-      "command": "pnpm test:apps-api-core",
-      "result": "422 pass / 0 fail"
+      "result": "exit 0, ok:true, 49 discovered"
     },
     {
       "command": "npx tsc --noEmit -p tsconfig.json",
       "result": "exit 0"
-    },
-    {
-      "command": "npx eslint <changed files>",
-      "result": "clean"
     }
   ],
   "mutation_suite": {
@@ -179,5 +173,11 @@
     "NEW-5 P1 guard detection used the raw line while mutation detection used the stripped line (A7); echo-prefixed mutations were swallowed whole (A1)",
     "NEW-8 P2 production-read-only now downgrades to the anon key instead of waiving the check",
     "P0-3 fabricated writer_inventory PASS receipt re-measured; runtime_proof production-query contradiction removed; pnpm_verify NOT_RUN no longer carries a PASS steps map"
+  ],
+  "known_open_out_of_scope": [
+    "NEW-7: 81 scripts/*.ts + apps/command-center/src/lib/data/client.ts construct service-role clients outside packages/db/src/client.ts",
+    "NEW-3: .github/workflows/live-schema-parity.yml is pull_request-triggered with secrets.SUPABASE_DB_URL / SUPABASE_DB_POOLER_URL",
+    "Proof Auditor Gate requires node:test TAP evidence for pnpm test:db from an isolated target; not producible under local containment",
+    "evaluateGuardReachability remains a line scanner with residual bypasses; the client boundary is the primary control"
   ]
 }
