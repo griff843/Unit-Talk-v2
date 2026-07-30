@@ -83,18 +83,25 @@ argument for the scanner.
 **Runtime separation, measured on both sides.** Production baseline was taken
 before the first push and re-read after the staging DB proof ran:
 
+The measurement below is from the **full writable set** — `pnpm test:db` plus
+`pnpm test:t1-proof:live`, fifteen further suites. That is the exact command
+chain that wrote 1,036 picks and 943 submissions to production across
+2026-07-29/30.
+
 ```text
 production zfzdnfwdarxucxtaojxm
   picks       107858 -> 107858   newest 2026-07-30 20:14:57.722+00 (unchanged)
   submissions 107428 -> 107428   newest 2026-07-30 20:14:57.722+00 (unchanged)
 
 staging xskgrzbteyqdufktjrjx
-  picks       33                 newest 2026-07-30 20:35:59.235+00
+  picks       141                newest 2026-07-30 21:22:20.069+00
+  submissions  55                newest 2026-07-30 21:22:20.378+00
+  reference    sports 9 · cappers 1 · market_families 6 · selection_types 3 · market_types 133
 ```
 
 The writes landed in staging. Production received none. `20:14:57.722+00` is the
 last row of the incident that preceded this lane; nothing has been appended
-since.
+since, across every CI run of this lane.
 
 **The guard fails closed on identity, not on a string match.** Project identity
 is taken structurally from the leftmost label of a `*.supabase.co` host, parsed

@@ -26,8 +26,7 @@
         "suites": 96,
         "tests": 3991,
         "pass": 3991,
-        "fail": 0,
-        "note": "re-run pending after review fixes; CI verify is authoritative"
+        "fail": 0
       },
       "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
       "stop_reason": "Refused by this lane's own guard: no staging credential on this workstation, so the resolved target (host=127.0.0.1) is not xskgrzbteyqdufktjrjx. Before this change the same command reached production and wrote to it, so the refusal is the deliverable.",
@@ -44,6 +43,7 @@
     "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP."
   },
   "isolation_proof": {
+    "definitive_run": "the full writable set \u2014 pnpm test:db plus pnpm test:t1-proof:live (15 suites) \u2014 executed in CI. This is the exact command set that previously wrote to production.",
     "production_unchanged": {
       "project_ref": "zfzdnfwdarxucxtaojxm",
       "picks": {
@@ -56,12 +56,20 @@
       },
       "newest_row_before": "2026-07-30T20:14:57.722Z",
       "newest_row_after": "2026-07-30T20:14:57.722Z",
-      "note": "Baseline taken before the first push on the stacked path; re-read after the staging DB proof ran. Zero new production rows."
+      "note": "Baseline taken before the first push on the stacked path and re-read after the full T1 live proof ran. Zero new production rows across every CI run of this lane."
     },
     "staging_received_the_writes": {
       "project_ref": "xskgrzbteyqdufktjrjx",
-      "picks": 33,
-      "newest_row": "2026-07-30T20:35:59.235Z"
+      "picks": 141,
+      "submissions": 55,
+      "newest_row": "2026-07-30T21:22:20.378Z",
+      "reference_data_seeded": {
+        "sports": 9,
+        "cappers": 1,
+        "market_families": 6,
+        "selection_types": 3,
+        "market_types": 133
+      }
     }
   },
   "workflow_scanner": {
