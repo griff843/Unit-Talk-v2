@@ -142,13 +142,13 @@ test('fails execution-bound proof when required command is only mentioned', () =
       '## Summary',
       'String-only DB proof.',
       '## Evidence',
-      'The proof says pnpm test:db was run, but includes no captured execution output.',
+      'The proof says pnpm test:contracts was run, but includes no captured execution output.',
       '## Verification',
-      'pnpm test:db',
+      'pnpm test:contracts',
     ].join('\n'),
   );
 
-  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:contracts']);
 
   assert.strictEqual(result.status, 1);
   assert.strictEqual(result.output.verdict, 'FAIL');
@@ -169,7 +169,7 @@ test('fails execution-bound proof when required command is not referenced', () =
     ].join('\n'),
   );
 
-  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:contracts']);
 
   assert.strictEqual(result.status, 1);
   assert.strictEqual(result.output.verdict, 'FAIL');
@@ -184,7 +184,7 @@ test('fails execution-bound proof when required command evidence has skipped nod
       '## Summary',
       'Skipped DB proof.',
       '## Evidence',
-      'Command: pnpm test:db',
+      'Command: pnpm test:contracts',
       'TAP version 13',
       '# tests 5',
       '# pass 4',
@@ -196,7 +196,7 @@ test('fails execution-bound proof when required command evidence has skipped nod
     ].join('\n'),
   );
 
-  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:contracts']);
 
   assert.strictEqual(result.status, 1);
   assert.strictEqual(result.output.verdict, 'FAIL');
@@ -211,7 +211,7 @@ test('passes execution-bound proof when required command has node:test pass outp
       '## Summary',
       'Execution-bound DB proof.',
       '## Evidence',
-      'Command: pnpm test:db',
+      'Command: pnpm test:contracts',
       'TAP version 13',
       '# tests 5',
       '# pass 5',
@@ -223,7 +223,7 @@ test('passes execution-bound proof when required command has node:test pass outp
     ].join('\n'),
   );
 
-  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:db']);
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:contracts']);
 
   assert.strictEqual(result.status, 0);
   assert.strictEqual(result.output.verdict, 'PASS');
@@ -290,4 +290,52 @@ test('fails when r-level format is invalid', () => {
   assert.strictEqual(result.status, 1);
   assert.strictEqual(result.output.verdict, 'FAIL');
   assert.match(result.output.failures.join('\n'), /Invalid --r-level/);
+});
+
+// UTV2-1630: writable DB commands can never be satisfied by proof-file text.
+// A hand-typed TAP block plus a fabricated project ref previously returned PASS.
+function proofDirWith(body: string): string {
+  const dir = makeTempDir();
+  writeFileSync(path.join(dir, 'proof.md'), body);
+  return dir;
+}
+
+for (const command of ['pnpm test:db', 'pnpm test:live-db', 'pnpm test:t1-proof:live', 'pnpm ci:db-smoke']) {
+  test(`writable DB command is delegated to verify, not audited from text: ${command}`, () => {
+    const proofDir = proofDirWith([
+      '## Summary', 'x', '## Evidence', 'x', '## Verification',
+      `Ran \`${command}\` against the database.`,
+      '# tests 7', '# pass 7', '# fail 0', '# skipped 0',
+    ].join('\n'));
+    const result = runGate(['--proof-dir', proofDir, '--require-executed-command', command]);
+    assert.strictEqual(
+      result.output.verdict,
+      'PASS',
+      `must not fail: CI always passes --require-executed-command "pnpm test:db" for T1, ` +
+        `so failing here deadlocks every T1 lane. Got: ${JSON.stringify(result.output.failures)}`,
+    );
+    assert.ok(
+      result.output.warnings.some((w) => /not audited from proof text/.test(w)),
+      `expected a delegation warning, got: ${JSON.stringify(result.output.warnings)}`,
+    );
+  });
+
+  test(`writable DB command passes even with NO text evidence at all: ${command}`, () => {
+    // The text requirement is dropped entirely, not merely softened — otherwise
+    // a lane that correctly omits an unverifiable claim (as UTV2-1553 does)
+    // would fail for omitting it.
+    const proofDir = proofDirWith(['## Summary', 'x', '## Evidence', 'x', '## Verification', 'No DB claim.'].join('\n'));
+    const result = runGate(['--proof-dir', proofDir, '--require-executed-command', command]);
+    assert.strictEqual(result.output.verdict, 'PASS', JSON.stringify(result.output.failures));
+  });
+}
+
+test('a non-DB command retains the existing text-evidence contract', () => {
+  const proofDir = proofDirWith([
+    '## Summary', 'x', '## Evidence', 'x', '## Verification',
+    'Ran `pnpm test:contracts`.',
+    '# tests 3', '# pass 3', '# fail 0', '# skipped 0',
+  ].join('\n'));
+  const result = runGate(['--proof-dir', proofDir, '--require-executed-command', 'pnpm test:contracts']);
+  assert.strictEqual(result.output.verdict, 'PASS', JSON.stringify(result.output.failures));
 });

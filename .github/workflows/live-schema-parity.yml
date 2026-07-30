@@ -114,6 +114,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # UTV2-1630: this job puts a PRODUCTION superuser Postgres URL in the
+      # environment and then runs comparison scripts from the PR's own checkout.
+      # Both of those scripts are inside this workflow's own trigger path filter,
+      # so a pull request that edits them executes its own version with full
+      # DDL/DML rights on production. "Catalog reads only" is a property of code
+      # the pull request replaces, not a control.
+      - name: Refuse to run PR-modified code against production
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          npx --yes tsx scripts/ci/assert-unmodified-vs-base.ts \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            scripts/ops/compare-databases.ts \
+            scripts/ci/schema-drift-gate.ts \
+            scripts/ci/assert-unmodified-vs-base.ts
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

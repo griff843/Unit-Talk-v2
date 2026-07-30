@@ -34,9 +34,9 @@
     "docs/06_status/proof/UTV2-1612/model-routing.json",
     "docs/06_status/proof/UTV2-1612/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-07-28T01:04:59.142Z",
-  "heartbeat_at": "2026-07-28T01:04:59.142Z",
+  "heartbeat_at": "2026-07-30T19:50:00Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1612-p0-containment-workflow.json",
@@ -56,5 +56,26 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "reconcile_notes": [
+    {
+      "at": "2026-07-30T19:50:00Z",
+      "action": "capacity-and-lock release only",
+      "from": "in_review",
+      "to": "merged",
+      "evidence": {
+        "pr": 1313,
+        "merged_at": "2026-07-28T13:18:52Z",
+        "merge_sha": "2822b709c74c43dc24a50dc6df35597e1a0463fe"
+      },
+      "basis": "merged is excluded from ACTIVE_LOCK_STATUSES (scripts/ops/shared.ts)",
+      "explicitly_not": [
+        "not done",
+        "no truth_check_history appended",
+        "no implementation proof altered",
+        "no terminal closeout claimed",
+        "open reconciliation PR untouched"
+      ]
+    }
+  ]
 }
