@@ -78,22 +78,35 @@ export const STAGING_FIXTURES: SeedRow[] = [
  * overwritten, holds no real data, and is re-seeded from the reference fixtures
  * immediately below. A run that starts from someone else's leftovers is not a
  * measurement of this commit.
+ *
+ * The list is deliberately minimal — see INTENTIONALLY_RETAINED below.
  */
 const MUTABLE_TABLES_CHILD_FIRST = [
   'distribution_receipts',
   'distribution_outbox',
-  'settlement_records',
-  'execution_intents',
-  'pick_promotion_history',
-  'pick_lifecycle',
-  'submission_events',
-  'audit_log',
-  'picks',
-  'submissions',
   'system_runs',
 ] as const;
 
+/**
+ * Deliberately NOT reset, and why.
+ *
+ * `settlement_records` is append-only, enforced by a database trigger
+ * (`SETTLEMENT_RECORD_IMMUTABLE`) — the settlement ledger is not allowed to
+ * lose history. Attempting the delete raises, and the right response is to
+ * leave the invariant alone rather than disable it for convenience: an
+ * invariant that CI switches off is not an invariant.
+ *
+ * The pick / submission graph is left in place for the same reason it does not
+ * need clearing. The cross-run collision was `system_runs.idempotency_key`, not
+ * the picks themselves: a later run re-processing a leftover pick fails only
+ * because the earlier run's system_runs row still holds the key. Clearing
+ * system_runs lets the re-processing succeed on its own terms, so deleting the
+ * picks buys nothing and would fight the settlement foreign keys.
+ */
+const INTENTIONALLY_RETAINED = ['settlement_records', 'picks', 'submissions'] as const;
+
 async function resetMutableTables(client: ReturnType<typeof createClient>): Promise<void> {
+  console.log(`[seed-staging] retained by design: ${INTENTIONALLY_RETAINED.join(', ')}`);
   for (const table of MUTABLE_TABLES_CHILD_FIRST) {
     // `not.is.null` on the primary key matches every row without needing a
     // value to compare against. PostgREST refuses an unfiltered delete.
