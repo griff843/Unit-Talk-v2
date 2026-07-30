@@ -254,6 +254,12 @@ jobs:
       (needs.proof-auditor.result == 'success' || needs.proof-auditor.result == 'skipped') &&
       (needs.runtime-verifier.result == 'success' || needs.runtime-verifier.result == 'skipped')
     runs-on: ubuntu-latest
+    # UTV2-1630: this job's C2 step runs `pnpm ci:db-smoke`, which writes. Its
+    # env block was migrated to CI_SUPABASE_* alongside runtime-verifier, but
+    # only runtime-verifier got the environment binding — so C2 received empty
+    # key values and failed for every T1 lane. Environment secrets are released
+    # per job, never inherited from a sibling.
+    environment: staging-ci
     steps:
       - uses: actions/checkout@v4
         with:

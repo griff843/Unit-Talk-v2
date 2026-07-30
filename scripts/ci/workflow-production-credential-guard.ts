@@ -173,6 +173,54 @@ export function findProductionCredentialExposures(
   return exposures;
 }
 
+/**
+ * Jobs that reference a staging secret without binding the environment that
+ * releases it.
+ *
+ * Environment secrets are scoped per job and are never inherited from a sibling.
+ * A job that interpolates `secrets.CI_SUPABASE_*` without `environment:
+ * staging-ci` silently receives EMPTY STRINGS — so it neither writes to
+ * production (safe) nor works (broken). `proof-gate.yml`'s `t1-proof` job hit
+ * exactly this: its env block was migrated alongside `runtime-verifier`, but
+ * only `runtime-verifier` got the binding, and C2 failed for every T1 lane with
+ * no indication that a credential was missing rather than wrong.
+ *
+ * Unlike the production check, this scans EVERY trigger — a scheduled or
+ * dispatched job is just as broken by the omission.
+ */
+export function findUnboundStagingCredentialJobs(workflowDir: string): CredentialExposure[] {
+  const STAGING_ENVIRONMENT = 'staging-ci';
+  const findings: CredentialExposure[] = [];
+
+  for (const file of readdirSync(workflowDir).filter((name) => /\.ya?ml$/.test(name)).sort()) {
+    const parsed = parseYaml(readFileSync(join(workflowDir, file), 'utf8')) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+
+    const jobs = (parsed as Record<string, unknown>)['jobs'];
+    if (!jobs || typeof jobs !== 'object' || Array.isArray(jobs)) continue;
+
+    for (const [jobId, body] of Object.entries(jobs as Record<string, unknown>)) {
+      const used = [...JSON.stringify(body ?? null).matchAll(/secrets\s*\.\s*(CI_SUPABASE_[A-Z_]+)\b/gu)].map(
+        (m) => m[1],
+      );
+      if (used.length === 0) continue;
+
+      const environment = (body as Record<string, unknown> | null)?.['environment'];
+      const bound =
+        environment === STAGING_ENVIRONMENT ||
+        (typeof environment === 'object' &&
+          environment !== null &&
+          (environment as Record<string, unknown>)['name'] === STAGING_ENVIRONMENT);
+
+      if (!bound) {
+        findings.push({ workflow: file, job: jobId, secrets: [...new Set(used)].sort() });
+      }
+    }
+  }
+
+  return findings;
+}
+
 export function formatExposures(exposures: CredentialExposure[]): string {
   return exposures
     .map((item) => `  ${item.workflow} :: job "${item.job}" → ${item.secrets.join(', ')}`)

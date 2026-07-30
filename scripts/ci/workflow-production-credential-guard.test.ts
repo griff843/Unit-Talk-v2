@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml';
 import { readFileSync } from 'node:fs';
 import {
   findProductionCredentialExposures,
+  findUnboundStagingCredentialJobs,
   formatExposures,
   READ_ONLY_EXEMPTIONS,
   PRODUCTION_DB_SECRET_NAMES,
@@ -295,6 +296,83 @@ jobs:
   assert.deepEqual(findProductionCredentialExposures(dir, []), [
     { workflow: 'mixed.yml', job: 'leak', secrets: ['SUPABASE_ANON_KEY'] },
   ]);
+});
+
+// ── Staging credentials must be bound to the environment that releases them ──
+
+test('every job using a CI_SUPABASE_* secret binds the staging-ci environment', () => {
+  const unbound = findUnboundStagingCredentialJobs(WORKFLOW_DIR);
+  assert.deepEqual(
+    unbound,
+    [],
+    'A job interpolates a staging secret without `environment: staging-ci`, so it ' +
+      'receives EMPTY STRINGS rather than credentials:\n' +
+      formatExposures(unbound) +
+      '\n\nEnvironment secrets are released per job and are never inherited from a sibling job.',
+  );
+});
+
+test('detects a job using staging secrets with no environment', () => {
+  const dir = fixtureDir({
+    'unbound.yml': `
+name: Unbound
+on:
+  pull_request:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pnpm ci:db-smoke
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.CI_SUPABASE_SECRET_KEY }}
+`,
+  });
+  assert.deepEqual(findUnboundStagingCredentialJobs(dir), [
+    { workflow: 'unbound.yml', job: 'smoke', secrets: ['CI_SUPABASE_SECRET_KEY'] },
+  ]);
+});
+
+test('a sibling job binding staging-ci does not satisfy an unbound job', () => {
+  // The exact shape of the proof-gate.yml defect.
+  const dir = fixtureDir({
+    'sibling.yml': `
+name: Sibling
+on:
+  pull_request:
+jobs:
+  bound:
+    runs-on: ubuntu-latest
+    environment: staging-ci
+    steps:
+      - run: echo "\${{ secrets.CI_SUPABASE_URL }}"
+  unbound:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.CI_SUPABASE_URL }}"
+`,
+  });
+  assert.deepEqual(findUnboundStagingCredentialJobs(dir), [
+    { workflow: 'sibling.yml', job: 'unbound', secrets: ['CI_SUPABASE_URL'] },
+  ]);
+});
+
+test('accepts the object form of environment', () => {
+  const dir = fixtureDir({
+    'objform.yml': `
+name: Object form
+on:
+  pull_request:
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging-ci
+      url: https://example.invalid
+    steps:
+      - run: echo "\${{ secrets.CI_SUPABASE_SECRET_KEY }}"
+`,
+  });
+  assert.deepEqual(findUnboundStagingCredentialJobs(dir), []);
 });
 
 test('the scanner reads real workflows and does not pass vacuously', () => {
