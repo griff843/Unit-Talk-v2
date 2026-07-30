@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,9 @@ import {
   assertIsolatedWritableDatabaseTarget,
   assertProductionReadOnlyDatabaseTarget,
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
+  databaseIdentityInputFromResolvedConfig,
   evaluateDatabaseIdentity,
+  readResolvedEnvFiles,
 } from '../../packages/db/src/production-identity-guard.js';
 import { createDatabaseConnectionConfig } from '../../packages/db/src/client.js';
 import {
@@ -617,26 +620,9 @@ test('P1-4: a service-role client against an isolated project is permitted', () 
   assert.equal(config.url, ISOLATED_URL);
 });
 
-test('P1-4: production-read-only intent permits a production service-role client', () => {
-  const previous = process.env['UNIT_TALK_DB_ACCESS_MODE'];
-  process.env['UNIT_TALK_DB_ACCESS_MODE'] = 'production-read-only';
-  try {
-    const config = createDatabaseConnectionConfig({
-      env: PRODUCTION_APP_ENV,
-      useServiceRole: true,
-    });
-    assert.equal(config.role, 'service_role');
-  } finally {
-    if (previous === undefined) delete process.env['UNIT_TALK_DB_ACCESS_MODE'];
-    else process.env['UNIT_TALK_DB_ACCESS_MODE'] = previous;
-  }
-});
-
-// ---------------------------------------------------------------------------
-// P0-2 — the inventory gate must assert guard EXECUTION, not string presence.
-// The real ci.yml pattern below kept this gate green while the guard never ran.
-// ---------------------------------------------------------------------------
-
+// Superseded by NEW-8: `production-read-only` must DOWNGRADE to the anon key,
+// not hand back a service-role client. The original assertion here encoded the
+// very defect the second review found.
 test('P0-2: rejects the real ci.yml dead-branch pattern that shipped', () => {
   const deadBranch = [
     '      - name: Live DB proof (classified)',
@@ -685,4 +671,151 @@ test('P0-2: accepts an unconditional guard that precedes every mutation', () => 
   ].join('\n');
 
   assert.equal(evaluateGuardReachability(correct).ok, true);
+});
+
+// ---------------------------------------------------------------------------
+// Second exact-head review — regressions for findings the FIRST fix introduced.
+// ---------------------------------------------------------------------------
+
+// NEW-1: the CLI entrypoint crashed with a temporal dead zone ReferenceError
+// because const declarations were appended below the module-eval main() call.
+// The unit tests passed because they call the function from a test callback,
+// after module evaluation. Only running the entrypoint catches this.
+test('NEW-1: db-writer-inventory CLI entrypoint executes without a TDZ error', () => {
+  const result = spawnSync(
+    process.execPath,
+    ['--import', 'tsx', 'scripts/ci/db-writer-inventory.ts'],
+    { cwd: repoRootForTests(), encoding: 'utf8' },
+  );
+  assert.doesNotMatch(
+    `${result.stdout}${result.stderr}`,
+    /before initialization|ReferenceError/,
+  );
+  assert.equal(result.status, 0, result.stderr);
+});
+
+function repoRootForTests(): string {
+  return path.resolve(path.dirname(new URL(import.meta.url).pathname), '../..');
+}
+
+// NEW-2: the client boundary returned early whenever the canonical ref was not
+// a literal substring, so these all issued a service-role key unchallenged.
+for (const [label, url] of [
+  ['percent-encoded production host', 'https://zfzdnfwdarxucxtaojx%6d.supabase.co'],
+  ['custom domain fronting production', 'https://db.unit-talk.com'],
+  ['loopback SSH tunnel', 'http://127.0.0.1:54321'],
+  ['pooler URL form', 'https://aws-0-us-east-1.pooler.supabase.com:6543'],
+] as const) {
+  test(`NEW-2: boundary refuses a service-role client for ${label}`, () => {
+    const previous = process.env['UNIT_TALK_DB_ACCESS_MODE'];
+    delete process.env['UNIT_TALK_DB_ACCESS_MODE'];
+    try {
+      assert.throws(
+        () =>
+          createDatabaseConnectionConfig({
+            env: {
+              SUPABASE_URL: url,
+              SUPABASE_ANON_KEY: 'anon-fixture',
+              SUPABASE_SERVICE_ROLE_KEY: 'service-fixture',
+            } as unknown as Parameters<typeof createDatabaseConnectionConfig>[0]['env'],
+            useServiceRole: true,
+          }),
+        /Refusing to construct a service-role client/,
+      );
+    } finally {
+      if (previous !== undefined) process.env['UNIT_TALK_DB_ACCESS_MODE'] = previous;
+    }
+  });
+}
+
+// NEW-8: `production-read-only` previously waived the check AND returned a full
+// service-role key. It must downgrade to the anon key instead.
+test('NEW-8: production-read-only downgrades to the anon key, not service_role', () => {
+  const previous = process.env['UNIT_TALK_DB_ACCESS_MODE'];
+  process.env['UNIT_TALK_DB_ACCESS_MODE'] = 'production-read-only';
+  try {
+    const config = createDatabaseConnectionConfig({
+      env: {
+        SUPABASE_URL: `https://${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`,
+        SUPABASE_ANON_KEY: 'anon-fixture',
+        SUPABASE_SERVICE_ROLE_KEY: 'service-fixture',
+      } as unknown as Parameters<typeof createDatabaseConnectionConfig>[0]['env'],
+      useServiceRole: true,
+    });
+    assert.equal(config.role, 'anon');
+    assert.equal(config.key, 'anon-fixture');
+  } finally {
+    if (previous === undefined) delete process.env['UNIT_TALK_DB_ACCESS_MODE'];
+    else process.env['UNIT_TALK_DB_ACCESS_MODE'] = previous;
+  }
+});
+
+// A1: the echo/printf skip discarded the whole line, so prefixing a mutation
+// with `echo "..." && ` hid it entirely.
+test('A1: an echo-prefixed mutation is still detected as a mutation', () => {
+  const sneaky = [
+    '        run: |',
+    '          if [ -n "$NEVER_SET" ]; then',
+    '            pnpm exec tsx guard.ts --assert-isolated-writable',
+    '          fi',
+    '          echo "running proof" && pnpm verify:live-db-verdict',
+  ].join('\n');
+  const result = evaluateGuardReachability(sneaky);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /unconditionally/);
+});
+
+// A7: guard detection used the RAW line while mutation detection used the
+// stripped line, so a quoted echo registered as a genuine guard invocation.
+test('A7: a guard name inside a quoted echo does not count as a guard', () => {
+  const quotedGuard = [
+    '        run: |',
+    '          echo "guard: --assert-isolated-writable"',
+    '          pnpm test:db',
+  ].join('\n');
+  const result = evaluateGuardReachability(quotedGuard);
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /no uncommented guard invocation/);
+});
+
+// N11/N12: P0-1b's premise is that the guard resolves the SAME config the
+// clients use. Neither the file order nor the process.env precedence was tested.
+test('N11: env file precedence is local.env > .env > .env.example', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1627-precedence-'));
+  try {
+    fs.writeFileSync(path.join(dir, '.env.example'), 'SUPABASE_URL=https://example.invalid\n');
+    fs.writeFileSync(path.join(dir, '.env'), 'SUPABASE_URL=https://dotenv.invalid\n');
+    fs.writeFileSync(path.join(dir, 'local.env'), 'SUPABASE_URL=https://localenv.invalid\n');
+    const resolved = readResolvedEnvFiles(dir);
+    assert.equal(resolved['SUPABASE_URL'], 'https://localenv.invalid');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('N12: process.env wins over the resolved file value for the same key', () => {
+  const input = databaseIdentityInputFromResolvedConfig(
+    { SUPABASE_URL: 'https://from-file.invalid' },
+    { SUPABASE_URL: 'https://from-process-env.invalid' } as NodeJS.ProcessEnv,
+  );
+  assert.equal(input.supabaseUrl, 'https://from-process-env.invalid');
+});
+
+// N3: `--experimental-test-isolation=none` runs tests in-process, so
+// NODE_TEST_CONTEXT is unset and `--test` in execArgv is the ONLY signal.
+// Without this, deleting the execArgv branch left all tests green.
+test('N3: boundary holds under --experimental-test-isolation=none', () => {
+  const root = repoRootForTests();
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--test',
+      '--experimental-test-isolation=none',
+      '--import',
+      'tsx',
+      '.out/fixtures/isolation-none-probe.mjs',
+    ],
+    { cwd: root, encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined } },
+  );
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
 });

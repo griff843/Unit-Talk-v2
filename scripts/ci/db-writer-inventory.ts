@@ -391,11 +391,6 @@ function main(): void {
   if (!result.ok) process.exit(1);
 }
 
-const argv1 = process.argv[1] ?? '';
-if (argv1 && import.meta.url === pathToFileURL(path.resolve(argv1)).href) {
-  main();
-}
-
 /**
  * UTV2-1627 — executable reachability for the isolation guard.
  *
@@ -438,18 +433,30 @@ export function evaluateGuardReachability(source: string): {
     if (/^if\s/u.test(line) || /;\s*then$/u.test(line)) shellDepth += 1;
     if (/^fi\b/u.test(line) && shellDepth > 0) shellDepth -= 1;
 
-    if (guardLine === -1 && GUARD_INVOCATION.test(line)) {
-      guardLine = index;
-      guardDepth = shellDepth;
-    }
     // A command name inside quotes is data, not execution:
     //   --require-executed-command "pnpm test:db"   (an auditor argument)
     //   echo "| C2 | pnpm test:db executed ... |"   (a summary table)
-    // Both previously registered as mutations. Strip quoted spans and skip
-    // pure output statements before matching.
+    // Strip quoted spans before matching EITHER a guard or a mutation. Applying
+    // this only to mutations made the check asymmetric — lenient about what
+    // counts as a guard, strict about what counts as a mutation — so
+    // `echo "guard: --assert-isolated-writable"` registered as a real guard
+    // invocation, defeating the check's own stated purpose.
     const executable = stripQuotedSpans(line);
-    if (/^(?:echo|printf)\b/u.test(executable)) continue;
-    if (MUTATING_COMMAND_PATTERNS.some((pattern) => pattern.test(executable))) {
+
+    if (guardLine === -1 && GUARD_INVOCATION.test(executable)) {
+      guardLine = index;
+      guardDepth = shellDepth;
+    }
+    // Only a leading echo/printf is pure output. `echo "x" && pnpm test:db`
+    // executes a mutation, so the skip must not swallow the whole line.
+    const afterOutputPrefix = executable.replace(
+      /^(?:echo|printf)\b[^&|;]*(?:&&|\|\||;)\s*/u,
+      '',
+    );
+    if (/^(?:echo|printf)\b/u.test(afterOutputPrefix)) continue;
+    if (
+      MUTATING_COMMAND_PATTERNS.some((pattern) => pattern.test(afterOutputPrefix))
+    ) {
       if (firstMutation === -1) firstMutation = index;
       if (shellDepth === 0 && unconditionalMutation === -1) {
         unconditionalMutation = index;
@@ -490,4 +497,9 @@ export function evaluateGuardReachability(source: string): {
 /** Remove single- and double-quoted spans so quoted command names read as data. */
 function stripQuotedSpans(line: string): string {
   return line.replace(/"[^"]*"/gu, '""').replace(/'[^']*'/gu, "''");
+}
+
+const argv1 = process.argv[1] ?? '';
+if (argv1 && import.meta.url === pathToFileURL(path.resolve(argv1)).href) {
+  main();
 }

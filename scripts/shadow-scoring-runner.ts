@@ -216,8 +216,16 @@ async function writeProof(outDir: string, proof: ProofOutput): Promise<void> {
 export async function run(options: CliOptions): Promise<ProofOutput> {
   const environment = loadEnvironment();
 
-  if (!environment.SUPABASE_URL || !environment.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+  // UTV2-1627: this runner is observation-only — it asserts picksCreated and
+  // distributionEnqueued remain 0. It previously REQUIRED a service-role key,
+  // which bypasses RLS and can write; read-only-ness rested on that assertion
+  // rather than on the credential. Prefer the anon key so Postgres enforces the
+  // restriction, and fall back to service-role only where anon is unavailable.
+  const readKey = environment.SUPABASE_ANON_KEY ?? environment.SUPABASE_SERVICE_ROLE_KEY;
+  if (!environment.SUPABASE_URL || !readKey) {
+    throw new Error(
+      'SUPABASE_URL and one of SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are required',
+    );
   }
 
   // UTV2-1628: the driver comes from the one boundary that may construct it.
@@ -228,7 +236,7 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
   // classification.
   const client = createPrivilegedClient(
     environment.SUPABASE_URL,
-    environment.SUPABASE_SERVICE_ROLE_KEY,
+    readKey,
     {
       auth: {
         persistSession: false,

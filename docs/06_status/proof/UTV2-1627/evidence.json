@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1627",
   "title": "Isolate CI and proof fixtures from production Supabase",
   "tier": "T1",
-  "generated_at": "2026-07-30T00:55:00.000Z",
+  "generated_at": "2026-07-30T02:15:00.000Z",
   "implementation_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071",
   "sha_binding": {
     "verified_source_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071",
@@ -22,23 +22,6 @@
       "status": "NOT_RUN",
       "target_classification": "static-only",
       "target_project_ref": null,
-      "steps": {
-        "ops_sync_check": "PASS",
-        "ops_system_alignment_check": "PASS",
-        "ops_automation_coverage_check": "PASS",
-        "env_check": "PASS",
-        "lint": "PASS",
-        "type_check": "PASS",
-        "build": "PASS",
-        "test": "PASS",
-        "smart_form_verify": "PASS",
-        "verify_commands": "PASS"
-      },
-      "tail": [
-        "[command-manifest] Verified 14 command definition(s)",
-        "[check-migration-versions] 3 migration file(s) verified \u2014 no duplicate versions.",
-        "[lint-migrations] 2 migration file(s) checked \u2014 no findings."
-      ],
       "note": "pnpm verify was deliberately not run: its test:live-db phase is production-bound, which is the defect this lane exists to remove. Replaced by the measured receipts below."
     },
     "type_check": {
@@ -66,10 +49,11 @@
       ]
     },
     "writer_inventory": {
-      "command": "pnpm exec tsx scripts/ci/db-writer-inventory.ts",
+      "command": "npx tsx scripts/ci/db-writer-inventory.ts",
       "status": "PASS",
-      "discovered_credentialed_tests": 49,
-      "errors": []
+      "exit_code": 0,
+      "stdout": "{\n  \"schema\": \"db-writer-inventory/v1\",\n  \"ok\": true,\n  \"discovered_credentialed_tests\": 49,\n  \"errors\": []\n}",
+      "note": "Re-measured after fixing a temporal-dead-zone ReferenceError that made this CLI crash at the previously-recorded head. The prior bundle recorded PASS for a command that could not execute."
     },
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -84,120 +68,8 @@
     }
   },
   "runtime_proof": {
-    "pnpm_test_db": "pass",
-    "supabase_project": "wgfgqfxnnwjmrbubqhcj",
-    "queries": [
-      {
-        "table": "picks",
-        "description": "Count isolated UTV2-1497 fixtures tagged with run ID a3811138 on project wgfgqfxnnwjmrbubqhcj.",
-        "row_count": 8
-      },
-      {
-        "table": "distribution_outbox",
-        "description": "Count isolated concurrent-claim outbox rows tagged with run ID a3811138 on project wgfgqfxnnwjmrbubqhcj.",
-        "row_count": 8
-      },
-      {
-        "table": "picks",
-        "description": "Read-only production non-match query for isolated run ID a3811138 on project zfzdnfwdarxucxtaojxm.",
-        "row_count": 0
-      },
-      {
-        "table": "distribution_outbox",
-        "description": "Read-only production non-match query for isolated run ID a3811138 on project zfzdnfwdarxucxtaojxm.",
-        "row_count": 0
-      }
-    ],
-    "row_counts": [
-      {
-        "table": "picks",
-        "count": 8,
-        "status": "isolated fixture rows present only on wgfgqfxnnwjmrbubqhcj"
-      },
-      {
-        "table": "distribution_outbox",
-        "count": 8,
-        "status": "all isolated rows claimed exactly once"
-      },
-      {
-        "table": "production.picks",
-        "count": 0,
-        "status": "no rows matched isolated run a3811138"
-      },
-      {
-        "table": "production.distribution_outbox",
-        "count": 0,
-        "status": "no rows matched isolated run a3811138"
-      }
-    ],
-    "isolated_target": {
-      "branch_name": "ci-proof-isolated",
-      "project_ref": "wgfgqfxnnwjmrbubqhcj",
-      "parent_project_ref": "zfzdnfwdarxucxtaojxm",
-      "access_mode": "writable-isolated",
-      "schema_source": [
-        "00000000000000_baseline_live_schema.sql",
-        "20260714120000_add_delivery_kill_switch.sql",
-        "20260714130000_bootstrap_delivery_kill_switch_posture.sql"
-      ],
-      "canonical_reference_seed_counts": {
-        "sports": 9,
-        "selection_types": 3,
-        "market_families": 6,
-        "market_types": 133
-      }
-    },
-    "github_secret_purposes": [
-      "CI_SUPABASE_URL",
-      "CI_SUPABASE_ANON_KEY",
-      "CI_SUPABASE_SERVICE_ROLE_KEY",
-      "CI_SUPABASE_PROJECT_REF"
-    ],
-    "negative_identity_proof": {
-      "command": "production-identity-guard.ts --assert-isolated-writable with canonical production URL",
-      "status": "PASS",
-      "expected_result": "rejected",
-      "output": "Refusing writable DB execution against canonical production Supabase project zfzdnfwdarxucxtaojxm"
-    },
-    "live_db_smoke": {
-      "command": "pnpm test:db",
-      "status": "PASS",
-      "target_project_ref": "wgfgqfxnnwjmrbubqhcj",
-      "tests": 7,
-      "pass": 7,
-      "fail": 0
-    },
-    "utv2_1497_isolated_receipt": {
-      "command": "pnpm test:t1-proof:live via pnpm verify",
-      "status": "PASS",
-      "run_id": "a3811138",
-      "target_project_ref": "wgfgqfxnnwjmrbubqhcj",
-      "created_at_range": {
-        "first": "2026-07-29T21:16:51.934Z",
-        "last": "2026-07-29T21:16:51.936Z"
-      },
-      "matching_picks": 8,
-      "matching_outbox_rows": 8,
-      "assertions": [
-        "all eight outbox rows were claimed",
-        "no row was double-claimed",
-        "excess workers returned null",
-        "each claimed row recorded one distinct test worker"
-      ]
-    },
-    "production_non_match_receipt": {
-      "access_mode": "production-read-only",
-      "production_project_ref": "zfzdnfwdarxucxtaojxm",
-      "isolated_run_id": "a3811138",
-      "matching_picks": 0,
-      "matching_outbox_rows": 0,
-      "production_mutation": "none",
-      "cleanup_performed": false
-    },
-    "fixture_state_note": {
-      "status": "observed",
-      "detail": "A repeated pre-existing UTV2-1022 live proof reused static selection fields because its UUID is metadata-only. The disposable isolated branch was reset before the final green run. No production rows were reset, deleted, or updated."
-    }
+    "status": "NOT_RUN",
+    "note": "Removed. The prior bundle recorded queries against production project zfzdnfwdarxucxtaojxm while simultaneously asserting that no production-bound verification was run. No production query was executed for this head; all checkouts are credential-free and resolve to http://127.0.0.1:1."
   },
   "acceptance_criteria": {
     "writable_ci_targets_isolated_supabase": "PASS",
@@ -219,8 +91,13 @@
   "measured_receipts": [
     {
       "command": "npx tsx --test scripts/ci/required-db-smoke.test.ts",
-      "result": "38 pass / 0 fail",
-      "note": "was 30 before this change; +8 regression tests"
+      "result": "48 pass / 0 fail",
+      "note": "30 -> 38 -> 48 across two review rounds"
+    },
+    {
+      "command": "npx tsx scripts/ci/db-writer-inventory.ts",
+      "result": "exit 0, ok:true, 49 discovered, 0 errors",
+      "note": "CLI entrypoint; crashed with a TDZ ReferenceError before this round"
     },
     {
       "command": "npx tsx --test packages/db/src/*.test.ts",
@@ -228,12 +105,11 @@
     },
     {
       "command": "pnpm test:ops",
-      "result": "1298 pass / 0 fail"
+      "result": "1308 pass / 0 fail"
     },
     {
       "command": "pnpm test:apps-api-core",
-      "result": "422 pass / 0 fail",
-      "note": "exercises the new createDatabaseConnectionConfig boundary"
+      "result": "422 pass / 0 fail"
     },
     {
       "command": "npx tsc --noEmit -p tsconfig.json",
@@ -245,41 +121,48 @@
     }
   ],
   "mutation_suite": {
-    "executed_against": "d46463d6cc16c63fb099f2b99b92322b31a58071",
-    "killed": 6,
-    "survived": 0,
+    "killed": 7,
+    "survived": 1,
     "mutations": [
       {
         "id": "M4",
-        "edit": "delete the missing-URL throw in production-identity-guard.ts",
-        "outcome": "KILLED",
-        "note": "survived before this change"
+        "outcome": "KILLED"
       },
       {
         "id": "M7",
-        "edit": "make canonical-production detection case-sensitive",
+        "outcome": "KILLED"
+      },
+      {
+        "id": "N3",
+        "edit": "remove the execArgv --test signal from isTestRunnerContext",
         "outcome": "KILLED",
-        "note": "survived before this change"
+        "note": "required an --experimental-test-isolation=none subprocess probe; survived in round 1"
       },
       {
-        "id": "P1-9a",
-        "edit": "drop malformed declared-project-ref validation",
+        "id": "N11",
+        "edit": "invert env-file precedence",
         "outcome": "KILLED"
       },
       {
-        "id": "P1-9b",
-        "edit": "restore the \"no URL ref means isolated\" bypass",
+        "id": "N12",
+        "edit": "make file values beat process.env",
         "outcome": "KILLED"
       },
       {
-        "id": "P1-4a",
-        "edit": "remove the boundary assertion from createDatabaseConnectionConfig",
+        "id": "NEW-2",
+        "edit": "restore the fail-open early return in the client boundary",
         "outcome": "KILLED"
       },
       {
-        "id": "P1-4b",
-        "edit": "make test-runner detection always return false",
+        "id": "NEW-8",
+        "edit": "let production-read-only grant a service-role key",
         "outcome": "KILLED"
+      },
+      {
+        "id": "N7",
+        "edit": "remove the echo/printf skip in evaluateGuardReachability",
+        "outcome": "SURVIVED",
+        "note": "ASSESSED BENIGN: stripQuotedSpans already removes the quoted command names the skip was added for, so the skip is now redundant defense rather than load-bearing. Recorded rather than papered over."
       }
     ]
   },
@@ -288,5 +171,13 @@
     "resolved_supabase_url_in_all_checkouts": "http://127.0.0.1:1",
     "production_writes_during_this_work": 0,
     "production_bound_verification_run": false
-  }
+  },
+  "second_review_findings_closed": [
+    "NEW-1 P0 temporal dead zone crash in db-writer-inventory.ts CLI entrypoint",
+    "NEW-2 P0 client boundary failed open on percent-encoded / custom-domain / tunnel / pooler URLs",
+    "NEW-4 P1 anon-key substitution broke shadow-scoring-runner (now accepts anon)",
+    "NEW-5 P1 guard detection used the raw line while mutation detection used the stripped line (A7); echo-prefixed mutations were swallowed whole (A1)",
+    "NEW-8 P2 production-read-only now downgrades to the anon key instead of waiving the check",
+    "P0-3 fabricated writer_inventory PASS receipt re-measured; runtime_proof production-query contradiction removed; pnpm_verify NOT_RUN no longer carries a PASS steps map"
+  ]
 }
