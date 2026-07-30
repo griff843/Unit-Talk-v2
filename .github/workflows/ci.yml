@@ -20,18 +20,137 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # UTV2-1630 — the writable DB proof PRODUCER.
+  #
+  # Split out of `verify` so the required context can depend on it. `verify` is
+  # one of only four required status checks (verify, Executor Result Validation,
+  # Merge Gate, P0 Protocol); `Proof Auditor Gate` is NOT required, so putting
+  # receipt enforcement there would gate nothing. `verify` needs: this job and
+  # downloads its same-run artifact, which is what makes the receipt binding
+  # mean something at merge time.
+  #
+  # Supersedes the ci.yml change in UTV2-1627 Phase A (frozen at b446cbb2),
+  # which swapped to CI_SUPABASE_ANON_KEY / CI_SUPABASE_SERVICE_ROLE_KEY —
+  # names that were never provisioned. The environment created for this lane
+  # uses CI_SUPABASE_PUBLISHABLE_KEY / CI_SUPABASE_SECRET_KEY. UTV2-1627 must
+  # rebase onto this version rather than restore its own.
+  staging-db-proof:
+    name: Writable DB proof (staging only)
+    runs-on: ubuntu-latest
+    # Binding the environment is what releases CI_SUPABASE_*. This is the ONLY
+    # job in this workflow with any database credential.
+    environment: staging-ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Assert staging credentials present
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          for name in CI_SUPABASE_URL CI_SUPABASE_PROJECT_REF CI_SUPABASE_SECRET_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty — staging-ci did not release its secrets."
+              exit 1
+            fi
+          done
+          echo "resolved project ref: $CI_SUPABASE_PROJECT_REF"
+          if [ "$CI_SUPABASE_PROJECT_REF" != "xskgrzbteyqdufktjrjx" ]; then
+            echo "::error::project ref is not the approved staging project"
+            exit 1
+          fi
+
+      - name: Materialize staging-only environment
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo "NODE_ENV=test"
+            echo "UNIT_TALK_APP_ENV=test"
+            echo "UNIT_TALK_ACTIVE_WORKSPACE=staging-ci"
+            echo "UNIT_TALK_LEGACY_WORKSPACE=staging-ci"
+            echo "LINEAR_TEAM_ID=staging-ci"
+            echo "LINEAR_TEAM_KEY=UTV2"
+            echo "LINEAR_TEAM_NAME=staging-ci"
+            echo "UNIT_TALK_API_RUNTIME_MODE=fail_open"
+            echo "UNIT_TALK_JWT_SECRET=staging-ci-not-a-production-secret"
+            echo "SUPABASE_URL=${CI_SUPABASE_URL}"
+            echo "SUPABASE_PROJECT_REF=${CI_SUPABASE_PROJECT_REF}"
+            echo "SUPABASE_ANON_KEY=${CI_SUPABASE_PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${CI_SUPABASE_SECRET_KEY}"
+            echo "UNIT_TALK_DB_ACCESS_MODE=writable-isolated"
+          } > local.env
+          echo "local.env written (values redacted); keys:"
+          cut -d= -f1 local.env | sed 's/^/  /'
+
+      - name: Record repository migration head
+        id: schema
+        run: |
+          set -euo pipefail
+          head=$(ls supabase/migrations/*.sql | tail -1 | xargs basename)
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Seed synthetic staging fixtures
+        run: pnpm exec tsx scripts/ci/seed-staging-fixtures.ts
+
+      - name: Run writable DB proof against staging
+        id: smoke
+        env:
+          CI_REQUIRE_DB_SMOKE: 'true'
+          CI_DB_PROOF_RECEIPT_PATH: ${{ github.workspace }}/.out/ci-db-proof-receipt.json
+          CI_REPO_MIGRATION_HEAD: ${{ steps.schema.outputs.head }}
+          CI_FIXTURE_RUN_ID: utv2-1630-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p .out
+          pnpm ci:assert-staging
+          pnpm ci:db-smoke
+          test -f "$CI_DB_PROOF_RECEIPT_PATH" || { echo "::error::receipt not produced"; exit 1; }
+
+      - name: Scrub credentials
+        if: always()
+        run: rm -f local.env
+
+      - name: Upload proof receipt (same-run artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: utv2-1630-db-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/ci-db-proof-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
   verify:
     runs-on: ubuntu-latest
-    # UTV2-1630: binding `staging-ci` is what releases CI_SUPABASE_*. This job
-    # no longer has access to any production database credential — the
-    # production secrets are not referenced anywhere in this file.
+    # UTV2-1630: `verify` is a REQUIRED status check. It depends on the producer
+    # above and verifies that run's receipt, so a merge cannot proceed without a
+    # genuine staging DB proof bound to this exact run and SHA.
     #
-    # Supersedes the ci.yml change in UTV2-1627 Phase A (frozen at b446cbb2),
-    # which swapped to CI_SUPABASE_ANON_KEY/CI_SUPABASE_SERVICE_ROLE_KEY. Those
-    # secret names were never provisioned; the environment created for this lane
-    # uses CI_SUPABASE_PUBLISHABLE_KEY/CI_SUPABASE_SECRET_KEY. UTV2-1627 must
-    # rebase onto this version rather than restore its own.
-    environment: staging-ci
+    # This job holds NO database credential of any kind. It does not bind an
+    # environment, so `staging-ci` secrets are not released to it.
+    needs: staging-db-proof
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,11 +182,15 @@ jobs:
           NOTION_TOKEN=
           SLACK_BOT_TOKEN=
           SLACK_SIGNING_SECRET=
-          UNIT_TALK_DB_ACCESS_MODE=writable-isolated
-          SUPABASE_PROJECT_REF=${{ secrets.CI_SUPABASE_PROJECT_REF }}
-          SUPABASE_URL=${{ secrets.CI_SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.CI_SUPABASE_SECRET_KEY }}
+          UNIT_TALK_API_RUNTIME_MODE=fail_open
+          UNIT_TALK_JWT_SECRET=ci-static-not-a-real-secret
+          # No database credential of any kind. This job never touches a DB; it
+          # verifies the receipt produced by the staging-db-proof job. Any
+          # writable script would refuse here anyway — ci:assert-staging cannot
+          # resolve a staging target from these values.
+          SUPABASE_URL=
+          SUPABASE_ANON_KEY=
+          SUPABASE_SERVICE_ROLE_KEY=
           DISCORD_BOT_TOKEN=
           DISCORD_GUILD_ID=
           DISCORD_ANNOUNCEMENT_CHANNEL_ID=
@@ -99,25 +222,31 @@ jobs:
         id: command_center
         run: pnpm test:command-center
 
-      # UTV2-1292: live-DB proof (test:db + the live t1-proof subset) wrapped by
-      # the verdict classifier. It exits non-zero ONLY on a real code failure;
-      # transient infrastructure degradation (schema-cache / statement timeout /
-      # 520-521 / connection failure) is reported as `infra_unavailable` and does
-      # NOT fail this gate. T1 strictness is preserved independently by the
-      # fail-closed `T1 Proof Gate` workflow (which runs `ci:db-smoke` for tier:T1).
-      - name: Live DB proof (classified)
+      # UTV2-1630 — the merge gate for writable DB proof.
+      #
+      # `verify` is required; `Proof Auditor Gate` is not. Verifying the receipt
+      # HERE is what makes it impossible to merge a T1 lane whose DB proof was
+      # hand-authored, copied from another run, or produced against production.
+      #
+      # The artifact name is scoped to this run and attempt, so a previous run's
+      # receipt cannot be substituted, and `if-no-files-found: error` means a
+      # deleted upload fails the required context rather than skipping it.
+      - name: Download staging DB proof receipt (this run)
+        uses: actions/download-artifact@v4
+        with:
+          name: utv2-1630-db-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/receipt
+          if-no-files-found: error
+
+      - name: Verify staging DB proof receipt
         id: live_db
-        env:
-          CI_REQUIRE_DB_SMOKE: ${{ github.ref_protected || github.ref == 'refs/heads/main' }}
-        # UTV2-1630: the live-DB path previously ran `pnpm test:db` directly via
-        # test:live-db, bypassing ci:db-smoke's guard entirely. On 2026-07-30
-        # that wrote 7 picks + 4 submissions to production from a pull request.
-        # `test:db` and `test:t1-proof:live` are now gated at the script level;
-        # this assertion fails the job early with a clear message.
         run: |
           set -euo pipefail
-          pnpm ci:assert-staging
-          pnpm verify:live-db-verdict
+          pnpm exec tsx scripts/ci/verify-db-proof-receipt.ts \
+            --receipt .out/receipt/ci-db-proof-receipt.json \
+            --command "pnpm test:db" \
+            --expect-workflow "CI" \
+            --expect-job staging-db-proof
 
       - name: CI truth summary
         if: always()

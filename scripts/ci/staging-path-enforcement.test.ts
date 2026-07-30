@@ -148,18 +148,24 @@ test('the staging proof workflow binds staging-ci and no production secret', () 
   }
 });
 
-test('the staging proof workflow uses pull_request, not pull_request_target', () => {
-  // Strip comments first: prose explaining why pull_request_target is avoided
-  // must not read as a usage of it.
-  const source = readRepo('.github/workflows/staging-db-proof.yml')
-    .split('\n')
-    .filter((line) => !line.trim().startsWith('#'))
-    .join('\n');
-  assert.ok(
-    !/^\s*pull_request_target:/mu.test(source),
-    'pull_request_target would expose secrets to fork PRs',
-  );
-  assert.match(source, /^\s+pull_request:/mu);
+test('no workflow with DB credentials uses pull_request_target', () => {
+  // Superseded in scope: the producer moved into ci.yml, so this property is
+  // asserted on the workflow that actually carries the trigger. Comments are
+  // stripped first — prose explaining why pull_request_target is avoided must
+  // not read as a usage of it.
+  for (const file of ['.github/workflows/ci.yml', '.github/workflows/staging-db-proof.yml']) {
+    const source = readRepo(file)
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n');
+    assert.ok(
+      !/^\s*pull_request_target:/mu.test(source),
+      `${file}: pull_request_target would expose secrets to fork PRs`,
+    );
+  }
+  const ci = readRepo('.github/workflows/ci.yml')
+    .split('\n').filter((l) => !l.trim().startsWith('#')).join('\n');
+  assert.match(ci, /^\s+pull_request:/mu, 'ci.yml must run on pull_request');
 });
 
 test('the proof auditor job depends on the DB job and downloads a same-run artifact', () => {
@@ -230,4 +236,81 @@ test('M26/M28/M29: artifact name is run+attempt scoped on upload AND download', 
     (failClosed?.length ?? 0) >= 2,
     `upload and download must both fail closed; found ${failClosed?.length ?? 0}`,
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1630 — the receipt must gate the REQUIRED context.
+//
+// `verify` is one of only four required status checks (verify, Executor Result
+// Validation, Merge Gate, P0 Protocol). `Proof Auditor Gate` is NOT required,
+// so a receipt verified only there would gate nothing at merge time. These
+// assertions fail if the same-run verifier is removed from `verify`, which is
+// what makes deletion of the gate a required-CI failure rather than a silent
+// downgrade.
+// ---------------------------------------------------------------------------
+
+const CI_YML = readRepo('.github/workflows/ci.yml');
+
+test('the required verify job depends on the staging DB proof producer', () => {
+  assert.match(CI_YML, /^\s+verify:/mu, 'the required context job must be named verify');
+  assert.match(
+    CI_YML,
+    /needs:\s*staging-db-proof/,
+    'verify must depend on the producer, so a failed DB proof fails the required context',
+  );
+});
+
+test('verify downloads and verifies the SAME-RUN receipt', () => {
+  assert.match(
+    CI_YML,
+    /utv2-1630-db-proof-receipt-\$\{\{\s*github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt\s*\}\}/,
+    'the artifact must be run+attempt scoped so a previous run cannot be substituted',
+  );
+  assert.match(CI_YML, /if-no-files-found:\s*error/, 'a missing receipt must fail, not skip');
+  assert.match(
+    CI_YML,
+    /verify-db-proof-receipt\.ts/,
+    'verify must run the receipt verifier — removing it is what this test catches',
+  );
+  assert.match(CI_YML, /--expect-job\s+staging-db-proof/);
+  assert.match(CI_YML, /--expect-workflow\s+"CI"/);
+});
+
+test('only the producer job holds database credentials', () => {
+  const producer = CI_YML.slice(
+    CI_YML.indexOf('  staging-db-proof:'),
+    CI_YML.indexOf('  verify:'),
+  );
+  const verifyJob = CI_YML.slice(CI_YML.indexOf('  verify:'));
+  assert.match(producer, /environment:\s*staging-ci/, 'producer must bind staging-ci');
+  assert.ok(
+    /secrets\.CI_SUPABASE_/.test(producer),
+    'producer reads the staging credentials',
+  );
+  assert.ok(
+    !/secrets\.(CI_)?SUPABASE_/.test(verifyJob),
+    'verify must hold NO database credential — it only verifies the receipt',
+  );
+});
+
+test('the retired standalone producer cannot auto-run alongside ci.yml', () => {
+  const standalone = readRepo('.github/workflows/staging-db-proof.yml')
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+  assert.ok(
+    !/^\s*pull_request:/mu.test(standalone),
+    'two divergent copies of the producer must not both run on pull_request',
+  );
+  assert.match(standalone, /workflow_dispatch:/);
+});
+
+test('writable DB commands cannot be proven by proof-file text', async () => {
+  const mod = await import('../ops/proof-auditor-gate.js');
+  for (const command of ['pnpm test:db', 'pnpm test:live-db', 'pnpm test:t1-proof:live', 'pnpm ci:db-smoke']) {
+    assert.equal(mod.requiresCiProducedReceipt(command), true, command);
+  }
+  for (const command of ['pnpm test', 'pnpm verify:static', 'pnpm test:contracts']) {
+    assert.equal(mod.requiresCiProducedReceipt(command), false, command);
+  }
 });

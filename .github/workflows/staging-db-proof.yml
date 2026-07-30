@@ -24,8 +24,14 @@
 #     secrets — GitHub withholds them, and the environment gate is a second lock.
 name: Staging DB Proof
 
+# RETIRED as an automatic trigger (UTV2-1630).
+#
+# The producer and its verifier now live in ci.yml, because `verify` is a
+# required status check and `Proof Auditor Gate` is not — a receipt verified
+# only here would gate nothing at merge time. Kept for manual runs so the chain
+# can be exercised without opening a PR; running on pull_request as well would
+# leave two divergent copies of the same job.
 on:
-  pull_request:
   workflow_dispatch: {}
 
 permissions:

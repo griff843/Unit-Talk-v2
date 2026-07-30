@@ -182,6 +182,24 @@ function createResult(options: CliOptions): GateResult {
   }
 
   for (const command of options.requiredExecutedCommands) {
+    // UTV2-1630: a writable DB claim can NEVER be satisfied by text in a proof
+    // file. TAP pasted into markdown proves a test ran somewhere, against some
+    // database — it cannot show WHICH. A production run and an isolated run
+    // produce identical text; a hand-typed TAP block plus a fabricated project
+    // ref previously returned verdict=PASS here.
+    //
+    // The only acceptable evidence is the CI-produced ci-db-proof-receipt/v2,
+    // verified in the required `verify` context by
+    // scripts/ci/verify-db-proof-receipt.ts against its own GITHUB_* values.
+    if (requiresCiProducedReceipt(command)) {
+      failures.push(
+        `Writable DB execution cannot be proven by proof-file text: ${command}. ` +
+          'It requires the CI-produced ci-db-proof-receipt/v2 artifact, verified in ' +
+          'the required `verify` context. Pasted or hand-authored TAP is never sufficient.',
+      );
+      continue;
+    }
+
     const matchingFiles = fileContents.filter(file => hasCommandReference(file.content, command));
 
     if (matchingFiles.length === 0) {
@@ -193,9 +211,7 @@ function createResult(options: CliOptions): GateResult {
       failures.push(
         `Required executed command lacks node:test pass evidence: ${command} (expected '# pass <n>', '# fail 0', and '# skipped 0')`,
       );
-      continue;
     }
-
   }
 
   return {
@@ -266,3 +282,14 @@ if (isCliEntrypoint()) {
   process.exitCode = result.verdict === 'PASS' ? 0 : 1;
 }
 
+
+/**
+ * Commands whose execution can only be proven by a CI-produced receipt.
+ *
+ * These touch a writable database, so "a test ran and printed TAP" says nothing
+ * about which project it ran against — the exact gap that let a production run
+ * satisfy the T1 proof gate as well as an isolated one.
+ */
+export function requiresCiProducedReceipt(command: string): boolean {
+  return /\b(test:db|test:live-db|test:t1-proof:live|ci:db-smoke)\b/u.test(command);
+}
