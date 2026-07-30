@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1553",
+  "tier": "T1",
+  "title": "Release two merged lanes from active capacity and file locks",
+  "generated_at": "2026-07-30T19:55:00.000Z",
+  "implementation_sha": "016cca65bc86a18d336c08cf1a0e834a3381bda9",
+  "sha_binding": {
+    "verified_source_sha": "016cca65bc86a18d336c08cf1a0e834a3381bda9",
+    "current_pr_head_sha": "016cca65bc86a18d336c08cf1a0e834a3381bda9",
+    "merge_sha": null,
+    "verified_source_note": "State-only change. All receipts executed against this tree."
+  },
+  "static_proof": {
+    "preflight": {
+      "command": "pnpm ops:preflight UTV2-1553 --tier T1",
+      "status": "PASS",
+      "checks": 41,
+      "waivers": 0,
+      "note": "PT1 validated against the staging project, not production."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "tap": {
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0
+    },
+    "output_sha256": "ee1e14e9ae9a65417701504709fafc43981e4230d95c07b80467f65f6901d5f4"
+  },
+  "explicitly_not": [
+    "not marked done",
+    "no truth_check_history appended or synthesized",
+    "no implementation proof altered",
+    "no terminal closeout claimed",
+    "open reconciliation PR branch and head untouched"
+  ]
+}
