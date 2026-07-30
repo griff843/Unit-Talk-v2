@@ -11,6 +11,8 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1630.yml",
+    "docs/06_status/lanes/UTV2-1630.json",
     "docs/06_status/proof/UTV2-1630/**",
     "scripts/ci/isolated-proof-attestation.test.ts",
     "scripts/ci/isolated-proof-attestation.ts",
