@@ -1,6 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  buildIsolatedProofAttestation,
+  CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
+  formatAttestationLine,
+} from './isolated-proof-attestation.js';
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -123,12 +128,29 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // UTV2-1630: attest the target BEFORE running, and fail closed if it is
+  // production. The proof gate previously accepted TAP output without knowing
+  // which database produced it, so a production run satisfied the T1 runtime
+  // proof requirement exactly as well as an isolated one.
+  const attestation = buildIsolatedProofAttestation(env['SUPABASE_URL'], 'pnpm test:db');
+  const attestationLine = formatAttestationLine(attestation);
+  console.log(attestationLine);
+
+  if (attestation.canonicalProduction) {
+    console.error(
+      `[ci:db-smoke] refusing to run DB proof against canonical production ` +
+        `${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}. Point CI at the isolated project.`,
+    );
+    process.exit(1);
+  }
+
   const result = spawnSync('pnpm test:db', {
     cwd: process.cwd(),
     encoding: 'utf8',
     shell: true,
   });
   const output = [
+    attestationLine,
     result.stdout,
     result.stderr,
     result.error ? result.error.message : '',
