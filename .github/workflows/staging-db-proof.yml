@@ -121,6 +121,11 @@ jobs:
           echo "head=$head" >> "$GITHUB_OUTPUT"
           echo "staging schema head: $head"
 
+      # Synthetic reference rows only — the FK chain the smoke suite needs.
+      # Idempotent upserts, so re-runs need no cleanup bookkeeping.
+      - name: Seed synthetic staging fixtures
+        run: pnpm exec tsx scripts/ci/seed-staging-fixtures.ts
+
       - name: Run writable DB proof against staging
         id: smoke
         env:
