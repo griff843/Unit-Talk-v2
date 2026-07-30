@@ -59,6 +59,8 @@ green on this head and consumed a genuine staging receipt.
 
 ## Evidence
 
+EVIDENCE:
+
 **The scanner detects the shipped defect and clears this branch.** Run against
 `origin/main`'s workflow set and against this branch's:
 
@@ -128,6 +130,12 @@ harm this lane exists to stop. Full record in PR #1322 and in the
   between repo migrations and the live schema, tracked as the migration-ledger
   drift under UTV2-1274. This lane touches no migration. It is not a required
   context.
+- `Readiness Regression Gate` is red and **pre-existing**: `readiness-score.json`
+  is 351 hours stale and its verdict is RED on `deploy_sha_alignment`,
+  `ingestor_health`, `worker_outbox_health` and `dead_letter_count` — production
+  runtime state, none of which this diff touches. It is not a required context.
+  It is deliberately left red: making it green would mean writing a readiness
+  score this lane has not measured.
 - The production `picks` table is ~93% test fixtures accumulated since
   2026-04-21 (100,247 of 107,858 rows carry a fixture marker). This lane stops
   the source; it deletes nothing. An exact-ID inventory of the 1,036 picks and

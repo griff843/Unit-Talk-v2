@@ -15,8 +15,19 @@
     "verify": {
       "command": "pnpm verify",
       "status": "PARTIAL",
-      "stages_passed": ["env:check", "lint", "type-check", "build", "test"],
-      "test_totals": { "suites": 96, "tests": 3991, "pass": 3991, "fail": 0 },
+      "stages_passed": [
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test"
+      ],
+      "test_totals": {
+        "suites": 96,
+        "tests": 3991,
+        "pass": 3991,
+        "fail": 0
+      },
       "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
       "stop_reason": "Refused by this lane's own guard: no staging credential on this workstation, so the resolved target (host=127.0.0.1) is not xskgrzbteyqdufktjrjx. Before this change the same command reached production and wrote to it, so the refusal is the deliverable.",
       "authoritative_full_run": "the required CI `verify` context, green on this head"
@@ -34,8 +45,14 @@
   "isolation_proof": {
     "production_unchanged": {
       "project_ref": "zfzdnfwdarxucxtaojxm",
-      "picks": { "before": 107858, "after": 107858 },
-      "submissions": { "before": 107428, "after": 107428 },
+      "picks": {
+        "before": 107858,
+        "after": 107858
+      },
+      "submissions": {
+        "before": 107428,
+        "after": 107428
+      },
       "newest_row_before": "2026-07-30T20:14:57.722Z",
       "newest_row_after": "2026-07-30T20:14:57.722Z",
       "note": "Baseline taken before the first push on the stacked path; re-read after the staging DB proof ran. Zero new production rows."
@@ -49,9 +66,33 @@
   "workflow_scanner": {
     "tool": "scripts/ci/workflow-production-credential-guard.ts",
     "against_origin_main": [
-      { "workflow": "ci.yml", "job": "verify", "secrets": ["SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"] },
-      { "workflow": "proof-gate.yml", "job": "t1-proof", "secrets": ["SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"] },
-      { "workflow": "proof-regression.yml", "job": "proof-regression", "secrets": ["SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"] }
+      {
+        "workflow": "ci.yml",
+        "job": "verify",
+        "secrets": [
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "SUPABASE_URL"
+        ]
+      },
+      {
+        "workflow": "proof-gate.yml",
+        "job": "t1-proof",
+        "secrets": [
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "SUPABASE_URL"
+        ]
+      },
+      {
+        "workflow": "proof-regression.yml",
+        "job": "proof-regression",
+        "secrets": [
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "SUPABASE_URL"
+        ]
+      }
     ],
     "against_this_branch": [],
     "note": "Verified in both directions: the scanner reports the shipped defect on main and nothing here, so it is not passing vacuously."
@@ -69,6 +110,7 @@
   ],
   "known_limitations": [
     "Live Schema Parity is red on this PR and is pre-existing: 80 drift items between repo migrations and live schema, tracked under UTV2-1274. This lane touches no migration and the check is not a required context.",
+    "Readiness Regression Gate is red and pre-existing: readiness-score.json is 351h stale with a RED verdict on deploy_sha_alignment, ingestor_health, worker_outbox_health and dead_letter_count \u2014 production runtime state this diff does not touch. Not a required context. Left red deliberately: making it green would mean writing a readiness score this lane has not measured.",
     "Production picks is ~93% test fixtures (100,247 of 107,858 rows carry a fixture marker, accumulated since 2026-04-21). This lane stops the source and deletes nothing; cleanup is deferred until it is on main."
   ],
   "explicitly_not": [
