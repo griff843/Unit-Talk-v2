@@ -35,6 +35,7 @@
     "scripts/ci/required-db-smoke.ts",
     "scripts/ci/seed-staging-fixtures.ts",
     "scripts/ci/staging-path-enforcement.test.ts",
+    "scripts/ci/staging-reference-fixtures.json",
     "scripts/ci/verify-db-proof-receipt.test.ts",
     "scripts/ci/verify-db-proof-receipt.ts",
     "scripts/ci/workflow-production-credential-guard.test.ts",

@@ -16,7 +16,8 @@
  *
  * Refuses to run against anything but the approved staging project.
  */
-import { realpathSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import {
@@ -31,45 +32,30 @@ interface SeedRow {
   rows: Record<string, unknown>[];
 }
 
-/** Minimal FK chain the DB smoke suite needs. */
+/**
+ * Reference data staging needs, mirrored from production's lookup tables.
+ *
+ * Not hand-written: `market_type_id` is derived inside the submission service
+ * from the market string, so a hand-picked subset guesses at that mapping and
+ * gets it wrong. The T1 live suites failed on
+ * `picks_market_type_id_fkey` for exactly that reason.
+ *
+ * These three tables are pure reference data — 6 families, 3 selection types,
+ * 133 market types. No picks, no submissions, no user data. Committing them
+ * keeps the seeder self-contained, which matters: CI has no production access
+ * by design, so it cannot fetch them at run time.
+ *
+ * Regenerate by reading the same three tables from production read-only.
+ */
+const REFERENCE_FIXTURES = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'staging-reference-fixtures.json'), 'utf8'),
+) as Record<string, Record<string, unknown>[]>;
+
+/** Insert order matters: children reference their parents. */
 export const STAGING_FIXTURES: SeedRow[] = [
-  {
-    table: 'market_families',
-    rows: [{ id: 'player_props', display_name: 'STAGING FIXTURE — player props' }],
-  },
-  {
-    table: 'selection_types',
-    rows: [{ id: 'over_under', display_name: 'STAGING FIXTURE — over/under' }],
-  },
-  {
-    table: 'market_types',
-    rows: [
-      {
-        id: 'player_points_ou',
-        market_family_id: 'player_props',
-        selection_type_id: 'over_under',
-        display_name: 'STAGING FIXTURE — player points O/U',
-        short_label: 'PTS O/U',
-        requires_line: true,
-        requires_participant: true,
-        active: true,
-        sort_order: 1,
-        metadata: { fixture: 'utv2-1630', synthetic: true },
-      },
-      {
-        id: 'player_assists_ou',
-        market_family_id: 'player_props',
-        selection_type_id: 'over_under',
-        display_name: 'STAGING FIXTURE — player assists O/U',
-        short_label: 'AST O/U',
-        requires_line: true,
-        requires_participant: true,
-        active: true,
-        sort_order: 2,
-        metadata: { fixture: 'utv2-1630', synthetic: true },
-      },
-    ],
-  },
+  { table: 'market_families', rows: REFERENCE_FIXTURES['market_families'] ?? [] },
+  { table: 'selection_types', rows: REFERENCE_FIXTURES['selection_types'] ?? [] },
+  { table: 'market_types', rows: REFERENCE_FIXTURES['market_types'] ?? [] },
 ];
 
 async function main(): Promise<void> {
