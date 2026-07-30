@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1630",
+  "tier": "T1",
+  "title": "Every writable CI and T1 database path runs only against the staging project",
+  "generated_at": "2026-07-30T21:00:00.000Z",
+  "implementation_sha": null,
+  "sha_binding": {
+    "verified_source_sha": null,
+    "current_pr_head_sha": null,
+    "merge_sha": null,
+    "verified_source_note": "Bound post-merge by post-merge-lane-close.yml (ops:proof-generate --merge-sha). The CI receipt below carries its own independent binding to run id, attempt and SHA."
+  },
+  "static_proof": {
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PARTIAL",
+      "stages_passed": ["env:check", "lint", "type-check", "build", "test"],
+      "test_totals": { "suites": 96, "tests": 3991, "pass": 3991, "fail": 0 },
+      "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
+      "stop_reason": "Refused by this lane's own guard: no staging credential on this workstation, so the resolved target (host=127.0.0.1) is not xskgrzbteyqdufktjrjx. Before this change the same command reached production and wrote to it, so the refusal is the deliverable.",
+      "authoritative_full_run": "the required CI `verify` context, green on this head"
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required `verify` context against its own GITHUB_* values",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP."
+  },
+  "isolation_proof": {
+    "production_unchanged": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "picks": { "before": 107858, "after": 107858 },
+      "submissions": { "before": 107428, "after": 107428 },
+      "newest_row_before": "2026-07-30T20:14:57.722Z",
+      "newest_row_after": "2026-07-30T20:14:57.722Z",
+      "note": "Baseline taken before the first push on the stacked path; re-read after the staging DB proof ran. Zero new production rows."
+    },
+    "staging_received_the_writes": {
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "picks": 33,
+      "newest_row": "2026-07-30T20:35:59.235Z"
+    }
+  },
+  "workflow_scanner": {
+    "tool": "scripts/ci/workflow-production-credential-guard.ts",
+    "against_origin_main": [
+      { "workflow": "ci.yml", "job": "verify", "secrets": ["SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"] },
+      { "workflow": "proof-gate.yml", "job": "t1-proof", "secrets": ["SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"] },
+      { "workflow": "proof-regression.yml", "job": "proof-regression", "secrets": ["SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"] }
+    ],
+    "against_this_branch": [],
+    "note": "Verified in both directions: the scanner reports the shipped defect on main and nothing here, so it is not passing vacuously."
+  },
+  "workflows_migrated": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/proof-gate.yml",
+    ".github/workflows/proof-regression.yml",
+    ".github/workflows/t1-proof-gate.yml"
+  ],
+  "read_only_production_consumers_retained": [
+    "live-schema-parity.yml (schema read; migrations applied to an ephemeral local stack)",
+    "shadow-parity-required.yml (--dry-run; asserts zero writes and exits non-zero otherwise)",
+    "supabase-pr-db-branch.yml (management token creating an isolated preview branch)"
+  ],
+  "known_limitations": [
+    "Live Schema Parity is red on this PR and is pre-existing: 80 drift items between repo migrations and live schema, tracked under UTV2-1274. This lane touches no migration and the check is not a required context.",
+    "Production picks is ~93% test fixtures (100,247 of 107,858 rows carry a fixture marker, accumulated since 2026-04-21). This lane stops the source and deletes nothing; cleanup is deferred until it is on main."
+  ],
+  "explicitly_not": [
+    "no production database mutation",
+    "no production credential in any checkout or PR-triggered workflow",
+    "no deployment or service restart",
+    "no direct-main or admin bypass",
+    "no branch-protection change",
+    "no writable DB claim asserted from proof text"
+  ]
+}
