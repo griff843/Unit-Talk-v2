@@ -122,12 +122,12 @@ Must be posted by a member listed in `.github/CODEOWNERS`. Bot-authored comments
 
 The following workflows exist under `.github/workflows/` but are intentionally **not** declared as required checks in §3. Each exclusion is deliberate. Do not add them to the fenced JSON without a corresponding branch-protection change and a ratified policy decision.
 
-### 5.1 `Supabase PR DB Branch` (`supabase-pr-db-branch.yml`)
+### 5.1 `Supabase PR DB Branch` (`supabase-pr-db-branch.yml`) — DELETED (UTV2-1629)
 
-- **Jobs:** `plan`, `validate`, `teardown`
-- **Why excluded:** conditionally required — `validate` only runs when a PR modifies files under `supabase/migrations/**`. Adding it as an always-required check would block every non-migration PR waiting for a job that is skipped. GitHub required-status checks cannot express "required only if it runs."
-- **Policy:** `validate` must pass on every PR that changes migrations. This is enforced by convention and by `ci-doctor` check `CV5` (recent run history), not by branch protection.
-- **Future work:** if GitHub adds conditional required checks, revisit and promote `validate` into the required inventory.
+- **Status:** removed 2026-07-30. The workflow file no longer exists; do not re-add it as a required check.
+- **Why removed:** dormant (`vars.SUPABASE_BRANCHING_ENABLED` unset, so `validate` never ran) and structurally unable to pass once UTV2-1630 put `ci:assert-staging` in front of `pnpm test:db` — a preview branch is its own project ref, which that gate refuses by design. Its `teardown` job was not behind the branching gate and so held `SUPABASE_ACCESS_TOKEN` (org-wide management API) on every closed migration PR, with nothing to tear down; four preview branches parented on production were nonetheless still live.
+- **What replaces it:** `live-schema-parity.yml` replays every repo migration against a fresh Supabase local stack and diffs the result against live — a full replay, stronger than the preview branch's pending-only push, and holding no management token. `ci.yml` / `staging-db-proof.yml` run `pnpm test:db` against the staging project via the `staging-ci` environment.
+- **`ci-doctor` impact:** checks `CV1`–`CV6` degrade to `skip` when the preview workflow is absent — this is the designed behaviour of `runPreviewChecks`, not a regression.
 
 ### 5.2 `doc-truth-gate` (`doc-truth-gate.yml`)
 

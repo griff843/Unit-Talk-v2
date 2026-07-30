@@ -51,7 +51,12 @@ async function main(): Promise<void> {
   {
     const migrationLinter = fs.existsSync(path.resolve('scripts/lint-migrations.mjs'));
     const migrationVersionCheck = fs.existsSync(path.resolve('scripts/check-migration-versions.mjs'));
-    const supabasePrBranch = fs.existsSync(path.resolve('.github/workflows/supabase-pr-db-branch.yml'));
+    // UTV2-1629: supabase-pr-db-branch.yml was deleted. Migration replay is now
+    // proven by live-schema-parity.yml, which applies EVERY repo migration to a
+    // fresh Supabase local stack (`supabase db reset`) and diffs the result
+    // against the live schema — a stronger check than the preview branch ran,
+    // and one that carries no management-API token.
+    const liveSchemaParity = fs.existsSync(path.resolve('.github/workflows/live-schema-parity.yml'));
 
     proofs.push({
       control: 'Schema changes are validated before deploy',
@@ -59,12 +64,12 @@ async function main(): Promise<void> {
       evidence: {
         migration_linter: migrationLinter,
         version_check: migrationVersionCheck,
-        supabase_pr_branch: supabasePrBranch,
+        live_schema_parity: liveSchemaParity,
         verify_commands: 'pnpm verify:commands runs check-migration-versions.mjs + lint-migrations.mjs',
         ci_workflow: 'ci.yml runs pnpm verify on every PR',
         generated_types: 'pnpm supabase:types regenerates database.types.ts — type-check catches schema drift',
       },
-      notes: 'Schema validated via: migration linter + version check (in pnpm verify:commands), Supabase PR DB branch for preview, type-check catches schema drift via generated types.',
+      notes: 'Schema validated via: migration linter + version check (in pnpm verify:commands), live-schema-parity full migration replay against an ephemeral Supabase stack, type-check catches schema drift via generated types.',
     });
   }
 
