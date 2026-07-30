@@ -4,12 +4,13 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import {
   findProductionCredentialExposures,
   findUnboundStagingCredentialJobs,
   formatExposures,
   pullRequestReachableWorkflows,
+  ORPHANED_REPOSITORY_SECRETS,
   SECRETS_INHERIT,
   WORKFLOW_LEVEL_ENV,
   READ_ONLY_EXEMPTIONS,
@@ -81,6 +82,74 @@ test('every exemption names a workflow, job and secret that actually exist', () 
     }
     assert.ok(entry.reason.trim().length >= 40, `exemption ${entry.workflow}::${entry.job} needs a real reason`);
   }
+});
+
+test('every exemption records whether it executes PR code, and names a real pin when it does', () => {
+  // UTV2-1629 — "it only reads production" is a property of the code the job
+  // runs, and on a pull_request event that code comes from the PR head. An
+  // exemption that does not say which of those two situations it is in has not
+  // actually been reasoned about.
+  for (const entry of READ_ONLY_EXEMPTIONS) {
+    assert.equal(
+      typeof entry.executesPullRequestCode,
+      'boolean',
+      `${entry.workflow}::${entry.job} must state whether it executes PR-authored code`,
+    );
+    assert.ok(
+      entry.privilegeReduction.trim().length >= 40,
+      `${entry.workflow}::${entry.job} must name the provisioning that would retire it`,
+    );
+
+    if (!entry.executesPullRequestCode) {
+      assert.deepEqual(
+        entry.pinnedBy,
+        [],
+        `${entry.workflow}::${entry.job} claims it runs no PR code, so it must pin nothing`,
+      );
+      continue;
+    }
+
+    assert.ok(
+      entry.pinnedBy.length > 0,
+      `${entry.workflow}::${entry.job} executes PR-authored code and must name what pins it`,
+    );
+
+    // The pin has to be real, not aspirational: every declared path must appear
+    // in the workflow's own assert-unmodified-vs-base invocation. A pin recorded
+    // here but absent from the YAML is the failure mode this test exists for.
+    const text = readFileSync(join(WORKFLOW_DIR, entry.workflow), 'utf8');
+    assert.match(
+      text,
+      /assert-unmodified-vs-base\.ts/u,
+      `${entry.workflow} declares a pin but never invokes assert-unmodified-vs-base.ts`,
+    );
+    for (const path of entry.pinnedBy) {
+      assert.ok(
+        text.includes(path),
+        `${entry.workflow}::${entry.job} declares ${path} as pinned, but the workflow never passes it to assert-unmodified-vs-base.ts`,
+      );
+    }
+  }
+});
+
+test('orphaned repository secrets are referenced by no workflow', () => {
+  // These are queued for deletion by the orchestrator (an external action). The
+  // repo's job is to make sure nothing starts depending on them again in the
+  // meantime — a reference here would turn a pending cleanup into a breakage.
+  const referenced: string[] = [];
+  for (const file of readdirSync(WORKFLOW_DIR).filter((name) => /\.ya?ml$/.test(name))) {
+    const text = readFileSync(join(WORKFLOW_DIR, file), 'utf8');
+    for (const secret of ORPHANED_REPOSITORY_SECRETS) {
+      if (new RegExp(`secrets\\s*\\.\\s*${secret}\\b`).test(text)) referenced.push(`${file} → ${secret}`);
+    }
+  }
+  assert.deepEqual(
+    referenced,
+    [],
+    'A workflow references a secret listed as orphaned and pending deletion:\n' +
+      referenced.join('\n') +
+      '\n\nEither remove the reference or take the name off ORPHANED_REPOSITORY_SECRETS.',
+  );
 });
 
 // ── Detection behaviour ─────────────────────────────────────────────────────
@@ -232,7 +301,15 @@ jobs:
 `,
   });
   const exemptions: CredentialExemption[] = [
-    { workflow: 'partial.yml', job: 'reader', secrets: ['SUPABASE_URL'], reason: 'read-only' },
+    {
+      workflow: 'partial.yml',
+      job: 'reader',
+      secrets: ['SUPABASE_URL'],
+      executesPullRequestCode: false,
+      pinnedBy: [],
+      reason: 'read-only',
+      privilegeReduction: 'fixture',
+    },
   ];
   assert.deepEqual(findProductionCredentialExposures(dir, exemptions), [
     { workflow: 'partial.yml', job: 'reader', secrets: ['SUPABASE_SERVICE_ROLE_KEY'] },
@@ -257,7 +334,15 @@ jobs:
 `,
   });
   const exemptions: CredentialExemption[] = [
-    { workflow: 'twojobs.yml', job: 'reader', secrets: ['SUPABASE_URL'], reason: 'read-only' },
+    {
+      workflow: 'twojobs.yml',
+      job: 'reader',
+      secrets: ['SUPABASE_URL'],
+      executesPullRequestCode: false,
+      pinnedBy: [],
+      reason: 'read-only',
+      privilegeReduction: 'fixture',
+    },
   ];
   assert.deepEqual(findProductionCredentialExposures(dir, exemptions), [
     { workflow: 'twojobs.yml', job: 'writer', secrets: ['SUPABASE_URL'] },

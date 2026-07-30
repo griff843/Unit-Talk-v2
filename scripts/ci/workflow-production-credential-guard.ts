@@ -58,7 +58,37 @@ export interface CredentialExemption {
   workflow: string;
   job: string;
   secrets: string[];
+  /**
+   * Does this job execute code the pull request supplies?
+   *
+   * UTV2-1629 — "it only reads" is worth nothing on its own, because whether a
+   * job only reads is a property of the code it runs, and on a `pull_request`
+   * event that code comes from the PR head. Recording this per exemption forces
+   * the distinction to be made rather than assumed: a `false` here is a claim
+   * that the credentialed steps run nothing from the checkout, and a `true`
+   * obliges `pinnedBy` to name what holds that code to the merge base.
+   *
+   * Note the workflow YAML itself is always PR-authored on a same-repo branch.
+   * What limits that is CODEOWNERS review on `.github/workflows/**` plus the
+   * fact that GitHub withholds secrets from fork `pull_request` runs entirely —
+   * neither of which is expressible here, and neither of which covers the
+   * checkout. This field is about the checkout.
+   */
+  executesPullRequestCode: boolean;
+  /**
+   * Repository paths pinned to the merge base by
+   * `scripts/ci/assert-unmodified-vs-base.ts` before the credential is in
+   * scope. Must be non-empty whenever `executesPullRequestCode` is true, and
+   * must be the job's whole runtime closure — not merely its entry point.
+   */
+  pinnedBy: string[];
   reason: string;
+  /**
+   * The external provisioning that would retire this exemption outright.
+   * Recorded so the standing privilege has a named exit, rather than becoming
+   * permanent by being merely documented.
+   */
+  privilegeReduction: string;
 }
 
 /**
@@ -70,35 +100,44 @@ export const READ_ONLY_EXEMPTIONS: CredentialExemption[] = [
     workflow: 'live-schema-parity.yml',
     job: 'check-config',
     secrets: ['SUPABASE_DB_URL', 'SUPABASE_DB_POOLER_URL'],
+    executesPullRequestCode: false,
+    pinnedBy: [],
     reason:
-      'Tests connection-string presence only; never opens a connection. The parity check it gates is a schema read.',
+      'Tests connection-string presence only; never opens a connection. Its single step runs an inline shell script from the workflow file and checks out no repository code at all, so there is nothing from the PR checkout to pin. The parity check it gates is a schema read.',
+    privilegeReduction:
+      'Retired together with the schema-parity exemption below: once that job takes a read-only role, this presence check tests the read-only credential instead.',
   },
   {
     workflow: 'live-schema-parity.yml',
     job: 'schema-parity',
     secrets: ['SUPABASE_DB_URL', 'SUPABASE_DB_POOLER_URL'],
+    executesPullRequestCode: true,
+    pinnedBy: [
+      'scripts/ops/compare-databases.ts',
+      'scripts/ci/schema-drift-gate.ts',
+      'scripts/ci/assert-unmodified-vs-base.ts',
+    ],
     reason:
-      'Applies repo migrations to an EPHEMERAL LOCAL Supabase stack and compares its schema to live; the migrations are never applied to live. This job holds a production SUPERUSER Postgres URL and runs comparison scripts from the PR checkout, and those scripts are inside its own trigger path filter — so "catalog reads only" is a property of code the PR can replace. It is therefore gated on assert-unmodified-vs-base.ts for compare-databases.ts and schema-drift-gate.ts: a PR that modifies either cannot execute its own version here.',
+      'Applies repo migrations to an EPHEMERAL LOCAL Supabase stack and compares its schema to live; the migrations are never applied to live. This job holds a production SUPERUSER Postgres URL and runs comparison scripts from the PR checkout, and those scripts are inside its own trigger path filter — so "catalog reads only" is a property of code the PR can replace. It is therefore gated on assert-unmodified-vs-base.ts for compare-databases.ts and schema-drift-gate.ts: a PR that modifies either cannot execute its own version here. UTV2-1629 additionally scoped the connection string to the two steps that read the catalog, instead of exporting it into $GITHUB_ENV where `supabase start`, `supabase db reset` and `upload-artifact` all inherited it.',
+    privilegeReduction:
+      'A read-only Postgres login role on the production project, supplied as its own pooler URL secret in place of SUPABASE_DB_POOLER_URL. It must hold pg_read_all_data: the snapshot query reads information_schema.columns, which is privilege-filtered per column, so a login role with no grants would report every table as having zero columns and the parity check would read as catastrophic (and entirely false) drift rather than failing. The role needs no write, DDL, CREATEROLE or superuser capability — the reads are pg_class/pg_constraint/pg_indexes/pg_policies/pg_trigger/pg_extension plus information_schema. Provisioning requires CREATE ROLE on production and is an orchestrator action.',
   },
   {
     workflow: 'shadow-parity-required.yml',
     job: 'shadow-parity',
     secrets: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'],
+    executesPullRequestCode: true,
+    pinnedBy: [
+      'scripts/shadow-scoring-runner.ts',
+      'scripts/ci/assert-unmodified-vs-base.ts',
+      'packages/config/src',
+      'package.json',
+      'pnpm-lock.yaml',
+    ],
     reason:
-      'Runs scripts/shadow-scoring-runner.ts with --dry-run, which counts production state without writing. Its purpose is parity against PRODUCTION data, so staging would make the check meaningless. The runner asserts picksCreated/shadowModeFalseSet/distributionEnqueued/promotionWidened are all 0 and exits non-zero otherwise. That is a property of a file the PR supplies, so the job is additionally gated on assert-unmodified-vs-base.ts: a PR that modifies the runner cannot execute its own version against production.',
-  },
-  {
-    workflow: 'supabase-pr-db-branch.yml',
-    job: 'validate',
-    secrets: ['SUPABASE_ACCESS_TOKEN'],
-    reason:
-      'Management-API token used to create an ISOLATED per-PR preview branch. Migrations and test:db run against that branch, never against the production database.',
-  },
-  {
-    workflow: 'supabase-pr-db-branch.yml',
-    job: 'teardown',
-    secrets: ['SUPABASE_ACCESS_TOKEN'],
-    reason: 'Deletes the isolated preview branch created by the validate job.',
+      'Runs scripts/shadow-scoring-runner.ts with --dry-run, which counts production state without writing. Its purpose is parity against PRODUCTION data, so staging would make the check meaningless. The runner asserts picksCreated/shadowModeFalseSet/distributionEnqueued/promotionWidened are all 0 and exits non-zero otherwise. That is a property of files the PR supplies, so the job is gated on assert-unmodified-vs-base.ts for the runner\'s ENTIRE dry-run runtime closure. UTV2-1629 found the earlier pin incomplete: it named the runner alone while the runner statically imported apps/api/src/server.js, which transitively loads most of apps/api and packages/domain — the exact paths in this workflow\'s trigger filter, so a PR editing packages/domain ran its own code against production at import time. Those imports are now dynamic and taken only on the non-dry-run path, and the pin covers @unit-talk/config (which resolves to .ts source) and the dependency manifests that `pnpm install` executes lifecycle scripts from.',
+    privilegeReduction:
+      'A read-only credential is NOT a drop-in here. Verified against production 2026-07-30: all 121 public tables have RLS enabled, and pick_candidates and market_universe carry ZERO policies — RLS-on with no policy denies every non-bypassrls role. Swapping in the anon/publishable key would return count 0 for exactly the tables the parity check counts, and the workflow classifies candidatesScanned=0 as a WARNING, so the check would go silently vacuous rather than fail. Real reduction therefore needs a dedicated Postgres role with pg_read_all_data reached over a direct connection (replacing the PostgREST client), or a PostgREST JWT minted for such a role. Both require CREATE ROLE on production and are orchestrator actions. Adding anon SELECT policies to production is NOT an acceptable alternative — it would expose pick data publicly.',
   },
 ];
 
@@ -232,6 +271,36 @@ export function pullRequestReachableWorkflows(workflowDir: string): Set<string> 
 }
 
 /**
+ * REPOSITORY-level secrets that no workflow references, pending deletion by the
+ * orchestrator. Deleting a secret is an external action, so the repo cannot do
+ * it; what the repo CAN do is refuse to start using one again silently.
+ *
+ * Confirmed 2026-07-30 with `gh secret list` and `gh secret list --env
+ * staging-ci`. All four were created 2026-07-29 by an earlier lane and all four
+ * point at the STAGING project, so this is hygiene, not exposure:
+ *
+ *   CI_SUPABASE_ANON_KEY          repo only — referenced by nothing
+ *   CI_SUPABASE_SERVICE_ROLE_KEY  repo only — referenced by nothing
+ *   CI_SUPABASE_URL               repo AND staging-ci
+ *   CI_SUPABASE_PROJECT_REF       repo AND staging-ci
+ *
+ * The last two are the diagnosis hazard. An environment secret wins for a job
+ * that binds `environment: staging-ci`, but the repository copy is released to
+ * every job regardless — so a job that FORGOT the binding still resolves the
+ * URL and the ref, and fails later and elsewhere on an empty key. That is the
+ * exact confusion `findUnboundStagingCredentialJobs` exists to catch, and it is
+ * only fully closed once the repository copies are gone.
+ *
+ * `CI_SUPABASE_ANON_KEY` / `CI_SUPABASE_SERVICE_ROLE_KEY` are the legacy Supabase
+ * key pair; the staging-ci environment carries the current
+ * publishable/secret pair instead. Nothing reads the legacy names.
+ */
+export const ORPHANED_REPOSITORY_SECRETS = [
+  'CI_SUPABASE_ANON_KEY',
+  'CI_SUPABASE_SERVICE_ROLE_KEY',
+] as const;
+
+/**
  * Every pull-request-reachable job holding a production credential it has no
  * exemption for. An empty array is the only passing state.
  *
@@ -291,14 +360,10 @@ export function findProductionCredentialExposures(
  * only `runtime-verifier` got the binding, and C2 failed for every T1 lane with
  * no indication that a credential was missing rather than wrong.
  *
- * NOTE: not every `CI_SUPABASE_*` name is environment-scoped today. Four of
- * them (`CI_SUPABASE_URL`, `CI_SUPABASE_PROJECT_REF`, `CI_SUPABASE_ANON_KEY`,
- * `CI_SUPABASE_SERVICE_ROLE_KEY`) also exist as repository-level secrets left
- * over from UTV2-1627, and repository secrets ARE released to every job. That
- * makes the failure mode partial rather than total, which is worse to diagnose:
- * a job can resolve the URL and ref while the keys come back empty. All four
- * point at staging, so this is a correctness problem, not an exposure. They
- * should be deleted once nothing references them.
+ * NOTE: not every `CI_SUPABASE_*` name is environment-scoped today. See
+ * ORPHANED_REPOSITORY_SECRETS below — repository secrets ARE released to every
+ * job, which makes the failure mode partial rather than total and so harder to
+ * diagnose: a job can resolve the URL and ref while the keys come back empty.
  *
  * Unlike the production check, this scans EVERY trigger — a scheduled or
  * dispatched job is just as broken by the omission.
