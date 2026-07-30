@@ -813,9 +813,77 @@ test('N3: boundary holds under --experimental-test-isolation=none', () => {
       '--experimental-test-isolation=none',
       '--import',
       'tsx',
-      '.out/fixtures/isolation-none-probe.mjs',
+      'scripts/ci/fixtures/isolation-none-probe.mjs',
     ],
     { cwd: root, encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined } },
   );
   assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+});
+
+// ---------------------------------------------------------------------------
+// Third review — identity from host STRUCTURE, not substring search.
+// B1: `CI_SUPABASE_PROJECT_REF=example` + https://db.example.com was ALLOWED.
+// NEW-6: any host containing a 20-char alnum run was ALLOWED.
+// Both because `identifiable` was a substring test over the host.
+// ---------------------------------------------------------------------------
+for (const [label, url, declaredRef, expect] of [
+  ['canonical production', `https://${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}.supabase.co`, undefined, 'throw'],
+  ['percent-encoded production', 'https://zfzdnfwdarxucxtaojx%6d.supabase.co', undefined, 'throw'],
+  ['B1 custom domain w/ substring ref', 'https://db.example.com', 'example', 'throw'],
+  ['B1 two-letter ref vs .co host', 'https://db.example.co', 'co', 'throw'],
+  ['NEW-6 20-char run on foreign host', 'https://abcdefghijklmnopqrst.evil.example', 'abcdefghijklmnopqrst', 'throw'],
+  ['pooler host', 'https://aws-0-us-east-1.pooler.supabase.com', 'pooler', 'throw'],
+  ['multi-label supabase host', 'https://a.b.supabase.co', undefined, 'throw'],
+  ['loopback without opt-in', 'http://127.0.0.1:54321', undefined, 'throw'],
+  ['benign test fixture', 'https://example.supabase.co', undefined, 'allow'],
+  ['isolated project', `https://${ISOLATED_REF}.supabase.co`, ISOLATED_REF, 'allow'],
+] as const) {
+  test(`boundary(${expect}): ${label}`, () => {
+    const prevMode = process.env['UNIT_TALK_DB_ACCESS_MODE'];
+    const prevRef = process.env['CI_SUPABASE_PROJECT_REF'];
+    delete process.env['UNIT_TALK_DB_ACCESS_MODE'];
+    if (declaredRef) process.env['CI_SUPABASE_PROJECT_REF'] = declaredRef;
+    else delete process.env['CI_SUPABASE_PROJECT_REF'];
+    try {
+      const call = () =>
+        createDatabaseConnectionConfig({
+          env: {
+            SUPABASE_URL: url,
+            SUPABASE_ANON_KEY: 'anon-fixture',
+            SUPABASE_SERVICE_ROLE_KEY: 'service-fixture',
+          } as unknown as Parameters<typeof createDatabaseConnectionConfig>[0]['env'],
+          useServiceRole: true,
+        });
+      if (expect === 'throw') assert.throws(call, /Refusing to construct a service-role client/);
+      else assert.equal(call().role, 'service_role');
+    } finally {
+      if (prevMode !== undefined) process.env['UNIT_TALK_DB_ACCESS_MODE'] = prevMode;
+      if (prevRef !== undefined) process.env['CI_SUPABASE_PROJECT_REF'] = prevRef;
+      else delete process.env['CI_SUPABASE_PROJECT_REF'];
+    }
+  });
+}
+
+// MN5: the loopback restriction had zero coverage — `LOOPBACK_HOSTS.has(host)`
+// could be replaced with `true` undetected.
+test('MN5: the local opt-in does not admit a non-loopback host', () => {
+  const prev = process.env['UNIT_TALK_ALLOW_LOCAL_SUPABASE'];
+  process.env['UNIT_TALK_ALLOW_LOCAL_SUPABASE'] = 'true';
+  try {
+    assert.throws(
+      () =>
+        createDatabaseConnectionConfig({
+          env: {
+            SUPABASE_URL: 'https://db.unit-talk.com',
+            SUPABASE_ANON_KEY: 'a',
+            SUPABASE_SERVICE_ROLE_KEY: 's',
+          } as unknown as Parameters<typeof createDatabaseConnectionConfig>[0]['env'],
+          useServiceRole: true,
+        }),
+      /Refusing to construct a service-role client/,
+    );
+  } finally {
+    if (prev === undefined) delete process.env['UNIT_TALK_ALLOW_LOCAL_SUPABASE'];
+    else process.env['UNIT_TALK_ALLOW_LOCAL_SUPABASE'] = prev;
+  }
 });
