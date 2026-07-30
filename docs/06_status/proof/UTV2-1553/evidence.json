@@ -3,13 +3,13 @@
   "issue_id": "UTV2-1553",
   "tier": "T1",
   "title": "Release two merged lanes from active capacity and file locks",
-  "generated_at": "2026-07-30T19:55:00.000Z",
-  "implementation_sha": "016cca65bc86a18d336c08cf1a0e834a3381bda9",
+  "generated_at": "2026-07-30T20:45:00.000Z",
+  "implementation_sha": "b658b911338f72c1e2f6087b3eabe12ca2245b22",
   "sha_binding": {
-    "verified_source_sha": "016cca65bc86a18d336c08cf1a0e834a3381bda9",
-    "current_pr_head_sha": "016cca65bc86a18d336c08cf1a0e834a3381bda9",
+    "verified_source_sha": "b658b911338f72c1e2f6087b3eabe12ca2245b22",
+    "current_pr_head_sha": null,
     "merge_sha": null,
-    "verified_source_note": "State-only change. All receipts executed against this tree."
+    "verified_source_note": "State-only change. All receipts executed against this tree. Rebased from 016cca65 onto claude/utv2-1630-isolated-proof-execution so CI runs the staging-only workflows; the rebase does not alter tree content."
   },
   "static_proof": {
     "preflight": {
@@ -18,27 +18,25 @@
       "checks": 41,
       "waivers": 0,
       "note": "PT1 validated against the staging project, not production."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
     }
   },
   "runtime_proof": {
-    "command": "pnpm test:db",
-    "status": "PASS",
-    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "applicable": false,
+    "reason": "Manifest-state-only change: four JSON lane manifests plus one sync file. No runtime code path is touched and no writable database claim is made. Under UTV2-1630 a writable DB claim is satisfiable only by a ci-db-proof-receipt/v2 artifact produced by the staging-db-proof job and verified inside the required verify context — never by proof-file text.",
+    "target_project_ref": null,
     "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
-    "targeted_production": false,
-    "tap": {
-      "tests": 7,
-      "pass": 7,
-      "fail": 0,
-      "skipped": 0
-    },
-    "output_sha256": "ee1e14e9ae9a65417701504709fafc43981e4230d95c07b80467f65f6901d5f4"
+    "targeted_production": false
   },
   "explicitly_not": [
     "not marked done",
     "no truth_check_history appended or synthesized",
     "no implementation proof altered",
     "no terminal closeout claimed",
-    "open reconciliation PR branch and head untouched"
+    "open reconciliation PR branch and head untouched",
+    "no writable database claim asserted from proof text"
   ]
 }
