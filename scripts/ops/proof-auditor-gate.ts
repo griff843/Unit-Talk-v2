@@ -192,10 +192,24 @@ function createResult(options: CliOptions): GateResult {
     // verified in the required `verify` context by
     // scripts/ci/verify-db-proof-receipt.ts against its own GITHUB_* values.
     if (requiresCiProducedReceipt(command)) {
-      failures.push(
-        `Writable DB execution cannot be proven by proof-file text: ${command}. ` +
-          'It requires the CI-produced ci-db-proof-receipt/v2 artifact, verified in ' +
-          'the required `verify` context. Pasted or hand-authored TAP is never sufficient.',
+      // Delegate rather than fail. This gate is NOT a required status check;
+      // `verify` is. Enforcement lives there, where the run downloads its own
+      // same-run ci-db-proof-receipt/v2 artifact and re-parses the TAP.
+      //
+      // Failing here instead would deadlock every T1 lane: CI invokes this gate
+      // with --require-executed-command "pnpm test:db", so an unconditional
+      // refusal makes the requirement unsatisfiable by any means — the proof
+      // cannot be text, and the receipt does not live in the proof directory.
+      // That is a fail-closed loop with no exit, not a control.
+      //
+      // Dropping the text requirement costs nothing, because proof-file text was
+      // never evidence of anything here: a production run and an isolated run
+      // print identical TAP.
+      warnings.push(
+        `Writable DB execution is not audited from proof text: ${command}. ` +
+          'Text cannot show which database a run targeted. Enforcement is the ' +
+          'CI-produced ci-db-proof-receipt/v2, verified in the required `verify` ' +
+          'context by scripts/ci/verify-db-proof-receipt.ts.',
       );
       continue;
     }

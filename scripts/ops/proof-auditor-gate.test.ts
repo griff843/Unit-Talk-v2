@@ -301,18 +301,32 @@ function proofDirWith(body: string): string {
 }
 
 for (const command of ['pnpm test:db', 'pnpm test:live-db', 'pnpm test:t1-proof:live', 'pnpm ci:db-smoke']) {
-  test(`writable DB command is refused on proof text alone: ${command}`, () => {
+  test(`writable DB command is delegated to verify, not audited from text: ${command}`, () => {
     const proofDir = proofDirWith([
       '## Summary', 'x', '## Evidence', 'x', '## Verification',
       `Ran \`${command}\` against the database.`,
       '# tests 7', '# pass 7', '# fail 0', '# skipped 0',
     ].join('\n'));
     const result = runGate(['--proof-dir', proofDir, '--require-executed-command', command]);
-    assert.strictEqual(result.output.verdict, 'FAIL');
-    assert.ok(
-      result.output.failures.some((f) => /cannot be proven by proof-file text/.test(f)),
-      `expected a receipt-required failure, got: ${JSON.stringify(result.output.failures)}`,
+    assert.strictEqual(
+      result.output.verdict,
+      'PASS',
+      `must not fail: CI always passes --require-executed-command "pnpm test:db" for T1, ` +
+        `so failing here deadlocks every T1 lane. Got: ${JSON.stringify(result.output.failures)}`,
     );
+    assert.ok(
+      result.output.warnings.some((w) => /not audited from proof text/.test(w)),
+      `expected a delegation warning, got: ${JSON.stringify(result.output.warnings)}`,
+    );
+  });
+
+  test(`writable DB command passes even with NO text evidence at all: ${command}`, () => {
+    // The text requirement is dropped entirely, not merely softened — otherwise
+    // a lane that correctly omits an unverifiable claim (as UTV2-1553 does)
+    // would fail for omitting it.
+    const proofDir = proofDirWith(['## Summary', 'x', '## Evidence', 'x', '## Verification', 'No DB claim.'].join('\n'));
+    const result = runGate(['--proof-dir', proofDir, '--require-executed-command', command]);
+    assert.strictEqual(result.output.verdict, 'PASS', JSON.stringify(result.output.failures));
   });
 }
 
