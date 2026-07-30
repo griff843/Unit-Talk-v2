@@ -11,12 +11,16 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".github/workflows/staging-db-proof.yml",
     ".ops/sync/UTV2-1630.yml",
     "docs/06_status/lanes/UTV2-1630.json",
     "docs/06_status/proof/UTV2-1630/**",
+    "package.json",
     "scripts/ci/isolated-proof-attestation.test.ts",
     "scripts/ci/isolated-proof-attestation.ts",
     "scripts/ci/required-db-smoke.ts",
+    "scripts/ci/verify-db-proof-receipt.test.ts",
+    "scripts/ci/verify-db-proof-receipt.ts",
     "scripts/ops/proof-auditor-gate.ts"
   ],
   "expected_proof_paths": [

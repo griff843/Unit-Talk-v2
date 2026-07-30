@@ -1,0 +1,195 @@
+# UTV2-1630 — writable database verification against the staging project only.
+#
+# Why this workflow exists
+# ------------------------
+# The T1 Proof Auditor requires `pnpm test:db` TAP evidence. Until now the only
+# way to obtain it was to hold PRODUCTION credentials, so a T1 lane could
+# satisfy its own proof gate only by doing the thing UTV2-1627 exists to
+# prevent. On 2026-07-29 that produced 310 test-fixture rows in production.
+#
+# This workflow supplies the missing half: a writable target that is not
+# production, and a receipt that a lane author cannot fabricate.
+#
+# Isolation properties
+# --------------------
+#   * The database job binds to the `staging-ci` GitHub environment and reads
+#     ONLY `CI_SUPABASE_*`. It never references SUPABASE_URL,
+#     SUPABASE_SERVICE_ROLE_KEY or SUPABASE_DB_URL.
+#   * Supabase API keys are project-scoped JWTs — the staging key returns 401
+#     against production, so credential substitution is structurally impossible
+#     rather than merely forbidden.
+#   * `ci:db-smoke` resolves the runtime target and refuses unless it is exactly
+#     xskgrzbteyqdufktjrjx, before any client is constructed.
+#   * `pull_request` (not `pull_request_target`) means fork PRs receive no
+#     secrets — GitHub withholds them, and the environment gate is a second lock.
+name: Staging DB Proof
+
+on:
+  pull_request:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staging-db-proof-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  staging-db-proof:
+    name: Writable DB proof (staging only)
+    runs-on: ubuntu-latest
+    # Binding the environment is what releases CI_SUPABASE_*. No other job in
+    # this repository may read them.
+    environment: staging-ci
+    outputs:
+      receipt_sha256: ${{ steps.smoke.outputs.receipt_sha256 }}
+      observed_ref: ${{ steps.smoke.outputs.observed_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Fail before anything else if the environment did not release the
+      # staging secrets, rather than falling through to a confusing DB error.
+      - name: Assert staging credentials present
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          for name in CI_SUPABASE_URL CI_SUPABASE_PROJECT_REF CI_SUPABASE_SECRET_KEY; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::$name is empty — staging-ci environment did not release its secrets."
+              exit 1
+            fi
+          done
+          # Echo identity only. Never the credential.
+          echo "resolved project ref: $CI_SUPABASE_PROJECT_REF"
+          echo "expected staging ref: xskgrzbteyqdufktjrjx"
+          if [ "$CI_SUPABASE_PROJECT_REF" != "xskgrzbteyqdufktjrjx" ]; then
+            echo "::error::project ref is not the approved staging project"
+            exit 1
+          fi
+
+      # `local.env` is written from CI_SUPABASE_* only. @unit-talk/config reads
+      # SUPABASE_* keys, so the staging values are mapped onto those names — the
+      # production secrets are never referenced anywhere in this workflow.
+      - name: Materialize staging-only environment
+        env:
+          CI_SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          CI_SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          CI_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          CI_SUPABASE_SECRET_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          {
+            echo "NODE_ENV=test"
+            echo "UNIT_TALK_APP_ENV=test"
+            echo "UNIT_TALK_ACTIVE_WORKSPACE=staging-ci"
+            echo "UNIT_TALK_LEGACY_WORKSPACE=staging-ci"
+            echo "LINEAR_TEAM_ID=staging-ci"
+            echo "LINEAR_TEAM_KEY=UTV2"
+            echo "LINEAR_TEAM_NAME=staging-ci"
+            echo "UNIT_TALK_API_RUNTIME_MODE=fail_open"
+            echo "UNIT_TALK_JWT_SECRET=staging-ci-not-a-production-secret"
+            echo "SUPABASE_URL=${CI_SUPABASE_URL}"
+            echo "SUPABASE_PROJECT_REF=${CI_SUPABASE_PROJECT_REF}"
+            echo "SUPABASE_ANON_KEY=${CI_SUPABASE_PUBLISHABLE_KEY}"
+            echo "SUPABASE_SERVICE_ROLE_KEY=${CI_SUPABASE_SECRET_KEY}"
+            echo "UNIT_TALK_DB_ACCESS_MODE=writable-isolated"
+          } > local.env
+          echo "local.env written (values redacted); keys:"
+          cut -d= -f1 local.env | sed 's/^/  /'
+
+      - name: Record staging schema head
+        id: schema
+        run: |
+          set -euo pipefail
+          head=$(ls supabase/migrations/*.sql | tail -1 | xargs basename)
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+          echo "staging schema head: $head"
+
+      - name: Run writable DB proof against staging
+        id: smoke
+        env:
+          CI_REQUIRE_DB_SMOKE: 'true'
+          CI_DB_PROOF_RECEIPT_PATH: ${{ github.workspace }}/.out/ci-db-proof-receipt.json
+          CI_SCHEMA_MIGRATION_HEAD: ${{ steps.schema.outputs.head }}
+          CI_FIXTURE_RUN_ID: utv2-1630-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          mkdir -p .out
+          pnpm ci:db-smoke
+          receipt="$CI_DB_PROOF_RECEIPT_PATH"
+          test -f "$receipt" || { echo "::error::receipt was not produced"; exit 1; }
+          echo "receipt_sha256=$(python3 -c "import json,sys;print(json.load(open('$receipt'))['receipt_sha256'])")" >> "$GITHUB_OUTPUT"
+          echo "observed_ref=$(python3 -c "import json,sys;print(json.load(open('$receipt'))['observed_project_ref'])")" >> "$GITHUB_OUTPUT"
+
+      # Remove local.env before anything else can read it, and before upload.
+      - name: Scrub credentials
+        if: always()
+        run: |
+          rm -f local.env
+          echo "local.env removed"
+
+      # The receipt contains no credential: only identity, timings, TAP counts
+      # and hashes. Verified by the guard test in required CI.
+      - name: Upload proof receipt (same-run artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: utv2-1630-db-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/ci-db-proof-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+  proof-auditor:
+    name: Proof Auditor (verifies staging receipt)
+    runs-on: ubuntu-latest
+    # `needs` plus a same-run artifact name is what prevents a previous run's
+    # receipt from being substituted.
+    needs: staging-db-proof
+    if: always()
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download receipt from THIS run
+        uses: actions/download-artifact@v4
+        with:
+          name: utv2-1630-db-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/receipt
+          # A missing artifact must fail the gate, never skip it.
+          if-no-files-found: error
+
+      - name: Verify receipt
+        run: |
+          set -euo pipefail
+          pnpm exec tsx scripts/ci/verify-db-proof-receipt.ts \
+            --receipt .out/receipt/ci-db-proof-receipt.json \
+            --command "pnpm test:db" \
+            --expect-job staging-db-proof
