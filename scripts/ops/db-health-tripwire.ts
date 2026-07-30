@@ -13,6 +13,7 @@
  */
 
 import postgres from 'postgres';
+import { assertPostgresConnectionAllowed } from '@unit-talk/db/privileged-client-boundary';
 
 const SUPABASE_DB_URL = process.env.SUPABASE_DB_URL;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -364,7 +365,14 @@ async function main() {
     process.exit(1);
   }
 
-  const sql = postgres(SUPABASE_DB_URL, { max: 1, connect_timeout: 10 });
+  // The only non-Supabase driver in the repository. It cannot use the client
+  // constructor, so it asserts against the same rule instead of inventing a
+  // second one: from a restricted context this connection string must resolve
+  // to staging or loopback, or nothing is opened.
+  const sql = postgres(
+    assertPostgresConnectionAllowed(SUPABASE_DB_URL, 'db-health-tripwire'),
+    { max: 1, connect_timeout: 10 },
+  );
 
   const allAlerts: Alert[] = [];
 

@@ -1,0 +1,806 @@
+{
+  "schema": "privileged-db-client-inventory/v1",
+  "boundary_module": "packages/db/src/privileged-client-boundary.ts",
+  "generated_from_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+  "method": {
+    "sites": "TypeScript AST. A construction site is a call or `new` whose callee resolves to a binding imported from @supabase/supabase-js, pg or postgres. Mentions in comments, string literals and regexes are not sites; aliased imports are.",
+    "classification": "writable-privileged = the file referenced a service-role credential (SUPABASE_SERVICE_ROLE_KEY / CI_ / V1_ / serviceRoleKey / service_role / SUPABASE_DB_URL / DATABASE_URL) at generated_from_sha, matched as an identifier, property or string literal via the AST. read-only = it did not. behind-the-boundary = it is the boundary. dead = writable-privileged AND unreferenced.",
+    "privileged": "true when the file could reach a service-role credential at generated_from_sha. Recorded separately from classification because `dead` would otherwise hide it: every `dead` entry here is also privileged, and was migrated for that reason.",
+    "referenced": "true when the file is imported by any source file under scripts/apps/packages, or named in package.json, .github/workflows/*.yml, docs/ or .claude/. Informational: every unreferenced file was migrated regardless.",
+    "enforcement": "The disposition, not the classification, is what scripts/ci/privileged-db-client-guard.ts re-checks on every run. See that file for the obligation each disposition carries."
+  },
+  "entries": [
+    {
+      "file": "apps/command-center/src/components/ApiHealthMonitoring.tsx",
+      "classification": "read-only",
+      "disposition": "unprivileged-direct",
+      "reason": "Browser client component. Constructs an anon-key client for a realtime subscription and holds no service-role credential; importing @unit-talk/db here would pull the server data layer into the browser bundle. The guard re-checks the no-privileged-credential premise every run.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": false
+    },
+    {
+      "file": "apps/command-center/src/components/PipelineLiveRefresh.tsx",
+      "classification": "read-only",
+      "disposition": "unprivileged-direct",
+      "reason": "Browser client component. Constructs an anon-key client for a realtime subscription and holds no service-role credential; importing @unit-talk/db here would pull the server data layer into the browser bundle. The guard re-checks the no-privileged-credential premise every run.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": false
+    },
+    {
+      "file": "apps/command-center/src/lib/data/client.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "packages/db/src/client.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 2,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "packages/db/src/privileged-client-boundary.ts",
+      "classification": "behind-the-boundary",
+      "disposition": "is-boundary",
+      "privileged": true,
+      "reason": "The boundary. The only module permitted to call a driver constructor; it resolves target identity and refuses a non-staging target from a restricted context.",
+      "referenced": true
+    },
+    {
+      "file": "scripts/auto-settle-proof.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/backtest-weights.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/backup-alert-check.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/band-accuracy.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/board-probe.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/calibration-report.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/catalog-state.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-game-results.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-model-registry.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-participants.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-participants2.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-participants3.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-picks-live.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/check-status.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ci/seed-staging-fixtures.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-check2.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-hornets.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-pick.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-probe.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-probe2.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-proof.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-setup.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-trigger.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-trigger2.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/clv-verify.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/db-check.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/db-lookup.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/db-role-validator.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/grading-alert-check.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ingest-mlb-run-detail.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ingestor-alert-check.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ingestor-supervisor.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/m5-burn-in-check.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/model-ownership/run-ownership-persistence-proof.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ops/burn-in-snapshot.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 2,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ops/db-health-tripwire.ts",
+      "classification": "writable-privileged",
+      "disposition": "asserted-in-place",
+      "reason": "Uses the `postgres` driver against SUPABASE_DB_URL, so it cannot use the Supabase client constructor. Passes its connection string through the boundary's assertion instead of duplicating the rule.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ops/edge-coverage-report.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ops/fix-settlement-utv2-665.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/ops/ingestor-health-check.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 2,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/pi-m5-verify.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/pipeline-health.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/portfolio-review.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/proof-deep.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/proof-setup.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/proof/utv2-576-closing-line-proof.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/prune-all-tables.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/prune-provider-offers.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/requeue-orphans.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/run-materializer-proof.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/run-migration-719.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/runtime-health.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/scoring-analysis.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/scoring-analysis2.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/scoring-analysis3.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/scoring-integrity-proof.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/scoring-provenance.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/scoring-raw.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/seed-model-registry-baseline.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/sgo-historical-coverage.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/sgo-r5-replay-readiness.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/shadow-clv-parity.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 2,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/shadow-grading-parity.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 2,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/shadow-overlap-check.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 2,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/shadow-scoring-runner.ts",
+      "classification": "writable-privileged",
+      "disposition": "deferred-cross-lane",
+      "reason": "Constructs a service-role client directly. UTV2-1629 owns this file and has already changed it on its branch, so migrating it here would collide. Not reachable from any `pnpm test` entrypoint, which is why the deferral is survivable: rule 3 fails the build the moment that stops being true.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true,
+      "owner_issue": "UTV2-1629"
+    },
+    {
+      "file": "scripts/stage-freshness-checks.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/stranded-picks-cleanup.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/system-check.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/t1-proof-bundle.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-252-provider-snapshot.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-320-nba-alias-gap-report.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-320-nba-baseline-benchmark.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-320-nba-feature-audit.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-320-nba-pick-metadata-audit.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-320-nba-prop-coverage-audit.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-320-nba-prop-segment-benchmark.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-321-mlb-feature-audit.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-54-verify.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/utv2-56-verify.ts",
+      "classification": "dead",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables; nothing references this file. Migrated anyway — \"unreferenced today\" is not a durable property.",
+      "sites_before": 1,
+      "referenced": false,
+      "privileged": true
+    },
+    {
+      "file": "scripts/verify-388.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/verify-719.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/verify-pick.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/worker-alert-check.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
+      "file": "scripts/worker-supervisor.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client from environment variables. Now obtains it from the boundary.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    }
+  ]
+}

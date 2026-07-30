@@ -8,7 +8,7 @@
  */
 
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
   analyzeWeightEffectiveness,
   runWalkForwardBacktest,
@@ -51,7 +51,7 @@ function defaultScoreInput(value: number | null, fallback = 50) {
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   console.log('=== UTV2-320: NBA Baseline Benchmark ===\n');
 

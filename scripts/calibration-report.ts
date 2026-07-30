@@ -19,7 +19,7 @@
  * Default --output: docs/06_status/proof/UTV2-1034/calibration-baseline-YYYYMMDD.md
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -300,7 +300,7 @@ async function main() {
     process.exit(1);
   }
 
-  const supabase = createClient(supabaseUrl, serviceKey, {
+  const supabase = createPrivilegedClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 

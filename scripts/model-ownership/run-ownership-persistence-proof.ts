@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -100,7 +101,7 @@ function toCsv(rows: string[][]): string {
 
 async function main() {
   const env = loadEnvironment();
-  const client = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  const client = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 

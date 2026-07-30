@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { readFileSync } from 'fs';
 
 async function main() {
@@ -6,7 +6,7 @@ async function main() {
   const get = (k: string) =>
     env.split('\n').find((l) => l.startsWith(k + '='))?.split('=').slice(1).join('=').trim().replace(/^["']|["']$/g, '') ?? '';
 
-  const sb = createClient(get('SUPABASE_URL'), get('SUPABASE_SERVICE_ROLE_KEY'));
+  const sb = createPrivilegedClient(get('SUPABASE_URL'), get('SUPABASE_SERVICE_ROLE_KEY'));
 
   const { data: mt, error: mtErr } = await sb.from('market_types').select('id,display_name,market_family_id').order('market_family_id');
   if (mtErr) console.log('market_types error:', mtErr.message);

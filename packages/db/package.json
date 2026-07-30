@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./target-identity": "./src/target-identity.ts",
+    "./privileged-client-boundary": "./src/privileged-client-boundary.ts"
   },
   "main": "dist/index.js",
   "types": "src/index.ts",

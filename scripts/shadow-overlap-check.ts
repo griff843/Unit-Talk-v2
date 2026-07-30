@@ -3,7 +3,7 @@
  *
  * Usage: V1_SUPABASE_URL=... V1_SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/shadow-overlap-check.ts
  */
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 function requireEnv(name: string): string {
   const val = process.env[name];
@@ -12,8 +12,8 @@ function requireEnv(name: string): string {
 }
 
 async function main() {
-  const v1 = createClient(requireEnv('V1_SUPABASE_URL'), requireEnv('V1_SUPABASE_SERVICE_ROLE_KEY'));
-  const v2 = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
+  const v1 = createPrivilegedClient(requireEnv('V1_SUPABASE_URL'), requireEnv('V1_SUPABASE_SERVICE_ROLE_KEY'));
+  const v2 = createPrivilegedClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   // V1 checks
   console.log('=== V1 ===');

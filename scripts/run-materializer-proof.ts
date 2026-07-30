@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import type { DatabaseConnectionConfig } from '../packages/db/src/client.js';
 import {
   DatabaseProviderOfferRepository,
@@ -42,7 +42,7 @@ async function main() {
   const key = process.env['SUPABASE_SERVICE_ROLE_KEY'];
   if (!url || !key) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
 
-  const client = createClient(url, key, { auth: { persistSession: false } });
+  const client = createPrivilegedClient(url, key, { auth: { persistSession: false } });
   const connection: DatabaseConnectionConfig = { url, key, role: 'service_role' };
 
   console.log('\n=== PRE-RUN: market_universe closing_line by sport ===');
