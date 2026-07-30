@@ -3,13 +3,13 @@
   "issue_id": "UTV2-1627",
   "title": "Isolate CI and proof fixtures from production Supabase",
   "tier": "T1",
-  "generated_at": "2026-07-29T21:52:55.000Z",
-  "implementation_sha": "076b7356078725288d902a1bd92a2bd9d37c921e",
+  "generated_at": "2026-07-30T00:55:00.000Z",
+  "implementation_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071",
   "sha_binding": {
-    "verified_source_sha": "076b7356078725288d902a1bd92a2bd9d37c921e",
-    "verified_source_note": "Implementation commit verified before the proof-only closeout commit; isolated DB receipts remain bound to the unchanged DB isolation implementation.",
+    "verified_source_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071",
+    "verified_source_note": "Bound to the implementation commit that closes the exact-head adversarial review. Every receipt below was executed locally against this exact tree under containment (all checkouts credential-free; SUPABASE_URL resolves to http://127.0.0.1:1). No production-bound verification was run.",
     "merge_sha": null,
-    "current_pr_head_sha": null
+    "current_pr_head_sha": "d46463d6cc16c63fb099f2b99b92322b31a58071"
   },
   "verifier": {
     "identity": "github-actions/runtime-verifier-gate",
@@ -18,9 +18,8 @@
   },
   "static_proof": {
     "pnpm_verify": {
-      "command": "UNIT_TALK_API_RUNTIME_MODE=fail_open pnpm verify:static",
-      "status": "PASS",
-      "exit_code": 0,
+      "command": "focused static/targeted suites (see measured_receipts); full pnpm verify NOT run",
+      "status": "NOT_RUN",
       "target_classification": "static-only",
       "target_project_ref": null,
       "steps": {
@@ -33,15 +32,14 @@
         "build": "PASS",
         "test": "PASS",
         "smart_form_verify": "PASS",
-        "verify_commands": "PASS",
-        "test_db": "PASS — prior isolated runtime receipt",
-        "test_t1_proof_live": "PASS — prior isolated runtime receipt"
+        "verify_commands": "PASS"
       },
       "tail": [
         "[command-manifest] Verified 14 command definition(s)",
-        "[check-migration-versions] 3 migration file(s) verified — no duplicate versions.",
-        "[lint-migrations] 2 migration file(s) checked — no findings."
-      ]
+        "[check-migration-versions] 3 migration file(s) verified \u2014 no duplicate versions.",
+        "[lint-migrations] 2 migration file(s) checked \u2014 no findings."
+      ],
+      "note": "pnpm verify was deliberately not run: its test:live-db phase is production-bound, which is the defect this lane exists to remove. Replaced by the measured receipts below."
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -77,8 +75,12 @@
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
       "changed_files": 24,
-      "rules_matched": ["lifecycle-fsm"],
-      "advisory_pm_gated_missing": ["r4-fault-report"]
+      "rules_matched": [
+        "lifecycle-fsm"
+      ],
+      "advisory_pm_gated_missing": [
+        "r4-fault-report"
+      ]
     }
   },
   "runtime_proof": {
@@ -213,5 +215,78 @@
     "action": "Disable writable CI/proof jobs first, then revert PR #1320 while keeping generic production Supabase credentials unavailable to every writable workflow.",
     "data_posture": "Do not mutate or clean production data. The disposable isolated proof branch may be discarded after retaining this evidence bundle."
   },
-  "verdict": "PASS"
+  "verdict": "PASS",
+  "measured_receipts": [
+    {
+      "command": "npx tsx --test scripts/ci/required-db-smoke.test.ts",
+      "result": "38 pass / 0 fail",
+      "note": "was 30 before this change; +8 regression tests"
+    },
+    {
+      "command": "npx tsx --test packages/db/src/*.test.ts",
+      "result": "244 pass / 0 fail"
+    },
+    {
+      "command": "pnpm test:ops",
+      "result": "1298 pass / 0 fail"
+    },
+    {
+      "command": "pnpm test:apps-api-core",
+      "result": "422 pass / 0 fail",
+      "note": "exercises the new createDatabaseConnectionConfig boundary"
+    },
+    {
+      "command": "npx tsc --noEmit -p tsconfig.json",
+      "result": "exit 0"
+    },
+    {
+      "command": "npx eslint <changed files>",
+      "result": "clean"
+    }
+  ],
+  "mutation_suite": {
+    "executed_against": "d46463d6cc16c63fb099f2b99b92322b31a58071",
+    "killed": 6,
+    "survived": 0,
+    "mutations": [
+      {
+        "id": "M4",
+        "edit": "delete the missing-URL throw in production-identity-guard.ts",
+        "outcome": "KILLED",
+        "note": "survived before this change"
+      },
+      {
+        "id": "M7",
+        "edit": "make canonical-production detection case-sensitive",
+        "outcome": "KILLED",
+        "note": "survived before this change"
+      },
+      {
+        "id": "P1-9a",
+        "edit": "drop malformed declared-project-ref validation",
+        "outcome": "KILLED"
+      },
+      {
+        "id": "P1-9b",
+        "edit": "restore the \"no URL ref means isolated\" bypass",
+        "outcome": "KILLED"
+      },
+      {
+        "id": "P1-4a",
+        "edit": "remove the boundary assertion from createDatabaseConnectionConfig",
+        "outcome": "KILLED"
+      },
+      {
+        "id": "P1-4b",
+        "edit": "make test-runner detection always return false",
+        "outcome": "KILLED"
+      }
+    ]
+  },
+  "containment": {
+    "production_credentials_location": "~/.unit-talk-secrets/local.env (0700 dir, 0600 file), outside every checkout",
+    "resolved_supabase_url_in_all_checkouts": "http://127.0.0.1:1",
+    "production_writes_during_this_work": 0,
+    "production_bound_verification_run": false
+  }
 }

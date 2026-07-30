@@ -1,67 +1,67 @@
-# UTV2-1627 Verification
+# UTV2-1627 — Verification
 
-Source SHA: `076b7356078725288d902a1bd92a2bd9d37c921e`
+**Source head:** `d46463d6cc16c63fb099f2b99b92322b31a58071`
+**Tier:** T1 · **Lane type:** governance
 
-## Summary
+## What this lane fixes
 
-CI, pull-request database smoke, and writable T1 proof workflows now require a separately named isolated Supabase credential set and an explicit `writable-isolated` access mode. The identity guard verifies the actual target URL and project ref, rejects the canonical production ref, and fails closed on missing or mismatched target identity.
+CI and proof fixtures could write to the production Supabase project. On
+2026-07-29 this was not hypothetical: 310 test-fixture `picks` rows (plus
+audit_log, submissions, outbox rows) were written to production
+`zfzdnfwdarxucxtaojxm` by lane test runs.
 
-The database-writer inventory classifies all 49 credentialed test entrypoints plus production read-only proof scripts and workflow execution paths. New unclassified writers, mutation-capable production-observation paths, or writable workflows using generic production secrets fail the inventory gate.
+## Findings closed
 
-Execution packets now classify verification as `static-only`, `writable-isolated`, or `production-read-only`. The old unconditional `pnpm verify` instruction is removed. Static packets exclude credentialed DB tests, writable packets emit an identity-guarded live-DB command, and production packets permit only read-only observation.
+| ID | Fix |
+|---|---|
+| P0-1 | `ci.yml` guard ran inside `if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]` — never exported, permanently dead. Now unconditional. |
+| P0-1b | Guard read `process.env` only; credentials live in `local.env`. Now resolves the same config the clients use. |
+| P0-2 | Inventory gate asserted string presence. Now asserts guard reachability and ordering. |
+| P0-3 | Proof cited a command referencing two test files deleted at `374580a2`; manifest locked the same dead paths. Both corrected. |
+| P1-4 | Guard was invoked by 1 of 49 credentialed tests. Now enforced at `createDatabaseConnectionConfig`, which every service-role client passes through. |
+| P1-5 | Production service-role key removed from `pull_request`-triggered `proof-regression.yml` and `shadow-parity-required.yml`; anon key instead, so RLS enforces read-only. |
+| P1-9 | Custom-domain, proxy/tunnel, and malformed-project-ref bypasses now fail closed. |
+| — | `supabase db push` (DDL) ran before any identity check. Isolation now asserted in a preceding step. |
 
-## Evidence
+## Verification performed
 
-- Verified implementation commit: `076b7356078725288d902a1bd92a2bd9d37c921e`
-- Isolated Supabase branch: `ci-proof-isolated`
-- Isolated project ref: `wgfgqfxnnwjmrbubqhcj`
-- Canonical production ref: `zfzdnfwdarxucxtaojxm`
-- Final UTV2-1497 run ID: `a3811138`
-- Isolated receipt: 8 matching picks and 8 matching outbox rows.
-- Production read-only receipt for run `a3811138`: 0 matching picks and 0 matching outbox rows.
-- Production cleanup or mutation: none.
-- Negative proof: a writable guard invocation using the canonical production URL was rejected.
-- Writer inventory: 49 credentialed tests classified, 0 errors.
+**No production-bound verification was run.** `pnpm verify` was deliberately
+not executed: its `test:live-db` phase is production-bound, which is the defect
+this lane removes. Containment during all work: production credentials relocated
+to `~/.unit-talk-secrets/` (0700/0600), every checkout credential-free,
+`SUPABASE_URL` resolving to `http://127.0.0.1:1`, **0 production writes**.
 
-The isolated branch was built from the checked-in schema baseline and forward migrations, then seeded with the canonical reference rows required by DB smoke and proof execution. Repository secrets were created for `CI_SUPABASE_URL`, `CI_SUPABASE_ANON_KEY`, `CI_SUPABASE_SERVICE_ROLE_KEY`, and `CI_SUPABASE_PROJECT_REF`; secret values are not included in proof output.
+| Command | Result |
+|---|---|
+| `npx tsx --test scripts/ci/required-db-smoke.test.ts` | 38 pass / 0 fail (was 30) |
+| `npx tsx --test packages/db/src/*.test.ts` | 244 pass / 0 fail |
+| `pnpm test:ops` | 1298 pass / 0 fail |
+| `pnpm test:apps-api-core` | 422 pass / 0 fail |
+| `npx tsc --noEmit -p tsconfig.json` | exit 0 |
+| `npx eslint <changed files>` | clean |
 
-## Verification
+### Mutation suite — 6/6 killed, 0 survived
 
-| Command                                                              | Result                                    |
-| -------------------------------------------------------------------- | ----------------------------------------- |
-| `pnpm type-check`                                                    | PASS via `pnpm verify:static`             |
-| `pnpm test`                                                          | PASS via `pnpm verify:static`             |
-| `UNIT_TALK_API_RUNTIME_MODE=fail_open pnpm verify:static`            | PASS — no writable DB suites executed     |
-| focused UTV2-1627 static tests                                       | PASS — 42 passed, 0 failed                |
-| `pnpm test:db`                                                       | PASS — 7 passed, 0 failed, isolated ref   |
-| `pnpm test:t1-proof:live`                                            | PASS via `pnpm verify`, isolated ref      |
-| `pnpm exec tsx scripts/ci/db-writer-inventory.ts`                    | PASS — 49 classified                      |
-| production identity negative proof                                   | PASS — canonical writable target rejected |
-| prior isolated `pnpm verify`                                         | PASS                                      |
-| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS                                      |
+| Mutation | Outcome |
+|---|---|
+| M4 delete missing-URL throw | KILLED (previously survived) |
+| M7 case-sensitive production detection | KILLED (previously survived) |
+| Drop malformed declared-ref validation | KILLED |
+| Restore "no URL ref means isolated" bypass | KILLED |
+| Remove boundary assertion from `createDatabaseConnectionConfig` | KILLED |
+| Make test-runner detection always false | KILLED |
 
-Final static verification tail:
+## Notes
 
-```text
-[command-manifest] Verified 14 command definition(s)
-[check-migration-versions] 3 migration file(s) verified — no duplicate versions.
-[lint-migrations] 2 migration file(s) checked — no findings.
-1..42
-# tests 42
-# pass 42
-# fail 0
-# skipped 0
-```
+The new reachability gate immediately flagged `proof-gate.yml` and
+`t1-proof-gate.yml`. Both were investigated and confirmed **false positives**:
+their `pnpm ci:db-smoke` sits in a legitimate if/else whose condition is
+genuinely computed, and `ci:db-smoke` is itself the guarded entrypoint. The rule
+was tightened to the property that actually matters — a guard inside a
+conditional fails only when a mutation can still run unconditionally — and
+quoted spans and `echo` lines are stripped so an auditor argument
+(`--require-executed-command "pnpm test:db"`) or a summary table is not mistaken
+for execution.
 
-R-level output:
-
-```text
-Verdict: PASS
-Changed files: 24
-Rules matched: lifecycle-fsm
-
-Advisory (PM-gated) artifacts missing:
-  - r4-fault-report [PM-gated]
-```
-
-The proof bundle is intentionally pre-merge. The merge SHA must be appended during post-merge lane finalization.
+Implemented directly by Claude after three Codex rounds produced no source
+changes.
