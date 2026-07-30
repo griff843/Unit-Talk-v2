@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   buildCiProofReceipt,
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
@@ -238,7 +239,31 @@ function writeSummary(evaluation: DbSmokeEvaluation, required: boolean): void {
   );
 }
 
-if (process.argv[1]?.replace(/\\/g, '/').endsWith('/required-db-smoke.ts')) {
+/**
+ * UTV2-1630: compare resolved real paths, never the filename.
+ *
+ * This file previously used `endsWith('/required-db-smoke.ts')`. That fails
+ * OPEN: under any rename, copy, symlink or compiled-.js invocation `main()`
+ * never runs and the process exits 0 having executed no smoke test and written
+ * no receipt. `ci.yml` happens to catch that with a follow-up `test -f` on the
+ * receipt path, but `proof-gate.yml` and `t1-proof-gate.yml` invoke
+ * `pnpm ci:db-smoke` bare — they would print "C2 PASS: pnpm test:db executed"
+ * having executed nothing.
+ *
+ * The same pattern was replaced with this comparison in assert-staging-target.ts,
+ * seed-staging-fixtures.ts and proof-auditor-gate.ts; this file was missed.
+ */
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint()) {
   void main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

@@ -25,8 +25,9 @@ ASSERTIONS:
 - [x] Its CLI entrypoint check compares resolved real paths, so a rename, copy, symlink or compiled-.js invocation cannot bypass it by failing open
 - [x] Writable DB proof is produced by a dedicated `staging-db-proof` job that is the ONLY job in `ci.yml` holding a database credential
 - [x] The required `verify` context depends on that job and verifies its same-run, same-attempt `ci-db-proof-receipt/v2`; it holds no database credential itself
-- [x] No pull-request-reachable job holds a production Supabase credential, enforced by a scanner over every workflow rather than by review
+- [x] No pull-request-reachable job holds a production Supabase credential except three read-only consumers, each named with a reason, re-validated against the live workflow, and — where it executes PR-authored code — gated so the pull request cannot run its own version
 - [x] Every job using a `CI_SUPABASE_*` secret binds `environment: staging-ci`, enforced by the same scanner
+- [x] The scanner resolves the workflow_call graph and scans whole documents, so workflow-level env, bracket-indexed secrets and `secrets: inherit` cannot evade it
 - [x] Zero new production rows were written during this lane's CI
 
 ## Verification
@@ -123,6 +124,43 @@ on its own: branched from `main`, its CI ran `main`'s unguarded `ci.yml` and
 wrote to production on every push, so unblocking this lane was itself causing the
 harm this lane exists to stop. Full record in PR #1322 and in the
 `scope_transfers` block of `docs/06_status/lanes/UTV2-1630.json`.
+
+## Adversarial review findings and disposition
+
+An independent exact-head review was run against this branch with a brief to
+**refute** the central claim. It could not refute the narrow claim — the
+writable script paths and the four migrated workflows are genuinely
+staging-pinned, and the URL guard survived 23 hostile hostname forms with zero
+false approvals. It did refute the claim as originally worded, and found three
+defects this lane had introduced. All are closed here.
+
+| # | Finding | Disposition |
+|---|---|---|
+| P0 | `shadow-parity-required.yml` and `live-schema-parity.yml` run PR-authored code with a production credential; their exemptions rested on script behaviour the PR can rewrite | **Fixed** — both gated on `assert-unmodified-vs-base.ts`; a PR that edits the executed script cannot run its own version |
+| P1 | `required-db-smoke.ts` still used the fail-open `endsWith` entrypoint guard | **Fixed** — `realpathSync`; plus a test that enforces the pattern across all six writable CLIs |
+| P1 | `verify` `needs:` producer → a FAILED producer makes the required check `skipped`, not red | **Fixed** — `if: always()` plus an explicit first-step assertion on `needs.staging-db-proof.result` |
+| P1 | `test:t1-proof:live` (15 writable suites) lost all CI coverage in the restructure | **Fixed** — runs in `staging-db-proof` |
+| P1 | Scanner evaded by workflow-level `env`, bracket indexing, `secrets: inherit`, and `workflow_call` callees | **Fixed** — whole-document scan, both accessor forms, call-graph resolution; one test per class |
+| P1 | `pnpm verify` unrunnable anywhere, so the pre-closure checklist's step 1 is unsatisfiable | **Partially fixed** — `verify:local` added. The CLAUDE.md wording is a governance-doc change and is deliberately left to its own lane rather than edited from inside this one |
+| P2 | `proof-gate.yml` `runtime-verifier` bound `staging-ci` on a false premise | **Fixed** — binding removed; it holds no DB credential |
+| P2 | Docblock claimed unbound `CI_SUPABASE_*` always yields empty strings | **Fixed** — four of those names also exist as repository-level secrets (UTV2-1627 leftovers), making the failure partial rather than total. Corrected in the docblock; deleting the orphans is left as follow-up |
+| P2 | `supabase-pr-db-branch.yml`'s `pnpm test:db` cannot pass against a preview branch | **Not fixed** — dormant (`SUPABASE_BRANCHING_ENABLED` unset). Recorded rather than silently left |
+| P2 | Receipt is anti-accident, not anti-tamper | **Claim narrowed**, see below |
+
+### The claim, narrowed to what is actually proven
+
+The receipt's `receipt_sha256` is keyless, and both producer and verifier are
+defined by `ci.yml`, which a pull request supplies. A PR that rewrites the
+producer could mint a valid receipt without opening a database. Branch
+protection does not currently require code-owner review, so this is not closed
+mechanically.
+
+The honest statement is therefore: **no CI job can accidentally reach
+production, and no pull request can reach production without visibly rewriting a
+workflow file owned by CODEOWNERS.** Making that last clause mechanical requires
+enabling `require_code_owner_reviews` on `.github/**` — a branch-protection
+change, which this lane is explicitly forbidden from making. It is recorded as
+the top follow-up.
 
 ## Known limitations
 

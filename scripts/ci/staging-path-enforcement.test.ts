@@ -314,3 +314,36 @@ test('writable DB commands cannot be proven by proof-file text', async () => {
     assert.equal(mod.requiresCiProducedReceipt(command), false, command);
   }
 });
+
+// ── The fail-open entrypoint class, enforced rather than remembered ──────────
+
+test('no writable-path script guards its CLI entrypoint by filename', () => {
+  // `process.argv[1].endsWith('/name.ts')` fails OPEN: under a rename, copy,
+  // symlink or compiled-.js invocation main() never runs, the process exits 0,
+  // and a `&&` chain proceeds as though the step succeeded. This lane fixed the
+  // pattern in four files and MISSED one (required-db-smoke.ts) — the file that
+  // actually runs the smoke test and writes the receipt. A reviewer found it.
+  //
+  // Guarding it mechanically is the only way this stops recurring.
+  const GUARDED = [
+    'scripts/ci/assert-staging-target.ts',
+    'scripts/ci/required-db-smoke.ts',
+    'scripts/ci/seed-staging-fixtures.ts',
+    'scripts/ci/verify-db-proof-receipt.ts',
+    'scripts/ci/assert-unmodified-vs-base.ts',
+    'scripts/ops/proof-auditor-gate.ts',
+  ];
+
+  for (const relative of GUARDED) {
+    const source = readRepo(relative);
+    assert.ok(
+      !/process\.argv\[1\][^\n]*endsWith\(/u.test(source),
+      `${relative} guards its entrypoint by filename, which fails open. Compare realpathSync(process.argv[1]) with realpathSync(fileURLToPath(import.meta.url)) instead.`,
+    );
+    assert.match(
+      source,
+      /realpathSync\([^)]*\)\s*===\s*realpathSync\(/u,
+      `${relative} must compare resolved real paths to decide whether it is the CLI entrypoint`,
+    );
+  }
+});

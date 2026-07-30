@@ -129,6 +129,19 @@ jobs:
           pnpm ci:db-smoke
           test -f "$CI_DB_PROOF_RECEIPT_PATH" || { echo "::error::receipt not produced"; exit 1; }
 
+      # Restores coverage that the ci.yml restructure dropped. These fifteen
+      # writable suites previously ran through
+      # verify:live-db-verdict -> test:live-db -> test:t1-proof:live. Nothing
+      # invokes verify:live-db-verdict any more, so they silently stopped
+      # running in CI entirely. They belong here: this is the only job with a
+      # database credential, and it is staging-bound.
+      - name: Run the T1 live proof suites against staging
+        env:
+          CI_FIXTURE_RUN_ID: utv2-1630-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          pnpm test:t1-proof:live
+
       - name: Scrub credentials
         if: always()
         run: rm -f local.env
@@ -150,8 +163,25 @@ jobs:
     #
     # This job holds NO database credential of any kind. It does not bind an
     # environment, so `staging-ci` secrets are not released to it.
+    #
+    # `if: always()` is load-bearing. With a bare `needs:`, a FAILED producer
+    # makes this job `skipped` rather than `failure` — and a skipped required
+    # check does not report red. That would invert the gate: a broken DB proof
+    # would stop reporting instead of blocking. The job therefore always runs
+    # and asserts the producer's result itself, as its very first step.
     needs: staging-db-proof
+    if: always()
     steps:
+      - name: Assert the DB proof producer succeeded
+        run: |
+          set -euo pipefail
+          result="${{ needs.staging-db-proof.result }}"
+          echo "staging-db-proof result: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::staging-db-proof did not succeed ($result). The required verify context fails closed."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 

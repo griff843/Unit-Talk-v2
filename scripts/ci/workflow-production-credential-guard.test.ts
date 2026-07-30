@@ -9,6 +9,9 @@ import {
   findProductionCredentialExposures,
   findUnboundStagingCredentialJobs,
   formatExposures,
+  pullRequestReachableWorkflows,
+  SECRETS_INHERIT,
+  WORKFLOW_LEVEL_ENV,
   READ_ONLY_EXEMPTIONS,
   PRODUCTION_DB_SECRET_NAMES,
   type CredentialExemption,
@@ -296,6 +299,136 @@ jobs:
   assert.deepEqual(findProductionCredentialExposures(dir, []), [
     { workflow: 'mixed.yml', job: 'leak', secrets: ['SUPABASE_ANON_KEY'] },
   ]);
+});
+
+// ── Evasion classes demonstrated against the first version of this scanner ──
+
+test('detects a production secret in WORKFLOW-level env inherited by every job', () => {
+  // Sits outside the `jobs` subtree, so a jobs-only walk reports nothing while
+  // every job in the file holds the credential. Most likely accidental form.
+  const dir = fixtureDir({
+    'wfenv.yml': `
+name: Workflow env
+on:
+  pull_request:
+env:
+  SUPABASE_SERVICE_ROLE_KEY: \${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+jobs:
+  anything:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pnpm test
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'wfenv.yml', job: WORKFLOW_LEVEL_ENV, secrets: ['SUPABASE_SERVICE_ROLE_KEY'] },
+  ]);
+});
+
+test('detects bracket-indexed secret access', () => {
+  const dir = fixtureDir({
+    'bracket.yml': `
+name: Bracket
+on:
+  pull_request:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets['SUPABASE_URL'] }}"
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'bracket.yml', job: 'leak', secrets: ['SUPABASE_URL'] },
+  ]);
+});
+
+test('detects a name assembled inside a bracket expression', () => {
+  const dir = fixtureDir({
+    'format.yml': `
+name: Format
+on:
+  pull_request:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets[format('{0}', 'SUPABASE_SERVICE_ROLE_KEY')] }}"
+`,
+  });
+  assert.equal(findProductionCredentialExposures(dir, []).length, 1);
+});
+
+test('detects secrets: inherit, which names no secret at all', () => {
+  const dir = fixtureDir({
+    'inherit.yml': `
+name: Inherit
+on:
+  pull_request:
+jobs:
+  call:
+    uses: ./.github/workflows/callee.yml
+    secrets: inherit
+`,
+    'callee.yml': `
+name: Callee
+on:
+  workflow_call:
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'inherit.yml', job: 'call', secrets: [SECRETS_INHERIT] },
+  ]);
+});
+
+test('a workflow_call callee is pull-request-reachable through its caller', () => {
+  // The callee's own `on:` has no pull_request, so a trigger-only test skips it
+  // entirely — while it runs on every PR with the caller's secrets.
+  const dir = fixtureDir({
+    'caller.yml': `
+name: Caller
+on:
+  pull_request:
+jobs:
+  call:
+    uses: ./.github/workflows/reusable.yml
+`,
+    'reusable.yml': `
+name: Reusable
+on:
+  workflow_call:
+jobs:
+  leak:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+`,
+  });
+  assert.ok(pullRequestReachableWorkflows(dir).has('reusable.yml'));
+  assert.deepEqual(findProductionCredentialExposures(dir, []), [
+    { workflow: 'reusable.yml', job: 'leak', secrets: ['SUPABASE_SERVICE_ROLE_KEY'] },
+  ]);
+});
+
+test('an unreferenced workflow_call workflow stays out of scope', () => {
+  const dir = fixtureDir({
+    'orphan.yml': `
+name: Orphan
+on:
+  workflow_call:
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "\${{ secrets.SUPABASE_URL }}"
+`,
+  });
+  assert.deepEqual(findProductionCredentialExposures(dir, []), []);
 });
 
 // ── Staging credentials must be bound to the environment that releases them ──

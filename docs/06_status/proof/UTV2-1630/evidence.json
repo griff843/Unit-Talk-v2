@@ -26,7 +26,8 @@
         "suites": 96,
         "tests": 3991,
         "pass": 3991,
-        "fail": 0
+        "fail": 0,
+        "note": "re-run pending after review fixes; CI verify is authoritative"
       },
       "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
       "stop_reason": "Refused by this lane's own guard: no staging credential on this workstation, so the resolved target (host=127.0.0.1) is not xskgrzbteyqdufktjrjx. Before this change the same command reached production and wrote to it, so the refusal is the deliverable.",
@@ -120,5 +121,14 @@
     "no direct-main or admin bypass",
     "no branch-protection change",
     "no writable DB claim asserted from proof text"
-  ]
+  ],
+  "adversarial_review": {
+    "brief": "refute the central claim",
+    "refuted_narrow_claim": false,
+    "url_guard": "23 hostile hostname forms fuzzed, zero false approvals",
+    "self_inflicted_defects_found": 3,
+    "all_p0_p1_closed": true,
+    "claim_as_ratified": "No CI job can accidentally reach production, and no pull request can reach production without visibly rewriting a workflow file owned by CODEOWNERS.",
+    "top_follow_up": "enable require_code_owner_reviews on .github/** \u2014 a branch-protection change this lane is forbidden from making"
+  }
 }

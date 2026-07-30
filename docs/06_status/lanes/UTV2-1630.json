@@ -12,8 +12,10 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
+    ".github/workflows/live-schema-parity.yml",
     ".github/workflows/proof-gate.yml",
     ".github/workflows/proof-regression.yml",
+    ".github/workflows/shadow-parity-required.yml",
     ".github/workflows/staging-db-proof.yml",
     ".github/workflows/t1-proof-gate.yml",
     ".ops/sync/UTV2-1553.yml",
@@ -26,6 +28,8 @@
     "docs/06_status/proof/UTV2-1630/**",
     "package.json",
     "scripts/ci/assert-staging-target.ts",
+    "scripts/ci/assert-unmodified-vs-base.test.ts",
+    "scripts/ci/assert-unmodified-vs-base.ts",
     "scripts/ci/isolated-proof-attestation.test.ts",
     "scripts/ci/isolated-proof-attestation.ts",
     "scripts/ci/required-db-smoke.ts",
@@ -109,6 +113,14 @@
         "docs/06_status/proof/UTV2-1553/**"
       ],
       "follow_up": "UTV2-1553 closes against this merge SHA; PR #1322 is the authoritative repair record."
+    },
+    {
+      "path": ".github/workflows/shadow-parity-required.yml + .github/workflows/live-schema-parity.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:45:00Z",
+      "authority": "adversarial exact-head review, PM directive 2026-07-30 (close every P0/P1)",
+      "reason": "Both are pull_request-triggered, check out the PR head, and run scripts from that checkout with a production service-role key / production superuser Postgres URL. In both cases the scripts they execute are themselves inside the workflow's trigger path filter, so a PR that edits one runs its own version against production. The path filter decides whether the job runs; the checkout decides what runs. Closed with scripts/ci/assert-unmodified-vs-base.ts rather than by removing the credential, because these two legitimately need to READ production."
     }
   ]
 }

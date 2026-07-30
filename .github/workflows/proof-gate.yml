@@ -177,12 +177,14 @@ jobs:
     needs: detect
     if: needs.detect.outputs.runtime_changed == 'true'
     runs-on: ubuntu-latest
-    # UTV2-1630: this job writes credentials into local.env and runs
-    # `pnpm ci:db-smoke`. It previously received PRODUCTION credentials, so the
-    # new staging guard would refuse and C2 would be permanently red for every
-    # T1 lane — making T1 proof unobtainable. Binding staging-ci supplies the
-    # isolated target the guard requires.
-    environment: staging-ci
+    # UTV2-1630: this job holds NO database credential — it runs
+    # scripts/ops/runtime-verifier-gate.ts, which reads proof files. An earlier
+    # revision of this lane bound `environment: staging-ci` here on the belief
+    # that it wrote local.env and ran ci:db-smoke; reading the steps below shows
+    # it does neither. The binding was removed: it created a deployment record
+    # on every T1 pull request and would have blocked this job the moment
+    # `staging-ci` gained a protection rule. The credential-bearing job in this
+    # workflow is `t1-proof`, which binds the environment itself.
     steps:
       - uses: actions/checkout@v4
         with:
