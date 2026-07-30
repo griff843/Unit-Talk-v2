@@ -1,6 +1,14 @@
 # PROOF: UTV2-1628
 
-MERGE_SHA: pending
+MERGE_SHA: 3f83c87692e2fab106156a8ae01f54fd1bdc31d5
+
+That is the base commit this branch merges into — `origin/main` at the time the
+proof was measured, and a real ancestor of this branch's head. It is provisional
+by construction: the squash merge SHA does not exist until the merge happens, so
+`post-merge-lane-close.yml` rewrites this line to the authoritative merge SHA via
+`ops:proof-generate --merge-sha`. The pre-fix baseline this lane measures against
+is a different commit, `a55de4025f966ce458546a16b5d91faa7b5e034b`, named
+throughout below.
 
 ## Summary
 

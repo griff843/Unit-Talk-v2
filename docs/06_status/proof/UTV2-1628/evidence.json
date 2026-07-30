@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1628",
+  "tier": "T1",
+  "title": "One enforced boundary for every privileged database client",
+  "generated_at": "2026-07-30T23:50:00.000Z",
+  "implementation_sha": "a35030ebb3130e5c61b697fa421b13bbb2c1b7f5",
+  "sha_binding": {
+    "verified_source_sha": "a35030ebb3130e5c61b697fa421b13bbb2c1b7f5",
+    "base_sha": "3f83c87692e2fab106156a8ae01f54fd1bdc31d5",
+    "pre_fix_baseline_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+    "current_pr_head_sha": null,
+    "merge_sha": null,
+    "sha_type": "pre_merge",
+    "verified_source_note": "Every measurement below was taken on the implementation commit a35030eb, with the pre-fix comparison taken on a real detached worktree at a55de402. The merge SHA does not exist until the squash merge lands; post-merge-lane-close.yml rebinds it."
+  },
+  "verifier": {
+    "identity": null,
+    "note": "Bound after CI completes to the GitHub Actions run that produced the ci-db-proof-receipt/v2 and verified it in the required `verify` context. The implementing agent is not the verifier of the writable-DB claim by design."
+  },
+  "static_proof": {
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PARTIAL",
+      "stages_passed": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "verify_static_exit_code": 0,
+      "test_totals": {
+        "suites": 96,
+        "tests": 3929,
+        "pass": 3929,
+        "fail": 0,
+        "skipped": 0,
+        "totals_note": "`suites` counts the 96 `tsx --test` process runs that make up `pnpm test`; the per-process `# tests` lines sum to 3929 with zero failures, zero skips and zero cancellations."
+      },
+      "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
+      "stop_reason": "No staging credential exists on this workstation, so ci:assert-staging cannot resolve the approved staging project and refuses. That refusal is UTV2-1630's shipped control working as intended, not a gap here.",
+      "authoritative_full_run": "the required CI `verify` context on this head"
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required `verify` context against its own GITHUB_* values",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP.",
+    "queries": [],
+    "row_counts": [],
+    "ci_receipt": {}
+  },
+  "boundary_proof": {
+    "guard": "scripts/ci/privileged-db-client-guard.ts (pnpm ci:db-client-boundary)",
+    "method": "AST construction-site inventory plus static import-graph reachability from the real `pnpm test` entrypoints; no string search, no credential, no connection",
+    "both_directions": {
+      "pre_fix": {
+        "sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+        "ok": false,
+        "sites": 93,
+        "files": 87,
+        "findings": 92,
+        "findings_by_kind": {
+          "raw-in-migrated": 83,
+          "reachable-from-test": 8,
+          "unasserted-site": 1
+        },
+        "reachable_from_pnpm_test": 8,
+        "reachable_files": [
+          "apps/command-center/src/lib/data/client.ts",
+          "packages/db/src/client.ts",
+          "scripts/backup-alert-check.ts",
+          "scripts/db-role-validator.ts",
+          "scripts/ingestor-alert-check.ts",
+          "scripts/ops/fix-settlement-utv2-665.ts",
+          "scripts/ops/ingestor-health-check.ts",
+          "scripts/prune-provider-offers.ts"
+        ]
+      },
+      "fixed": {
+        "ref": "this branch head",
+        "ok": true,
+        "sites": 5,
+        "files": 5,
+        "findings": 0,
+        "reachable_from_pnpm_test": 0
+      },
+      "note": "Same guard, same inventory, two real trees. The pre-fix tree is a detached git worktree at a55de402, not a synthetic fixture, so the check is verified to fail the world it was written to describe."
+    },
+    "negative_control": {
+      "description": "A two-line file constructing a client directly was added under scripts/, the guard run, the file removed, the guard run again.",
+      "with_new_unclassified_constructor": {
+        "sites": 6,
+        "files": 6,
+        "findings": 1,
+        "finding_kind": "unclassified",
+        "exit_code": 1
+      },
+      "after_removal": {
+        "sites": 5,
+        "files": 5,
+        "findings": 0,
+        "exit_code": 0
+      }
+    },
+    "residual_direct_sites": [
+      "packages/db/src/privileged-client-boundary.ts (is the boundary)",
+      "scripts/ops/db-health-tripwire.ts (postgres driver; connection string passed through assertPostgresConnectionAllowed)",
+      "apps/command-center/src/components/ApiHealthMonitoring.tsx (anon key, browser bundle)",
+      "apps/command-center/src/components/PipelineLiveRefresh.tsx (anon key, browser bundle)",
+      "scripts/shadow-scoring-runner.ts (deferred-cross-lane; owned by another open lane, not reachable from pnpm test)"
+    ],
+    "enforcement_points": [
+      ".github/workflows/ci.yml — step `Privileged DB client boundary` inside the required `verify` job",
+      "package.json — first stage of `verify:static`, so the local route cannot skip it either"
+    ]
+  },
+  "r_level": {
+    "checker": "scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "verdict": "PASS",
+    "rules_matched": ["lifecycle-fsm", "operator-ui"],
+    "advisory_missing": ["r4-fault-report (PM-gated, advisory)"]
+  },
+  "known_limitations": [
+    "scripts/shadow-scoring-runner.ts is not migrated: another open lane owns the file and has already changed it on its branch. Recorded in the inventory as deferred-cross-lane with that owner. It is not reachable from any pnpm test entrypoint, and the guard's reachability rule fails the build unconditionally the moment that stops being true.",
+    "Two Command Center browser components stay direct. They are anon-key only and the guard re-checks that premise every run, but nothing stops a new browser component being added under the same exemption through a reviewed inventory entry.",
+    "The boundary governs construction, not the environment. A process that is neither under node:test nor flagged staging-only may still reach production with a service-role key — that is production runtime and it must.",
+    "The inventory's `referenced` field, and therefore its `dead` bucket, is a heuristic over imports, npm scripts, workflows and doc mentions. Nothing enforces on it; all 45 dead entries were migrated regardless.",
+    "File scope lock is red on this PR and is not a required context: the guard reads file_scope_lock from the lane manifest as first committed on the branch, and this lane's manifest is created in a later commit than the implementation it covers.",
+    "Readiness Regression Gate and Live Schema Parity are red and pre-existing — a stale readiness score and 80 pre-existing migration/live-schema drift items respectively. Neither is a required context and this diff touches neither."
+  ],
+  "explicitly_not": [
+    "no production database mutation",
+    "no production credential in any checkout or PR-triggered workflow",
+    "no deployment or service restart",
+    "no direct-main or admin bypass",
+    "no branch-protection change",
+    "no writable DB claim asserted from proof text"
+  ]
+}
