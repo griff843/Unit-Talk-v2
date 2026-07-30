@@ -270,6 +270,23 @@ policies is not an acceptable alternative — it would expose pick data publicly
 production row counts. This lane changed CI credential scope, one script's
 import graph and documentation; it wrote nothing to any database.
 
+**Lane Authority allowlist gap closed in passing.** `Lane authority` failed on
+this PR with `outside_allowed_paths: docs/ops/SUPABASE_PREVIEW_BRANCH_VALIDATION.md
+is outside allowed paths for lane governance`. The path is correct for the
+change — the doc records that the workflow it describes was deleted — but
+`docs/ops/**` was never in `.lane/lanes/governance.yml`, despite existing since
+the ci-doctor bundle (`5f155770`) and being read by `ci-doctor` checks CV1–CV6.
+That is the same DEBT-025 class the governance manifest already documents six
+times (`KNOWN_DEBT.md`, `INCIDENTS/**` case mismatch, `AGENTS.md`,
+`OS_V1_LOCK.md`, the T1M packet docs, `docs/06_status/audits/**`), and it has no
+override: a File Scope Lock override cannot resolve Lane Authority, they are
+separate controls. Added `docs/ops/**` with the same annotation convention:
+
+```text
+$ pnpm lane:check --lane governance --base origin/main --head HEAD
+lane:check PASS lane=governance files=18
+```
+
 **Known red, non-required contexts.** `File scope lock`, `Readiness Regression
 Gate` and `Live Schema Parity` may be red; none is in the required set
 (`verify`, `Executor Result Validation`, `Merge Gate`, `P0 Protocol`). Live

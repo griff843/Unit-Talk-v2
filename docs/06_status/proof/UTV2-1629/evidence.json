@@ -144,6 +144,13 @@
     "action_taken": "recorded in code so the repo refuses to start using them again silently",
     "action_NOT_taken": "no secret was deleted — secret deletion is an orchestrator-owned action explicitly out of scope for this lane"
   },
+  "lane_authority_allowlist_gap": {
+    "failure": "outside_allowed_paths: docs/ops/SUPABASE_PREVIEW_BRANCH_VALIDATION.md is outside allowed paths for lane governance",
+    "diagnosis": "docs/ops/** has existed since the ci-doctor bundle (5f155770) and is read by ci-doctor checks CV1-CV6, but no lane manifest ever allowed it. Same DEBT-025 class as the six gaps .lane/lanes/governance.yml already documents. No override exists: a File Scope Lock override cannot resolve Lane Authority, they are separate controls.",
+    "fix": "added docs/ops/** to .lane/lanes/governance.yml with the same annotation convention as the prior six entries",
+    "verified": "pnpm lane:check --lane governance --base origin/main --head HEAD -> PASS lane=governance files=18",
+    "note": "Lane authority is not one of the four required contexts; this was fixed rather than waived because the change is one precedented allowlist line and the path is correct for the diff."
+  },
   "known_limitations": [
     "Live Schema Parity may be red: pre-existing drift between repo migrations and live schema, tracked under UTV2-1274. This lane touches no migration and the check is not a required context.",
     "Readiness Regression Gate may be red and is pre-existing: readiness-score.json reflects production runtime state this diff does not touch. Not a required context. Left red deliberately rather than writing a readiness score this lane has not measured.",

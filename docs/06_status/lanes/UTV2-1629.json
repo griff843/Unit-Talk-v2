@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/actions/supabase-pooler-url/action.yml",
+    ".lane/lanes/governance.yml",
     ".github/workflows/live-schema-parity.yml",
     ".github/workflows/shadow-parity-required.yml",
     ".github/workflows/supabase-pr-db-branch.yml",
