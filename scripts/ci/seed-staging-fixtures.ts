@@ -16,6 +16,8 @@
  *
  * Refuses to run against anything but the approved staging project.
  */
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import {
   EXPECTED_STAGING_SUPABASE_PROJECT_REF,
@@ -108,8 +110,26 @@ async function main(): Promise<void> {
   console.log('[seed-staging] done (idempotent — re-running is a no-op)');
 }
 
-const invoked = process.argv[1]?.replace(/\\/g, '/');
-if (invoked?.endsWith('/seed-staging-fixtures.ts')) {
+/**
+ * Compare resolved real paths rather than matching on filename.
+ *
+ * An `endsWith('/<name>.ts')` test is defeated by any rename, copy, symlink or
+ * compiled .js invocation — and it fails OPEN: main() never runs, the process
+ * exits 0, and a `&&` chain proceeds to the writable suite. Verified: a renamed
+ * copy of this file exited 0 against a PRODUCTION target while the correctly
+ * named file refused with exit 1.
+ */
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint()) {
   void main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

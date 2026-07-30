@@ -113,13 +113,13 @@ jobs:
           echo "local.env written (values redacted); keys:"
           cut -d= -f1 local.env | sed 's/^/  /'
 
-      - name: Record staging schema head
+      - name: Record repository migration head
         id: schema
         run: |
           set -euo pipefail
           head=$(ls supabase/migrations/*.sql | tail -1 | xargs basename)
           echo "head=$head" >> "$GITHUB_OUTPUT"
-          echo "staging schema head: $head"
+          echo "repo migration head: $head"
 
       # Synthetic reference rows only — the FK chain the smoke suite needs.
       # Idempotent upserts, so re-runs need no cleanup bookkeeping.
@@ -131,7 +131,7 @@ jobs:
         env:
           CI_REQUIRE_DB_SMOKE: 'true'
           CI_DB_PROOF_RECEIPT_PATH: ${{ github.workspace }}/.out/ci-db-proof-receipt.json
-          CI_SCHEMA_MIGRATION_HEAD: ${{ steps.schema.outputs.head }}
+          CI_REPO_MIGRATION_HEAD: ${{ steps.schema.outputs.head }}
           CI_FIXTURE_RUN_ID: utv2-1630-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail

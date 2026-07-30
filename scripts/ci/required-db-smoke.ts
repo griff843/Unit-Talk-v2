@@ -182,7 +182,7 @@ async function main(): Promise<void> {
     finishedAt,
     exitCode: result.status,
     capturedOutput,
-    schemaMigrationHead: env['CI_SCHEMA_MIGRATION_HEAD'] ?? null,
+    repoMigrationHead: env['CI_REPO_MIGRATION_HEAD'] ?? null,
     fixtureRunId: env['CI_FIXTURE_RUN_ID'] ?? null,
     cleanupResult: env['CI_FIXTURE_CLEANUP_RESULT'] ?? null,
   });

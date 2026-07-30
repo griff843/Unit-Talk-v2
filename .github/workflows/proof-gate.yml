@@ -177,6 +177,12 @@ jobs:
     needs: detect
     if: needs.detect.outputs.runtime_changed == 'true'
     runs-on: ubuntu-latest
+    # UTV2-1630: this job writes credentials into local.env and runs
+    # `pnpm ci:db-smoke`. It previously received PRODUCTION credentials, so the
+    # new staging guard would refuse and C2 would be permanently red for every
+    # T1 lane — making T1 proof unobtainable. Binding staging-ci supplies the
+    # isolated target the guard requires.
+    environment: staging-ci
     steps:
       - uses: actions/checkout@v4
         with:
@@ -278,9 +284,11 @@ jobs:
           NOTION_TOKEN=
           SLACK_BOT_TOKEN=
           SLACK_SIGNING_SECRET=
-          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_DB_ACCESS_MODE=writable-isolated
+          SUPABASE_PROJECT_REF=${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          SUPABASE_URL=${{ secrets.CI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.CI_SUPABASE_SECRET_KEY }}
           DISCORD_BOT_TOKEN=
           DISCORD_GUILD_ID=
           DISCORD_ANNOUNCEMENT_CHANNEL_ID=

@@ -21,6 +21,8 @@
  * Unknown, ambiguous, custom-domain, proxy, tunnel, malformed, missing and
  * unresolvable targets all fail, before any client is constructed.
  */
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   EXPECTED_STAGING_SUPABASE_PROJECT_REF,
@@ -82,7 +84,25 @@ function main(): void {
   console.log(`[assert-staging] OK: ${result.reason}`);
 }
 
-const invoked = process.argv[1]?.replace(/\\/g, '/');
-if (invoked?.endsWith('/assert-staging-target.ts')) {
+/**
+ * Compare resolved real paths rather than matching on filename.
+ *
+ * An `endsWith('/<name>.ts')` test is defeated by any rename, copy, symlink or
+ * compiled .js invocation — and it fails OPEN: main() never runs, the process
+ * exits 0, and a `&&` chain proceeds to the writable suite. Verified: a renamed
+ * copy of this file exited 0 against a PRODUCTION target while the correctly
+ * named file refused with exit 1.
+ */
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint()) {
   main();
 }

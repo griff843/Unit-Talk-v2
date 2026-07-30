@@ -172,3 +172,62 @@ test('the proof auditor job depends on the DB job and downloads a same-run artif
   );
   assert.match(source, /if-no-files-found:\s*error/, 'a missing artifact must fail, not skip');
 });
+
+// ---------------------------------------------------------------------------
+// Mutation-driven regressions from the exact-head review.
+// ---------------------------------------------------------------------------
+
+// M4: `.evilxxx.com` is exactly as long as `.supabase.co`, so removing the
+// host-suffix check made slice(0,-12) equal the staging ref and APPROVED an
+// attacker host. The suffix check was correct but unpinned.
+test('M4: a same-length lookalike TLD is refused', () => {
+  for (const host of [
+    'https://xskgrzbteyqdufktjrjx.evilxxx.com',
+    'https://xskgrzbteyqdufktjrjx.supabase.io',
+    'https://xskgrzbteyqdufktjrjx.aupabase.co',
+  ]) {
+    assert.equal(
+      assertStagingTarget({ SUPABASE_URL: host }).ok,
+      false,
+      `${host} must be refused — only *.supabase.co is a Supabase project host`,
+    );
+  }
+});
+
+// M15: the check that turns "not production" into "positively staging".
+// Deleting it let any non-production Supabase project verify.
+test('M15: a non-production Supabase project that is not staging is refused', () => {
+  const other = 'https://abcdefghijklmnopqrst.supabase.co';
+  const result = assertStagingTarget({ SUPABASE_URL: other });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /is not the approved staging project/);
+});
+
+// M30: the job-identity pin in the auditor invocation.
+test('M30: the auditor pins the producing job identity', () => {
+  const source = readRepo('.github/workflows/staging-db-proof.yml');
+  assert.match(
+    source,
+    /--expect-job\s+staging-db-proof/,
+    'the auditor must pin --expect-job so another job cannot mint the receipt',
+  );
+});
+
+// M26/M28/M29: artifact scoping and fail-closed download must hold on BOTH the
+// upload and the download step, not just wherever the regex happened to match.
+test('M26/M28/M29: artifact name is run+attempt scoped on upload AND download', () => {
+  const source = readRepo('.github/workflows/staging-db-proof.yml');
+  const scoped = source.match(
+    /utv2-1630-db-proof-receipt-\$\{\{\s*github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt\s*\}\}/gu,
+  );
+  assert.ok(
+    (scoped?.length ?? 0) >= 2,
+    'both the upload and the download must use the run+attempt scoped name; ' +
+      `found ${scoped?.length ?? 0} occurrence(s)`,
+  );
+  const failClosed = source.match(/if-no-files-found:\s*error/gu);
+  assert.ok(
+    (failClosed?.length ?? 0) >= 2,
+    `upload and download must both fail closed; found ${failClosed?.length ?? 0}`,
+  );
+});

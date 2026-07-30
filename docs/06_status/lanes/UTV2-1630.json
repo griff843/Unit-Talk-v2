@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
+    ".github/workflows/proof-gate.yml",
     ".github/workflows/staging-db-proof.yml",
     ".ops/sync/UTV2-1630.yml",
     "docs/06_status/lanes/UTV2-1630.json",
@@ -57,6 +58,14 @@
       "reason": "ci.yml on main writes production SUPABASE_* into local.env and runs verify:live-db-verdict -> test:live-db -> pnpm test:db, bypassing the guard that lived only inside ci:db-smoke. Observed writing 7 picks and 4 submissions to production from PR #1321 on 2026-07-30. UTV2-1627 Phase A changed the same file but is frozen and unmerged, and referenced CI_SUPABASE_ANON_KEY / CI_SUPABASE_SERVICE_ROLE_KEY, which were never provisioned.",
       "supersedes": "the ci.yml hunk in UTV2-1627 Phase A (b446cbb2)",
       "follow_up": "UTV2-1627 must rebase onto the landed ci.yml protection, not restore its own copy."
+    },
+    {
+      "path": ".github/workflows/proof-gate.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T18:40:00Z",
+      "authority": "PM directive 2026-07-30 (absorb the live ci.yml bypass)",
+      "reason": "Its runtime-verifier job wrote production SUPABASE_* into local.env and ran pnpm ci:db-smoke. With the staging guard in place that call refuses, so C2 would be permanently red and T1 proof unobtainable. Migrated to the staging-ci environment in-lane rather than shipping a known breakage."
     }
   ]
 }

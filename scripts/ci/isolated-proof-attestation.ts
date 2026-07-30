@@ -97,7 +97,15 @@ export interface CiProofReceipt {
   tap: TapCounts;
   captured_output: string;
   output_sha256: string;
-  schema_migration_head: string | null;
+  /**
+   * The REPOSITORY's latest migration filename at the reviewed commit.
+   *
+   * Deliberately NOT called schema_migration_head: nothing here observes the
+   * schema actually applied to staging, so naming it that would overclaim in a
+   * receipt whose entire purpose is that its fields are observed rather than
+   * asserted. Detecting staging drift is live-schema-parity's job.
+   */
+  repo_migration_head: string | null;
   fixture_run_id: string | null;
   cleanup_result: string | null;
   receipt_sha256?: string;
@@ -181,9 +189,13 @@ export function isApprovedStagingTarget(
 
 /** Parse node:test TAP counters out of captured output. */
 export function parseTapCounts(text: string): TapCounts {
+  // Anchor to line start and take the LAST match. A lazy first-match search let
+  // an earlier '# pass 99' block shadow the real summary, and loose leading
+  // whitespace let indented prose parse as counters.
   const grab = (label: string): number | null => {
-    const match = new RegExp(`(?:^|\\n)\\s*#\\s+${label}\\s+(\\d+)\\b`, 'u').exec(text);
-    return match ? Number(match[1]) : null;
+    const matches = [...text.matchAll(new RegExp(`^# ${label} (\\d+)$`, 'gmu'))];
+    const last = matches.at(-1);
+    return last ? Number(last[1]) : null;
   };
   return {
     tests: grab('tests'),
@@ -200,7 +212,7 @@ export function buildCiProofReceipt(input: {
   finishedAt: string;
   exitCode: number | null;
   capturedOutput: string;
-  schemaMigrationHead?: string | null;
+  repoMigrationHead?: string | null;
   fixtureRunId?: string | null;
   cleanupResult?: string | null;
   ci?: CiContext;
@@ -228,7 +240,7 @@ export function buildCiProofReceipt(input: {
     tap: parseTapCounts(input.capturedOutput),
     captured_output: input.capturedOutput,
     output_sha256: sha256(input.capturedOutput),
-    schema_migration_head: input.schemaMigrationHead ?? null,
+    repo_migration_head: input.repoMigrationHead ?? null,
     fixture_run_id: input.fixtureRunId ?? null,
     cleanup_result: input.cleanupResult ?? null,
   };

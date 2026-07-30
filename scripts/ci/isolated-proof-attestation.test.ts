@@ -38,7 +38,7 @@ function receiptJson(overrides: Record<string, unknown> = {}, ci: CiContext = CI
     finishedAt: '2026-07-30T14:00:20.000Z',
     exitCode: 0,
     capturedOutput: TAP,
-    schemaMigrationHead: '20260714130000_bootstrap_delivery_kill_switch_posture.sql',
+    repoMigrationHead: '20260714130000_bootstrap_delivery_kill_switch_posture.sql',
     fixtureRunId: 'utv2-1630-30500000001-1',
     cleanupResult: 'ok',
     ci,
@@ -284,4 +284,24 @@ test('a receipt built against production records it truthfully and is rejected',
   const verdict = verifyCiProofReceipt(JSON.stringify(built), 'pnpm test:db', { ci: CI });
   assert.equal(verdict.ok, false);
   assert.match(verdict.reason, /canonical production/);
+});
+
+// P2 from review: a first-match, loosely-anchored parse let an earlier block
+// shadow the real TAP summary and let indented prose parse as counters.
+test('TAP parsing takes the last summary and ignores indented prose', () => {
+  const shadowed = [
+    '# pass 99',
+    '# fail 0',
+    '# skipped 0',
+    'some later real run:',
+    '# tests 3',
+    '# pass 1',
+    '# fail 3',
+    '# skipped 0',
+  ].join('\n');
+  assert.deepEqual(parseTapCounts(shadowed), { tests: 3, pass: 1, fail: 3, skipped: 0 });
+
+  assert.deepEqual(parseTapCounts('   #   pass   5'), {
+    tests: null, pass: null, fail: null, skipped: null,
+  });
 });
