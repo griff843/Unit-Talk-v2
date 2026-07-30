@@ -22,6 +22,16 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # UTV2-1630: binding `staging-ci` is what releases CI_SUPABASE_*. This job
+    # no longer has access to any production database credential — the
+    # production secrets are not referenced anywhere in this file.
+    #
+    # Supersedes the ci.yml change in UTV2-1627 Phase A (frozen at b446cbb2),
+    # which swapped to CI_SUPABASE_ANON_KEY/CI_SUPABASE_SERVICE_ROLE_KEY. Those
+    # secret names were never provisioned; the environment created for this lane
+    # uses CI_SUPABASE_PUBLISHABLE_KEY/CI_SUPABASE_SECRET_KEY. UTV2-1627 must
+    # rebase onto this version rather than restore its own.
+    environment: staging-ci
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,9 +63,11 @@ jobs:
           NOTION_TOKEN=
           SLACK_BOT_TOKEN=
           SLACK_SIGNING_SECRET=
-          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_DB_ACCESS_MODE=writable-isolated
+          SUPABASE_PROJECT_REF=${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          SUPABASE_URL=${{ secrets.CI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.CI_SUPABASE_SECRET_KEY }}
           DISCORD_BOT_TOKEN=
           DISCORD_GUILD_ID=
           DISCORD_ANNOUNCEMENT_CHANNEL_ID=
@@ -97,7 +109,15 @@ jobs:
         id: live_db
         env:
           CI_REQUIRE_DB_SMOKE: ${{ github.ref_protected || github.ref == 'refs/heads/main' }}
-        run: pnpm verify:live-db-verdict
+        # UTV2-1630: the live-DB path previously ran `pnpm test:db` directly via
+        # test:live-db, bypassing ci:db-smoke's guard entirely. On 2026-07-30
+        # that wrote 7 picks + 4 submissions to production from a pull request.
+        # `test:db` and `test:t1-proof:live` are now gated at the script level;
+        # this assertion fails the job early with a clear message.
+        run: |
+          set -euo pipefail
+          pnpm ci:assert-staging
+          pnpm verify:live-db-verdict
 
       - name: CI truth summary
         if: always()
