@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/.worktrees/utv2-1626",
   "branch": "claude/utv2-1626-readiness-refresher",
   "base_branch": "main",
-  "commit_sha": "1e1197581155864b550c332daa8d93a40447fceb",
-  "pr_url": null,
+  "commit_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1326",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/readiness-refresh.yml",
@@ -31,14 +31,29 @@
     "docs/06_status/proof/UTV2-1626/evidence.json",
     "docs/06_status/proof/UTV2-1626/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-30T17:59:00.000Z",
-  "heartbeat_at": "2026-07-30T23:40:39.763Z",
+  "heartbeat_at": "2026-07-31T00:03:14.587Z",
   "closed_at": null,
   "blocked_by": [],
-  "preflight_token": null,
+  "preflight_token": ".out/ops/preflight/claude/utv2-1626-readiness-refresher.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-31T00:03:14.587Z",
+      "verdict": "pass",
+      "merge_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1326",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
