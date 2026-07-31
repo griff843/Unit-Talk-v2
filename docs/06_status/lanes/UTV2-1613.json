@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1613",
-  "lane_type": "runtime",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/.worktrees/wt-1613/.out/worktrees/claude__utv2-1613-lane-close-measured-truth",
@@ -20,6 +20,8 @@
     "scripts/ops/lane-close-repair-packet.ts",
     "scripts/ops/lane-close.test.ts",
     "scripts/ops/lane-close.ts",
+    "scripts/ops/lane-manifest.test.ts",
+    "scripts/ops/lane-manifest.ts",
     "scripts/ops/reconcile.test.ts",
     "scripts/ops/reconcile.ts",
     "scripts/ops/truth-history-audit.test.ts",
@@ -35,7 +37,7 @@
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1613-lane-close-measured-truth.json",
-  "created_by": "codex-cli",
+  "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
   "execution_location": {

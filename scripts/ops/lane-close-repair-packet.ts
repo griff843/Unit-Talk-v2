@@ -47,6 +47,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -593,6 +594,42 @@ export function applyRepairPacket(
   };
 }
 
+/**
+ * Real `fetchMergeAuthority` for the CLI `apply` command.
+ *
+ * UTV2-1613 adversarial review finding: `applyRepairPacket`'s authority-drift
+ * check only runs `if (packet.merge_binding && options.fetchMergeAuthority)`
+ * -- and the CLI's only call site previously never supplied
+ * `fetchMergeAuthority` at all, making the check dead code in every real
+ * invocation of `pnpm ops:lane-repair-packet apply`, the documented and only
+ * real entry point. A merge SHA that was rebased, force-pushed, or reverted
+ * since packet generation was never detected. This wires a real
+ * implementation so the check actually runs outside of tests.
+ */
+function liveMergeAuthorityFromGitHub(prUrl: string): LiveMergeAuthority | null {
+  const match = prUrl.match(/^https:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)/u);
+  if (!match) return null;
+  try {
+    const stdout = execFileSync(
+      'gh',
+      ['pr', 'view', match[2] as string, '--repo', match[1] as string, '--json', 'url,mergeCommit,headRefName'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const parsed = JSON.parse(stdout) as {
+      url?: string;
+      mergeCommit?: { oid?: string | null } | null;
+      headRefName?: string | null;
+    };
+    return {
+      pr_url: parsed.url ?? prUrl,
+      merge_sha: parsed.mergeCommit?.oid ?? null,
+      head_ref: parsed.headRefName ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────────
 
 function usage(): void {
@@ -642,7 +679,10 @@ export function main(argv = process.argv.slice(2)): number {
       return errors.length === 0 ? 0 : 1;
     }
 
-    const result = applyRepairPacket(packet, { issueId });
+    const result = applyRepairPacket(packet, {
+      issueId,
+      fetchMergeAuthority: liveMergeAuthorityFromGitHub,
+    });
     emitJson({ ...result, packet_path: packetPath });
     return result.ok ? 0 : 1;
   } catch (error) {

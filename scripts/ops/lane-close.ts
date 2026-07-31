@@ -38,6 +38,7 @@ import {
   hashState,
   isMeasuredPass,
   measuredTruthCheckReceipt,
+  truthHistoryEntryForMeasuredReceipt,
   unexecutedTruthCheckReceipt,
   writeRepairPacket,
   type LaneCloseRepairPacket,
@@ -588,6 +589,7 @@ export function repairMergedLaneManifest(
   options: {
     fetchPr?: (prUrl: string) => RepairMergedPrInfo;
     inferMergedPrForBranch?: (branch: string, issueId: string) => RepairMergedPrInfo | null;
+    isMergeReachable?: (mergeSha: string) => boolean;
     validatedPr?: RepairMergedPrInfo;
     now?: Date;
     repoRoot?: string;
@@ -655,6 +657,23 @@ export function repairMergedLaneManifest(
         'infra_error',
         `Manifest has no pr_url, and no merged pull request was found whose head ref is "${manifest.branch}". ` +
           'Repair refused; the merge binding cannot be inferred and must not be guessed.',
+      );
+    }
+    // Defense in depth on top of selectInferredMergedPr's identity check:
+    // this path has no --pr flag, no isTrustedPostMergeAutomation gate, and
+    // is reachable from an ordinary worktree, so it warrants the same
+    // reachability check the explicit --pr path applies in
+    // validateTrustedPostMergeRepair. A merge SHA GitHub calls "merged" but
+    // that is not reachable from origin/main (a force-push, a since-reverted
+    // merge, a cross-fork oddity) is refused rather than bound.
+    const reachable = (options.isMergeReachable ?? isMergeShaReachableFromMain)(
+      inferredPr.mergeSha as string,
+    );
+    if (!reachable) {
+      return repairBlocked(
+        manifest,
+        'unreachable_merge_sha',
+        `Inferred PR ${inferredPr.url} reports merge SHA ${inferredPr.mergeSha}, which is not reachable from origin/main. Repair refused.`,
       );
     }
     selectedBy = 'branch_merged_head';
@@ -816,6 +835,24 @@ export function repairMergedLaneManifest(
  * one), or when the resolved PR fails the same issue-identity check the
  * trusted path applies.
  */
+/**
+ * Selects the one merged PR authoritatively backing this ghost lane.
+ *
+ * UTV2-1613 adversarial review finding: the first version of this function
+ * accepted `issuePattern.test(candidate.title ?? '') || issuePattern.test(branch)`.
+ * `branch` here is always `manifest.branch`, and by this repo's own
+ * `BRANCH_PATTERN` naming convention a conforming lane branch already embeds
+ * the issue ID -- so `issuePattern.test(branch)` was true for essentially
+ * every candidate regardless of its actual title, making the title check
+ * vacuous. The real gate was `headRefName === branch` alone: a stale or
+ * reused branch name (plausible for short-lived, low-entropy lane branches
+ * after worktree cleanup) could bind a wrong PR's merge SHA with no content
+ * verification at all -- silently, since this path is reachable from an
+ * ordinary worktree, not gated by `isTrustedPostMergeAutomation`.
+ *
+ * The fix requires the candidate's own title to name the issue -- never the
+ * branch name as a stand-in for it -- on top of the head-ref match.
+ */
 export function selectInferredMergedPr(
   candidates: RepairMergedPrInfo[],
   branch: string,
@@ -827,7 +864,7 @@ export function selectInferredMergedPr(
       candidate.merged &&
       Boolean(candidate.mergeSha) &&
       candidate.headRefName === branch &&
-      (issuePattern.test(candidate.title ?? '') || issuePattern.test(branch)),
+      issuePattern.test(candidate.title ?? ''),
   );
   if (matches.length !== 1) {
     return null;
@@ -1558,6 +1595,40 @@ export function completeIdempotentReclose(
   };
 }
 
+/**
+ * Composes the manifest state persisted when a repaired-but-failing close
+ * gives up: the merge binding is real (GitHub state), so it stays; the
+ * measured truth-check outcome is real too, and must not be silently
+ * dropped.
+ *
+ * UTV2-1613 adversarial review finding: `repairedManifest` is captured by
+ * `repairMergedLaneManifest` before `runTruthCheck()` runs, so its
+ * `truth_check_history` is the STALE pre-run array. `runTruthCheck()`'s own
+ * write (with the real failing entry appended) is correctly discarded by the
+ * transaction rollback on this path -- but persisting `repairedManifest`
+ * verbatim afterward would then permanently lose that measured failure. This
+ * function appends the measured entry from the same receipt the caller
+ * already computed, exported so the composition is unit-testable without
+ * spawning the full CLI.
+ *
+ * Never appends a pass: `truthHistoryEntryForMeasuredReceipt` only returns
+ * one for a receipt that executed and exited 0, and this function is only
+ * ever called from the `result.exit_code !== 0` branch in `main()`.
+ */
+export function manifestForFailedRepairClose(
+  repairedManifest: LaneManifest,
+  receipt: MeasuredTruthCheckReceipt,
+): LaneManifest {
+  const failureEntry = truthHistoryEntryForMeasuredReceipt(receipt);
+  if (!failureEntry) {
+    return repairedManifest;
+  }
+  return {
+    ...repairedManifest,
+    truth_check_history: [...repairedManifest.truth_check_history, failureEntry],
+  };
+}
+
 async function main(): Promise<void> {
   const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
@@ -1809,9 +1880,19 @@ async function main(): Promise<void> {
       // GitHub says, and NOT in `done`. `truth_check_history` records the
       // measured failure; nothing records a pass. Closing still requires a
       // genuine passing truth-check on a later run.
+      //
+      // UTV2-1613 adversarial review finding: `repairedManifest` was captured
+      // by `repairMergedLaneManifest` before `runTruthCheck()` ran, so its
+      // `truth_check_history` is the STALE pre-run array. `runTruthCheck()`'s
+      // own write (with the real failing entry appended) was correctly
+      // discarded by the rollback above -- but writing `repairedManifest`
+      // back verbatim would then permanently lose that measured failure,
+      // directly contradicting this comment. The measured failure entry is
+      // appended explicitly here, from the same `receipt` this run already
+      // computed, so the persisted state matches what was actually measured.
       let mergeBindingPersisted = false;
       if (repairedManifest && mergeBinding) {
-        writeManifest(repairedManifest);
+        writeManifest(manifestForFailedRepairClose(repairedManifest, receipt));
         mergeBindingPersisted = true;
       }
 

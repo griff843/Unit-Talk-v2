@@ -12,6 +12,7 @@ import {
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
   implementationFilesFromTrustedRepair,
+  manifestForFailedRepairClose,
   isTrustedPostMergeAutomation,
   mapFailuresToCode,
   rebindRepairedLaneProof,
@@ -35,6 +36,7 @@ import {
   isMeasuredPass,
   measuredTruthCheckReceipt,
   truthHistoryEntryForMeasuredReceipt,
+  unexecutedTruthCheckReceipt,
 } from './lane-close-repair-packet.js';
 import { readAllLeases, reserveLease } from './lease-registry.js';
 import { ModelRoutingRebindError } from './proof-generate.js';
@@ -2905,6 +2907,7 @@ test('UTV2-1613: a merged PR is inferred from the lane branch when pr_url is nul
           title: 'fix(lanes): UTV2-1553 release merged-lane lock from active accounting',
         };
       },
+      isMergeReachable: () => true,
     });
 
     assert.strictEqual(repair.ok, true);
@@ -2988,4 +2991,106 @@ test('UTV2-1613: PR inference refuses an ambiguous or identity-mismatched candid
     ),
     null,
   );
+});
+
+test('UTV2-1613 adversarial review fix: a matching branch name is never accepted as a stand-in for a real title match', () => {
+  // The first version of selectInferredMergedPr accepted
+  // `issuePattern.test(title) || issuePattern.test(branch)`. Since a
+  // conforming lane branch already embeds the issue ID by this repo's own
+  // BRANCH_PATTERN convention, that OR made the title check vacuous -- the
+  // only real gate left was headRefName === branch. A PR whose title has
+  // nothing to do with this issue, sitting on a stale/reused branch name,
+  // must be refused rather than silently bound.
+  const branch = 'claude/utv2-1553-release-merged-lane-lock';
+  const unrelatedTitleCandidate = {
+    repository: 'griff843/Unit-Talk-v2',
+    state: 'merged',
+    merged: true,
+    headRefName: branch,
+    title: 'chore: unrelated cleanup with no issue reference',
+    url: 'u1',
+    number: 9999,
+    mergeSha: 'deadbeef',
+  };
+  assert.strictEqual(
+    selectInferredMergedPr([unrelatedTitleCandidate], branch, 'UTV2-1553'),
+    null,
+    'a title with no reference to the issue must never match merely because the branch name does',
+  );
+});
+
+test('UTV2-1613: repair refuses an inferred PR whose merge SHA is not reachable from origin/main', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const ghost = createManifest({
+      issue_id: 'UTV2-1553',
+      branch: 'claude/utv2-1553-release-merged-lane-lock',
+      status: 'started',
+      commit_sha: null,
+      pr_url: null,
+      preflight_token: tokenPath,
+    });
+
+    const repair = repairMergedLaneManifest(ghost, {
+      repoRoot,
+      artifactRoot,
+      inferMergedPrForBranch: () => ({
+        url: 'https://github.com/griff843/Unit-Talk-v2/pull/1322',
+        number: 1322,
+        repository: 'griff843/Unit-Talk-v2',
+        state: 'merged',
+        merged: true,
+        mergeSha: 'not-actually-reachable-sha',
+        headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+        title: 'fix(lanes): UTV2-1553 release merged-lane lock',
+      }),
+      isMergeReachable: () => false,
+    });
+
+    assert.strictEqual(repair.ok, false);
+    assert.strictEqual(repair.code, 'unreachable_merge_sha');
+    assert.strictEqual(ghost.status, 'started', 'the original manifest object must be untouched');
+  });
+});
+
+test('UTV2-1613 adversarial review fix: a failed repaired close persists the measured failure, not the stale pre-run history', () => {
+  const repairedManifest = createManifest({
+    status: 'merged',
+    commit_sha: 'abc123merge456',
+    truth_check_history: [], // stale: captured before runTruthCheck ran
+  });
+  const failing = createTruthCheckResult({
+    verdict: 'fail',
+    exit_code: 1,
+    failures: ['P3'],
+    checked_at: '2026-07-31T13:00:00.000Z',
+    checks: [{ id: 'P3', status: 'fail', detail: 'proof does not reference merge sha' }],
+  });
+  const receipt = measuredTruthCheckReceipt({
+    command: 'ops:truth-check UTV2-1001',
+    runner: 'ops:lane-close',
+    result: failing,
+    evaluatedStateHash: hashState(repairedManifest),
+  });
+
+  const persisted = manifestForFailedRepairClose(repairedManifest, receipt);
+
+  assert.strictEqual(persisted.truth_check_history.length, 1);
+  assert.strictEqual(persisted.truth_check_history[0]?.verdict, 'fail');
+  assert.deepStrictEqual(persisted.truth_check_history[0]?.failures, ['P3']);
+  assert.strictEqual(persisted.truth_check_history[0]?.runner, 'ops:lane-close');
+  assert.strictEqual(persisted.status, 'merged', 'the merge binding fields are untouched');
+  assert.notStrictEqual(persisted.status, 'done');
+});
+
+test('UTV2-1613: manifestForFailedRepairClose is a no-op when the receipt never executed', () => {
+  const repairedManifest = createManifest({ status: 'merged', truth_check_history: [] });
+  const unexecuted = unexecutedTruthCheckReceipt({
+    command: 'ops:lane-close --repair-merged',
+    mergeSha: 'abc123merge456',
+  });
+
+  const persisted = manifestForFailedRepairClose(repairedManifest, unexecuted);
+
+  assert.deepStrictEqual(persisted, repairedManifest);
+  assert.deepStrictEqual(persisted.truth_check_history, []);
 });

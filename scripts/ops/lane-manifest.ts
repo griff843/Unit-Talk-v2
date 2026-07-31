@@ -2,7 +2,6 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import {
   type LaneManifest,
-  type TruthCheckHistoryEntry,
   assertStatusTransition,
   createManifest,
   emitJson,
@@ -260,6 +259,24 @@ function recordMergeCommand(
   console.log(`${payload.issue_id} ${payload.status} ${payload.commit_sha}`);
 }
 
+/**
+ * Binds a lane manifest to authoritative GitHub merge state: status, the
+ * merge SHA, and the PR URL. Nothing else.
+ *
+ * UTV2-1613: this function used to also unconditionally append a
+ * `truth_check_history` entry — `{ verdict: 'pass', failures: [], runner:
+ * 'manual', source: 'github_pr_merge_commit' }` — from nothing but the fact
+ * that a PR merged. No truth-check ever ran here; `record-merge` only talks
+ * to the GitHub API for PR state. That entry is worse than the sibling
+ * fabrication in `lane-close.ts`'s old `--repair-merged` path in one
+ * specific way: `runner: 'manual'` IS a canonical runner value, so a
+ * runner-union check alone cannot distinguish it from a real manually-
+ * recorded pass. The only fix that actually closes the gap is to never write
+ * a governance verdict here at all — this function inherently cannot measure
+ * one, so it does not claim one. `truth_check_history` is left byte-for-byte
+ * as the caller supplied it; `historyAppended` always reports `false`,
+ * preserved for interface stability with existing callers.
+ */
 export function applyPrMergeToManifest(input: RecordMergeInput): RecordMergeResult {
   const mergeSha = normalizeSha(input.pr.mergeSha);
   if (!input.pr.merged || !mergeSha) {
@@ -284,57 +301,15 @@ export function applyPrMergeToManifest(input: RecordMergeInput): RecordMergeResu
     truth_check_history: input.manifest.truth_check_history ?? [],
   };
 
-  const sourceEntry = mergeShaHistoryEntry(input.pr.url, mergeSha, input.now);
-  const historyAppended = !hasMergeShaSourceEntry(next.truth_check_history, sourceEntry);
-  if (historyAppended) {
-    next.truth_check_history = [...next.truth_check_history, sourceEntry];
-  }
-
   return {
     manifest: next,
     changed:
       input.manifest.status !== next.status ||
       input.manifest.commit_sha !== next.commit_sha ||
       input.manifest.pr_url !== next.pr_url ||
-      input.manifest.heartbeat_at !== next.heartbeat_at ||
-      historyAppended,
-    historyAppended,
+      input.manifest.heartbeat_at !== next.heartbeat_at,
+    historyAppended: false,
   };
-}
-
-function mergeShaHistoryEntry(
-  prUrl: string,
-  mergeSha: string,
-  checkedAt: string,
-): TruthCheckHistoryEntry & { source: string; pr_url: string } {
-  return {
-    checked_at: checkedAt,
-    verdict: 'pass',
-    merge_sha: mergeSha,
-    failures: [],
-    runner: 'manual',
-    source: 'github_pr_merge_commit',
-    pr_url: prUrl,
-  };
-}
-
-function hasMergeShaSourceEntry(
-  history: TruthCheckHistoryEntry[],
-  expected: TruthCheckHistoryEntry & { source: string; pr_url: string },
-): boolean {
-  return history.some((entry) => {
-    const candidate = entry as TruthCheckHistoryEntry & {
-      source?: string;
-      pr_url?: string;
-    };
-    return (
-      candidate.merge_sha === expected.merge_sha &&
-      candidate.verdict === expected.verdict &&
-      candidate.runner === expected.runner &&
-      candidate.source === expected.source &&
-      candidate.pr_url === expected.pr_url
-    );
-  });
 }
 
 function normalizeSha(value: string | null | undefined): string | null {

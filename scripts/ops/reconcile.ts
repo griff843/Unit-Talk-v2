@@ -48,6 +48,15 @@ import {
 const STALE_MS = 4 * 60 * 60 * 1000;    // 4 hours  → stale (report only)
 const STRANDED_MS = 24 * 60 * 60 * 1000; // 24 hours → blocked (write manifest)
 
+/**
+ * `ACTIVE_LOCK_STATUSES` minus `reopened`. See the doc comment at the
+ * `ghost_merged` check site in `reconcileManifest` for why `reopened` must
+ * never be eligible for this rule.
+ */
+const GHOST_ELIGIBLE_STATUSES = new Set(
+  [...ACTIVE_LOCK_STATUSES].filter((status) => status !== 'reopened'),
+);
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type ReconcileVerdict = 'stale' | 'stranded' | 'orphaned' | 'ghost_merged' | 'clean';
@@ -103,7 +112,20 @@ export interface ReconcileManifestOptions {
  * governance state on an unclear answer would be worse than one that does
  * nothing.
  */
+function escapeRegExpForIssueMatch(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
 export function resolveMergedPrForLane(manifest: LaneManifest): MergedPrForLane | null {
+  // Explicit identity (`pr_url` already on the manifest) resolves exactly
+  // that PR by URL -- no further identity check is needed. The branch-only
+  // fallback below is the risky, inferred path: a stale or reused branch name
+  // could otherwise match an unrelated merged PR, so it additionally requires
+  // the candidate's own title to name this issue (UTV2-1613 adversarial
+  // review finding, mirroring the equivalent fix to selectInferredMergedPr in
+  // lane-close.ts -- never accept the branch name itself as a stand-in for a
+  // real title check).
+  const usingBranchFallback = !manifest.pr_url;
   const selector = manifest.pr_url
     ? ['view', manifest.pr_url]
     : ['list', '--head', manifest.branch, '--state', 'merged', '--limit', '5'];
@@ -115,7 +137,7 @@ export function resolveMergedPrForLane(manifest: LaneManifest): MergedPrForLane 
       '--repo',
       'griff843/Unit-Talk-v2',
       '--json',
-      'url,state,mergedAt,mergeCommit,headRefName',
+      'url,state,mergedAt,mergeCommit,headRefName,title',
     ],
     { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
   );
@@ -134,13 +156,19 @@ export function resolveMergedPrForLane(manifest: LaneManifest): MergedPrForLane 
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
     headRefName?: string | null;
+    title?: string | null;
   };
   const candidates: PrShape[] = Array.isArray(parsed) ? (parsed as PrShape[]) : [parsed as PrShape];
+  const issuePattern = new RegExp(
+    `(^|[^A-Z0-9])${escapeRegExpForIssueMatch(manifest.issue_id)}([^A-Z0-9]|$)`,
+    'iu',
+  );
   const merged = candidates.filter(
     (candidate) =>
       (candidate.state?.toLowerCase() === 'merged' || Boolean(candidate.mergedAt)) &&
       Boolean(candidate.mergeCommit?.oid) &&
-      candidate.headRefName === manifest.branch,
+      candidate.headRefName === manifest.branch &&
+      (!usingBranchFallback || issuePattern.test(candidate.title ?? '')),
   );
   if (merged.length !== 1) return null;
 
@@ -203,7 +231,19 @@ export function reconcileManifest(
   // strictly alone: reconciling a terminal manifest "forward" to `merged`
   // would be moving it backwards, rewriting hundreds of settled records to fix
   // a lock problem they do not have.
-  const merged = ACTIVE_LOCK_STATUSES.has(manifest.status) ? resolveMergedPr(manifest) : null;
+  //
+  // UTV2-1613 adversarial review finding: `ACTIVE_LOCK_STATUSES` includes
+  // `reopened`, which is NOT eligible here. A manifest only ever reaches
+  // `reopened` when `runTruthCheck` detects a genuine regression on a
+  // previously-`done` lane (exitCode 4) -- which means it already has a
+  // merged `pr_url` from its first close. Every `reopened` manifest would
+  // therefore deterministically match the ghost rule below, and this
+  // unattended, scheduled, contents:write reconciler would silently rewrite
+  // its "this needs urgent re-verification" signal back to a generic
+  // pre-verification `merged` status -- indistinguishable from an ordinary
+  // ghost lane, with no human in the loop. `GHOST_ELIGIBLE_STATUSES` is
+  // `ACTIVE_LOCK_STATUSES` minus exactly that one status.
+  const merged = GHOST_ELIGIBLE_STATUSES.has(manifest.status) ? resolveMergedPr(manifest) : null;
   if (merged && merged.mergeSha) {
     const updated: LaneManifest = {
       ...manifest,

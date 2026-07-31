@@ -223,3 +223,30 @@ test('UTV2-1613: an unresolvable or non-merged PR is never treated as a ghost', 
     assert.notEqual(entry.verdict, 'ghost_merged');
   }
 });
+
+test('UTV2-1613 adversarial review fix: a reopened lane is never eligible for the ghost rule', () => {
+  // A manifest reaches `reopened` only when ops:truth-check detects a genuine
+  // regression on a previously-done lane -- it therefore already has a merged
+  // pr_url from its first close, and would otherwise deterministically match
+  // this ghost rule. Silently rewriting it back to a generic `merged` status
+  // on an unattended schedule would erase the "needs urgent re-verification"
+  // signal with no human in the loop. `reopened` is in ACTIVE_LOCK_STATUSES
+  // (so it still gets ordinary stale/stranded heartbeat handling) but must
+  // never be ghost-eligible.
+  let resolveCalled = false;
+  const entry = reconcileManifest(ghostManifest('reopened'), {
+    apply: true,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => {
+      resolveCalled = true;
+      return { url: PR_URL, mergeSha: MERGE_SHA };
+    },
+    writeManifest: () => {
+      throw new Error('a reopened lane must never be written by the ghost rule');
+    },
+  });
+
+  assert.strictEqual(resolveCalled, false, 'resolveMergedPr must not even be called for reopened');
+  assert.notEqual(entry.verdict, 'ghost_merged');
+});
