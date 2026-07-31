@@ -112,7 +112,13 @@
       "fail": 0,
       "skipped": 0,
       "suites": 6,
-      "change": "scripts/shadow-scoring-runner.test.ts added to the script"
+      "change": "scripts/shadow-scoring-runner.test.ts added to the script",
+      "after_main_sync": {
+        "tests": 1465,
+        "pass": 1465,
+        "fail": 0,
+        "note": "The branch was synced with main twice (branch protection requires an up-to-date branch). The second sync conflicted on package.json because both sides extended test:ops. Resolved as a union — this lane's scripts/shadow-scoring-runner.test.ts plus the three suites main added (scripts/ops/readiness-refresh.test.ts, scripts/ci/readiness-ledger-gate.test.ts, scripts/ci/readiness-refresh-workflow.test.ts) — not by taking a side. All four verified present in the merged script."
+      }
     },
     "shadow_scoring_runner": {
       "command": "pnpm exec tsx --test scripts/shadow-scoring-runner.test.ts",

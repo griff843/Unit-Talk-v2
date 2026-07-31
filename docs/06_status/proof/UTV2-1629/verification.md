@@ -203,6 +203,23 @@ $ pnpm test:ops
 # duration_ms 19421.763604
 ```
 
+The 1414 figure is measured at this proof's bound SHA. The branch was later
+synced with `main` twice, as branch protection requires an up-to-date branch;
+the second sync conflicted on `package.json` because both sides extended
+`test:ops`. It was resolved as a **union** — this lane's
+`scripts/shadow-scoring-runner.test.ts` plus the three suites `main` added —
+not by taking a side. On the synced tree the same command reports **1465 of
+1465**, and both sides' additions are present:
+
+```text
+$ pnpm test:ops           # after main-sync
+1..1453
+# tests 1465
+# pass 1465
+# fail 0
+# skipped 0
+```
+
 That file previously reported 9 of its 12 tests and exited non-zero: importing
 the module to reach `parseCliOptions` fired `main()`, which threw on absent
 credentials and called `process.exit(1)` mid-suite. It was quietly left out of
