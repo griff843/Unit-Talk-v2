@@ -4,13 +4,14 @@
   "tier": "T1",
   "title": "Reversible, fixture-excluding production reporting view",
   "generated_at": "2026-07-31T12:10:00.000Z",
-  "status": "prepared_awaiting_lane_slot",
+  "status": "pr_open",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
   "sha_binding": {
     "verified_source_sha": null,
     "merge_sha": null,
-    "base_sha": "537b35cb",
+    "base_sha": "d82e1c60",
     "sha_type": "pending_merge",
-    "verified_source_note": "Lane not started and no PR opened: `migration` is a singleton lane type and [\"migration\",\"runtime\"] is a forbidden combination in docs/governance/CONCURRENCY_CONFIG.json, while UTV2-1604 is an active `runtime` lane (status in_review, read from docs/06_status/lanes/UTV2-1604.json on branch codex/utv2-1604-parked-mode-scheduler-policy). Work is committed to claude/utv2-1399-fixture-reporting-view off main tip 537b35cb. The authoritative binding is the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "verified_source_note": "Lane initially blocked by UTV2-1604 (runtime, in_review), then by UTV2-1632 (runtime, merged but not yet closed -- a ghost lane whose manifest still read status: started on origin/main after its PR merged). Both cleared; ops:lane-start UTV2-1399 succeeded once UTV2-1632 read status: done. PR #1343 opened from claude/utv2-1399-fixture-reporting-view against main tip d82e1c60. The authoritative binding is the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "bound_at": null
   },
   "verifier": {
@@ -211,11 +212,25 @@
     }
   ],
   "not_closed": [
-    "Lane not started, no PR opened, no merge: migration/runtime forbidden combination is live (UTV2-1604).",
-    "pnpm test:db not run \u2014 outstanding T1 requirement, needs an active lane.",
-    "packages/db/src/database.types.ts not regenerated \u2014 must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges.",
-    "Round-trip reversibility drill not run locally \u2014 no Docker or psql; runs in CI."
+    "pnpm test:db not run locally \u2014 outstanding T1 requirement; satisfied via CI's staging-db-proof job on the PR, not a local run (ci:assert-staging correctly refuses any non-staging target from this host).",
+    "packages/db/src/database.types.ts not regenerated \u2014 must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges. supabase db push itself is reserved to the human operator per docs/05_operations/DB_MIGRATION_WORKFLOW.md; merge alone does not apply it.",
+    "Round-trip reversibility drill not run locally \u2014 no Docker or psql; confirmed the down-script/exemption-registry checks pass locally via migration-reversibility-gate.ts --base origin/main; the scratch-postgres drill itself runs in CI.",
+    "PR merge and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this evidence snapshot."
   ],
+  "sequencing_history": {
+    "note": "Recorded because it materially affected how this lane reached PR: two separate runtime-singleton blocks, one tooling gap, one root-checkout staleness issue.",
+    "events": [
+      "Initially blocked: UTV2-1604 (runtime, in_review) held the singleton slot. Prepared all work read-only per original instructions; did not lane-start.",
+      "UTV2-1604 merged and closed; slot appeared free.",
+      "First ops:lane-start attempt succeeded on the concurrency check but hit 'Branch exists but worktree does not exist' -- the pre-assigned worktree was created via a raw `git worktree add` at a flat custom path, never through ops:lane-start, so worktreePathForBranch()'s canonical nested-path expectation could never be satisfied from within it. Verified this mechanically (no code path exists for existing-branch + zero-worktree adoption with commits preserved) before taking any action, per repeated instruction not to force or fabricate past a governance gate.",
+      "Root cause fixed by the coordinator: removed the flat worktree, deleted the LOCAL branch ref only (origin untouched, verified via ls-remote), making a genuinely fresh ops:lane-start creation possible.",
+      "Second blocker discovered: UTV2-1632 (runtime) had merged but its lane-close had not yet run, so its manifest still read status: started -- a ghost lane occupying the same runtime singleton slot UTV2-1604 had vacated. Verified from origin/main, not asserted from memory. Did not touch UTV2-1632's own worktree.",
+      "UTV2-1632 lane-close completed by a sibling session; root checkout's local main was separately found stale (behind origin by 3 commits including the UTV2-1632 closeout) and fast-forwarded via git pull --ff-only -- sanctioned per CLAUDE.md session-start guidance, non-destructive.",
+      "ops:lane-start succeeded with a minimal file_scope_lock (only files that existed pre-branch, since normalizeFileScopePath requires existence for every non-proof-path entry at admission time); running it from the root checkout left two untracked leftover files there (byte-identical to what it also committed into the new worktree) -- found and removed to restore root-checkout cleanliness.",
+      "The fresh branch's one auto-generated scaffold commit was rebased onto origin's real 4 commits after confirming zero file overlap conflict risk; file_scope_lock and the migration lock were then expanded/re-claimed from within the new worktree.",
+      "Pushed for real and opened PR #1343."
+    ]
+  },
   "governance_finding": {
     "severity": "high",
     "title": "The concurrency governor cannot see lanes whose manifests live only on unmerged branches",
