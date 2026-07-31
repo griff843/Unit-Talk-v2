@@ -12,11 +12,19 @@
   "files_changed": [],
   "file_scope_lock": [
     ".lane/migration-lock.yml",
+    ".ops/sync/UTV2-1399.yml",
+    "db/migrations-rollback/20260731000000_utv2_1399_fixture_excluding_reporting_views.down.sql",
+    "docs/06_status/lanes/UTV2-1399.json",
+    "docs/06_status/proof/UTV2-1399/**",
     "package.json",
-    "packages/db/src/database.types.ts"
+    "packages/db/src/database.types.ts",
+    "scripts/ci/utv2-1399-reporting-view-guard.test.ts",
+    "scripts/generate-types.mjs",
+    "supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1399/evidence.json"
+    "docs/06_status/proof/UTV2-1399/evidence.json",
+    "docs/06_status/proof/UTV2-1399/verification.md"
   ],
   "status": "started",
   "started_at": "2026-07-31T20:52:38.113Z",
