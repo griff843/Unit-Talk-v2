@@ -1,6 +1,6 @@
 # PROOF: UTV2-1594
 
-MERGE_SHA: 1a533cbf0057ab2543813f25f16660c9e2189308
+MERGE_SHA: c08548f1155f011f30a446986949b2b4d5d59b38
 
 That SHA is a real ancestor — the `main` tip this lane branched from and
 measured against, not a merge SHA that does not exist yet. It is rebound to this
@@ -542,6 +542,61 @@ What is deliberately absent: any notion of which comment authors are
 authoritative, any precedence rule between description and amendments, and any
 comment parsing. Those are exactly the decisions UTV2-1547 owns, and guessing
 them here is what the scope guard forbids.
+
+## Post-merge proof repair (E13)
+
+The original PR merged, but the automated post-merge closeout failed truth-check:
+
+```
+[FAIL] R1 runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence
+[FAIL] R2 runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db
+```
+
+This is a confirmed systemic gap (`ops:proof-generate --merge-sha` never
+auto-populates these fields from the CI receipt, even when CI ran a real
+passing DB proof) — the same gate other T1 lanes hit the same day, tracked as
+a separate issue and not fixed here. This lane's own instance was closed via
+the existing governed repair tool (`pnpm ops:proof-repair scaffold|apply`):
+
+- The original PR's own `Writable DB proof (staging only)` CI job had already
+  passed for real (`verify` was green): `pnpm test:db` ran against real staging
+  Supabase, TAP `7/7 pass, 0 fail`.
+- That job's real captured output was harvested verbatim into
+  `evidence.json`'s `runtime_proof.tap_output`, plus `runtime_proof.queries` —
+  the 7 tables `apps/api/src/database-smoke.test.ts` actually reads/writes
+  (`picks`, `submissions`, `pick_lifecycle`, `distribution_outbox`,
+  `distribution_receipts`, `audit_log`, `settlement_records`), each description
+  sourced from the actual test file with line numbers.
+- `runtime_proof.row_counts` — real, current row counts for those same 7
+  tables, queried directly against the staging project the CI receipt names.
+  This lane's own `local.env` has dummy staging credentials, so `pnpm test:db`
+  cannot be re-run locally in this environment; the counts are a live
+  read-only measurement taken after the fact and honestly labeled as such
+  rather than presented as a synchronous snapshot from the original run.
+- Applied with a `--verifier-identity` distinct from the lane manifest's
+  `created_by`, satisfying R3/P10 separation-of-duties.
+- `ops:proof-repair apply` replaces the `verifier` and `runtime_proof` keys in
+  `evidence.json` wholesale rather than merging into them. This lane's
+  original `runtime_proof` legitimately held something else — the OS-process
+  fixture narrative for sections A/C, which have no database surface — and
+  would have been silently discarded by that replacement. It was restored
+  verbatim (checked byte-identical programmatically) under a new
+  `implementation_runtime_evidence` key in the same commit, so nothing
+  authored is lost.
+- Independent review of this repair caught a second, real defect: `sha_binding`
+  was still bound to the pre-merge measurement tip rather than the real PR
+  squash-merge commit — `post-merge-lane-close.yml`'s automated
+  `ops:proof-generate --merge-sha` rebind never actually landed the true merge
+  SHA (a variant of the same systemic gap this repair otherwise works around).
+  `proof-repair apply` cannot fix this itself — it requires `--merge-sha` to
+  match whatever is already bound and refuses to write a merge SHA on its own,
+  by design. Fixed with the tool that does own that field:
+  `pnpm ops:proof-generate --issue UTV2-1594 --merge-sha <real merge SHA>`,
+  dry-run checked first, confirmed to touch only the SHA-anchor fields
+  (`sha_binding`, the `MERGE_SHA:` line) and leave every other authored key
+  byte-identical.
+
+No code changed in the repair; only `docs/06_status/proof/UTV2-1594/evidence.json`.
 
 ## Scope notes
 
