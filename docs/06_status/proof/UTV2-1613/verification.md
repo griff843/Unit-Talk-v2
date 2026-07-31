@@ -1,6 +1,6 @@
 # PROOF: UTV2-1613
 
-MERGE_SHA: 904a62e100eaf9ddb5e1fe60bc72abddad6acd66
+MERGE_SHA: 1a533cbf0057ab2543813f25f16660c9e2189308
 
 <!--
   Pre-merge: this is the implementation commit SHA on this PR's own branch
@@ -383,9 +383,74 @@ $ pnpm lint          # clean
 $ pnpm type-check    # clean
 ```
 
+### 10. Post-merge runtime-proof repair (governed follow-up PR)
+
+PR #1339 merged as `1a533cbf0057ab2543813f25f16660c9e2189308`, but the
+automated post-merge closeout correctly refused to close the lane: this
+bundle's `static_proof` was fully populated (lint, type-check, 195/4081
+tests) but had no `runtime_proof` section at all, so `ops:lane-close`'s
+unconditional T1 gate failed C6/P7/P9/R1/R2 -- exactly as designed. This
+lane's diff (`lane-close.ts`, `lane-close-repair-packet.ts`,
+`lane-manifest.ts`, `reconcile.ts`, `truth-history-audit.ts`) touches no
+database path, but that does not exempt it: **every** pull request in this
+repo runs `ci.yml`'s `staging-db-proof` job, and PR #1339's own head
+(`bda21ecac6c5ae4f17683cddf25bd90bf0ca0c84`) did execute `pnpm test:db`
+against staging, producing a `ci-db-proof-receipt/v2` that was simply never
+folded into this bundle. That omission is corrected here, following the
+identical precedent set by UTV2-1631/PR #1335.
+
+Command:
+
+```text
+$ pnpm ops:proof-generate UTV2-1613 --merge-sha 1a533cbf0057ab2543813f25f16660c9e2189308 --pr https://github.com/griff843/Unit-Talk-v2/pull/1339 --json
+{"ok":true,"code":"proof_generated", ..., "rebound_paths":["docs/06_status/proof/UTV2-1613/verification.md","docs/06_status/proof/UTV2-1613/evidence.json"]}
+
+$ pnpm ops:proof-repair apply --issue UTV2-1613 --merge-sha 1a533cbf0057ab2543813f25f16660c9e2189308 \
+  --runtime-proof-file <harvested-from-CI-receipt>.json \
+  --verifier-identity "github-actions/CI — run 30661777017, job 91259566906 (staging-db-proof, producer) and job 91260945152 (verify, independent receipt verifier)" \
+  --manifest-created-by claude
+{"ok":true,"code":"repaired", ...}
+```
+
+Nothing was re-executed locally -- there are no staging credentials on this
+host, and `ci:assert-staging` correctly refuses outside CI. Every field under
+`runtime_proof` and `verifier` was read back from:
+
+- the `ci-db-proof-receipt/v2` artifact `utv2-1630-db-proof-receipt-30661777017-1`
+  (`gh api repos/griff843/Unit-Talk-v2/actions/artifacts/8805580141/zip`),
+  giving `tap: {tests:7, pass:7, fail:0}`, `exit_code: 0`,
+  `observed_project_ref: xskgrzbteyqdufktjrjx` (staging, not the canonical
+  production ref `zfzdnfwdarxucxtaojxm`), and the seven live
+  `database-smoke.test.ts` case names with their real per-case
+  `duration_ms`;
+- the same job's raw log (`gh api repos/griff843/Unit-Talk-v2/actions/jobs/91259566906/logs`)
+  for the `[seed-staging]` row-count lines (0 reset each for
+  `distribution_receipts`/`distribution_outbox`/`system_runs`; 9/1/6/3/133
+  synthetic rows upserted for `sports`/`cappers`/`market_families`/
+  `selection_types`/`market_types`);
+- the independent `verify` job's log (`91260945152`), which re-ran
+  `scripts/ci/verify-db-proof-receipt.ts` and printed
+  `Verdict: PASS` / `Reason: DB proof verified: run 30661777017 attempt 1 @
+  33fa464cf270c8612f79deb3e2410143a5590d7a, target xskgrzbteyqdufktjrjx,
+  pass=7 fail=0 skipped=0`.
+
+`verifier.identity` names those two CI jobs, not the implementing agent --
+`ops:proof-repair` structurally requires (P10/R3) a verifier identity
+distinct from `manifest.created_by` (`claude`) for exactly this reason: proof
+text cannot show which database a run reached, so the verifier of the
+live-DB claim is the CI job that holds the credential plus the job that
+independently re-derives the receipt binding, not the agent asserting it.
+
+`sha_binding.merge_sha` was rebound via `ops:proof-generate --merge-sha`
+(the pre-existing, narrowly-scoped mechanism `proof-repair.ts`'s own design
+contract requires this repair to defer to) -- `proof-repair apply` never
+writes that field itself, and refuses to proceed if it is absent or
+mismatched.
+
 ## Governance
 
 - No production write, deployment, restart, schema mutation, or row deletion.
 - No direct-main push, no `--admin` merge, no branch-protection change.
 - No fabricated or unmeasured proof: every number above is copied from a
-  command run on this branch.
+  command run on this branch, or read back verbatim from a retained CI
+  artifact/log and cited by run and job ID.
