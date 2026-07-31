@@ -73,20 +73,28 @@ is provably dead.
 
 ASSERTIONS:
 
-1. A dead process holding a slot is reclaimed, with a stated reason, and the
-   next waiter is admitted into the freed slot (E1, fixture 3).
-2. A live verifier is never reclaimed — not when slow, not when its heartbeat
-   lapses, not when its lease expires (E2, fixture 4).
-3. A recycled pid is detected and is not mistaken for the original owner (E3).
-4. Signal, uncaught-exception and normal-exit paths all release the slot (E4).
-5. A waiting process emits periodic progress naming who holds the queue (E5).
-6. An ownership record is interpretable by any process, with no writer-side
-   state (E6).
-7. Four consecutive timeout/resume attempts become one resumable execution
-   history rather than four replays (E7, fixture 1).
-8. Every reachable timeout is deterministic and inside `[5m, 4h]` (E8).
-9. A pre-UTV2-1594 slot record held by a live pid survives the rollout (E9).
-10. `pnpm type-check`, `pnpm lint` and `pnpm test` are green on the branch head.
+- [x] A1. A dead process holding a slot is reclaimed, with a stated reason, and
+      the next waiter is admitted into the freed slot (E1, fixture 3).
+- [x] A2. A live verifier is never reclaimed — not when slow, not when its
+      heartbeat lapses, not when its lease expires (E2, fixture 4).
+- [x] A3. A recycled pid is detected and is not mistaken for the original owner
+      (E3).
+- [x] A4. Signal, uncaught-exception and normal-exit paths all release the slot
+      (E4).
+- [x] A5. A waiting process emits periodic progress naming who holds the queue
+      (E5).
+- [x] A6. An ownership record is interpretable by any process, with no
+      writer-side state (E6).
+- [x] A7. Four consecutive timeout/resume attempts become one resumable
+      execution history rather than four replays (E7, fixture 1).
+- [x] A8. Every reachable timeout is deterministic and inside `[5m, 4h]` (E8).
+- [x] A9. A slot record written by the previous code path, held by a live pid,
+      survives the rollout (E9).
+- [x] A10. `pnpm type-check`, `pnpm lint` and `pnpm test` are green on the
+      branch head (E10).
+- [ ] A11. Section B (canonical PM amendment ingestion) — **not claimed**. It is
+      deliberately out of scope pending the structured PM-decision schema this
+      issue directs coordination with; see "Where section B is left".
 
 EVIDENCE:
 
