@@ -47,10 +47,10 @@
     "docs/06_status/proof/UTV2-1630/evidence.json",
     "docs/06_status/proof/UTV2-1630/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-30T12:50:45.177Z",
-  "heartbeat_at": "2026-07-30T21:32:48.135Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-31T04:42:52.513Z",
+  "closed_at": "2026-07-31T04:42:52.513Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1630-isolated-proof-execution.json",
   "created_by": "claude",
@@ -76,6 +76,20 @@
         "R2",
         "R3"
       ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-31T04:42:39.405Z",
+      "verdict": "pass",
+      "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-31T04:42:50.374Z",
+      "verdict": "pass",
+      "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "failures": [],
       "runner": "ops:lane-close"
     }
   ],
@@ -113,7 +127,7 @@
       "to_issue": "UTV2-1630",
       "at": "2026-07-30T21:20:00Z",
       "authority": "PM directive 2026-07-30 (production-safe CI recovery)",
-      "reason": "PR-triggered job that handed the PRODUCTION service-role key to proof scripts selected by a grep over the changed-file list \u2014 i.e. to arbitrary writable code, on every PR touching settlement/submission/promotion/distribution source. Same defect class as the ci.yml bypass; found by the workflow credential scanner added in this lane. Migrated to staging-ci and gated on ci:assert-staging."
+      "reason": "PR-triggered job that handed the PRODUCTION service-role key to proof scripts selected by a grep over the changed-file list — i.e. to arbitrary writable code, on every PR touching settlement/submission/promotion/distribution source. Same defect class as the ci.yml bypass; found by the workflow credential scanner added in this lane. Migrated to staging-ci and gated on ci:assert-staging."
     },
     {
       "path": ".github/workflows/t1-proof-gate.yml",
