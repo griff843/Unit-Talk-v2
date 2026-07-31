@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1613",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/.worktrees/wt-1613/.out/worktrees/claude__utv2-1613-lane-close-measured-truth",
+  "branch": "claude/utv2-1613-lane-close-measured-truth",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1613.yml",
+    "docs/06_status/lanes/UTV2-1590.json",
+    "docs/06_status/proof/UTV2-1613/evidence.json",
+    "docs/06_status/proof/UTV2-1613/verification.md",
+    "package.json",
+    "scripts/ops/lane-close-repair-packet.test.ts",
+    "scripts/ops/lane-close-repair-packet.ts",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
+    "scripts/ops/lane-manifest.test.ts",
+    "scripts/ops/lane-manifest.ts",
+    "scripts/ops/reconcile.test.ts",
+    "scripts/ops/reconcile.ts",
+    "scripts/ops/truth-history-audit.test.ts",
+    "scripts/ops/truth-history-audit.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1613/verification.md",
+    "docs/06_status/proof/UTV2-1613/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-07-31T12:04:35.220Z",
+  "heartbeat_at": "2026-07-31T12:04:35.220Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1613-lane-close-measured-truth.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/.worktrees/wt-1613/.out/worktrees/claude__utv2-1613-lane-close-measured-truth",
+    "package_install": "required",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
