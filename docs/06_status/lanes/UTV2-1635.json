@@ -24,12 +24,12 @@
     "docs/06_status/proof/UTV2-1635/verification.md",
     "docs/06_status/proof/UTV2-1635/diff-summary.md"
   ],
-  "status": "reopened",
+  "status": "done",
   "started_at": "2026-07-31T12:39:06.080Z",
-  "heartbeat_at": "2026-07-31T20:16:46.834Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-31T21:34:04.245Z",
+  "closed_at": "2026-07-31T21:34:04.245Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1635-resolve-c1-proof-bundles.result.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -40,6 +40,13 @@
       "runner": "manual",
       "source": "github_pr_merge_commit",
       "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1337"
+    },
+    {
+      "checked_at": "2026-07-31T21:34:01.414Z",
+      "verdict": "pass",
+      "merge_sha": "7279ee3977c1945bd6b13c8edc2a1fe57b70c09c",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [
