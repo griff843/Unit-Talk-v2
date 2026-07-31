@@ -7,11 +7,13 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-29T21:55:37Z",
   "sha_binding": {
-    "verified_source_sha": "f74021c9ba714cf407eaffd1070de9a286cea1c1",
+    "verified_source_sha": "9879d1f97f81ca596822b5debf972d784ee1087b",
     "verified_source_note": "Implementation commit on the origin/main-rebased branch containing the shared exact validator, strict environment value preservation, scheduler outcomes, deploy/canary/production propagation, post-start equality assertions, required test wiring, and mutation coverage. Rebased from pre-rebase 8bdb94418cf459dbd21dc9658f08f7f4f3c0b473 onto origin/main; the only conflict was the package.json test:ops script, resolved as a union of main's entries plus this lane's two new suites.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "merge_sha": null
+    "merge_sha": "9879d1f97f81ca596822b5debf972d784ee1087b",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-31T11:59:00.132Z"
   },
   "verifier": {
     "identity": "codex-cli/utv2-1604-parked-mode-scheduler-policy",
