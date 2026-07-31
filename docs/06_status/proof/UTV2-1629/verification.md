@@ -1,9 +1,12 @@
 # PROOF: UTV2-1629
-MERGE_SHA: a6b2e063b3aa4214ff2686d5d870df8366b97a3d
+MERGE_SHA: ae5828c8f2a25801101e77e3a9343cba7e503267
 
 Residual production credentials in pull-request-reachable CI: the three
 exposures UTV2-1630 left standing are closed, and each credential that remains
 records what pins it and what would retire it.
+
+Implementation SHA (measurements were taken against this tree): a6b2e063b3aa4214ff2686d5d870df8366b97a3d
+Squash merge commit on main: ae5828c8f2a25801101e77e3a9343cba7e503267
 
 ## Summary
 

@@ -6,10 +6,13 @@
   "generated_at": "2026-07-30T22:15:00.000Z",
   "implementation_sha": "a6b2e063b3aa4214ff2686d5d870df8366b97a3d",
   "sha_binding": {
-    "verified_source_sha": "a6b2e063b3aa4214ff2686d5d870df8366b97a3d",
+    "verified_source_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
     "current_pr_head_sha": null,
-    "merge_sha": "a6b2e063b3aa4214ff2686d5d870df8366b97a3d",
-    "verified_source_note": "Bound to the last implementation commit on this branch, a real ancestor of HEAD. The measurements below were taken against this tree. Rebound to the squash merge SHA by post-merge-lane-close.yml."
+    "merge_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
+    "verified_source_note": "Bound to the squash merge commit ae5828c8f2a25801101e77e3a9343cba7e503267 on main. The measurements in this bundle were taken against implementation commit a6b2e063b3aa4214ff2686d5d870df8366b97a3d, an ancestor of the merged tree; the merge added only two main-syncs and this SHA rebinding, no change to the measured behaviour. The post-sync test:ops count is recorded separately below.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-31T00:15:08.348Z",
+    "implementation_sha": "a6b2e063b3aa4214ff2686d5d870df8366b97a3d"
   },
   "static_proof": {
     "verify": {
@@ -63,7 +66,10 @@
       "credential": "SUPABASE_SERVICE_ROLE_KEY (production)",
       "defect": "static import of apps/api/src/server.js evaluated the PR's own apps/api and packages/domain code at module load, before --dry-run was parsed",
       "fix": "apps/api imports made dynamic and confined to the non-dry-run path, which no PR-triggered job takes; the resulting 4-file closure pinned to the merge base in full",
-      "pin_extended_from": ["scripts/shadow-scoring-runner.ts", "scripts/ci/assert-unmodified-vs-base.ts"],
+      "pin_extended_from": [
+        "scripts/shadow-scoring-runner.ts",
+        "scripts/ci/assert-unmodified-vs-base.ts"
+      ],
       "pin_extended_to": [
         "scripts/shadow-scoring-runner.ts",
         "scripts/ci/assert-unmodified-vs-base.ts",
@@ -90,11 +96,18 @@
   ],
   "exemption_schema_change": {
     "type": "CredentialExemption",
-    "new_required_fields": ["executesPullRequestCode", "pinnedBy", "privilegeReduction"],
+    "new_required_fields": [
+      "executesPullRequestCode",
+      "pinnedBy",
+      "privilegeReduction"
+    ],
     "rationale": "'it only reads' is a property of the code a job runs, and on a pull_request event that code comes from the PR head. Recording it per exemption forces the distinction to be stated rather than assumed: false is a claim that the credentialed steps run nothing from the checkout; true obliges pinnedBy to name the job's whole runtime closure. privilegeReduction gives each standing privilege a named exit instead of letting it become permanent by being documented.",
     "exemptions_remaining": 3,
     "exemptions_removed": 2,
-    "removed": ["supabase-pr-db-branch.yml::validate", "supabase-pr-db-branch.yml::teardown"]
+    "removed": [
+      "supabase-pr-db-branch.yml::validate",
+      "supabase-pr-db-branch.yml::teardown"
+    ]
   },
   "test_results": {
     "workflow_production_credential_guard": {
@@ -117,7 +130,7 @@
         "tests": 1465,
         "pass": 1465,
         "fail": 0,
-        "note": "The branch was synced with main twice (branch protection requires an up-to-date branch). The second sync conflicted on package.json because both sides extended test:ops. Resolved as a union — this lane's scripts/shadow-scoring-runner.test.ts plus the three suites main added (scripts/ops/readiness-refresh.test.ts, scripts/ci/readiness-ledger-gate.test.ts, scripts/ci/readiness-refresh-workflow.test.ts) — not by taking a side. All four verified present in the merged script."
+        "note": "The branch was synced with main twice (branch protection requires an up-to-date branch). The second sync conflicted on package.json because both sides extended test:ops. Resolved as a union \u2014 this lane's scripts/shadow-scoring-runner.test.ts plus the three suites main added (scripts/ops/readiness-refresh.test.ts, scripts/ci/readiness-ledger-gate.test.ts, scripts/ci/readiness-refresh-workflow.test.ts) \u2014 not by taking a side. All four verified present in the merged script."
       }
     },
     "shadow_scoring_runner": {
@@ -126,7 +139,7 @@
       "pass": 16,
       "fail": 0,
       "skipped": 0,
-      "before": "reported 9 of 12 tests and exited non-zero — importing the module fired main(), which threw on absent credentials and called process.exit(1) mid-suite; the file was omitted from every pnpm test:* script so nothing noticed",
+      "before": "reported 9 of 12 tests and exited non-zero \u2014 importing the module fired main(), which threw on absent credentials and called process.exit(1) mid-suite; the file was omitted from every pnpm test:* script so nothing noticed",
       "fix": "main() runs only when the file is the process entrypoint, compared by resolved real path so a rename, copy, symlink or compiled-.js invocation cannot fail it open"
     }
   },
@@ -139,16 +152,19 @@
     "pick_candidates_policies": 0,
     "market_universe_policies": 0,
     "provider_offers_policies": 0,
-    "consequence": "RLS-on with no policy denies every role lacking BYPASSRLS, so an anon key returns count=0 for exactly the tables queryDailyCounts reads. countTable swallows the permission error and returns 0, and the workflow classifies candidatesScanned=0 as a WARNING — surfacing as 'PASSED (with warnings)'. The check would go silently vacuous rather than fail.",
-    "real_reduction_requires": "a dedicated Postgres role with pg_read_all_data over a direct connection (replacing the PostgREST client), or a PostgREST JWT minted for such a role. Both need CREATE ROLE on production — an orchestrator action, out of scope for this lane.",
+    "consequence": "RLS-on with no policy denies every role lacking BYPASSRLS, so an anon key returns count=0 for exactly the tables queryDailyCounts reads. countTable swallows the permission error and returns 0, and the workflow classifies candidatesScanned=0 as a WARNING \u2014 surfacing as 'PASSED (with warnings)'. The check would go silently vacuous rather than fail.",
+    "real_reduction_requires": "a dedicated Postgres role with pg_read_all_data over a direct connection (replacing the PostgREST client), or a PostgREST JWT minted for such a role. Both need CREATE ROLE on production \u2014 an orchestrator action, out of scope for this lane.",
     "explicitly_rejected": "adding anon SELECT policies to production, which would expose pick data publicly"
   },
   "orphaned_repository_secrets_recorded": {
     "constant": "ORPHANED_REPOSITORY_SECRETS in scripts/ci/workflow-production-credential-guard.ts",
-    "names": ["CI_SUPABASE_ANON_KEY", "CI_SUPABASE_SERVICE_ROLE_KEY"],
+    "names": [
+      "CI_SUPABASE_ANON_KEY",
+      "CI_SUPABASE_SERVICE_ROLE_KEY"
+    ],
     "status": "referenced by no workflow; both point at the staging project, so this is hygiene rather than exposure",
     "action_taken": "recorded in code so the repo refuses to start using them again silently",
-    "action_NOT_taken": "no secret was deleted — secret deletion is an orchestrator-owned action explicitly out of scope for this lane"
+    "action_NOT_taken": "no secret was deleted \u2014 secret deletion is an orchestrator-owned action explicitly out of scope for this lane"
   },
   "lane_authority_allowlist_gap": {
     "failure": "outside_allowed_paths: docs/ops/SUPABASE_PREVIEW_BRANCH_VALIDATION.md is outside allowed paths for lane governance",
@@ -174,5 +190,10 @@
     "no direct-main push, no admin merge, no branch-protection change",
     "no writable DB claim and no pnpm test:db claim"
   ],
-  "required_contexts": ["verify", "Executor Result Validation", "Merge Gate", "P0 Protocol"]
+  "required_contexts": [
+    "verify",
+    "Executor Result Validation",
+    "Merge Gate",
+    "P0 Protocol"
+  ]
 }
