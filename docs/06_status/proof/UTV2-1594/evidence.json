@@ -4,14 +4,14 @@
   "tier": "T1",
   "title": "Execution throughput hardening: resumable execution (A) and crash-safe verify semaphore (C)",
   "generated_at": "2026-07-31T13:05:00.000Z",
-  "status": "in_review",
+  "status": "merged",
   "sha_binding": {
-    "verified_source_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
-    "merge_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
+    "verified_source_sha": "c08548f1155f011f30a446986949b2b4d5d59b38",
+    "merge_sha": "c08548f1155f011f30a446986949b2b4d5d59b38",
     "base_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
-    "sha_type": "base_sha_pending_merge_rebind",
+    "sha_type": "merge_sha",
     "verified_source_note": "Every measurement in this bundle was taken on the lane branch, rebased twice as main moved during the lane's lifetime, finally onto main tip 1a533cbf0057ab2543813f25f16660c9e2189308 (git merge-base HEAD origin/main == origin/main at push time). The second rebase produced one real package.json conflict in test:ops (upstream added lane-close-repair-packet.test.ts and truth-history-audit.test.ts; this lane added verify-semaphore.test.ts and execution-checkpoint.test.ts), resolved programmatically as a verified union -- all entries from both sides present, checked before continuing. The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
-    "bound_at": null
+    "bound_at": "2026-07-31T22:18:32.434Z"
   },
   "verifier": {
     "identity": "claude/utv2-1594-proof-repair (independent harvest of the merged PR's real CI DB-proof receipt)"
@@ -103,7 +103,7 @@
       "finished_at": "2026-07-31T21:37:12.419Z",
       "note": "This lane's own local.env carries dummy staging credentials (SUPABASE_PROJECT_REF=containmentlocal0000, SUPABASE_URL=http://127.0.0.1:1), so pnpm test:db cannot be re-run locally in this environment -- the staging-ci GitHub Actions environment secret is the only credential that can reach xskgrzbteyqdufktjrjx. This proof therefore harvests the actual CI run that already executed pnpm test:db against real staging for this exact PR (#1340), rather than re-running or inventing evidence."
     },
-    "tap_output": "TAP version 13\n# Subtest: database repository bundle persists a submission and settlement when Supabase is configured\nok 1 - database repository bundle persists a submission and settlement when Supabase is configured\n# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\nok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\n# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\nok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\n# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\nok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\n# Subtest: UTV2-883: no duplicate participants for the same external_id and sport\nok 5 - UTV2-883: no duplicate participants for the same external_id and sport\n# Subtest: UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows\nok 6 - UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows\n# Subtest: UTV2-996: correction chain is additive \u2014 original settlement row is not mutated\nok 7 - UTV2-996: correction chain is additive \u2014 original settlement row is not mutated\n1..7\n# tests 7\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 68798.64727\n",
+    "tap_output": "TAP version 13\n# Subtest: database repository bundle persists a submission and settlement when Supabase is configured\nok 1 - database repository bundle persists a submission and settlement when Supabase is configured\n# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\nok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\n# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\nok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\n# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\nok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\n# Subtest: UTV2-883: no duplicate participants for the same external_id and sport\nok 5 - UTV2-883: no duplicate participants for the same external_id and sport\n# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows\nok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows\n# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated\nok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated\n1..7\n# tests 7\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 68798.64727\n",
     "queries": [
       {
         "table": "picks",
@@ -270,7 +270,7 @@
     },
     "runtime_proof": {
       "type": "live_process_demonstration",
-      "note": "Not a database runtime proof \u2014 this lane has no database surface. The runtime behaviour under test is OS process liveness, signal handling and crash cleanup, and it was exercised against real processes rather than stubs.",
+      "note": "Not a database runtime proof — this lane has no database surface. The runtime behaviour under test is OS process liveness, signal handling and crash cleanup, and it was exercised against real processes rather than stubs.",
       "isolation": {
         "semaphore_dir": "temporary directory created with mktemp -d, passed via --dir",
         "live_state_protected": true,
