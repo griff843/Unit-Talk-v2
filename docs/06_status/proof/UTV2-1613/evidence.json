@@ -7,18 +7,16 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-31T12:40:00Z",
   "sha_binding": {
-    "verified_source_sha": "set-by-ci",
+    "verified_source_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
     "verified_source_note": "All receipts below were executed on this branch after rebasing onto origin/main at b5ebdc23. The rebase was clean; package.json's test:ops entry was extended as a union with this lane's two new suites, dropping nothing.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "merge_sha": "set-by-ci",
+    "merge_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
     "sha_type": "merge_sha",
-    "bound_at": "set-by-ci"
+    "bound_at": "2026-07-31T21:39:17.761Z"
   },
   "verifier": {
-    "identity": "claude/utv2-1613-lane-close-measured-truth",
-    "role": "implementation-lane",
-    "independence_note": "Executor-produced mechanical evidence. This is not independent review, PM approval, or production certification."
+    "identity": "github-actions/CI — run 30661777017, job 91259566906 (staging-db-proof, producer) and job 91260945152 (verify, independent receipt verifier)"
   },
   "scope": {
     "runtime_change": false,
@@ -63,7 +61,11 @@
       "runner": "ops:lane-close --repair-merged",
       "source": "github_pr_merge_commit_repair"
     },
-    "canonical_runner_union": ["ops:lane-close", "ops:reconcile", "manual"]
+    "canonical_runner_union": [
+      "ops:lane-close",
+      "ops:reconcile",
+      "manual"
+    ]
   },
   "static_proof": {
     "lint": {
@@ -79,7 +81,12 @@
     "canonical_suites": {
       "command": "npx tsx --test scripts/ops/lane-close.test.ts scripts/ops/lane-close-repair-packet.test.ts scripts/ops/reconcile.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/truth-history-audit.test.ts",
       "status": "PASS",
-      "totals": { "tests": 195, "pass": 195, "fail": 0, "skipped": 0 },
+      "totals": {
+        "tests": 195,
+        "pass": 195,
+        "fail": 0,
+        "skipped": 0
+      },
       "per_suite": {
         "scripts/ops/lane-close.test.ts": 148,
         "scripts/ops/lane-close-repair-packet.test.ts": 19,
@@ -91,7 +98,11 @@
     "full_unit_suite": {
       "command": "pnpm test",
       "status": "PASS",
-      "totals": { "tests": 4081, "pass": 4081, "fail": 0 }
+      "totals": {
+        "tests": 4081,
+        "pass": 4081,
+        "fail": 0
+      }
     }
   },
   "second_fabrication_site": {
@@ -150,7 +161,9 @@
     },
     "2_invalid_proof_bundle_cannot_receive_pass": {
       "status": "PASS",
-      "tests": ["AC2/AC7: UTV2-1592 regression fixture — an invalid proof bundle cannot receive a pass"]
+      "tests": [
+        "AC2/AC7: UTV2-1592 regression fixture — an invalid proof bundle cannot receive a pass"
+      ]
     },
     "3_failure_records_actual_failures": {
       "status": "PASS",
@@ -161,7 +174,9 @@
     },
     "4_pass_only_after_canonical_evaluation": {
       "status": "PASS",
-      "tests": ["AC4: a genuine pass is recorded only when the run executed AND exited 0"]
+      "tests": [
+        "AC4: a genuine pass is recorded only when the run executed AND exited 0"
+      ]
     },
     "5_runner_validates_against_canonical_union": {
       "status": "PASS",
@@ -202,7 +217,9 @@
     },
     "7_utv2_1592_is_a_regression_fixture": {
       "status": "PASS",
-      "tests": ["AC2/AC7: UTV2-1592 regression fixture — an invalid proof bundle cannot receive a pass"]
+      "tests": [
+        "AC2/AC7: UTV2-1592 regression fixture — an invalid proof bundle cannot receive a pass"
+      ]
     },
     "8_historical_certification_cannot_inherit_a_fabricated_pass": {
       "status": "PASS",
@@ -310,5 +327,132 @@
     "branch_protection_changed": false,
     "production_writes": false,
     "unmeasured_claims": false
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required verify context against its own GITHUB_* values",
+    "source_run": {
+      "github_run_id": "30661777017",
+      "github_run_attempt": "1",
+      "github_job": "staging-db-proof",
+      "github_sha_evaluated": "33fa464cf270c8612f79deb3e2410143a5590d7a",
+      "workflow_ref": "griff843/Unit-Talk-v2/.github/workflows/ci.yml@refs/pull/1339/merge",
+      "note": "This run evaluated PR #1339's own head (bda21ecac6c5ae4f17683cddf25bd90bf0ca0c84) merged against main's tip at CI time (github_sha_evaluated). That PR squash-merged as 1a533cbf0057ab2543813f25f16660c9e2189308, the merge_sha this evidence bundle is bound to."
+    },
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "relation_to_this_lane": "This lane (UTV2-1613) changes no database path -- scripts/ops/lane-close.ts, lane-close-repair-packet.ts, lane-manifest.ts, reconcile.ts, truth-history-audit.ts are pure ops-script/manifest logic. The runtime evidence below is not evidence FOR the truth-record fix; it is the live-DB measurement the T1 gate requires unconditionally, produced by CI on this lane's own PR head and omitted from the original evidence bundle.",
+    "queries": [
+      {
+        "table": "submissions/settlements (repository bundle)",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1",
+        "duration_ms": 17421.369446
+      },
+      {
+        "table": "distribution_outbox/pick_lifecycle",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2",
+        "duration_ms": 17182.176384
+      },
+      {
+        "table": "distribution_outbox/distribution_receipts/pick_lifecycle/audit",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3",
+        "duration_ms": 18300.002112
+      },
+      {
+        "table": "settlement_records/pick_lifecycle/audit",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4",
+        "duration_ms": 17842.899105
+      },
+      {
+        "table": "participants",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "ok 5",
+        "duration_ms": 133.171345
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+        "result": "ok 6",
+        "duration_ms": 18786.617431
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated",
+        "result": "ok 7",
+        "duration_ms": 17467.451012
+      }
+    ],
+    "queries_note": "The seven live cases pnpm test:db executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential, on PR #1339's own head. Transcribed verbatim from the ci-db-proof-receipt/v2 artifact (utv2-1630-db-proof-receipt-30661777017-1, downloaded via gh api repos/griff843/Unit-Talk-v2/actions/artifacts/8805580141/zip) captured_output field, whose output_sha256 (af5109cec68d5e9ab021be1d48def97cac6c426fa6a44391f67313c23ca435bf) the independent verify job re-derived. Total wall time for the seven cases was 107705.64291 ms per the TAP footer (# duration_ms).",
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "reset (0 row(s) deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "reset (0 row(s) deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 0,
+        "status": "reset (0 row(s) deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "synthetic row(s) upserted"
+      }
+    ],
+    "row_counts_note": "From the [seed-staging] lines in the same staging-db-proof job (91259566906), run immediately before pnpm test:db in the same job.",
+    "row_counts_captured_at": "2026-07-31T20:09:53Z",
+    "receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "github_run_id": "30661777017",
+      "github_job": "staging-db-proof",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "output_sha256": "af5109cec68d5e9ab021be1d48def97cac6c426fa6a44391f67313c23ca435bf",
+      "receipt_sha256": "2c68d9579c3d1bf15a193249c6264447891a9d23af56873a0aec777ae51f5bc0",
+      "verify_job_verdict": "PASS",
+      "verify_job_reason": "DB proof verified: run 30661777017 attempt 1 @ 33fa464cf270c8612f79deb3e2410143a5590d7a, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "verify_job_id": "91260945152"
+    },
+    "harvest_note": "Read back on 2026-07-31 from the retained artifacts of run 30661777017 -- the staging-db-proof job log (91259566906) and the ci-db-proof-receipt/v2 artifact. Nothing was re-run: a re-run would be a different measurement wearing this merge SHA's name. No pnpm test:db was executed on this host -- there are no staging credentials available here, and ci:assert-staging correctly refuses outside CI."
   }
 }
