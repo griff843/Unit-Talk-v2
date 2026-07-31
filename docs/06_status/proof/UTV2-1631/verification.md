@@ -1,6 +1,6 @@
 # PROOF: UTV2-1631
 
-MERGE_SHA: ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d
+MERGE_SHA: 91826943f4e53a15cdcb815a43b6c3ffb7f38ced
 
 That SHA is a real ancestor — the `main` tip this lane branched from and
 measured against, not a merge SHA that does not exist yet. It is rebound to this
@@ -247,7 +247,20 @@ SHA — resolvable only from GitHub's retained PR commit list, not locally; that
 was not resolved). Every destroyed version is recoverable via
 `git show <sha>^:<path>`. No other lane's proof is repaired by this PR.
 
+## Known imprecision, recorded rather than glossed
+
+`evidence.json` rebinding is **value**-preserving, not **byte**-preserving. It
+round-trips through `JSON.parse` / `JSON.stringify(parsed, null, 2)`, so every
+key and every value survives exactly, but hand-authored formatting (compact
+one-line objects, for instance) is normalized to the 2-space style. This is
+long-standing behaviour of `rebindEvidenceJsonSha`, not something this lane
+introduced, and no measurement is altered by it — but the byte-identical claim
+above is precise only for the markdown artifacts, and it would be wrong to let
+it read as covering the JSON layout too. Observed live when this bundle was
+rebound to its own merge SHA: values identical, indentation reflowed.
+
+
 ## Merge SHA Binding
 
-Merge SHA: `ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d`
-PR: rebound post-merge by `post-merge-lane-close.yml`
+Merge SHA: `91826943f4e53a15cdcb815a43b6c3ffb7f38ced`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1332

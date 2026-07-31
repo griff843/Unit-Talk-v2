@@ -4,14 +4,14 @@
   "tier": "T1",
   "title": "proof-generate must preserve measured proof, not replace it with a scaffold",
   "generated_at": "2026-07-31T05:05:00.000Z",
-  "status": "in_review",
+  "status": "merged",
   "sha_binding": {
-    "verified_source_sha": "ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d",
-    "merge_sha": "ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d",
+    "verified_source_sha": "91826943f4e53a15cdcb815a43b6c3ffb7f38ced",
+    "merge_sha": "91826943f4e53a15cdcb815a43b6c3ffb7f38ced",
     "base_sha": "ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d",
     "sha_type": "merge_sha",
     "verified_source_note": "Every measurement in this bundle was taken on the branch built from main tip ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d, which is a real ancestor. The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha -- a rebind that this lane makes non-destructive.",
-    "bound_at": "2026-07-31T05:05:00.000Z"
+    "bound_at": "2026-07-31T05:36:22.778Z"
   },
   "verifier": {
     "identity": "claude/utv2-1631-proof-preservation (implementing agent) + GitHub Actions required contexts on the PR head",
@@ -19,9 +19,18 @@
     "note": "This lane touches no database path. No pnpm test:db claim is made and none is applicable."
   },
   "static_proof": {
-    "type_check": { "command": "pnpm type-check", "status": "PASS" },
-    "lint": { "command": "pnpm lint", "status": "PASS" },
-    "verify": { "command": "pnpm verify", "status": "see verification.md" },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "status": "see verification.md"
+    },
     "unit_tests": {
       "command": "npx tsx --test scripts/ops/proof-generate.test.ts",
       "tests": 67,
@@ -40,16 +49,34 @@
     "target": "copy of docs/06_status/proof/UTV2-1628/ (7 queries, 8 row_counts, real verifier.identity)",
     "command": "pnpm ops:proof-generate UTV2-9999 --merge-sha ad11db4f4ce54b60ad2f9b4f1bec81e6e4a95a72 --json",
     "pre_fix": {
-      "verification_md_bytes": { "before": 19624, "after": 850 },
-      "diff_summary_md_bytes": { "before": 10515, "after": 730 },
-      "evidence_json_bytes": { "before": 18742, "after": 18742 },
+      "verification_md_bytes": {
+        "before": 19624,
+        "after": 850
+      },
+      "diff_summary_md_bytes": {
+        "before": 10515,
+        "after": 730
+      },
+      "evidence_json_bytes": {
+        "before": 18742,
+        "after": 18742
+      },
       "exit_code": 0,
       "reported_as": "stale_paths_replaced"
     },
     "post_fix": {
-      "verification_md_bytes": { "before": 19624, "after": 19624 },
-      "diff_summary_md_bytes": { "before": 10515, "after": 10515 },
-      "evidence_json_bytes": { "before": 18742, "after": 18742 },
+      "verification_md_bytes": {
+        "before": 19624,
+        "after": 19624
+      },
+      "diff_summary_md_bytes": {
+        "before": 10515,
+        "after": 10515
+      },
+      "evidence_json_bytes": {
+        "before": 18742,
+        "after": 18742
+      },
       "exit_code": 0,
       "reported_as": "preserved_paths + rebound_paths",
       "lines_changed": 6,
@@ -58,8 +85,16 @@
   },
   "both_directions": {
     "method": "origin/main:scripts/ops/proof-generate.ts restored verbatim alongside the fixed implementation; the new destructive-mutation assertions run against it.",
-    "pre_fix_result": { "tests": 6, "pass": 0, "fail": 6 },
-    "post_fix_result": { "tests": 67, "pass": 67, "fail": 0 }
+    "pre_fix_result": {
+      "tests": 6,
+      "pass": 0,
+      "fail": 6
+    },
+    "post_fix_result": {
+      "tests": 67,
+      "pass": 67,
+      "fail": 0
+    }
   },
   "scaffold_audit": {
     "document": "docs/06_status/proof/UTV2-1631/proof-scaffold-audit.md",
