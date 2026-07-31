@@ -1,6 +1,6 @@
 # PROOF: UTV2-1632
 
-MERGE_SHA: 8fa7fd6b55f3f835a74c7753b54332125ca509ab
+MERGE_SHA: 5aee608a5c7f30539bcb94ffb8e56e9c0f5ad1bd
 
 That SHA is this lane's implementation commit — a real, reachable ancestor of
 the PR head, and the commit every measurement below was taken against. This
