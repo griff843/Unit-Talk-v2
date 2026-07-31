@@ -1,13 +1,16 @@
 # PROOF: UTV2-1399 — reversible, fixture-excluding production reporting view
 
-MERGE_SHA: PENDING_LANE_SLOT
+MERGE_SHA: PENDING_MERGE
 
-> **Lane status: PREPARED, NOT STARTED.** `migration` is a singleton lane type
-> and `["migration","runtime"]` is a forbidden combination in
-> `docs/governance/CONCURRENCY_CONFIG.json`. UTV2-1604 is an active `runtime`
-> lane (`status: in_review`, verified from its branch manifest). This lane was
-> therefore NOT started and no PR was opened. Every measurement below is real
-> and was taken read-only against production; only the lane slot is blocked.
+> **Lane status: STARTED, PR OPEN.** `migration` is a singleton lane type and
+> `["migration","runtime"]` is a forbidden combination in
+> `docs/governance/CONCURRENCY_CONFIG.json`. The lane was initially blocked by
+> UTV2-1604 (`runtime`, in_review) and then by UTV2-1632 (`runtime`, merged but
+> not yet closed — a ghost lane). Both cleared; `ops:lane-start UTV2-1399`
+> succeeded once UTV2-1632's manifest read `status: done` on `origin/main`.
+> PR: https://github.com/griff843/Unit-Talk-v2/pull/1343. Branch
+> `claude/utv2-1399-fixture-reporting-view`. Every measurement below is real
+> and was taken read-only against production before the lane slot opened.
 > `MERGE_SHA` is bound post-merge by `post-merge-lane-close.yml` via
 > `ops:proof-generate --merge-sha`.
 
@@ -495,3 +498,41 @@ class `ci` only. The 6 `qa_demo` picks are the **sole** source of all 16
 mutate a table the repo cannot replay from scratch. Two independent problems
 intersect on exactly those 6 rows; hold them out of deletion and exclude them
 from reporting only.
+
+### 14. Sequencing history — how this lane actually reached PR
+
+Recorded because it materially affected the path here: two separate runtime-singleton
+blocks and one tooling gap, not one.
+
+1. Initially blocked by UTV2-1604 (`runtime`, in_review). Did all preparation
+   read-only per original instructions; did not lane-start.
+2. UTV2-1604 merged and closed; slot appeared free.
+3. First `ops:lane-start` attempt passed the concurrency check but hit
+   `Branch exists but worktree does not exist; Phase 1 fails closed` —
+   the pre-assigned worktree was created via a raw `git worktree add` at a flat
+   custom path, never through `ops:lane-start`, so `worktreePathForBranch()`'s
+   canonical nested-path expectation could never be satisfied from within it.
+   Verified mechanically (no code path exists for "existing branch + zero
+   worktrees, adopt with commits preserved") before taking any action.
+4. Root cause fixed: removed the flat worktree, deleted the **local** branch
+   ref only (origin untouched, verified via `ls-remote`), enabling a genuinely
+   fresh `ops:lane-start` creation.
+5. Second blocker: UTV2-1632 (`runtime`) had merged but its lane-close had not
+   yet run — a **ghost lane** (manifest still read `status: started` on
+   `origin/main` after merge) occupying the same singleton slot UTV2-1604 had
+   vacated. Verified from `origin/main`, not asserted from memory.
+6. UTV2-1632's lane-close completed by a sibling session. Root checkout's
+   local `main` was separately found stale (3 commits behind `origin`,
+   including that closeout) and fast-forwarded via `git pull --ff-only` —
+   sanctioned per `CLAUDE.md` session-start guidance, non-destructive.
+7. `ops:lane-start` succeeded with a **minimal** `file_scope_lock` (only files
+   that existed pre-branch — `normalizeFileScopePath` requires existence for
+   every non-proof-path entry at admission time). Running it from the root
+   checkout left two untracked leftover files there (`docs/06_status/lanes/UTV2-1399.json`,
+   `.ops/sync/UTV2-1399.yml`), byte-identical to what it also committed into
+   the new worktree — found and removed to restore root-checkout cleanliness.
+8. The fresh branch's one auto-generated scaffold commit was rebased onto
+   `origin`'s real 4 commits after confirming zero file-overlap conflict risk.
+   `file_scope_lock` was then expanded and the migration lock re-claimed from
+   within the new worktree.
+9. Pushed for real, opened PR #1343.
