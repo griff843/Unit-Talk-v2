@@ -107,8 +107,12 @@
   "reversibility": {
     "mechanism": "single schema",
     "objects_created": {
-      "schemas": ["reporting"],
-      "functions": ["reporting.pick_fixture_reason(jsonb,text,text,text)"],
+      "schemas": [
+        "reporting"
+      ],
+      "functions": [
+        "reporting.pick_fixture_reason(jsonb,text,text,text)"
+      ],
       "views": [
         "reporting.picks",
         "reporting.excluded_picks",
@@ -134,7 +138,10 @@
     "round_trip_drill_note": "No Docker or psql available locally. migration-reversibility-gate.yml runs the drill on scratch postgres:16. The migration's fail-closed partition guard is conditioned on v_raw > 0 so a replay against an empty database does not abort -- a defect caught and fixed before commit."
   },
   "static_proof": {
-    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
     "lint": {
       "command": "npx eslint scripts/ci/utv2-1399-reporting-view-guard.test.ts scripts/generate-types.mjs",
       "status": "PASS"
@@ -182,7 +189,7 @@
   },
   "adjacent_findings": [
     {
-      "topic": "Live Schema Parity — 78 unauthorized missing_in_expected findings",
+      "topic": "Live Schema Parity \u2014 78 unauthorized missing_in_expected findings",
       "status": "investigated_and_recorded_not_fixed",
       "blocks_this_lane": false,
       "cause": "command_center_game_threads and command_center_delivery_mappings exist on live but have no CREATE TABLE anywhere in supabase/migrations/, supabase/migrations_archive/, the baseline dump, or db/migrations-rollback/. Entirely absent from the ledger, not present-but-drifted. Created out-of-band after the UTV2-1274 baseline.",
@@ -205,14 +212,46 @@
   ],
   "not_closed": [
     "Lane not started, no PR opened, no merge: migration/runtime forbidden combination is live (UTV2-1604).",
-    "pnpm test:db not run — outstanding T1 requirement, needs an active lane.",
-    "packages/db/src/database.types.ts not regenerated — must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges.",
-    "Round-trip reversibility drill not run locally — no Docker or psql; runs in CI."
+    "pnpm test:db not run \u2014 outstanding T1 requirement, needs an active lane.",
+    "packages/db/src/database.types.ts not regenerated \u2014 must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges.",
+    "Round-trip reversibility drill not run locally \u2014 no Docker or psql; runs in CI."
   ],
   "governance_finding": {
     "severity": "high",
     "title": "The concurrency governor cannot see lanes whose manifests live only on unmerged branches",
     "detail": "scripts/ops/shared.ts readAllManifests() reads only the local filesystem docs/06_status/lanes/*.json. UTV2-1604's manifest exists solely on its PR branch codex/utv2-1604-parked-mode-scheduler-policy and is therefore invisible from any other checkout. Running `ops:lane-start UTV2-1399` would have been MECHANICALLY ADMITTED -- the governor would have seen only two governance lanes and raised no forbidden_combination violation -- while SUBSTANTIVELY violating the [\"migration\",\"runtime\"] rule. Four of the six currently active worktrees (UTV2-1594, 1613, 1624, 1632) likewise have no committed manifest, so the governor is blind to most of the live board.",
     "action_taken": "Did not lane-start. The mechanical loophole was not used; the substantive rule was honoured. Recommend a governor change that resolves active lanes from open PRs / remote branches rather than the local working tree alone."
+  },
+  "corrected_inventory": {
+    "artifact": "docs/06_status/proof/UTV2-1399/corrected-inventory.json",
+    "supersedes": ".out/fixture-cleanup-packet/inventory.json",
+    "authorizes_deletion": false,
+    "relationship_to_packet": "strict superset \u2014 +31 ids, 0 removed",
+    "delta_is_classifier_correction_not_data_drift": {
+      "packet_published_sha256": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
+      "recomputed_sha256_2026_07_31": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
+      "match": true
+    },
+    "sha256_fixture_v2": "618ca94a27d7d033089b18adaf3ff499c2a296325b9e170d748bab20df06796d",
+    "sha256_legitimate_v2": "27b7bf563f0b2b29ab3d52c431df36a4d775c5f4fb20b6fda108cd6db1886b2e",
+    "counts": {
+      "picks_total": 107858,
+      "fixture_v1": 100247,
+      "fixture_v2": 100278,
+      "legitimate_v1": 7611,
+      "legitimate_v2": 7580,
+      "newly_classified": 31,
+      "removed": 0
+    },
+    "exclusion_classes": {
+      "ci": 100270,
+      "qa_demo": 6,
+      "junk": 2
+    },
+    "packet_figures_now_provably_wrong": [
+      "relationships.md: pick_offer_snapshots fixture-reachable 0 -> actually 20",
+      "relationships.md: command_center_delivery_mappings fixture-reachable 0 -> actually 16"
+    ],
+    "headline_recommendation": "Scope any future deletion to class `ci` only. The 6 qa_demo picks are the sole source of all 16 command_center_delivery_mappings rows, and that table has no CREATE TABLE in the migration ledger \u2014 deleting them would mutate a table the repo cannot replay. Hold them out of deletion; exclude from reporting only."
   }
 }
