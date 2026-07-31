@@ -159,8 +159,15 @@ subdirectory beside the untouched original bundle.
 ```text
 pnpm type-check    PASS   (ops:preflight check PB1 on this branch)
 pnpm ci:sync-check PASS    after adding .ops/sync/UTV2-1635.yml
+pnpm verify        NOT RUN locally -- see below; the required `verify` CI context is the authoritative result
 pnpm test:db       NOT RUN  no live-database claim is made by this lane
 ```
+
+`pnpm verify` was not run locally: it invokes `pnpm test:db`, which fails closed in a
+developer checkout under the `ci:assert-staging` guard, and this worktree holds no
+staging credential. This lane does not claim a local `pnpm verify` pass -- only the
+required `verify` GitHub check on this head, which is a genuinely different execution
+(staging-credentialed CI) and is not being described as if it were a local run.
 
 ## Live-database gate
 
@@ -172,4 +179,8 @@ credential. The authoritative live-database evidence for this head is the requir
 
 ## R-level
 
-No R-level rules triggered: no source code, migrations, or workflow YAML changed.
+Checked via `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
+semantics: no R-level rules triggered, because no source code, migrations, or workflow
+YAML changed -- only Markdown and JSON under `docs/06_status/proof/` and the lane
+manifest/sync file. The command itself was not additionally invoked locally; the required
+`R-Level Compliance Check` CI context on this PR is the authoritative result.
