@@ -418,3 +418,61 @@ test('mutations on a missing checkpoint return null instead of inventing one', (
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ── a killed runner must not leave a dangling attempt behind ────────────────
+
+test('an attempt left open by a killed runner is closed as silence when the next attempt starts', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1594';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    // Attempt 1 opens and the runner is killed before it can call finishAttempt.
+    beginAttempt({ issueId, timeoutPolicy, dir });
+    recordPhaseComplete(issueId, 'orient', 'orientation complete', { dir });
+
+    const second = beginAttempt({ issueId, timeoutPolicy, dir });
+    const first = second.checkpoint.attempts.find((a) => a.attempt === 1);
+    assert.ok(first);
+    assert.notEqual(first.ended_at, null, 'a dangling attempt must not stay open forever');
+    assert.equal(first.outcome, 'silent_no_heartbeat', 'a runner that vanished is silence, not success');
+    assert.match(first.reason ?? '', /never reported an outcome/);
+    assert.equal(first.phase_at_end, 'plan');
+
+    const openAttempts = second.checkpoint.attempts.filter((a) => a.ended_at === null);
+    assert.equal(openAttempts.length, 1, 'exactly one attempt may be in flight');
+    assert.equal(openAttempts[0]?.attempt, 2);
+    // Progress from the killed attempt is still carried forward.
+    assert.deepEqual(second.resume.skipped_phases, ['orient']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('liveness describes the attempt in flight, not an older dangling one', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1594';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const first = beginAttempt({ issueId, timeoutPolicy, dir });
+
+    // Force a second open attempt alongside the first, the shape a killed
+    // runner used to leave behind.
+    const forced = {
+      ...first.checkpoint,
+      attempt: 2,
+      attempts: [
+        { ...first.checkpoint.attempts[0]!, attempt: 1 },
+        { ...first.checkpoint.attempts[0]!, attempt: 2, ended_at: null, outcome: null },
+      ],
+    };
+    writeCheckpoint(forced, dir);
+
+    const verdict = classifyCheckpointLiveness(readCheckpoint(issueId, dir), {
+      now: new Date(Date.parse(forced.heartbeat_at) + 1_000),
+    });
+    assert.equal(verdict.state, 'active');
+    assert.match(verdict.reason, /attempt 2/, 'liveness must report the latest open attempt, not the first');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

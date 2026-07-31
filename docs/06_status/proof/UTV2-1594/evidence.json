@@ -20,8 +20,13 @@
     "live_process_note": "Fixtures 3 and 4 and the PID-reuse case were demonstrated against real OS processes (spawn, SIGKILL, SIGTERM, /proc start-time probes) in an isolated temp semaphore directory passed with --dir. The live .out/ops/preflight/full-verify-semaphore/ state used by five concurrently running sibling lanes was never a test target and was confirmed free and untouched after the demonstration."
   },
   "scope": {
-    "implemented": ["A: resumable execution", "C: crash-safe full-verify semaphore"],
-    "deliberately_not_implemented": ["B: canonical PM amendment ingestion"],
+    "implemented": [
+      "A: resumable execution",
+      "C: crash-safe full-verify semaphore"
+    ],
+    "deliberately_not_implemented": [
+      "B: canonical PM amendment ingestion"
+    ],
     "b_deferral_reason": "The issue directs coordination with UTV2-1547's pm-decision/v1 schema rather than creating a second incompatible one. That schema has not landed, so implementing B here would either duplicate or pre-empt it. Original fixture 2 (a PM correction consumed on resume) is therefore not claimed.",
     "b_seam": [
       "codex-exec.ts composes the resume brief at a single point before the spawn (readCheckpoint -> buildResumeBrief -> buildCodexPrompt(packet, resumeBrief)); buildCodexPrompt takes the brief as a parameter, so an amendment brief is a second argument at the same call site.",
@@ -32,8 +37,14 @@
     "b_deliberately_absent": "No notion of authoritative comment authors, no precedence rule between description and amendments, and no comment parsing. Those are the decisions UTV2-1547 owns."
   },
   "static_proof": {
-    "type_check": { "command": "pnpm type-check", "status": "PASS" },
-    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
     "full_test_suite": {
       "command": "pnpm test",
       "status": "PASS",
@@ -46,15 +57,15 @@
     "unit_tests": [
       {
         "command": "npx tsx --test scripts/ops/verify-semaphore.test.ts",
-        "tests": 36,
-        "pass": 36,
+        "tests": 40,
+        "pass": 40,
         "fail": 0,
         "skipped": 0
       },
       {
         "command": "npx tsx --test scripts/ops/execution-checkpoint.test.ts",
-        "tests": 21,
-        "pass": 21,
+        "tests": 23,
+        "pass": 23,
         "fail": 0,
         "skipped": 0
       },
@@ -76,7 +87,7 @@
   },
   "runtime_proof": {
     "type": "live_process_demonstration",
-    "note": "Not a database runtime proof — this lane has no database surface. The runtime behaviour under test is OS process liveness, signal handling and crash cleanup, and it was exercised against real processes rather than stubs.",
+    "note": "Not a database runtime proof \u2014 this lane has no database surface. The runtime behaviour under test is OS process liveness, signal handling and crash cleanup, and it was exercised against real processes rather than stubs.",
     "isolation": {
       "semaphore_dir": "temporary directory created with mktemp -d, passed via --dir",
       "live_state_protected": true,
@@ -159,12 +170,34 @@
         "name": "four consecutive timeout/resume attempts become one resumable execution history",
         "method": "Four attempts opened and closed with outcome timed_out, each completing one phase, asserted end to end.",
         "observed": {
-          "checkpoint_files": ["UTV2-1590.json"],
+          "checkpoint_files": [
+            "UTV2-1590.json"
+          ],
           "attempts": 4,
-          "attempt_start_phases": ["orient", "plan", "implement", "verify"],
-          "attempt_outcomes": ["timed_out", "timed_out", "timed_out", "timed_out"],
-          "completed_phases": ["orient", "plan", "implement", "verify"],
-          "completed_phase_credited_to_attempt": [1, 2, 3, 4],
+          "attempt_start_phases": [
+            "orient",
+            "plan",
+            "implement",
+            "verify"
+          ],
+          "attempt_outcomes": [
+            "timed_out",
+            "timed_out",
+            "timed_out",
+            "timed_out"
+          ],
+          "completed_phases": [
+            "orient",
+            "plan",
+            "implement",
+            "verify"
+          ],
+          "completed_phase_credited_to_attempt": [
+            1,
+            2,
+            3,
+            4
+          ],
           "findings_retained": 4,
           "findings_recomputed": 0,
           "fifth_attempt_would_resume_at": "closeout",
@@ -175,7 +208,11 @@
     ],
     "timeout_policy": {
       "policy_id": "utv2-1594-exec-timeout-v1",
-      "inputs": ["tier", "reasoning_effort", "phase"],
+      "inputs": [
+        "tier",
+        "reasoning_effort",
+        "phase"
+      ],
       "floor_ms": 300000,
       "hard_cap_ms": 14400000,
       "combinations_asserted_in_bounds": 105,
@@ -191,7 +228,12 @@
     },
     "silence_handling": {
       "principle": "silence is never success",
-      "outcomes": ["EXECUTION_TIMED_OUT", "EXECUTION_SILENT", "EXECUTION_FAILED", "EXECUTION_CANCELLED"],
+      "outcomes": [
+        "EXECUTION_TIMED_OUT",
+        "EXECUTION_SILENT",
+        "EXECUTION_FAILED",
+        "EXECUTION_CANCELLED"
+      ],
       "unit_assertions": [
         "a silent attempt is reported as silent, never as progress",
         "an unreadable heartbeat counts as silence rather than as liveness",
@@ -273,5 +315,54 @@
   "operator_commands_added": {
     "pnpm ops:verify-slots": "who holds each slot, age, heartbeat, reason; `reap` for a safe pass that removes only provably dead owners; --json for machine-readable output; --dir to target an isolated semaphore",
     "pnpm ops:exec-checkpoint": "status | resume-brief | heartbeat | phase-complete | finding | pending | cancel for a lane's durable execution checkpoint"
+  },
+  "self_review": {
+    "id": "E12",
+    "summary": "Reviewing this lane's own diff before certifying it surfaced three ways the same failure class could have survived inside the fix itself. Both were fixed and checked in both directions.",
+    "findings": [
+      {
+        "gap": "readSemaphoreStatus and reapVerifySlots iterated `slot < maxConcurrent`, so lowering UNIT_TALK_FULL_VERIFY_CONCURRENCY from 2 to 1 left a corpse in slot-1 that nothing would ever inspect again -- never listed, never reclaimed.",
+        "why_it_matters": "That is 'a dead owner holds something forever', relocated inside the fix.",
+        "fix": "Both functions now scan the configured range union any slot-N directory actually present on disk."
+      },
+      {
+        "gap": "release() used `if (current && current.operation_id !== operationId) return;`, so a MISSING record fell through to the delete. The one window in which the record can be missing is between another process's mkdirSync(slotPath) and its own record write.",
+        "why_it_matters": "That path could drop a slot out from under a verify that was starting at that instant -- the exact invariant this lane exists to protect.",
+        "fix": "Release now requires positive ownership (`current?.operation_id !== operationId`). A directory orphaned by this branch classifies as corrupt_orphan past the write grace and is reclaimed normally, so it is not a leak."
+      },
+      {
+        "gap": "beginAttempt appended a new attempt without closing any prior one, and classifyCheckpointLiveness took the FIRST open attempt. A codex-exec killed before it could call finishAttempt left a dangling open record, and the next run's liveness check described that stale attempt instead of the run in flight.",
+        "why_it_matters": "The lane exists because long-running work loses progress when stopped abruptly; this session was itself stopped abruptly mid-implementation, and the defect it exposed in this lane's own code was the same shape as the defect the lane was opened to fix.",
+        "fix": "beginAttempt closes any dangling attempt as silent_no_heartbeat -- the failure it actually was, never success -- and liveness takes the LAST open attempt. Progress recorded by the killed attempt is still carried forward."
+      }
+    ],
+    "both_directions": {
+      "method": "The four new assertions were run against the pre-fix implementation and then against the fixed one.",
+      "pre_fix": {
+        "fail": [
+          "37 a slot above the configured concurrency is still reported, not orphaned forever",
+          "38 a dead slot above the configured concurrency is reclaimed rather than leaked",
+          "40 release requires positive ownership: a slot mid-acquire by someone else is left alone",
+          "22 an attempt left open by a killed runner is closed as silence when the next attempt starts",
+          "23 liveness describes the attempt in flight, not an older dangling one"
+        ],
+        "pass": [
+          "39 a LIVE slot above the configured concurrency is still not reclaimed"
+        ]
+      },
+      "post_fix": {
+        "verify_semaphore": {
+          "tests": 40,
+          "pass": 40,
+          "fail": 0
+        },
+        "execution_checkpoint": {
+          "tests": 23,
+          "pass": 23,
+          "fail": 0
+        }
+      },
+      "honest_note": "Assertion 39 passes in both directions BY CONSTRUCTION and is not counted as a regression test: pre-fix the slot was not scanned at all, so nothing was reaped either. It exists to stop the widened scan from widening what may be REAPED -- a guard against the fix over-reaching, which is the specific way this change could have hurt a live verifier."
+    }
   }
 }

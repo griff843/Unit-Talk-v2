@@ -571,6 +571,34 @@ export function reapSlot(dir: string, view: SemaphoreSlotView, reapedBy: { pid: 
   return record;
 }
 
+/**
+ * Every slot number that must be considered: the configured range, plus any
+ * higher-numbered slot directory still on disk.
+ *
+ * Without the second half, lowering `UNIT_TALK_FULL_VERIFY_CONCURRENCY` from 2
+ * to 1 would make a corpse in `slot-1` permanently invisible — never listed by
+ * the operator command and never reclaimed, because nothing would ever look at
+ * it again. That is the same "a dead owner holds something forever" failure
+ * this module exists to remove, just relocated.
+ */
+function slotNumbers(dir: string, maxConcurrent: number): number[] {
+  const numbers = new Set<number>();
+  for (let slot = 0; slot < maxConcurrent; slot += 1) {
+    numbers.add(slot);
+  }
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const match = entry.isDirectory() ? /^slot-(\d+)$/.exec(entry.name) : null;
+      if (match) {
+        numbers.add(Number.parseInt(match[1]!, 10));
+      }
+    }
+  } catch {
+    // Directory does not exist yet; the configured range is the whole story.
+  }
+  return [...numbers].sort((left, right) => left - right);
+}
+
 /** Safe reap pass over every slot: removes only provably dead/expired owners. */
 export function reapVerifySlots(
   options: { dir?: string; maxConcurrent?: number; ctx?: Partial<ClassifyContext> } = {},
@@ -581,7 +609,7 @@ export function reapVerifySlots(
     return [];
   }
   const reaped: ReapRecord[] = [];
-  for (let slot = 0; slot < maxConcurrent; slot += 1) {
+  for (const slot of slotNumbers(dir, maxConcurrent)) {
     const view = inspectSlot(dir, slot, options.ctx);
     const record = reapSlot(dir, view, { pid: process.pid, operation_id: null });
     if (record) {
@@ -731,7 +759,9 @@ export function readSemaphoreStatus(
   const dir = options.dir ?? verifySemaphoreDir();
   const maxConcurrent = options.maxConcurrent ?? configuredVerifyConcurrency();
   const slots: SemaphoreSlotView[] = [];
-  for (let slot = 0; slot < maxConcurrent; slot += 1) {
+  // Includes any slot above the configured concurrency that still exists on
+  // disk, so an operator can always see (and reclaim) what is actually held.
+  for (const slot of slotNumbers(dir, maxConcurrent)) {
     slots.push(inspectSlot(dir, slot, options.ctx));
   }
   const occupied = slots.filter((s) => s.occupied).length;
@@ -917,8 +947,16 @@ export function acquireVerifySlot(options: AcquireVerifySlotOptions = {}): Verif
             // Only remove the slot if we still own it: if this slot was already
             // reaped and re-claimed by someone else, deleting it here would
             // destroy a live verify.
+            // Positive ownership only. A record that names someone else is
+            // obviously not ours, but a *missing* record is not ours either:
+            // the one window in which it can be missing is between another
+            // process's `mkdirSync(slotPath)` and its own record write, and
+            // deleting the directory there would drop a slot out from under a
+            // verify that is starting right now. An orphaned directory left by
+            // this branch is not a leak -- it classifies as `corrupt_orphan`
+            // once past the write grace and is reclaimed normally.
             const current = readJsonIfPresent(ownerPath);
-            if (current && current.operation_id !== operationId) {
+            if (current?.operation_id !== operationId) {
               return;
             }
             try {

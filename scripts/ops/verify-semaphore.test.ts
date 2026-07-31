@@ -856,3 +856,79 @@ test('the semaphore directory is the only shared state a reader needs', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ── slots outside the configured range are still visible and reclaimable ─────
+
+test('a slot above the configured concurrency is still reported, not orphaned forever', () => {
+  const dir = tmpDir();
+  try {
+    // Acquired while concurrency was 2, inspected after it was lowered to 1.
+    seedSlot(dir, 1, owner({ slot: 1, pid: 4242, operation_id: 'left-over' }));
+    const status = readSemaphoreStatus({
+      dir,
+      maxConcurrent: 1,
+      ctx: { machine: { hostname: HOST, boot_id: BOOT }, isProcessAlive: () => false },
+    });
+    const leftOver = status.slots.find((s) => s.slot === 1);
+    assert.ok(leftOver, 'a slot above the configured range must still be listed');
+    assert.equal(leftOver.classification.state, 'dead_owner');
+    assert.equal(leftOver.classification.reapable, true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a dead slot above the configured concurrency is reclaimed rather than leaked', () => {
+  const dir = tmpDir();
+  try {
+    seedSlot(dir, 1, owner({ slot: 1, pid: 4242, operation_id: 'left-over' }));
+    const reaped = reapVerifySlots({
+      dir,
+      maxConcurrent: 1,
+      ctx: { machine: { hostname: HOST, boot_id: BOOT }, isProcessAlive: () => false },
+    });
+    assert.equal(reaped.length, 1);
+    assert.equal(reaped[0]?.slot, 1);
+    assert.equal(fs.existsSync(path.join(dir, 'slot-1')), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a LIVE slot above the configured concurrency is still not reclaimed', () => {
+  const dir = tmpDir();
+  try {
+    seedSlot(dir, 1, owner({ slot: 1, pid: 4242, operation_id: 'live-left-over' }));
+    const reaped = reapVerifySlots({
+      dir,
+      maxConcurrent: 1,
+      ctx: {
+        machine: { hostname: HOST, boot_id: BOOT },
+        isProcessAlive: () => true,
+        processStartToken: () => 'linux:starttime:1000',
+      },
+    });
+    assert.deepEqual(reaped, [], 'widening the scan must not widen what may be reaped');
+    assert.equal(fs.existsSync(path.join(dir, 'slot-1')), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('release requires positive ownership: a slot mid-acquire by someone else is left alone', () => {
+  const dir = tmpDir();
+  try {
+    const handle = acquireVerifySlot({ dir, maxConcurrent: 1, enableHeartbeat: false, installSignalHandlers: false });
+    // Reproduce the window between another process's mkdir and its record
+    // write: the directory exists, the record does not.
+    fs.rmSync(handle.owner_path, { force: true });
+    handle.release();
+    assert.equal(
+      fs.existsSync(handle.slot_path),
+      true,
+      'a directory with no record may belong to a process that is acquiring right now',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

@@ -418,6 +418,23 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     released_resources: [],
   };
 
+  // A runner that was killed before it could call finishAttempt leaves its
+  // attempt open forever. Leaving it that way would accumulate dangling
+  // records and — worse — let an old one be mistaken for the run in flight.
+  // Close it here, as the failure it actually was: the process stopped
+  // reporting and never said why. Silence is never recorded as success.
+  const priorAttempts = (existing?.attempts ?? []).map((prior) =>
+    prior.ended_at === null
+      ? {
+          ...prior,
+          ended_at: now,
+          outcome: 'silent_no_heartbeat' as AttemptOutcome,
+          reason: `attempt ${prior.attempt} never reported an outcome; closed when attempt ${attempt} started`,
+          phase_at_end: prior.phase_at_end ?? existing?.phase ?? prior.phase_at_start,
+        }
+      : prior,
+  );
+
   const checkpoint: ExecutionCheckpoint = {
     schema_version: EXECUTION_CHECKPOINT_SCHEMA_VERSION,
     issue_id: input.issueId,
@@ -436,7 +453,7 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     completed_phases: existing?.completed_phases ?? [],
     findings: existing?.findings ?? [],
     pending_actions: existing?.pending_actions ?? [],
-    attempts: [...(existing?.attempts ?? []), attemptRecord],
+    attempts: [...priorAttempts, attemptRecord],
     cancel_requested: false,
     cancel_reason: null,
     owner: { pid: process.pid, host: os.hostname() || 'unknown' },
@@ -604,7 +621,10 @@ export function classifyCheckpointLiveness(
       reason: 'no execution attempt has been opened for this issue',
     };
   }
-  const open = checkpoint.attempts.find((attempt) => attempt.ended_at === null);
+  // The LAST open attempt, not the first. If a runner was killed before it
+  // could close its attempt, an older dangling record would otherwise shadow
+  // the attempt actually in flight and liveness would describe the wrong run.
+  const open = [...checkpoint.attempts].reverse().find((attempt) => attempt.ended_at === null);
   if (!open) {
     return {
       state: 'closed',

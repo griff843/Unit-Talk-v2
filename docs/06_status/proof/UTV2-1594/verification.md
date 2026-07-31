@@ -103,8 +103,8 @@ EVIDENCE:
 - `pnpm type-check` — PASS, clean exit, no output.
 - `pnpm lint` — PASS, clean exit, no output.
 - `pnpm test` — PASS, 4093 tests, 4093 pass, 0 fail, 0 skipped (E10).
-- `npx tsx --test scripts/ops/verify-semaphore.test.ts` — 36 tests, 36 pass, 0 fail, 0 skipped.
-- `npx tsx --test scripts/ops/execution-checkpoint.test.ts` — 21 tests, 21 pass, 0 fail, 0 skipped.
+- `npx tsx --test scripts/ops/verify-semaphore.test.ts` — 40 tests, 40 pass, 0 fail, 0 skipped.
+- `npx tsx --test scripts/ops/execution-checkpoint.test.ts` — 23 tests, 23 pass, 0 fail, 0 skipped.
 - `npx tsx --test scripts/ops/codex-exec.test.ts` — 21 tests, 21 pass, 0 fail, 0 skipped.
 - `npx tsx --test scripts/ops/preflight.test.ts` — 14 tests, 14 pass, 0 fail, 0 skipped.
 
@@ -373,6 +373,78 @@ version). `a pre-UTV2-1594 slot record held by a live pid is left alone`
 asserts such a record classifies as `legacy_live`, `reapable: false`. `a
 pre-UTV2-1594 slot record held by a dead pid is reclaimed immediately, not after
 6h` asserts the improvement applies to legacy records too.
+
+### E12 — three gaps found in self-review, fixed, and checked both directions
+
+Reviewing this lane's own diff before certifying it surfaced three ways the
+same failure class could have survived inside the fix itself.
+
+**1. A slot above the configured concurrency was invisible and unreclaimable.**
+`readSemaphoreStatus` and `reapVerifySlots` both iterated `slot < maxConcurrent`.
+Lowering `UNIT_TALK_FULL_VERIFY_CONCURRENCY` from 2 to 1 would leave a corpse in
+`slot-1` that nothing would ever look at again — never listed by the operator
+command, never reclaimed. That is exactly "a dead owner holds something
+forever", relocated. Both functions now scan the configured range **union** any
+`slot-N` directory actually on disk.
+
+**2. `release()` deleted a slot whose record was missing.** The check was
+`if (current && current.operation_id !== operationId) return;` — a *missing*
+record fell through to the delete. The one window in which the record can be
+missing is between another process's `mkdirSync(slotPath)` and its own record
+write, so that path could drop a slot out from under a verify that was starting
+at that instant. Release now requires **positive** ownership
+(`current?.operation_id !== operationId`). A directory orphaned by this branch
+is not a leak: it classifies as `corrupt_orphan` past the write grace and is
+reclaimed normally.
+
+Both fixes were checked in both directions rather than asserted. The four new
+assertions were run against the pre-fix implementation and then against the
+fixed one:
+
+```
+=== PRE-FIX ===
+not ok 37 - a slot above the configured concurrency is still reported, not orphaned forever
+not ok 38 - a dead slot above the configured concurrency is reclaimed rather than leaked
+ok  39 - a LIVE slot above the configured concurrency is still not reclaimed
+not ok 40 - release requires positive ownership: a slot mid-acquire by someone else is left alone
+
+=== POST-FIX ===
+# pass 40
+# fail 0
+```
+
+Assertion 39 passes in both directions **by construction**, and is recorded as
+such rather than counted as a regression test: pre-fix the slot was not scanned
+at all, so nothing was reaped either. It exists to stop the widened scan from
+widening what may be *reaped* — a guard against the fix over-reaching, which is
+the specific way this change could have hurt a live verifier.
+
+**3. A killed runner left its attempt open forever.** `beginAttempt` appended a
+new attempt without closing any prior one, and `classifyCheckpointLiveness`
+took the **first** open attempt. A `codex-exec` process killed before it could
+call `finishAttempt` therefore left a dangling record, and the next run's
+liveness check described that stale attempt instead of the run actually in
+flight. `beginAttempt` now closes any dangling attempt as
+`silent_no_heartbeat` — the failure it actually was, never success — and
+liveness takes the **last** open attempt. Progress recorded by the killed
+attempt is still carried forward.
+
+Checked the same way:
+
+```
+=== PRE-FIX ===
+not ok 22 - an attempt left open by a killed runner is closed as silence when the next attempt starts
+not ok 23 - liveness describes the attempt in flight, not an older dangling one
+
+=== POST-FIX ===
+# pass 23
+# fail 0
+```
+
+This one is worth naming plainly: the lane exists because long-running work
+loses its progress when it is stopped abruptly, and this session was itself
+stopped abruptly mid-implementation. The defect it exposed in my own code was
+the same shape as the defect the lane was opened to fix.
 
 ### E10 — full suite
 
