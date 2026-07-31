@@ -14,6 +14,10 @@ MERGE_SHA: PENDING_MERGE
 > `MERGE_SHA` is bound post-merge by `post-merge-lane-close.yml` via
 > `ops:proof-generate --merge-sha`.
 
+**Verified against branch commit:** `bd47422ddf43290db19a8162e339a66b2c5a8197`
+(the parent of the commit that added this line — a fixed, permanent reference
+so this SHA-binding statement never needs to chase a moving HEAD).
+
 ## Verification
 
 **Target:** production Supabase `zfzdnfwdarxucxtaojxm`
