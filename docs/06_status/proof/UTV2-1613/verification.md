@@ -1,6 +1,14 @@
 # PROOF: UTV2-1613
 
-MERGE_SHA: set-by-ci
+MERGE_SHA: 904a62e100eaf9ddb5e1fe60bc72abddad6acd66
+
+<!--
+  Pre-merge: this is the implementation commit SHA on this PR's own branch
+  (an ancestor of / identical to the PR head, as executor-result-validator.yml
+  requires). Post-merge, ops:proof-generate --merge-sha rebinds this to the
+  actual squash-merge commit SHA on main, matching this repo's standard
+  proof-binding convention.
+-->
 
 ## Summary
 
@@ -109,6 +117,8 @@ ASSERTIONS:
       this lane.
 
 ## Verification
+
+EVIDENCE:
 
 ### 1. The defect, and its removal
 
