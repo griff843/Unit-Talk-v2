@@ -147,6 +147,21 @@
       "skipped": 0,
       "duration_ms": 810.149062
     },
+    "ops_suite": {
+      "command": "pnpm test:ops",
+      "tests": 1497,
+      "suites": 6,
+      "pass": 1497,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 51294.532839,
+      "note": "Full ops suite green with the new guard wired into the test:ops file list."
+    },
+    "migration_reversibility_gate": {
+      "command": "npx tsx scripts/ci/migration-reversibility-gate.ts --base origin/main",
+      "status": "PASS",
+      "note": "Down-script presence and non-IRREVERSIBLE classification verified locally. The scratch-postgres round-trip drill still runs in CI."
+    },
     "guard_intent": "The guard test mechanically enforces what the lane promised: no DELETE/UPDATE/TRUNCATE/INSERT/ALTER TABLE/DROP COLUMN/GRANT in the migration; every created object inside schema reporting; no materialized views; the down script drops only that schema and claims no irreversibility exemption; the classifier never references a dual-use source name; the classifier is a non-STRICT CASE returning text, filtered IS NULL / IS NOT NULL. Per CLAUDE.md invariant 11."
   },
   "runtime_proof": {
