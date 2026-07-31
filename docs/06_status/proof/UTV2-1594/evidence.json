@@ -6,11 +6,11 @@
   "generated_at": "2026-07-31T13:05:00.000Z",
   "status": "in_review",
   "sha_binding": {
-    "verified_source_sha": "2cce459967197925c058d4b2dad77305bfe7cbb8",
-    "merge_sha": "2cce459967197925c058d4b2dad77305bfe7cbb8",
-    "base_sha": "2cce459967197925c058d4b2dad77305bfe7cbb8",
+    "verified_source_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
+    "merge_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
+    "base_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
     "sha_type": "base_sha_pending_merge_rebind",
-    "verified_source_note": "Every measurement in this bundle was taken on the lane branch, rebased onto main tip 2cce459967197925c058d4b2dad77305bfe7cbb8, which is a real ancestor (git merge-base HEAD origin/main == origin/main at the time of this rebase). The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "verified_source_note": "Every measurement in this bundle was taken on the lane branch, rebased twice as main moved during the lane's lifetime, finally onto main tip 1a533cbf0057ab2543813f25f16660c9e2189308 (git merge-base HEAD origin/main == origin/main at push time). The second rebase produced one real package.json conflict in test:ops (upstream added lane-close-repair-packet.test.ts and truth-history-audit.test.ts; this lane added verify-semaphore.test.ts and execution-checkpoint.test.ts), resolved programmatically as a verified union -- all entries from both sides present, checked before continuing. The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "bound_at": null
   },
   "verifier": {
@@ -48,12 +48,12 @@
     "full_test_suite": {
       "command": "pnpm test",
       "status": "PASS",
-      "tests": 4112,
-      "pass": 4112,
+      "tests": 4163,
+      "pass": 4163,
       "fail": 0,
       "skipped": 0,
       "exit_code": 0,
-      "measured_on": "the final implementation, rebased onto origin/main tip 2cce459967197925c058d4b2dad77305bfe7cbb8; count moved 4093 -> 4099 across this lane's own E12 self-review, then 4099 -> 4112 across the rebase (two new upstream suites, neither touched by this lane)"
+      "measured_on": "the final implementation, rebased twice onto origin/main (finally tip 1a533cbf0057ab2543813f25f16660c9e2189308); count moved 4093 -> 4099 across this lane's own E12 self-review, 4099 -> 4112 across the first rebase, 4112 -> 4163 across the second rebase (upstream suites plus one resolved package.json union conflict), all neither touched by this lane"
     },
     "unit_tests": [
       {

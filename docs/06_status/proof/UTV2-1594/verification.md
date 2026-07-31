@@ -1,6 +1,6 @@
 # PROOF: UTV2-1594
 
-MERGE_SHA: 2cce459967197925c058d4b2dad77305bfe7cbb8
+MERGE_SHA: 1a533cbf0057ab2543813f25f16660c9e2189308
 
 That SHA is a real ancestor — the `main` tip this lane branched from and
 measured against, not a merge SHA that does not exist yet. It is rebound to this
@@ -102,7 +102,7 @@ EVIDENCE:
 
 - `pnpm type-check` — PASS, clean exit, no output.
 - `pnpm lint` — PASS, clean exit, no output.
-- `pnpm test` — PASS, 4112 tests, 4112 pass, 0 fail, 0 skipped (E10).
+- `pnpm test` — PASS, 4163 tests, 4163 pass, 0 fail, 0 skipped (E10).
 - `npx tsx --test scripts/ops/verify-semaphore.test.ts` — 40 tests, 40 pass, 0 fail, 0 skipped.
 - `npx tsx --test scripts/ops/execution-checkpoint.test.ts` — 23 tests, 23 pass, 0 fail, 0 skipped.
 - `npx tsx --test scripts/ops/codex-exec.test.ts` — 21 tests, 21 pass, 0 fail, 0 skipped.
@@ -474,23 +474,27 @@ the same shape as the defect the lane was opened to fix.
 ### E10 — full suite
 
 `pnpm test` on the branch head, measured on the final implementation after
-rebasing onto origin/main tip `2cce459967197925c058d4b2dad77305bfe7cbb8`:
-**4112 tests, 4112 pass, 0 fail, 0 skipped**, exit code 0. No `not ok` line
+rebasing onto origin/main tip `1a533cbf0057ab2543813f25f16660c9e2189308`:
+**4163 tests, 4163 pass, 0 fail, 0 skipped**, exit code 0. No `not ok` line
 anywhere in the run.
 
 ```
 $ pnpm lint && pnpm type-check && pnpm test
 ...
 === aggregated over all suites ===
-tests 4112  pass 4112  fail 0  skipped 0
+tests 4163  pass 4163  fail 0  skipped 0
 EXIT=0
 ```
 
 The count moved 4093 → 4099 across this lane's own self-review (four new
 assertions in `verify-semaphore.test.ts`, two in `execution-checkpoint.test.ts`),
-then 4099 → 4112 across the rebase (two new suites merged into `main` in the
+then 4099 → 4112 across a first rebase (two new suites merged into `main` in the
 interim, `scheduler-classification.test.ts` and `deploy-parked-mode.test.ts`,
-neither touched by this lane).
+neither touched by this lane), then 4112 → 4163 across a second rebase after
+`main` moved again (UTV2-1632's proper closeout, UTV2-1635, UTV2-1613 — one real
+`package.json` conflict in `test:ops`, resolved programmatically as a verified
+union: every entry from both sides present, none dropped, checked
+programmatically before continuing the rebase).
 
 ### E11 — a preflight defect found and fixed on the way in
 
