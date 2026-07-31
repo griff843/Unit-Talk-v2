@@ -1,6 +1,10 @@
 # UTV2-1635 Diff Summary
 
-Docs-only. 1,924 insertions, **0 deletions**. No source, migration, or workflow change.
+MERGE_SHA: 7279ee3977c1945bd6b13c8edc2a1fe57b70c09c
+
+Docs-only. 10 files changed, 2,200 insertions, **0 deletions**, per
+`git show 7279ee3977c1945bd6b13c8edc2a1fe57b70c09c --numstat` against merge parent
+`2cce4599`. No source, migration, or workflow change.
 
 ## Intent
 
