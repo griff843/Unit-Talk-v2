@@ -7,11 +7,11 @@
   "status": "pr_open",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
   "sha_binding": {
-    "verified_source_sha": "f1f397ecab462cdc83c98b7c15e8a239ac074aa1",
+    "verified_source_sha": "bed10124c3d3c2c684a9de72fb1d452fe4470b2c",
     "merge_sha": null,
     "base_sha": "d82e1c60107c6063418ec0c76f8f0e660fc3803a",
     "sha_type": "pending_merge",
-    "verified_source_note": "verified_source_sha is the pre-PR-checks commit f1f397ec (the last commit before this schema-v2 proof-binding fix). Verified empty diff against the PR's synthetic merge ref refs/pull/1343/merge (12445581, a merge of f1f397ec into base d82e1c60 -- the exact fork point, not a drifted later main tip) before choosing it, so every commit strictly after it touches only docs/06_status/proof/** or docs/06_status/lanes/**, satisfying proof-binding-validator's rule 4. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
+    "verified_source_note": "verified_source_sha is bed10124, the commit immediately preceding this one. (An earlier value, f1f397ec, was invalidated when a subsequent commit-message fix -- removing a stray cross-issue reference from a historical commit -- rewrote this branch's history via detached-HEAD amend + cherry-pick + force-with-lease push, so f1f397ec is no longer an ancestor of HEAD.) Diff verified locally with scripts/ci/proof-binding-validator.ts before pushing: only this file changes between bed10124 and the new HEAD, satisfying rule 4. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "bound_at": "2026-07-31T21:15:00.000Z"
