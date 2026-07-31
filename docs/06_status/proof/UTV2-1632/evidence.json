@@ -1,0 +1,350 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1632",
+  "tier": "T1",
+  "title": "DB Health Tripwire has never executed a single check — bare tsx exits 127 every run",
+  "generated_at": "2026-07-31T12:40:00.000Z",
+  "status": "in_review",
+  "sha_binding": {
+    "verified_source_sha": "8fa7fd6b55f3f835a74c7753b54332125ca509ab",
+    "merge_sha": "8fa7fd6b55f3f835a74c7753b54332125ca509ab",
+    "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "sha_type": "branch_head_pending_merge",
+    "verified_source_note": "Every measurement in this bundle was taken on this lane's branch, built from main tip b5ebdc23. The workflow_dispatch runs cited below executed pre-rebase commits of the identical working tree; the rebase onto b5ebdc23 and the db-health-checks.ts split changed module boundaries, not check logic, and the static suite was re-run after both. The authoritative binding is the squash SHA written post-merge by post-merge-lane-close.yml.",
+    "bound_at": null
+  },
+  "defect": {
+    "claim": "The DB Health Tripwire has never executed a single check since it was added.",
+    "root_causes": [
+      {
+        "id": 1,
+        "summary": "The workflow invoked `tsx` by bare binary name. tsx is a workspace devDependency and is not on the runner's PATH inside a raw `run:` block, so the step exited 127 before Node started.",
+        "evidence": "runs 30616577637, 30597176319, 30573430796, 30546729826, 30525259668 — all failure, steps 1-6 green, step 7 'Run DB health checks' red",
+        "sufficient_alone": true
+      },
+      {
+        "id": 2,
+        "summary": "`import postgres from 'postgres'` named a package present in no package.json and with no pnpm-lock.yaml entry anywhere in the repository. Fixing (1) alone would have moved the failure from exit 127 to MODULE_NOT_FOUND exit 1.",
+        "evidence": "pre-fix `pnpm exec tsx scripts/ops/db-health-tripwire.ts` -> Error: Cannot find module 'postgres', exit 1; `grep -n postgres pnpm-lock.yaml` matched only @supabase/postgrest-js",
+        "sufficient_alone": true
+      },
+      {
+        "id": 3,
+        "summary": "Discovered by the first live run. A check that trips because a quantity never happened has no numeric measurement; requiring one made the execution gate reject a correct production finding.",
+        "evidence": "run 30628974075 — [tripwire:gate] FAIL — checks[2] (autovacuum_staleness) is tripped but carries no measured value",
+        "sufficient_alone": false
+      },
+      {
+        "id": 4,
+        "summary": "The Linear alert would never have been delivered: commentCreate takes the issue UUID, not the identifier, and the error was logged as a warning and swallowed.",
+        "evidence": "run 30628974075 — Linear comment failed with 'issue not found' for the tripwire's tracking issue identifier",
+        "sufficient_alone": false
+      }
+    ],
+    "why_invisible": "The job's only signal was a red badge, and a red badge is also what a genuine finding looks like. A monitor that had never worked was indistinguishable from a monitor that was working and unhappy."
+  },
+  "static_proof": {
+    "lint": {
+      "command": "pnpm exec eslint <changed files>",
+      "status": "PASS"
+    },
+    "unit_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+      "tests": 57,
+      "pass": 57,
+      "fail": 0,
+      "skipped": 0,
+      "note": "Runs inside the required `verify` context via pnpm test -> pnpm test:ops. No package.json script list was modified."
+    },
+    "db_client_boundary": {
+      "command": "pnpm ci:db-client-boundary",
+      "status": "PASS",
+      "note": "The pure check logic was split into scripts/ops/db-health-checks.ts so no `pnpm test` entrypoint reaches a module that constructs a database client."
+    },
+    "bare_binary_guard": {
+      "command": "pnpm exec tsx scripts/ci/workflow-bare-binary-guard.ts",
+      "status": "PASS",
+      "swept": ".github/workflows/** and .github/actions/**",
+      "other_instances_found": 0,
+      "regression_fixture": "the pre-fix line `tsx scripts/ops/db-health-tripwire.ts` is reported by the same guard"
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "db-health-tripwire-receipt/v1",
+    "target": {
+      "kind": "canonical-production",
+      "host": "aws-1-us-west-2.pooler.supabase.com",
+      "access": "read-only"
+    },
+    "read_only_enforcement": {
+      "mechanism": "SET TRANSACTION READ ONLY",
+      "observed_transaction_read_only": "on",
+      "note": "The value Postgres itself returned for SHOW transaction_read_only, inside the same transaction as the catalog reads. The execution gate fails unless it is 'on'.",
+      "write_capability_added": false,
+      "sql_verbs_in_diff": [
+        "SELECT",
+        "SHOW"
+      ],
+      "non_catalog_requests": [
+        "GET {SUPABASE_URL}/rest/v1/rpc/get_logs?type=postgres"
+      ]
+    },
+    "runs": [
+      {
+        "run_id": "30628974075",
+        "purpose": "first live execution — proves the harness now starts and reaches the database",
+        "outcome": "checks_tripped",
+        "counts": {
+          "total": 13,
+          "executed": 12,
+          "passed": 2,
+          "tripped": 10,
+          "not_run": 1
+        },
+        "steps": {
+          "Run DB health checks": "success",
+          "Prove the checks executed": "failure",
+          "Report DB health verdict": "not reached"
+        },
+        "note": "The execution gate failed here on root cause 3 — a correct finding with no numeric measurement. This run is retained because it demonstrates the gate refusing a receipt it could not validate rather than passing it."
+      },
+      {
+        "run_id": "30629198346",
+        "purpose": "baseline — real thresholds, no override",
+        "outcome": "checks_tripped",
+        "counts": {
+          "total": 13,
+          "executed": 12,
+          "passed": 2,
+          "tripped": 10,
+          "not_run": 1
+        },
+        "threshold_override_active": false,
+        "linear_alert": "failed",
+        "game_results_table_size": {
+          "measured": {
+            "value": 55.62,
+            "unit": "MB",
+            "observed": true
+          },
+          "threshold": {
+            "value": 300,
+            "unit": "MB",
+            "source": "env"
+          },
+          "status": "pass"
+        }
+      },
+      {
+        "run_id": "30629281828",
+        "purpose": "NEGATIVE DEMONSTRATION — same commit and same measured value, threshold lowered by workflow_dispatch input only",
+        "dispatch_input": "threshold_overrides={\"GAME_RESULTS_SIZE_THRESHOLD_MB\":\"1\"}",
+        "outcome": "checks_tripped",
+        "counts": {
+          "total": 13,
+          "executed": 12,
+          "passed": 1,
+          "tripped": 11,
+          "not_run": 1
+        },
+        "threshold_override_active": true,
+        "linear_alert": "suppressed_threshold_override",
+        "game_results_table_size": {
+          "measured": {
+            "value": 55.62,
+            "unit": "MB",
+            "observed": true
+          },
+          "threshold": {
+            "value": 1,
+            "unit": "MB",
+            "source": "dispatch_override"
+          },
+          "status": "tripped",
+          "severity": "critical"
+        },
+        "conclusion": "The same measurement produced a different verdict when only the threshold moved. A run that merely started could not produce that difference. The lowered threshold is committed nowhere.",
+        "alert_safety": "Any override suppresses the Linear alert, so a demonstration can never be mistaken for a production finding."
+      },
+      {
+        "run_id": "30629392553",
+        "purpose": "confirming run — all three outcomes separated correctly",
+        "outcome": "checks_tripped",
+        "counts": {
+          "total": 13,
+          "executed": 12,
+          "passed": 2,
+          "tripped": 10,
+          "not_run": 1
+        },
+        "steps": {
+          "Run DB health checks": "success",
+          "Prove the checks executed": "success",
+          "Report DB health verdict": "failure"
+        },
+        "gate_output": "[tripwire:gate] PASS — 12/13 checks executed (2 pass, 10 tripped, 1 not run)"
+      }
+    ],
+    "measured_checks": [
+      {
+        "check": "table_size",
+        "subject": "system_runs",
+        "measured": 1287.33,
+        "unit": "MB",
+        "threshold": 500,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "table_size",
+        "subject": "raw_payloads",
+        "measured": 693.73,
+        "unit": "MB",
+        "threshold": 300,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "table_size",
+        "subject": "odds_snapshots",
+        "measured": 427.21,
+        "unit": "MB",
+        "threshold": 300,
+        "status": "tripped",
+        "severity": "warn"
+      },
+      {
+        "check": "table_size",
+        "subject": "game_results",
+        "measured": 55.62,
+        "unit": "MB",
+        "threshold": 300,
+        "status": "pass",
+        "severity": null
+      },
+      {
+        "check": "table_size",
+        "subject": "provider_offer_history",
+        "measured": 0,
+        "unit": "MB",
+        "threshold": 300,
+        "status": "pass",
+        "severity": null
+      },
+      {
+        "check": "toast_bloat",
+        "subject": "odds_snapshots",
+        "measured": 99.1,
+        "unit": "%",
+        "threshold": 80,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "toast_bloat",
+        "subject": "raw_payloads",
+        "measured": 99,
+        "unit": "%",
+        "threshold": 80,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "autovacuum_staleness",
+        "subject": "system_runs",
+        "measured": 905.71,
+        "unit": "hours since last_analyze",
+        "threshold": 24,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "autovacuum_staleness",
+        "subject": "raw_payloads",
+        "measured": 905.71,
+        "unit": "hours since last_analyze",
+        "threshold": 24,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "autovacuum_staleness",
+        "subject": "odds_snapshots",
+        "measured": 905.71,
+        "unit": "hours since last_analyze",
+        "threshold": 24,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "autovacuum_staleness",
+        "subject": "game_results",
+        "measured": 905.71,
+        "unit": "hours since last_analyze",
+        "threshold": 24,
+        "status": "tripped",
+        "severity": "critical"
+      },
+      {
+        "check": "autovacuum_staleness",
+        "subject": "provider_offer_history",
+        "measured": null,
+        "observed": true,
+        "unit": "hours since last_analyze",
+        "threshold": 24,
+        "status": "tripped",
+        "severity": "critical",
+        "note": "never analysed — observed, but the quantity does not exist"
+      },
+      {
+        "check": "statement_timeout_rate",
+        "subject": null,
+        "measured": null,
+        "observed": false,
+        "threshold": null,
+        "status": "not_run",
+        "severity": null,
+        "note": "log endpoint returned HTTP 404"
+      }
+    ]
+  },
+  "outcome_separation": {
+    "claim": "A harness error, a healthy database and a real finding are three distinct outcomes reported by three distinct workflow steps.",
+    "mapping": {
+      "Run DB health checks red": "harness_error — the checks could not run",
+      "Prove the checks executed red": "the run produced no usable proof of execution",
+      "Report DB health verdict red": "the checks ran and one tripped — the only DB-unhealthy outcome"
+    },
+    "fail_closed": {
+      "missing_receipt": "gate exits 1 — 'an absent receipt fails closed rather than passing silently'",
+      "zero_executed_checks": "gate exits 1 — 'the tripwire started but evaluated nothing'",
+      "receipt_from_another_run": "gate exits 1 — receipt run_id must equal the current GITHUB_RUN_ID",
+      "declared_counts_disagree_with_rows": "gate exits 1 — counts are recomputed, never trusted",
+      "read_only_not_observed": "gate exits 1 — transaction_read_only must be recorded as 'on'",
+      "gate_step_condition": "if: always() — deleting the producer step turns the job red, not green",
+      "unhandled_error": "exit 2 with a harness_error receipt; the pre-fix handler was process.exit(0)"
+    }
+  },
+  "findings_handed_on": [
+    {
+      "severity": "high",
+      "summary": "Production bloat and vacuum findings are real and currently true: system_runs 1287.33 MB against a 500 MB threshold, raw_payloads 693.73 MB and odds_snapshots 427.21 MB against 300 MB, TOAST ratios of 99%, and 905.71 hours (37.7 days) since the last ANALYZE on every hot table. This is the signature of the June 2026 write-path degradation.",
+      "scope": "out of scope for this lane, which restores detection; merging turns the scheduled monitor red for this reason"
+    },
+    {
+      "severity": "medium",
+      "summary": "statement_timeout_rate cannot run against its current data source. GET {SUPABASE_URL}/rest/v1/rpc/get_logs?type=postgres returns HTTP 404 — the endpoint does not exist. Postgres logs are reachable only via the Supabase Management API, which needs a credential this job deliberately does not hold.",
+      "disposition": "recorded as not_run with the 404 as its reason rather than contributing an invisible pass; repairing it would expand privilege"
+    },
+    {
+      "severity": "medium",
+      "summary": "The Linear alert destination does not resolve — the tripwire's tracking issue returns 'Entity not found: Issue' for the token this workflow holds. Lookup and error handling are now correct and the failure is recorded and annotated, but the destination needs a decision.",
+      "disposition": "annotated as a warning, never a job failure — conflating 'could not notify' with 'the database is unhealthy' is what this lane undoes"
+    },
+    {
+      "severity": "low",
+      "summary": "The `runtime` lane contract cannot express a dependency fix: .lane/lanes/runtime.yml allows package.json but not pnpm-lock.yaml. Under pnpm 10 with --frozen-lockfile the pair is indivisible, so no dependency-adding runtime lane can satisfy the contract as written. `Lane authority` is red on this PR for that reason (outside_allowed_paths: pnpm-lock.yaml).",
+      "disposition": "Deliberately not fixed here. Lane authority is not a required context, and widening a lane's authority to make one's own lane pass is a governance change that belongs in its own lane, not a side effect of a runtime fix."
+    }
+  ]
+}
