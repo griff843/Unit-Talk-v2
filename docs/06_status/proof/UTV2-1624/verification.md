@@ -102,43 +102,43 @@ deliberately: a calendar date must never block every merge in the program.
 
 ASSERTIONS:
 
-1. Exact current counts are re-derived by the checked-in tool, not hardcoded.
-   457 / 302 / 36 / 119 / 18 at `97fc751d`. The reported 430/175/8 appear nowhere
-   in the implementation. (EVIDENCE 1)
-2. A test file can exist while remaining unreachable, and is detected. Fixture
-   `counts are derived from the graph, not hardcoded, and an unreachable test
-   file is detected`, plus the live negative demonstration in EVIDENCE 4.
-3. A chained root-to-workspace script resolves correctly and emits the exact
-   path: `pnpm verify -> verify:static -> test -> test:apps -> @fixture/api:test
-   -> tsx --test`. (EVIDENCE 3, fixture 7)
-4. Supported globs expand correctly, including POSIX `sh`'s single-segment `**`,
-   and the shadowed files are reported. (EVIDENCE 2, fixtures 3–5)
-5. Fixture/helper files that match test naming but register no tests are not
-   treated as executable tests. (fixture 12)
-6. Reachability is not inferred from filename similarity — two files with the
-   same basename in different directories get different verdicts. (fixture 8)
-7. The named critical governance tests are each either proven already reachable
-   or wired in this lane, with execution receipts. (EVIDENCE 5, 6)
-8. Every newly wired test is negatively demonstrated: mutating the module it
-   exercises makes it fail. 12/12 killed, every source byte-restored.
-   (EVIDENCE 6, `mutation-check.json`)
-9. A newly added unwired test fails the required gate. (EVIDENCE 4a)
-10. An active orphan ops capability with no disposition fails. (EVIDENCE 4b)
-11. A baseline entry that loses its owner, issue or expiry fails. (EVIDENCE 4c,
-    fixture 14)
-12. Existing baseline debt is explicit and cannot grow: `max_entries` caps both
-    sections, and stale entries fail. (fixtures 16, 17)
-13. Tool/parser failures are reported separately from implementation findings,
-    and an execution graph that cannot be built at all fails closed rather than
-    degrading to a silent pass. (fixture 24; coverage-check fixture `a missing
-    workspace manifest fails closed rather than silently skipping the wiring
-    section`)
-14. Documentation-only reference is not sufficient for a capability claimed as
-    automated. (fixture 20)
-15. Running the new gate against pristine `origin/main` fails on exactly the
-    delta this lane closes — 11 tests plus 1 capability — and nothing else. No
-    finding is suppressed. (EVIDENCE 7)
-16. `pnpm verify` passes on the branch. (EVIDENCE 8)
+- [x] Exact current counts are re-derived by the checked-in tool, not hardcoded.
+      457 / 302 / 36 / 119 / 18 at `97fc751d`. The reported 430/175/8 appear nowhere
+      in the implementation. (EVIDENCE 1)
+- [x] A test file can exist while remaining unreachable, and is detected. Fixture
+      `counts are derived from the graph, not hardcoded, and an unreachable test
+      file is detected`, plus the live negative demonstration in EVIDENCE 4.
+- [x] A chained root-to-workspace script resolves correctly and emits the exact
+      path: `pnpm verify -> verify:static -> test -> test:apps -> @fixture/api:test
+      -> tsx --test`. (EVIDENCE 3, fixture 7)
+- [x] Supported globs expand correctly, including POSIX `sh`'s single-segment `**`,
+      and the shadowed files are reported. (EVIDENCE 2, fixtures 3–5)
+- [x] Fixture/helper files that match test naming but register no tests are not
+      treated as executable tests. (fixture 12)
+- [x] Reachability is not inferred from filename similarity — two files with the
+      same basename in different directories get different verdicts. (fixture 8)
+- [x] The named critical governance tests are each either proven already reachable
+      or wired in this lane, with execution receipts. (EVIDENCE 5, 6)
+- [x] Every newly wired test is negatively demonstrated: mutating the module it
+      exercises makes it fail. 12/12 killed, every source byte-restored.
+      (EVIDENCE 6, `mutation-check.json`)
+- [x] A newly added unwired test fails the required gate. (EVIDENCE 4a)
+- [x] An active orphan ops capability with no disposition fails. (EVIDENCE 4b)
+- [x] A baseline entry that loses its owner, issue or expiry fails. (EVIDENCE 4c,
+      fixture 14)
+- [x] Existing baseline debt is explicit and cannot grow: `max_entries` caps both
+      sections, and stale entries fail. (fixtures 16, 17)
+- [x] Tool/parser failures are reported separately from implementation findings,
+      and an execution graph that cannot be built at all fails closed rather than
+      degrading to a silent pass. (fixture 24; coverage-check fixture `a missing
+      workspace manifest fails closed rather than silently skipping the wiring
+      section`)
+- [x] Documentation-only reference is not sufficient for a capability claimed as
+      automated. (fixture 20)
+- [x] Running the new gate against pristine `origin/main` fails on exactly the
+      delta this lane closes — 11 tests plus 1 capability — and nothing else. No
+      finding is suppressed. (EVIDENCE 7)
+- [x] `pnpm verify` passes on the branch. (EVIDENCE 8)
 
 EVIDENCE:
 
