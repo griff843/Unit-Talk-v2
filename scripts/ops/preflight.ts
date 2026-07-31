@@ -62,6 +62,16 @@ const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
 // UTV2-1516: throttle concurrent `pnpm type-check && pnpm test` runs during
 // full verify so WSL2 hosts with limited RAM don't get pushed into swap by
 // several lanes running a full baseline at once.
+// `pnpm test` emits far more than spawnSync's 1 MiB default maxBuffer, which
+// aborts the child with ENOBUFS and reports PB2 as a baseline FAILURE even
+// though the suite itself was green. That turns a passing tree into a preflight
+// INFRA/FAIL verdict and blocks lane start for a reason that has nothing to do
+// with the code under test (UTV2-1594). Declared here, above the module-level
+// `main()` invocation, because `runCommand` is reached synchronously from that
+// call and a const declared further down the file is still in its temporal
+// dead zone at that point.
+const RUN_COMMAND_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+
 const FULL_VERIFY_THROTTLE_ENV = 'UNIT_TALK_FULL_VERIFY_CONCURRENCY';
 const FULL_VERIFY_THROTTLE_DEFAULT = 1;
 export const FULL_VERIFY_THROTTLE_STALE_MS = 6 * 60 * 60 * 1000;
@@ -1285,11 +1295,13 @@ function runCommand(command: string, args: string[]): {
         cwd: ROOT,
         encoding: 'utf8',
         stdio: 'pipe',
+        maxBuffer: RUN_COMMAND_MAX_BUFFER_BYTES,
       })
     : spawnSync(command, args, {
         cwd: ROOT,
         encoding: 'utf8',
         stdio: 'pipe',
+        maxBuffer: RUN_COMMAND_MAX_BUFFER_BYTES,
       });
   if (child.error) {
     return {
