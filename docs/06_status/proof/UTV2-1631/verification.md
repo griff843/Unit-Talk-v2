@@ -264,3 +264,54 @@ rebound to its own merge SHA: values identical, indentation reflowed.
 
 Merge SHA: `91826943f4e53a15cdcb815a43b6c3ffb7f38ced`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1332
+
+## Runtime proof harvest (closeout)
+
+This bundle shipped with no `runtime_proof` section, so `ops:truth-check`
+failed P7, P9, R1 and R2. The bundle's stated reason was that the lane touches
+no database path and that no `pnpm test:db` claim was applicable.
+
+The first half of that is true and stays true: the diff is
+`scripts/ops/proof-generate.ts` and its test, and it touches no database path.
+The second half was wrong. Every pull request runs `ci.yml`'s `staging-db-proof`
+job, so the head that squash-merged to `91826943` **did** execute `pnpm test:db`
+and `pnpm test:t1-proof:live` against staging `xskgrzbteyqdufktjrjx`, and a
+`ci-db-proof-receipt/v2` for it was retained. Declaring the T1 runtime
+requirement inapplicable was an omission, not an exemption. The evidence existed
+the whole time and was simply never copied into the bundle.
+
+It was read back on 2026-07-31 from the retained artifacts of that same run —
+run `30606700922`, the run on PR #1332's head `c86980e1` — and from nothing
+else:
+
+| Fact | Source |
+|---|---|
+| 7 live `pnpm test:db` cases + durations against staging `xskgrzbteyqdufktjrjx` | `ci-db-proof-receipt/v2` `captured_output`, artifact `8783916784` (`utv2-1630-db-proof-receipt-30606700922-1`, not expired) |
+| 3 reset + 5 upsert row counts on staging | job log, run `30606700922` job `91080340422` (`Writable DB proof (staging only)`), `[seed-staging]` lines |
+| 96 tests / 96 pass / 0 fail / 0 skipped across 16 TAP blocks | same job log — `test:db` plus the 15 `test:t1-proof:live` suites |
+| `[assert-staging] OK` × 3 | same job log, once before each writable command |
+| Verifier verdict `PASS` | job log, run `30606700922` job `91080910177` (`verify`): `DB proof verified: run 30606700922 attempt 1 @ 119cde131aa4fcead2de463ee413608468284cc7, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0` |
+
+`verifier.identity` is now the CI producer job plus the independent `verify` job
+that re-derived the receipt's binding — two jobs, neither of them the
+implementing agent, which is what P10 checks against `manifest.created_by`. The
+original implementing-agent verification of this lane's *central* claim is not
+discarded: it moves to `verifier.central_claim_verifier`, and
+`verifier.verifier_scope` says plainly that the CI identity verifies the live-DB
+execution evidence and **not** the proof-preservation claim. That claim remains
+what it always was — the same assertions run against both implementations, 0/6
+pass pre-fix, 67/67 post-fix.
+
+The runtime evidence is not evidence *for* the fix. It is the live-DB
+measurement the T1 gate requires, produced by CI on this lane's own head. It is
+included because it exists and is real, not because it argues for the diff.
+
+`boundaries.database_access` previously read a flat `none`. That was correct
+about the diff and about every local run in this lane, and wrong about CI. It is
+corrected in place rather than left standing.
+
+Nothing was re-executed. A fresh run would be a different measurement wearing
+this merge SHA's name.
+
+`ops:truth-check UTV2-1631` then returns `VERDICT: pass (43 checks, 0 failures)`
+and `ops:lane-close UTV2-1631` exits 0 with an empty failure list.
