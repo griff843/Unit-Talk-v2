@@ -50,5 +50,27 @@ The recovered files are historical evidence of the branch state. They are **not*
 to the merge commit and should not be treated as a merge-SHA-bound proof bundle; the
 merge-SHA binding lives in the existing `verification.md` / `evidence.json`.
 
+## Recovery is not certification
+
+Recovering a claim byte-identically establishes **what the branch said**, not that the run
+happened as described. This file is presented as retrieved evidence, not as a verdict.
+
+Two specific cautions on the recovered `verification.md`:
+
+- It asserts `pnpm test:db` PASS 7/7 against "live Supabase" for a **docs-only governance
+  lane**, run from `.out/worktrees/claude__utv2-1423-canonical-merge-authority`. That
+  worktree no longer exists, so whether it held database credentials cannot now be
+  verified.
+- The lane merged 2026-07-08, before `pnpm ci:assert-staging` landed in `a55de402`
+  (2026-07-30). At that time `test:db` from a developer checkout ran against the
+  **production** project, not staging. The claim is therefore coherent with its era but
+  describes a path that is now prohibited, and its TAP block is not reproducible under the
+  current standard.
+
+Compare UTV2-1604, whose bundle asserted a `test:db` run sourcing production credentials
+from the main checkout and was corrected before merge. The failure mode being catalogued
+is not only "proof was destroyed" but also "proof asserted a run that could not have
+happened as described" — a bundle can survive intact and still be unproven.
+
 Full context: [`../UNPROVEN_BUT_SHIPPED.md`](../UNPROVEN_BUT_SHIPPED.md) and
 [`../UTV2-1631/proof-scaffold-audit.md`](../UTV2-1631/proof-scaffold-audit.md).

@@ -33,6 +33,12 @@ scaffold on the branch and destroyed nothing. That is a materially better result
 audit's worst case, and a materially worse one than "all fine" — because 2 files *were*
 destroyed, on the highest-consequence lane in the set.
 
+**One caveat governs the whole table below.** These outcomes describe whether the proof
+*artifact* survived, not whether its *claims hold*. 11 of the 21 lanes assert a
+`test:db` run that today's rules would reject — see
+[Claim coherence](#claim-coherence--a-surviving-bundle-can-still-be-unproven). A file
+graded `NO_LOSS` here is intact; it is not thereby certified.
+
 ---
 
 ## Count reconciliation
@@ -185,6 +191,61 @@ not.
 Lanes in this group: UTV2-1143, 1170, 1171, 1174, 1286, 1287, 1344, 1352, 1401, 1433,
 1459, 1460, 1464, 1467, 1524. (UTV2-1423 also appears in C1 but is classified
 `RECOVERED` above.)
+
+---
+
+## Claim coherence — a surviving bundle can still be unproven
+
+Presence of text is not proof. A bundle can survive intact and still assert a run that
+could not have happened as described. UTV2-1604 (merged 2026-07-29) is the worked
+example: its bundle claimed `pnpm test:db` 7/7 sourcing **production** credentials from
+the main checkout — a path now prohibited and not reproducible — and was corrected to a
+truthful claim before merge.
+
+So every C1 bundle asserting a live-database run was re-checked against what that lane
+could actually have executed at its own merge date.
+
+**The dating boundary:** `pnpm test:db` now begins with `pnpm ci:assert-staging`, which
+lands it in the staging project (`xskgrzbteyqdufktjrjx`) and fails closed in a developer
+checkout. That guard arrived with UTV2-1630 in **`a55de402`, 2026-07-30**. **Every C1 lane
+merged before it** (2026-05-26 → 2026-07-17). At their time, `test:db` from a developer
+checkout ran against **production** (`zfzdnfwdarxucxtaojxm`).
+
+**11 of the 21 C1 lanes assert a `test:db` run:**
+
+| Lane | Tier | Merged | Bundle | Project named |
+|---|---|---|---|---|
+| UTV2-1286 | T1 | 2026-06-22 | surviving | production |
+| UTV2-1287 | T1 | 2026-06-22 | surviving | production |
+| UTV2-1344 | T2 | 2026-06-28 | surviving | unstated |
+| UTV2-1352 | T2 | 2026-06-29 | surviving | unstated |
+| UTV2-1464 | T2 | 2026-07-04 | surviving | unstated |
+| UTV2-1459 | T2 | 2026-07-06 | surviving | production |
+| **UTV2-1423** | **T1** | **2026-07-08** | **recovered** | unstated ("live Supabase") |
+| UTV2-1467 | T1 | 2026-07-10 | surviving | production |
+| UTV2-1524 | T1 | 2026-07-13 | surviving | production |
+| UTV2-1433 | T2 | 2026-07-17 | surviving | unstated |
+| UTV2-1460 | T2 | 2026-07-17 | surviving | unstated |
+
+**What this does and does not mean.** These claims are *coherent with their era* — unlike
+UTV2-1604, they describe a run that was genuinely possible and routine when made, so this
+is not the "asserted a run that could not have happened" failure mode. But their evidence
+is a **production-database run**, which today's standard repudiates: current T1 runtime
+proof requires the staging project plus a `ci-db-proof-receipt/v2` artifact
+re-verified in-run. None of these 11 TAP blocks is reproducible today, and none would
+satisfy the present gate.
+
+The honest reading: their DB evidence is **valid-for-its-era, not valid-now**. That is a
+third category alongside "destroyed" and "never existed", and it is invisible to any
+shape or presence test — which is precisely why it is recorded here.
+
+**This applies to the recovered UTV2-1423 file too, and is not softened by the fact that
+this lane recovered it.** Its TAP block is a docs-only governance lane asserting a live
+production DB run from a worktree at
+`.out/worktrees/claude__utv2-1423-canonical-merge-authority`. That worktree no longer
+exists, so whether it held credentials cannot now be checked. The recovered file is
+byte-identical evidence of *what the branch said*; it is **not** a certification that the
+run occurred as described. Recovering a claim is not the same as verifying it.
 
 ---
 

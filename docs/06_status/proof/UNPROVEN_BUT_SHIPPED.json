@@ -1323,5 +1323,98 @@
       "UTV2-1467",
       "UTV2-1524"
     ]
+  },
+  "claim_coherence": {
+    "principle": "Presence of proof text is not proof. A bundle can survive intact and still assert a run that could not have happened as described (worked example: UTV2-1604, corrected before merge 2026-07-29).",
+    "staging_boundary": {
+      "guard": "pnpm ci:assert-staging",
+      "landed_in": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "landed_on": "2026-07-30",
+      "issue": "UTV2-1630",
+      "effect": "test:db now targets the staging project xskgrzbteyqdufktjrjx and fails closed in a developer checkout."
+    },
+    "all_c1_lanes_merged_before_boundary": true,
+    "c1_lane_merge_date_range": "2026-05-26 to 2026-07-17",
+    "lanes_asserting_test_db": [
+      {
+        "lane": "UTV2-1286",
+        "tier": "T1",
+        "merged_at": "2026-06-22",
+        "bundle": "surviving",
+        "project_named": "production"
+      },
+      {
+        "lane": "UTV2-1287",
+        "tier": "T1",
+        "merged_at": "2026-06-22",
+        "bundle": "surviving",
+        "project_named": "production"
+      },
+      {
+        "lane": "UTV2-1344",
+        "tier": "T2",
+        "merged_at": "2026-06-28",
+        "bundle": "surviving",
+        "project_named": "unstated"
+      },
+      {
+        "lane": "UTV2-1352",
+        "tier": "T2",
+        "merged_at": "2026-06-29",
+        "bundle": "surviving",
+        "project_named": "unstated"
+      },
+      {
+        "lane": "UTV2-1464",
+        "tier": "T2",
+        "merged_at": "2026-07-04",
+        "bundle": "surviving",
+        "project_named": "unstated"
+      },
+      {
+        "lane": "UTV2-1459",
+        "tier": "T2",
+        "merged_at": "2026-07-06",
+        "bundle": "surviving",
+        "project_named": "production"
+      },
+      {
+        "lane": "UTV2-1423",
+        "tier": "T1",
+        "merged_at": "2026-07-08",
+        "bundle": "recovered",
+        "project_named": "unstated"
+      },
+      {
+        "lane": "UTV2-1467",
+        "tier": "T1",
+        "merged_at": "2026-07-10",
+        "bundle": "surviving",
+        "project_named": "production"
+      },
+      {
+        "lane": "UTV2-1524",
+        "tier": "T1",
+        "merged_at": "2026-07-13",
+        "bundle": "surviving",
+        "project_named": "production"
+      },
+      {
+        "lane": "UTV2-1433",
+        "tier": "T2",
+        "merged_at": "2026-07-17",
+        "bundle": "surviving",
+        "project_named": "unstated"
+      },
+      {
+        "lane": "UTV2-1460",
+        "tier": "T2",
+        "merged_at": "2026-07-17",
+        "bundle": "surviving",
+        "project_named": "unstated"
+      }
+    ],
+    "verdict": "These claims are coherent with their era — a production-database run from a developer checkout was routine and possible when made — so they are NOT the UTV2-1604 failure mode. But the evidence is a production-database run, which the current standard repudiates: T1 runtime proof now requires the staging project plus a ci-db-proof-receipt/v2 artifact re-verified in-run. None of these TAP blocks is reproducible today or would satisfy the present gate. Classify as valid-for-era, not valid-now.",
+    "applies_to_recovered_content": "The recovered UTV2-1423 verification.md is subject to the same caveat and is not certified by having been recovered. It asserts a live-database run for a docs-only governance lane from a worktree that no longer exists; whether it held credentials cannot now be checked. Recovering a claim establishes what the branch said, not that the run occurred."
   }
 }

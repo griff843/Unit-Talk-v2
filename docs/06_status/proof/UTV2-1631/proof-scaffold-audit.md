@@ -281,3 +281,10 @@ destroyed and what it could not decide; the ledger decides the remainder.
 
 Table A restoration (the 82 destructive events on `main`, all locally recoverable via
 `git show <sha>^:<path>`) remains open and is still the larger body of work.
+
+That restoration should carry one finding from the C1 work: **a surviving bundle can
+still be unproven.** 11 of the 21 C1 lanes assert a `pnpm test:db` run predating the
+`ci:assert-staging` guard (`a55de402`, 2026-07-30), so their TAP evidence is a
+*production*-database run from a developer checkout — valid-for-its-era, but repudiated by
+the current standard and not reproducible. Restoring a destroyed file returns the text; it
+does not validate the claim inside it. See the ledger's "Claim coherence" section.
