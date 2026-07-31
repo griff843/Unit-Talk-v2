@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1631",
+  "tier": "T1",
+  "title": "proof-generate must preserve measured proof, not replace it with a scaffold",
+  "generated_at": "2026-07-31T05:05:00.000Z",
+  "status": "in_review",
+  "sha_binding": {
+    "verified_source_sha": "ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d",
+    "merge_sha": "ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d",
+    "base_sha": "ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d",
+    "sha_type": "merge_sha",
+    "verified_source_note": "Every measurement in this bundle was taken on the branch built from main tip ad11db4feb84f574e2cbf63e0dce05ef1c1ab47d, which is a real ancestor. The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha -- a rebind that this lane makes non-destructive.",
+    "bound_at": "2026-07-31T05:05:00.000Z"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1631-proof-preservation (implementing agent) + GitHub Actions required contexts on the PR head",
+    "method": "The load-bearing claim -- that the defect is real and that the fix removes it -- is verified by running the SAME assertions against both implementations: the pre-fix file restored verbatim from origin/main, and the fixed file. 0/6 pass pre-fix, 67/67 pass post-fix. That comparison is mechanical and does not rest on the implementing agent's narrative.",
+    "note": "This lane touches no database path. No pnpm test:db claim is made and none is applicable."
+  },
+  "static_proof": {
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "verify": { "command": "pnpm verify", "status": "see verification.md" },
+    "unit_tests": {
+      "command": "npx tsx --test scripts/ops/proof-generate.test.ts",
+      "tests": 67,
+      "pass": 67,
+      "fail": 0,
+      "skipped": 0
+    },
+    "related_suites": {
+      "command": "npx tsx --test scripts/ops/proof-generate.test.ts scripts/ops/lane-close.test.ts scripts/ops/truth-check-lib.test.ts",
+      "tests": 259,
+      "pass": 259,
+      "fail": 0
+    }
+  },
+  "reproduction": {
+    "target": "copy of docs/06_status/proof/UTV2-1628/ (7 queries, 8 row_counts, real verifier.identity)",
+    "command": "pnpm ops:proof-generate UTV2-9999 --merge-sha ad11db4f4ce54b60ad2f9b4f1bec81e6e4a95a72 --json",
+    "pre_fix": {
+      "verification_md_bytes": { "before": 19624, "after": 850 },
+      "diff_summary_md_bytes": { "before": 10515, "after": 730 },
+      "evidence_json_bytes": { "before": 18742, "after": 18742 },
+      "exit_code": 0,
+      "reported_as": "stale_paths_replaced"
+    },
+    "post_fix": {
+      "verification_md_bytes": { "before": 19624, "after": 19624 },
+      "diff_summary_md_bytes": { "before": 10515, "after": 10515 },
+      "evidence_json_bytes": { "before": 18742, "after": 18742 },
+      "exit_code": 0,
+      "reported_as": "preserved_paths + rebound_paths",
+      "lines_changed": 6,
+      "lines_changed_detail": "MERGE_SHA: (1), Merge SHA: (2), verified_source_sha (1), sha_binding.merge_sha (1), bound_at (1)"
+    }
+  },
+  "both_directions": {
+    "method": "origin/main:scripts/ops/proof-generate.ts restored verbatim alongside the fixed implementation; the new destructive-mutation assertions run against it.",
+    "pre_fix_result": { "tests": 6, "pass": 0, "fail": 6 },
+    "post_fix_result": { "tests": 67, "pass": 67, "fail": 0 }
+  },
+  "scaffold_audit": {
+    "document": "docs/06_status/proof/UTV2-1631/proof-scaffold-audit.md",
+    "proof_dirs_scanned": 528,
+    "destructive_events": 82,
+    "distinct_lanes_affected": 62,
+    "lines_destroyed": 4106,
+    "bytes_destroyed_approx": 222000,
+    "events_by_github_actions_bot": 11,
+    "verification_md_replaced_visible_on_main": 22,
+    "diff_summary_md_replaced_visible_on_main": 58,
+    "always_thin_not_victims": 50,
+    "cannot_distinguish": 24,
+    "cannot_distinguish_reason": "the adding commit IS the lane's own squash-merge SHA, so main retains no pre-state; resolvable only from GitHub's retained PR commit list, which was not consulted",
+    "repairs_performed_in_this_pr": 0
+  },
+  "boundaries": {
+    "production_writes": "none",
+    "production_credentials": "none in any checkout or PR-triggered workflow",
+    "database_access": "none",
+    "other_lane_proof_modified": "none"
+  }
+}
