@@ -369,3 +369,53 @@ contaminated tables and the whole surface is pointless.
   was written for it: the partition guard is conditioned on `v_raw > 0` so a
   replay against an empty database does not abort.
 - `packages/db/src/database.types.ts` regeneration — post-merge, per §8.
+
+### 12. Lane apparatus — ready to use the moment the slot frees
+
+`ops:lane-start UTV2-1399` was deliberately NOT run. Note that it would have
+been *mechanically admitted*: `scripts/ops/shared.ts readAllManifests()` reads
+only the local `docs/06_status/lanes/*.json`, and UTV2-1604's manifest exists
+only on its own PR branch, so the governor would have seen no `runtime` lane and
+raised no `forbidden_combination` violation. Admission by that loophole would
+still have violated the rule, so the lane was not started. (Four of the six
+active worktrees — UTV2-1594, 1613, 1624, 1632 — likewise have no committed
+manifest, so the governor is blind to most of the live board. Recommend
+resolving active lanes from open PRs rather than the local working tree.)
+
+**Unblock condition:** UTV2-1604 reaches `done` (PR #1319 merged and its lane
+closed). Then `ops:lane-start UTV2-1399` is admissible with no config change.
+
+Exact `file_scope_lock` for the manifest (`lane_type: migration`, `tier: T1`,
+`executor: claude`) — every file this lane creates or modifies:
+
+```json
+[
+  "supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql",
+  "db/migrations-rollback/20260731000000_utv2_1399_fixture_excluding_reporting_views.down.sql",
+  "scripts/ci/utv2-1399-reporting-view-guard.test.ts",
+  "scripts/generate-types.mjs",
+  "packages/db/src/database.types.ts",
+  "package.json",
+  ".lane/migration-lock.yml",
+  ".ops/sync/UTV2-1399.yml",
+  "docs/06_status/lanes/UTV2-1399.json",
+  "docs/06_status/proof/UTV2-1399/**"
+]
+```
+
+`expected_proof_paths`: `docs/06_status/proof/UTV2-1399/verification.md`,
+`docs/06_status/proof/UTV2-1399/evidence.json`.
+
+Do **not** set `runtime_proof_kind: live-schema-parity` (see §9).
+
+`.lane/migration-lock.yml` currently holds a **stale** lock naming
+`issue_id: UTV2-1086` with `release_after: merge`, acquired 2026-05-24 — that
+migration merged long ago and the lock was never released.
+`scripts/lane-contract.ts` only checks the file *exists*, not that it matches
+the current lane, so the stale lock neither blocks nor protects anything. It
+should be re-claimed for UTV2-1399 as part of lane-start.
+
+**Remaining steps once started:** claim the migration lock → `pnpm verify` →
+`pnpm test:db` → open PR → four required contexts green → `pm-verdict/v1`
+APPROVED + `t1-approved` → merge via REST (never `--admin`) → migration applied
+to live → `pnpm supabase:types` → `ops:lane-finalize` → `ops:lane-close`.
