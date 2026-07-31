@@ -2,17 +2,46 @@
  * ops:reconcile — scheduled stranded lane detection (EXECUTION_TRUTH_MODEL.md §7)
  *
  * Detects and mutates manifests for stale/stranded/orphaned lanes:
- *   stale:    heartbeat_at 4-24h old → logged in digest, no manifest write
- *   stranded: heartbeat_at >24h → status → blocked, truth_check_history appended
- *   orphaned: branch deleted on remote but manifest active → logged in digest
+ *   stale:        heartbeat_at 4-24h old → logged in digest, no manifest write
+ *   stranded:     heartbeat_at >24h → status → blocked, truth_check_history appended
+ *   orphaned:     branch deleted on remote but manifest active → logged in digest
+ *   ghost_merged: the lane's PR is MERGED on GitHub while the manifest is still
+ *                 in an active status → status → merged, commit_sha bound
  *
  * Does not modify branches or Linear state. Idempotent — safe to re-run.
+ *
+ * ## ghost_merged (UTV2-1613)
+ *
+ * A manifest left in `started`/`in_progress`/`in_review` after its PR merged
+ * keeps holding its `file_scope_lock` against every other lane and keeps
+ * consuming a concurrency slot, indefinitely — nothing in the ordinary flow
+ * ever revisits it. Live examples at the time of writing: UTV2-1553
+ * (`started`, PR #1322 merged) blocking any lane that touches its files, and
+ * UTV2-1612's stale `package.json` lock blocking UTV2-1604.
+ *
+ * Reconciling such a manifest to `merged` is not a judgement about the lane's
+ * quality — it is copying down what GitHub already says. It deliberately
+ * stops at `merged` and never advances to `done`: `done` is a governance
+ * verdict that only a passing `ops:truth-check` may grant, and this reconciler
+ * measures nothing. `merged` is enough to release the locks, because
+ * `merged` is outside both `ACTIVE_LOCK_STATUSES` and the file-scope guard's
+ * `LOCK_CONFLICT_STATUSES`.
+ *
+ * The appended history entry is a `fail` under the canonical `ops:reconcile`
+ * runner, recording exactly why the lane was reconciled. It is never a pass:
+ * see UTV2-1613 for what happened the last time a repair path wrote one.
  */
 
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROOT, parseArgs, readAllManifests, type LaneManifest } from './shared.js';
+import {
+  ACTIVE_LOCK_STATUSES,
+  ROOT,
+  parseArgs,
+  readAllManifests,
+  type LaneManifest,
+} from './shared.js';
 
 // ── Thresholds (EXECUTION_TRUTH_MODEL.md §7) ─────────────────────────────────
 
@@ -21,7 +50,7 @@ const STRANDED_MS = 24 * 60 * 60 * 1000; // 24 hours → blocked (write manifest
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type ReconcileVerdict = 'stale' | 'stranded' | 'orphaned' | 'clean';
+export type ReconcileVerdict = 'stale' | 'stranded' | 'orphaned' | 'ghost_merged' | 'clean';
 
 export interface ReconcileEntry {
   issue_id: string;
@@ -45,11 +74,80 @@ interface ReconcileDigest {
   entries: ReconcileEntry[];
 }
 
+export interface MergedPrForLane {
+  url: string | null;
+  mergeSha: string | null;
+}
+
 export interface ReconcileManifestOptions {
   apply: boolean;
   now?: Date;
   branchExists?: (branch: string) => boolean | null;
   writeManifest?: (manifest: LaneManifest) => void;
+  /**
+   * Resolves the merged PR authoritatively backing this lane, or null when the
+   * lane has no merged PR. Injectable so the ghost-lane rule is testable
+   * without a network round trip.
+   */
+  resolveMergedPr?: (manifest: LaneManifest) => MergedPrForLane | null;
+}
+
+/**
+ * Asks GitHub whether this lane's PR is merged. Resolves via the manifest's
+ * own `pr_url` when it has one, otherwise by the lane branch's merged head PR
+ * — the stranded case where the lane never recorded its own binding.
+ *
+ * Every failure mode returns null (no ghost detected) rather than guessing:
+ * `gh` missing, unauthenticated, rate-limited, ambiguous results, or a PR
+ * whose head ref is not this lane's branch. A reconciler that mutates
+ * governance state on an unclear answer would be worse than one that does
+ * nothing.
+ */
+export function resolveMergedPrForLane(manifest: LaneManifest): MergedPrForLane | null {
+  const selector = manifest.pr_url
+    ? ['view', manifest.pr_url]
+    : ['list', '--head', manifest.branch, '--state', 'merged', '--limit', '5'];
+  const result = spawnSync(
+    'gh',
+    [
+      'pr',
+      ...selector,
+      '--repo',
+      'griff843/Unit-Talk-v2',
+      '--json',
+      'url,state,mergedAt,mergeCommit,headRefName',
+    ],
+    { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
+  );
+  if (result.error || result.status !== 0 || !result.stdout) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    return null;
+  }
+
+  type PrShape = {
+    url?: string;
+    state?: string | null;
+    mergedAt?: string | null;
+    mergeCommit?: { oid?: string | null } | null;
+    headRefName?: string | null;
+  };
+  const candidates: PrShape[] = Array.isArray(parsed) ? (parsed as PrShape[]) : [parsed as PrShape];
+  const merged = candidates.filter(
+    (candidate) =>
+      (candidate.state?.toLowerCase() === 'merged' || Boolean(candidate.mergedAt)) &&
+      Boolean(candidate.mergeCommit?.oid) &&
+      candidate.headRefName === manifest.branch,
+  );
+  if (merged.length !== 1) return null;
+
+  return {
+    url: merged[0]?.url ?? manifest.pr_url,
+    mergeSha: merged[0]?.mergeCommit?.oid ?? null,
+  };
 }
 
 // ── Branch existence check ────────────────────────────────────────────────────
@@ -92,8 +190,56 @@ export function reconcileManifest(
   const ageH = ageMs != null ? Math.round(ageMs / (60 * 60 * 1000) * 10) / 10 : null;
   const branchExists = options.branchExists ?? branchExistsOnRemote;
   const writeManifest = options.writeManifest ?? writeManifestJson;
+  const resolveMergedPr = options.resolveMergedPr ?? resolveMergedPrForLane;
 
-  // Check orphaned first (branch gone → higher priority than heartbeat)
+  // Ghost-merged is checked FIRST. A merged lane's branch is routinely deleted
+  // afterwards, so the orphaned-branch check below would otherwise classify
+  // every ghost as merely "orphaned — manual close required" and leave its
+  // locks in place, which is exactly the state UTV2-1613 is fixing.
+  // Only manifests in a genuinely lock-HOLDING status are eligible. This is
+  // the exact `ACTIVE_LOCK_STATUSES` set from shared.ts -- the population that
+  // reserves files and concurrency slots. Anything already terminal (including
+  // the legacy `closed` status that predates the current schema) is left
+  // strictly alone: reconciling a terminal manifest "forward" to `merged`
+  // would be moving it backwards, rewriting hundreds of settled records to fix
+  // a lock problem they do not have.
+  const merged = ACTIVE_LOCK_STATUSES.has(manifest.status) ? resolveMergedPr(manifest) : null;
+  if (merged && merged.mergeSha) {
+    const updated: LaneManifest = {
+      ...manifest,
+      status: 'merged',
+      commit_sha: merged.mergeSha,
+      pr_url: merged.url ?? manifest.pr_url,
+      truth_check_history: [
+        ...(manifest.truth_check_history ?? []),
+        {
+          checked_at: new Date(now).toISOString(),
+          verdict: 'fail',
+          merge_sha: merged.mergeSha,
+          failures: [
+            `ghost lane: PR ${merged.url ?? '(unknown)'} merged while manifest status was "${manifest.status}"; ` +
+              'merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check.',
+          ],
+          runner: 'ops:reconcile',
+        },
+      ],
+    };
+    const plannedMutation = 'status -> merged, commit_sha bound, locks released';
+    if (options.apply) {
+      writeManifest(updated);
+    }
+    return {
+      issue_id: manifest.issue_id,
+      verdict: 'ghost_merged',
+      detail: `PR ${merged.url ?? '(unknown)'} is merged (${merged.mergeSha}) but manifest status is "${manifest.status}"`,
+      branch: manifest.branch,
+      heartbeat_age_h: ageH,
+      action_taken: options.apply ? plannedMutation : `DRY-RUN - WOULD ${plannedMutation}`,
+      planned_mutation: plannedMutation,
+    };
+  }
+
+  // Check orphaned next (branch gone → higher priority than heartbeat)
   const remoteBranchExists = branchExists(manifest.branch);
   if (remoteBranchExists === false) {
     return {
@@ -173,8 +319,18 @@ export function main(argv = process.argv.slice(2)): void {
   const apply = parsed.bools.has('apply');
 
   const allManifests = readAllManifests();
+  // `--issue UTV2-###` (repeatable) narrows a run to specific lanes. The
+  // scheduled job never passes it and still sweeps everything; an operator
+  // reconciling one known ghost should not have to mutate fourteen unrelated
+  // stranded manifests as collateral in the same commit.
+  const issueFilter = new Set(
+    (parsed.flags.get('issue') ?? []).map((value) => value.trim().toUpperCase()).filter(Boolean),
+  );
   const activeManifests = allManifests.filter(
-    (m) => m.status !== 'done' && m.status !== 'merged',
+    (m) =>
+      m.status !== 'done' &&
+      m.status !== 'merged' &&
+      (issueFilter.size === 0 || issueFilter.has(m.issue_id.toUpperCase())),
   );
 
   const entries: ReconcileEntry[] = [];
@@ -183,7 +339,7 @@ export function main(argv = process.argv.slice(2)): void {
   for (const manifest of activeManifests) {
     const entry = reconcileManifest(manifest, { apply });
     entries.push(entry);
-    if (entry.verdict === 'stranded' && apply) mutations++;
+    if ((entry.verdict === 'stranded' || entry.verdict === 'ghost_merged') && apply) mutations++;
   }
 
   const digest: ReconcileDigest = {
@@ -212,6 +368,10 @@ export function main(argv = process.argv.slice(2)): void {
     const byVerdict = (v: ReconcileVerdict) => entries.filter((e) => e.verdict === v);
     for (const e of byVerdict('stranded')) {
       const label = apply ? 'STRANDED' : 'DRY-RUN WOULD MUTATE';
+      console.log(`  [${label}] ${e.issue_id}: ${e.detail} -> ${e.action_taken}`);
+    }
+    for (const e of byVerdict('ghost_merged')) {
+      const label = apply ? 'GHOST-MERGED' : 'DRY-RUN WOULD MUTATE';
       console.log(`  [${label}] ${e.issue_id}: ${e.detail} -> ${e.action_taken}`);
     }
     for (const e of byVerdict('orphaned')) {

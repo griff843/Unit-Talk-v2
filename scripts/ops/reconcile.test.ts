@@ -70,6 +70,7 @@ test('ops:reconcile default dry-run does not write stranded manifest changes', (
     apply: false,
     now: NOW,
     branchExists: () => true,
+    resolveMergedPr: () => null,
     writeManifest: () => {
       writes += 1;
     },
@@ -87,6 +88,7 @@ test('ops:reconcile --apply writes stranded manifest changes', () => {
     apply: true,
     now: NOW,
     branchExists: () => true,
+    resolveMergedPr: () => null,
     writeManifest: (manifest) => {
       written = manifest;
     },
@@ -96,4 +98,128 @@ test('ops:reconcile --apply writes stranded manifest changes', () => {
   assert.equal(entry.action_taken, 'status -> blocked, truth_check_history appended');
   assert.equal(written?.status, 'blocked');
   assert.equal(written?.truth_check_history.length, 1);
+});
+
+
+// ── UTV2-1613: automatic ghost-lock release ───────────────────────────────────
+
+const MERGE_SHA = '965872d378caa3e88ef4987f8bbb0bab0214856e';
+const PR_URL = 'https://github.com/griff843/Unit-Talk-v2/pull/1322';
+
+function ghostManifest(status: LaneManifest['status']): LaneManifest {
+  return {
+    ...manifestWithHeartbeat('2026-05-17T11:30:00.000Z'),
+    issue_id: 'UTV2-1553',
+    branch: 'claude/utv2-1553-release-merged-lane-lock',
+    status,
+    file_scope_lock: ['docs/06_status/lanes/UTV2-1553.json', 'package.json'],
+  };
+}
+
+test('UTV2-1613: an active manifest whose PR is merged is reconciled to merged and releases its locks', () => {
+  let written: LaneManifest | null = null;
+  const entry = reconcileManifest(ghostManifest('started'), {
+    apply: true,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => ({ url: PR_URL, mergeSha: MERGE_SHA }),
+    writeManifest: (manifest) => {
+      written = manifest;
+    },
+  });
+
+  assert.equal(entry.verdict, 'ghost_merged');
+  const result = written as LaneManifest | null;
+  assert.equal(result?.status, 'merged');
+  assert.equal(result?.commit_sha, MERGE_SHA);
+  assert.equal(result?.pr_url, PR_URL);
+  // `merged` is outside ACTIVE_LOCK_STATUSES and the file-scope guard's
+  // LOCK_CONFLICT_STATUSES, which is what actually releases the ghost lock.
+  assert.notEqual(result?.status, 'started');
+});
+
+test('UTV2-1613: ghost reconciliation stops at merged and never certifies done', () => {
+  let written: LaneManifest | null = null;
+  reconcileManifest(ghostManifest('in_review'), {
+    apply: true,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => ({ url: PR_URL, mergeSha: MERGE_SHA }),
+    writeManifest: (manifest) => {
+      written = manifest;
+    },
+  });
+
+  const result = written as LaneManifest | null;
+  assert.notEqual(result?.status, 'done', 'done is a governance verdict this reconciler never grants');
+  assert.equal(result?.closed_at, null);
+});
+
+test('UTV2-1613: ghost reconciliation records a canonical fail entry, never a pass', () => {
+  let written: LaneManifest | null = null;
+  reconcileManifest(ghostManifest('started'), {
+    apply: true,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => ({ url: PR_URL, mergeSha: MERGE_SHA }),
+    writeManifest: (manifest) => {
+      written = manifest;
+    },
+  });
+
+  const result = written as LaneManifest | null;
+  const history = result?.truth_check_history ?? [];
+  assert.equal(history.length, 1);
+  assert.equal(history[0]?.verdict, 'fail');
+  assert.equal(history[0]?.runner, 'ops:reconcile');
+  assert.equal(history[0]?.merge_sha, MERGE_SHA);
+  assert.match(history[0]?.failures[0] ?? '', /ghost lane/);
+  assert.match(history[0]?.failures[0] ?? '', /NOT closed/);
+});
+
+test('UTV2-1613: ghost reconciliation is a dry-run no-op without --apply', () => {
+  let writes = 0;
+  const entry = reconcileManifest(ghostManifest('started'), {
+    apply: false,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => ({ url: PR_URL, mergeSha: MERGE_SHA }),
+    writeManifest: () => {
+      writes += 1;
+    },
+  });
+
+  assert.equal(entry.verdict, 'ghost_merged');
+  assert.match(entry.action_taken, /^DRY-RUN - WOULD/);
+  assert.equal(writes, 0);
+});
+
+test('UTV2-1613: ghost detection outranks the orphaned-branch verdict', () => {
+  // A merged lane's branch is normally deleted afterwards. Before this change
+  // the deleted branch made the lane "orphaned — manual close required", which
+  // logged it forever and never released its locks.
+  const entry = reconcileManifest(ghostManifest('started'), {
+    apply: false,
+    now: NOW,
+    branchExists: () => false,
+    resolveMergedPr: () => ({ url: PR_URL, mergeSha: MERGE_SHA }),
+    writeManifest: () => {},
+  });
+  assert.equal(entry.verdict, 'ghost_merged');
+});
+
+test('UTV2-1613: an unresolvable or non-merged PR is never treated as a ghost', () => {
+  for (const resolver of [
+    () => null,
+    () => ({ url: PR_URL, mergeSha: null }),
+  ] as const) {
+    const entry = reconcileManifest(ghostManifest('started'), {
+      apply: false,
+      now: NOW,
+      branchExists: () => true,
+      resolveMergedPr: resolver,
+      writeManifest: () => {},
+    });
+    assert.notEqual(entry.verdict, 'ghost_merged');
+  }
 });
