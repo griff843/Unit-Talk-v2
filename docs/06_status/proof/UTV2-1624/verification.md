@@ -109,6 +109,8 @@ reachable, become non-executable fixtures, or point at deleted files are *stale*
 and fail — which is what forces the ledger down. Expiry lapse is a **warning**,
 deliberately: a calendar date must never block every merge in the program.
 
+## Verification
+
 ASSERTIONS:
 
 - [x] Exact current counts are re-derived by the checked-in tool, not hardcoded.
