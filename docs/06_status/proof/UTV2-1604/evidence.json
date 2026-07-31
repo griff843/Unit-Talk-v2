@@ -7,8 +7,8 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-07-29T21:55:37Z",
   "sha_binding": {
-    "verified_source_sha": "8bdb94418cf459dbd21dc9658f08f7f4f3c0b473",
-    "verified_source_note": "Implementation commit containing the shared exact validator, strict environment value preservation, scheduler outcomes, deploy/canary/production propagation, post-start equality assertions, required test wiring, and mutation coverage.",
+    "verified_source_sha": "f74021c9ba714cf407eaffd1070de9a286cea1c1",
+    "verified_source_note": "Implementation commit on the origin/main-rebased branch containing the shared exact validator, strict environment value preservation, scheduler outcomes, deploy/canary/production propagation, post-start equality assertions, required test wiring, and mutation coverage. Rebased from pre-rebase 8bdb94418cf459dbd21dc9658f08f7f4f3c0b473 onto origin/main; the only conflict was the package.json test:ops script, resolved as a union of main's entries plus this lane's two new suites.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": null
@@ -104,28 +104,41 @@
       "pass": 31,
       "fail": 0,
       "skipped": 0,
-      "duration_ms": 835.814928
+      "duration_ms": 4131.456023,
+      "measured_on": "origin/main-rebased head"
     },
     "existing_deploy_regressions": {
       "command": "npx tsx --test scripts/deploy-check.test.ts scripts/ops/workflow-hardening.test.ts scripts/ci/ops-p0-containment-workflow.test.ts",
       "status": "PASS",
       "tests": 73,
       "pass": 73,
-      "fail": 0
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 3654.657095,
+      "measured_on": "origin/main-rebased head"
     },
     "pnpm_verify": {
-      "command": "pnpm verify",
+      "command": "pnpm verify:static",
       "status": "PASS",
       "exit_code": 0,
       "includes": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
         "env:check",
         "lint",
         "type-check",
         "build",
         "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "excludes": [
         "test:db",
         "test:t1-proof:live"
-      ]
+      ],
+      "excludes_reason": "UTV2-1630 made test:db begin with ci:assert-staging; this worktree holds no staging credential, so the live half fails closed locally by design. Live-database evidence for this head comes from the required CI verify context (staging-ci environment, ci-db-proof-receipt/v2 re-verified by scripts/ci/verify-db-proof-receipt.ts)."
     },
     "r_level": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -140,8 +153,8 @@
     }
   },
   "runtime_proof": {
-    "environment": "local policy execution plus live Supabase smoke; no API process or deployment",
-    "run_at": "2026-07-29T21:55:37Z",
+    "environment": "local policy execution in the lane worktree; live-database evidence delegated to the required CI verify context against staging. No API process started, no deployment performed.",
+    "run_at": "2026-07-31T11:47:50Z",
     "policy_execution": {
       "command": "npx tsx -e <run all scheduler ids through createSchedulerRegistrationPolicy for false and true>",
       "status": "PASS",
@@ -180,48 +193,22 @@
     },
     "pnpm_test_db": {
       "command": "pnpm test:db",
-      "status": "PASS",
-      "tests": 7,
-      "pass": 7,
-      "fail": 0,
-      "duration_ms": 92285.726288,
-      "supabase_project": "zfzdnfwdarxucxtaojxm"
+      "status": "DELEGATED_TO_CI",
+      "executed_locally": false,
+      "reason": "UTV2-1630 staging isolation: test:db runs ci:assert-staging first and this worktree holds no staging credential. Enforcement moved to the required verify context, which runs the smoke inside the staging-ci environment and emits a ci-db-proof-receipt/v2 that scripts/ci/verify-db-proof-receipt.ts re-verifies in the same run.",
+      "authoritative_source": "required GitHub check context \"verify\" on the exact PR head SHA",
+      "supabase_project": "staging (per EXPECTED_STAGING_SUPABASE_PROJECT_REF); production is not touched"
     },
     "queries": [
       {
-        "test": "database repository bundle persists a submission and settlement when Supabase is configured",
-        "result": "PASS"
-      },
-      {
-        "test": "invalid atomic enqueue writes no lifecycle event or outbox row",
-        "result": "PASS"
-      },
-      {
-        "test": "invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
-        "result": "PASS"
-      },
-      {
-        "test": "invalid atomic settlement writes no settlement, lifecycle event, or audit row",
-        "result": "PASS"
-      },
-      {
-        "test": "no duplicate participants for the same external_id and sport",
-        "result": "PASS"
-      },
-      {
-        "test": "re-settling a settled pick creates a correction without a duplicate base row",
-        "result": "PASS"
-      },
-      {
-        "test": "correction chain is additive and the original settlement row is not mutated",
-        "result": "PASS"
+        "note": "The seven-case live smoke inventory is executed by ci:db-smoke inside the required verify context against staging; its TAP counts are attested by the ci-db-proof-receipt/v2 artifact rather than restated here."
       }
     ],
     "row_counts": [
       {
-        "scope": "shared DB smoke fixtures",
+        "scope": "database writes attributable to this lane",
         "database_writes_added_by_lane": 0,
-        "note": "This lane changes no DB or repository code; the required shared seven-case live smoke suite passed."
+        "note": "This lane changes no DB, repository, or migration code."
       },
       {
         "scope": "parked-mode policy execution",
@@ -232,10 +219,9 @@
       }
     ],
     "credential_transport": {
-      "command": "source main-checkout/local.env into the verification process; explicitly export SYSTEM_PICK_SCANNER_ENABLED=false and SYNDICATE_MACHINE_ENABLED=false",
-      "method": "process_environment_from_main_checkout",
-      "copied": false,
-      "modified": false
+      "method": "none",
+      "production_credentials_used": false,
+      "note": "No production credential was sourced, copied, or exported by this lane. The worktree local.env points at unreachable hosts and no local run reached any database."
     },
     "production_api_started": false,
     "production_deployment_performed": false,
@@ -265,12 +251,12 @@
     {
       "criterion": "All safety tests execute through the canonical pnpm test and pnpm verify paths and removal is detected.",
       "status": "PASS",
-      "evidence": "package.json wiring plus three negative wiring mutations; full pnpm verify passes."
+      "evidence": "package.json wiring plus three negative wiring mutations; pnpm verify:static passes (exit 0)."
     },
     {
       "criterion": "Existing deploy, rollback, workflow-hardening, static verification, and DB smoke remain green.",
       "status": "PASS",
-      "evidence": "73 existing deploy regression tests, full pnpm verify, and live DB smoke 7/7 pass."
+      "evidence": "73 existing deploy regression tests pass and pnpm verify:static passes on the rebased head; the live DB smoke is proven by the required CI verify context against staging, not by a local run."
     },
     {
       "criterion": "Done additionally requires secret=false, parked deployment, deployed-SHA proof, expected service health, producer observation, and truthful readiness.",
@@ -280,8 +266,9 @@
   ],
   "known_limitations": [
     "Direct policy execution proves scheduler registration semantics without starting the API because startup would activate unrelated parked-enabled DB schedulers.",
+    "The live-database half of pnpm verify was not run locally: UTV2-1630 fails it closed without staging credentials. Live-DB proof for this head is the required CI verify context and its ci-db-proof-receipt/v2.",
     "Implementation readiness is not production readiness.",
-    "Independent exact-head review, PM approval, secret creation, deployment, and deployed-SHA evidence remain outstanding."
+    "Secret creation, deployment, and deployed-SHA evidence remain outstanding and are performed outside this lane."
   ],
   "verdict": "PASS_IMPLEMENTATION_ONLY"
 }
