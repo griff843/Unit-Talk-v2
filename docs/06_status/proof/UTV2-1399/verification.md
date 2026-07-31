@@ -435,3 +435,63 @@ should be re-claimed for UTV2-1399 as part of lane-start.
 `pnpm test:db` → open PR → four required contexts green → `pm-verdict/v1`
 APPROVED + `t1-approved` → merge via REST (never `--admin`) → migration applied
 to live → `pnpm supabase:types` → `ops:lane-finalize` → `ops:lane-close`.
+
+### 13. Corrected exact-ID inventory (supersedes the packet's `inventory.json`)
+
+Artifact: `docs/06_status/proof/UTV2-1399/corrected-inventory.json`.
+**It authorizes nothing.** No row may be deleted on the strength of it.
+
+**The delta is a classifier correction, not data drift** — proven by re-deriving
+the packet's own published checksum against current data:
+
+```text
+packet_published_sha256      203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1
+recomputed_sha256_2026_07_31 203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1   MATCH
+```
+
+The corrected set is a **strict superset**: +31 ids, **0 removed**.
+
+```text
+                          stale packet (v1)   corrected (v2)   delta
+picks total                       107,858         107,858          0
+fixture                           100,247         100,278        +31
+legitimate                          7,611           7,580        -31
+
+sha256_fixture_v2      618ca94a27d7d033089b18adaf3ff499c2a296325b9e170d748bab20df06796d
+sha256_legitimate_v2   27b7bf563f0b2b29ab3d52c431df36a4d775c5f4fb20b6fda108cd6db1886b2e
+```
+
+**Three exclusion classes, materially different deletion risk — do not merge:**
+
+```text
+class     picks     settlement_records  pick_offer_snapshots  cc_delivery_mappings
+ci      100,270                 35,923                    20                     0
+qa_demo       6                      0                     0                    16
+junk          2                      0                     0                     0
+(legit)   7,580                  1,573                   173                     0
+```
+
+**Two packet figures are now provably wrong**, and both moved off zero —
+`relationships.md` declared both tables "not in scope":
+
+| dependent table | packet (v1) | corrected (v2) | delta |
+|---|---:|---:|---:|
+| `pick_offer_snapshots` | 0 | **20** | +20 |
+| `command_center_delivery_mappings` | 0 | **16** | +16 |
+| pick_lifecycle | 135,732 | 135,803 | +71 |
+| pick_promotion_history | 105,261 | 105,348 | +87 |
+| settlement_records | 35,912 | 35,923 | +11 |
+| distribution_outbox | 5,307 | 5,332 | +25 |
+| pick_reviews | 8,336 | 8,336 | 0 |
+| fixture submissions | 92,487 | 92,518 | +31 |
+
+Consistency check: `pick_offer_snapshots` 20 + 173 = 193 = the packet's own
+stated table total, so the reclassification is internally coherent.
+
+**Strongest recommendation for the rebuilt deletion packet:** scope deletion to
+class `ci` only. The 6 `qa_demo` picks are the **sole** source of all 16
+`command_center_delivery_mappings` rows — and that table is one of the two with
+**no `CREATE TABLE` anywhere in the migration ledger** (§9). Deleting them would
+mutate a table the repo cannot replay from scratch. Two independent problems
+intersect on exactly those 6 rows; hold them out of deletion and exclude them
+from reporting only.
