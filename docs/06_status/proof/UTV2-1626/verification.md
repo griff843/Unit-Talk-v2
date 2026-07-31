@@ -303,3 +303,35 @@ undifferentiated red X on a two-week-old file.
 - `pnpm verify` cannot complete on a workstation without staging credentials
   (inherited from UTV2-1630). Local coverage is `verify:static`; the authoritative
   full run is the required `verify` context in CI.
+
+## Runtime proof harvest (closeout)
+
+`ops:truth-check` R1/R2/R3/P10 require the evidence bundle to carry the live
+queries, the observed row counts, and a verifier identity distinct from the
+lane's `created_by`. This lane's central measurement is a read-only production
+read, which no CI job can verify — but the same head also produced a writable
+staging DB proof under the standard CI receipt, and that receipt was never
+copied into `evidence.json`. It was read back on 2026-07-31 from the retained
+artifacts of the original run:
+
+| Fact | Source |
+|---|---|
+| 7 live `pnpm test:db` cases against staging `xskgrzbteyqdufktjrjx` | `ci-db-proof-receipt/v2` `captured_output`, artifact `8778682075` |
+| 3 reset + 5 upsert row counts on staging | job log, run `30591788931` job `91035479830` (`Writable DB proof (staging only)`), `[seed-staging]` lines |
+| 96 tests / 96 pass / 0 fail / 0 skipped across 16 TAP blocks | same job log |
+| Verifier verdict `PASS` | job log, run `30591788931` job `91036083714` (`verify`): `DB proof verified: run 30591788931 attempt 1 @ 29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0` |
+| 5 read-only production counts on `distribution_outbox` | the readiness generator's own run at 2026-07-30T23:40:39.763Z, already quoted in `blocker_detail` |
+
+The production counts are recorded as the individual `COUNT` queries
+`scripts/ops/readiness-refresh.ts` issues rather than as a single total, because
+`stale_unknown` is a subset of `processing` and `attempted-and-stuck` a subset
+of `pending` — a sum would double-count. `verifier.verifier_scope` states
+plainly that the CI identity verifies the staging execution evidence and not
+the production read; that claim rests on the persistence assertion and the
+source-scanning test recorded above.
+
+Nothing was re-executed. A fresh run would be a different measurement wearing
+this merge SHA's name.
+
+`ops:truth-check UTV2-1626` then returns `VERDICT: pass (43 checks, 0 failures)`
+and `ops:lane-close UTV2-1626` exits 0 with an empty failure list.
