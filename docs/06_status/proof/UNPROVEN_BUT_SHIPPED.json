@@ -1,0 +1,1327 @@
+{
+  "schema": "unproven-but-shipped-ledger/v1",
+  "issue": "UTV2-1635",
+  "generated_at": "2026-07-31T11:59:02.520Z",
+  "source_audit": "docs/06_status/proof/UTV2-1631/proof-scaffold-audit.md",
+  "scope": "Table C1 of the proof-scaffold audit — proof files whose adding commit on `main` is the lane's own squash-merge SHA.",
+  "method": "For each C1 file: resolve the lane PR, enumerate its retained pre-squash branch commits via GitHub `/pulls/{n}/commits`, fetch the blob at every commit that touched the path via `/contents/{path}?ref={sha}`, and test each version against the generator shape. A non-generated version on the branch proves hand-written proof was destroyed before the squash; only generated versions proves the file was born as scaffold and nothing was lost.",
+  "count_reconciliation": {
+    "audit_stated": "24 files, 22 lanes",
+    "audit_enumerated_lists": "28 entries (7 verification.md + 21 diff-summary.md) across 21 unique lanes",
+    "measured_by_shape_test": "29 files across 22 lanes",
+    "measured_after_excluding_confirmed_false_positive": "28 files across 21 lanes",
+    "false_positive": {
+      "lane": "UTV2-1125",
+      "file": "verification.md",
+      "confirmed": true,
+      "reason": "Added 2026-05-29 in 992a7c8ca1. `buildRuntimeVerification` existed from 2026-05-25 (dda94cd0) but emitted `runtime-verification.md`; it was only pointed at `verification.md` on 2026-07-04 in 994ed267. The file is hand-written prose (2,287 B, substantive Summary/Evidence sections) with zero `not run by proof-generate` / `result: not_run` markers. The audit's conclusion to exclude it is correct; its stated reason (that verification.md generation did not exist) is correct only for that filename, not for the generator function."
+    },
+    "conclusion": "The audit's lane count (22) is right only if UTV2-1125 is counted, which contradicts the audit's own caveat excluding it. Its file count (24) is not reproducible by any reading. The defensible figures are 28 files / 21 lanes."
+  },
+  "headline": {
+    "c1_files_investigated": 28,
+    "c1_lanes_investigated": 21,
+    "resolvable_from_github": 28,
+    "unresolvable": 0,
+    "files_recovered": 2,
+    "files_no_loss_generated_diff": 18,
+    "files_no_loss_augmented": 3,
+    "files_proven_by_retained_ci": 2,
+    "files_unproven_but_shipped": 3,
+    "lanes_unproven_but_shipped": [
+      "UTV2-1518",
+      "UTV2-1528",
+      "UTV2-1513"
+    ]
+  },
+  "classification_definitions": {
+    "RECOVERED": "Hand-written proof existed on the branch and was replaced by generator output before the squash merge. The destroyed version has been retrieved byte-identically from GitHub and added alongside the existing bundle. Nothing on `main` was modified or removed.",
+    "NO_LOSS_GENERATED_DIFF": "The `diff-summary.md` was generated on the branch and never had a hand-written predecessor. Its content is mechanically derived from the actual diff, so it is factually accurate — it lacks prose rationale, not evidence. No data was destroyed.",
+    "NO_LOSS_AUGMENTED": "The file was generated on the branch and then hand-augmented before merge. The version on `main` contains real measured content. No data was destroyed.",
+    "PROVEN_BY_RETAINED_CI": "The `verification.md` carries no runtime evidence, but the lane is T3, whose tier proof requirement is green CI on the merge SHA — and that CI result is still retained by GitHub and is green. The tier requirement is met by recovered evidence; only the bundle artifact is thin.",
+    "UNPROVEN_BUT_SHIPPED": "The code shipped and is on `main`, but the completion evidence required by its tier cannot be reconstructed. `verification.md` contains only generator scaffold (`result: not_run`), no hand-written version ever existed on the branch to recover, and the tier requires an issue-specific verification log that no retained artifact supplies. This says nothing about whether the code is correct — CI was green — only that the evidence does not exist."
+  },
+  "lanes": [
+    {
+      "lane": "UTV2-1518",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "UTV2-1518: widen own-lane proof-directory exemption to the full glob (reopened)",
+      "pr": "1197",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1197",
+      "merge_sha": "28d6bac3f67bcfd3ac059b9b9eb3359ce07cd781",
+      "head_sha": "eadd04c90db46b311939673652a4ab60eda83ec0",
+      "merged_at": "2026-07-13T12:46:33Z",
+      "classification": "UNPROVEN_BUT_SHIPPED",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 2,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ci/file-scope-guard.test.ts",
+        "scripts/ci/file-scope-guard.ts"
+      ],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "Executor Result Validation": "success",
+        "P0 Protocol": "success",
+        "verify": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": {
+        "rank": 1,
+        "band": "HIGH",
+        "why": "Modifies `scripts/ci/file-scope-guard.ts` (+16/−1) — the CI gate that enforces file-scope on every lane repo-wide. An undetected defect here weakens scope enforcement for all subsequent lanes."
+      }
+    },
+    {
+      "lane": "UTV2-1528",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "UTV2-1528: ratify OS v1 lock -- land OS_V1_LOCK.md",
+      "pr": "1199",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1199",
+      "merge_sha": "fa207483e6bf51fc555195a45b17d36b3d33bf9d",
+      "head_sha": "faab1ec4c6837f9c12ece6086f9f582df2d4de33",
+      "merged_at": "2026-07-13T14:11:56Z",
+      "classification": "UNPROVEN_BUT_SHIPPED",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 1,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        ".lane/lanes/governance.yml"
+      ],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "Executor Result Validation": "success",
+        "verify": "success",
+        "P0 Protocol": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": {
+        "rank": 2,
+        "band": "MEDIUM",
+        "why": "Modifies `.lane/lanes/governance.yml` (+4/−0) — governance lane path authority. Small diff, but it widens which paths a governance lane may write."
+      }
+    },
+    {
+      "lane": "UTV2-1513",
+      "tier": "T2",
+      "lane_type": "delivery-ui",
+      "title": "UTV2-1513: Public website MVP foundation",
+      "pr": "1201",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1201",
+      "merge_sha": "c9531ae7616f6812bb1f743c5d46704b213b70c4",
+      "head_sha": "9782da7a3efdb4d5550929383f83ff4801b73e13",
+      "merged_at": "2026-07-14T05:03:19Z",
+      "classification": "UNPROVEN_BUT_SHIPPED",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 32,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Executor Result Validation": "success",
+        "verify": "success",
+        "Merge Gate": "success",
+        "P0 Protocol": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": {
+        "rank": 3,
+        "band": "MEDIUM-LOW",
+        "why": "32 files, +2657/−0, all under `apps/web/**` — a new, isolated Next.js public marketing site. No existing runtime, DB, delivery, domain, or Tier C path is touched; exposure is public-facing legal/pricing copy, not pipeline behaviour."
+      }
+    },
+    {
+      "lane": "UTV2-1428",
+      "tier": "T3",
+      "lane_type": "governance",
+      "title": "UTV2-1428: launch safety incident runbook, rollback procedure, minimal SLOs",
+      "pr": "1196",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1196",
+      "merge_sha": "2b1c23169c8ca9329d1623970114015eeed72135",
+      "head_sha": "3439aff79cc3ead7f0cacfc8b92ad00278c425e8",
+      "merged_at": "2026-07-13T11:22:26Z",
+      "classification": "PROVEN_BY_RETAINED_CI",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 0,
+      "docs_only": true,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "verify": "success",
+        "P0 Protocol": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": {
+        "rank": 4,
+        "band": "LOW",
+        "why": "Documentation only (launch safety runbook / rollback / SLOs). No code changed."
+      }
+    },
+    {
+      "lane": "UTV2-1498",
+      "tier": "T3",
+      "lane_type": "governance",
+      "title": "UTV2-1498: memory-to-skill knowledge promotion framework",
+      "pr": "1198",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1198",
+      "merge_sha": "d2839f5ba95a9be589b46ce779bb19e45c5cdcd4",
+      "head_sha": "49a7fb717c0d33bb7b30e92fe93ceb76ed3d928a",
+      "merged_at": "2026-07-13T13:16:36Z",
+      "classification": "PROVEN_BY_RETAINED_CI",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 0,
+      "docs_only": true,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "verify": "success",
+        "P0 Protocol": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": {
+        "rank": 5,
+        "band": "LOW",
+        "why": "Documentation only (memory-to-skill knowledge promotion framework). No code changed."
+      }
+    },
+    {
+      "lane": "UTV2-1143",
+      "tier": "T2",
+      "lane_type": "modeling",
+      "title": "feat(domain): UTV2-1143 INIT-4.4.3 — Edge Decay Detector",
+      "pr": "943",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/943",
+      "merge_sha": "327c9a4cfd50eea592a72f332c83931c5bfec1ab",
+      "head_sha": "43d352dd278eef3272ab1e4ba7a2903c81cb4f2d",
+      "merged_at": "2026-06-01T00:37:05Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 5,
+      "docs_only": false,
+      "tier_c_paths_touched": [
+        "packages/domain/src/edge-decay/edge-decay-detector.test.ts",
+        "packages/domain/src/edge-decay/edge-decay-detector.ts",
+        "packages/domain/src/edge-decay/index.ts",
+        "packages/domain/src/index.ts"
+      ],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "verify": "success",
+        "P0 Protocol": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1170",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "fix(ops): UTV2-1170 wire loop dispatch gates",
+      "pr": "876",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/876",
+      "merge_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
+      "head_sha": "5ac914d6ed4e4c4d5f24c48d0cb638cd033ab031",
+      "merged_at": "2026-05-26T11:43:56Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 2,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ops/workflow-hardening.test.ts"
+      ],
+      "required_contexts_on_head_sha": {},
+      "required_contexts_on_merge_sha": {},
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1171",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "fix(ops): UTV2-1171 align dispatch governor gates",
+      "pr": "877",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/877",
+      "merge_sha": "d2c8b4da53767674a30cfc8e13590a189f93d7f9",
+      "head_sha": "0bf2fd500dcd06fe31ba2ec6a2831eb9a842c37c",
+      "merged_at": "2026-05-26T12:14:33Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 3,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ops/workflow-hardening.test.ts"
+      ],
+      "required_contexts_on_head_sha": {},
+      "required_contexts_on_merge_sha": {},
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1174",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "docs(governance): UTV2-1174 map prompt agents to authority and CI enforcement",
+      "pr": "878",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/878",
+      "merge_sha": "cc909e8f0742d64898eb3cf31bab6fe61efcdbe2",
+      "head_sha": "1f150039f0221e20ed55ae491e9f0baf899d891d",
+      "merged_at": "2026-05-26T13:21:07Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 0,
+      "docs_only": true,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "verify": "success",
+        "Executor Result Validation": "success",
+        "P0 Protocol": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1286",
+      "tier": "T1",
+      "lane_type": "runtime",
+      "title": "UTV2-1286 — emit per-phase loop progress so the watchdog stops false-positive restarting slow-but-alive cycles (T1)",
+      "pr": "1037",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1037",
+      "merge_sha": "2b50bf5925cfc667ec6226c710a36c739f6da128",
+      "head_sha": "28121b4e5301488ecde303d9ef89045924e78c7c",
+      "merged_at": "2026-06-22T00:17:48Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 5,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1287",
+      "tier": "T1",
+      "lane_type": "runtime",
+      "title": "UTV2-1287 — add game-results finalization/results funnel telemetry (diagnostic, no behavior change) (T1)",
+      "pr": "1038",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1038",
+      "merge_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915",
+      "head_sha": "b75236b8485c802d746d9bcd4394c369ded03c1c",
+      "merged_at": "2026-06-22T11:48:36Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 3,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1344",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "feat(ci): UTV2-1344 grading staleness alert GHA workflow",
+      "pr": "1097",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1097",
+      "merge_sha": "0a4fdb0d5662dd3790b57864b8e72a1f2b419647",
+      "head_sha": "db6b3864827c51e5c23196314eb32848a856ecbd",
+      "merged_at": "2026-06-28T08:11:45Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 2,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        ".github/workflows/grading-staleness-check.yml"
+      ],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "verify": "success",
+        "Executor Result Validation": "success",
+        "P0 Protocol": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1352",
+      "tier": "T2",
+      "lane_type": "verification",
+      "title": "feat(ops): UTV2-1352 M5 terminal criteria rollup",
+      "pr": "1109",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1109",
+      "merge_sha": "d211a73ad0270186cc200777a054aef1a7fe941e",
+      "head_sha": "6841f696c99cece8d762f914b5b8d40d8c01314e",
+      "merged_at": "2026-06-29T01:22:42Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 0,
+      "docs_only": true,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "verify": "success",
+        "Executor Result Validation": "success",
+        "P0 Protocol": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1401",
+      "tier": "T2",
+      "lane_type": "governance",
+      "title": "UTV2-1401: Ops/harness hardening — guardrail injection, CLI arg validation, autostash, BOM fail-closed, hook stderr routing",
+      "pr": "1143",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1143",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "head_sha": "ff08db25146fb97e3c1d927d4b81bb8c0af5326d",
+      "merged_at": "2026-07-03T02:38:47Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 17,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ops/lane-manifest.ts",
+        "scripts/ops/lane-start.ts",
+        "scripts/ops/merge-wrapper.test.ts",
+        "scripts/ops/merge-wrapper.ts",
+        "scripts/ops/ops-merge-wrapper.test.ts",
+        "scripts/ops/ops-merge-wrapper.ts"
+      ],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "Executor Result Validation": "success",
+        "verify": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1423",
+      "tier": "T1",
+      "lane_type": "governance",
+      "title": "UTV2-1423: canonical T2 merge-authority + PM-approval definition",
+      "pr": "1169",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1169",
+      "merge_sha": "ae203a4e16b0a1cc4828e744410b4b15cb43f9cf",
+      "head_sha": "8311eafbd8d6f6389928d1149f99ed5b0d27b389",
+      "merged_at": "2026-07-08T12:37:56Z",
+      "classification": "RECOVERED",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 2,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1433",
+      "tier": "T2",
+      "lane_type": "hygiene",
+      "title": "feat(ops): UTV2-1433 lane-close --repair-merged releases an already-done lease",
+      "pr": "1227",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1227",
+      "merge_sha": "8922cf74e59e87ad494f05dca28666d0843b5f8b",
+      "head_sha": "b9f833c6086c323e289a2bb0693f908a2c5bbc7f",
+      "merged_at": "2026-07-17T02:46:50Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 2,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ops/lane-close.test.ts",
+        "scripts/ops/lane-close.ts"
+      ],
+      "required_contexts_on_head_sha": {
+        "Executor Result Validation": "success",
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "Merge Gate": "skipped",
+        "Executor Result Validation": "success",
+        "verify": "success"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1459",
+      "tier": "T2",
+      "lane_type": "hygiene",
+      "title": "UTV2-1459: T1 proof test skips gracefully on stale live data instead of failing",
+      "pr": "1147",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1147",
+      "merge_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
+      "head_sha": "9554ac15d275f8bdaad911776da66f7f4f7e810b",
+      "merged_at": "2026-07-06T17:59:45Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 1,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1460",
+      "tier": "T2",
+      "lane_type": "hygiene",
+      "title": "feat(ops): UTV2-1460 generate verification markdown proof",
+      "pr": "1229",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1229",
+      "merge_sha": "a081e88adef5d88bcc7af3f6f7ecadfed7fdd52f",
+      "head_sha": "32b27be29dd70ac5c9fca4209dcea18aba8b34db",
+      "merged_at": "2026-07-17T05:53:48Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 0,
+      "docs_only": true,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [],
+      "required_contexts_on_head_sha": {
+        "Executor Result Validation": "success",
+        "Merge Gate": "success",
+        "verify": "success",
+        "P0 Protocol": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "Merge Gate": "success",
+        "Executor Result Validation": "success"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1464",
+      "tier": "T2",
+      "lane_type": "verification",
+      "title": "UTV2-1464: proof-generate emits verification.md with merge-SHA rebind",
+      "pr": "1150",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1150",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "head_sha": "b1440cba399d86094cb36c61bc7732d8cd8f6853",
+      "merged_at": "2026-07-04T21:37:31Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 2,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ops/proof-generate.test.ts",
+        "scripts/ops/proof-generate.ts"
+      ],
+      "required_contexts_on_head_sha": {
+        "Executor Result Validation": "success",
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "Merge Gate": "success",
+        "Executor Result Validation": "skipped",
+        "verify": "cancelled"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1467",
+      "tier": "T1",
+      "lane_type": "governance",
+      "title": "UTV2-1467: implement merge-train (Design B batched-merge protocol)",
+      "pr": "1180",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1180",
+      "merge_sha": "ddf0e90198f7702089a0c155c01bf069f7b0541a",
+      "head_sha": "eafda9c96e78ac4237cfe46e0fdcfab7727acb9b",
+      "merged_at": "2026-07-10T14:54:13Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md"
+      ],
+      "code_files_changed": 3,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        "scripts/ops/merge-wrapper.ts",
+        "scripts/ops/ops-merge-wrapper.test.ts",
+        "scripts/ops/ops-merge-wrapper.ts"
+      ],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "Executor Result Validation": "success",
+        "verify": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "success"
+      },
+      "risk": null
+    },
+    {
+      "lane": "UTV2-1524",
+      "tier": "T1",
+      "lane_type": "governance",
+      "title": "UTV2-1524: fix scope-override parser Reason/Paths order + findOwnManifest trap",
+      "pr": "1194",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1194",
+      "merge_sha": "60a2a15028aad049e8ff0f3c8c10da5275879ebb",
+      "head_sha": "1bebb8ad0251e22577ba3cc958a1ff9e8f17a063",
+      "merged_at": "2026-07-13T10:45:49Z",
+      "classification": "NO_LOSS",
+      "c1_files": [
+        "diff-summary.md",
+        "verification.md"
+      ],
+      "code_files_changed": 7,
+      "docs_only": false,
+      "tier_c_paths_touched": [],
+      "governance_paths_touched": [
+        ".github/workflows/file-scope-lock-check.yml",
+        ".lane/lanes/governance.yml",
+        "scripts/ci/file-scope-guard.test.ts",
+        "scripts/ci/file-scope-guard.ts",
+        "scripts/ci/scope-override-comment-parser.test.ts",
+        "scripts/ci/scope-override-comment-parser.ts"
+      ],
+      "required_contexts_on_head_sha": {
+        "Merge Gate": "success",
+        "P0 Protocol": "success",
+        "verify": "success",
+        "Executor Result Validation": "success"
+      },
+      "required_contexts_on_merge_sha": {
+        "verify": "cancelled"
+      },
+      "risk": null
+    }
+  ],
+  "files": [
+    {
+      "lane": "UTV2-1143",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1143/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "modeling",
+      "pr": "943",
+      "merge_sha": "327c9a4cfd50eea592a72f332c83931c5bfec1ab",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "0d53149cd045aeffc74fc5a25a79c5e446ae4eb1",
+        "first_branch_version_lines": 41,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 41
+    },
+    {
+      "lane": "UTV2-1170",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1170/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "876",
+      "merge_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "33f3c3f994fc9f87feae8b0b68b2571df97b4fb3",
+        "first_branch_version_lines": 26,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 26
+    },
+    {
+      "lane": "UTV2-1171",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1171/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "877",
+      "merge_sha": "d2c8b4da53767674a30cfc8e13590a189f93d7f9",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "4e71d8a8bfd5d4f6a2d52a087242c0a4bf88d457",
+        "first_branch_version_lines": 26,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 26
+    },
+    {
+      "lane": "UTV2-1174",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1174/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "878",
+      "merge_sha": "cc909e8f0742d64898eb3cf31bab6fe61efcdbe2",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "1065b1388dab084afdb56d3ffe1c3405e3ef3000",
+        "first_branch_version_lines": 28,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 29
+    },
+    {
+      "lane": "UTV2-1286",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1286/diff-summary.md",
+      "tier": "T1",
+      "lane_type": "runtime",
+      "pr": "1037",
+      "merge_sha": "2b50bf5925cfc667ec6226c710a36c739f6da128",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "28121b4e5301488ecde303d9ef89045924e78c7c",
+        "first_branch_version_lines": 43,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 49
+    },
+    {
+      "lane": "UTV2-1287",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1287/diff-summary.md",
+      "tier": "T1",
+      "lane_type": "runtime",
+      "pr": "1038",
+      "merge_sha": "7c6e8922ae0b27faab4de2125a26c264cda94915",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "b75236b8485c802d746d9bcd4394c369ded03c1c",
+        "first_branch_version_lines": 39,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 39
+    },
+    {
+      "lane": "UTV2-1344",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1344/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "1097",
+      "merge_sha": "0a4fdb0d5662dd3790b57864b8e72a1f2b419647",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 5,
+        "first_branch_commit": "2ee9a68ab90e426de8d73ff283d5b89408d33bfb",
+        "first_branch_version_lines": 35,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 41
+    },
+    {
+      "lane": "UTV2-1352",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1352/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "verification",
+      "pr": "1109",
+      "merge_sha": "d211a73ad0270186cc200777a054aef1a7fe941e",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "abc030b027a4174bfcda9efece1e2de99ca264cb",
+        "first_branch_version_lines": 45,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 50
+    },
+    {
+      "lane": "UTV2-1401",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1401/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "1143",
+      "merge_sha": "7ece7115e2595e100c21ad2647e7604cc5ee79d4",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "fe6b8e56f840f47bbfa8105ebd2dae598ab1e321",
+        "first_branch_version_lines": 69,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 73
+    },
+    {
+      "lane": "UTV2-1423",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1423/diff-summary.md",
+      "tier": "T1",
+      "lane_type": "governance",
+      "pr": "1169",
+      "merge_sha": "ae203a4e16b0a1cc4828e744410b4b15cb43f9cf",
+      "classification": "RECOVERED",
+      "branch_investigation": {
+        "pre_squash_versions": 2,
+        "first_branch_commit": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+        "first_branch_version_lines": 72,
+        "was_generated_shape_when_first_committed": false,
+        "destroyed_on_branch": true
+      },
+      "recovered": {
+        "from_commit": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+        "lines": 72,
+        "written_to": "docs/06_status/proof/UTV2-1423/recovered/diff-summary.md"
+      },
+      "lines_on_main": 31
+    },
+    {
+      "lane": "UTV2-1423",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1423/verification.md",
+      "tier": "T1",
+      "lane_type": "governance",
+      "pr": "1169",
+      "merge_sha": "ae203a4e16b0a1cc4828e744410b4b15cb43f9cf",
+      "classification": "RECOVERED",
+      "branch_investigation": {
+        "pre_squash_versions": 2,
+        "first_branch_commit": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+        "first_branch_version_lines": 49,
+        "was_generated_shape_when_first_committed": false,
+        "destroyed_on_branch": true
+      },
+      "recovered": {
+        "from_commit": "c003a5529962a1aeb77f38d926f6b22170fa1710",
+        "lines": 49,
+        "written_to": "docs/06_status/proof/UTV2-1423/recovered/verification.md"
+      },
+      "lines_on_main": 23
+    },
+    {
+      "lane": "UTV2-1428",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1428/diff-summary.md",
+      "tier": "T3",
+      "lane_type": "governance",
+      "pr": "1196",
+      "merge_sha": "2b1c23169c8ca9329d1623970114015eeed72135",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "82ceb855e9bb5aa76aa2e033d520436c65c73824",
+        "first_branch_version_lines": 39,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 43
+    },
+    {
+      "lane": "UTV2-1428",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1428/verification.md",
+      "tier": "T3",
+      "lane_type": "governance",
+      "pr": "1196",
+      "merge_sha": "2b1c23169c8ca9329d1623970114015eeed72135",
+      "classification": "PROVEN_BY_RETAINED_CI",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "82ceb855e9bb5aa76aa2e033d520436c65c73824",
+        "first_branch_version_lines": 25,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 25
+    },
+    {
+      "lane": "UTV2-1433",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1433/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "hygiene",
+      "pr": "1227",
+      "merge_sha": "8922cf74e59e87ad494f05dca28666d0843b5f8b",
+      "classification": "NO_LOSS_AUGMENTED",
+      "branch_investigation": {
+        "pre_squash_versions": 2,
+        "first_branch_commit": "1c1e50193f3cacfa8eeafbc684c28549edbfcf68",
+        "first_branch_version_lines": 41,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 48
+    },
+    {
+      "lane": "UTV2-1459",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1459/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "hygiene",
+      "pr": "1147",
+      "merge_sha": "5206e6e1d87787271f512d1b01009c71ad752628",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "810f751d7a37237994156a7b603f63aceb1a3224",
+        "first_branch_version_lines": 35,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 35
+    },
+    {
+      "lane": "UTV2-1460",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1460/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "hygiene",
+      "pr": "1229",
+      "merge_sha": "a081e88adef5d88bcc7af3f6f7ecadfed7fdd52f",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "e681b2003f6d9c921549652817160d7b85e85249",
+        "first_branch_version_lines": 35,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 35
+    },
+    {
+      "lane": "UTV2-1464",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1464/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "verification",
+      "pr": "1150",
+      "merge_sha": "994ed267d95c48fde488f5941d4989f092dc59ae",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "31509593be50f56c35bbc3229a8fbe5645d9d171",
+        "first_branch_version_lines": 42,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 41
+    },
+    {
+      "lane": "UTV2-1467",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1467/diff-summary.md",
+      "tier": "T1",
+      "lane_type": "governance",
+      "pr": "1180",
+      "merge_sha": "ddf0e90198f7702089a0c155c01bf069f7b0541a",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "c93391b504193a0c968f458e9c8246a44a7f8f71",
+        "first_branch_version_lines": 45,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 51
+    },
+    {
+      "lane": "UTV2-1498",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1498/diff-summary.md",
+      "tier": "T3",
+      "lane_type": "governance",
+      "pr": "1198",
+      "merge_sha": "d2839f5ba95a9be589b46ce779bb19e45c5cdcd4",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "6c214c1ea62c5a74ca60fa51a55f7cfa6a64366f",
+        "first_branch_version_lines": 37,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 41
+    },
+    {
+      "lane": "UTV2-1498",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1498/verification.md",
+      "tier": "T3",
+      "lane_type": "governance",
+      "pr": "1198",
+      "merge_sha": "d2839f5ba95a9be589b46ce779bb19e45c5cdcd4",
+      "classification": "PROVEN_BY_RETAINED_CI",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "6c214c1ea62c5a74ca60fa51a55f7cfa6a64366f",
+        "first_branch_version_lines": 25,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 25
+    },
+    {
+      "lane": "UTV2-1513",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1513/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "delivery-ui",
+      "pr": "1201",
+      "merge_sha": "c9531ae7616f6812bb1f743c5d46704b213b70c4",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "b52974ebca732b49ff983a5ca09fded10f01194d",
+        "first_branch_version_lines": 97,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 103
+    },
+    {
+      "lane": "UTV2-1513",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1513/verification.md",
+      "tier": "T2",
+      "lane_type": "delivery-ui",
+      "pr": "1201",
+      "merge_sha": "c9531ae7616f6812bb1f743c5d46704b213b70c4",
+      "classification": "UNPROVEN_BUT_SHIPPED",
+      "branch_investigation": {
+        "pre_squash_versions": 2,
+        "first_branch_commit": "b52974ebca732b49ff983a5ca09fded10f01194d",
+        "first_branch_version_lines": 29,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 25
+    },
+    {
+      "lane": "UTV2-1518",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1518/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "1197",
+      "merge_sha": "28d6bac3f67bcfd3ac059b9b9eb3359ce07cd781",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "8ea7b964e526ded77b9209f56a771ca9142c2094",
+        "first_branch_version_lines": 41,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 45
+    },
+    {
+      "lane": "UTV2-1518",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1518/verification.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "1197",
+      "merge_sha": "28d6bac3f67bcfd3ac059b9b9eb3359ce07cd781",
+      "classification": "UNPROVEN_BUT_SHIPPED",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "8ea7b964e526ded77b9209f56a771ca9142c2094",
+        "first_branch_version_lines": 35,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 25
+    },
+    {
+      "lane": "UTV2-1524",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1524/diff-summary.md",
+      "tier": "T1",
+      "lane_type": "governance",
+      "pr": "1194",
+      "merge_sha": "60a2a15028aad049e8ff0f3c8c10da5275879ebb",
+      "classification": "NO_LOSS_AUGMENTED",
+      "branch_investigation": {
+        "pre_squash_versions": 2,
+        "first_branch_commit": "6ba9d4e7ec2e6b701220966425c87438113fad78",
+        "first_branch_version_lines": 55,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 61
+    },
+    {
+      "lane": "UTV2-1524",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1524/verification.md",
+      "tier": "T1",
+      "lane_type": "governance",
+      "pr": "1194",
+      "merge_sha": "60a2a15028aad049e8ff0f3c8c10da5275879ebb",
+      "classification": "NO_LOSS_AUGMENTED",
+      "branch_investigation": {
+        "pre_squash_versions": 3,
+        "first_branch_commit": "6ba9d4e7ec2e6b701220966425c87438113fad78",
+        "first_branch_version_lines": 25,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 48
+    },
+    {
+      "lane": "UTV2-1528",
+      "file": "diff-summary.md",
+      "path": "docs/06_status/proof/UTV2-1528/diff-summary.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "1199",
+      "merge_sha": "fa207483e6bf51fc555195a45b17d36b3d33bf9d",
+      "classification": "NO_LOSS_GENERATED_DIFF",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "2575ed35794f0eb874c251f07a72485298a7dbcc",
+        "first_branch_version_lines": 37,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 43
+    },
+    {
+      "lane": "UTV2-1528",
+      "file": "verification.md",
+      "path": "docs/06_status/proof/UTV2-1528/verification.md",
+      "tier": "T2",
+      "lane_type": "governance",
+      "pr": "1199",
+      "merge_sha": "fa207483e6bf51fc555195a45b17d36b3d33bf9d",
+      "classification": "UNPROVEN_BUT_SHIPPED",
+      "branch_investigation": {
+        "pre_squash_versions": 1,
+        "first_branch_commit": "2575ed35794f0eb874c251f07a72485298a7dbcc",
+        "first_branch_version_lines": 25,
+        "was_generated_shape_when_first_committed": true,
+        "destroyed_on_branch": false
+      },
+      "recovered": null,
+      "lines_on_main": 25
+    }
+  ],
+  "risk_ordering": {
+    "basis": "PM direction: high-risk production and Tier C lanes first.",
+    "tier_c_definition_source": ".github/workflows/codex-return-review.yml",
+    "tier_c_lanes_in_c1": [
+      {
+        "lane": "UTV2-1143",
+        "classification": "NO_LOSS",
+        "paths": [
+          "packages/domain/src/edge-decay/edge-decay-detector.test.ts",
+          "packages/domain/src/edge-decay/edge-decay-detector.ts",
+          "packages/domain/src/edge-decay/index.ts",
+          "packages/domain/src/index.ts"
+        ]
+      }
+    ],
+    "note": "Exactly one C1 lane touched a Tier C path (UTV2-1143) and it is not in the unproven set; its verification.md is hand-written and intact. No lane requiring re-verification touches Tier C, so ordering falls back to governance-gate blast radius, then production surface, then code volume.",
+    "action_order": [
+      {
+        "rank": 1,
+        "lane": "UTV2-1518",
+        "tier": "T2",
+        "band": "HIGH",
+        "classification": "UNPROVEN_BUT_SHIPPED"
+      },
+      {
+        "rank": 2,
+        "lane": "UTV2-1528",
+        "tier": "T2",
+        "band": "MEDIUM",
+        "classification": "UNPROVEN_BUT_SHIPPED"
+      },
+      {
+        "rank": 3,
+        "lane": "UTV2-1513",
+        "tier": "T2",
+        "band": "MEDIUM-LOW",
+        "classification": "UNPROVEN_BUT_SHIPPED"
+      },
+      {
+        "rank": 4,
+        "lane": "UTV2-1428",
+        "tier": "T3",
+        "band": "LOW",
+        "classification": "PROVEN_BY_RETAINED_CI"
+      },
+      {
+        "rank": 5,
+        "lane": "UTV2-1498",
+        "tier": "T3",
+        "band": "LOW",
+        "classification": "PROVEN_BY_RETAINED_CI"
+      }
+    ],
+    "no_action_required": [
+      "UTV2-1143",
+      "UTV2-1170",
+      "UTV2-1171",
+      "UTV2-1174",
+      "UTV2-1286",
+      "UTV2-1287",
+      "UTV2-1344",
+      "UTV2-1352",
+      "UTV2-1401",
+      "UTV2-1423",
+      "UTV2-1433",
+      "UTV2-1459",
+      "UTV2-1460",
+      "UTV2-1464",
+      "UTV2-1467",
+      "UTV2-1524"
+    ]
+  }
+}

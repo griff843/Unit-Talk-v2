@@ -187,6 +187,15 @@ as stubs; destroyed nothing.
 67 files (16 `verification.md`, 51 `diff-summary.md`) first appear on `main`
 already in generated shape, so no pre-state exists in `main`'s history.
 
+> **[RESOLVED — see [`../UNPROVEN_BUT_SHIPPED.md`](../UNPROVEN_BUT_SHIPPED.md), UTV2-1635]**
+> C1 was resolved from GitHub's retained pre-squash PR commits, as anticipated below.
+> All 28 files across 21 lanes were decided; none remained undecidable. 26 were born as
+> scaffold on the branch and destroyed nothing; 2 (UTV2-1423, T1 governance) had
+> hand-written proof destroyed pre-squash and have been recovered byte-identically.
+> Only 3 lanes are classified `UNPROVEN_BUT_SHIPPED`. Note the count below is not
+> reproducible — the correct figures are 28 files / 21 lanes; see the ledger's
+> "Count reconciliation" section.
+
 **C1 — genuinely undecidable (24 files, 22 lanes).** The adding commit *is* the
 lane's own squash-merge SHA, confirmed against `commit_sha` in
 `docs/06_status/lanes/<ID>.json`. A squash merge collapses the branch, so if
@@ -261,3 +270,14 @@ row in Table A, `git show <sha>^:<path>` recovers the destroyed version, and
 `ops:proof-generate` will rebind its merge SHA in place rather than replace it.
 That should be a separate lane, or one lane per tier band — deliberately out of
 scope for this PR, which changes the generator and nothing else.
+
+## Follow-up completed
+
+**Table C1 was resolved under UTV2-1635.** Ledger:
+[`../UNPROVEN_BUT_SHIPPED.md`](../UNPROVEN_BUT_SHIPPED.md) (human) and
+[`../UNPROVEN_BUT_SHIPPED.json`](../UNPROVEN_BUT_SHIPPED.json) (machine-readable).
+These two documents should be read together with this audit — this one records what was
+destroyed and what it could not decide; the ledger decides the remainder.
+
+Table A restoration (the 82 destructive events on `main`, all locally recoverable via
+`git show <sha>^:<path>`) remains open and is still the larger body of work.
