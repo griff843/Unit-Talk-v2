@@ -73,6 +73,20 @@ const accessToken = getEnv('SUPABASE_ACCESS_TOKEN');
 const dbUrl = getEnv('SUPABASE_DB_URL');
 const dbPassword = getEnv('SUPABASE_DB_PASSWORD');
 
+// Schemas to emit types for.
+//
+// `reporting` (UTV2-1399) holds the fixture-excluding production reporting
+// views. It must be listed explicitly: `supabase gen types` emits ONLY the
+// schemas named here, so without it `reporting.picks` and friends would be
+// invisible to TypeScript and every consumer would fall back to reading the
+// contaminated public.* tables directly — the exact failure the views exist to
+// prevent.
+//
+// Adding a schema is additive to the generated `Database` type (it appears as a
+// sibling key of `public`), so existing `Database['public'][...]` consumers are
+// unaffected.
+const TYPED_SCHEMAS = 'public,reporting';
+
 let args;
 let mode;
 
@@ -83,13 +97,13 @@ if (dbUrl) {
   const encodedDbUrl = dbUrl.replace(/^(postgresql?:\/\/[^:]+):(.+)@(.+)$/, (_, prefix, pass, suffix) => {
     return `${prefix}:${encodeURIComponent(pass)}@${suffix}`;
   });
-  args = ['supabase', 'gen', 'types', 'typescript', '--db-url', encodedDbUrl, '--schema', 'public'];
+  args = ['supabase', 'gen', 'types', 'typescript', '--db-url', encodedDbUrl, '--schema', TYPED_SCHEMAS];
   mode = '--db-url (explicit SUPABASE_DB_URL)';
 } else if (accessToken) {
   // Option A: use --project-id with access token injected into subprocess env.
   // This is equivalent to --linked but works even when the token is only in local.env.
   supabaseEnv['SUPABASE_ACCESS_TOKEN'] = accessToken;
-  args = ['supabase', 'gen', 'types', 'typescript', '--project-id', projectRef, '--schema', 'public'];
+  args = ['supabase', 'gen', 'types', 'typescript', '--project-id', projectRef, '--schema', TYPED_SCHEMAS];
   mode = '--project-id (access token injected from local.env)';
 } else if (dbPassword) {
   // Option B2: construct pooler URL from project ref + password.
@@ -97,7 +111,7 @@ if (dbUrl) {
   // If your project is in a different region, set SUPABASE_DB_URL directly instead.
   const encoded = encodeURIComponent(dbPassword);
   const constructedUrl = `postgresql://postgres.${projectRef}:${encoded}@aws-0-us-east-2.pooler.supabase.com:5432/postgres`;
-  args = ['supabase', 'gen', 'types', 'typescript', '--db-url', constructedUrl, '--schema', 'public'];
+  args = ['supabase', 'gen', 'types', 'typescript', '--db-url', constructedUrl, '--schema', TYPED_SCHEMAS];
   mode = '--db-url (constructed from SUPABASE_DB_PASSWORD — Ohio region assumed)';
   console.warn('WARN: Region assumed to be us-east-2 (Ohio). If this fails, set SUPABASE_DB_URL explicitly.');
 } else {
