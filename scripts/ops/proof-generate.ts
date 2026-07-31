@@ -913,7 +913,6 @@ export function generateProofArtifacts(
   const generatedPaths: string[] = [];
   const updatedPaths: string[] = [];
   const unchangedPaths: string[] = [];
-  const stalePathsReplaced: string[] = [];
   const preservedPaths: string[] = [];
   const reboundPaths: string[] = [];
   const pushUnique = (paths: string[], proofPath: string): void => {
@@ -1048,11 +1047,18 @@ export function generateProofArtifacts(
           manifestModelRouting: input.manifest.model_routing,
         },
       );
+      // A model-routing sidecar is bound by APPENDING an immutable
+      // closeout_binding; existing provenance is preserved. That is a rebind,
+      // not a replacement, so it belongs in rebound_paths — reporting it as
+      // `stale_paths_replaced` was part of the same conflation this lane
+      // removes (UTV2-1631).
       if (outcome.status === 'updated') {
         pushUnique(updatedPaths, outcome.path);
-        pushUnique(stalePathsReplaced, outcome.path);
+        pushUnique(preservedPaths, outcome.path);
+        pushUnique(reboundPaths, outcome.path);
       } else if (outcome.status === 'unchanged') {
         pushUnique(unchangedPaths, outcome.path);
+        pushUnique(preservedPaths, outcome.path);
       }
     }
   }
@@ -1069,7 +1075,7 @@ export function generateProofArtifacts(
     // planned here AND re-checked by rebindMergeSha, so without this filter it
     // reported as both (visible in the reproduction of this defect).
     unchanged_paths: unchangedPaths.filter((proofPath) => !updatedPaths.includes(proofPath)),
-    stale_paths_replaced: stalePathsReplaced,
+    stale_paths_replaced: [],
     // A file this run created from a template was not "preserved" — the rebind
     // pass sees it on disk afterwards, so filter it back out.
     preserved_paths: preservedPaths.filter((proofPath) => !generatedPaths.includes(proofPath)),
