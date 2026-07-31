@@ -6,14 +6,15 @@
   "generated_at": "2026-07-30T23:50:00.000Z",
   "implementation_sha": "a35030ebb3130e5c61b697fa421b13bbb2c1b7f5",
   "sha_binding": {
-    "verified_source_sha": "a35030ebb3130e5c61b697fa421b13bbb2c1b7f5",
+    "verified_source_sha": "69b1c37091e5d8984baa48e745ac1272123fa020",
     "base_sha": "fd0b3a114a403065238e562f1ea5b82033f78cdf",
     "pre_fix_baseline_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
-    "current_pr_head_sha": null,
-    "merge_sha": null,
-    "sha_type": "pre_merge",
-    "verified_source_note": "Every static measurement below was taken on the implementation commit whose original hash was a35030ebb3130e5c61b697fa421b13bbb2c1b7f5, with the pre-fix comparison taken on a real detached worktree at a55de402. The merge SHA does not exist until the squash merge lands; post-merge-lane-close.yml rebinds it.",
-    "rebase_note": "implementation_sha names the ORIGINAL implementation commit — the tree every static measurement in this bundle was taken on, and the one the first CI receipt was produced from. Branch protection requires the head to be current with main, and several lanes landed while this PR was open, so the branch was rebased repeatedly and that commit's hash was rewritten each time; naming a rewritten hash here would be a moving target that is stale the moment main advances again. base_sha is likewise a real ancestor rather than the final base. Two of the rebases hit the same package.json conflict and were resolved the same way — `test:ops` is the union of the lanes' test lists and the `ci:*` scripts sit side by side — and two changed this lane's own content, recorded as live_regression_caught and deferral_closed. The authoritative binding is the merge SHA, which post-merge-lane-close.yml writes."
+    "current_pr_head_sha": "4d4fdd78603d026902fd4f8fb892314e4be727a5",
+    "merge_sha": "69b1c37091e5d8984baa48e745ac1272123fa020",
+    "sha_type": "merge_sha",
+    "verified_source_note": "Every static measurement below was taken on the implementation commit whose original hash was a35030ebb3130e5c61b697fa421b13bbb2c1b7f5, with the pre-fix comparison taken on a real detached worktree at a55de402. PR #1324 squash-merged to main as 69b1c37091e5d8984baa48e745ac1272123fa020 at 2026-07-31T00:50:03Z, from head 4d4fdd78603d026902fd4f8fb892314e4be727a5, and merge_sha above is that commit.",
+    "rebase_note": "implementation_sha names the ORIGINAL implementation commit — the tree every static measurement in this bundle was taken on, and the one the first CI receipt was produced from. Branch protection requires the head to be current with main, and several lanes landed while this PR was open, so the branch was rebased repeatedly and that commit's hash was rewritten each time; naming a rewritten hash here would be a moving target that is stale the moment main advances again. base_sha is likewise a real ancestor rather than the final base. Two of the rebases hit the same package.json conflict and were resolved the same way — `test:ops` is the union of the lanes' test lists and the `ci:*` scripts sit side by side — and two changed this lane's own content, recorded as live_regression_caught and deferral_closed. The authoritative binding is the merge SHA, which post-merge-lane-close.yml writes.",
+    "bound_at": "2026-07-31T00:53:51.470Z"
   },
   "verifier": {
     "identity": "github-actions/CI — run 30591605559, job staging-db-proof (producer) and job 91035195309 `verify` (independent receipt verifier)",
