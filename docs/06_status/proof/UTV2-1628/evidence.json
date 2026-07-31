@@ -4,16 +4,16 @@
   "tier": "T1",
   "title": "One enforced boundary for every privileged database client",
   "generated_at": "2026-07-30T23:50:00.000Z",
-  "implementation_sha": "0bc4b5d7a1cdea721d32df4cceba5bd3f38b4e9e",
+  "implementation_sha": "53c5d48fe796c08eea33e3c6ac3fa5afe8d776a5",
   "sha_binding": {
-    "verified_source_sha": "0bc4b5d7a1cdea721d32df4cceba5bd3f38b4e9e",
-    "base_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+    "verified_source_sha": "53c5d48fe796c08eea33e3c6ac3fa5afe8d776a5",
+    "base_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
     "pre_fix_baseline_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
     "current_pr_head_sha": null,
     "merge_sha": null,
     "sha_type": "pre_merge",
     "verified_source_note": "Every static measurement below was taken on the implementation commit whose original hash was a35030ebb3130e5c61b697fa421b13bbb2c1b7f5, with the pre-fix comparison taken on a real detached worktree at a55de402. The merge SHA does not exist until the squash merge lands; post-merge-lane-close.yml rebinds it.",
-    "rebase_note": "The branch was rebased onto 328ac4b3 to resolve a package.json conflict with the readiness-ledger lane, which rewrote all three commit hashes (a35030ebb3130e5c61b697fa421b13bbb2c1b7f5 -> 0bc4b5d7a1cdea721d32df4cceba5bd3f38b4e9e, e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b -> d3341f82e636a3a0907015510755cdfde5e692c9). The only content change the rebase introduced is package.json, where `test:ops` is now the union of both lanes' test lists and `ci:readiness-gate` sits alongside `ci:db-client-boundary`. Nothing else in the tree moved."
+    "rebase_note": "The branch was rebased twice while this PR was open, each time to resolve a package.json conflict with a lane that landed on main, and each rebase rewrote every commit hash (a35030eb -> 0bc4b5d7 -> 53c5d48f for the implementation commit). Both conflicts were the same shape and were resolved the same way: `test:ops` is the union of the lanes' test lists and the `ci:*` scripts sit side by side. Nothing else in either resolution changed behaviour."
   },
   "verifier": {
     "identity": "github-actions/CI — run 30591605559, job staging-db-proof (producer) and job 91035195309 `verify` (independent receipt verifier)",
@@ -40,11 +40,11 @@
       "verify_static_exit_code": 0,
       "test_totals": {
         "suites": 96,
-        "tests": 3980,
-        "pass": 3980,
+        "tests": 3998,
+        "pass": 3998,
         "fail": 0,
         "skipped": 0,
-        "totals_note": "`suites` counts the 96 `tsx --test` process runs that make up `pnpm test`; the per-process `# tests` lines sum to 3980 with zero failures, zero skips and zero cancellations. It was 3929 before the rebase onto 328ac4b3; the 51 additional tests are the readiness-ledger lane's, which entered `test:ops` when the two lists were unioned in the conflict resolution."
+        "totals_note": "`suites` counts the 96 `tsx --test` process runs that make up `pnpm test`; the per-process `# tests` lines sum to 3998 with zero failures, zero skips and zero cancellations. It was 3929 at implementation time and 3980 after the first rebase; the 69 additional tests belong to the two lanes that landed while this PR was open and entered `test:ops` when their lists were unioned with this lane's."
       },
       "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
       "stop_reason": "No staging credential exists on this workstation, so ci:assert-staging cannot resolve the approved staging project and refuses. That refusal is UTV2-1630's shipped control working as intended, not a gap here.",
@@ -205,11 +205,12 @@
         "ok": false,
         "sites": 93,
         "files": 87,
-        "findings": 92,
+        "findings": 94,
         "findings_by_kind": {
-          "raw-in-migrated": 83,
+          "raw-in-migrated": 84,
           "reachable-from-test": 8,
-          "unasserted-site": 1
+          "unasserted-site": 1,
+          "boundary-not-reachable": 1
         },
         "reachable_from_pnpm_test": 8,
         "reachable_files": [
@@ -226,25 +227,25 @@
       "fixed": {
         "ref": "this branch head",
         "ok": true,
-        "sites": 5,
-        "files": 5,
+        "sites": 4,
+        "files": 4,
         "findings": 0,
         "reachable_from_pnpm_test": 0
       },
-      "note": "Same guard, same inventory, two real trees. The pre-fix tree is a detached git worktree at a55de402, not a synthetic fixture, so the check is verified to fail the world it was written to describe."
+      "note": "Same guard, same inventory, two real trees. The pre-fix tree is a detached git worktree at a55de402, not a synthetic fixture. Re-measured after the second rebase: the pre-fix count is 94 rather than the 92 first observed, because two entries were added to the inventory during this PR and neither is migrated in the pre-fix tree."
     },
     "negative_control": {
       "description": "A two-line file constructing a client directly was added under scripts/, the guard run, the file removed, the guard run again.",
       "with_new_unclassified_constructor": {
-        "sites": 6,
-        "files": 6,
+        "sites": 5,
+        "files": 5,
         "findings": 1,
         "finding_kind": "unclassified",
         "exit_code": 1
       },
       "after_removal": {
-        "sites": 5,
-        "files": 5,
+        "sites": 4,
+        "files": 4,
         "findings": 0,
         "exit_code": 0
       }
@@ -253,8 +254,7 @@
       "packages/db/src/privileged-client-boundary.ts (is the boundary)",
       "scripts/ops/db-health-tripwire.ts (postgres driver; connection string passed through assertPostgresConnectionAllowed)",
       "apps/command-center/src/components/ApiHealthMonitoring.tsx (anon key, browser bundle)",
-      "apps/command-center/src/components/PipelineLiveRefresh.tsx (anon key, browser bundle)",
-      "scripts/shadow-scoring-runner.ts (deferred-cross-lane; owned by another open lane, not reachable from pnpm test)"
+      "apps/command-center/src/components/PipelineLiveRefresh.tsx (anon key, browser bundle)"
     ],
     "enforcement_points": [
       ".github/workflows/ci.yml — step `Privileged DB client boundary` inside the required `verify` job",
@@ -283,14 +283,39 @@
       "regenerate_with": "pnpm ci:db-client-inventory",
       "entries": 89,
       "by_classification_and_disposition": {
-        "writable-privileged/migrated": 39,
+        "writable-privileged/migrated": 40,
         "dead/migrated": 45,
         "writable-privileged/asserted-in-place": 1,
-        "writable-privileged/deferred-cross-lane": 1,
         "read-only/unprivileged-direct": 2,
         "behind-the-boundary/is-boundary": 1
       },
-      "note": "89 rather than the 88 measured at implementation time: scripts/ops/readiness-refresh.ts was added after the rebase — see live_regression_caught."
+      "note": "89 rather than the 88 measured at implementation time: scripts/ops/readiness-refresh.ts was added after the first rebase (see live_regression_caught), and there is no longer a deferred-cross-lane row (see deferral_closed)."
+    },
+    "deferral_closed": {
+      "file": "scripts/shadow-scoring-runner.ts",
+      "was": "deferred-cross-lane, on the stated condition that rule 3 would fail the build the moment the file became reachable from `pnpm test`",
+      "trigger": "the lane that owned the file landed on main and added scripts/shadow-scoring-runner.test.ts to `test:ops`, putting the module inside pnpm test's import graph",
+      "states_observed": [
+        {
+          "state": "after the second rebase, before migrating",
+          "sites": 5,
+          "findings": 1,
+          "kind": "reachable-from-test"
+        },
+        {
+          "state": "after migrating to the boundary, before re-classifying",
+          "sites": 4,
+          "findings": 1,
+          "kind": "no-site-for-direct-entry"
+        },
+        {
+          "state": "after re-classifying as migrated",
+          "sites": 4,
+          "findings": 0,
+          "kind": null
+        }
+      ],
+      "note": "Three states, three verdicts, none of them a judgement call. The classification could not outlive the condition it was granted under, and the guard refused a stale label even after the underlying problem was fixed."
     }
   },
   "r_level": {
@@ -305,7 +330,7 @@
     ]
   },
   "known_limitations": [
-    "scripts/shadow-scoring-runner.ts is not migrated: another open lane owns the file and has already changed it on its branch. Recorded in the inventory as deferred-cross-lane with that owner. It is not reachable from any pnpm test entrypoint, and the guard's reachability rule fails the build unconditionally the moment that stops being true.",
+    "Shadow Parity Check does not run on this PR: its pull_request path filter covers apps/api/src/**lifecycle|promotion|settlement, submission-service.ts, candidate-pick-scanner.ts and packages/domain/src/**, none of which this diff touches. That workflow pins scripts/shadow-scoring-runner.ts against the merge base, so a PR that did trigger it and also edited that file would be refused by design — the migration here was safe only because the filter does not select this diff, and a future edit to that file under a triggering diff will need the pin acknowledged rather than worked around.",
     "Two Command Center browser components stay direct. They are anon-key only and the guard re-checks that premise every run, but nothing stops a new browser component being added under the same exemption through a reviewed inventory entry.",
     "The boundary governs construction, not the environment. A process that is neither under node:test nor flagged staging-only may still reach production with a service-role key — that is production runtime and it must.",
     "The inventory's `referenced` field, and therefore its `dead` bucket, is a heuristic over imports, npm scripts, workflows and doc mentions. Nothing enforces on it; all 45 dead entries were migrated regardless.",

@@ -633,12 +633,11 @@
     {
       "file": "scripts/shadow-scoring-runner.ts",
       "classification": "writable-privileged",
-      "disposition": "deferred-cross-lane",
-      "reason": "Constructs a service-role client directly. UTV2-1629 owns this file and has already changed it on its branch, so migrating it here would collide. Not reachable from any `pnpm test` entrypoint, which is why the deferral is survivable: rule 3 fails the build the moment that stops being true.",
+      "disposition": "migrated",
+      "reason": "Constructed a service-role client directly. Deferred while another lane held the file; that lane landed and added scripts/shadow-scoring-runner.test.ts to `test:ops`, which put this module inside `pnpm test`'s import graph and made the deferral fail rule 3 on its own terms. Migrated to the boundary here, which is what the deferral said would happen.",
       "sites_before": 1,
       "referenced": true,
-      "privileged": true,
-      "owner_issue": "UTV2-1629"
+      "privileged": true
     },
     {
       "file": "scripts/stage-freshness-checks.ts",

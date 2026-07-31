@@ -1,10 +1,11 @@
 # PROOF: UTV2-1628
 
-MERGE_SHA: 328ac4b3d05ec4905520c4aedd4d5867e02b3495
+MERGE_SHA: ae5828c8f2a25801101e77e3a9343cba7e503267
 
-That is the base commit this branch merges into — `origin/main` after the rebase
-that resolved a `package.json` conflict with the readiness-ledger lane, and a
-real ancestor of this branch's head. It is provisional
+That is the base commit this branch merges into — `origin/main` after the second
+of two rebases, each resolving a `package.json` conflict with a lane that landed
+while this PR was open, and a real ancestor of this branch's head. It is
+provisional
 by construction: the squash merge SHA does not exist until the merge happens, so
 `post-merge-lane-close.yml` rewrites this line to the authoritative merge SHA via
 `ops:proof-generate --merge-sha`. The pre-fix baseline this lane measures against
@@ -38,7 +39,7 @@ ASSERTIONS:
 - [x] From a restricted context (node:test, `UNIT_TALK_DB_TARGET_POLICY=staging-only`, `NODE_ENV=test`) only the approved staging project and literal loopback are permitted; production, unidentified hosts, custom domains, poolers, tunnels, malformed and empty URLs all refuse
 - [x] Outside a restricted context the boundary does not interfere — production runtime reaches production
 - [x] The key's role is read from the key, not declared by the caller; an unreadable key is treated as privileged
-- [x] 93 direct construction sites across 87 files reduced to 5 sites across 5 files, each classified with an obligation the guard re-checks
+- [x] 93 direct construction sites across 87 files reduced to 4 sites across 4 files, each classified with an obligation the guard re-checks
 - [x] Zero files reachable from `pnpm test` construct a client outside the boundary — down from 8
 - [x] The CI check is an AST + reachability analysis, verified to fail the pre-fix tree and pass this one
 - [x] No production credential was used, copied, printed or committed; no production write was made
@@ -75,23 +76,23 @@ privilege from whether the file could reach a service-role credential at
 
 | Classification | Disposition | Files |
 |---|---|---|
-| writable-privileged | migrated | 39 |
+| writable-privileged | migrated | 40 |
 | dead (also privileged, unreferenced) | migrated | 45 |
 | writable-privileged | asserted-in-place | 1 |
-| writable-privileged | deferred-cross-lane | 1 |
 | read-only | unprivileged-direct | 2 |
 | behind-the-boundary | is-boundary | 1 |
 | **total** | | **89** |
 
 The 89th entry is `scripts/ops/readiness-refresh.ts`, which did not exist when
-the inventory was built — see evidence item 6 below.
+the inventory was built — see evidence item 6 below. There is no longer a
+`deferred-cross-lane` row: see item 7.
 
 87 of the 89 could reach a service-role credential. The 45 `dead` entries are
 also privileged — the classification records that separately rather than letting
 "dead" hide it — and were migrated anyway, because "nothing calls it today" is
 not a property that stays true.
 
-The five files that still construct directly:
+The four files that still construct directly:
 
 - `packages/db/src/privileged-client-boundary.ts` — is the boundary
 - `scripts/ops/db-health-tripwire.ts` — the `postgres` driver, which cannot use
@@ -100,7 +101,6 @@ The five files that still construct directly:
 - `apps/command-center/src/components/{ApiHealthMonitoring,PipelineLiveRefresh}.tsx`
   — browser components holding an anon key; importing `@unit-talk/db` would pull
   the server data layer into the browser bundle
-- `scripts/shadow-scoring-runner.ts` — see "Not closed" below
 
 `apps/command-center/src/lib/data/client.ts` carried a second copy of the
 connection builder alongside its own `createClient` call, so the app's behaviour
@@ -151,7 +151,7 @@ $ pnpm verify:static                                    exit 0
   lint                   OK
   type-check             OK
   build                  OK
-  test                   96 suites, 3980 tests, 3980 pass, 0 fail, 0 skipped
+  test                   96 suites, 3998 tests, 3998 pass, 0 fail, 0 skipped
   smart-form verify      OK
   verify:commands        OK
 
@@ -165,11 +165,12 @@ $ pnpm test:db
 reason, and that refusal is UTV2-1630's deliverable working, not a gap in this
 one. The authoritative complete run is the required `verify` context in CI.
 
-The 3980/0 figure is measured on this branch after the rebase onto `328ac4b3`.
-It was 3929 before that rebase; the 51 additional tests belong to the
-readiness-ledger lane and entered `test:ops` when the two lanes' test lists were
-unioned in the conflict resolution. I did not re-measure the base, so this proof
-makes no claim about the delta beyond the 34 tests added here (17 in
+The 3998/0 figure is measured on this branch after the second rebase, onto
+`ae5828c8`. It was 3929 when the lane was implemented and 3980 after the first
+rebase; the 69 additional tests belong to the two lanes that landed while this PR
+was open and entered `test:ops` when their test lists were unioned with this
+lane's. I did not re-measure the base, so this proof makes no claim about the
+delta beyond the 34 tests added here (17 in
 `scripts/ci/privileged-db-client-guard.test.ts`, 17 in
 `packages/db/src/privileged-client-boundary.test.ts`).
 
@@ -200,12 +201,16 @@ live cases `test:db` ran, is in `evidence.json` beside this document.
 EVIDENCE:
 
 **1. The guard, run against the pre-fix tree and against this branch.** A
-worktree at `a55de402` and this working tree, same guard, same inventory:
+worktree at `a55de402` and this working tree, same guard, same inventory. Re-run
+after the second rebase, so the pre-fix finding count is 94 rather than the 92
+first measured: two entries were added to the inventory during this PR and
+neither is migrated in the pre-fix tree.
 
 ```text
 $ tsx both-directions.ts
-PRE-FIX  a55de402   ok=false  sites=93  files=87  findings=92  reachable-from-pnpm-test=8
-    raw-in-migrated: 83
+PRE-FIX  a55de402   ok=false  sites=93  files=87  findings=94  reachable-from-pnpm-test=8
+    boundary-not-reachable: 1
+    raw-in-migrated: 84
     reachable-from-test: 8
     unasserted-site: 1
     reachable: apps/command-center/src/lib/data/client.ts
@@ -216,7 +221,7 @@ PRE-FIX  a55de402   ok=false  sites=93  files=87  findings=92  reachable-from-pn
     reachable: scripts/ops/fix-settlement-utv2-665.ts
     reachable: scripts/ops/ingestor-health-check.ts
     reachable: scripts/prune-provider-offers.ts
-FIXED    HEAD        ok=true   sites=5   files=5   findings=0   reachable-from-pnpm-test=0
+FIXED    HEAD        ok=true   sites=4   files=4   findings=0   reachable-from-pnpm-test=0
 ```
 
 **2. A newly added unclassified constructor fails, and only its removal clears
@@ -225,7 +230,7 @@ the guard run again:
 
 ```text
 $ pnpm ci:db-client-boundary        # with scripts/tmp-new-unclassified-constructor.ts present
-[db-client-boundary] 6 direct driver construction site(s) across 6 file(s)
+[db-client-boundary] 5 direct driver construction site(s) across 5 file(s)
 [db-client-boundary] unclassified: scripts/tmp-new-unclassified-constructor.ts constructs a
   database client directly (createClient() at line 2 from '@supabase/supabase-js') but is
   absent from scripts/ci/privileged-db-client-inventory.json.
@@ -233,7 +238,7 @@ $ pnpm ci:db-client-boundary        # with scripts/tmp-new-unclassified-construc
 exit=1
 
 $ pnpm ci:db-client-boundary        # after removal
-[db-client-boundary] 5 direct driver construction site(s) across 5 file(s)
+[db-client-boundary] 4 direct driver construction site(s) across 4 file(s)
 [db-client-boundary] OK
 exit=0
 ```
@@ -311,15 +316,38 @@ carries a classified inventory entry. Its own production-only precondition is
 untouched, so the readiness measurement still reads production and only
 production.
 
-## Not closed
+**7. The deferral closed itself, on the terms it was written under.** The
+inventory recorded `scripts/shadow-scoring-runner.ts` as `deferred-cross-lane`
+and said in as many words that rule 3 would fail the build the moment it became
+reachable from `pnpm test`. The lane that owned it then landed and added
+`scripts/shadow-scoring-runner.test.ts` to `test:ops`:
 
-- **`scripts/shadow-scoring-runner.ts` is not migrated.** UTV2-1629 owns the
-  file and has already changed it on its branch, so editing it here would
-  collide. It is recorded in the inventory as `deferred-cross-lane` with that
-  owner. The deferral buys time and nothing else: it is not reachable from any
-  `pnpm test` entrypoint, and rule 3 fails the build unconditionally the moment
-  that stops being true. It should be migrated when that lane lands — a one-line
-  import change.
+```text
+$ pnpm ci:db-client-boundary            # after the second rebase
+[db-client-boundary] 5 direct driver construction site(s) across 5 file(s)
+[db-client-boundary] reachable-from-test: scripts/shadow-scoring-runner.ts is reachable
+  from a `pnpm test` entrypoint through the static import graph and constructs a database
+  client directly: a path from the test suite to an unguarded privileged client.
+[db-client-boundary] FAILED with 1 finding(s)
+
+$ pnpm ci:db-client-boundary            # after migrating it, before re-classifying
+[db-client-boundary] 4 direct driver construction site(s) across 4 file(s)
+[db-client-boundary] no-site-for-direct-entry: scripts/shadow-scoring-runner.ts is recorded
+  as deferred but no longer constructs directly. The other lane landed; re-classify it as
+  migrated.
+[db-client-boundary] FAILED with 1 finding(s)
+
+$ pnpm ci:db-client-boundary            # after re-classifying it as migrated
+[db-client-boundary] 4 direct driver construction site(s) across 4 file(s)
+[db-client-boundary] OK
+```
+
+Three states, three different verdicts, none of them a judgement call. The
+classification could not outlive the condition it was granted under, and the
+guard would not accept a stale label even after the underlying problem was
+fixed. That is the difference between a disposition and an excuse.
+
+## Not closed
 
 - **The two Command Center browser components remain direct.** They are anon-key
   only and the guard re-checks that premise every run, but the exemption is real:

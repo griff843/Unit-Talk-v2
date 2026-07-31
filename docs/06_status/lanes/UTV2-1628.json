@@ -93,6 +93,7 @@
     "scripts/shadow-clv-parity.ts",
     "scripts/shadow-grading-parity.ts",
     "scripts/shadow-overlap-check.ts",
+    "scripts/shadow-scoring-runner.ts",
     "scripts/stage-freshness-checks.ts",
     "scripts/stranded-picks-cleanup.ts",
     "scripts/system-check.ts",
