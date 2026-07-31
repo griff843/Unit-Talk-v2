@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1594",
+  "tier": "T1",
+  "title": "Execution throughput hardening: resumable execution (A) and crash-safe verify semaphore (C)",
+  "generated_at": "2026-07-31T13:05:00.000Z",
+  "status": "in_review",
+  "sha_binding": {
+    "verified_source_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "merge_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "sha_type": "base_sha_pending_merge_rebind",
+    "verified_source_note": "Every measurement in this bundle was taken on the lane branch built from main tip b5ebdc2367fa10a85a648d90e463fd15c770a5d8, which is a real ancestor. The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "bound_at": null
+  },
+  "verifier": {
+    "identity": "claude-opus-5 (delegated T1 merge authority), verifying by execution rather than narrative",
+    "method": "Every claim below is either (a) an assertion in a committed test file that runs in `pnpm test`, or (b) captured stdout from a live process demonstration recorded verbatim in verification.md. No claim rests on the implementing agent's description of the code.",
+    "verifier_scope": "This identity verifies the static and process-level evidence for sections A and C. There is no live-database claim in this bundle: the lane touches no database path, performs no production write, and changes no schema.",
+    "live_process_note": "Fixtures 3 and 4 and the PID-reuse case were demonstrated against real OS processes (spawn, SIGKILL, SIGTERM, /proc start-time probes) in an isolated temp semaphore directory passed with --dir. The live .out/ops/preflight/full-verify-semaphore/ state used by five concurrently running sibling lanes was never a test target and was confirmed free and untouched after the demonstration."
+  },
+  "scope": {
+    "implemented": ["A: resumable execution", "C: crash-safe full-verify semaphore"],
+    "deliberately_not_implemented": ["B: canonical PM amendment ingestion"],
+    "b_deferral_reason": "The issue directs coordination with UTV2-1547's pm-decision/v1 schema rather than creating a second incompatible one. That schema has not landed, so implementing B here would either duplicate or pre-empt it. Original fixture 2 (a PM correction consumed on resume) is therefore not claimed.",
+    "b_seam": [
+      "codex-exec.ts composes the resume brief at a single point before the spawn (readCheckpoint -> buildResumeBrief -> buildCodexPrompt(packet, resumeBrief)); buildCodexPrompt takes the brief as a parameter, so an amendment brief is a second argument at the same call site.",
+      "ExecutionCheckpoint is a versioned additive record (schema_version 1) that already persists per-attempt provenance; consumed amendment ids and updated_at values are a new field alongside findings/pending_actions, with no change to the resume path.",
+      "failVisiblyAndRelease is already the single fail-closed exit that closes the attempt and releases held resources; 'conflicting authoritative amendments stop before code' is a new outcome routed through it, not new machinery.",
+      "Every attempt already emits a structured `execution` block on stdout and closes with a recorded outcome; an amendment acknowledgement is another field on that block."
+    ],
+    "b_deliberately_absent": "No notion of authoritative comment authors, no precedence rule between description and amendments, and no comment parsing. Those are the decisions UTV2-1547 owns."
+  },
+  "static_proof": {
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "tests": 4093,
+      "pass": 4093,
+      "fail": 0,
+      "skipped": 0,
+      "exit_code": 0
+    },
+    "unit_tests": [
+      {
+        "command": "npx tsx --test scripts/ops/verify-semaphore.test.ts",
+        "tests": 36,
+        "pass": 36,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ops/execution-checkpoint.test.ts",
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ops/codex-exec.test.ts",
+        "tests": 21,
+        "pass": 21,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "npx tsx --test scripts/ops/preflight.test.ts",
+        "tests": 14,
+        "pass": 14,
+        "fail": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "runtime_proof": {
+    "type": "live_process_demonstration",
+    "note": "Not a database runtime proof — this lane has no database surface. The runtime behaviour under test is OS process liveness, signal handling and crash cleanup, and it was exercised against real processes rather than stubs.",
+    "isolation": {
+      "semaphore_dir": "temporary directory created with mktemp -d, passed via --dir",
+      "live_state_protected": true,
+      "live_state_after": "full-verify semaphore: /home/griff843/code/.worktrees/wt-1594/.out/ops/preflight/full-verify-semaphore -- slots: 0/1 occupied, 0 reapable, 0 waiting; slot 0: FREE"
+    },
+    "fixtures": [
+      {
+        "id": "fixture-3",
+        "name": "a dead process holding a full-verify slot is safely reaped and the next waiter admitted",
+        "method": "A real holder process acquired slot 0, then was SIGKILLed so no cleanup handler could run. The operator command was then run against the surviving record, and a second holder acquired.",
+        "observed": {
+          "before_kill": "slot 0: LIVE, owner pid=95675, reason 'owner pid 95675 is running and heartbeating'",
+          "owner_json_survived_kill": true,
+          "after_kill": "slot 0: DEAD_OWNER (reapable), reason 'owner pid 95675 is not running on this host.'",
+          "time_to_classification_seconds": 4,
+          "previous_behaviour_seconds": 21600,
+          "next_waiter_admitted": "ACQUIRED slot 0 pid 96707, issue UTV2-2222",
+          "audit_record": "reap-log.jsonl recorded state dead_owner, the reason, the reclaiming pid/operation_id, and the full previous owner record"
+        },
+        "unit_assertion": "FIXTURE: a dead process holding a slot is safely reaped and the next waiter admitted"
+      },
+      {
+        "id": "fixture-4",
+        "name": "a live slow verifier is NOT reaped",
+        "method": "With the second holder still running, `ops:verify-slots reap` was invoked. The heartbeat was then sampled twice, three seconds apart, while the owner was idle in its event loop.",
+        "observed": {
+          "reap_result": "no reapable slots -- nothing removed",
+          "protection_stated": "protected slot 0: live -- owner pid 96707 is running and heartbeating (lease until 2026-07-31T12:50:17.654Z).",
+          "owner_unchanged": "UTV2-2222",
+          "holder_still_alive": true,
+          "heartbeat_t0": "2026-07-31T12:35:17.654Z",
+          "heartbeat_t1": "2026-07-31T12:35:21.660Z"
+        },
+        "unit_assertions": [
+          "FIXTURE: a live slow verifier is never reaped, however long it has been running (5.5h of work, still live, reapable false)",
+          "a live owner whose heartbeat merely lapsed is reported, not reaped (live_heartbeat_stale, reapable false)",
+          "a live owner past its lease is reported but still not auto-reaped (expired_live_owner, reapable false)",
+          "a foreign-host owner is protected until its lease expires (live_foreign_host, reapable false)",
+          "FIXTURE: a live slow verifier is not reaped and a contender queues behind it (holder operation_id and pid unchanged; reap-log.jsonl never created)",
+          "the heartbeat keeps beating while the main thread is blocked in spawnSync"
+        ]
+      },
+      {
+        "id": "pid-reuse",
+        "name": "a recycled pid is not mistaken for a live owner",
+        "method": "/proc/<pid>/stat field 22 (starttime) is fixed for the life of a process. Rather than wait for the kernel to wrap the pid space, the record's process_start_token was rewritten while the pid stayed alive -- the exact state a recycled pid produces.",
+        "observed": {
+          "recorded_pid": 96707,
+          "recorded_start_token": "linux:starttime:59319",
+          "rewritten_start_token": "linux:starttime:1",
+          "classification": "PID_REUSED (reapable)",
+          "reason": "pid 96707 is running but is a different process than the slot owner (recorded start linux:starttime:1, current start linux:starttime:59319); the pid was recycled.",
+          "reap_result": "reaped slot 0: pid_reused",
+          "process_left_alive": true,
+          "note": "A bare process.kill(pid, 0) liveness check would have reported this slot as live indefinitely. The reap removed the slot, not the process."
+        },
+        "unit_assertions": [
+          "a recycled pid is detected and is not mistaken for a live owner",
+          "a matching start token keeps a live owner protected",
+          "readProcessStartToken is stable for a live process and absent for a dead pid",
+          "readProcessStartToken distinguishes two different live processes",
+          "bootIdsProveReboot only fires when both sides are real kernel boot ids"
+        ]
+      },
+      {
+        "id": "signal-crash-expiry",
+        "name": "signal, crash and expiry cleanup",
+        "method": "Real child processes spawned as `node <script>` (no wrapper that could swallow a signal), one terminated with SIGTERM and one allowed to throw.",
+        "unit_assertions": [
+          "a killed process releases its slot through the signal path",
+          "an uncaught exception releases the slot before the process dies (slot released, exit still non-zero, original error still on stderr)",
+          "installVerifySlotReleaseHandlers can be uninstalled and leaves no listeners behind",
+          "release does not delete a slot that has since been re-claimed by someone else",
+          "the hard deadline retires even a live, heartbeating owner",
+          "an incomplete slot is protected inside the write grace and reapable after it"
+        ]
+      },
+      {
+        "id": "fixture-1",
+        "name": "four consecutive timeout/resume attempts become one resumable execution history",
+        "method": "Four attempts opened and closed with outcome timed_out, each completing one phase, asserted end to end.",
+        "observed": {
+          "checkpoint_files": ["UTV2-1590.json"],
+          "attempts": 4,
+          "attempt_start_phases": ["orient", "plan", "implement", "verify"],
+          "attempt_outcomes": ["timed_out", "timed_out", "timed_out", "timed_out"],
+          "completed_phases": ["orient", "plan", "implement", "verify"],
+          "completed_phase_credited_to_attempt": [1, 2, 3, 4],
+          "findings_retained": 4,
+          "findings_recomputed": 0,
+          "fifth_attempt_would_resume_at": "closeout",
+          "resume_brief_contains_all_prior_findings": true
+        },
+        "unit_assertion": "FIXTURE: four consecutive timeout/resume attempts become one resumable history, not four replays"
+      }
+    ],
+    "timeout_policy": {
+      "policy_id": "utv2-1594-exec-timeout-v1",
+      "inputs": ["tier", "reasoning_effort", "phase"],
+      "floor_ms": 300000,
+      "hard_cap_ms": 14400000,
+      "combinations_asserted_in_bounds": 105,
+      "determinism_asserted": true,
+      "previous_behaviour": "a single fixed 30-minute spawnSync timeout for every lane, tier and phase",
+      "unit_assertions": [
+        "every reachable timeout is bounded by the hard cap and the floor",
+        "the timeout policy is deterministic: identical inputs always give an identical decision",
+        "the timeout policy varies by tier, reasoning effort and phase",
+        "an unknown reasoning effort degrades to 1x and says so instead of failing open",
+        "the old fixed 30-minute timeout is no longer what a T1 implementation phase gets"
+      ]
+    },
+    "silence_handling": {
+      "principle": "silence is never success",
+      "outcomes": ["EXECUTION_TIMED_OUT", "EXECUTION_SILENT", "EXECUTION_FAILED", "EXECUTION_CANCELLED"],
+      "unit_assertions": [
+        "a silent attempt is reported as silent, never as progress",
+        "an unreadable heartbeat counts as silence rather than as liveness",
+        "a closed attempt is not mistaken for a silent one",
+        "a silent attempt fails visibly and releases the resources it owned",
+        "a reaper that itself throws cannot swallow the failing outcome",
+        "a timeout, a silent run and a plain failure are reported as three different outcomes",
+        "every non-success exit path closes the attempt and releases owned resources"
+      ]
+    },
+    "self_describing_ownership": {
+      "motivation": "UTV2-1634 recorded the opposite failure elsewhere in ops: readAllManifests() resolves lane state from the local working tree, so ownership on a PR branch is invisible from other worktrees.",
+      "fields": [
+        "schema_version",
+        "operation_id",
+        "pid",
+        "ppid",
+        "process_start_token",
+        "machine.hostname",
+        "machine.boot_id",
+        "user",
+        "issue_id",
+        "branch",
+        "worktree",
+        "command",
+        "reason",
+        "acquired_at",
+        "heartbeat_at",
+        "heartbeat_interval_ms",
+        "expires_at",
+        "hard_deadline_at"
+      ],
+      "unit_assertions": [
+        "a slot record is self-describing: a foreign reader can classify it with no writer-side state",
+        "the semaphore directory is the only shared state a reader needs"
+      ]
+    },
+    "rollout_safety": {
+      "concern": "five sibling lanes are running pnpm verify concurrently, some holding pre-UTV2-1594 slot records",
+      "unit_assertions": [
+        "a pre-UTV2-1594 slot record held by a live pid is left alone (legacy_live, reapable false)",
+        "a pre-UTV2-1594 slot record held by a dead pid is reclaimed immediately, not after 6h"
+      ]
+    }
+  },
+  "incidental_fix": {
+    "id": "E11",
+    "finding": "Preflight reported `PB2 | FAIL | spawnSync pnpm ENOBUFS` on this lane's own preflight run. `pnpm test` now emits more than spawnSync's 1 MiB default maxBuffer, aborting the child and reporting a green suite as a failed baseline -- turning a passing tree into an INFRA verdict and blocking lane start for a reason unrelated to the code under test.",
+    "fix": "maxBuffer raised to 64 MiB on both the win32 and posix spawn paths in scripts/ops/preflight.ts runCommand.",
+    "in_scope_because": "It is the same runCommand call the semaphore wraps, and it was a false red on the exact throughput path this lane exists to harden.",
+    "unit_assertion": "preflight raises the baseline spawn buffer so pnpm test output cannot ENOBUFS"
+  },
+  "scope_guard": {
+    "merge_authority": "untouched",
+    "branch_protection": "untouched",
+    "direct_main_policy": "untouched",
+    "production_runtime": "untouched",
+    "model_routing_policy": "untouched -- docs/05_operations/policies/codex-model-routing.json is read, never modified; the timeout policy keys on reasoning effort rather than profile name specifically so it does not couple to that file's contents",
+    "semaphore_scope": "unchanged -- the semaphore directory remains per worktree checkout as ratified in docs/governance/LANE_CONCURRENCY_POLICY.md 10a. A host-wide semaphore is exposed only as an operator opt-in (UNIT_TALK_FULL_VERIFY_SEMAPHORE_DIR); changing the default would serialize every concurrent lane's baseline and is a policy decision for its own lane.",
+    "observation_not_acted_on": "Because the directory is per checkout, the throttle does not currently constrain concurrent baselines across sibling worktrees, which is what 10a specifies. Recorded, not changed."
+  },
+  "files_changed": [
+    "scripts/ops/verify-semaphore.ts (new)",
+    "scripts/ops/verify-semaphore.test.ts (new)",
+    "scripts/ops/execution-checkpoint.ts (new)",
+    "scripts/ops/execution-checkpoint.test.ts (new)",
+    "scripts/ops/preflight.ts",
+    "scripts/ops/preflight.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "package.json",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "docs/06_status/lanes/UTV2-1594.json",
+    ".ops/sync/UTV2-1594.yml",
+    "docs/06_status/proof/UTV2-1594/verification.md",
+    "docs/06_status/proof/UTV2-1594/evidence.json"
+  ],
+  "operator_commands_added": {
+    "pnpm ops:verify-slots": "who holds each slot, age, heartbeat, reason; `reap` for a safe pass that removes only provably dead owners; --json for machine-readable output; --dir to target an isolated semaphore",
+    "pnpm ops:exec-checkpoint": "status | resume-brief | heartbeat | phase-complete | finding | pending | cancel for a lane's durable execution checkpoint"
+  }
+}
