@@ -4,12 +4,13 @@
   "tier": "T1",
   "title": "The readiness ledger is measured and published, and the gate says which kind of failure it found",
   "generated_at": "2026-07-30T23:55:00.000Z",
-  "implementation_sha": "1e1197581155864b550c332daa8d93a40447fceb",
+  "implementation_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
   "sha_binding": {
-    "verified_source_sha": "1e1197581155864b550c332daa8d93a40447fceb",
+    "verified_source_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
     "current_pr_head_sha": null,
-    "merge_sha": null,
-    "verified_source_note": "Bound to the implementation head that carries the generator, the gate, the workflow and the measured ledger. The lane apparatus commit that follows adds only this proof bundle and the lane manifest; the merge SHA is written back by post-merge-lane-close.yml."
+    "merge_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+    "verified_source_note": "Bound to the merge commit on main. PR #1326 was squash-merged, so the implementation head 3839ff43755e60eaebd2661880415c8784c83f7a is not an ancestor of main; 328ac4b3d05ec4905520c4aedd4d5867e02b3495 is the commit that carries this tree. The measurements below were produced on that exact tree and were not re-run afterwards against a different one.",
+    "implementation_head_sha": "3839ff43755e60eaebd2661880415c8784c83f7a"
   },
   "static_proof": {
     "verify_static": {
