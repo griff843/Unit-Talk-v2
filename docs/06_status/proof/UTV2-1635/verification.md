@@ -1,5 +1,5 @@
 # PROOF: UTV2-1635
-MERGE_SHA: 10b49e2289539790d6ec3b8ff74840f6b30706c6
+MERGE_SHA: 7625d7aa3075e2fd4db78fc31ff0aea47c21e47a
 
 Lane type: governance. Tier: T2. Docs-only — no source, migration, or workflow change.
 
