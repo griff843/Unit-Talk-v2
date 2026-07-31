@@ -583,6 +583,18 @@ the existing governed repair tool (`pnpm ops:proof-repair scaffold|apply`):
   verbatim (checked byte-identical programmatically) under a new
   `implementation_runtime_evidence` key in the same commit, so nothing
   authored is lost.
+- Independent review of this repair caught a second, real defect: `sha_binding`
+  was still bound to the pre-merge measurement tip rather than the real PR
+  squash-merge commit — `post-merge-lane-close.yml`'s automated
+  `ops:proof-generate --merge-sha` rebind never actually landed the true merge
+  SHA (a variant of the same systemic gap this repair otherwise works around).
+  `proof-repair apply` cannot fix this itself — it requires `--merge-sha` to
+  match whatever is already bound and refuses to write a merge SHA on its own,
+  by design. Fixed with the tool that does own that field:
+  `pnpm ops:proof-generate --issue UTV2-1594 --merge-sha <real merge SHA>`,
+  dry-run checked first, confirmed to touch only the SHA-anchor fields
+  (`sha_binding`, the `MERGE_SHA:` line) and leave every other authored key
+  byte-identical.
 
 No code changed in the repair; only `docs/06_status/proof/UTV2-1594/evidence.json`.
 
