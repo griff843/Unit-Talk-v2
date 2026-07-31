@@ -7,7 +7,7 @@ Lane type: governance
 Branch: codex/utv2-1594-durable-execution-semaphore
 PR URL: N/A
 Head SHA: 03f6ce4dd4abf704f9161babf1b9ee1b8fa50e30
-Merge SHA: c08548f1155f011f30a446986949b2b4d5d59b38
+Merge SHA: 8355a39c05bd380cad1f72748327878ddb003513
 Diff base: c08548f1155f011f30a446986949b2b4d5d59b38^1
 Diff target: c08548f1155f011f30a446986949b2b4d5d59b38
 
@@ -55,4 +55,4 @@ A	scripts/ops/verify-semaphore.ts
 
 ## SHA Binding
 Head SHA: 03f6ce4dd4abf704f9161babf1b9ee1b8fa50e30
-Merge SHA: c08548f1155f011f30a446986949b2b4d5d59b38
+Merge SHA: 8355a39c05bd380cad1f72748327878ddb003513
