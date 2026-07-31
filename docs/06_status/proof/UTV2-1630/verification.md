@@ -186,3 +186,27 @@ the top follow-up.
   the source; it deletes nothing. An exact-ID inventory of the 1,036 picks and
   943 submissions written since containment was produced read-only, and cleanup
   is deliberately deferred until this change is on `main`.
+
+## Runtime proof harvest (closeout)
+
+`ops:truth-check` R1/R2/R3/P10 require the evidence bundle to carry the live
+queries, the observed row counts, and a verifier identity distinct from the
+lane's `created_by`. Those facts existed the whole time inside the CI receipt
+this lane produced; they had simply never been copied into `evidence.json`.
+They were read back on 2026-07-31 from the retained artifacts of the original
+run and are now recorded under `runtime_proof`:
+
+| Fact | Source |
+|---|---|
+| 7 live `pnpm test:db` cases against staging `xskgrzbteyqdufktjrjx` | `ci-db-proof-receipt/v2` `captured_output`, artifact `8775492252` (`utv2-1630-db-proof-receipt-30583207418-1`) |
+| 5 reference-table upsert counts on staging | job log, run `30583207418` job `91008556141` (`Writable DB proof (staging only)`), `[seed-staging]` lines |
+| 96 tests / 96 pass / 0 fail / 0 skipped across 16 TAP blocks | same job log — `pnpm test:db` plus `pnpm test:t1-proof:live` |
+| Verifier verdict `PASS` | job log, run `30583207418` job `91008917481` (`verify`): `DB proof verified: run 30583207418 attempt 1 @ d75643c1ae782aa54cef1c6a22373c7a72a493ff, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0` |
+
+Nothing was re-executed to satisfy the gate. A fresh run would be a different
+measurement wearing this merge SHA's name, which is the precise defect this
+lane exists to eliminate. The seeder in that run reported only reference-data
+upserts and no reset/delete counts, so none are claimed.
+
+`ops:truth-check UTV2-1630` then returns `VERDICT: pass (43 checks, 0 failures)`
+and `ops:lane-close UTV2-1630` exits 0 with an empty failure list.
