@@ -13,7 +13,7 @@
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
     "sha_type": "merge_sha",
-    "bound_at": "2026-07-31T21:39:17.761Z"
+    "bound_at": "2026-07-31T21:53:48.712Z"
   },
   "verifier": {
     "identity": "github-actions/CI — run 30661777017, job 91259566906 (staging-db-proof, producer) and job 91260945152 (verify, independent receipt verifier)"

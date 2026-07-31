@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1613-lane-close-measured-truth
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1339
 Head SHA: bda21ecac6c5ae4f17683cddf25bd90bf0ca0c84
-Merge SHA: 1a533cbf0057ab2543813f25f16660c9e2189308
+Merge SHA: 45ce763fcee28aaf92ffd77d812c2e4dfc2679b3
 Diff base: 1a533cbf0057ab2543813f25f16660c9e2189308^1
 Diff target: 1a533cbf0057ab2543813f25f16660c9e2189308
 
@@ -57,4 +57,4 @@ A	scripts/ops/truth-history-audit.ts
 
 ## SHA Binding
 Head SHA: bda21ecac6c5ae4f17683cddf25bd90bf0ca0c84
-Merge SHA: 1a533cbf0057ab2543813f25f16660c9e2189308
+Merge SHA: 45ce763fcee28aaf92ffd77d812c2e4dfc2679b3
