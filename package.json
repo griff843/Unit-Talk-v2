@@ -93,6 +93,8 @@
     "ops:lane-alert": "tsx scripts/ops/stale-lane-alerter.ts",
     "ops:lane:block": "tsx scripts/ops/lane-block.ts",
     "ops:lane-close": "tsx scripts/ops/lane-close.ts",
+    "ops:lane-repair-packet": "tsx scripts/ops/lane-close-repair-packet.ts",
+    "ops:truth-history-audit": "tsx scripts/ops/truth-history-audit.ts",
     "ops:lane-finalize": "tsx scripts/ops/lane-finalize.ts",
     "ops:lane-link-pr": "tsx scripts/ops/lane-link-pr.ts",
     "ops:lane-manifest": "tsx scripts/ops/lane-manifest.ts",

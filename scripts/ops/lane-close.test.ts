@@ -23,8 +23,19 @@ import {
   validateTrustedPostMergeRepair,
   type RepairMergedPrInfo,
   type CloseoutFailureCode,
+  classifyTruthCheckAuthorization,
+  completeIdempotentReclose,
+  releaseSelfAcquiredMergeLock,
+  selectInferredMergedPr,
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
+import {
+  CANONICAL_TRUTH_CHECK_RUNNERS,
+  hashState,
+  isMeasuredPass,
+  measuredTruthCheckReceipt,
+  truthHistoryEntryForMeasuredReceipt,
+} from './lane-close-repair-packet.js';
 import { readAllLeases, reserveLease } from './lease-registry.js';
 import { ModelRoutingRebindError } from './proof-generate.js';
 import { evaluateCloseoutTruthGate } from './truth-check-lib.js';
@@ -726,7 +737,11 @@ test('UTV2-1564: a second --repair-merged call against an already-correctly-repa
       fetchPr,
     });
     assert.strictEqual(firstRun.code, 'repaired');
-    assert.strictEqual(firstRun.manifest.truth_check_history.length, 1);
+    // UTV2-1613: this assertion used to be `.length === 1` -- the one entry
+    // being the synthesized `verdict: 'pass'` record that no truth-check had
+    // produced. Repair now writes NO history at all; only a real
+    // runTruthCheck() run may append.
+    assert.strictEqual(firstRun.manifest.truth_check_history.length, 0);
 
     // Simulates the CI auto-closer (post-merge-lane-close.yml) re-triggering
     // --repair-merged against the manifest the first run just wrote --
@@ -740,7 +755,7 @@ test('UTV2-1564: a second --repair-merged call against an already-correctly-repa
     });
 
     assert.strictEqual(secondRun.code, 'already_repaired');
-    assert.strictEqual(secondRun.manifest.truth_check_history.length, 1);
+    assert.strictEqual(secondRun.manifest.truth_check_history.length, 0);
     assert.deepStrictEqual(secondRun.manifest.truth_check_history, firstRun.manifest.truth_check_history);
     assert.deepStrictEqual(secondRun.changed_fields, []);
   });
@@ -1683,8 +1698,28 @@ test('guard blocks and emits a repair packet when repair-merged produces changes
     // branch instead of hand-retyping the repaired content.
     const packetAbsolutePath = path.join(repoRoot, guard?.repair_packet_path ?? '');
     assert.ok(fs.existsSync(packetAbsolutePath), 'repair packet file must be written');
-    const packetContent = JSON.parse(fs.readFileSync(packetAbsolutePath, 'utf8')) as { commit_sha?: string };
-    assert.strictEqual(packetContent.commit_sha, 'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7');
+    // UTV2-1613: the packet is now a schema-v2 repair packet rather than a bare
+    // manifest dump, so the repaired content lives under proposed_manifest and
+    // is accompanied by the hashes and the explicit truth-check receipt.
+    const packetContent = JSON.parse(fs.readFileSync(packetAbsolutePath, 'utf8')) as {
+      schema_version?: number;
+      proposed_manifest?: { commit_sha?: string };
+      truth_check?: { executed?: boolean; verdict?: unknown };
+      input_manifest_hash?: string;
+      candidate_manifest_hash?: string;
+    };
+    assert.strictEqual(packetContent.schema_version, 2);
+    assert.strictEqual(
+      packetContent.proposed_manifest?.commit_sha,
+      'fd3f50d7c95e26e353f3857ec2684d1ff8ad99f7',
+    );
+    // Reaching this guard means the close was blocked before any truth-check
+    // ran, so the packet must say exactly that and claim no verdict.
+    assert.strictEqual(packetContent.truth_check?.executed, false);
+    assert.strictEqual(packetContent.truth_check?.verdict, null);
+    assert.match(packetContent.input_manifest_hash ?? '', /^sha256:[0-9a-f]{64}$/);
+    assert.match(packetContent.candidate_manifest_hash ?? '', /^sha256:[0-9a-f]{64}$/);
+    assert.notStrictEqual(packetContent.input_manifest_hash, packetContent.candidate_manifest_hash);
   });
 });
 
@@ -2279,7 +2314,24 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
       completion.manifest.files_changed,
       implementationFilesFromTrustedRepair(manifest, pr.files ?? []),
     );
-    assert.ok(completion.manifest.truth_check_history.some((entry) => entry.verdict === 'pass'));
+    // UTV2-1613: the repair itself contributes no history at all. In
+    // production the passing entry on a successful close comes from the real
+    // runTruthCheck() call in main() (which writes it before
+    // finalizeLaneCloseManifest re-reads the manifest), never from repair --
+    // this stubbed finalizeManifest deliberately does not fabricate one, and
+    // the repaired manifest must therefore carry no pass.
+    assert.strictEqual(
+      completion.manifest.truth_check_history.some((entry) => entry.verdict === 'pass'),
+      false,
+      'repair must never contribute a passing truth_check_history entry',
+    );
+    assert.strictEqual(
+      completion.manifest.truth_check_history.some(
+        (entry) => !CANONICAL_TRUTH_CHECK_RUNNERS.includes(entry.runner),
+      ),
+      false,
+      'every history entry must use a canonical runner',
+    );
     assert.strictEqual(completion.sync_removed, true);
     assert.strictEqual(fs.existsSync(syncPath), false);
     assert.strictEqual(completion.worktree_cleanup, 'removed');
@@ -2463,4 +2515,477 @@ test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact me
     'docs/06_status/proof/UTV2-1585/verification.md',
     'scripts/ops/workflow-hardening.test.ts',
   ]);
+});
+
+// ── UTV2-1613: idempotent, non-self-poisoning closeout ────────────────────────
+//
+// Five regressions, each corresponding to a failure measured on the live
+// system rather than imagined from the code.
+
+test('UTV2-1613 R1: a normal successful close releases the dispatch lease', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'merged' });
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+
+    const { warnings } = releaseCloseoutLocks(manifest.issue_id, manifest.branch, {
+      leaseRegistryDir,
+      mergeLockPath,
+    });
+
+    const lease = readAllLeases(leaseRegistryDir).find(
+      (entry) => entry.issue_id === manifest.issue_id,
+    );
+    assert.strictEqual(lease?.status, 'released', 'the issue lease must not remain active');
+    // A missing merge lock is benign here -- the lease is the authority under test.
+    assert.ok(warnings.every((warning) => /merge lock/.test(warning)));
+  });
+});
+
+test('UTV2-1613 R2: a second close invocation is a clean no-op that leaves nothing behind', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-07-30T12:00:00.000Z' });
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+
+    const releaseCalls: string[] = [];
+    const first = completeIdempotentReclose(manifest, {
+      repoRoot: os.tmpdir(),
+      releaseLocks: (issue, branch) => {
+        releaseCalls.push(`${issue}:${branch}`);
+        return releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath });
+      },
+    });
+    const second = completeIdempotentReclose(manifest, {
+      repoRoot: os.tmpdir(),
+      releaseLocks: (issue, branch) => {
+        releaseCalls.push(`${issue}:${branch}`);
+        return releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath });
+      },
+    });
+
+    assert.strictEqual(releaseCalls.length, 2, 'both invocations attempt release');
+    assert.strictEqual(first.manifest.status, 'done');
+    assert.strictEqual(second.manifest.status, 'done');
+    // Crucially: closed_at is not rewritten by the re-run, and no new lock or
+    // lease exists afterwards.
+    assert.strictEqual(second.manifest.closed_at, '2026-07-30T12:00:00.000Z');
+    const lease = readAllLeases(leaseRegistryDir).find(
+      (entry) => entry.issue_id === manifest.issue_id,
+    );
+    assert.strictEqual(lease?.status, 'released');
+    const lock = readMergeLock(mergeLockPath);
+    assert.strictEqual(lock.ok, false, 'a no-op re-close must not create a merge lock');
+  });
+});
+
+test('UTV2-1613 R3: a failed truth-check releases no authority and does not mark the lane done', () => {
+  const failing = createTruthCheckResult({
+    verdict: 'fail',
+    exit_code: 1,
+    failures: ['P3'],
+    checks: [{ id: 'P3', status: 'fail', detail: 'proof does not reference merge sha' }],
+  });
+  const receipt = measuredTruthCheckReceipt({
+    command: 'ops:truth-check UTV2-1001',
+    runner: 'ops:lane-close',
+    result: failing,
+    evaluatedStateHash: hashState(createManifest()),
+  });
+
+  assert.strictEqual(isMeasuredPass(receipt), false);
+  const entry = truthHistoryEntryForMeasuredReceipt(receipt);
+  assert.strictEqual(entry?.verdict, 'fail');
+
+  // The manifest that a failed close leaves behind may be `merged` (the
+  // authoritative GitHub binding) but must never be `done`, and its history
+  // must contain the measured failure rather than any pass.
+  const afterFailedClose = createManifest({
+    status: 'merged',
+    truth_check_history: [entry as NonNullable<typeof entry>],
+  });
+  assert.notStrictEqual(afterFailedClose.status, 'done');
+  assert.strictEqual(
+    afterFailedClose.truth_check_history.some((historyEntry) => historyEntry.verdict === 'pass'),
+    false,
+  );
+
+  // And finalize must refuse to promote it: a failing latest entry is drift,
+  // not authorization.
+  assert.strictEqual(classifyTruthCheckAuthorization(afterFailedClose, failing), 'drift');
+});
+
+test('UTV2-1613 R4: re-closing an already-done lane does not raise spurious truth_check_drift', () => {
+  // The exact live shape: truth-check-lib refuses to append history to a done
+  // manifest (UTV2-1224), so the fresh in-run pass carries a NEW checked_at
+  // that can never equal the persisted one. Before this fix that mismatch was
+  // reported as concurrent drift on every single re-close.
+  const persistedPass = {
+    checked_at: '2026-07-30T12:00:00.000Z',
+    verdict: 'pass' as const,
+    merge_sha: 'c17e1f64e2ae20d7df80e2d4c030c99c6e01bcc6',
+    failures: [],
+    runner: 'ops:lane-close' as const,
+  };
+  const doneManifest = createManifest({
+    status: 'done',
+    closed_at: '2026-07-30T12:00:00.000Z',
+    truth_check_history: [persistedPass],
+  });
+  const freshPass = createTruthCheckResult({ checked_at: '2026-07-31T08:15:00.000Z' });
+
+  assert.strictEqual(
+    classifyTruthCheckAuthorization(doneManifest, freshPass),
+    'already_closed',
+    'a re-close of a done lane on the same merge SHA is benign, not drift',
+  );
+
+  // The narrowing must not swallow anything real. A different merge SHA is
+  // still drift even on a done lane...
+  assert.strictEqual(
+    classifyTruthCheckAuthorization(
+      doneManifest,
+      createTruthCheckResult({ checked_at: '2026-07-31T08:15:00.000Z', merge_sha: 'other-sha' }),
+    ),
+    'drift',
+  );
+  // ...and a NON-done lane whose latest entry does not match is still drift,
+  // which is the genuine concurrent-run case this guard exists for.
+  assert.strictEqual(
+    classifyTruthCheckAuthorization(
+      createManifest({ status: 'merged', truth_check_history: [persistedPass] }),
+      freshPass,
+    ),
+    'drift',
+  );
+  // ...and an exact match is still ordinary authorization.
+  assert.strictEqual(
+    classifyTruthCheckAuthorization(
+      createManifest({ status: 'merged', truth_check_history: [persistedPass] }),
+      createTruthCheckResult({
+        checked_at: persistedPass.checked_at,
+        merge_sha: persistedPass.merge_sha,
+      }),
+    ),
+    'authorized',
+  );
+});
+
+test('UTV2-1613 R5: an orphaned-pid merge lock is reaped rather than compounding', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    // A previous blocked run of THIS lane left a held lock behind, owned by a
+    // PID that no longer exists on this host.
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1001',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: {
+          user: 'u',
+          host: os.hostname() || 'unknown',
+          pid: 999_999_999,
+          session_id: 'abandoned-run',
+        },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+
+    // Before the fix this returned merge_lock_stale_reclaim_required and the
+    // retry then left its own residue on top.
+    const result = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      cwd: process.cwd(),
+      now: new Date('2026-07-30T12:05:00.000Z'),
+    });
+
+    assert.strictEqual(result.ok, true, `expected reap+acquire, got ${result.code}`);
+    assert.strictEqual(result.code, 'merge_lock_reclaimed');
+    const lock = readMergeLock(mergeLockPath);
+    assert.strictEqual(lock.ok ? lock.lock.issue_id : '', manifest.issue_id);
+    assert.strictEqual(lock.ok ? lock.lock.status : '', 'held');
+    assert.strictEqual(lock.ok ? lock.lock.owner.pid : -1, process.pid);
+  });
+});
+
+test('UTV2-1613 R5: reaping never takes another lane\'s orphaned lock', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    acquireMergeLock(
+      {
+        issue_id: 'UTV2-9999',
+        branch: 'codex/utv2-9999-other-lane',
+        pr: '9999',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: {
+          user: 'u',
+          host: os.hostname() || 'unknown',
+          pid: 999_999_998,
+          session_id: 'other-lane',
+        },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+
+    const result = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      cwd: process.cwd(),
+      now: new Date('2026-07-30T12:05:00.000Z'),
+    });
+
+    assert.strictEqual(result.ok, false, 'another lane\'s lock must never be reaped');
+    const lock = readMergeLock(mergeLockPath);
+    assert.strictEqual(lock.ok ? lock.lock.issue_id : '', 'UTV2-9999');
+  });
+});
+
+test('UTV2-1613 R5: an expired (not orphaned) lock still requires an explicit reclaim', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1001',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: { user: 'u', host: os.hostname() || 'unknown', pid: process.pid, session_id: 's' },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+
+    // Far past the TTL, but the owning PID (this process) is alive -- a merge
+    // may genuinely still be in flight, so this must not be auto-reaped.
+    const result = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      cwd: process.cwd(),
+      now: new Date('2026-08-30T12:00:00.000Z'),
+    });
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'merge_lock_stale_reclaim_required');
+  });
+});
+
+test('UTV2-1613: a run that gives up releases the merge lock it acquired for itself', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    const acquired = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      cwd: process.cwd(),
+      now: new Date('2026-07-30T12:00:00.000Z'),
+    });
+    assert.strictEqual(acquired.code, 'merge_lock_acquired');
+
+    releaseSelfAcquiredMergeLock(acquired, manifest, { mergeLockPath });
+
+    const lock = readMergeLock(mergeLockPath);
+    assert.strictEqual(
+      lock.ok ? lock.lock.status : '',
+      'released',
+      'an abandoned run must not leave its own lock held for the next retry to trip over',
+    );
+  });
+});
+
+test('UTV2-1613: a pre-existing lock this run did not acquire is left untouched', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1001',
+        cwd: process.cwd(),
+        reason: 'ops:merge-lock acquire',
+        owner: { user: 'u', host: os.hostname() || 'unknown', pid: process.pid, session_id: 's' },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+    const held = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      cwd: process.cwd(),
+      now: new Date('2026-07-30T12:01:00.000Z'),
+    });
+    assert.strictEqual(held.code, 'merge_lock_held');
+
+    releaseSelfAcquiredMergeLock(held, manifest, { mergeLockPath });
+
+    const lock = readMergeLock(mergeLockPath);
+    assert.strictEqual(lock.ok ? lock.lock.status : '', 'held');
+  });
+});
+
+test('UTV2-1613: releaseCloseoutLocks warns, never throws, on another lane\'s merge lock', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    acquireMergeLock(
+      {
+        issue_id: 'UTV2-9999',
+        branch: 'codex/utv2-9999-other-lane',
+        pr: '9999',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: { user: 'u', host: os.hostname() || 'unknown', pid: process.pid, session_id: 's' },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-07-30T12:00:00.000Z') },
+    );
+
+    let result: { warnings: string[] } | null = null;
+    assert.doesNotThrow(() => {
+      result = releaseCloseoutLocks('UTV2-1001', 'codex/utv2-1001-enforce-non-null-merge-sha', {
+        leaseRegistryDir,
+        mergeLockPath,
+      });
+    });
+    assert.ok(result);
+    assert.ok(
+      (result as unknown as { warnings: string[] }).warnings.some((warning) =>
+        /held by another lane/.test(warning),
+      ),
+    );
+    const lock = readMergeLock(mergeLockPath);
+    assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the other lane keeps its lock');
+  });
+});
+
+// ── UTV2-1613: merge-binding inference for ghost lanes ────────────────────────
+
+test('UTV2-1613: a merged PR is inferred from the lane branch when pr_url is null', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const ghost = createManifest({
+      issue_id: 'UTV2-1553',
+      branch: 'claude/utv2-1553-release-merged-lane-lock',
+      status: 'started',
+      commit_sha: null,
+      pr_url: null,
+      preflight_token: tokenPath,
+    });
+
+    const repair = repairMergedLaneManifest(ghost, {
+      repoRoot,
+      artifactRoot,
+      now: new Date('2026-07-31T09:00:00.000Z'),
+      inferMergedPrForBranch: (branch, issueId) => {
+        assert.strictEqual(branch, 'claude/utv2-1553-release-merged-lane-lock');
+        assert.strictEqual(issueId, 'UTV2-1553');
+        return {
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1322',
+          number: 1322,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
+          headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+          title: 'fix(lanes): UTV2-1553 release merged-lane lock from active accounting',
+        };
+      },
+    });
+
+    assert.strictEqual(repair.ok, true);
+    assert.strictEqual(repair.code, 'repaired');
+    assert.strictEqual(repair.manifest.status, 'merged');
+    assert.strictEqual(repair.manifest.commit_sha, '965872d378caa3e88ef4987f8bbb0bab0214856e');
+    assert.strictEqual(repair.merge_binding?.selected_by, 'branch_merged_head');
+    assert.strictEqual(repair.merge_binding?.pr_number, 1322);
+    // The whole point: a repaired binding, and still zero truth-check history.
+    assert.deepStrictEqual(repair.manifest.truth_check_history, []);
+  });
+});
+
+test('UTV2-1613: a null pr_url with no inferable merged PR is refused, never guessed', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    const repair = repairMergedLaneManifest(
+      createManifest({ status: 'started', commit_sha: null, pr_url: null, preflight_token: tokenPath }),
+      { repoRoot, artifactRoot, inferMergedPrForBranch: () => null },
+    );
+    assert.strictEqual(repair.ok, false);
+    assert.strictEqual(repair.code, 'infra_error');
+    assert.match(repair.remediation, /must not be guessed/);
+  });
+});
+
+test('UTV2-1613: PR inference refuses an ambiguous or identity-mismatched candidate set', () => {
+  const branch = 'claude/utv2-1553-release-merged-lane-lock';
+  const base = {
+    repository: 'griff843/Unit-Talk-v2',
+    state: 'merged',
+    merged: true,
+    headRefName: branch,
+    title: 'fix(lanes): UTV2-1553 release merged-lane lock',
+  };
+
+  // Exactly one match is required.
+  assert.ok(
+    selectInferredMergedPr(
+      [{ ...base, url: 'u1', number: 1322, mergeSha: 'sha1' }],
+      branch,
+      'UTV2-1553',
+    ),
+  );
+  // Two merged PRs on the same head ref: ambiguous authority is never resolved
+  // by picking one.
+  assert.strictEqual(
+    selectInferredMergedPr(
+      [
+        { ...base, url: 'u1', number: 1322, mergeSha: 'sha1' },
+        { ...base, url: 'u2', number: 1323, mergeSha: 'sha2' },
+      ],
+      branch,
+      'UTV2-1553',
+    ),
+    null,
+  );
+  // A different head ref never matches, even if the title looks right.
+  assert.strictEqual(
+    selectInferredMergedPr(
+      [{ ...base, url: 'u1', number: 1322, mergeSha: 'sha1', headRefName: 'claude/other' }],
+      branch,
+      'UTV2-1553',
+    ),
+    null,
+  );
+  // Merged-but-no-merge-SHA is not a usable binding.
+  assert.strictEqual(
+    selectInferredMergedPr(
+      [{ ...base, url: 'u1', number: 1322, mergeSha: null }],
+      branch,
+      'UTV2-1553',
+    ),
+    null,
+  );
+  // Not merged at all.
+  assert.strictEqual(
+    selectInferredMergedPr(
+      [{ ...base, url: 'u1', number: 1322, mergeSha: 'sha1', merged: false, state: 'open' }],
+      branch,
+      'UTV2-1553',
+    ),
+    null,
+  );
 });

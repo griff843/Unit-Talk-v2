@@ -26,11 +26,24 @@ import {
   acquireMergeLock,
   defaultMergeLockOwner,
   MERGE_LOCK_PATH,
+  reclaimMergeLock,
   releaseMergeLock,
   requireMergeLockHeld,
   type MergeLockResult,
 } from './merge-mutex.js';
 import { leasePathForIssue, releaseLease } from './lease-registry.js';
+import {
+  assertCanonicalRunner,
+  buildRepairPacket,
+  hashState,
+  isMeasuredPass,
+  measuredTruthCheckReceipt,
+  unexecutedTruthCheckReceipt,
+  writeRepairPacket,
+  type LaneCloseRepairPacket,
+  type MeasuredTruthCheckReceipt,
+  type MergeBindingInference,
+} from './lane-close-repair-packet.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -61,7 +74,8 @@ export type CloseoutFailureCode =
   | 'missing_implementation_artifacts' // candidate PR omitted declared proof artifacts
   | 'unreachable_merge_sha' // GitHub merge SHA is not reachable from current main
   | 'repair_required_via_pr' // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
-  | 'model_routing_rebind_failed'; // required model-routing.json sidecar rebind failed (UTV2-1589)
+  | 'model_routing_rebind_failed' // required model-routing.json sidecar rebind failed (UTV2-1589)
+  | 'merge_lock_reap_failed'; // an orphaned-pid merge lock for this lane could not be reclaimed (UTV2-1613)
 
 export type CloseoutOutcome = 'closed' | 'already_closed' | 'closed_with_warnings' | 'blocked';
 
@@ -86,6 +100,20 @@ export interface RepairMergedManifestResult {
   changed_fields: string[];
   remediation: string;
   pr: RepairMergedPrInfo | null;
+  /**
+   * The INFERRED merge binding (UTV2-1613 separation of concerns). Present
+   * only when a real, merged, identity-checked PR was resolved. Deliberately
+   * carries no verdict field: this is a statement about GitHub, never about
+   * whether the lane passes.
+   */
+  merge_binding?: MergeBindingInference | null;
+  /**
+   * The manifest exactly as it was before repair. Carried on the result so a
+   * repair packet can record what its proposal was computed *from* without
+   * every caller having to thread a second copy through -- that input hash is
+   * what makes stale application detectable at apply time.
+   */
+  input_manifest?: LaneManifest;
 }
 
 /**
@@ -177,6 +205,9 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'A required model-routing.json sidecar could not be bound to the authoritative merge SHA/PR ' +
         '(missing, malformed, wrong lane identity, or conflicting prior binding). No proof or manifest state was ' +
         'left partially bound -- see model_routing_error_code and proof_path for the specific cause.';
+    case 'merge_lock_reap_failed':
+      return 'This lane holds a merge lock whose owning process is gone (orphaned PID), but the lock could not be ' +
+        'reclaimed. Inspect .ops/merge-lock.json and run `pnpm ops:merge-lock reclaim` explicitly.';
     case 'lane_closed':
       return '';
   }
@@ -241,6 +272,53 @@ export function requireCloseCommitSha(manifest: LaneManifest): void {
  * before flipping status -- if it isn't, it refuses and throws rather than
  * silently closing on stale authorization.
  */
+export type TruthCheckAuthorization = 'authorized' | 'already_closed' | 'drift';
+
+/**
+ * Distinguishes the three states the persisted history can be in relative to
+ * the passing result that authorized this close. Before UTV2-1613 only two
+ * were modelled -- "matches" and "everything else" -- and the second silently
+ * absorbed a benign case as if it were a concurrency incident.
+ *
+ * The benign case is re-closing an already-`done` lane.
+ * `truth-check-lib.ts`'s `finalizeWithManifest()` deliberately refuses to
+ * append history to a `done` manifest (UTV2-1224: done lanes are immutable
+ * except for explicit reopen events). So on a re-close the fresh in-run
+ * truth-check passes but writes nothing, leaving the persisted latest entry as
+ * the *original* close's entry -- a different `checked_at` by construction. A
+ * timestamp comparison alone therefore reports `truth_check_drift` on every
+ * single re-close, forever, even though both entries are passes on the same
+ * merge SHA and nothing concurrent happened at all. That made `ops:lane-close`
+ * non-idempotent and buried the signal a real drift would carry.
+ *
+ * `already_closed` is that case, recognised narrowly: the manifest is already
+ * terminal, its latest persisted entry is a pass, and that pass is bound to
+ * the same merge SHA the fresh run just evaluated. Anything weaker (no
+ * history, a failing latest entry, a different merge SHA) is still `drift` --
+ * this widens nothing about what counts as a pass, it only stops
+ * misclassifying a no-op as an incident.
+ */
+export function classifyTruthCheckAuthorization(
+  manifest: LaneManifest,
+  authorizedTruthCheck: TruthCheckResult,
+): TruthCheckAuthorization {
+  const history = manifest.truth_check_history ?? [];
+  const latest = history[history.length - 1];
+  if (latest === undefined || latest.verdict !== 'pass') {
+    return 'drift';
+  }
+  if (
+    latest.checked_at === authorizedTruthCheck.checked_at &&
+    latest.merge_sha === authorizedTruthCheck.merge_sha
+  ) {
+    return 'authorized';
+  }
+  if (manifest.status === 'done' && latest.merge_sha === authorizedTruthCheck.merge_sha) {
+    return 'already_closed';
+  }
+  return 'drift';
+}
+
 export function finalizeLaneCloseManifest(
   issueId: string,
   authorizedTruthCheck: TruthCheckResult,
@@ -248,14 +326,18 @@ export function finalizeLaneCloseManifest(
   const manifest = readManifest(issueId);
   const history = manifest.truth_check_history ?? [];
   const latest = history[history.length - 1];
+  const authorization = classifyTruthCheckAuthorization(manifest, authorizedTruthCheck);
 
-  const matchesAuthorization =
-    latest !== undefined &&
-    latest.verdict === 'pass' &&
-    latest.checked_at === authorizedTruthCheck.checked_at &&
-    latest.merge_sha === authorizedTruthCheck.merge_sha;
+  // Criterion 5: every recorded history entry must use the canonical runner
+  // union, enforced at the moment a manifest is about to be made terminal
+  // rather than only where entries are written. The defective repair path
+  // reached this exact point with a `runner: 'ops:lane-close --repair-merged'`
+  // entry sitting at the head of the history and nothing objected.
+  if (latest !== undefined) {
+    assertCanonicalRunner(latest.runner);
+  }
 
-  if (!matchesAuthorization) {
+  if (authorization === 'drift') {
     throw new TruthCheckDriftError(
       `Refusing to close ${issueId}: manifest's latest truth-check ` +
         `(${latest ? `${latest.verdict} at ${latest.checked_at}, merge_sha ${latest.merge_sha}` : 'none'}) ` +
@@ -263,6 +345,16 @@ export function finalizeLaneCloseManifest(
         `(pass at ${authorizedTruthCheck.checked_at}, merge_sha ${authorizedTruthCheck.merge_sha}). ` +
         'A concurrent truth-check run must have changed, failed, or advanced it since authorization.',
     );
+  }
+
+  if (authorization === 'already_closed') {
+    // Idempotent re-close: the terminal manifest is already correct and its
+    // history is immutable by design. Refresh nothing except the heartbeat --
+    // in particular do NOT overwrite closed_at, which records when the lane
+    // actually closed, not when someone re-ran the closer.
+    manifest.heartbeat_at = new Date().toISOString();
+    writeManifest(manifest);
+    return manifest;
   }
 
   manifest.status = 'done';
@@ -294,11 +386,25 @@ export function releaseCloseoutLocks(
     issue_id: issueId,
     branch,
   }, { lockPath: options.mergeLockPath });
-  if (!mergeLock.ok && mergeLock.code !== 'merge_lock_missing') {
+  // `merge_lock_owner_mismatch` means the live lock belongs to a DIFFERENT
+  // lane. There is nothing of ours to release, and releasing it anyway would
+  // steal another lane's serialization slot -- so it is neither an error nor
+  // an action, just a warning (UTV2-1613). Throwing here used to make an
+  // otherwise-successful closeout fail *after* the manifest was already
+  // terminal, which is the worst possible place to fail.
+  if (
+    !mergeLock.ok &&
+    mergeLock.code !== 'merge_lock_missing' &&
+    mergeLock.code !== 'merge_lock_owner_mismatch'
+  ) {
     throw new Error(`Failed to release merge lock: ${mergeLock.code} ${mergeLock.message}`);
   }
   if (!mergeLock.ok) {
-    warnings.push(`merge lock already released or missing: ${mergeLock.message}`);
+    warnings.push(
+      mergeLock.code === 'merge_lock_owner_mismatch'
+        ? `merge lock is held by another lane; left untouched: ${mergeLock.message}`
+        : `merge lock already released or missing: ${mergeLock.message}`,
+    );
   }
 
   return { warnings };
@@ -481,6 +587,7 @@ export function repairMergedLaneManifest(
   manifest: LaneManifest,
   options: {
     fetchPr?: (prUrl: string) => RepairMergedPrInfo;
+    inferMergedPrForBranch?: (branch: string, issueId: string) => RepairMergedPrInfo | null;
     validatedPr?: RepairMergedPrInfo;
     now?: Date;
     repoRoot?: string;
@@ -490,6 +597,7 @@ export function repairMergedLaneManifest(
     releaseLocksIfAlreadyDone?: boolean;
   } = {},
 ): RepairMergedManifestResult {
+  const inputManifest = structuredClone(manifest);
   if (manifest.status === 'done') {
     // --repair-merged is intentionally safe to re-run. A previous closeout may
     // have written the terminal manifest before releasing its coordination
@@ -518,11 +626,44 @@ export function repairMergedLaneManifest(
     };
   }
 
+  // UTV2-1613 (ghost lanes): a manifest can be stranded in an ACTIVE status
+  // with pr_url still null while its implementation PR merged days ago -- the
+  // lane never got far enough to record the binding. UTV2-1553 is exactly
+  // this: status `started`, pr_url null, commit_sha null, PR #1322 merged.
+  // Such a manifest keeps holding its file_scope_lock against every other
+  // lane, and `--repair-merged` used to refuse it outright ("no pr_url to
+  // repair from"), so the only remaining fix was a hand edit -- on the very
+  // machinery whose whole purpose is to make hand edits unnecessary.
+  //
+  // The binding is mechanically inferable without guessing: ask GitHub for
+  // the MERGED pull request whose head ref is this lane's own branch. That is
+  // authoritative GitHub state, identity-checked against the manifest's
+  // branch, exactly like every other field this function repairs. It infers a
+  // binding only -- it never implies anything about the truth-check outcome.
+  let selectedBy: MergeBindingInference['selected_by'] = options.validatedPr
+    ? 'explicit_pr'
+    : 'manifest_pr_url';
+  let inferredPr: RepairMergedPrInfo | null = null;
   if (!manifest.pr_url && !options.validatedPr) {
-    return repairBlocked(manifest, 'infra_error', 'Manifest has no pr_url to repair from.');
+    inferredPr = (options.inferMergedPrForBranch ?? inferMergedPrForBranch)(
+      manifest.branch,
+      manifest.issue_id,
+    );
+    if (!inferredPr) {
+      return repairBlocked(
+        manifest,
+        'infra_error',
+        `Manifest has no pr_url, and no merged pull request was found whose head ref is "${manifest.branch}". ` +
+          'Repair refused; the merge binding cannot be inferred and must not be guessed.',
+      );
+    }
+    selectedBy = 'branch_merged_head';
   }
 
-  const pr = options.validatedPr ?? (options.fetchPr ?? fetchMergedPrInfo)(manifest.pr_url ?? '');
+  const pr =
+    options.validatedPr ??
+    inferredPr ??
+    (options.fetchPr ?? fetchMergedPrInfo)(manifest.pr_url ?? '');
   if (!pr.merged || !pr.mergeSha) {
     return {
       ok: false,
@@ -597,18 +738,33 @@ export function repairMergedLaneManifest(
     };
   }
 
-  const historyEntry = {
-    checked_at: now,
-    verdict: 'pass' as const,
-    merge_sha: pr.mergeSha,
-    failures: [],
-    runner: 'ops:lane-close --repair-merged',
-    source: 'github_pr_merge_commit_repair',
+  // UTV2-1613: NOTHING is appended to truth_check_history here.
+  //
+  // This is where `--repair-merged` used to synthesize
+  //   { verdict: 'pass', failures: [], runner: 'ops:lane-close --repair-merged' }
+  // before the canonical truth-check had run at all. That entry claimed a
+  // governance outcome nobody had measured, using a runner outside the
+  // canonical union, and it was written *unconditionally* -- including when the
+  // proof bundle was invalid and the close was about to be refused (PR #1312 /
+  // UTV2-1592). Repairing a merge binding is an inference from GitHub state; it
+  // is not evidence about whether the lane's work is correct, and the two must
+  // not share a record type.
+  //
+  // The only writer of truth_check_history on this path is now the real
+  // `runTruthCheck()` call in main(), which records what it actually measured.
+  // The measured receipt for this run is carried separately in the repair
+  // packet's `truth_check` field -- see lane-close-repair-packet.ts.
+
+  const mergeBinding: MergeBindingInference = {
+    source: 'github_pull_request',
+    repository: pr.repository ?? TRUSTED_POST_MERGE_REPOSITORY,
     pr_url: pr.url,
-    repaired_fields: changedFields,
+    pr_number: pr.number ?? null,
+    head_ref: pr.headRefName ?? null,
+    merge_sha: pr.mergeSha,
+    inferred_at: now,
+    selected_by: selectedBy,
   };
-  next.truth_check_history = [...next.truth_check_history, historyEntry];
-  changedFields.push('truth_check_history');
 
   const artifactPath = writeRepairArtifact({
     issueId: manifest.issue_id,
@@ -618,6 +774,7 @@ export function repairMergedLaneManifest(
       repaired_at: now,
       issue_id: manifest.issue_id,
       pr,
+      merge_binding: mergeBinding,
       changed_fields: changedFields,
       previous: {
         status: manifest.status,
@@ -642,9 +799,97 @@ export function repairMergedLaneManifest(
     manifest: next,
     artifact_path: artifactPath,
     changed_fields: changedFields,
-    remediation: 'Manifest repaired from authoritative GitHub merge state; closeout truth-check still runs before lane closure.',
+    remediation:
+      'Merge binding inferred from authoritative GitHub merge state and proposed for the manifest. ' +
+      'This records NO truth-check outcome; the canonical truth-check still runs, and only its measured ' +
+      'result can close the lane.',
     pr,
+    merge_binding: mergeBinding,
+    input_manifest: inputManifest,
   };
+}
+
+/**
+ * Resolves the merged pull request whose head ref is exactly this lane's
+ * branch. Returns null when there is no such PR, when more than one merged PR
+ * shares the head ref (ambiguous authority must never be resolved by picking
+ * one), or when the resolved PR fails the same issue-identity check the
+ * trusted path applies.
+ */
+export function selectInferredMergedPr(
+  candidates: RepairMergedPrInfo[],
+  branch: string,
+  issueId: string,
+): RepairMergedPrInfo | null {
+  const issuePattern = new RegExp(`(^|[^A-Z0-9])${escapeRegExp(issueId)}([^A-Z0-9]|$)`, 'iu');
+  const matches = candidates.filter(
+    (candidate) =>
+      candidate.merged &&
+      Boolean(candidate.mergeSha) &&
+      candidate.headRefName === branch &&
+      (issuePattern.test(candidate.title ?? '') || issuePattern.test(branch)),
+  );
+  if (matches.length !== 1) {
+    return null;
+  }
+  return matches[0] ?? null;
+}
+
+function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPrInfo | null {
+  let stdout: string;
+  try {
+    stdout = execFileSync(
+      'gh',
+      [
+        'pr',
+        'list',
+        '--repo',
+        TRUSTED_POST_MERGE_REPOSITORY,
+        '--head',
+        branch,
+        '--state',
+        'merged',
+        '--limit',
+        '20',
+        '--json',
+        'url,number,state,mergedAt,mergeCommit,headRefName,title',
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+  } catch {
+    return null;
+  }
+
+  let parsed: Array<{
+    url?: string;
+    number?: number;
+    state?: string | null;
+    mergedAt?: string | null;
+    mergeCommit?: { oid?: string | null } | null;
+    headRefName?: string | null;
+    title?: string | null;
+  }>;
+  try {
+    parsed = JSON.parse(stdout) as typeof parsed;
+  } catch {
+    return null;
+  }
+
+  const candidates: RepairMergedPrInfo[] = parsed.map((entry) => {
+    const state = entry.state?.toLowerCase() ?? null;
+    return {
+      url: entry.url ?? '',
+      number: entry.number,
+      repository: TRUSTED_POST_MERGE_REPOSITORY,
+      state,
+      merged: state === 'merged' || Boolean(entry.mergedAt),
+      mergeSha: entry.mergeCommit?.oid ?? null,
+      headRefName: entry.headRefName ?? null,
+      title: entry.title ?? null,
+    };
+  });
+
+  return selectInferredMergedPr(candidates, branch, issueId);
 }
 
 export interface RepairRequiredViaPrResult {
@@ -766,10 +1011,14 @@ export function rebindRepairedLaneProof(
 export function buildRepairRequiredViaPrPacket(input: {
   issueId: string;
   manifest: LaneManifest;
+  inputManifest: LaneManifest;
   changedFields: string[];
   pr: RepairMergedPrInfo | null;
+  mergeBinding?: MergeBindingInference | null;
   repoRoot: string;
   artifactRoot?: string;
+  command?: string;
+  now?: Date;
 }): RepairRequiredViaPrResult {
   const normalizedIssue = input.issueId.toUpperCase();
   const slug = normalizedIssue.toLowerCase();
@@ -777,9 +1026,34 @@ export function buildRepairRequiredViaPrPacket(input: {
   const manifestRelativePath = `docs/06_status/lanes/${normalizedIssue}.json`;
   const artifactRoot =
     input.artifactRoot ?? path.join(input.repoRoot, '.out', 'ops', 'lane-close-repair');
-  fs.mkdirSync(artifactRoot, { recursive: true });
-  const packetPath = path.join(artifactRoot, `${normalizedIssue}.repair-packet.json`);
-  fs.writeFileSync(packetPath, `${JSON.stringify(input.manifest, null, 2)}\n`);
+
+  // UTV2-1613: the packet is a schema-v2 repair packet, not a bare manifest
+  // dump. The old format was literally the proposed manifest JSON, which the
+  // operator was told to `cp` over the real file -- there was no record of what
+  // it was generated from, no way to detect that the manifest had moved on
+  // since, and no place to distinguish "GitHub says this PR merged" from "a
+  // truth-check measured this lane as passing". This packet records the input
+  // hash, the candidate hash, the inferred merge authority, and an explicit
+  // truth-check receipt -- which on THIS path is always `executed: false`,
+  // because reaching here means the close was blocked before any truth-check
+  // ran. It therefore cannot carry a pass.
+  const truthCheck = unexecutedTruthCheckReceipt({
+    command: input.command ?? 'ops:lane-close --repair-merged',
+    runner: 'ops:lane-close',
+    mergeSha: input.mergeBinding?.merge_sha ?? input.pr?.mergeSha ?? null,
+    evaluatedStateHash: null,
+  });
+  const packet = buildRepairPacket({
+    issueId: normalizedIssue,
+    command: input.command ?? 'ops:lane-close --repair-merged',
+    inputManifest: input.inputManifest,
+    proposedManifest: input.manifest,
+    changedFields: input.changedFields,
+    mergeBinding: input.mergeBinding ?? null,
+    truthCheck,
+    now: input.now,
+  });
+  const packetPath = writeRepairPacket(packet, { artifactRoot });
   const packetRelativePath = path.relative(input.repoRoot, packetPath).replaceAll('\\', '/');
 
   return {
@@ -802,7 +1076,7 @@ export function buildRepairRequiredViaPrPacket(input: {
       `npx tsx scripts/ops/generate-preflight-token.ts --issue ${normalizedIssue} --tier T1 --branch ${branch}`,
       `pnpm ops:lane-start ${normalizedIssue} --tier T1 --branch ${branch} --lane-type governance --files ${manifestRelativePath}`,
       `cd .out/worktrees/${branch.replace(/\//g, '__')}   # the cwd lane-start records -- never hand-roll a different worktree path`,
-      `cp <repo-root>/${packetRelativePath} ${manifestRelativePath}   # apply the repaired manifest content from the packet -- never hand-retype it`,
+      `pnpm ops:lane-repair-packet apply ${normalizedIssue} --packet <repo-root>/${packetRelativePath}   # fails closed if the manifest, the packet, or the GitHub merge authority moved since generation -- never cp/hand-retype`,
       `git add ${manifestRelativePath} && git commit -m "chore(lanes): ${normalizedIssue} record lane-close truth-check result"`,
       `git push -u origin ${branch}`,
       `gh pr create --base main --title "${normalizedIssue}: lane-close manifest repair" --body "Reconciles the lane manifest from authoritative GitHub merge state via the governed lane-close repair path. Never edits main directly."`,
@@ -875,8 +1149,11 @@ export function guardRepairAgainstMainCheckout(
   options: {
     currentBranch: string;
     repoRoot: string;
+    inputManifest?: LaneManifest;
     artifactRoot?: string;
     trustedPostMerge?: boolean;
+    command?: string;
+    now?: Date;
   },
 ): RepairRequiredViaPrResult | null {
   if (!repair.ok || repair.code !== 'repaired' || repair.changed_fields.length === 0) {
@@ -891,12 +1168,58 @@ export function guardRepairAgainstMainCheckout(
   return buildRepairRequiredViaPrPacket({
     issueId: repair.manifest.issue_id,
     manifest: repair.manifest,
+    inputManifest: options.inputManifest ?? repair.input_manifest ?? repair.manifest,
     changedFields: repair.changed_fields,
     pr: repair.pr,
+    mergeBinding: repair.merge_binding ?? null,
     repoRoot: options.repoRoot,
     artifactRoot: options.artifactRoot,
+    command: options.command,
+    now: options.now,
   });
 }
+
+/**
+ * Decides whether a blocking merge lock is this same lane's own abandoned
+ * lock and may therefore be reclaimed automatically.
+ *
+ * The compounding failure this exists to stop (UTV2-1613): `ops:lane-close`
+ * auto-acquires the merge lock, and every blocked exit path used to
+ * `process.exit(1)` without releasing it. The lock file was left `held` by a
+ * PID that no longer exists. On the next retry `markExpiredLock()` correctly
+ * reclassified it `stale_reclaim_required` -- but nothing reclaimed it, so
+ * `acquireMergeLock()` refused, and that retry then left its own residue too.
+ * Each attempt to fix the lane blocked on the previous attempt's wreckage;
+ * the failure compounded instead of being idempotent.
+ *
+ * Reaping is deliberately narrow. Only a lock for THIS issue on THIS branch
+ * whose staleness is specifically `orphaned_pid` (a dead process on this
+ * host, proven by `isProcessAlive`) is reclaimable here. A merely *expired*
+ * lock may still have a live owner mid-merge, and another lane's lock is never
+ * ours to take -- both keep requiring an explicit operator reclaim.
+ */
+export function isReapableOwnOrphanedLock(
+  lock: MergeLockResult['lock'],
+  manifest: LaneManifest,
+): boolean {
+  if (!lock) return false;
+  return (
+    lock.status === 'stale_reclaim_required' &&
+    lock.stale_reason === 'orphaned_pid' &&
+    lock.issue_id === manifest.issue_id &&
+    lock.branch === manifest.branch
+  );
+}
+
+export interface MergeLockReapFailure {
+  ok: false;
+  code: 'merge_lock_reap_failed';
+  message: string;
+  lock?: MergeLockResult['lock'];
+  lock_path?: string;
+}
+
+export type CloseoutMergeLockResult = MergeLockResult | MergeLockReapFailure;
 
 export function ensureCloseoutMergeLock(
   manifest: LaneManifest,
@@ -906,7 +1229,7 @@ export function ensureCloseoutMergeLock(
     now?: Date;
     cwd?: string;
   } = {},
-): MergeLockResult {
+): CloseoutMergeLockResult {
   const held = requireMergeLockHeld(
     {
       issue_id: manifest.issue_id,
@@ -919,17 +1242,65 @@ export function ensureCloseoutMergeLock(
     return held;
   }
 
-  return acquireMergeLock(
-    {
-      issue_id: manifest.issue_id,
-      branch: manifest.branch,
-      pr: manifest.pr_url,
-      cwd: options.cwd ?? process.cwd(),
-      reason: 'ops:lane-close',
-      owner: defaultMergeLockOwner(),
-    },
-    { lockPath: options.mergeLockPath, now: options.now },
-  );
+  const lockInput = {
+    issue_id: manifest.issue_id,
+    branch: manifest.branch,
+    pr: manifest.pr_url,
+    cwd: options.cwd ?? process.cwd(),
+    reason: 'ops:lane-close',
+    owner: defaultMergeLockOwner(),
+  };
+
+  // Reap this lane's own orphaned lock before attempting acquisition --
+  // otherwise acquireMergeLock() refuses a lock nobody is holding and the
+  // retry loop never converges.
+  if (isReapableOwnOrphanedLock(held.lock, manifest)) {
+    const reclaimed = reclaimMergeLock(lockInput, {
+      lockPath: options.mergeLockPath,
+      now: options.now,
+    });
+    if (reclaimed.ok) {
+      return reclaimed;
+    }
+    return {
+      ok: false,
+      code: 'merge_lock_reap_failed',
+      lock: reclaimed.lock,
+      lock_path: reclaimed.lock_path,
+      message:
+        `Orphaned merge lock for ${manifest.issue_id} on ${manifest.branch} could not be reclaimed: ` +
+        `${reclaimed.code} ${reclaimed.message}`,
+    };
+  }
+
+  return acquireMergeLock(lockInput, {
+    lockPath: options.mergeLockPath,
+    now: options.now,
+  });
+}
+
+/**
+ * Releases a merge lock that THIS invocation acquired, on a path that is about
+ * to exit without closing the lane. Every blocked exit must call this: the
+ * lock exists only to serialize this attempt, and an attempt that is giving up
+ * has no claim on it. Silent about failures -- the caller is already reporting
+ * a more important error, and a failed release here must not mask it.
+ */
+export function releaseSelfAcquiredMergeLock(
+  lock: CloseoutMergeLockResult | null,
+  manifest: LaneManifest,
+  options: { mergeLockPath?: string } = {},
+): void {
+  if (!lock?.ok) return;
+  if (lock.code !== 'merge_lock_acquired' && lock.code !== 'merge_lock_reclaimed') return;
+  try {
+    releaseMergeLock(
+      { issue_id: manifest.issue_id, branch: manifest.branch },
+      { lockPath: options.mergeLockPath },
+    );
+  } catch {
+    // Intentionally swallowed: see doc comment.
+  }
 }
 
 function isIdempotentLeaseReleaseFailure(
@@ -1142,18 +1513,103 @@ export function cleanupClosedLaneWorktree(
   return 'removed';
 }
 
+/**
+ * Idempotent re-close of an already-terminal lane.
+ *
+ * Before UTV2-1613 a second `ops:lane-close` on a `done` lane took the full
+ * path: it auto-acquired the merge lock, ran a truth-check whose result could
+ * not possibly match the immutable persisted history (see
+ * `classifyTruthCheckAuthorization`), reported `truth_check_drift`, and exited
+ * without releasing the lock it had just taken. The next retry then blocked on
+ * *that* lock. Retrying a closed lane made it strictly worse each time.
+ *
+ * This path exists so a re-close is what it should always have been: confirm
+ * the lane is terminal, release any coordination state still attributable to
+ * it, and report `already_closed`. It writes no manifest, transitions no
+ * Linear issue, and marks nothing Done that was not already Done -- it can
+ * only ever release, never grant.
+ */
+export function completeIdempotentReclose(
+  manifest: LaneManifest,
+  options: {
+    repoRoot?: string;
+    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+  } = {},
+): SuccessfulLaneCloseResult {
+  const syncPath = path.join(
+    options.repoRoot ?? process.cwd(),
+    '.ops',
+    'sync',
+    `${manifest.issue_id}.yml`,
+  );
+  const syncRemoved = fs.existsSync(syncPath);
+  fs.rmSync(syncPath, { force: true });
+
+  const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
+    manifest.issue_id,
+    manifest.branch,
+  );
+
+  return {
+    manifest,
+    warnings: closeoutLocks.warnings,
+    sync_removed: syncRemoved,
+    worktree_cleanup: 'not_requested',
+  };
+}
+
 async function main(): Promise<void> {
   const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
   const explicitPr = flags.get('pr')?.at(-1)?.trim() ?? '';
+  const invokedCommand = ['ops:lane-close', ...process.argv.slice(2)].join(' ');
   let transaction: RepairRollbackTransaction | null = null;
+  let heldLock: CloseoutMergeLockResult | null = null;
+  let lockManifest: LaneManifest | null = null;
+
+  /**
+   * Every non-success exit funnels through here. A run that is giving up must
+   * not leave behind the merge lock it acquired for itself -- that residue is
+   * precisely what made repeated `ops:lane-close` invocations compound instead
+   * of converge (UTV2-1613).
+   */
+  const abandonSelfAcquiredLock = (): void => {
+    if (heldLock && lockManifest) {
+      releaseSelfAcquiredMergeLock(heldLock, lockManifest);
+    }
+    heldLock = null;
+  };
 
   try {
     let manifest = readManifest(issueId);
+    const inputManifest = structuredClone(manifest);
+    lockManifest = manifest;
     const repairMerged = bools.has('repair-merged');
     const trustedPostMerge = isTrustedPostMergeAutomation(process.env, {
       postMergeTrusted: bools.has('post-merge-trusted'),
     });
+
+    // Idempotent no-op BEFORE any lock is taken, so a re-close cannot create
+    // the residue it would then trip over on the next attempt.
+    if (manifest.status === 'done' && !repairMerged && !explicitPr) {
+      const cleanup = completeIdempotentReclose(manifest);
+      emitJson({
+        ok: true,
+        code: 'lane_closed' as CloseoutFailureCode,
+        outcome: 'already_closed' satisfies CloseoutOutcome,
+        issue_id: issueId,
+        status: manifest.status,
+        closed_at: manifest.closed_at,
+        remediation:
+          'Lane is already closed. Coordination state was released idempotently; no manifest, proof, or Linear ' +
+          'state was changed, and no truth-check outcome was recorded. Reopen detection remains the job of ' +
+          'ops:truth-check, not of re-running the closer.',
+        warnings: cleanup.warnings,
+        sync_removed: cleanup.sync_removed,
+        worktree_cleanup: cleanup.worktree_cleanup,
+      });
+      process.exit(0);
+    }
 
     if (explicitPr && !repairMerged) {
       emitJson({
@@ -1167,6 +1623,9 @@ async function main(): Promise<void> {
     }
 
     let validatedPr: RepairMergedPrInfo | undefined;
+    let repairedManifest: LaneManifest | null = null;
+    let repairChangedFields: string[] = [];
+    let mergeBinding: MergeBindingInference | null = null;
     if (explicitPr) {
       const validation = validateTrustedPostMergeRepair(manifest, explicitPr, {
         repairMerged,
@@ -1196,9 +1655,11 @@ async function main(): Promise<void> {
     const lock = ensureCloseoutMergeLock(manifest, {
       acquireLock: !bools.has('no-acquire-lock'),
     });
+    heldLock = lock;
     if (!lock.ok) {
       transaction?.rollback();
       transaction = null;
+      heldLock = null;
       emitJson({
         ok: false,
         code: lock.code,
@@ -1218,8 +1679,9 @@ async function main(): Promise<void> {
         validatedPr,
       });
       if (!repair.ok) {
-        transaction.rollback();
+        transaction?.rollback();
         transaction = null;
+        abandonSelfAcquiredLock();
         emitJson({
           ok: false,
           code: repair.code,
@@ -1240,8 +1702,9 @@ async function main(): Promise<void> {
         if (validatedPr) {
           cleanup = completeAlreadyClosedLaneCleanup(manifest);
         }
-        transaction.commit();
+        transaction?.commit();
         transaction = null;
+        heldLock = null;
         emitJson({
           ok: true,
           code: 'lane_closed' as CloseoutFailureCode,
@@ -1267,21 +1730,32 @@ async function main(): Promise<void> {
       const guard = guardRepairAgainstMainCheckout(repair, {
         currentBranch: currentBranchResult.ok ? currentBranchResult.stdout : '',
         repoRoot: process.cwd(),
+        inputManifest,
         trustedPostMerge,
+        command: invokedCommand,
       });
       if (guard) {
-        transaction.rollback();
+        transaction?.rollback();
         transaction = null;
+        abandonSelfAcquiredLock();
         emitJson(guard);
         process.exit(1);
       }
 
       writeManifest(repair.manifest);
       manifest = repair.manifest;
+      repairedManifest = repair.manifest;
+      repairChangedFields = repair.changed_fields;
+      mergeBinding = repair.merge_binding ?? null;
       rebindRepairedLaneProof(manifest);
     }
 
     requireCloseCommitSha(manifest);
+
+    // The exact state the truth-check is about to evaluate. Recorded in the
+    // measured receipt so a pass can never be credited to a state other than
+    // the one that produced it.
+    const evaluatedStateHash = hashState(manifest);
 
     const result = await runTruthCheck({
       issueId,
@@ -1290,9 +1764,58 @@ async function main(): Promise<void> {
       runner: 'ops:lane-close',
     });
 
+    const truthCheckCommand = `ops:truth-check ${issueId} (runner ops:lane-close)`;
+    const receipt: MeasuredTruthCheckReceipt = measuredTruthCheckReceipt({
+      command: truthCheckCommand,
+      runner: assertCanonicalRunner('ops:lane-close'),
+      result,
+      evaluatedStateHash,
+    });
+    const repairPacket: LaneCloseRepairPacket | null = repairedManifest
+      ? buildRepairPacket({
+          issueId,
+          command: invokedCommand,
+          inputManifest,
+          proposedManifest: repairedManifest,
+          changedFields: repairChangedFields,
+          mergeBinding,
+          truthCheck: receipt,
+        })
+      : null;
+    const repairPacketPathWritten = repairPacket
+      ? writeRepairPacket(repairPacket, {
+          artifactRoot: path.join(process.cwd(), '.out', 'ops', 'lane-close-repair'),
+        })
+      : null;
+
     if (result.exit_code !== 0) {
       transaction?.rollback();
       transaction = null;
+
+      // UTV2-1613: a failing truth-check rolls back everything this run wrote
+      // EXCEPT the inferred merge binding, which is re-applied below.
+      //
+      // The binding is a fact about GitHub -- this PR merged, at this SHA --
+      // and it stays true whether or not the lane's proof bundle is valid.
+      // Rolling it back was what made ghost lanes permanent: a stranded
+      // manifest (UTV2-1553: `started`, pr_url null) would be correctly
+      // repaired to `merged`, fail its truth-check for an unrelated reason
+      // (missing proof), and be reverted to `started` -- so it kept holding
+      // its file_scope_lock against every other lane, forever, and the next
+      // repair attempt began from the same broken state.
+      //
+      // Persisting the binding releases that lock without asserting anything
+      // about correctness: the lane lands in `merged`, which is exactly what
+      // GitHub says, and NOT in `done`. `truth_check_history` records the
+      // measured failure; nothing records a pass. Closing still requires a
+      // genuine passing truth-check on a later run.
+      let mergeBindingPersisted = false;
+      if (repairedManifest && mergeBinding) {
+        writeManifest(repairedManifest);
+        mergeBindingPersisted = true;
+      }
+
+      abandonSelfAcquiredLock();
       const code = mapFailuresToCode(result.failures, result.verdict);
       emitJson({
         ok: false,
@@ -1301,6 +1824,10 @@ async function main(): Promise<void> {
         remediation: remediationForCode(code),
         issue_id: issueId,
         truth_check: result,
+        measured_truth_check: receipt,
+        merge_binding: mergeBinding,
+        merge_binding_persisted: mergeBindingPersisted,
+        repair_packet_path: repairPacketPathWritten,
       });
       process.exit(result.exit_code);
     }
@@ -1316,6 +1843,7 @@ async function main(): Promise<void> {
       completion.warnings.length > 0 ? 'closed_with_warnings' : 'closed';
     transaction?.commit();
     transaction = null;
+    heldLock = null;
 
     emitJson({
       ok: true,
@@ -1328,8 +1856,13 @@ async function main(): Promise<void> {
       sync_removed: completion.sync_removed,
       worktree_cleanup: completion.worktree_cleanup,
       truth_check: result,
+      measured_truth_check: receipt,
+      measured_pass: isMeasuredPass(receipt),
+      merge_binding: mergeBinding,
+      repair_packet_path: repairPacketPathWritten,
     });
   } catch (error) {
+    abandonSelfAcquiredLock();
     transaction?.rollback();
     transaction = null;
     if (
