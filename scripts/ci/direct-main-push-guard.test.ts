@@ -50,6 +50,28 @@ test('classifyMainCommit: github-actions[bot] with the allow-listed lane-close m
   assert.strictEqual(result.code, 'authorized_automation');
 });
 
+test('classifyMainCommit: the scheduled readiness-ledger commit is authorized only for the ledger file itself (UTV2-1626)', () => {
+  const authorized = classifyMainCommit(
+    input({
+      authorLogin: 'github-actions[bot]',
+      message: 'ops(readiness): refresh ledger [skip ci]',
+      associatedPrNumbers: [],
+      changedFiles: ['docs/06_status/readiness/readiness-score.json'],
+    }),
+  );
+  assert.strictEqual(authorized.code, 'authorized_automation');
+
+  const widened = classifyMainCommit(
+    input({
+      authorLogin: 'github-actions[bot]',
+      message: 'ops(readiness): refresh ledger [skip ci]',
+      associatedPrNumbers: [],
+      changedFiles: ['docs/06_status/readiness/readiness-score.json', '.github/workflows/merge-gate.yml'],
+    }),
+  );
+  assert.strictEqual(widened.code, 'unauthorized_direct_push');
+});
+
 test('classifyMainCommit: github-actions[bot] with an UNLISTED message pattern is NOT auto-authorized', () => {
   const result = classifyMainCommit(
     input({
