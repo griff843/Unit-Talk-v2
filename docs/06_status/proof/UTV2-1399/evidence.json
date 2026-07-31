@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "UTV2-1399",
   "tier": "T1",
   "title": "Reversible, fixture-excluding production reporting view",
@@ -7,12 +7,14 @@
   "status": "pr_open",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
   "sha_binding": {
-    "verified_source_sha": null,
+    "verified_source_sha": "f1f397ecab462cdc83c98b7c15e8a239ac074aa1",
     "merge_sha": null,
-    "base_sha": "d82e1c60",
+    "base_sha": "d82e1c60107c6063418ec0c76f8f0e660fc3803a",
     "sha_type": "pending_merge",
-    "verified_source_note": "Lane initially blocked by UTV2-1604 (runtime, in_review), then by UTV2-1632 (runtime, merged but not yet closed -- a ghost lane whose manifest still read status: started on origin/main after its PR merged). Both cleared; ops:lane-start UTV2-1399 succeeded once UTV2-1632 read status: done. PR #1343 opened from claude/utv2-1399-fixture-reporting-view against main tip d82e1c60. The authoritative binding is the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
-    "bound_at": null
+    "verified_source_note": "verified_source_sha is the pre-PR-checks commit f1f397ec (the last commit before this schema-v2 proof-binding fix). Verified empty diff against the PR's synthetic merge ref refs/pull/1343/merge (12445581, a merge of f1f397ec into base d82e1c60 -- the exact fork point, not a drifted later main tip) before choosing it, so every commit strictly after it touches only docs/06_status/proof/** or docs/06_status/lanes/**, satisfying proof-binding-validator's rule 4. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "bound_at": "2026-07-31T21:15:00.000Z"
   },
   "verifier": {
     "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm via Supabase MCP execute_sql, 2026-07-31 11:40:28+00 onward",
