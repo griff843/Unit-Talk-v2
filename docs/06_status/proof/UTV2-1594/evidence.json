@@ -48,11 +48,12 @@
     "full_test_suite": {
       "command": "pnpm test",
       "status": "PASS",
-      "tests": 4093,
-      "pass": 4093,
+      "tests": 4099,
+      "pass": 4099,
       "fail": 0,
       "skipped": 0,
-      "exit_code": 0
+      "exit_code": 0,
+      "measured_on": "the final implementation, after the three E12 self-review fixes and their six new assertions (4093 -> 4099)"
     },
     "unit_tests": [
       {

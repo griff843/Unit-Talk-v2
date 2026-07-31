@@ -102,7 +102,7 @@ EVIDENCE:
 
 - `pnpm type-check` — PASS, clean exit, no output.
 - `pnpm lint` — PASS, clean exit, no output.
-- `pnpm test` — PASS, 4093 tests, 4093 pass, 0 fail, 0 skipped (E10).
+- `pnpm test` — PASS, 4099 tests, 4099 pass, 0 fail, 0 skipped (E10).
 - `npx tsx --test scripts/ops/verify-semaphore.test.ts` — 40 tests, 40 pass, 0 fail, 0 skipped.
 - `npx tsx --test scripts/ops/execution-checkpoint.test.ts` — 23 tests, 23 pass, 0 fail, 0 skipped.
 - `npx tsx --test scripts/ops/codex-exec.test.ts` — 21 tests, 21 pass, 0 fail, 0 skipped.
@@ -473,16 +473,20 @@ the same shape as the defect the lane was opened to fix.
 
 ### E10 — full suite
 
-`pnpm test` on the branch head: **4093 tests, 4093 pass, 0 fail, 0 skipped**,
-exit code 0. No `not ok` line anywhere in the run.
+`pnpm test` on the branch head, measured on the final implementation (after the
+three E12 fixes and their six new assertions): **4099 tests, 4099 pass, 0 fail,
+0 skipped**, exit code 0. No `not ok` line anywhere in the run.
 
 ```
-$ pnpm test
+$ pnpm lint && pnpm type-check && pnpm test
 ...
 === aggregated over all suites ===
-tests 4093  pass 4093  fail 0  skipped 0
+tests 4099  pass 4099  fail 0  skipped 0
 EXIT=0
 ```
+
+The count moved 4093 → 4099 across this lane's own self-review: four new
+assertions in `verify-semaphore.test.ts` and two in `execution-checkpoint.test.ts`.
 
 ### E11 — a preflight defect found and fixed on the way in
 
