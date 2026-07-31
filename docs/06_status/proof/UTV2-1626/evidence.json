@@ -12,6 +12,13 @@
     "verified_source_note": "Bound to the merge commit on main. PR #1326 was squash-merged, so the implementation head 3839ff43755e60eaebd2661880415c8784c83f7a is not an ancestor of main; 328ac4b3d05ec4905520c4aedd4d5867e02b3495 is the commit that carries this tree. The measurements below were produced on that exact tree and were not re-run afterwards against a different one.",
     "implementation_head_sha": "3839ff43755e60eaebd2661880415c8784c83f7a"
   },
+  "verifier": {
+    "identity": "github-actions/CI — run 30591788931, job 91035479830 `Writable DB proof (staging only)` (producer) and job 91036083714 `verify` (independent receipt verifier)",
+    "method": "scripts/ci/verify-db-proof-receipt.ts re-checked the receipt against its own GITHUB_* values inside the required `verify` context and printed `Verdict: PASS` / `Reason: DB proof verified: run 30591788931 attempt 1 @ 29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0`.",
+    "note": "The implementing agent is not the verifier of the writable-DB claim by design: proof text cannot show which database a run reached, so the verifier is the CI job that holds the credential and the separate job that re-derives the receipt's binding. The production-side measurement in runtime_proof below is a different claim with a different verifier — see verifier_scope.",
+    "verifier_scope": "This identity verifies the live-DB execution evidence recorded under runtime_proof.queries, runtime_proof.row_counts (target xskgrzbteyqdufktjrjx) and runtime_proof.ci_receipt. It does not and cannot verify the read-only production readiness measurement, which was taken by scripts/ops/readiness-refresh.ts on a credentialled workstation; that claim rests on the persistence assertion and the source-scanning test recorded elsewhere in this bundle.",
+    "harvest_note": "The queries, row counts and receipt fields were read back on 2026-07-31 from the retained artifacts of that same run — the job logs for jobs 91035479830 and 91036083714, and receipt artifact 8778682075. Nothing was re-run: a re-run would be a different measurement wearing this merge SHA's name."
+  },
   "static_proof": {
     "verify_static": {
       "command": "pnpm verify:static",
@@ -93,6 +100,189 @@
       "ingestor_health": "latest ingestor.cycle started 2026-06-30T12:55:01.189873+00:00 (43845m old, threshold 30m), status \"failed\"; latest merged provider cycle 2026-06-30T12:24:44.890623+00:00; latest game_results row 2026-06-30T07:27:28.089891+00:00.",
       "worker_outbox_health": "worker.heartbeat 2026-07-16T03:48:17.780927+00:00 (21352m old, threshold 30m, status succeeded); queue buckets pending=9, processing=32, stale_unknown=32, attempted-and-stuck=0.",
       "dead_letter_count": "1948 dead_letter rows = 1947 bucket:governance_hold (attempt_count=0) + 1 bucket:true_failure (attempt_count>0). Governance holds do not fail readiness under QUEUE_READINESS_SEMANTICS.md v1.0; the single true delivery failure does."
+    },
+    "queries": [
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1",
+        "duration_ms": 7506.189735
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2",
+        "duration_ms": 7833.763617
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3",
+        "duration_ms": 13199.142057
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4",
+        "duration_ms": 13195.886199
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "ok 5",
+        "duration_ms": 217.12805
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "ok 6",
+        "duration_ms": 14598.900333
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: correction chain is additive — original settlement row is not mutated",
+        "result": "ok 7",
+        "duration_ms": 14866.508139
+      }
+    ],
+    "queries_note": "The seven live cases `pnpm test:db` executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential, on the head that squash-merged to 328ac4b3. Transcribed from the ci-db-proof-receipt/v2 captured_output of run 30591788931 (artifact 8778682075), whose output_sha256 the verifier re-derived in the `verify` context; not from any local run. These are the writable live-DB queries this head executed; they are not the readiness measurement above, which is read-only against production.",
+    "row_counts": [
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='dead_letter'",
+        "operation": "read",
+        "rows": 1948,
+        "disjoint_breakdown": {
+          "attempt_count=0 (bucket:governance_hold)": 1947,
+          "attempt_count>0 (bucket:true_failure)": 1
+        }
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='pending'",
+        "operation": "read",
+        "rows": 9
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='processing'",
+        "operation": "read",
+        "rows": 32
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='processing' AND updated_at older than the stale-processing window (bucket:stale_unknown)",
+        "operation": "read",
+        "rows": 32,
+        "subset_of": "status='processing'"
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='pending' AND attempt_count>0 AND updated_at past the retry window (attempted-and-stuck)",
+        "operation": "read",
+        "rows": 0,
+        "subset_of": "status='pending'"
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "distribution_receipts",
+        "operation": "reset",
+        "rows": 2
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "distribution_outbox",
+        "operation": "reset",
+        "rows": 12
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "system_runs",
+        "operation": "reset",
+        "rows": 1
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "sports",
+        "operation": "upsert",
+        "rows": 9
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "cappers",
+        "operation": "upsert",
+        "rows": 1
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "market_families",
+        "operation": "upsert",
+        "rows": 6
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "selection_types",
+        "operation": "upsert",
+        "rows": 3
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "market_types",
+        "operation": "upsert",
+        "rows": 133
+      }
+    ],
+    "row_counts_note": "Two sources, both labelled. The five zfzdnfwdarxucxtaojxm entries are production counts the readiness generator observed read-only at 2026-07-30T23:40:39.763Z; they are the same numbers quoted in blocker_detail above, restated as the individual COUNT queries scripts/ops/readiness-refresh.ts actually issues. They are deliberately not summed: stale_unknown is a subset of processing and attempted-and-stuck a subset of pending, so a total would double-count. The eight xskgrzbteyqdufktjrjx entries were observed by scripts/ci/seed-staging-fixtures.ts in run 30591788931, job 91035479830, immediately before the writable suites ran, read from that job's log: `reset` rows are the deletions it reported for the mutable tables, `upsert` rows the reference data it re-seeded. settlement_records, picks and submissions are retained by design and were not reset.",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "github_run_id": "30591788931",
+      "github_run_attempt": "1",
+      "github_sha": "29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8",
+      "github_ref_name": "1326/merge",
+      "producer_job_id": "91035479830",
+      "verifier_job_id": "91036083714",
+      "receipt_command": "pnpm test:db",
+      "started_at": "2026-07-30T23:51:43.867Z",
+      "finished_at": "2026-07-30T23:52:56.947Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "job_tap_total": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0,
+        "blocks": 16
+      },
+      "repo_migration_head": "20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "fixture_run_id": "utv2-1630-30591788931-1",
+      "output_sha256": "d5045b803b46c0d854761efa584f35ec0a5cfc88ecb3df61c4b696109e0af8d5",
+      "receipt_sha256": "f581a90c9e76649c1f4f17feed886458ef35f4315b15c6cded1bb498594a201c",
+      "artifact_id": "8778682075",
+      "artifact_name": "utv2-1630-db-proof-receipt-30591788931-1",
+      "artifact_name_note": "The artifact name is prefixed `utv2-1630` because that string is a literal in ci.yml, written by the lane that built this workflow. It is not a claim about which issue this run belongs to; github_run_id and workflow_ref (refs/pull/1326/merge) are.",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30591788931 attempt 1 @ 29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "pr": 1326,
+      "head_sha_at_proof": "3839ff43755e60eaebd2661880415c8784c83f7a",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1326/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was 3839ff43755e60eaebd2661880415c8784c83f7a, which squash-merged to main as 328ac4b3d05ec4905520c4aedd4d5867e02b3495.",
+      "job_tap_note": "test_db_tap is the receipt's own tap block for `pnpm test:db`. job_tap_total sums all 16 TAP blocks printed by job 91035479830, i.e. test:db plus the pnpm test:t1-proof:live suites, read from that job's log.",
+      "result": "success"
     }
   },
   "persistence_assertion": {
