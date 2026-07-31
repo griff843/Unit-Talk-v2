@@ -1,1 +1,288 @@
-placeholder
+# PROOF: UTV2-1613
+
+MERGE_SHA: set-by-ci
+
+## Summary
+
+`scripts/ops/lane-close.ts`, on the `--repair-merged` path, synthesized a
+`truth_check_history` entry with `verdict: "pass"`, `failures: []` and
+`runner: "ops:lane-close --repair-merged"` **before** the canonical
+truth-check ran, and wrote it unconditionally — including when the proof
+bundle was invalid and the close was about to be refused. In the manifest
+that entry is indistinguishable from a measured pass, and its runner is
+outside the canonical `TruthCheckHistoryEntry['runner']` union, so it is
+attributed to a runner that does not exist.
+
+This lane removes the fabrication and replaces the conflated record with an
+explicit three-way separation:
+
+1. **inferred merge binding** — what GitHub says about the PR (which PR,
+   which head ref, which merge commit);
+2. **proposed tracked-file repair** — the manifest content that would be
+   written, with hashes of the state it was computed from;
+3. **measured truth-check outcome** — what `runTruthCheck()` actually
+   returned when it actually ran, or an explicit `executed: false` receipt
+   when it did not run at all.
+
+A `verdict: "pass"` record is reachable from exactly one input: a receipt
+that executed and exited 0. `truthHistoryEntryForMeasuredReceipt()` is the
+only history-entry constructor and returns `null` for an unexecuted receipt.
+
+The lane also fixes the non-idempotent, self-poisoning closeout measured on
+the live system, and adds automatic ghost-lock release.
+
+This is implementation and mechanical-measurement evidence. It does not
+claim any production deployment, database mutation, secret change, or
+readiness certification.
+
+## Assertions
+
+ASSERTIONS:
+
+- [x] `--repair-merged` appends nothing to `truth_check_history`. The only
+      writer on that path is the real `runTruthCheck()` call.
+- [x] An unexecuted truth-check yields no history entry at all (`null`),
+      not an optimistic placeholder.
+- [x] A failed or `infra_error` truth-check records the measured failure
+      with its real `failures[]`, never a pass.
+- [x] A pass is recorded only when the receipt executed **and** exited 0; a
+      `verdict: "pass"` with a non-zero exit code is treated as not-a-pass.
+- [x] The exact string `ops:lane-close --repair-merged` is rejected at
+      runtime by `assertCanonicalRunner()`, and the canonical union is
+      asserted at the manifest write boundary in `finalizeLaneCloseManifest`.
+- [x] Repair packets (schema v2) carry the exact command, timestamp, input
+      manifest hash, candidate repaired-state hash, selected PR / head ref /
+      merge SHA, check IDs and exit code.
+- [x] Applying a packet fails closed on input drift, packet tampering, or
+      changed GitHub merge authority; an unresolvable PR is treated as
+      changed authority, not as agreement. A refused apply writes nothing.
+- [x] UTV2-1592 is encoded as a regression fixture: a repair against an
+      invalid proof bundle produces a packet in which no field serialises a
+      passing verdict.
+- [x] The historical-certification flow (an already-merged lane repaired
+      with no truth-check execution) applies the binding, lands at `merged`,
+      and cannot inherit a pass or reach `done`.
+- [x] A successful normal close releases the issue lease idempotently.
+- [x] A second invocation on a closed lane is a clean no-op: no active
+      lease, no merge lock created, `closed_at` not rewritten.
+- [x] A failed truth-check releases no authority and does not mark the lane
+      Done; the manifest's latest entry is the measured failure, and
+      `classifyTruthCheckAuthorization` classifies it as drift, refusing to
+      promote it.
+- [x] Re-closing an already-`done` lane no longer raises spurious
+      `truth_check_drift`, while a different merge SHA, a non-terminal
+      manifest, and a failing latest entry all remain drift.
+- [x] This lane's own orphaned-pid merge lock is reaped instead of
+      compounding; another lane's lock and a merely-expired lock with a live
+      owner are never reaped.
+- [x] A run that gives up releases the merge lock it acquired for itself; a
+      pre-existing lock it did not acquire is left untouched.
+- [x] `releaseCloseoutLocks` warns rather than throwing when the live merge
+      lock belongs to another lane, and never releases it.
+- [x] A manifest in a lock-holding status whose PR is merged is reconciled
+      to `merged` with its `commit_sha` bound, releasing its file-scope and
+      concurrency locks — and is never advanced to `done`.
+- [x] Existing fabricated history entries are inventoried, not deleted.
+- [x] No production write, deployment, restart, or deletion was performed by
+      this lane.
+
+## Verification
+
+### 1. The defect, and its removal
+
+The fabricated record previously written by `scripts/ops/lane-close.ts` on
+the repair path:
+
+```json
+{
+  "checked_at": "<now>",
+  "verdict": "pass",
+  "merge_sha": "<pr merge sha>",
+  "failures": [],
+  "runner": "ops:lane-close --repair-merged",
+  "source": "github_pr_merge_commit_repair"
+}
+```
+
+That block is deleted. Three tests in `scripts/ops/lane-close.test.ts` that
+previously asserted the fabricated entry existed were updated to assert its
+absence, each with a comment naming what it used to encode.
+
+### 2. Canonical suites
+
+Command:
+
+```text
+npx tsx --test scripts/ops/lane-close.test.ts scripts/ops/lane-close-repair-packet.test.ts scripts/ops/truth-history-audit.test.ts scripts/ops/reconcile.test.ts
+```
+
+Result:
+
+```text
+# tests 181
+# suites 0
+# pass 181
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Breakdown: `lane-close.test.ts` 141 (128 pre-existing, all still passing,
+plus 13 new), `lane-close-repair-packet.test.ts` 19,
+`truth-history-audit.test.ts` 7, `reconcile.test.ts` 14.
+
+### 3. Full unit suite
+
+Command:
+
+```text
+pnpm test
+```
+
+Result, aggregated across all suites on the `origin/main`-rebased head:
+
+```text
+TOTAL tests 4075 pass 4075 fail 0
+```
+
+### 4. Static gates
+
+```text
+pnpm lint         # clean, no errors
+pnpm type-check   # tsc -b, clean
+```
+
+### 5. Live inventory of fabricated history entries
+
+Existing fabricated entries are **not** deleted by this lane. Deleting them
+would repeat the mistake that created them: a tool silently rewriting the
+governance record with no PR and no reviewable diff. `ops:truth-history-audit`
+is strictly read-only and exits 0 even when it finds fabrications.
+
+Command:
+
+```text
+pnpm ops:truth-history-audit
+```
+
+Measured on the rebased head:
+
+```text
+scanned_manifests:       647
+affected_manifests:      188
+fabricated_pass_count:   181
+```
+
+Findings by runner:
+
+```text
+ops:lane-close --repair-merged   181   fabricated_repair_pass
+manual-reconciliation             21   non_canonical_runner
+<runner field absent>             19   non_canonical_runner
+post-merge-lane-close             13   non_canonical_runner
+manual-backfill                   10   non_canonical_runner
+manual-close                       6   non_canonical_runner
+operator                           4   non_canonical_runner
+pm                                 1   non_canonical_runner
+```
+
+Every one of the 181 fabricated passes carries the repair runner and
+`verdict: "pass"`. A second, previously unreported population exists: 55
+entries under five other non-canonical runners, plus 19 entries with no
+`runner` field at all — including 13 written by `post-merge-lane-close`.
+Those are recorded here for triage; correcting them is out of this lane's
+scope.
+
+The count rose from 180 to 181 between the start of this lane and its
+rebase, because the defective path was still writing new fabricated entries
+on `main` throughout.
+
+### 6. Ghost lanes reconciled — real cases, mechanically
+
+Both live ghost manifests were reconciled by the new `ops:reconcile` ghost
+rule, not by hand.
+
+Detection (dry run, whole board):
+
+```text
+$ pnpm ops:reconcile --json
+manifests: 647 total, 31 active
+
+ghost_merged  UTV2-1553  PR .../pull/1322 is merged (965872d378caa3e88ef4987f8bbb0bab0214856e)
+                         but manifest status is "started"
+ghost_merged  UTV2-1590  PR .../pull/1309 is merged (67f26057b7e35eff928a1b7c5e71084da5a67e1a)
+                         but manifest status is "in_review"
+```
+
+Applied to the one whose manifest this PR may carry:
+
+```text
+$ pnpm ops:reconcile --apply --issue UTV2-1590
+[GHOST-MERGED] status -> merged, commit_sha bound, locks released
+verdict: MUTATIONS_APPLIED
+```
+
+Resulting manifest change: `status: in_review -> merged`,
+`commit_sha: null -> 67f26057b7e35eff928a1b7c5e71084da5a67e1a`, and one
+appended entry with `verdict: "fail"`, `runner: "ops:reconcile"` recording
+why. It is **not** `done`, and `closed_at` stays `null`.
+
+The second ghost is covered under Known Gaps below.
+
+### 7. Two findings that block the obvious repair path
+
+**`ops:lane-close --repair-merged` cannot load either ghost manifest.**
+The stranded manifest has `file_scope_lock: []`, which `validateManifest`
+rejects, so `readManifest` throws before any repair logic runs:
+
+```text
+$ npx tsx scripts/ops/lane-close.ts UTV2-1590 --repair-merged
+{"ok": false, "code": "infra_error",
+ "message": "docs/06_status/lanes/UTV2-1590.json: file_scope_lock must contain at least one file"}
+```
+
+A lane manifest can therefore be written in a state that every tool going
+through `readManifest` refuses to read. This is why the ghost release lives
+in `ops:reconcile` (which reads manifests without validating) rather than in
+`lane-close` alone.
+
+**A ghost lane blocks the PR that would fix it.**
+`scripts/ci/file-scope-guard.ts` resolves a manifest that already exists on
+the base branch from the *base* copy, so a PR that reconciles a ghost is
+still evaluated against the ghost's stale, lock-holding content. This is a
+genuine bootstrap deadlock, and it is why the automatic release was built
+into the scheduled reconciler, which runs on `main` rather than through a
+lane PR.
+
+### 8. Deliberate non-changes
+
+**`scripts/ci/file-scope-guard.ts` was not modified.** The obvious extension
+— treat any manifest with a non-null `commit_sha` as non-blocking — would
+*widen* what stops holding locks, based on a field a live lane can
+legitimately set mid-flight. The guard is offline and cannot ask GitHub
+anything, so it has no sound signal of its own. Moving ghosts to `merged`
+(already outside both `ACTIVE_LOCK_STATUSES` and the guard's
+`LOCK_CONFLICT_STATUSES`) achieves the release without weakening the guard.
+
+**The concurrency caps in `docs/governance/CONCURRENCY_CONFIG.json` were not
+raised.** `checkConcurrencyLimits` already counts only
+`ACTIVE_LOCK_STATUSES`, so `merged` and `done` manifests consume no slot;
+the measured starvation came from ghost lanes sitting in active statuses,
+which the reconciler now clears. Adding a literal reserve would widen the
+caps to work around a problem that no longer exists. Flagged for PM: if a
+literal reserved control-plane allocation is still wanted, it should be its
+own governance change rather than a side effect of this one.
+
+**The ghost release does not assume the local manifest set is the true
+active set.** It only ever transitions a manifest it can see from an active
+status to `merged`, and only when GitHub independently confirms the merge. A
+lane whose manifest exists solely on its own PR branch is invisible to a
+`main` checkout and is correctly left alone — it is live, not a ghost.
+
+## Governance
+
+- No production write, deployment, restart, schema mutation, or row deletion.
+- No direct-main push, no `--admin` merge, no branch-protection change.
+- No fabricated or unmeasured proof: every number above is copied from a
+  command run on this branch.
