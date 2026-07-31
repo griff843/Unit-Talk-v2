@@ -41,6 +41,18 @@ import {
   validatePersistedModelRouting,
   type ModelRoutingBlock,
 } from './model-routing.js';
+import {
+  beginAttempt,
+  buildResumeBrief,
+  classifyCheckpointLiveness,
+  failVisiblyAndRelease,
+  finishAttempt,
+  readCheckpoint,
+  resolveExecutionTimeout,
+  type ExecutionCheckpoint,
+  type ResumePlan,
+  type TimeoutPolicyDecision,
+} from './execution-checkpoint.js';
 
 interface CodexExecResult {
   ok: boolean;
@@ -51,6 +63,9 @@ interface CodexExecResult {
     | 'MODEL_ROUTING_INVALID'
     | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
+    | 'EXECUTION_TIMED_OUT'
+    | 'EXECUTION_SILENT'
+    | 'EXECUTION_CANCELLED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'DRY_RUN';
   issue_id: string;
@@ -65,6 +80,48 @@ interface CodexExecResult {
   policy_version?: string;
   legacy_compatibility_used?: boolean;
   codex_cli_version?: string | null;
+  execution?: ExecutionSummary;
+}
+
+/**
+ * The resume/timeout facts a caller needs to decide whether to re-dispatch:
+ * which attempt this was, what phase it resumed at, what the bounded timeout
+ * was and where it came from, and whether the executor went silent.
+ */
+export interface ExecutionSummary {
+  attempt: number;
+  resumed: boolean;
+  phase: string;
+  resumed_from_phase: string;
+  skipped_phases: string[];
+  carried_findings: number;
+  timeout_ms: number;
+  timeout_policy_id: string;
+  timeout_clamped: TimeoutPolicyDecision['clamped'];
+  checkpoint_path: string;
+  outcome?: string;
+  heartbeat_state?: string;
+  released_resources?: string[];
+}
+
+function buildExecutionSummary(
+  checkpoint: ExecutionCheckpoint,
+  resume: ResumePlan,
+  policy: TimeoutPolicyDecision,
+  checkpointPathValue: string,
+): ExecutionSummary {
+  return {
+    attempt: checkpoint.attempt,
+    resumed: resume.resumed,
+    phase: checkpoint.phase,
+    resumed_from_phase: resume.resume_from_phase,
+    skipped_phases: resume.skipped_phases,
+    carried_findings: resume.carried_findings.length,
+    timeout_ms: policy.timeout_ms,
+    timeout_policy_id: policy.policy_id,
+    timeout_clamped: policy.clamped,
+    checkpoint_path: checkpointPathValue,
+  };
 }
 
 export interface ModelRoutingExecResolution {
@@ -284,7 +341,7 @@ function checkExecSubcommand(): { available: boolean; error: string | null } {
   return { available: true, error: null };
 }
 
-function buildCodexPrompt(packet: ExecutionPacket): string {
+export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string): string {
   return [
     `# Unit Talk V2 — Lane Execution Packet`,
     ``,
@@ -301,6 +358,10 @@ function buildCodexPrompt(packet: ExecutionPacket): string {
     ``,
     `## Closeout instructions`,
     packet.closeout_instructions.map(c => `- ${c}`).join('\n'),
+    // The resume brief goes ahead of the (long) repo brief so a resumed run
+    // reads "here is what is already settled" before it reads anything that
+    // would tempt it to start the investigation over.
+    ...(resumeBrief ? [``, resumeBrief] : []),
     ``,
     `## Repo brief (critical — read before touching any code)`,
     packet.repo_brief,
