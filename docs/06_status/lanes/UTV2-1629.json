@@ -34,10 +34,10 @@
     "docs/06_status/proof/UTV2-1629/evidence.json",
     "docs/06_status/proof/UTV2-1629/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-30T22:10:00.000Z",
-  "heartbeat_at": "2026-07-31T00:16:12.935Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-31T04:49:15.782Z",
+  "closed_at": "2026-07-31T04:49:15.782Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -73,6 +73,20 @@
         "R3"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-31T04:49:04.420Z",
+      "verdict": "pass",
+      "merge_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-31T04:49:13.479Z",
+      "verdict": "pass",
+      "merge_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
