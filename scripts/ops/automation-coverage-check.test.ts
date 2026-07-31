@@ -72,7 +72,7 @@ test('automation coverage fails recurring manual-purpose tool without target iss
     }),
   );
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'FAIL');
   assert.ok(report.findings.some(finding => finding.code === 'AUTO_MANUAL_RECURRING_UNJUSTIFIED'));
@@ -82,7 +82,7 @@ test('automation coverage allows diagnostic-only manual tools', () => {
   const root = tempRoot();
   const registryPath = writeRegistry(root, baseRegistry(root));
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'PASS');
   assert.equal(report.coverage[0]?.required_check_status, 'not-required');
@@ -112,7 +112,7 @@ test('automation coverage fails prompt-agent gate claim without equivalent block
     }),
   );
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'FAIL');
   assert.ok(report.findings.some(finding => finding.code === 'AUTO_PROMPT_AGENT_BLOCKING_WITHOUT_GATE'));
@@ -146,7 +146,7 @@ test('automation coverage emits classified trigger and artifact fields', () => {
     }),
   );
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'PASS');
   const reconcileEntry = report.coverage.find(entry => entry.surface === 'scripts/ops/reconcile.ts');
@@ -159,14 +159,17 @@ test('automation coverage emits classified trigger and artifact fields', () => {
 /* UTV2-1624 — executable wiring coverage is enforced from this same gate      */
 /* -------------------------------------------------------------------------- */
 
-test('registry-only fixtures with no workspace manifest skip the wiring section instead of failing', () => {
+test('a missing workspace manifest fails closed rather than silently skipping the wiring section', () => {
+  // A required gate that quietly evaluates nothing is the defect class this
+  // check exists to catch, so an unbuildable execution graph is a tool failure.
   const root = tempRoot();
   const registryPath = writeRegistry(root, baseRegistry(root));
 
   const report = buildAutomationCoverageReport(registryPath);
 
   assert.equal(report.wiring, null);
-  assert.equal(report.verdict, 'PASS');
+  assert.equal(report.verdict, 'FAIL');
+  assert.ok(report.findings.some(finding => finding.code === 'AUTO_WIRING_TOOL_FAILURE'));
 });
 
 test('an unwired test in the analysed workspace fails the required automation coverage gate', () => {

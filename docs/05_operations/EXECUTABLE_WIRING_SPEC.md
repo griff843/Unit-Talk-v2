@@ -112,7 +112,9 @@ Tool and parser failures are held in `parser_errors` and surfaced as `[TOOL-FAIL
 
 `pnpm ops:automation-coverage-check --output <path> --json` persists a machine-readable report containing total test files, reachable/unreachable counts, the reachability path per file, capability counts and classifications, baseline sizes, newly unwired failures, and tool failures. The text mode prints the concise human summary.
 
-Flags: `--wiring-baseline <path>` to point at an alternate ledger, `--no-wiring` to run the registry-only checks.
+Flags: `--wiring-baseline <path>` to point at an alternate ledger.
+
+There is deliberately **no flag that disables the wiring section**. A required gate with an off switch is the same defect class this check exists to catch — the capability would still be present while no longer doing anything. If the execution graph cannot be built at all (no `package.json` at the analysis root), that is reported as `AUTO_WIRING_TOOL_FAILURE` and fails; it never degrades to a silent pass.
 
 ## 8. Non-goals
 

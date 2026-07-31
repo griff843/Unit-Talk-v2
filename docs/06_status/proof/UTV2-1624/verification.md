@@ -128,8 +128,11 @@ ASSERTIONS:
     fixture 14)
 12. Existing baseline debt is explicit and cannot grow: `max_entries` caps both
     sections, and stale entries fail. (fixtures 16, 17)
-13. Tool/parser failures are reported separately from implementation findings.
-    (fixture 24)
+13. Tool/parser failures are reported separately from implementation findings,
+    and an execution graph that cannot be built at all fails closed rather than
+    degrading to a silent pass. (fixture 24; coverage-check fixture `a missing
+    workspace manifest fails closed rather than silently skipping the wiring
+    section`)
 14. Documentation-only reference is not sufficient for a capability claimed as
     automated. (fixture 20)
 15. Running the new gate against pristine `origin/main` fails on exactly the
@@ -404,6 +407,20 @@ other root scripts changed by this lane: []
 | UTV2-1637 | Phase B — `packages/**` baseline (38 entries), plus chaining `@unit-talk/invariants` and `@unit-talk/observability` into the required `test` root |
 | UTV2-1638 | Phase B — `scripts/**` baseline (12 entries) and the 18 orphan ops/ci capabilities |
 | UTV2-1639 | Runtime Verifier Gate accepts a proof file that does not contain the supplied merge SHA (Urgent, T1) |
+
+## Review findings applied to this lane's own diff
+
+Two defects were found reviewing this diff against the standard it sets, and
+both are fixed here rather than deferred:
+
+- The CLI carried a `--no-wiring` flag. A required gate with an off switch is
+  exactly the defect class this check exists to catch — the capability stays
+  present while no longer doing anything. The flag is removed. The programmatic
+  `wiring: false` option remains for registry-only unit fixtures, which have no
+  workspace to analyse.
+- A missing `package.json` at the analysis root silently skipped the wiring
+  section and returned PASS. That is fail-open behaviour in a gate, against core
+  invariant 10. It now emits `AUTO_WIRING_TOOL_FAILURE` and fails.
 
 ## Non-goals respected
 

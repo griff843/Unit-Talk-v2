@@ -289,14 +289,28 @@ export function buildAutomationCoverageReport(
   }
 
   let wiring: WiringReport | null = null;
-  // Registry-only fixtures point reference_root at a scratch directory with no
-  // workspace manifest; there is no execution graph to analyse there.
-  const wiringEnabled = options.wiring !== false && existsSync(resolveFromRoot('package.json', root));
-  if (wiringEnabled) {
-    wiring = buildWiringReport({
-      root,
-      baselinePath: options.wiringBaselinePath ?? DEFAULT_BASELINE_PATH,
-    });
+  if (options.wiring !== false) {
+    // Fail closed. A missing workspace manifest means the execution graph could
+    // not be built at all, which is a tool failure, not a clean repository.
+    // Registry-only fixtures must opt out explicitly with `wiring: false`; there
+    // is deliberately no CLI flag that can switch this required check off.
+    if (!existsSync(resolveFromRoot('package.json', root))) {
+      findings.push({
+        severity: 'fail',
+        category: 'executable-wiring-gap',
+        code: 'AUTO_WIRING_TOOL_FAILURE',
+        surface: root,
+        detail:
+          'no package.json at the analysis root, so the execution graph could not be built; executable wiring coverage was not evaluated',
+      });
+    } else {
+      wiring = buildWiringReport({
+        root,
+        baselinePath: options.wiringBaselinePath ?? DEFAULT_BASELINE_PATH,
+      });
+    }
+  }
+  if (wiring) {
     for (const error of wiring.parser_errors) {
       findings.push({
         severity: 'fail',
@@ -342,15 +356,20 @@ interface ParsedArgs {
   registryPath: string;
   json: boolean;
   output: string | null;
-  wiring: boolean;
   wiringBaselinePath: string | null;
 }
 
+/**
+ * There is deliberately no flag that disables the executable wiring section. A
+ * required gate with an off switch is the same defect class this check exists to
+ * catch: the capability would still be present while no longer doing anything.
+ * The programmatic `wiring: false` option exists only for registry-only unit
+ * fixtures, which have no workspace to analyse.
+ */
 function parseArgs(argv: string[]): ParsedArgs {
   let registryPath = DEFAULT_REGISTRY;
   let json = false;
   let output: string | null = null;
-  let wiring = true;
   let wiringBaselinePath: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -364,10 +383,6 @@ function parseArgs(argv: string[]): ParsedArgs {
       json = true;
       continue;
     }
-    if (arg === '--no-wiring') {
-      wiring = false;
-      continue;
-    }
     if (arg === '--wiring-baseline') {
       wiringBaselinePath = argv[index + 1] ?? null;
       index += 1;
@@ -379,7 +394,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  return { registryPath, json, output, wiring, wiringBaselinePath };
+  return { registryPath, json, output, wiringBaselinePath };
 }
 
 function printText(report: AutomationCoverageReport): void {
@@ -399,7 +414,6 @@ const invokedPath = process.argv[1] ?? '';
 if (invokedPath.endsWith('automation-coverage-check.ts') || invokedPath.endsWith('automation-coverage-check.js')) {
   const args = parseArgs(process.argv.slice(2));
   const report = buildAutomationCoverageReport(args.registryPath, {
-    wiring: args.wiring,
     wiringBaselinePath: args.wiringBaselinePath,
   });
 
