@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/.worktrees/wt-proofclass",
   "branch": "claude/utv2-1635-resolve-c1-proof-bundles",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "7279ee3977c1945bd6b13c8edc2a1fe57b70c09c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1337",
   "files_changed": [],
   "file_scope_lock": [
@@ -24,14 +24,24 @@
     "docs/06_status/proof/UTV2-1635/verification.md",
     "docs/06_status/proof/UTV2-1635/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-31T12:39:06.080Z",
-  "heartbeat_at": "2026-07-31T12:39:06.080Z",
+  "heartbeat_at": "2026-07-31T20:06:49.323Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1635-resolve-c1-proof-bundles.result.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-31T20:06:36.422Z",
+      "verdict": "pass",
+      "merge_sha": "7279ee3977c1945bd6b13c8edc2a1fe57b70c09c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1337"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
