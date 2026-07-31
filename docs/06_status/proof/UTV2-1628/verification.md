@@ -1,11 +1,12 @@
 # PROOF: UTV2-1628
 
-MERGE_SHA: ae5828c8f2a25801101e77e3a9343cba7e503267
+MERGE_SHA: fd0b3a114a403065238e562f1ea5b82033f78cdf
 
-That is the base commit this branch merges into — `origin/main` after the second
-of two rebases, each resolving a `package.json` conflict with a lane that landed
-while this PR was open, and a real ancestor of this branch's head. It is
-provisional
+It is a real ancestor of this branch's head, taken from `origin/main` during the
+lane. Branch protection requires the head to be current with `main`, and several
+lanes landed while this PR was open, so the branch was rebased onto later commits
+after this line was written; the SHA above stays true as an ancestor regardless.
+It is provisional
 by construction: the squash merge SHA does not exist until the merge happens, so
 `post-merge-lane-close.yml` rewrites this line to the authoritative merge SHA via
 `ops:proof-generate --merge-sha`. The pre-fix baseline this lane measures against
