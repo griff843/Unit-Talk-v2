@@ -1,8 +1,14 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import {
+  buildWiringReport,
+  summarizeWiringReport,
+  DEFAULT_BASELINE_PATH,
+  type WiringReport,
+} from './executable-wiring.js';
 
 type Severity = 'fail' | 'warn';
-type Category = 'implementation-gap' | 'current-authority-contradiction';
+type Category = 'implementation-gap' | 'current-authority-contradiction' | 'executable-wiring-gap';
 
 export interface ToolSurface {
   name: string;
@@ -64,6 +70,21 @@ export interface AutomationCoverageReport {
   };
   coverage: AutomationCoverageEntry[];
   findings: AutomationFinding[];
+  /**
+   * UTV2-1624: executable wiring coverage. Presence of a test or an ops script is
+   * not coverage — this section proves each is reachable from a real execution
+   * path, or is explicitly dispositioned in the reviewed wiring baseline.
+   */
+  wiring: WiringReport | null;
+}
+
+export interface AutomationCoverageOptions {
+  /** Repo root the wiring graph is built from. Defaults to the registry's reference_root. */
+  root?: string;
+  /** Wiring baseline ledger path; `null` disables the wiring section entirely. */
+  wiringBaselinePath?: string | null;
+  /** Set to false to skip the wiring section (used by narrow registry-only fixtures). */
+  wiring?: boolean;
 }
 
 const DEFAULT_REGISTRY = 'docs/05_operations/system-alignment-registry.json';
@@ -161,9 +182,12 @@ function buildCoverageEntry(surface: ToolSurface, root: string): AutomationCover
   };
 }
 
-export function buildAutomationCoverageReport(registryPath = DEFAULT_REGISTRY): AutomationCoverageReport {
+export function buildAutomationCoverageReport(
+  registryPath = DEFAULT_REGISTRY,
+  options: AutomationCoverageOptions = {},
+): AutomationCoverageReport {
   const registry = readJson<AutomationRegistry>(registryPath);
-  const root = registry.reference_root ?? process.cwd();
+  const root = options.root ?? registry.reference_root ?? process.cwd();
   const findings: AutomationFinding[] = [];
   const coverage = registry.tool_surfaces.map(surface => buildCoverageEntry(surface, root));
 
@@ -264,6 +288,35 @@ export function buildAutomationCoverageReport(registryPath = DEFAULT_REGISTRY): 
     }
   }
 
+  let wiring: WiringReport | null = null;
+  // Registry-only fixtures point reference_root at a scratch directory with no
+  // workspace manifest; there is no execution graph to analyse there.
+  const wiringEnabled = options.wiring !== false && existsSync(resolveFromRoot('package.json', root));
+  if (wiringEnabled) {
+    wiring = buildWiringReport({
+      root,
+      baselinePath: options.wiringBaselinePath ?? DEFAULT_BASELINE_PATH,
+    });
+    for (const error of wiring.parser_errors) {
+      findings.push({
+        severity: 'fail',
+        category: 'executable-wiring-gap',
+        code: 'AUTO_WIRING_TOOL_FAILURE',
+        surface: error.subject,
+        detail: `wiring parser failure (tool defect, not an implementation finding): ${error.detail}`,
+      });
+    }
+    for (const finding of wiring.findings) {
+      findings.push({
+        severity: finding.severity,
+        category: 'executable-wiring-gap',
+        code: finding.code,
+        surface: finding.subject,
+        detail: finding.detail,
+      });
+    }
+  }
+
   const fail = findings.filter(finding => finding.severity === 'fail').length;
   const warn = findings.filter(finding => finding.severity === 'warn').length;
 
@@ -281,13 +334,24 @@ export function buildAutomationCoverageReport(registryPath = DEFAULT_REGISTRY): 
     summary: { fail, warn },
     coverage,
     findings,
+    wiring,
   };
 }
 
-function parseArgs(argv: string[]): { registryPath: string; json: boolean; output: string | null } {
+interface ParsedArgs {
+  registryPath: string;
+  json: boolean;
+  output: string | null;
+  wiring: boolean;
+  wiringBaselinePath: string | null;
+}
+
+function parseArgs(argv: string[]): ParsedArgs {
   let registryPath = DEFAULT_REGISTRY;
   let json = false;
   let output: string | null = null;
+  let wiring = true;
+  let wiringBaselinePath: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -300,13 +364,22 @@ function parseArgs(argv: string[]): { registryPath: string; json: boolean; outpu
       json = true;
       continue;
     }
+    if (arg === '--no-wiring') {
+      wiring = false;
+      continue;
+    }
+    if (arg === '--wiring-baseline') {
+      wiringBaselinePath = argv[index + 1] ?? null;
+      index += 1;
+      continue;
+    }
     if (arg === '--output') {
       output = argv[index + 1] ?? null;
       index += 1;
     }
   }
 
-  return { registryPath, json, output };
+  return { registryPath, json, output, wiring, wiringBaselinePath };
 }
 
 function printText(report: AutomationCoverageReport): void {
@@ -314,6 +387,9 @@ function printText(report: AutomationCoverageReport): void {
     `[automation-coverage] verdict=${report.verdict} fail=${report.summary.fail} warn=${report.summary.warn} ` +
       `classified=${report.inventory.classified_surfaces}`,
   );
+  if (report.wiring) {
+    for (const line of summarizeWiringReport(report.wiring).slice(0, 4)) console.log(line);
+  }
   for (const finding of report.findings) {
     console.log(`[${finding.severity.toUpperCase()}] ${finding.code} ${finding.surface} - ${finding.detail}`);
   }
@@ -322,7 +398,10 @@ function printText(report: AutomationCoverageReport): void {
 const invokedPath = process.argv[1] ?? '';
 if (invokedPath.endsWith('automation-coverage-check.ts') || invokedPath.endsWith('automation-coverage-check.js')) {
   const args = parseArgs(process.argv.slice(2));
-  const report = buildAutomationCoverageReport(args.registryPath);
+  const report = buildAutomationCoverageReport(args.registryPath, {
+    wiring: args.wiring,
+    wiringBaselinePath: args.wiringBaselinePath,
+  });
 
   if (args.output) {
     mkdirSync(path.dirname(args.output), { recursive: true });
