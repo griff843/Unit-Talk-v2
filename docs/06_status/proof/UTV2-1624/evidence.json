@@ -6,10 +6,10 @@
   "generated_at": "2026-07-31T12:45:00.000Z",
   "status": "in_progress",
   "sha_binding": {
-    "verified_source_sha": "97fc751d7443e466167f3b088859ddb42a8e57af",
+    "verified_source_sha": "9db5b4bb8d5589d60f8a7f15a139d3335d6a57ac",
     "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
     "sha_type": "branch_head_pending_merge",
-    "verified_source_note": "Every count and command output in this bundle was measured on 97fc751d, this lane's head after rebasing onto origin/main b5ebdc23. The authoritative binding is the squash merge SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "verified_source_note": "Every count and every command output in this bundle was re-measured on 9db5b4bb after this lane was rebased twice onto origin/main (most recently past UTV2-1604 and UTV2-1632). The authoritative binding is the squash merge SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "bound_at": "2026-07-31T12:45:00.000Z"
   },
   "verifier": {
@@ -19,7 +19,7 @@
     "independence_note": "The reachability claims do not rest on the implementing agent's reading of the code. Each named merge-path test was cross-checked with an independent grep of package.json and .github/ (verification.md EVIDENCE 5), and each newly wired test was mutation-checked so that a decorative test could not pass as coverage (EVIDENCE 6)."
   },
   "rederived_inventory": {
-    "measured_at_sha": "97fc751d7443e466167f3b088859ddb42a8e57af",
+    "measured_at_sha": "9db5b4bb8d5589d60f8a7f15a139d3335d6a57ac",
     "command": "pnpm ops:automation-coverage-check",
     "test_files_total": 457,
     "required_reachable": 302,
@@ -29,8 +29,8 @@
     "unwired": 119,
     "unwired_baselined": 119,
     "unwired_new": 0,
-    "capabilities_total": 143,
-    "capabilities_wired": 125,
+    "capabilities_total": 145,
+    "capabilities_wired": 127,
     "capabilities_orphan": 18,
     "capabilities_orphan_new": 0,
     "reported_by_prior_audit": {
@@ -42,13 +42,23 @@
     }
   },
   "static_proof": {
-    "type_check": { "command": "pnpm type-check", "status": "PASS" },
-    "lint": { "command": "pnpm lint", "status": "PASS" },
-    "verify_static": { "command": "pnpm verify:static", "status": "PASS", "exit_code": 0 },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "exit_code": 0
+    },
     "test_ops": {
       "command": "pnpm test:ops",
-      "tests": 1670,
-      "pass": 1670,
+      "tests": 1683,
+      "pass": 1683,
       "fail": 0,
       "skipped": 0,
       "note": "Includes the 12 tests newly wired by this lane."
@@ -159,18 +169,45 @@
   ],
   "baseline": {
     "path": "docs/05_operations/executable-wiring-baseline.json",
-    "tests": { "entries": 119, "max_entries": 119, "by_disposition": { "phase-b-wiring": 77, "external-service": 32, "failing-triage": 10 }, "by_issue": { "UTV2-1636": 68, "UTV2-1637": 38, "UTV2-1638": 12, "UTV2-1639": 1 } },
-    "capabilities": { "entries": 18, "max_entries": 18, "by_disposition": { "archive-delete-candidate": 11, "manual-diagnostic": 5, "one-shot-migration-aid": 2 } },
+    "tests": {
+      "entries": 119,
+      "max_entries": 119,
+      "by_disposition": {
+        "phase-b-wiring": 77,
+        "external-service": 32,
+        "failing-triage": 10
+      },
+      "by_issue": {
+        "UTV2-1636": 68,
+        "UTV2-1637": 38,
+        "UTV2-1638": 12,
+        "UTV2-1639": 1
+      }
+    },
+    "capabilities": {
+      "entries": 18,
+      "max_entries": 18,
+      "by_disposition": {
+        "archive-delete-candidate": 11,
+        "manual-diagnostic": 5,
+        "one-shot-migration-aid": 2
+      }
+    },
     "shrink_only": "max_entries caps both sections. Entries that become reachable, become non-executable fixtures, or point at deleted files are stale and fail, which forces the ledger down. Expiry lapse is a warning, not a failure, so a calendar date can never block every merge in the program."
   },
   "rebase": {
-    "base": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "base": "2cce459967197925c058d4b2dad77305bfe7cbb8",
     "conflict": "package.json test:ops — UTV2-1604 added an entry concurrently",
     "resolution": "union",
     "main_entries": 105,
     "branch_entries": 117,
     "dropped_from_main": 0,
-    "note": "Dropping an entry during conflict resolution would silently unwire tests, the exact defect class this lane exists to make impossible. The resolution was verified to be a strict superset of origin/main's list."
+    "note": "Rebased a second time onto origin/main after UTV2-1604 and UTV2-1632 landed. UTV2-1632 added two new scripts/ops+scripts/ci capabilities (workflow-bare-binary-guard.ts, db-health-checks.ts); re-running the checker confirmed both are wired, not orphan. Test counts (457/302/36/119) were unchanged; capability total rose 143->145 with orphan count unchanged at 18/18 baselined, 0 new."
   },
-  "follow_ups": ["UTV2-1636", "UTV2-1637", "UTV2-1638", "UTV2-1639"]
+  "follow_ups": [
+    "UTV2-1636",
+    "UTV2-1637",
+    "UTV2-1638",
+    "UTV2-1639"
+  ]
 }

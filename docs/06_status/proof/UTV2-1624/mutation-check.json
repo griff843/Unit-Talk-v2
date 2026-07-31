@@ -110,5 +110,6 @@
       "verdict": "KILLED",
       "source_restored": true
     }
-  ]
+  ],
+  "rebase_note": "This lane was rebased twice onto origin/main after this receipt was generated at head_sha above. Every mutated module (the 9 distinct scripts/ops/*.ts files referenced by mutated_module across the 12 rows) is byte-identical between that head and the final pre-merge head 9db5b4bb8d5589d60f8a7f15a139d3335d6a57ac -- verified with git diff <original>..HEAD for each file, 0 lines each -- so these results still hold and were not re-run to avoid re-measuring something unchanged."
 }

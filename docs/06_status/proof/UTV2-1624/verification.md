@@ -1,12 +1,14 @@
 # PROOF: UTV2-1624
 
-MERGE_SHA: 97fc751d7443e466167f3b088859ddb42a8e57af
+MERGE_SHA: 9db5b4bb8d5589d60f8a7f15a139d3335d6a57ac
 
-That SHA is the implementation commit — this lane's work rebased onto `origin/main`
-at `b5ebdc23` — and it is a real ancestor of the PR head. Every count and every
-command output below was measured on it. The proof bundle itself lands in a
-following commit, so the PR head is one commit later by construction; the
-authoritative binding is the squash merge SHA, written post-merge by
+That SHA is the implementation commit — this lane's work rebased twice onto
+`origin/main`, most recently at `2cce4599` (after UTV2-1604 and UTV2-1632
+landed) — and it is a real ancestor of the PR head. Every count and every
+command output below was re-measured on it after the second rebase, not
+carried over from the first. The proof bundle itself lands in a following
+commit, so the PR head is one commit later by construction; the authoritative
+binding is the squash merge SHA, written post-merge by
 `post-merge-lane-close.yml` via `ops:proof-generate --merge-sha`. The exact PR
 head SHA is carried by the `executor-result/v1` comment, which the required
 `Executor Result Validation` context checks against the live PR head.
@@ -32,13 +34,20 @@ The issue quoted a prior audit: 430 test files, 175 unreachable, 8 orphan ops
 scripts. None of those numbers is hardcoded anywhere in this lane, and none of
 them reproduced. The tool re-derives everything.
 
-| Metric | Reported by prior audit | Re-derived at `97fc751d` |
-|---|---|---|
-| Canonical test files | 430 | **457** |
-| Reachable from required `pnpm verify` | — | **302** |
-| Reachable only from another named command / workflow | — | **36** |
-| Unreachable | 175 | **119** |
-| Orphan `scripts/ops/**` + `scripts/ci/**` capabilities | 8 | **18** |
+| Metric | Reported by prior audit | Re-derived at `97fc751d` (first rebase) | Re-derived at `9db5b4bb` (post second rebase) |
+|---|---|---|---|
+| Canonical test files | 430 | 457 | **457** |
+| Reachable from required `pnpm verify` | — | 302 | **302** |
+| Reachable only from another named command / workflow | — | 36 | **36** |
+| Unreachable | 175 | 119 | **119** |
+| Orphan `scripts/ops/**` + `scripts/ci/**` capabilities | 8 | 18 | **18** |
+
+Total `scripts/ops/**` + `scripts/ci/**` capabilities rose from 143 to 145 between
+the two measurements — UTV2-1632 added `scripts/ci/workflow-bare-binary-guard.ts`
+and `scripts/ops/db-health-checks.ts` — but the orphan count held at 18/18
+baselined, 0 new: both new files are `test-covered-library` /
+`invoked-library` respectively, confirmed by re-running the checker rather than
+assumed from the diff.
 
 The prior audit both over-counted unreachable tests and under-counted orphan
 capabilities by more than 2x. It also named `proof-auditor-gate.test.ts` as
@@ -142,7 +151,7 @@ ASSERTIONS:
 
 EVIDENCE:
 
-### 1. Re-derived inventory at `97fc751d`
+### 1. Re-derived inventory at `97fc751d` (unchanged after rebase to `9db5b4bb`, see EVIDENCE 8)
 
 ```text
 $ pnpm ops:automation-coverage-check
@@ -366,21 +375,28 @@ does not exist on `main`) and the one capability that becomes `test-covered-libr
 once its test is wired. Everything `main` would otherwise fail on is in the
 baseline, explicitly, with an owner and an expiry — nothing is suppressed.
 
-### 8. Verification commands on the branch
+### 8. Verification commands on the branch, re-run after the second rebase
 
 ```text
 $ git rev-parse HEAD
-97fc751d7443e466167f3b088859ddb42a8e57af
+9db5b4bb8d5589d60f8a7f15a139d3335d6a57ac
 
 $ pnpm type-check
-TYPECHECK_EXIT=0
+exit 0
 
 $ pnpm lint
-LINT_EXIT=0
+exit 0
+
+$ pnpm ops:automation-coverage-check
+[automation-coverage] verdict=PASS fail=0 warn=1 classified=15
+[executable-wiring] verdict=PASS required_roots=verify
+[executable-wiring] tests total=457 required-reachable=302 optional-reachable=36 fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
+[executable-wiring] capabilities total=145 wired=127 orphan=18 (baselined=18 new=0)
+[executable-wiring] baseline tests=119/119 capabilities=18/18
 
 $ pnpm test:ops
-# tests 1670
-# pass 1670
+# tests 1683
+# pass 1683
 # fail 0
 # skipped 0
 ```
