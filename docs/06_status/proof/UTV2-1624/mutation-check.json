@@ -1,0 +1,114 @@
+{
+  "generated_at": "2026-07-31T12:36:10.078Z",
+  "head_sha": "97fc751d7443e466167f3b088859ddb42a8e57af",
+  "rows": [
+    {
+      "test": "scripts/ops/review.test.ts",
+      "mutated_module": "scripts/ops/review-state-schema.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/review-verdict.test.ts",
+      "mutated_module": "scripts/ops/review-state-schema.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/review-state-schema.test.ts",
+      "mutated_module": "scripts/ops/review-state-schema.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/agent-result-schema.test.ts",
+      "mutated_module": "scripts/ops/agent-result-schema.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/merge-risk.test.ts",
+      "mutated_module": "scripts/ops/merge-risk.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/ci-dispatch-watchdog.test.ts",
+      "mutated_module": "scripts/ops/ci-dispatch-watchdog.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/p0-detect.test.ts",
+      "mutated_module": "scripts/ops/p0-detect.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/proof-check.test.ts",
+      "mutated_module": "scripts/ops/proof-schema.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/proof-schema.test.ts",
+      "mutated_module": "scripts/ops/proof-schema.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/concurrency-rules.test.ts",
+      "mutated_module": "scripts/ops/concurrency-rules.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/executable-wiring.test.ts",
+      "mutated_module": "scripts/ops/executable-wiring.ts",
+      "mutation": "invert every === and && in the module under test",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    },
+    {
+      "test": "scripts/ops/runtime-contract-check.test.ts",
+      "mutated_module": "scripts/ops/runtime-contract-check.ts",
+      "mutation": "remove one of the five declared runtime contract checks",
+      "clean_exit": 0,
+      "mutant_exit": 1,
+      "verdict": "KILLED",
+      "source_restored": true
+    }
+  ]
+}
