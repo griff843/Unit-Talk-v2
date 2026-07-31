@@ -6,11 +6,11 @@
   "generated_at": "2026-07-31T13:05:00.000Z",
   "status": "in_review",
   "sha_binding": {
-    "verified_source_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
-    "merge_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
-    "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "verified_source_sha": "2cce459967197925c058d4b2dad77305bfe7cbb8",
+    "merge_sha": "2cce459967197925c058d4b2dad77305bfe7cbb8",
+    "base_sha": "2cce459967197925c058d4b2dad77305bfe7cbb8",
     "sha_type": "base_sha_pending_merge_rebind",
-    "verified_source_note": "Every measurement in this bundle was taken on the lane branch built from main tip b5ebdc2367fa10a85a648d90e463fd15c770a5d8, which is a real ancestor. The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "verified_source_note": "Every measurement in this bundle was taken on the lane branch, rebased onto main tip 2cce459967197925c058d4b2dad77305bfe7cbb8, which is a real ancestor (git merge-base HEAD origin/main == origin/main at the time of this rebase). The authoritative binding is this PR's squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "bound_at": null
   },
   "verifier": {

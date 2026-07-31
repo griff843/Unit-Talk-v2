@@ -1,6 +1,6 @@
 # PROOF: UTV2-1594
 
-MERGE_SHA: b5ebdc2367fa10a85a648d90e463fd15c770a5d8
+MERGE_SHA: 2cce459967197925c058d4b2dad77305bfe7cbb8
 
 That SHA is a real ancestor — the `main` tip this lane branched from and
 measured against, not a merge SHA that does not exist yet. It is rebound to this
