@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2-utv2-1628",
   "branch": "claude/utv2-1628-service-role-boundary",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "69b1c37091e5d8984baa48e745ac1272123fa020",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1324",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
@@ -118,14 +118,22 @@
     "docs/06_status/proof/UTV2-1628/evidence.json",
     "docs/06_status/proof/UTV2-1628/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-30T22:10:00.000Z",
-  "heartbeat_at": "2026-07-30T22:10:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-31T00:53:54.858Z",
+  "closed_at": "2026-07-31T00:53:54.858Z",
   "blocked_by": [],
-  "preflight_token": null,
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-31T00:53:51.473Z",
+      "verdict": "pass",
+      "merge_sha": "69b1c37091e5d8984baa48e745ac1272123fa020",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

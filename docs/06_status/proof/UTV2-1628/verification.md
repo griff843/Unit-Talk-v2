@@ -1,17 +1,19 @@
 # PROOF: UTV2-1628
 
-MERGE_SHA: fd0b3a114a403065238e562f1ea5b82033f78cdf
+MERGE_SHA: 69b1c37091e5d8984baa48e745ac1272123fa020
 
-It is a real ancestor of this branch's head, taken from `origin/main` during the
-lane. Branch protection requires the head to be current with `main`, and several
-lanes landed while this PR was open, so the branch was rebased onto later commits
-after this line was written; the SHA above stays true as an ancestor regardless.
-It is provisional
-by construction: the squash merge SHA does not exist until the merge happens, so
-`post-merge-lane-close.yml` rewrites this line to the authoritative merge SHA via
-`ops:proof-generate --merge-sha`. The pre-fix baseline this lane measures against
-is a different commit, `a55de4025f966ce458546a16b5d91faa7b5e034b`, named
-throughout below.
+That is the authoritative merge SHA: PR #1324 squash-merged to `main` at
+2026-07-31T00:50:03Z. It replaces the provisional base SHA
+`fd0b3a114a403065238e562f1ea5b82033f78cdf` this file carried before the merge,
+which was written when the squash SHA did not yet exist.
+
+`ops:proof-generate --merge-sha` was not used to make this substitution: it
+replaces `verification.md` and `evidence.json` wholesale with generated
+templates, which would have discarded every measurement recorded below. Only the
+SHA line changed here; nothing else in this document was touched by the repair.
+
+The pre-fix baseline this lane measures against is a different commit,
+`a55de4025f966ce458546a16b5d91faa7b5e034b`, named throughout below.
 
 ## Summary
 
