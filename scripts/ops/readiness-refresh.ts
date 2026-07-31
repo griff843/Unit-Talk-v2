@@ -46,7 +46,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   extractProjectRefFromUrl,
@@ -997,7 +997,12 @@ export function resolveProductionDb(env: NodeJS.ProcessEnv): {
         `${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}; a non-production reading is not a production readiness measurement`,
     };
   }
-  const client = createClient(url, key, { auth: { persistSession: false } }) as unknown as ReadOnlyClient;
+  // UTV2-1628: the driver is constructed at the boundary, not here. This call
+  // site is already production-only by the check above, and the boundary refuses
+  // production from a restricted context (node:test, staging-only policy) — which
+  // is the correct outcome: a readiness measurement taken from inside the test
+  // suite would not be a production readiness measurement either.
+  const client = createPrivilegedClient(url, key, { auth: { persistSession: false } }, 'readiness-refresh production read') as unknown as ReadOnlyClient;
   return { db: wrapReadOnlyClient(client, projectRef), reason: null };
 }
 

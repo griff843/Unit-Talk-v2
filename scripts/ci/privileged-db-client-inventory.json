@@ -406,6 +406,15 @@
       "privileged": true
     },
     {
+      "file": "scripts/ops/readiness-refresh.ts",
+      "classification": "writable-privileged",
+      "disposition": "migrated",
+      "reason": "Landed on main after this lane's inventory was built. Constructed a client from SUPABASE_SERVICE_ROLE_KEY for a production read and was reachable from a `pnpm test` entrypoint through scripts/ops/readiness-refresh.test.ts. Classified writable-privileged because the credential is service-role; the file's own read-only wrapper is a call-site convention, not a property of the key. Now obtains the client from the boundary; its production-only precondition is unchanged.",
+      "sites_before": 1,
+      "referenced": true,
+      "privileged": true
+    },
+    {
       "file": "scripts/pi-m5-verify.ts",
       "classification": "writable-privileged",
       "disposition": "migrated",

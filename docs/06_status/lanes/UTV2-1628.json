@@ -68,6 +68,7 @@
     "scripts/ops/edge-coverage-report.ts",
     "scripts/ops/fix-settlement-utv2-665.ts",
     "scripts/ops/ingestor-health-check.ts",
+    "scripts/ops/readiness-refresh.ts",
     "scripts/pi-m5-verify.ts",
     "scripts/pipeline-health.ts",
     "scripts/portfolio-review.ts",

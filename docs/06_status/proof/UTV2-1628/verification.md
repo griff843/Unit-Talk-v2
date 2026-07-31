@@ -1,9 +1,10 @@
 # PROOF: UTV2-1628
 
-MERGE_SHA: 3f83c87692e2fab106156a8ae01f54fd1bdc31d5
+MERGE_SHA: 328ac4b3d05ec4905520c4aedd4d5867e02b3495
 
-That is the base commit this branch merges into — `origin/main` at the time the
-proof was measured, and a real ancestor of this branch's head. It is provisional
+That is the base commit this branch merges into — `origin/main` after the rebase
+that resolved a `package.json` conflict with the readiness-ledger lane, and a
+real ancestor of this branch's head. It is provisional
 by construction: the squash merge SHA does not exist until the merge happens, so
 `post-merge-lane-close.yml` rewrites this line to the authoritative merge SHA via
 `ops:proof-generate --merge-sha`. The pre-fix baseline this lane measures against
@@ -74,15 +75,18 @@ privilege from whether the file could reach a service-role credential at
 
 | Classification | Disposition | Files |
 |---|---|---|
-| writable-privileged | migrated | 38 |
+| writable-privileged | migrated | 39 |
 | dead (also privileged, unreferenced) | migrated | 45 |
 | writable-privileged | asserted-in-place | 1 |
 | writable-privileged | deferred-cross-lane | 1 |
 | read-only | unprivileged-direct | 2 |
 | behind-the-boundary | is-boundary | 1 |
-| **total** | | **88** |
+| **total** | | **89** |
 
-86 of the 88 could reach a service-role credential. The 45 `dead` entries are
+The 89th entry is `scripts/ops/readiness-refresh.ts`, which did not exist when
+the inventory was built — see evidence item 6 below.
+
+87 of the 89 could reach a service-role credential. The 45 `dead` entries are
 also privileged — the classification records that separately rather than letting
 "dead" hide it — and were migrated anyway, because "nothing calls it today" is
 not a property that stays true.
@@ -147,7 +151,7 @@ $ pnpm verify:static                                    exit 0
   lint                   OK
   type-check             OK
   build                  OK
-  test                   96 suites, 3929 tests, 3929 pass, 0 fail, 0 skipped
+  test                   96 suites, 3980 tests, 3980 pass, 0 fail, 0 skipped
   smart-form verify      OK
   verify:commands        OK
 
@@ -161,9 +165,12 @@ $ pnpm test:db
 reason, and that refusal is UTV2-1630's deliverable working, not a gap in this
 one. The authoritative complete run is the required `verify` context in CI.
 
-The 3929/0 figure is measured on this branch. I did not re-measure the base, so
-this proof makes no claim about the delta beyond the 34 tests added here
-(17 in `scripts/ci/privileged-db-client-guard.test.ts`, 17 in
+The 3980/0 figure is measured on this branch after the rebase onto `328ac4b3`.
+It was 3929 before that rebase; the 51 additional tests belong to the
+readiness-ledger lane and entered `test:ops` when the two lanes' test lists were
+unioned in the conflict resolution. I did not re-measure the base, so this proof
+makes no claim about the delta beyond the 34 tests added here (17 in
+`scripts/ci/privileged-db-client-guard.test.ts`, 17 in
 `packages/db/src/privileged-client-boundary.test.ts`).
 
 That authoritative run has now happened, on branch head
@@ -276,6 +283,33 @@ cannot identify; it is now `http://127.0.0.1:1`. This was the only such site in
 the entire suite — measured by running all 16 `test:*` scripts individually
 under the strict boundary, which produced exactly two failures, both in that
 file.
+
+**6. The guard caught a real regression while this PR was open, which is the
+only test of a control that counts.** Between the first CI run and the merge,
+another lane landed `scripts/ops/readiness-refresh.ts` on `main`. Rebasing onto
+it produced:
+
+```text
+$ pnpm ci:db-client-boundary
+[db-client-boundary] 6 direct driver construction site(s) across 6 file(s)
+[db-client-boundary] unclassified: scripts/ops/readiness-refresh.ts constructs a
+  database client directly (createClient() at line 1000 from '@supabase/supabase-js')
+  but is absent from scripts/ci/privileged-db-client-inventory.json.
+[db-client-boundary] reachable-from-test: scripts/ops/readiness-refresh.ts is reachable
+  from a `pnpm test` entrypoint through the static import graph and constructs a
+  database client directly: a path from the test suite to an unguarded privileged client.
+[db-client-boundary] FAILED with 2 finding(s)
+exit=1
+```
+
+Both rules fired on the same file, independently — the inventory rule because it
+was new, the reachability rule because `scripts/ops/readiness-refresh.test.ts`
+had entered `pnpm test` in the same merge. That is exactly the class of
+regression this lane exists to stop, and it was caught by the check rather than
+by review. It is fixed here: the file now takes its client from the boundary and
+carries a classified inventory entry. Its own production-only precondition is
+untouched, so the readiness measurement still reads production and only
+production.
 
 ## Not closed
 
