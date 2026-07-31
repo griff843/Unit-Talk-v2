@@ -31,6 +31,8 @@ env:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    outputs:
+      syndicate_machine_mode: ${{ steps.syndicate-mode.outputs.mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,6 +52,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Validate production secret inventory
+        id: syndicate-mode
         env:
           SECRET_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SECRET_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
@@ -79,10 +82,16 @@ jobs:
             echo "ERROR: Required production secrets are not configured: ${missing[*]}"
             exit 1
           fi
-          if [ "$SECRET_SYNDICATE_MACHINE_ENABLED" != "true" ]; then
-            echo "::error::SYNDICATE_MACHINE_ENABLED secret must be exactly 'true' for production deploys."
-            exit 1
-          fi
+          case "$SECRET_SYNDICATE_MACHINE_ENABLED" in
+            true) syndicate_machine_mode=active ;;
+            false) syndicate_machine_mode=parked ;;
+            *)
+              echo "::error::SYNDICATE_MACHINE_ENABLED must be exactly 'true' (active) or 'false' (parked)."
+              exit 1
+              ;;
+          esac
+          echo "mode=$syndicate_machine_mode" >> "$GITHUB_OUTPUT"
+          echo "{\"service\":\"deploy\",\"event\":\"syndicate_machine_mode.validated\",\"mode\":\"$syndicate_machine_mode\"}"
           echo "All required production secrets are present."
 
       - name: Create CI local.env (dev defaults + Supabase — required for t1-proof tests)
@@ -126,7 +135,7 @@ jobs:
           UNIT_TALK_BOT_API_KEY=${{ secrets.UNIT_TALK_BOT_API_KEY }}
           UNIT_TALK_INGESTOR_API_KEY=${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           SGO_API_KEY=${{ secrets.SGO_API_KEY }}
-          SYNDICATE_MACHINE_ENABLED=${{ secrets.SYNDICATE_MACHINE_ENABLED }}
+          SYNDICATE_MACHINE_ENABLED=${{ steps.syndicate-mode.outputs.mode == 'active' && 'true' || 'false' }}
           EOF
 
       - name: Validate progressive delivery contract
@@ -180,9 +189,13 @@ jobs:
 
   canary:
     name: Canary deploy
-    needs: build
+    needs: [build, verify]
     runs-on: ubuntu-latest
     environment: canary
+    outputs:
+      syndicate_machine_mode: ${{ needs.verify.outputs.syndicate_machine_mode }}
+    env:
+      SYNDICATE_MACHINE_MODE: ${{ needs.verify.outputs.syndicate_machine_mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -226,14 +239,17 @@ jobs:
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
-          SYNDICATE_MACHINE_ENABLED: ${{ secrets.SYNDICATE_MACHINE_ENABLED }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
-          if [ "$SYNDICATE_MACHINE_ENABLED" != "true" ]; then
-            echo "::error::SYNDICATE_MACHINE_ENABLED secret must be exactly 'true' for canary deploy."
-            exit 1
-          fi
+          case "$SYNDICATE_MACHINE_MODE" in
+            active) SYNDICATE_MACHINE_ENABLED=true ;;
+            parked) SYNDICATE_MACHINE_ENABLED=false ;;
+            *)
+              echo "::error::Validated syndicate-machine mode is missing or invalid for canary deploy."
+              exit 1
+              ;;
+          esac
           # Resolve worker distribution target and promotion target coverage.
           # The worker must cover all *enabled* promotion targets (default: best-bets,
           # trader-insights). When channel secrets aren't configured we disable all
@@ -344,19 +360,30 @@ jobs:
 
       - name: Confirm syndicate machine gate in canary container
         run: |
+          case "$SYNDICATE_MACHINE_MODE" in
+            active) REQUESTED_VALUE=true ;;
+            parked) REQUESTED_VALUE=false ;;
+            *)
+              echo "::error::Validated syndicate-machine mode is missing or invalid for canary readiness."
+              exit 1
+              ;;
+          esac
           VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true")
-          if [ "$VALUE" != "true" ]; then
-            echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in canary container: '${VALUE:-missing}'"
+          if [ "$VALUE" != "$REQUESTED_VALUE" ]; then
+            echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in canary container: requested='$REQUESTED_VALUE' runtime='${VALUE:-missing}'"
             exit 1
           fi
-          echo '{"service":"deploy","event":"syndicate_machine_gate.confirmed","stage":"canary","value":"true"}'
+          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"canary","mode":"%s","requestedValue":"%s","runtimeValue":"%s"}\n' \
+            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE"
 
   promote:
     name: Promote production
     needs: canary
     runs-on: ubuntu-latest
     environment: production
+    env:
+      SYNDICATE_MACHINE_MODE: ${{ needs.canary.outputs.syndicate_machine_mode }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -400,14 +427,17 @@ jobs:
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
-          SYNDICATE_MACHINE_ENABLED: ${{ secrets.SYNDICATE_MACHINE_ENABLED }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
-          if [ "$SYNDICATE_MACHINE_ENABLED" != "true" ]; then
-            echo "::error::SYNDICATE_MACHINE_ENABLED secret must be exactly 'true' for production deploy."
-            exit 1
-          fi
+          case "$SYNDICATE_MACHINE_MODE" in
+            active) SYNDICATE_MACHINE_ENABLED=true ;;
+            parked) SYNDICATE_MACHINE_ENABLED=false ;;
+            *)
+              echo "::error::Validated syndicate-machine mode is missing or invalid for production deploy."
+              exit 1
+              ;;
+          esac
           # Resolve worker distribution target and promotion target coverage.
           # The worker must cover all *enabled* promotion targets (default: best-bets,
           # trader-insights). When channel secrets aren't configured we disable all
@@ -511,13 +541,22 @@ jobs:
 
       - name: Confirm syndicate machine gate in production container
         run: |
+          case "$SYNDICATE_MACHINE_MODE" in
+            active) REQUESTED_VALUE=true ;;
+            parked) REQUESTED_VALUE=false ;;
+            *)
+              echo "::error::Validated syndicate-machine mode is missing or invalid for production readiness."
+              exit 1
+              ;;
+          esac
           VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true")
-          if [ "$VALUE" != "true" ]; then
-            echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in production container: '${VALUE:-missing}'"
+          if [ "$VALUE" != "$REQUESTED_VALUE" ]; then
+            echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in production container: requested='$REQUESTED_VALUE' runtime='${VALUE:-missing}'"
             exit 1
           fi
-          echo '{"service":"deploy","event":"syndicate_machine_gate.confirmed","stage":"production","value":"true"}'
+          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s"}\n' \
+            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE"
 
   smoke:
     name: Post-deploy functional smoke
