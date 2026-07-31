@@ -200,6 +200,7 @@
     "globals": "^16.0.0",
     "micromatch": "^4.0.8",
     "playwright": "1.58.2",
+    "postgres": "^3.4.9",
     "prettier": "^3.5.3",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2",
