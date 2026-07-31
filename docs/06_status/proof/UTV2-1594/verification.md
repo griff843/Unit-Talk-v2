@@ -122,6 +122,31 @@ directory** passed with `--dir`. The live
 on was never used as a test target, and was confirmed untouched at the end of
 the run.
 
+The transcripts quoted below were captured before the three self-review fixes in
+E12. Rather than let the proof cite a build that is not the one being merged,
+the whole demonstration was **re-run unchanged against the final
+implementation**; every fixture reproduced identically, with new pids and
+timestamps:
+
+```
+slot 0: LIVE                                         (holder acquired)
+slot 0: DEAD_OWNER (reapable)                        (after SIGKILL)
+slot 0: LIVE                                         (next waiter admitted)
+no reapable slots — nothing removed
+protected slot 0: live — owner pid 212020 is running and heartbeating (lease until 2026-07-31T13:04:53.809Z).
+owner still UTV2-2222: UTV2-2222        holder still alive: YES
+heartbeat_at t0: 2026-07-31T12:49:53.809Z
+heartbeat_at t1: 2026-07-31T12:49:57.815Z
+slot 0: PID_REUSED (reapable)
+reaped slot 0: pid_reused — pid 212020 is running but is a different process than the slot owner
+               (recorded start linux:starttime:1, current start linux:starttime:146832); the pid was recycled.
+holder pid 212020 still alive: YES
+```
+
+The E12 fixes widen which slots are *scanned* and tighten when a slot may be
+*released*; neither touches the classification paths these fixtures exercise,
+which is what the re-run confirms rather than assumes.
+
 ### E1 — fixture 3: a dead process holding a slot is reaped, next waiter admitted
 
 A holder process acquired slot 0 and was then `SIGKILL`ed, so no cleanup handler
