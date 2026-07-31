@@ -14,7 +14,8 @@ import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 
 /**
@@ -219,7 +220,13 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
     throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   }
 
-  const client = createClient<Record<string, never>>(
+  // UTV2-1628: the driver comes from the one boundary that may construct it.
+  // The deferral recorded in the inventory ended when the lane that owned this
+  // file landed and added scripts/shadow-scoring-runner.test.ts to `test:ops`,
+  // which put this module inside `pnpm test`'s import graph — the exact
+  // condition the guard's reachability rule fails on regardless of
+  // classification.
+  const client = createPrivilegedClient(
     environment.SUPABASE_URL,
     environment.SUPABASE_SERVICE_ROLE_KEY,
     {
@@ -228,7 +235,8 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
         autoRefreshToken: false,
       },
     },
-  );
+    'shadow-scoring-runner',
+  ) as Client;
 
   // Guardrails are always zero -- this runner never touches picks,
   // never sets shadow_mode=false, never enqueues distribution, never promotes.

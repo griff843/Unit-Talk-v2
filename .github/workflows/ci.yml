@@ -227,6 +227,18 @@ jobs:
           OPENAI_API_KEY=
           EOF
 
+      # UTV2-1628 — every privileged DB client must come from one boundary.
+      #
+      # Runs before the expensive stages so the failure is legible and early.
+      # It is also the first step of `verify:static`, so a developer running
+      # `pnpm verify` locally hits the same check; the duplication costs seconds
+      # and means neither route can be the one that skips it.
+      #
+      # This holds no credential and opens no connection: it parses the tree.
+      - name: Privileged DB client boundary
+        id: db_client_boundary
+        run: pnpm ci:db-client-boundary
+
       # npm's legacy audit endpoint was permanently retired (HTTP 410,
       # 2026-07-14): "This endpoint is being retired. Use the bulk advisory
       # endpoint instead." `pnpm audit` has no bulk-endpoint support in the

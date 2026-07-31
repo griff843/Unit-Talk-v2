@@ -1,5 +1,5 @@
 #!/usr/bin/env tsx
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ function loadEnv() {
 
 async function main() {
   loadEnv();
-  const sb = createClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
+  const sb = createPrivilegedClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
 
   // 1. Dodgers/Giants events — what dates do they have?
   console.log('=== Dodgers / Giants events ===');

@@ -19,7 +19,7 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
   EXPECTED_STAGING_SUPABASE_PROJECT_REF,
   extractProjectRefFromUrl,
@@ -152,7 +152,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const client = createClient(url as string, key, {
+  const client = createPrivilegedClient(url as string, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 

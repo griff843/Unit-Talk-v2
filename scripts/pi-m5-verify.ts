@@ -11,7 +11,7 @@
 import { execSync } from 'node:child_process';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 const env = loadEnvironment();
 const supabaseUrl = env.SUPABASE_URL ?? '';
@@ -173,7 +173,7 @@ async function main(): Promise<void> {
   if (!supabaseUrl || !supabaseKey) {
     fail('AC6d', 'outbox-health', 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
   } else {
-    const db = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+    const db = createPrivilegedClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
     const { data, error } = await db
       .from('distribution_outbox')
       .select('id, status, created_at')

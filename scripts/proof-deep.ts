@@ -2,7 +2,7 @@
  * Deep probe: new settlement pick details + event completion status
  */
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -10,7 +10,7 @@ function asRecord(v: unknown): Record<string, unknown> {
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   // 1. The new settlement created after API restart
   const { data: newS } = await db

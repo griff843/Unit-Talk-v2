@@ -1,5 +1,6 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadEnvironment, requireSupabaseEnvironment, type AppEnv } from '@unit-talk/config';
+import { createPrivilegedClient } from './privileged-client-boundary.js';
 
 export interface DatabaseClientOptions {
   env?: AppEnv | undefined;
@@ -41,25 +42,24 @@ export function createServiceRoleDatabaseConnectionConfig(
 export function createDatabaseClient(
   options: DatabaseClientOptions = {},
 ): UnitTalkSupabaseClient {
-  const connection = createDatabaseConnectionConfig(options);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createClient<any>(connection.url, connection.key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  return createDatabaseClientFromConnection(createDatabaseConnectionConfig(options));
 }
 
 export function createDatabaseClientFromConnection(
   connection: DatabaseConnectionConfig,
 ): UnitTalkSupabaseClient {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createClient<any>(connection.url, connection.key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+  // Both public constructors funnel here, and here alone opens the connection —
+  // through the UTV2-1628 boundary, which refuses a non-staging target from a
+  // test process before any socket exists.
+  return createPrivilegedClient(
+    connection.url,
+    connection.key,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     },
-  });
+    `@unit-talk/db ${connection.role} client`,
+  );
 }

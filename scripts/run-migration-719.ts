@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -18,7 +18,7 @@ function loadEnv() {
 
 async function main() {
   loadEnv();
-  const sb = createClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
+  const sb = createPrivilegedClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
 
   const sql = readFileSync(resolve(__dirname, '..', 'supabase/migrations_archive/202604230001_utv2_719_fix_team_external_ids_and_league.sql'), 'utf8');
 

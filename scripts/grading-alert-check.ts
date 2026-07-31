@@ -16,7 +16,7 @@
  *   GRADING_ALERT_WINDOW_HOURS=48 pnpm grading:alert-check
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 
 const WINDOW_HOURS = Number.parseInt(
@@ -49,7 +49,7 @@ interface SystemRunRow {
 }
 
 async function main() {
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 

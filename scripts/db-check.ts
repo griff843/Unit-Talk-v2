@@ -1,9 +1,9 @@
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
   const s = await db.from('settlement_records').select('id,created_at,pick_id').order('created_at',{ascending:false}).limit(5);
   console.log('settlements err:', s.error?.message ?? 'none', 'count:', s.data?.length ?? 0);
   if (s.data?.length) console.log('  latest:', s.data[0].id.slice(0,8), s.data[0].created_at?.slice(0,19));
