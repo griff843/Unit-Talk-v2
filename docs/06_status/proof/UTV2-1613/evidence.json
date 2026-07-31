@@ -31,6 +31,8 @@
       "scripts/ops/lane-close-repair-packet.ts",
       "scripts/ops/lane-close.test.ts",
       "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-manifest.test.ts",
+      "scripts/ops/lane-manifest.ts",
       "scripts/ops/reconcile.test.ts",
       "scripts/ops/reconcile.ts",
       "scripts/ops/truth-history-audit.test.ts",
@@ -75,22 +77,68 @@
       "note": "tsc -b tsconfig.json clean"
     },
     "canonical_suites": {
-      "command": "npx tsx --test scripts/ops/lane-close.test.ts scripts/ops/lane-close-repair-packet.test.ts scripts/ops/truth-history-audit.test.ts scripts/ops/reconcile.test.ts",
+      "command": "npx tsx --test scripts/ops/lane-close.test.ts scripts/ops/lane-close-repair-packet.test.ts scripts/ops/reconcile.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/truth-history-audit.test.ts",
       "status": "PASS",
-      "totals": { "tests": 181, "pass": 181, "fail": 0, "skipped": 0 },
+      "totals": { "tests": 195, "pass": 195, "fail": 0, "skipped": 0 },
       "per_suite": {
-        "scripts/ops/lane-close.test.ts": 141,
+        "scripts/ops/lane-close.test.ts": 148,
         "scripts/ops/lane-close-repair-packet.test.ts": 19,
-        "scripts/ops/truth-history-audit.test.ts": 7,
-        "scripts/ops/reconcile.test.ts": 14
+        "scripts/ops/reconcile.test.ts": 15,
+        "scripts/ops/lane-manifest.test.ts": 9,
+        "scripts/ops/truth-history-audit.test.ts": 7
       }
     },
     "full_unit_suite": {
       "command": "pnpm test",
       "status": "PASS",
-      "totals": { "tests": 4075, "pass": 4075, "fail": 0 }
+      "totals": { "tests": 4081, "pass": 4081, "fail": 0 }
     }
   },
+  "second_fabrication_site": {
+    "location": "scripts/ops/lane-manifest.ts applyPrMergeToManifest (record-merge command)",
+    "reported_by": "PM, while manually repairing a sibling lane's post-merge closeout",
+    "defect": "Unconditionally wrote truth_check_history entry {verdict:'pass', failures:[], runner:'manual', source:'github_pr_merge_commit'} from nothing but 'PR is merged'. No truth-check ever ran in this function. runner:'manual' IS a canonical value, so a runner-union check alone could not catch it.",
+    "fix": "record-merge now binds only status/commit_sha/pr_url/heartbeat_at; truth_check_history passes through completely untouched.",
+    "status": "FIXED"
+  },
+  "self_review_findings": [
+    {
+      "id": "SR1",
+      "severity": "high",
+      "summary": "selectInferredMergedPr's title-or-branch OR made the title check vacuous since a conforming branch already embeds the issue ID; fixed to require a genuine title match.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR2",
+      "severity": "high",
+      "summary": "The identical gap in reconcile.ts's resolveMergedPrForLane branch-inference fallback; fixed the same way.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR3",
+      "severity": "medium",
+      "summary": "The inferred-PR repair path had no origin/main reachability check, unlike the sibling explicit --pr path; added as defense in depth.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR4",
+      "severity": "high",
+      "summary": "reconcile.ts's ghost_merged rule was eligible for reopened manifests, which signal a genuine detected regression; an unattended scheduled job could have silently overwritten that signal. Ghost eligibility now excludes reopened.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR5",
+      "severity": "medium",
+      "summary": "applyRepairPacket's GitHub-authority-drift check was dead code in the real CLI (fetchMergeAuthority never supplied); wired a real gh-backed implementation.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR6",
+      "severity": "medium",
+      "summary": "A failing repaired close persisted stale pre-run truth_check_history, discarding the just-measured failure entry. Extracted as manifestForFailedRepairClose and unit-tested.",
+      "status": "FIXED"
+    }
+  ],
   "acceptance_criteria": {
     "1_repair_without_execution_never_emits_pass": {
       "status": "PASS",

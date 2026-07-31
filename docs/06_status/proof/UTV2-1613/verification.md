@@ -31,6 +31,28 @@ only history-entry constructor and returns `null` for an unexecuted receipt.
 The lane also fixes the non-idempotent, self-poisoning closeout measured on
 the live system, and adds automatic ghost-lock release.
 
+**A second fabrication site was found and fixed.** While independently
+repairing a sibling lane's post-merge closeout, the PM found that
+`scripts/ops/lane-manifest.ts`'s `record-merge` command
+(`applyPrMergeToManifest`) unconditionally wrote a `truth_check_history`
+entry with `verdict: "pass"`, `failures: []` and `runner: "manual"` — the
+same defect class, from a different call site, with no truth-check running
+anywhere in that path either. Because `"manual"` IS a canonical runner value,
+a runner-union check alone cannot distinguish it from a genuine manually-
+recorded pass. `record-merge` now binds only status/commit_sha/pr_url/
+heartbeat_at and never touches `truth_check_history`.
+
+**This lane's own diff was also adversarially self-reviewed** before
+requesting merge, and five findings were fixed: a vacuous title-or-branch
+identity check on the newly-introduced PR-inference path (in both
+`lane-close.ts` and `reconcile.ts`), a missing origin/main reachability check
+on that same path, a dead authority-drift check in the repair-packet CLI
+(the option was never wired to a real implementation), a `reopened` manifest
+being silently eligible for the ghost rule (risking erasure of a genuine
+detected regression), and a failed repaired close persisting stale
+pre-run history instead of the just-measured failure. Details and tests for
+each are in section 9 below.
+
 This is implementation and mechanical-measurement evidence. It does not
 claim any production deployment, database mutation, secret change, or
 readiness certification.
@@ -279,6 +301,77 @@ active set.** It only ever transitions a manifest it can see from an active
 status to `merged`, and only when GitHub independently confirms the merge. A
 lane whose manifest exists solely on its own PR branch is invisible to a
 `main` checkout and is correctly left alone — it is live, not a ghost.
+
+### 9. Second fabrication site, and this lane's own adversarial self-review
+
+**`lane-manifest.ts` `record-merge`.** `applyPrMergeToManifest` fabricated
+`{ verdict: "pass", failures: [], runner: "manual", source:
+"github_pr_merge_commit" }` purely from "GitHub reports this PR merged" —
+no truth-check runs in this function at all. Fixed the same way as the
+primary defect: the function now binds only `status`/`commit_sha`/`pr_url`/
+`heartbeat_at`; `truth_check_history` passes through completely untouched,
+including any pre-existing legacy entries (verified by
+`scripts/ops/lane-manifest.test.ts`, updated tests: *"records merge SHA, PR
+URL, heartbeat, and status -- but no truth_check_history entry"*, *"never
+touches pre-existing truth_check_history, including a legacy fabricated
+entry"*, *"starting from empty history stays empty"*).
+
+**Five findings from adversarially self-reviewing this lane's own diff**,
+each with a regression test:
+
+1. `selectInferredMergedPr` accepted `issuePattern.test(title) ||
+   issuePattern.test(branch)`. Since a conforming lane branch already embeds
+   its issue ID by this repo's `BRANCH_PATTERN` convention, the branch arm
+   made the title check vacuous — the real gate was `headRefName === branch`
+   alone, which a stale/reused branch name could satisfy for an unrelated PR.
+   Fixed to require a genuine title match. Test: *"a matching branch name is
+   never accepted as a stand-in for a real title match"*.
+2. `reconcile.ts`'s `resolveMergedPrForLane` had the identical gap in its
+   own branch-inference fallback (used when a manifest has no `pr_url`);
+   fixed to require the same title match, only when that fallback is the one
+   in use (an explicit `pr_url` lookup needs no such check — its identity is
+   already anchored by the manifest).
+3. The inferred-PR repair path had no `origin/main` reachability check,
+   unlike the sibling explicit `--pr` path (`isMergeShaReachableFromMain` in
+   `validateTrustedPostMergeRepair`). Added as defense in depth. Test: *"repair
+   refuses an inferred PR whose merge SHA is not reachable from origin/main"*.
+4. `reconcile.ts`'s ghost rule was eligible for `reopened` manifests. A
+   manifest only reaches `reopened` from a genuine detected regression on a
+   previously-`done` lane (which already has a merged `pr_url`) — so every
+   `reopened` lane would deterministically match the ghost rule, and this
+   unattended, scheduled, `contents:write` job would silently overwrite that
+   signal with a generic `merged` status. `GHOST_ELIGIBLE_STATUSES` now
+   excludes `reopened` explicitly. Test: *"a reopened lane is never eligible
+   for the ghost rule"* — asserts `resolveMergedPr` is not even called.
+5. `applyRepairPacket`'s GitHub-authority-drift check only runs when the
+   caller supplies `fetchMergeAuthority`, and the CLI's only real call site
+   never did — making the check dead code in every actual `pnpm
+   ops:lane-repair-packet apply` invocation. Wired a real `gh`-backed
+   implementation into the CLI.
+6. A failing repaired close persisted the merge binding using
+   `repairedManifest.truth_check_history`, which is the STALE array captured
+   *before* `runTruthCheck()` ran. The real failing entry `runTruthCheck` had
+   written was correctly discarded by the transaction rollback — but writing
+   the stale manifest back afterward then permanently lost that measured
+   failure, contradicting this proof's own stated invariant ("records the
+   measured failure; nothing records a pass"). Extracted as
+   `manifestForFailedRepairClose` and unit-tested directly: *"a failed
+   repaired close persists the measured failure, not the stale pre-run
+   history"*, *"is a no-op when the receipt never executed"*.
+
+Re-run after all six fixes:
+
+```text
+$ npx tsx --test scripts/ops/lane-close.test.ts scripts/ops/lane-close-repair-packet.test.ts \
+  scripts/ops/reconcile.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/truth-history-audit.test.ts
+# tests 195  # pass 195  # fail 0
+
+$ pnpm test
+TOTAL tests 4081 pass 4081 fail 0
+
+$ pnpm lint          # clean
+$ pnpm type-check    # clean
+```
 
 ## Governance
 
