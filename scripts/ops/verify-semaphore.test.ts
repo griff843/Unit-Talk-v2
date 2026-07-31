@@ -33,6 +33,7 @@ import {
   verifySemaphoreDir,
   VerifySemaphoreWaitTimeoutError,
   type ClassifyContext,
+  type MachineIdentity,
   type VerifySlotOwner,
 } from './verify-semaphore.js';
 
@@ -769,6 +770,88 @@ test('inspectSlot reports a free slot without inventing an owner', () => {
     assert.equal(view.classification.state, 'free');
     assert.equal(view.classification.reapable, false);
     assert.equal(view.owner, null);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── ownership records must be readable by any process, not just the writer ───
+
+// UTV2-1634 showed the opposite failure mode elsewhere in ops: `readAllManifests()`
+// resolves lane state from the local working tree, so ownership that lives on a
+// PR branch is invisible to every other worktree. A verify slot must never
+// depend on the writer's context to be interpreted -- any process that finds
+// the record has to be able to decide "is this owner alive?" from the record
+// alone.
+test('a slot record is self-describing: a foreign reader can classify it with no writer-side state', () => {
+  const dir = tmpDir();
+  try {
+    const handle = acquireVerifySlot({
+      dir,
+      maxConcurrent: 1,
+      issueId: 'UTV2-1594',
+      branch: 'codex/utv2-1594',
+      enableHeartbeat: false,
+      installSignalHandlers: false,
+    });
+
+    // Re-read the record as bytes, exactly as an unrelated process would.
+    const record = JSON.parse(fs.readFileSync(handle.owner_path, 'utf8')) as Record<string, unknown>;
+    for (const key of [
+      'schema_version',
+      'operation_id',
+      'pid',
+      'process_start_token',
+      'machine',
+      'user',
+      'issue_id',
+      'branch',
+      'worktree',
+      'command',
+      'acquired_at',
+      'heartbeat_at',
+      'heartbeat_interval_ms',
+      'expires_at',
+      'hard_deadline_at',
+    ]) {
+      assert.ok(key in record, `an ownership record must carry '${key}' for a foreign reader`);
+    }
+    assert.ok((record.machine as MachineIdentity).hostname, 'the record must name the host that can probe the pid');
+
+    // Classification depends only on the record plus the reader's own machine
+    // identity and process table -- never on anything the writer kept locally.
+    const verdict = classifySlotRecord(
+      record,
+      ctx({ machine: readMachineIdentity(), isProcessAlive: () => true, processStartToken: readProcessStartToken }),
+    );
+    assert.equal(verdict.reapable, false, `a live self-owned slot must not be reapable: ${verdict.reason}`);
+
+    const foreign = classifySlotRecord(
+      record,
+      ctx({ machine: readMachineIdentity(), isProcessAlive: () => false, processStartToken: readProcessStartToken }),
+    );
+    assert.equal(foreign.state, 'dead_owner');
+    assert.equal(foreign.reapable, true);
+
+    handle.release();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the semaphore directory is the only shared state a reader needs', () => {
+  const dir = tmpDir();
+  try {
+    seedSlot(dir, 0, owner({ pid: 4242, operation_id: 'written-elsewhere' }));
+    // No handle, no in-memory bookkeeping, nothing from the writing process.
+    const status = readSemaphoreStatus({
+      dir,
+      maxConcurrent: 1,
+      ctx: { machine: { hostname: HOST, boot_id: BOOT }, isProcessAlive: () => false },
+    });
+    assert.equal(status.slots[0]?.classification.state, 'dead_owner');
+    assert.equal(status.slots[0]?.raw_owner?.operation_id, 'written-elsewhere');
+    assert.equal(status.slots[0]?.raw_owner?.issue_id, 'UTV2-1594');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
