@@ -280,6 +280,22 @@ $ npx eslint scripts/ci/utv2-1399-reporting-view-guard.test.ts scripts/generate-
 $ pnpm type-check
 > pnpm exec tsc -b tsconfig.json
 === TYPECHECK EXIT: 0 ===
+
+$ pnpm test:ops          # full ops suite, with the new guard wired in
+# tests 1497
+# suites 6
+# pass 1497
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 51294.532839
+=== EXIT: 0 ===
+
+$ npx tsx scripts/ci/migration-reversibility-gate.ts --base origin/main
+  [PASS] supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql
+migration-reversibility-gate: PASS
+=== GATE EXIT: 0 ===
 ```
 
 ### 8. Generated types
