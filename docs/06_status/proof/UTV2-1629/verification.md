@@ -313,3 +313,38 @@ Gate` and `Live Schema Parity` may be red; none is in the required set
 Schema Parity is pre-existing drift tracked under UTV2-1274 and this lane
 touches no migration. A missing `Supabase PR DB Branch` check is this lane's
 deletion taking effect and is likewise not required.
+
+## Runtime proof harvest (closeout)
+
+This bundle shipped with no `runtime_proof` section and no `verifier` at all, so
+`ops:truth-check` failed C6, P7, P9, P10, R1, R2 and R3 — seven of the eight
+failures were one omission. The lane's central claim is static (no PR-reachable
+job holds a production credential), but the same head still produced a writable
+staging DB proof under the standard CI receipt, and that receipt was never
+copied into `evidence.json`. It was read back on 2026-07-31 from the retained
+artifacts of the original run:
+
+| Fact | Source |
+|---|---|
+| 7 live `pnpm test:db` cases against staging `xskgrzbteyqdufktjrjx` | `ci-db-proof-receipt/v2` `captured_output`, artifact `8778913219` |
+| 3 reset + 5 upsert row counts on staging | job log, run `30592473722` job `91037566710` (`Writable DB proof (staging only)`), `[seed-staging]` lines |
+| 96 tests / 96 pass / 0 fail / 0 skipped across 16 TAP blocks | same job log |
+| Verifier verdict `PASS` | job log, run `30592473722` job `91038153515` (`verify`): `DB proof verified: run 30592473722 attempt 1 @ 8643d77409b10a3a643864f567a9234cd9120263, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0` |
+
+Three of the eight row counts are zero. They are recorded as measured: the
+seeder deletes every row in those tables and reported `0/0/0`, where the run
+thirteen minutes earlier reported `2/12/1`. Why they were already empty is not
+established by this evidence and is not claimed here.
+
+`verifier.verifier_scope` states what this identity does and does not verify.
+It verifies the live-DB execution evidence. It does not verify the credential
+closure itself, which is the static measurement under
+`import_closure_measurement` and `exposures_closed`. What the receipt does add
+to that claim is a checkable negative: the only PR-triggered job that reached a
+database reached staging, under a hash the verifier re-derived independently.
+
+Nothing was re-executed. A fresh run would be a different measurement wearing
+this merge SHA's name.
+
+`ops:truth-check UTV2-1629` then returns `VERDICT: pass (43 checks, 0 failures)`
+and `ops:lane-close UTV2-1629` exits 0 with an empty failure list.
