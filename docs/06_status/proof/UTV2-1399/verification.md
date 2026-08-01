@@ -14,9 +14,10 @@ MERGE_SHA: PENDING_MERGE
 > `MERGE_SHA` is bound post-merge by `post-merge-lane-close.yml` via
 > `ops:proof-generate --merge-sha`.
 
-**Verified against branch commit:** `bd47422ddf43290db19a8162e339a66b2c5a8197`
-(the parent of the commit that added this line — a fixed, permanent reference
-so this SHA-binding statement never needs to chase a moving HEAD).
+**Verified against branch commit:** `47df44cbe11793459ace200f82828ba20461d2c4`
+(the parent of the commit that added this section — updated after the branch
+was rebased onto `origin/main`'s tip `b493a7d5`, since the earlier SHA this
+line pointed to no longer exists in this branch's history post-rebase).
 
 ## Verification
 
@@ -540,3 +541,39 @@ blocks and one tooling gap, not one.
    `file_scope_lock` was then expanded and the migration lock re-claimed from
    within the new worktree.
 9. Pushed for real, opened PR #1343.
+
+### 15. Rebase onto origin/main (5 intervening merges) — re-verification
+
+`origin/main` moved through 5 merges (UTV2-1604, 1632, 1635, 1613, 1594) after
+this branch was last synced, producing a genuine `mergeable: false` /
+`mergeable_state: dirty` PR state that correctly stopped `pull_request` CI from
+dispatching (not a platform anomaly, as first suspected — confirmed by direct
+inspection of `gh api .../pulls/1343 --jq '{mergeable,mergeable_state}'`).
+
+Rebased clean with one expected `package.json` conflict (`test:ops`), resolved
+as a verified union: origin/main's side carried 110 entries (4 new since this
+branch's last sync: `verify-semaphore.test.ts`, `execution-checkpoint.test.ts`,
+`lane-close-repair-packet.test.ts`, `truth-history-audit.test.ts`), this
+branch's side carried 107; union = 111, zero dropped from either side —
+verified programmatically before continuing the rebase.
+
+`.lane/migration-lock.yml` required no conflict resolution: `origin/main`'s
+copy was still the pre-existing stale UTV2-1086 lock, unmodified by any of the
+5 intervening merges (all `governance` type, none `migration` or `runtime` —
+verified from each lane's manifest on `origin/main` before assuming this), so
+this lane's re-claim applied cleanly with no ownership dispute.
+
+Post-rebase: `merge-base(HEAD, origin/main)` equals `origin/main`'s tip
+exactly. Re-ran the full local verification battery on the rebased head:
+
+```text
+$ pnpm type-check                                          → PASS
+$ npx tsx --test scripts/ci/utv2-1399-reporting-view-guard.test.ts → 6/6 PASS
+$ npx tsx scripts/ci/migration-reversibility-gate.ts --base origin/main → PASS
+$ pnpm test:ops                                             → 1645/1645 PASS
+```
+
+Re-measured production counts against `zfzdnfwdarxucxtaojxm` at
+`2026-08-01 00:44:41 UTC` — unchanged from the original 2026-07-31 measurement:
+`picks_raw=107858, picks_retained=7580, picks_excluded=100278`. No drift; no
+recount of any downstream figure required.

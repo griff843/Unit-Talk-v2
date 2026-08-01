@@ -7,11 +7,11 @@
   "status": "pr_open",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
   "sha_binding": {
-    "verified_source_sha": "bed10124c3d3c2c684a9de72fb1d452fe4470b2c",
+    "verified_source_sha": "47df44cbe11793459ace200f82828ba20461d2c4",
     "merge_sha": null,
-    "base_sha": "d82e1c60107c6063418ec0c76f8f0e660fc3803a",
+    "base_sha": "b493a7d5240d5d4e32426a0a60f2f903e8e087fc",
     "sha_type": "pending_merge",
-    "verified_source_note": "verified_source_sha is bed10124, the commit immediately preceding this one. (An earlier value, f1f397ec, was invalidated when a subsequent commit-message fix -- removing a stray cross-issue reference from a historical commit -- rewrote this branch's history via detached-HEAD amend + cherry-pick + force-with-lease push, so f1f397ec is no longer an ancestor of HEAD.) Diff verified locally with scripts/ci/proof-binding-validator.ts before pushing: only this file changes between bed10124 and the new HEAD, satisfying rule 4. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
+    "verified_source_note": "verified_source_sha is 47df44cb, the commit immediately preceding this one. Rebound twice: once after the commit-message-fix history rewrite (to bed10124), and again here after rebasing the whole branch onto origin/main (which had moved through 5 further merges -- UTV2-1604, 1632, 1635, 1613, 1594 -- since the branch was last synced, producing a genuine mergeable:false/dirty state that CI correctly stopped dispatching on). The rebase resolved one real package.json conflict in test:ops, verified programmatically as a union (111 final entries: 110 from origin/main's side including 4 new sibling-lane test files, plus this lane's 1, zero dropped). .lane/migration-lock.yml required no conflict resolution: origin/main's copy was still the pre-existing stale UTV2-1086 lock, unmodified by any of the 5 intervening merges (all governance-type, none migration/runtime), so this lane's re-claim applied cleanly. merge-base(HEAD, origin/main) now equals origin/main's tip exactly. base_sha updated to that tip. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "bound_at": "2026-07-31T21:15:00.000Z"
