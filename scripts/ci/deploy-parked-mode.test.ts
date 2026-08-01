@@ -238,6 +238,36 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
         );
       }
     }
+
+    // UTV2-1618: live incident (2026-08-01) -- the production compose file
+    // requires UNIT_TALK_IMAGE_TAG for every service on every compose
+    // evaluation, not just `up`. These checks lock in the fix so the exact
+    // same bug class cannot silently return.
+    if (!confirmScript.includes("UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec")) {
+      violations.push(`${stage} readiness must supply UNIT_TALK_IMAGE_TAG to every docker compose exec`);
+    }
+    if (/docker compose exec[^\n]*2>\/dev\/null\s*\|\|\s*true/.test(confirmScript)) {
+      violations.push(
+        `${stage} readiness must not suppress stderr or swallow exit status (2>/dev/null || true) on a compose exec -- that hides a real Compose evaluation failure as "variable missing"`,
+      );
+    }
+    if (!confirmScript.includes(".unit-talk-release")) {
+      violations.push(`${stage} readiness must cross-check the resolved tag against the host's own release record`);
+    }
+    if (!confirmScript.includes('docker ps -q --filter') || !confirmScript.includes('docker inspect')) {
+      violations.push(`${stage} readiness must independently cross-check via docker inspect + compose labels, not compose-exec alone`);
+    }
+  }
+
+  // UTV2-1618: production must also prove the public kill switches remain
+  // engaged -- defense-in-depth containment that this deploy did not set but
+  // must never silently observe as disengaged.
+  if (
+    !productionConfirm.includes('delivery_kill_switch') ||
+    !productionConfirm.includes('best-bets') ||
+    !productionConfirm.includes('trader-insights')
+  ) {
+    violations.push('production readiness must verify the best-bets/trader-insights kill switches remain engaged');
   }
 
   const directSecretConsumers =
@@ -523,4 +553,59 @@ test('static deploy audit detects a registry preflight that does not fail closed
       violation.includes('fail closed'),
     ),
   );
+});
+
+// ── UTV2-1618: live production incident, 2026-08-01 -- the canary confirm
+// step's `docker compose exec` never received UNIT_TALK_IMAGE_TAG, which the
+// production compose file requires for EVERY service on EVERY compose
+// evaluation. Compose failed closed before printenv ever ran, and
+// `2>/dev/null || true` silently discarded that failure, misreporting a
+// genuine Compose evaluation error as "SYNDICATE_MACHINE_ENABLED missing at
+// runtime". The API container itself was correctly recreated and healthy
+// throughout -- only this verification step's own evaluation was broken.
+// Full promotion and the other production services were never touched.
+
+test('static deploy audit detects a confirm step missing UNIT_TALK_IMAGE_TAG on compose exec', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll(
+    "UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec",
+    'docker compose exec',
+  );
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes('UNIT_TALK_IMAGE_TAG')));
+});
+
+test('static deploy audit detects reintroduced stderr suppression on a confirm-step compose exec', () => {
+  const mutatedSource = deployWorkflowSource.replace(
+    '"cd \'$DEPLOY_PATH\' && UNIT_TALK_IMAGE_TAG=\'$IMAGE_TAG\' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>&1)\n          API_EXEC_STATUS=$?',
+    '"cd \'$DEPLOY_PATH\' && UNIT_TALK_IMAGE_TAG=\'$IMAGE_TAG\' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>/dev/null || true)\n          API_EXEC_STATUS=$?',
+  );
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(
+    violations.some((violation) => violation.includes('2>/dev/null || true')),
+    `expected a stderr-suppression violation, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('static deploy audit detects a missing .unit-talk-release cross-check', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll('.unit-talk-release', '.unused-marker');
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes("release record")));
+});
+
+test('static deploy audit detects a missing docker-inspect independent cross-check', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll('docker inspect', 'docker unused-inspect');
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes('docker inspect')));
+});
+
+test('static deploy audit detects a missing public kill-switch verification in production readiness', () => {
+  const productionMarker = deployWorkflowSource.indexOf(
+    'Confirm syndicate machine gate in production container',
+  );
+  assert.notEqual(productionMarker, -1);
+  const mutatedSource =
+    deployWorkflowSource.slice(0, productionMarker) +
+    deployWorkflowSource.slice(productionMarker).replace('delivery_kill_switch', 'unused_table');
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes('kill switch')));
 });

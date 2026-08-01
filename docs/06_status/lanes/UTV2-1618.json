@@ -23,8 +23,10 @@
   "file_scope_lock": [
     ".github/workflows/ops-api-diagnose.yml",
     ".github/workflows/ops-p0-containment.yml",
+    ".github/workflows/deploy.yml",
     "scripts/ci/ops-api-diagnose-workflow.test.ts",
     "scripts/ci/ops-p0-containment-workflow.test.ts",
+    "scripts/ci/deploy-parked-mode.test.ts",
     "package.json",
     "docs/06_status/proof/UTV2-1618/evidence.json",
     "docs/06_status/proof/UTV2-1618/verification.md"

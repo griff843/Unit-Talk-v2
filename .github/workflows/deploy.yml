@@ -411,7 +411,19 @@ jobs:
           fi
           exit 1
 
+      # UTV2-1618: root cause of a real production incident (2026-08-01) --
+      # this step's `docker compose exec` never received UNIT_TALK_IMAGE_TAG,
+      # which the production compose file requires (`${UNIT_TALK_IMAGE_TAG:?required}`)
+      # for EVERY service, not just the one being released. Compose therefore
+      # failed closed before printenv ever ran, and `2>/dev/null || true`
+      # silently discarded that failure, misreporting a genuine Compose
+      # evaluation error as "the variable is missing at runtime". The API
+      # container itself was correctly recreated and healthy the whole time --
+      # only this verification step's own evaluation was broken. See
+      # scripts/ci/deploy-parked-mode.test.ts for the regression fixture.
       - name: Confirm syndicate machine gate in canary container
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           case "$SYNDICATE_MACHINE_MODE" in
             active) REQUESTED_VALUE=true ;;
@@ -421,14 +433,88 @@ jobs:
               exit 1
               ;;
           esac
-          VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true")
-          if [ "$VALUE" != "$REQUESTED_VALUE" ]; then
-            echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in canary container: requested='$REQUESTED_VALUE' runtime='${VALUE:-missing}'"
+
+          # 1. Resolve the exact deployed tag from the host's own release record
+          #    (written by "Release API canary" moments earlier) and cross-check
+          #    it against what this job resolved -- an independent confirmation
+          #    of what actually got deployed, not just what was requested.
+          RELEASE_TAG=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" "cat '$DEPLOY_PATH/.unit-talk-release'" 2>&1)
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::Could not read .unit-talk-release from the remote host -- no record of what canary actually deployed. Raw output: $RELEASE_TAG"
             exit 1
           fi
-          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"canary","mode":"%s","requestedValue":"%s","runtimeValue":"%s"}\n' \
-            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE"
+          if [ "$RELEASE_TAG" != "$IMAGE_TAG" ]; then
+            echo "::error::Release record mismatch: workflow resolved tag '$IMAGE_TAG' but .unit-talk-release on host records '$RELEASE_TAG'."
+            exit 1
+          fi
+
+          # 2/3. Every compose evaluation requires UNIT_TALK_IMAGE_TAG -- supply
+          # it here exactly as the release step did. No stderr suppression, no
+          # `|| true`: a real failure must surface as a real failure.
+          COMPOSE_EXEC_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>&1)
+          COMPOSE_EXEC_STATUS=$?
+
+          # 4. Classify the failure precisely rather than collapsing every
+          # non-zero outcome into "variable missing".
+          if [ $COMPOSE_EXEC_STATUS -ne 0 ]; then
+            if printf '%s' "$COMPOSE_EXEC_OUTPUT" | grep -qi "variable is not set\|required"; then
+              echo "::error::Compose evaluation failed while confirming the canary container (missing/invalid compose variable): $COMPOSE_EXEC_OUTPUT"
+            elif printf '%s' "$COMPOSE_EXEC_OUTPUT" | grep -qi "no such service\|no container found\|is not running"; then
+              echo "::error::Canary api service/container could not be resolved: $COMPOSE_EXEC_OUTPUT"
+            else
+              echo "::error::SYNDICATE_MACHINE_ENABLED is absent in the canary container: $COMPOSE_EXEC_OUTPUT"
+            fi
+            exit 1
+          fi
+          VALUE="$COMPOSE_EXEC_OUTPUT"
+          if [ "$VALUE" != "$REQUESTED_VALUE" ]; then
+            echo "::error::SYNDICATE_MACHINE_ENABLED value mismatch in canary container: requested='$REQUESTED_VALUE' runtime='$VALUE'"
+            exit 1
+          fi
+
+          # 5. Independent verification via docker inspect + compose labels --
+          # resolves the exact running container by its compose project/service
+          # labels and reads its real image reference and process environment
+          # straight from the Docker daemon. This path needs no compose-file
+          # re-evaluation at all, so it can never be broken by the class of bug
+          # that caused this incident, and it cross-validates the compose-exec
+          # result above rather than replacing it.
+          CID=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker ps -q --filter 'label=com.docker.compose.service=api' --filter 'status=running'" 2>&1)
+          if [ -z "$CID" ]; then
+            echo "::error::docker-inspect verification: no running container found with compose label service=api."
+            exit 1
+          fi
+          INSPECT_SERVICE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker inspect --format '{{index .Config.Labels \"com.docker.compose.service\"}}' '$CID'" 2>&1)
+          INSPECT_PROJECT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker inspect --format '{{index .Config.Labels \"com.docker.compose.project\"}}' '$CID'" 2>&1)
+          INSPECT_IMAGE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker inspect --format '{{.Config.Image}}' '$CID'" 2>&1)
+          INSPECT_SYNDICATE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' '$CID'" 2>&1 \
+            | grep '^SYNDICATE_MACHINE_ENABLED=' | head -1 | cut -d= -f2-)
+          if [ "$INSPECT_SERVICE" != "api" ]; then
+            echo "::error::docker-inspect resolved an unexpected compose service '$INSPECT_SERVICE' (expected 'api')."
+            exit 1
+          fi
+          EXPECTED_IMAGE="$IMAGE_NAMESPACE/api:$IMAGE_TAG"
+          if [ "$INSPECT_IMAGE" != "$EXPECTED_IMAGE" ]; then
+            echo "::error::docker-inspect image mismatch: container reports '$INSPECT_IMAGE', requested '$EXPECTED_IMAGE'."
+            exit 1
+          fi
+          if [ -z "$INSPECT_SYNDICATE" ]; then
+            echo "::error::docker-inspect: SYNDICATE_MACHINE_ENABLED is absent from the container's process environment (compose project '$INSPECT_PROJECT')."
+            exit 1
+          fi
+          if [ "$INSPECT_SYNDICATE" != "$REQUESTED_VALUE" ]; then
+            echo "::error::docker-inspect value mismatch: requested='$REQUESTED_VALUE' actual='$INSPECT_SYNDICATE' (compose project '$INSPECT_PROJECT')."
+            exit 1
+          fi
+
+          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"canary","mode":"%s","requestedValue":"%s","runtimeValue":"%s","composeExecValue":"%s","inspectValue":"%s","inspectImage":"%s","inspectProject":"%s","releaseTag":"%s"}\n' \
+            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$VALUE" "$INSPECT_SYNDICATE" "$INSPECT_IMAGE" "$INSPECT_PROJECT" "$RELEASE_TAG"
 
   promote:
     name: Promote production
@@ -641,7 +727,16 @@ jobs:
           fi
           exit 1
 
+      # UTV2-1618: same root cause and fix as the canary confirm step -- see its
+      # comment header for the full incident account. Every docker compose exec
+      # here now receives UNIT_TALK_IMAGE_TAG, failures are classified instead of
+      # collapsed, and each variable is independently cross-checked via docker
+      # inspect + compose labels rather than trusting compose-exec alone.
       - name: Confirm syndicate machine gate in production container
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           case "$SYNDICATE_MACHINE_MODE" in
             active)
@@ -661,50 +756,177 @@ jobs:
               exit 1
               ;;
           esac
-          VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null || true")
+
+          # 1. Cross-check the resolved tag against the host's own release record.
+          RELEASE_TAG=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" "cat '$DEPLOY_PATH/.unit-talk-release'" 2>&1)
+          if [ -z "$RELEASE_TAG" ]; then
+            echo "::error::Could not read .unit-talk-release from the remote host -- no record of what production actually deployed. Raw output: $RELEASE_TAG"
+            exit 1
+          fi
+          if [ "$RELEASE_TAG" != "$IMAGE_TAG" ]; then
+            echo "::error::Release record mismatch: workflow resolved tag '$IMAGE_TAG' but .unit-talk-release on host records '$RELEASE_TAG'."
+            exit 1
+          fi
+
+          # 2/3/5. Same fix as canary, applied to all four production variables:
+          # every compose evaluation gets UNIT_TALK_IMAGE_TAG, failures are
+          # classified instead of collapsed, and each result is independently
+          # cross-checked via docker inspect + compose labels.
+
+          API_EXEC_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>&1)
+          API_EXEC_STATUS=$?
+          if [ $API_EXEC_STATUS -ne 0 ]; then
+            if printf '%s' "$API_EXEC_OUTPUT" | grep -qi "variable is not set\|required"; then
+              echo "::error::Compose evaluation failed while confirming the production api container: $API_EXEC_OUTPUT"
+            elif printf '%s' "$API_EXEC_OUTPUT" | grep -qi "no such service\|no container found\|is not running"; then
+              echo "::error::Production api service/container could not be resolved: $API_EXEC_OUTPUT"
+            else
+              echo "::error::SYNDICATE_MACHINE_ENABLED is absent in the production api container: $API_EXEC_OUTPUT"
+            fi
+            exit 1
+          fi
+          VALUE="$API_EXEC_OUTPUT"
           if [ "$VALUE" != "$REQUESTED_VALUE" ]; then
             echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in production container: requested='$REQUESTED_VALUE' runtime='${VALUE:-missing}'"
             exit 1
           fi
 
-          # UTV2-1646: prove the deployed-SHA-bound container truth for the full parked
-          # contract, not just SYNDICATE_MACHINE_ENABLED -- these three vars each ran a
-          # separate real risk (ingestor still polling live providers, worker still
-          # claiming/delivering outbox rows) that the API-only check above never covered.
-          INGESTOR_AUTORUN_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_AUTORUN 2>/dev/null || true")
+          INGESTOR_AUTORUN_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_AUTORUN" 2>&1)
+          INGESTOR_AUTORUN_STATUS=$?
+          if [ $INGESTOR_AUTORUN_STATUS -ne 0 ]; then
+            if printf '%s' "$INGESTOR_AUTORUN_OUTPUT" | grep -qi "variable is not set\|required"; then
+              echo "::error::Compose evaluation failed while confirming the production ingestor container: $INGESTOR_AUTORUN_OUTPUT"
+            elif printf '%s' "$INGESTOR_AUTORUN_OUTPUT" | grep -qi "no such service\|no container found\|is not running"; then
+              echo "::error::Production ingestor service/container could not be resolved: $INGESTOR_AUTORUN_OUTPUT"
+            else
+              echo "::error::UNIT_TALK_INGESTOR_AUTORUN is absent in the production ingestor container: $INGESTOR_AUTORUN_OUTPUT"
+            fi
+            exit 1
+          fi
+          INGESTOR_AUTORUN_VALUE="$INGESTOR_AUTORUN_OUTPUT"
           if [ "$INGESTOR_AUTORUN_VALUE" != "$REQUESTED_INGESTOR_AUTORUN" ]; then
             echo "::error::UNIT_TALK_INGESTOR_AUTORUN readiness RED in production container: requested='$REQUESTED_INGESTOR_AUTORUN' runtime='${INGESTOR_AUTORUN_VALUE:-missing}'"
             exit 1
           fi
 
-          INGESTOR_SCHEDULING_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_SCHEDULING_ENABLED 2>/dev/null || true")
+          INGESTOR_SCHEDULING_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_SCHEDULING_ENABLED" 2>&1)
+          INGESTOR_SCHEDULING_STATUS=$?
+          if [ $INGESTOR_SCHEDULING_STATUS -ne 0 ]; then
+            if printf '%s' "$INGESTOR_SCHEDULING_OUTPUT" | grep -qi "variable is not set\|required"; then
+              echo "::error::Compose evaluation failed while confirming the production ingestor container: $INGESTOR_SCHEDULING_OUTPUT"
+            elif printf '%s' "$INGESTOR_SCHEDULING_OUTPUT" | grep -qi "no such service\|no container found\|is not running"; then
+              echo "::error::Production ingestor service/container could not be resolved: $INGESTOR_SCHEDULING_OUTPUT"
+            else
+              echo "::error::UNIT_TALK_INGESTOR_SCHEDULING_ENABLED is absent in the production ingestor container: $INGESTOR_SCHEDULING_OUTPUT"
+            fi
+            exit 1
+          fi
+          INGESTOR_SCHEDULING_VALUE="$INGESTOR_SCHEDULING_OUTPUT"
           if [ "$INGESTOR_SCHEDULING_VALUE" != "$REQUESTED_INGESTOR_SCHEDULING" ]; then
             echo "::error::UNIT_TALK_INGESTOR_SCHEDULING_ENABLED readiness RED in production container: requested='$REQUESTED_INGESTOR_SCHEDULING' runtime='${INGESTOR_SCHEDULING_VALUE:-missing}'"
             exit 1
           fi
 
-          WORKER_AUTORUN_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T worker printenv UNIT_TALK_WORKER_AUTORUN 2>/dev/null || true")
+          WORKER_AUTORUN_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T worker printenv UNIT_TALK_WORKER_AUTORUN" 2>&1)
+          WORKER_AUTORUN_STATUS=$?
+          if [ $WORKER_AUTORUN_STATUS -ne 0 ]; then
+            if printf '%s' "$WORKER_AUTORUN_OUTPUT" | grep -qi "variable is not set\|required"; then
+              echo "::error::Compose evaluation failed while confirming the production worker container: $WORKER_AUTORUN_OUTPUT"
+            elif printf '%s' "$WORKER_AUTORUN_OUTPUT" | grep -qi "no such service\|no container found\|is not running"; then
+              echo "::error::Production worker service/container could not be resolved: $WORKER_AUTORUN_OUTPUT"
+            else
+              echo "::error::UNIT_TALK_WORKER_AUTORUN is absent in the production worker container: $WORKER_AUTORUN_OUTPUT"
+            fi
+            exit 1
+          fi
+          WORKER_AUTORUN_VALUE="$WORKER_AUTORUN_OUTPUT"
           if [ "$WORKER_AUTORUN_VALUE" != "$REQUESTED_WORKER_AUTORUN" ]; then
             echo "::error::UNIT_TALK_WORKER_AUTORUN readiness RED in production container: requested='$REQUESTED_WORKER_AUTORUN' runtime='${WORKER_AUTORUN_VALUE:-missing}'"
             exit 1
           fi
 
+          ENABLED_TARGETS_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T worker printenv UNIT_TALK_ENABLED_TARGETS" 2>&1)
+          ENABLED_TARGETS_STATUS=$?
+          if [ $ENABLED_TARGETS_STATUS -ne 0 ]; then
+            if printf '%s' "$ENABLED_TARGETS_OUTPUT" | grep -qi "variable is not set\|required"; then
+              echo "::error::Compose evaluation failed while confirming the production worker container: $ENABLED_TARGETS_OUTPUT"
+            elif printf '%s' "$ENABLED_TARGETS_OUTPUT" | grep -qi "no such service\|no container found\|is not running"; then
+              echo "::error::Production worker service/container could not be resolved: $ENABLED_TARGETS_OUTPUT"
+            else
+              echo "::error::UNIT_TALK_ENABLED_TARGETS is absent in the production worker container: $ENABLED_TARGETS_OUTPUT"
+            fi
+            exit 1
+          fi
+          ENABLED_TARGETS_VALUE="$ENABLED_TARGETS_OUTPUT"
+
           # UNIT_TALK_ENABLED_TARGETS is asserted only in parked mode: active mode's
           # value legitimately varies with the UNIT_TALK_ENABLED_TARGETS secret, but
           # parked mode must NEVER resolve to a real target regardless of that secret.
-          ENABLED_TARGETS_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T worker printenv UNIT_TALK_ENABLED_TARGETS 2>/dev/null || true")
           if [ "$SYNDICATE_MACHINE_MODE" = "parked" ] && [ "$ENABLED_TARGETS_VALUE" != "none" ]; then
             echo "::error::UNIT_TALK_ENABLED_TARGETS readiness RED in production container: parked mode requires 'none', runtime='${ENABLED_TARGETS_VALUE:-missing}'"
             exit 1
           fi
 
-          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s"}\n' \
-            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE"
+          # 5. Independent docker-inspect + compose-labels cross-check across all
+          # three services -- needs no compose-file re-evaluation at all, so it
+          # can never be broken by the class of bug that caused this incident.
+          for pair in "api:SYNDICATE_MACHINE_ENABLED:$REQUESTED_VALUE" \
+                      "ingestor:UNIT_TALK_INGESTOR_AUTORUN:$REQUESTED_INGESTOR_AUTORUN" \
+                      "ingestor:UNIT_TALK_INGESTOR_SCHEDULING_ENABLED:$REQUESTED_INGESTOR_SCHEDULING" \
+                      "worker:UNIT_TALK_WORKER_AUTORUN:$REQUESTED_WORKER_AUTORUN"; do
+            svc="${pair%%:*}"
+            rest="${pair#*:}"
+            var="${rest%%:*}"
+            requested="${rest#*:}"
+            cid=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+              "docker ps -q --filter 'label=com.docker.compose.service=$svc' --filter 'status=running'" 2>&1)
+            if [ -z "$cid" ]; then
+              echo "::error::docker-inspect verification: no running container found with compose label service=$svc."
+              exit 1
+            fi
+            inspect_value=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+              "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' '$cid'" 2>&1 \
+              | grep "^${var}=" | head -1 | cut -d= -f2-)
+            if [ -z "$inspect_value" ]; then
+              echo "::error::docker-inspect: $var is absent from the $svc container's process environment."
+              exit 1
+            fi
+            if [ "$inspect_value" != "$requested" ]; then
+              echo "::error::docker-inspect value mismatch for $svc/$var: requested='$requested' actual='$inspect_value'."
+              exit 1
+            fi
+          done
+
+          # 6. Prove the public kill switches remain engaged for the live
+          # Discord-facing targets, independent of anything in the container --
+          # a read-only query against the same production Supabase this deploy
+          # targets. Parked mode never requires this (it's defense-in-depth,
+          # not this deploy's own responsibility to flip), but it must never be
+          # silently disengaged, and this deploy must prove it either way.
+          KILL_SWITCH_JSON=$(curl -sS --max-time 15 \
+            "$SUPABASE_URL/rest/v1/delivery_kill_switch?target=in.(best-bets,trader-insights)&select=target,killed" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY")
+          if ! printf '%s' "$KILL_SWITCH_JSON" | python3 -c "
+          import json, sys
+          rows = json.load(sys.stdin)
+          targets = {r['target']: r['killed'] for r in rows}
+          for t in ('best-bets', 'trader-insights'):
+              if targets.get(t) is not True:
+                  print(f'{t}: killed={targets.get(t)!r} (expected true)', file=sys.stderr)
+                  sys.exit(1)
+          "; then
+            echo "::error::Public delivery kill-switch is not engaged for best-bets/trader-insights: $KILL_SWITCH_JSON"
+            exit 1
+          fi
+
+          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","killSwitchEngaged":true}\n' \
+            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG"
 
   smoke:
     name: Post-deploy functional smoke
