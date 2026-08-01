@@ -6,9 +6,9 @@
   "generated_at": "2026-08-01T04:24:14.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "7db8aed381b748fd5187796e12083a6d91d5adc9",
+    "verified_source_sha": "95e324a2e084a0f3108bc04566b735f516bcc7b3",
     "merge_sha": null,
-    "base_sha": "ea78c9e680a482d8de7171f5fa1461f564c55893",
+    "base_sha": "4e8830fa72800722e0f1c251884d2173453b1c45",
     "sha_type": "pending_merge",
     "verified_source_note": "22a1d70d is this branch's real implementation commit after a second rebase onto origin/main. The first rebase (18f2d258, now superseded) was conflict-free; a second rebase was required when origin/main advanced again mid-lane (UTV2-1633 db-role migration + a ghost-lane reconcile), which produced a genuine package.json conflict on the test:ops script entry -- resolved by unioning both additions (this lane's ci-db-proof-harvest.test.ts and UTV2-1633's reporting-reader-role-guard test), never dropping either. Re-confirmed via `git merge-base HEAD origin/main` equalling `git rev-parse origin/main` post-rebase, and pnpm type-check + the four modified/added test files (151/151) re-run green on the new head. The authoritative binding is the PR's squash-merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`, which this lane's own auto-harvest addition also runs against.",
     "bound_at": "2026-08-01T04:24:14.000Z"

@@ -1,23 +1,27 @@
 # UTV2-1641 Diff Summary
 
-Generated at: 2026-08-01T05:45:21.200Z
+Generated at: 2026-08-01T06:12:06.121Z
 Issue: UTV2-1641
 Tier: T1
 Lane type: governance
 Branch: claude/utv2-1641-1642-proof-lifecycle-fixes
 PR URL: N/A
-Head SHA: 9869652c246007e8de916f593ee66986bbfd117b
+Head SHA: 7176337d00549c824764329f7dad0e2a96d2cc3e
 Merge SHA: N/A
 Diff base: 6afd7fb6f809d2b8e9db84fa7ecd55e10656d626
-Diff target: 9869652c246007e8de916f593ee66986bbfd117b
+Diff target: 7176337d00549c824764329f7dad0e2a96d2cc3e
 
 ## Git Diff Stat
 ```
 .ops/sync/{UTV2-1641.yml => UTV2-1644.yml}         |    2 +-
+ docs/06_status/lanes/UTV2-1633.json                |   44 +-
  docs/06_status/lanes/UTV2-1641.json                |   19 +-
  docs/06_status/lanes/UTV2-1644.json                |   41 +
+ docs/06_status/proof/UTV2-1633/diff-summary.md     |   48 +
+ docs/06_status/proof/UTV2-1633/evidence.json       |  138 ++-
+ docs/06_status/proof/UTV2-1633/verification.md     |   14 +-
  docs/06_status/proof/UTV2-1641/.gitkeep            |    0
- docs/06_status/proof/UTV2-1641/diff-summary.md     |   60 +
+ docs/06_status/proof/UTV2-1641/diff-summary.md     |   68 ++
  docs/06_status/proof/UTV2-1641/evidence.json       |  134 +++
  docs/06_status/proof/UTV2-1641/verification.md     |  273 +++++
  docs/06_status/proof/UTV2-1644/.gitkeep            |    0
@@ -33,14 +37,18 @@ Diff target: 9869652c246007e8de916f593ee66986bbfd117b
  scripts/ops/proof-repair.ts                        |   17 +-
  scripts/ops/shared.test.ts                         |   27 +
  scripts/ops/shared.ts                              |   34 +
- 20 files changed, 3539 insertions(+), 6 deletions(-)
+ 24 files changed, 3755 insertions(+), 42 deletions(-)
 ```
 
 ## Git Name Status
 ```
 R089	.ops/sync/UTV2-1641.yml	.ops/sync/UTV2-1644.yml
+M	docs/06_status/lanes/UTV2-1633.json
 M	docs/06_status/lanes/UTV2-1641.json
 A	docs/06_status/lanes/UTV2-1644.json
+A	docs/06_status/proof/UTV2-1633/diff-summary.md
+M	docs/06_status/proof/UTV2-1633/evidence.json
+M	docs/06_status/proof/UTV2-1633/verification.md
 A	docs/06_status/proof/UTV2-1641/.gitkeep
 A	docs/06_status/proof/UTV2-1641/diff-summary.md
 A	docs/06_status/proof/UTV2-1641/evidence.json
@@ -64,5 +72,5 @@ M	scripts/ops/shared.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 9869652c246007e8de916f593ee66986bbfd117b
+Head SHA: 7176337d00549c824764329f7dad0e2a96d2cc3e
 Merge SHA: N/A
