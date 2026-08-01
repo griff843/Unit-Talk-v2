@@ -12,6 +12,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
+import { execFileSync } from 'node:child_process';
 
 const requireFromTest = createRequire(import.meta.url);
 const {
@@ -21,6 +22,7 @@ const {
   expandGlob,
   expandTestArgument,
   isExecutableTestFile,
+  listRepoFiles,
   summarizeWiringReport,
 } = requireFromTest('./executable-wiring.ts') as typeof import('./executable-wiring.js');
 
@@ -36,6 +38,11 @@ function write(root: string, relativePath: string, content: string): string {
   mkdirSync(dirname(fullPath), { recursive: true });
   writeFileSync(fullPath, content);
   return fullPath;
+}
+
+function track(root: string, relativePaths: string[]): void {
+  execFileSync('git', ['init', '-q'], { cwd: root });
+  execFileSync('git', ['add', '--', ...relativePaths], { cwd: root });
 }
 
 interface FixtureOptions {
@@ -78,6 +85,112 @@ function statusOf(report: ReturnType<typeof buildWiringReport>, path: string): s
 function capabilityStatusOf(report: ReturnType<typeof buildWiringReport>, path: string): string | undefined {
   return report.capabilities.find(entry => entry.path === path)?.status;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Canonical repository discovery                                             */
+/* -------------------------------------------------------------------------- */
+
+test('nested .claude/worktrees files produce zero findings in a tracked repository', () => {
+  const root = fixture({ rootScripts: { verify: 'pnpm lint', lint: 'eslint .' } });
+  write(root, '.gitignore', '.claude/worktrees/\n');
+  write(root, '.claude/worktrees/nested-repo/apps/api/src/ghost.test.ts', TEST_BODY);
+  track(root, ['package.json', 'pnpm-workspace.yaml', '.gitignore']);
+
+  const report = buildWiringReport({ root, baselinePath: null });
+
+  assert.equal(report.totals.test_files, 0);
+  assert.deepEqual(report.findings, []);
+});
+
+test('tracked .claude policy and command files remain in canonical scans', () => {
+  const root = fixture({
+    rootScripts: { verify: 'pnpm lint', lint: 'eslint .' },
+    files: {
+      'scripts/ops/probe.ts': 'export const probe = true;\n',
+      '.claude/policies/runtime.md': 'Policy reference: `scripts/ops/probe.ts`\n',
+      '.claude/commands/probe.md': 'Run `scripts/ops/probe.ts` for diagnostics.\n',
+    },
+  });
+  track(root, [
+    'package.json',
+    'pnpm-workspace.yaml',
+    'scripts/ops/probe.ts',
+    '.claude/policies/runtime.md',
+    '.claude/commands/probe.md',
+  ]);
+
+  assert.deepEqual(listRepoFiles(root, '.claude'), [
+    '.claude/commands/probe.md',
+    '.claude/policies/runtime.md',
+  ]);
+  const report = buildWiringReport({ root, baselinePath: null });
+  const capability = report.capabilities.find(entry => entry.path === 'scripts/ops/probe.ts');
+  assert.deepEqual(capability?.doc_references, [
+    'doc:.claude/commands/probe.md',
+    'doc:.claude/policies/runtime.md',
+  ]);
+});
+
+test('ignored and untracked files cannot affect canonical totals', () => {
+  const root = fixture({
+    rootScripts: { verify: 'pnpm test', test: 'tsx --test src/wired.test.ts' },
+    files: { 'src/wired.test.ts': TEST_BODY },
+  });
+  write(root, '.gitignore', 'scratch/\n.claude/worktrees/\n');
+  track(root, ['package.json', 'pnpm-workspace.yaml', '.gitignore', 'src/wired.test.ts']);
+
+  const before = buildWiringReport({ root, baselinePath: null });
+  write(root, 'scratch/ignored.test.ts', TEST_BODY);
+  write(root, 'local/untracked.test.ts', TEST_BODY);
+  write(root, '.claude/worktrees/agent/repo.test.ts', TEST_BODY);
+  const after = buildWiringReport({ root, baselinePath: null });
+
+  assert.deepEqual(after.totals, before.totals);
+  assert.deepEqual(after.tests, before.tests);
+  assert.deepEqual(after.findings, before.findings);
+});
+
+test('a newly tracked unwired file still fails', () => {
+  const root = fixture({
+    rootScripts: { verify: 'pnpm lint', lint: 'eslint .' },
+    files: { 'src/newly-tracked.test.ts': TEST_BODY },
+  });
+  track(root, ['package.json', 'pnpm-workspace.yaml', 'src/newly-tracked.test.ts']);
+
+  const report = buildWiringReport({ root, baselinePath: null });
+
+  assert.equal(report.verdict, 'FAIL');
+  assert.equal(report.totals.unwired_new, 1);
+  assert.ok(
+    report.findings.some(
+      finding =>
+        finding.code === 'WIRING_TEST_UNWIRED_NEW' &&
+        finding.subject === 'src/newly-tracked.test.ts',
+    ),
+  );
+});
+
+test('clean-clone and worktree-heavy checkout results are identical', () => {
+  const root = fixture({
+    rootScripts: { verify: 'pnpm test', test: 'tsx --test src/wired.test.ts' },
+    files: { 'src/wired.test.ts': TEST_BODY },
+  });
+  write(root, '.gitignore', '.claude/worktrees/\n.out/\n.worktrees/\n');
+  track(root, ['package.json', 'pnpm-workspace.yaml', '.gitignore', 'src/wired.test.ts']);
+  const clean = buildWiringReport({ root, baselinePath: null });
+
+  for (let index = 0; index < 8; index += 1) {
+    write(root, `.claude/worktrees/agent-${index}/apps/api/src/ghost-${index}.test.ts`, TEST_BODY);
+    write(root, `.out/worktrees/lane-${index}/scripts/ops/ghost-${index}.test.ts`, TEST_BODY);
+  }
+  const heavy = buildWiringReport({ root, baselinePath: null });
+
+  assert.deepEqual(heavy.totals, clean.totals);
+  assert.deepEqual(heavy.tests, clean.tests);
+  assert.deepEqual(heavy.capabilities, clean.capabilities);
+  assert.deepEqual(heavy.findings, clean.findings);
+  assert.deepEqual(heavy.parser_errors, clean.parser_errors);
+});
 
 /* -------------------------------------------------------------------------- */
 /* Command parsing primitives                                                 */
