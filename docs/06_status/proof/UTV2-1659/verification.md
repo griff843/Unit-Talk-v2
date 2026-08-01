@@ -13,6 +13,8 @@ ASSERTIONS:
 
 EVIDENCE:
 
+## Verification
+
 Focused regression run:
 
 ```text
