@@ -6,11 +6,11 @@
   "generated_at": "2026-08-01T04:24:14.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "d39c367e849596cbef64711fe9737c8b81715c17",
+    "verified_source_sha": "18f2d258fa08e4783cf0e73e319f7e79b8a9adba",
     "merge_sha": null,
-    "base_sha": "a7967d7d729bbedb9d67b187332c6b6c939e51fc",
+    "base_sha": "1295d0abd7cb5e65f30e80f0e2289c321e71653f",
     "sha_type": "pending_merge",
-    "verified_source_note": "d39c367e is this branch's real implementation commit, a genuine descendant of origin/main tip a7967d7d (branch was fully up to date with origin/main at start -- confirmed via `git merge-base HEAD origin/main` equalling `git rev-parse origin/main`). The authoritative binding is the PR's squash-merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`, which this lane's own auto-harvest addition also runs against.",
+    "verified_source_note": "18f2d258 is this branch's real implementation commit after a clean rebase onto origin/main (no conflicts) picking up an unrelated pnpm-audit advisory fix (UTV2-1643) that landed on main mid-lane; re-confirmed via `git merge-base HEAD origin/main` equalling `git rev-parse origin/main` post-rebase, and pnpm type-check + the four modified/added test files (151/151) re-run green on the new head. The authoritative binding is the PR's squash-merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`, which this lane's own auto-harvest addition also runs against.",
     "bound_at": "2026-08-01T04:24:14.000Z"
   },
   "verifier": {
