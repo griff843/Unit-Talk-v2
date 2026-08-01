@@ -2,11 +2,21 @@
   "schema_version": 1,
   "issue_id": "UTV2-1618",
   "sha_binding": {
-    "verified_source_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
-    "merge_sha": null,
+    "verified_source_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+    "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087",
     "evidence_commit_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
     "current_pr_head_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
-    "verified_source_note": "Bound to the code-only commit carrying the Bounce 3 remediation (cc9fe9ae, on top of the 788e227f/2e80a15a scope). Code and proof are separate commits so the proof names a SHA that contains the code it describes."
+    "verified_source_note": "Bound to the code-only commit carrying the Bounce 3 remediation (cc9fe9ae, on top of the 788e227f/2e80a15a scope). Code and proof are separate commits so the proof names a SHA that contains the code it describes.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-01T18:01:02.340Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "pass",
+      "p0_protocol": "pass",
+      "executor_result_validation": "pass",
+      "t1_proof_gate": "pass",
+      "writable_db_proof_staging": "pass"
+    }
   },
   "verifier": {
     "identity": "claude-opus-5",
@@ -31,15 +41,15 @@
     "test_run_logs": [
       {
         "path": "scripts/ci/deploy-parked-mode.test.ts",
-        "merge_sha": null
+        "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087"
       },
       {
         "path": "scripts/ci/ops-api-diagnose-workflow.test.ts",
-        "merge_sha": null
+        "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087"
       },
       {
         "path": "scripts/ci/ops-p0-containment-workflow.test.ts",
-        "merge_sha": null
+        "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087"
       }
     ],
     "mutation_verification": {
@@ -56,21 +66,40 @@
   },
   "runtime_proof": {
     "command": "pnpm test:db",
-    "status": "CARRIED_FORWARD",
+    "status": "PASS",
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "duration_ms": 84746,
+    "duration_ms": 47660,
+    "source": "CI run 30710515887 (\"CI\" workflow, job \"staging-db-proof\" / \"Writable DB proof (staging only)\"), for PR #1314 head 9eb150fec673e4acf722d26bd1dfe18d1c734c30. Retrieved from the job's uploaded ci-db-proof-receipt.json artifact (schema ci-db-proof-receipt/v2) -- ops:proof-generate's own automated ci_db_proof_harvest could not locate this run because its head-SHA query is paginated to 20 results and this run was the 25th returned for that SHA; harvested manually from the same authoritative artifact instead of re-deriving evidence by hand.",
     "receipts": [
       {
-        "supabase_project": "zfzdnfwdarxucxtaojxm",
-        "duration_ms": 84746,
+        "supabase_project": "xskgrzbteyqdufktjrjx",
+        "project_kind": "staging (approved CI target; canonical production ref is zfzdnfwdarxucxtaojxm)",
+        "github_run_id": "30710515887",
+        "github_job": "staging-db-proof",
+        "duration_ms": 47660,
         "tests_run": 7,
         "tests_pass": 7,
-        "note": "Live Supabase, executed against the original 2e80a15a scope. This extension (788e227f) touches only .github/workflows/deploy.yml, scripts/ci/deploy-parked-mode.test.ts, and the lane manifest -- no DB schema, query, or application code -- so the prior live-DB result is unaffected and R-level re-confirmed no new runtime-proof artifact is mechanically required for this diff."
+        "tests_fail": 0,
+        "note": "pnpm test:db (apps/api/src/database-smoke.test.ts) against live Supabase staging. Exercises: submission+settlement persistence; UTV2-920 atomic-enqueue/delivery-confirmation/settlement rollback-on-invalid-input (no orphan lifecycle/outbox/audit rows written); UTV2-883 no-duplicate-participant constraint; UTV2-996 settlement correction chain is additive (original row never mutated). All 7 pass."
       }
     ],
-    "extension_note": "test:db could not be freshly re-executed from this worktree: its local.env intentionally points SUPABASE_URL at an unreachable local sandbox (127.0.0.1) as containment for agent-owned worktrees, and ci:assert-staging correctly refused to run a writable DB check against an unidentified target. This is fail-closed working as intended, not a gap -- the diff has no DB-touching surface for it to exercise.",
+    "queries": [
+      {
+        "description": "pnpm test:db -- live Supabase staging smoke tests (apps/api/src/database-smoke.test.ts)",
+        "result": "7/7 tests passed, duration_ms 47660, project ref xskgrzbteyqdufktjrjx (staging), CI run 30710515887"
+      }
+    ],
+    "row_counts": [
+      {
+        "description": "database-smoke.test.ts live-DB suite",
+        "tests_run": 7,
+        "tests_passed": 7,
+        "tests_failed": 0
+      }
+    ],
+    "extension_note": "test:db could not be freshly re-executed from either worktree used while implementing this fix: local.env in both intentionally points SUPABASE_URL at an unreachable local sandbox (127.0.0.1) as containment for agent-owned worktrees, and ci:assert-staging correctly refused to run a writable DB check against an unidentified target -- fail-closed working as intended. The evidence above is the actual CI execution against staging for this exact merged PR head, not a substitute.",
     "production_diagnostic": "The read-only diagnostic executed against production and returned containment verified, container-internal health pass, host endpoint unreachable (advisory, separate defect class). No production mutation occurred."
   },
   "incident_record_correction": {
@@ -81,5 +110,6 @@
   "blast_radius": {
     "production_mutation_on_merge": false,
     "note": "Merging performs no production mutation. The diagnostic workflows remain read-only; the containment workflow retains dispatch-only triggering and human environment approval; deploy.yml's confirm-step fix only changes verification logic, not what gets deployed."
-  }
+  },
+  "status": "PASS"
 }

@@ -1,5 +1,5 @@
 # PROOF: UTV2-1618
-MERGE_SHA: cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12
+MERGE_SHA: 147462572b46d80b18c38d3960053ccc272ba087
 
 Bound to the code-only commit carrying the Bounce 3 remediation (cc9fe9ae, on
 top of 788e227f, which extended the original 2e80a15a scope onto
@@ -249,5 +249,5 @@ verification logic only, not to what gets deployed or how.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `147462572b46d80b18c38d3960053ccc272ba087`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1314

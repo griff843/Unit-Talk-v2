@@ -29,7 +29,9 @@
     "scripts/ci/deploy-parked-mode.test.ts",
     "package.json",
     "docs/06_status/proof/UTV2-1618/evidence.json",
-    "docs/06_status/proof/UTV2-1618/verification.md"
+    "docs/06_status/proof/UTV2-1618/verification.md",
+    "docs/06_status/lanes/UTV2-1618.json",
+    ".ops/sync/UTV2-1618.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1618/evidence.json",
@@ -37,12 +39,27 @@
   ],
   "status": "merged",
   "started_at": "2026-07-28T14:30:00.000Z",
-  "heartbeat_at": "2026-08-01T17:46:29.248Z",
+  "heartbeat_at": "2026-08-01T18:04:06.387Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-01T18:02:30.161Z",
+      "verdict": "pass",
+      "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-01T18:04:06.387Z",
+      "verdict": "pass",
+      "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
