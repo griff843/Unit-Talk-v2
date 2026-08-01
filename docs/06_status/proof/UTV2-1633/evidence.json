@@ -7,16 +7,19 @@
   "status": "blocked_on_operator_authorized_db_apply",
   "pr_url": null,
   "sha_binding": {
-    "verified_source_sha": "9f5836f9485c266b7a206d77403fab77ea723372",
-    "sha_type": "implementation_commit_sha",
+    "verified_source_sha": "43709ca58df1e69998e1981255110b160642e0e5",
+    "merge_sha": "43709ca58df1e69998e1981255110b160642e0e5",
+    "sha_type": "merge_sha",
     "verified_source_note": "Implementation commit on branch claude/utv2-1633-readonly-postgres-role, pre-PR. Rebound to the real squash-merge SHA post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha, per the same allowance UTV2-1399 used.",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "bound_at": "2026-08-01T05:35:14.080Z"
   },
   "verifier": {
-    "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm and staging xskgrzbteyqdufktjrjx via Supabase MCP execute_sql, 2026-08-01",
+    "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm and staging xskgrzbteyqdufktjrjx via Supabase MCP execute_sql, 2026-08-01; runtime_proof harvested by claude/utv2-1633-proof-repair from CI job 91329871333",
     "method": "Every claim about live database state is quoted alongside the exact SQL that produced it. All statements executed against either live database are SELECT only; no DDL was applied and no row was created, updated, or deleted by this lane.",
-    "verifier_scope": "This identity verifies (a) that schema `reporting` and role `reporting_reader` do not yet exist in production or staging, (b) the pre-existing PUBLIC/schema-level privilege baseline in production, and (c) that the migration's own static/local checks pass. It does NOT verify the role's actual read/write behavior against a live database, because the role does not exist in either environment yet -- see verification.md 'BLOCKED' section."
+    "verifier_scope": "This identity verifies (a) that schema `reporting` and role `reporting_reader` do not yet exist in production or staging, (b) the pre-existing PUBLIC/schema-level privilege baseline in production, and (c) that the migration's own static/local checks pass. It does NOT verify the role's actual read/write behavior against a live database, because the role does not exist in either environment yet -- see verification.md 'BLOCKED' section.",
+    "runtime_proof_verifier_note": "scripts/ops/proof-repair.ts's mergeRuntimeProofIntoEvidence unconditionally replaces this entire `verifier` object with a bare `{identity: <verifier-identity flag>}` when adding runtime_proof -- confirmed by running --dry-run then a real apply and diffing before/after, same as UTV2-1399's own repair found. The pre-repair rich object (method/verifier_scope above) was restored by hand afterward rather than accepted as lost, and the tool's stamped identity (claude/utv2-1633-proof-repair, distinct from this manifest's created_by=claude) is folded into the `identity` line rather than silently discarded."
   },
   "required_implementation": {
     "connect_and_usage_grant": "implemented",
@@ -50,9 +53,17 @@
       "access": "read_only_select_only",
       "current_database": "postgres",
       "schemas_present": [
-        "auth", "cron", "extensions", "graphql", "graphql_public",
-        "information_schema", "public", "realtime", "storage",
-        "supabase_migrations", "vault"
+        "auth",
+        "cron",
+        "extensions",
+        "graphql",
+        "graphql_public",
+        "information_schema",
+        "public",
+        "realtime",
+        "storage",
+        "supabase_migrations",
+        "vault"
       ],
       "reporting_schema_exists": false,
       "reporting_reader_role_exists": false,
@@ -124,7 +135,9 @@
   "reversibility": {
     "mechanism": "single role, no owned objects",
     "objects_created": {
-      "roles": ["reporting_reader"],
+      "roles": [
+        "reporting_reader"
+      ],
       "schemas": [],
       "views": [],
       "tables": []
@@ -136,7 +149,12 @@
       "default_privileges_entries": 1
     },
     "mutations_performed": {
-      "delete": 0, "update": 0, "truncate": 0, "insert": 0, "alter_table": 0, "drop_column": 0
+      "delete": 0,
+      "update": 0,
+      "truncate": 0,
+      "insert": 0,
+      "alter_table": 0,
+      "drop_column": 0
     },
     "down_script": "db/migrations-rollback/20260801000000_utv2_1633_reporting_reader_role.down.sql",
     "irreversible_exemption_claimed": false,
@@ -165,9 +183,101 @@
     }
   ],
   "not_closed": [
-    "Production negative/positive demonstration and after-state privilege dump -- blocked on operator-authorized supabase db push for both UTV2-1399's prerequisite migration and this lane's own migration.",
-    "pnpm test:db / full pnpm verify -- not run locally (needs staging credentials this host does not carry); CI is authoritative. test:ops (including this guard test) verified locally.",
-    "PR open/merge, t1-approved label, pm-verdict/v1, and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this snapshot.",
+    "Production negative/positive demonstration and after-state privilege dump -- blocked on operator-authorized supabase db push for both UTV2-1399's prerequisite migration and this lane's own migration. This is a different, still-open gap from the mechanical runtime_proof requirement below.",
     "This role is not granted to any login/service credential and is not wired into any live application by design -- a separate governed action requiring explicit PM authorization."
-  ]
+  ],
+  "runtime_proof_repair_note": "The mechanical T1 runtime-proof requirement (ops:truth-check C6/R1/R2/P7/P9: runtime_proof.queries and row_counts non-empty from a real pnpm test:db run) is satisfied below via the governed proof-repair path (docs/05_operations/DB_MIGRATION_WORKFLOW.md-adjacent pattern, same as UTV2-1399/UTV2-1624/UTV2-1613 today): harvested, not re-run, from PR #1350's own 'Writable DB proof (staging only)' CI job on head 70dbb63f (squash-merged to 43709ca5). This is apps/api/src/database-smoke.test.ts's fixed, generic suite -- it proves live Supabase connectivity and transactional behavior, not this migration's specific role/grants (which remain blocked, see above).",
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 76369.682146,
+    "queries": [
+      {
+        "table": "submissions,settlement_records",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 13331.48ms)"
+      },
+      {
+        "table": "distribution_outbox,pick_lifecycle",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 12639.61ms)"
+      },
+      {
+        "table": "distribution_outbox,distribution_receipts,pick_lifecycle,audit_log",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 12130.76ms)"
+      },
+      {
+        "table": "settlement_records,pick_lifecycle,audit_log",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 12406.91ms)"
+      },
+      {
+        "table": "market_universe",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 116.10ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows (ok 6, 12111.88ms)"
+      },
+      {
+        "table": "settlement_records,settlement_corrections",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated (ok 7, 13009.91ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 8,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 0,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-01T05:11:11.421Z",
+    "row_counts_note": "Harvested (not re-run) from the seed-staging-fixtures.ts step of CI job 'Writable DB proof (staging only)' (run 30685295210, job 91329871333) on PR #1350's own head 70dbb63f20ee8bca1b42aa3dbb8885cf50682179, which squash-merged to 43709ca58df1e69998e1981255110b160642e0e5. That job holds the only credential to staging xskgrzbteyqdufktjrjx; a local re-run is impossible from this host (ci:assert-staging correctly refuses the containment stub target: SUPABASE_URL=http://127.0.0.1:1). CI receipt: [ci:db-smoke] sha256=60502aabf3364d3ba47b3d0e6c0d2443257d57e4a724253011c1fa948cd90291, target=xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "ci.yml",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 30685295210,
+      "job_id": 91329871333,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30685295210/job/91329871333",
+      "target_head_sha": "70dbb63f20ee8bca1b42aa3dbb8885cf50682179",
+      "target_merge_sha": "43709ca58df1e69998e1981255110b160642e0e5",
+      "conclusion": "success"
+    }
+  }
 }
