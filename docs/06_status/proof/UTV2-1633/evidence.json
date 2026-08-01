@@ -7,13 +7,13 @@
   "status": "blocked_on_operator_authorized_db_apply",
   "pr_url": null,
   "sha_binding": {
-    "verified_source_sha": "43709ca58df1e69998e1981255110b160642e0e5",
-    "merge_sha": "43709ca58df1e69998e1981255110b160642e0e5",
+    "verified_source_sha": "2e690ca1e07c772525d69b03013518a65e6ed5c7",
+    "merge_sha": "2e690ca1e07c772525d69b03013518a65e6ed5c7",
     "sha_type": "merge_sha",
     "verified_source_note": "Implementation commit on branch claude/utv2-1633-readonly-postgres-role, pre-PR. Rebound to the real squash-merge SHA post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha, per the same allowance UTV2-1399 used.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "bound_at": "2026-08-01T05:35:14.080Z"
+    "bound_at": "2026-08-01T05:50:42.780Z"
   },
   "verifier": {
     "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm and staging xskgrzbteyqdufktjrjx via Supabase MCP execute_sql, 2026-08-01; runtime_proof harvested by claude/utv2-1633-proof-repair from CI job 91329871333",

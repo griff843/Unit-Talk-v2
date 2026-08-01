@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1633-proof-repair",
   "branch": "claude/utv2-1633-proof-repair",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "2e690ca1e07c772525d69b03013518a65e6ed5c7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1354",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1633.yml",
@@ -19,14 +19,22 @@
     "docs/06_status/proof/UTV2-1633/evidence.json",
     "docs/06_status/proof/UTV2-1633/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-08-01T05:33:00.000Z",
-  "heartbeat_at": "2026-08-01T05:33:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-01T05:50:48.200Z",
+  "closed_at": "2026-08-01T05:50:48.200Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1633-proof-repair.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-01T05:50:46.368Z",
+      "verdict": "pass",
+      "merge_sha": "2e690ca1e07c772525d69b03013518a65e6ed5c7",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

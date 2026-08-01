@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1633-proof-repair
 PR URL: N/A
 Head SHA: b273e89c82a83730d9a7f02b196c2cda50319553
-Merge SHA: 43709ca58df1e69998e1981255110b160642e0e5
+Merge SHA: 2e690ca1e07c772525d69b03013518a65e6ed5c7
 Diff base: 43709ca58df1e69998e1981255110b160642e0e5^1
 Diff target: 43709ca58df1e69998e1981255110b160642e0e5
 
@@ -45,4 +45,4 @@ A	supabase/migrations/20260801000000_utv2_1633_reporting_reader_role.sql
 
 ## SHA Binding
 Head SHA: b273e89c82a83730d9a7f02b196c2cda50319553
-Merge SHA: 43709ca58df1e69998e1981255110b160642e0e5
+Merge SHA: 2e690ca1e07c772525d69b03013518a65e6ed5c7

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1633 — least-privilege read-only Postgres role for diagnostics and reporting
 
-MERGE_SHA: 43709ca58df1e69998e1981255110b160642e0e5
+MERGE_SHA: 2e690ca1e07c772525d69b03013518a65e6ed5c7
 
 > **Lane status: MERGED (PR #1350, squash SHA `43709ca5`), PRODUCTION APPLICATION STILL BLOCKED.**
 > Updated via governed proof-repair (`claude/utv2-1633-proof-repair`): the
