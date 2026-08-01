@@ -62,23 +62,24 @@ MERGE_SHA: b256bce5df9a9afb307ecef37b2d575624fabd4b
 
 ---
 
-## Required implementation — status
+## ASSERTIONS:
 
-| Requirement (from the issue) | Status |
-|---|---|
-| `CONNECT` on the database, `USAGE` on schema it must read | Implemented |
-| `SELECT` only — no INSERT/UPDATE/DELETE/TRUNCATE, no CREATE, no role admin | Implemented; mechanically enforced by the guard test |
-| `DEFAULT PRIVILEGES` scoped so future `reporting` tables don't over-grant | Implemented |
-| Explicit grant on `reporting.*` using UTV2-1399's prescribed statements | Implemented, verbatim |
-| No access to secrets-bearing or auth schemas beyond a reporting consumer | Implemented — zero grants outside schema `reporting` |
-| Negative demonstration (real DB error output) | **Blocked** — see above |
-| Positive demonstration (real query result) | **Blocked** — see above |
-| `information_schema`/`pg_catalog` privilege dump, before and after | Before: captured below (production, read-only). After: **blocked** |
-| Migration recorded in the ledger, replayable | Implemented — see "Static proof" |
+- [x] `CONNECT` on the database, `USAGE` on schema `reporting` — implemented
+- [x] `SELECT` only — no `INSERT`/`UPDATE`/`DELETE`/`TRUNCATE`, no `CREATE`, no role administration — implemented; mechanically enforced by the guard test
+- [x] `DEFAULT PRIVILEGES` scoped so future `reporting` tables don't over-grant — implemented
+- [x] Explicit grant on `reporting.*` using UTV2-1399's prescribed statements — implemented, verbatim
+- [x] No access to secrets-bearing or auth schemas beyond a reporting consumer — implemented, zero grants outside schema `reporting`
+- [x] Migration recorded in the ledger, replayable — implemented, see "Static proof"
+- [ ] Negative demonstration (real DB error output) — **BLOCKED**, see above
+- [ ] Positive demonstration (real query result) — **BLOCKED**, see above
+- [x] `information_schema`/`pg_catalog` privilege dump, before-state — captured below (production, read-only)
+- [ ] `information_schema`/`pg_catalog` privilege dump, after-state — **BLOCKED**, see above
 
 ---
 
-## Grant statements used (exact, from the migration)
+## EVIDENCE:
+
+### Grant statements used (exact, from the migration)
 
 ```sql
 GRANT CONNECT ON DATABASE postgres TO reporting_reader;
