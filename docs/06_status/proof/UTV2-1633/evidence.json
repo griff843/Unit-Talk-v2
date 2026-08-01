@@ -114,6 +114,11 @@
       "status": "PASS",
       "note": "No R1-R5 rule in docs/05_operations/r1-r5-rules.json matches supabase/migrations/** paths -- no artifacts required for this diff."
     },
+    "executable_wiring_gate": {
+      "command": "pnpm ops:automation-coverage-check",
+      "status": "PASS",
+      "note": "UTV2-1624's new WIRING_TEST_UNWIRED_NEW gate correctly flagged the guard test as unwired on the first verify run. Wired into package.json's test:ops list; unwired new=0 after the fix."
+    },
     "guard_intent": "Mechanically enforces: reporting_reader is NOLOGIN with every role-administration attribute explicitly denied; every GRANT/ALTER DEFAULT PRIVILEGES statement targets only schema reporting with only SELECT/USAGE/CONNECT, never INSERT/UPDATE/DELETE/TRUNCATE/CREATE/ALL, and never schema public or any public.* relation; the migration fails closed if schema reporting is missing; the migration verifies its own grant set in-transaction before committing; the rollback drops the role and revokes every grant without touching schema reporting itself; the migration creates no schema object of any kind other than the role."
   },
   "reversibility": {
@@ -148,9 +153,9 @@
     },
     {
       "topic": "package.json singleton lock held by ghost lane UTV2-1624",
-      "status": "investigated_and_avoided_not_fixed",
+      "status": "resolved",
       "blocks_this_lane": false,
-      "detail": "UTV2-1624's PR (#1338) merged (commit 43c36112) but its lane manifest still read status in_progress at this lane's start time; a separate PR (#1349) was already open to repair that closeout. This lane declares no package.json scope to avoid colliding with that in-flight repair, and therefore does not wire its guard test into pnpm test's automatic test:ops run in this PR."
+      "detail": "UTV2-1624's PR (#1338) merged (commit 43c36112) but its lane manifest still read status in_progress at lane-start time -- a stale manifest, not a real content conflict. UTV2-1624 also merged a new mechanical gate (WIRING_TEST_UNWIRED_NEW) that correctly flagged this guard test as unwired on the first verify run. Wired the guard test into package.json's test:ops list; pnpm ops:automation-coverage-check reports unwired new=0. File Scope Lock Check (advisory) still reports package.json as outside this lane's originally-declared scope -- a bookkeeping artifact of the same stale manifest, not a real conflict, and not one of the four required contexts."
     },
     {
       "topic": "Live Schema Parity -- 78 unauthorized missing_in_expected findings",
@@ -161,8 +166,7 @@
   ],
   "not_closed": [
     "Production negative/positive demonstration and after-state privilege dump -- blocked on operator-authorized supabase db push for both UTV2-1399's prerequisite migration and this lane's own migration.",
-    "pnpm test:db / full pnpm verify / pnpm test:ops -- not run locally; CI is authoritative.",
-    "Guard test not wired into package.json's test:ops list -- blocked on a concurrent lane's (UTV2-1624) file-scope lock; deferred as a trivial follow-up.",
+    "pnpm test:db / full pnpm verify -- not run locally (needs staging credentials this host does not carry); CI is authoritative. test:ops (including this guard test) verified locally.",
     "PR open/merge, t1-approved label, pm-verdict/v1, and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this snapshot.",
     "This role is not granted to any login/service credential and is not wired into any live application by design -- a separate governed action requiring explicit PM authorization."
   ]

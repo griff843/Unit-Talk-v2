@@ -242,29 +242,32 @@ UTV2-1399, not this lane); the migration creates no schema object of any
 kind other than the role. Per CLAUDE.md invariant 11: if a rule can be
 enforced mechanically, it must not live only in prose.
 
-**`pnpm test:db` / `pnpm test:ops` / full `pnpm verify`:** not run standalone
-from this host — `ci:assert-staging` correctly refuses any non-staging
-target, and this lane does not touch `package.json` (see "package.json
-conflict" below), so the guard test is not yet wired into the `test:ops`
-list. CI's own `verify` and `T1 Proof Gate` runs are the authoritative
-signal for these, on the PR's actual head.
+**`pnpm test:db` / full `pnpm verify`:** not run standalone from this host —
+`ci:assert-staging` correctly refuses any non-staging target. CI's own
+`verify` and `T1 Proof Gate` runs are the authoritative signal for these, on
+the PR's actual head.
 
-**`package.json` conflict, recorded not fixed:** this lane's guard test is
-not added to the `test:ops` script list in `package.json` in this PR.
-`package.json` is a singleton-only path
-(`scripts/ops/lane-start.ts` `SINGLETON_ONLY_FILES`), and at lane-start time
-it was held by UTV2-1624's lane manifest (status `in_progress` on
-`origin/main`) — a ghost lock: UTV2-1624's PR (#1338) had already merged
-(commit `43c36112`), but its lane-close had not yet run, and a separate PR
-(#1349, `codex/utv2-1624-runtime-proof-repair`) was open specifically to
-repair that closeout. Rather than touch `package.json` — which would either
-collide with that in-flight repair or require reconciling another issue's
-lane as a side effect of this one — this lane declares no `package.json`
-scope at all and does not wire its guard test into `pnpm test`'s automatic
-run. The guard test is still fully written and passes standalone (above);
-wiring it into `test:ops` is a trivial follow-up once `package.json`'s lock
-is free, in the same spirit as UTV2-1399 deferring
-`packages/db/src/database.types.ts` regeneration to a post-merge step.
+**`package.json` / `test:ops` wiring — resolved.** At lane-start time this
+lane deliberately declared no `package.json` scope: it is a singleton-only
+path (`scripts/ops/lane-start.ts` `SINGLETON_ONLY_FILES`), and was held by
+UTV2-1624's lane manifest (status `in_progress` on `origin/main`) — a ghost
+lock, since UTV2-1624's PR (#1338) had already merged (commit `43c36112`) but
+its lane-close had not yet run. UTV2-1624 also merged a new mechanical gate
+(`scripts/ops/executable-wiring.ts`, `WIRING_TEST_UNWIRED_NEW`) that
+correctly flagged this guard test as unwired-and-unbaselined on this PR's
+first `verify` run. Since UTV2-1624's actual content is genuinely merged to
+`main` (the ghost lock is a stale manifest status only, not a real content
+conflict), `package.json` was safe to edit: the guard test is now appended to
+`test:ops`, `pnpm ops:automation-coverage-check` reports
+`unwired=... (new=0)`, and the guard test passes as part of `test:ops`
+locally (`npx tsx --test scripts/ci/utv2-1633-reporting-reader-role-guard.test.ts`
+— 6/6 pass, shown above). `File Scope Lock Check` (advisory, not a required
+context) will report this `package.json` edit as outside this lane's
+originally-declared scope, same as it already reported for
+`docs/06_status/lanes/UTV2-1633.json` colliding with UTV2-1624's overly broad
+`docs/06_status/lanes/**` glob — both are artifacts of the same stale
+manifest, not real conflicts, and neither blocks any of the four required
+contexts.
 
 ---
 
@@ -312,11 +315,9 @@ not touched.
 - Production negative/positive demonstration and after-state privilege dump —
   blocked on operator-authorized `supabase db push` for both UTV2-1399's
   prerequisite migration and this lane's own migration (see "BLOCKED" above).
-- `pnpm test:db` / full `pnpm verify` / `pnpm test:ops` — not run locally;
-  CI is authoritative.
-- Guard test not wired into `package.json`'s `test:ops` list — blocked on a
-  concurrent lane's (UTV2-1624) file-scope lock; deferred as a trivial
-  follow-up.
+- `pnpm test:db` / full `pnpm verify` — not run locally (needs staging
+  credentials this host does not carry); CI is authoritative. `test:ops`
+  (including this guard test) verified locally, above.
 - PR open/merge, `t1-approved` label, `pm-verdict/v1`, and final closeout
   (`ops:lane-finalize`, `ops:lane-close`) not yet complete as of this
   snapshot.
