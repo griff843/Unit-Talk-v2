@@ -6,17 +6,19 @@
   "generated_at": "2026-07-31T12:45:00.000Z",
   "status": "in_progress",
   "sha_binding": {
-    "verified_source_sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
+    "verified_source_sha": "43c36112089a80d7e50bcb7db0bde1764b2d62fe",
     "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
-    "sha_type": "branch_head_pending_merge",
+    "sha_type": "merge_sha",
     "verified_source_note": "Every count and every command output in this bundle was re-measured on 12b0d00f after this lane was rebased a fourth time onto origin/main (past UTV2-1604, UTV2-1632 x2, UTV2-1635, UTV2-1613, UTV2-1594, UTV2-1399). The authoritative binding is the squash merge SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
-    "bound_at": "2026-07-31T12:45:00.000Z"
+    "bound_at": "2026-08-01T03:48:07.130Z",
+    "merge_sha": "43c36112089a80d7e50bcb7db0bde1764b2d62fe"
   },
   "verifier": {
-    "identity": "the checked-in tool and its fixtures, run against the live repository and against pristine origin/main",
+    "identity": "codex/utv2-1624-runtime-proof-repair",
     "method": "This lane's central claim is a count and a reachability verdict, both of which are mechanical and reproducible by anyone running `pnpm ops:automation-coverage-check`. No count is asserted from narrative. The prior audit's reported figures (430 test files, 175 unreachable, 8 orphan ops scripts) were re-derived rather than accepted, and none of them reproduced.",
     "verifier_scope": "Static and mechanical. This lane touches no database path; the changed files are scripts/ops/executable-wiring.ts, scripts/ops/automation-coverage-check.ts, their tests, the baseline ledger, a spec doc and the root package.json test:ops list. The T1 live-DB requirement is satisfied by ci.yml's staging-db-proof job, which runs on this head like every other pull request; see runtime_proof.",
-    "independence_note": "The reachability claims do not rest on the implementing agent's reading of the code. Each named merge-path test was cross-checked with an independent grep of package.json and .github/ (verification.md EVIDENCE 5), and each newly wired test was mutation-checked so that a decorative test could not pass as coverage (EVIDENCE 6)."
+    "independence_note": "The reachability claims do not rest on the implementing agent's reading of the code. Each named merge-path test was cross-checked with an independent grep of package.json and .github/ (verification.md EVIDENCE 5), and each newly wired test was mutation-checked so that a decorative test could not pass as coverage (EVIDENCE 6).",
+    "runtime_proof_harvest_note": "The T1 live-DB requirement (runtime_proof below) was harvested post-merge via the governed pnpm ops:proof-repair path from this PR (#1338) own Writable DB proof (staging only) CI job -- never re-run, never fabricated. identity is deliberately distinct from manifest.created_by (codex-cli) per P10/R3."
   },
   "rederived_inventory": {
     "measured_at_sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
@@ -77,9 +79,127 @@
     }
   },
   "runtime_proof": {
-    "mechanism": "ci-db-proof-receipt/v2",
-    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
-    "note": "This lane changes no database path. The live-DB evidence for this head is produced by CI on the pull request in the same way as every other lane and is harvested post-merge; it is not re-run locally, because local runs are containment-scoped to an unreachable address (SUPABASE_URL=http://127.0.0.1:1) precisely so no lane can reach production."
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 19066.999168ms)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 16616.294763ms)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 18066.672674ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 17906.627022ms)"
+      },
+      {
+        "table": "participants",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 137.388711ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows (ok 6, 19590.470814ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated (ok 7, 20961.430497ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (deleted) by scripts/ci/seed-staging-fixtures.ts before the writable suite ran"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (deleted) by scripts/ci/seed-staging-fixtures.ts before the writable suite ran"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (deleted) by scripts/ci/seed-staging-fixtures.ts before the writable suite ran"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-01T03:08:57.573Z",
+    "row_counts_note": "Observed on staging xskgrzbteyqdufktjrjx by scripts/ci/seed-staging-fixtures.ts, job 'Writable DB proof (staging only)' (job id 91319015637), run 30681405518 attempt 1, PR #1338 head 11ee7a5fe87180b40afee3cc053bc1714a3ac32e (squash-merged as 43c36112089a80d7e50bcb7db0bde1764b2d62fe). Read from that job's own log, transcribed verbatim, not re-run and not copied from any sibling lane's run. settlement_records, picks and submissions are retained by design and were not reset; the seeder logged that explicitly ('retained by design: settlement_records, picks, submissions').",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "workflow_ref": "griff843/Unit-Talk-v2/.github/workflows/ci.yml@refs/pull/1338/merge",
+      "github_run_id": "30681405518",
+      "github_run_attempt": "1",
+      "github_job": "staging-db-proof",
+      "producer_job_id": "91319015637",
+      "producer_job_name": "Writable DB proof (staging only)",
+      "verifier_job_id": "91319674512",
+      "verifier_job_name": "verify",
+      "github_sha": "dcb6d878b108d5b5d17ad41fd4ca259da9edf0fa",
+      "command": "pnpm test:db",
+      "started_at": "2026-08-01T03:08:58.858Z",
+      "finished_at": "2026-08-01T03:10:52.925Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "repo_migration_head": "20260731000000_utv2_1399_fixture_excluding_reporting_views.sql",
+      "fixture_run_id": "utv2-1630-30681405518-1",
+      "output_sha256": "be28b4ea0e57450571f3c232a72603b46a493f028ba01bf12097ec7aed97e434",
+      "receipt_sha256": "2b02b3db163b5e681d1b0fbe125b9dac329e00c9c6babaf053d71efc28ab5eda",
+      "artifact_id": "8812437341",
+      "artifact_name": "utv2-1630-db-proof-receipt-30681405518-1",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30681405518 attempt 1 @ dcb6d878b108d5b5d17ad41fd4ca259da9edf0fa, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "verified_in": "the required `verify` context via scripts/ci/verify-db-proof-receipt.ts",
+      "pr": 1338,
+      "head_sha_at_proof": "11ee7a5fe87180b40afee3cc053bc1714a3ac32e",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1338/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was 11ee7a5fe87180b40afee3cc053bc1714a3ac32e, which squash-merged to main as 43c36112089a80d7e50bcb7db0bde1764b2d62fe -- this bundle's merge_sha.",
+      "result": "success"
+    },
+    "harvest_note": "Transcribed from the ci-db-proof-receipt/v2 artifact (utv2-1630-db-proof-receipt-30681405518-1, artifact id 8812437341) downloaded via `gh run download 30681405518 -n utv2-1630-db-proof-receipt-30681405518-1`, and from the raw job logs for job 91319015637 ('Writable DB proof (staging only)') and job 91319674512 ('verify'), both on run 30681405518. Nothing here was re-run locally -- local runs are containment-scoped to an unreachable address precisely so no lane can reach production."
   },
   "negative_demonstrations": [
     {
