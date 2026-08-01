@@ -1,15 +1,70 @@
 # PROOF: UTV2-1618
-MERGE_SHA: 2e80a15abebc381892755b6c85d1bea3f36edd7c
+MERGE_SHA: 788e227fdbfb122021db440860770879616af91f
 
-Bound to the code-only commit carrying the final state of every in-scope file.
-Code and proof are deliberately separate commits so the proof can name a SHA
-that actually contains the code it describes.
+Bound to the code-only commit carrying the final state of every in-scope file
+(788e227f, extending the original 2e80a15a scope onto `deploy.yml`). Code and
+proof are deliberately separate commits so the proof can name a SHA that
+actually contains the code it describes.
 
 ## Summary
 
 Hardens the read-only production diagnostic so its verdict can be trusted, and
 fixes the compose image-tag context in the containment workflow that stopped the
 first production run verifying its own result.
+
+**Extension (this commit, 788e227f):** the identical defect class recurred as a
+live production incident in `.github/workflows/deploy.yml`'s canary and
+production confirm steps. Fixed both, and extended production readiness to
+prove the full parked contract plus the public kill-switch state.
+
+### Extension: live incident, root cause, and corrected record
+
+2026-08-01: the parked-mode deploy re-dispatched after the UTV2-1648 GHCR fix
+merged. The `canary` job's "Release API canary" step correctly recreated the
+API container and it passed its health check. The very next step, "Confirm
+syndicate machine gate in canary container", then reported
+`SYNDICATE_MACHINE_ENABLED readiness RED: runtime='missing'` and failed the job.
+
+Root cause: the production compose file declares
+`${UNIT_TALK_IMAGE_TAG:?required}` on every service, so **every** Compose
+evaluation -- not just `up` -- needs that variable. The release step supplied
+it; the confirm step's `docker compose exec` did not. Compose therefore failed
+closed before `printenv` ever ran, and the confirm script's own
+`2>/dev/null || true` discarded that failure and stdout together, so a
+genuine Compose evaluation error was misreported as "the variable is absent at
+runtime" -- a different, misleading failure class.
+
+**Corrected incident record:** only the canary job's API container was ever
+recreated. `promote` and every other production service (ingestor, worker,
+discord-bot) were never touched -- `promote` correctly never ran, since
+`canary`'s own job failure (from the broken confirm step, not from the actual
+container state) blocked the pipeline before promotion.
+
+Fix, applied to both the canary and production confirm steps:
+1. Resolve the exact deployed tag from the host's own `.unit-talk-release`
+   record (written by the release step moments earlier) and cross-check it
+   against the tag this job resolved, independent of anything compose reports.
+2. Supply `UNIT_TALK_IMAGE_TAG` on every `docker compose exec` in these steps.
+3. Remove all `2>/dev/null || true` suppression from these checks; capture
+   stdout+stderr together and the real exit status.
+4. Classify failures precisely: Compose evaluation failed (variable
+   unset/required) / service or container could not be resolved / variable
+   absent in the container / variable value mismatch -- four distinct
+   `::error::` messages instead of one collapsed "missing" case.
+5. Independently cross-verify every checked value via `docker ps --filter
+   label=com.docker.compose.service=...` + `docker inspect` against the
+   container's real `Config.Env` and image reference -- a path that performs
+   no Compose-file evaluation at all, so it cannot be broken by this same bug
+   class, and cross-validates rather than replaces the compose-exec result.
+6. Production readiness now also queries the live Supabase
+   `delivery_kill_switch` table (read-only, via `curl` + the service-role
+   key already available to the job) and fails closed unless both
+   `best-bets` and `trader-insights` report `killed=true` -- proving the
+   public-delivery defense-in-depth containment survived the deploy, not
+   just the container-level parked-mode variables.
+7. Five new regression tests in `scripts/ci/deploy-parked-mode.test.ts` lock
+   in items 2-6 above by mutating the fixed workflow source back toward each
+   specific defect and asserting the static audit catches it.
 
 ## ASSERTIONS:
 
@@ -98,21 +153,31 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1277
-# pass 1277
+# tests 1881
+# pass 1881
+# fail 0
+
+$ npx tsx --test scripts/ci/deploy-parked-mode.test.ts
+# tests 20
+# pass 20
 # fail 0
 ```
 
-`pnpm verify` covers lint, type-check, build and the full test suite. Stages were
-run sequentially because `verify:parallel` was OOM-killed locally (exit 137);
-that is not treated as a waiver, and CI on the merge SHA is authoritative.
+`pnpm test` (the full composite) fails inside `test:apps`, earlier in the chain
+than `test:ops`, due to a pre-existing local.env misconfiguration in this
+worktree (`UNIT_TALK_API_RUNTIME_MODE=test`, an invalid value) -- reproduced
+identically with this diff's changes fully `git stash`ed out, confirming it is
+unrelated and pre-existing. `local.env` is gitignored and not part of this
+diff. CI on the merge SHA runs in a clean environment and is authoritative.
 
 ### Scope
 
-Two production-path workflows, two contract test files, `package.json` for test
-wiring, plus lane apparatus. No application, domain, package or migration file is
-touched. No production dispatch, deploy, rollback, secret change, DB mutation,
-row quarantine or networking mutation is part of this lane.
+Two production-path CI/diagnostic workflows, `.github/workflows/deploy.yml`,
+three contract test files, `package.json` for test wiring, plus lane apparatus.
+No application, domain, package or migration file is touched. No production
+dispatch, deploy, rollback, secret change, DB mutation, row quarantine or
+networking mutation is part of this lane -- deploy.yml's change is to
+verification logic only, not to what gets deployed or how.
 
 ## Merge SHA Binding
 
