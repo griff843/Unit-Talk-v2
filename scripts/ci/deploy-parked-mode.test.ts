@@ -41,6 +41,15 @@ function runScript(step: WorkflowStep): string {
   return source;
 }
 
+function stepIndex(job: WorkflowRecord, name: string): number {
+  const steps = job['steps'];
+  assert.ok(Array.isArray(steps), 'job steps must be an array');
+  return steps.findIndex(
+    (candidate) =>
+      candidate && typeof candidate === 'object' && (candidate as WorkflowStep)['name'] === name,
+  );
+}
+
 function auditParkedModeDeployWorkflow(source: string): string[] {
   const parsed = parseYaml(source) as WorkflowRecord;
   const violations: string[] = [];
@@ -61,6 +70,14 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
   const productionConfirm = runScript(
     workflowStep(promote, 'Confirm syndicate machine gate in production container'),
   );
+  const canaryAuth = runScript(workflowStep(canary, 'Authenticate GHCR on remote'));
+  const promoteAuth = runScript(workflowStep(promote, 'Authenticate GHCR on remote'));
+  const canaryPermissions = objectField(canary, 'permissions');
+  const promotePermissions = objectField(promote, 'permissions');
+  const canarySteps = canary['steps'];
+  const promoteSteps = promote['steps'];
+  assert.ok(Array.isArray(canarySteps), 'canary steps must be an array');
+  assert.ok(Array.isArray(promoteSteps), 'promote steps must be an array');
 
   if (
     verifyOutputs['syndicate_machine_mode'] !==
@@ -237,6 +254,58 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
     violations.push('deploy receipts and container checks must not hardcode active mode');
   }
 
+  // UTV2-1648: the long-lived GHCR_PAT secret must never come back -- registry
+  // auth on the remote host must use the ephemeral, repository-scoped
+  // github.token the build job already uses to push these same images.
+  if (/secrets\.GHCR_PAT\b/.test(source) || /GHCR_PAT\s*:/.test(source)) {
+    violations.push('no job may reference the retired GHCR_PAT secret');
+  }
+
+  for (const [stage, job, authScript, permissions] of [
+    ['canary', canary, canaryAuth, canaryPermissions],
+    ['production', promote, promoteAuth, promotePermissions],
+  ] as const) {
+    if (!authScript.includes('${{ github.token }}') && !authScript.includes('$REGISTRY_TOKEN')) {
+      violations.push(`${stage} GHCR auth must use github.token, not a standing secret`);
+    }
+    if (!/\$\{\{\s*github\.token\s*\}\}/.test(source)) {
+      violations.push('github.token must appear literally in the workflow source');
+    }
+    if (!authScript.includes('${{ github.actor }}')) {
+      violations.push(`${stage} GHCR auth must use github.actor as the registry username, not a hardcoded login`);
+    }
+    if (permissions['packages'] !== 'read') {
+      violations.push(`${stage} job must be scoped to packages: read (pull-only), not the workflow-level write default`);
+    }
+    if (permissions['contents'] !== 'read') {
+      violations.push(`${stage} job must declare contents: read explicitly`);
+    }
+
+    const preflightName = 'Preflight — verify registry auth and resolve all 4 image tags';
+    const authIdx = stepIndex(job, 'Authenticate GHCR on remote');
+    const preflightIdx = stepIndex(job, preflightName);
+    const mutationIdx = stepIndex(
+      job,
+      stage === 'canary' ? 'Release API canary' : 'Promote all production containers',
+    );
+    if (preflightIdx === -1) {
+      violations.push(`${stage} must have a registry preflight step before any container mutation`);
+    } else {
+      if (!(authIdx < preflightIdx && preflightIdx < mutationIdx)) {
+        violations.push(
+          `${stage} registry preflight must run after auth and before the container-mutation step, in that order`,
+        );
+      }
+      const preflightScript = runScript(workflowStep(job, preflightName));
+      if (!/for svc in .*api.*worker.*ingestor.*discord-bot/.test(preflightScript)) {
+        violations.push(`${stage} registry preflight must check all four services (api, worker, ingestor, discord-bot)`);
+      }
+      if (!/exit 1/.test(preflightScript)) {
+        violations.push(`${stage} registry preflight must fail closed (exit 1) if any image fails to resolve`);
+      }
+    }
+  }
+
   return violations;
 }
 
@@ -400,6 +469,58 @@ test('static deploy audit detects a missing parked-mode UNIT_TALK_ENABLED_TARGET
   assert.ok(
     auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
       violation.includes('UNIT_TALK_ENABLED_TARGETS'),
+    ),
+  );
+});
+
+// ── UTV2-1648: no standing GHCR_PAT credential; ephemeral github.token only ──
+
+test('static deploy audit detects a reintroduced GHCR_PAT secret', () => {
+  const mutatedSource = deployWorkflowSource
+    .replaceAll('${{ github.token }}', '${{ secrets.GHCR_PAT }}')
+    .replaceAll('REGISTRY_TOKEN', 'GHCR_PAT');
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) => violation.includes('GHCR_PAT')),
+  );
+});
+
+test('static deploy audit detects a hardcoded registry username instead of github.actor', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll('${{ github.actor }}', 'griff843');
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) => violation.includes('github.actor')),
+  );
+});
+
+test('static deploy audit detects canary/production still granted packages: write', () => {
+  const mutatedSource = deployWorkflowSource.replace(
+    /(canary:\n(?:.*\n)*?\s+permissions:\n\s+contents: read\n\s+packages: )read/,
+    '$1write',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) => violation.includes('packages: read')),
+  );
+});
+
+test('static deploy audit detects a missing registry preflight step', () => {
+  const mutatedSource = deployWorkflowSource.replace(
+    /\n\s+- name: Preflight — verify registry auth and resolve all 4 image tags\n(?:.*\n)*?(?=\n\s+- name: Release API canary)/,
+    '\n',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('registry preflight'),
+    ),
+  );
+});
+
+test('static deploy audit detects a registry preflight that does not fail closed', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll(
+    'echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."\n            exit 1',
+    'echo "::warning::registry preflight found issues but continuing"',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('fail closed'),
     ),
   );
 });
