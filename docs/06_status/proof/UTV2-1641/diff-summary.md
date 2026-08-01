@@ -1,22 +1,21 @@
 # UTV2-1641 Diff Summary
 
-Generated at: 2026-08-01T05:36:16.386Z
+Generated at: 2026-08-01T05:37:54.234Z
 Issue: UTV2-1641
 Tier: T1
 Lane type: governance
 Branch: claude/utv2-1641-1642-proof-lifecycle-fixes
 PR URL: N/A
-Head SHA: 02e26bfb30121f3021be733c68e8c00a7b35d5c9
+Head SHA: dc91ae0bf61f2bf41272b7563d239ef2dc3fa6c0
 Merge SHA: N/A
-Diff base: 1295d0abd7cb5e65f30e80f0e2289c321e71653f
-Diff target: 02e26bfb30121f3021be733c68e8c00a7b35d5c9
+Diff base: 6afd7fb6f809d2b8e9db84fa7ecd55e10656d626
+Diff target: dc91ae0bf61f2bf41272b7563d239ef2dc3fa6c0
 
 ## Git Diff Stat
 ```
-.ops/sync/UTV2-1641.yml                            |   10 +
- docs/06_status/lanes/UTV2-1641.json                |   50 +
+docs/06_status/lanes/UTV2-1641.json                |   19 +-
  docs/06_status/proof/UTV2-1641/.gitkeep            |    0
- docs/06_status/proof/UTV2-1641/diff-summary.md     |   56 +
+ docs/06_status/proof/UTV2-1641/diff-summary.md     |   62 +
  docs/06_status/proof/UTV2-1641/evidence.json       |  121 ++
  docs/06_status/proof/UTV2-1641/verification.md     |  273 +++++
  package.json                                       |    2 +-
@@ -30,13 +29,12 @@ Diff target: 02e26bfb30121f3021be733c68e8c00a7b35d5c9
  scripts/ops/proof-repair.ts                        |   17 +-
  scripts/ops/shared.test.ts                         |   27 +
  scripts/ops/shared.ts                              |   34 +
- 17 files changed, 3463 insertions(+), 3 deletions(-)
+ 16 files changed, 3426 insertions(+), 5 deletions(-)
 ```
 
 ## Git Name Status
 ```
-A	.ops/sync/UTV2-1641.yml
-A	docs/06_status/lanes/UTV2-1641.json
+M	docs/06_status/lanes/UTV2-1641.json
 A	docs/06_status/proof/UTV2-1641/.gitkeep
 A	docs/06_status/proof/UTV2-1641/diff-summary.md
 A	docs/06_status/proof/UTV2-1641/evidence.json
@@ -58,5 +56,5 @@ M	scripts/ops/shared.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 02e26bfb30121f3021be733c68e8c00a7b35d5c9
+Head SHA: dc91ae0bf61f2bf41272b7563d239ef2dc3fa6c0
 Merge SHA: N/A

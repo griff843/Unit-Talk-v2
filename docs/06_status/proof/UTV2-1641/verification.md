@@ -1,6 +1,6 @@
 # PROOF: UTV2-1641
 
-MERGE_SHA: 18f2d2586e11017c0862f397bf30d4a3b63f207a
+MERGE_SHA: 22a1d70d965ace5cdefb5ca4934314bb46214c6e
 
 That SHA is the implementation commit on this branch (an ancestor of the PR
 head), per `executor-result-validator.yml`'s documented allowance. It is
