@@ -6,7 +6,7 @@
   "generated_at": "2026-08-01T04:24:14.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "18f2d258fa08e4783cf0e73e319f7e79b8a9adba",
+    "verified_source_sha": "18f2d2586e11017c0862f397bf30d4a3b63f207a",
     "merge_sha": null,
     "base_sha": "1295d0abd7cb5e65f30e80f0e2289c321e71653f",
     "sha_type": "pending_merge",
