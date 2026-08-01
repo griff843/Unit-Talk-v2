@@ -4,6 +4,7 @@ import {
   createManifest,
   defaultProofPaths,
   deriveDeliveryUiApp,
+  mergeVerifierIdentity,
   normalizeFileScopePath,
   normalizeRepoRelativePath,
   requireIssueId,
@@ -563,4 +564,30 @@ test('deriveDeliveryUiApp fails closed when a path is outside any canonical app 
     deriveDeliveryUiApp(['apps/command-center/src/app/page.tsx', 'scripts/ops/shared.ts']),
     null,
   );
+});
+
+// ── mergeVerifierIdentity (UTV2-1642) ──────────────────────────────────────────
+
+test('mergeVerifierIdentity preserves every pre-existing field, only setting identity', () => {
+  const existing = {
+    identity: 'stale-identity',
+    method: 'every count is quoted alongside the exact SQL that produced it',
+    verifier_scope: 'verifies the classifier behaviour only',
+    independence_note: 'measured in the opposite direction, not by narrative',
+  };
+  const merged = mergeVerifierIdentity(existing, 'claude/utv2-1642-proof-repair');
+  assert.deepStrictEqual(merged, {
+    ...existing,
+    identity: 'claude/utv2-1642-proof-repair',
+  });
+});
+
+test('mergeVerifierIdentity degrades to a bare object when there is no prior verifier', () => {
+  assert.deepStrictEqual(mergeVerifierIdentity(undefined, 'claude/x'), { identity: 'claude/x' });
+  assert.deepStrictEqual(mergeVerifierIdentity(null, 'claude/x'), { identity: 'claude/x' });
+});
+
+test('mergeVerifierIdentity treats non-object existing values (string/array) as absent, not as content to spread', () => {
+  assert.deepStrictEqual(mergeVerifierIdentity('not-an-object', 'claude/x'), { identity: 'claude/x' });
+  assert.deepStrictEqual(mergeVerifierIdentity(['a', 'b'], 'claude/x'), { identity: 'claude/x' });
 });

@@ -1248,3 +1248,37 @@ export function removeFileIfExists(filePath: string): void {
     // fail closed callers may continue; deletion failure is non-fatal by spec
   }
 }
+
+/**
+ * Merges a verifier `identity` into an already-existing `verifier` object
+ * without discarding whatever else is already on it (`method`,
+ * `verifier_scope`, `independence_note`, or any other hand-authored
+ * narrative field).
+ *
+ * UTV2-1642: both `scripts/ops/proof-repair.ts`'s `mergeRuntimeProofIntoEvidence`
+ * and `scripts/ops/proof-generate.ts`'s CI-DB-proof auto-harvest path (UTV2-1641)
+ * need to stamp a verifier identity onto `evidence.json` when they add
+ * `runtime_proof`. The proof-repair version used to do `verifier: { identity }` --
+ * a bare object literal that REPLACED the whole `verifier` value. Confirmed live on
+ * UTV2-1399's PR #1348: a pre-existing rich verifier object (method/verifier_scope/
+ * independence_note describing the lane's real verification methodology) was
+ * silently discarded and had to be restored by hand. Centralizing the merge here
+ * means both callers get the same non-destructive behavior and neither can
+ * regress independently.
+ *
+ * If no prior verifier object exists (or the existing value is not an object --
+ * e.g. `null`, a string, an array), there is nothing to preserve and this
+ * degrades to the previous bare-object behavior, which the issue explicitly
+ * allows ("If no prior verifier object exists, the current bare-object behavior
+ * is fine").
+ */
+export function mergeVerifierIdentity(
+  existingVerifier: unknown,
+  identity: string,
+): Record<string, unknown> {
+  const base =
+    existingVerifier && typeof existingVerifier === 'object' && !Array.isArray(existingVerifier)
+      ? (existingVerifier as Record<string, unknown>)
+      : {};
+  return { ...base, identity };
+}
