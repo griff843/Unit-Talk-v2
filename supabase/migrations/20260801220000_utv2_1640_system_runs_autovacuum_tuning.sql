@@ -1,0 +1,59 @@
+-- UTV2-1640 Phase A — reversible autovacuum/autoanalyze tuning for system_runs
+--
+-- PROBLEM
+--   The DB Health Tripwire's first-ever real execution (2026-07-31, UTV2-1632)
+--   found system_runs (3.39M rows, 1.29 GB) with autovacuum lagging far
+--   behind its write volume: last_analyze 2026-06-23, last_autovacuum
+--   2026-07-12 -- both well past what the table's append-heavy write pattern
+--   needs. system_runs already carries a table-level storage-parameter
+--   override baked into its original creation (see
+--   00000000000000_baseline_live_schema.sql):
+--     autovacuum_vacuum_scale_factor    0.05  (cluster default is 0.2)
+--     autovacuum_analyze_scale_factor   0.05  (cluster default is 0.1)
+--     autovacuum_vacuum_threshold       100   (cluster default is 50)
+--     autovacuum_vacuum_cost_delay      10ms  (cluster default is 2ms)
+--   Even at 0.05/0.05 -- already 4x tighter than cluster default -- a table
+--   this size (3.4M+ live rows and growing) still needs ~170,000 dead rows
+--   before a vacuum is considered and ~170,000 changed rows before an
+--   analyze is. That was still too coarse: stats went stale for five weeks
+--   and dead tuples accumulated for two despite the existing override.
+--
+-- WHAT THIS MIGRATION DOES
+--   Tightens the two scale factors further via ALTER TABLE ... SET,
+--   overriding only these two keys on THIS table -- no other table, no
+--   cluster-wide GUC change, and no change to the other two pre-existing
+--   overrides (autovacuum_vacuum_threshold, autovacuum_vacuum_cost_delay,
+--   both left exactly as they were):
+--     autovacuum_vacuum_scale_factor    0.05 -> 0.02  (~68,000 dead rows triggers vacuum, not ~170,000)
+--     autovacuum_analyze_scale_factor   0.05 -> 0.01  (~34,000 changed rows triggers analyze, not ~170,000)
+--   Both remain non-zero: this narrows the trigger window roughly another
+--   2.5x on top of the existing override, it does not switch to "vacuum
+--   constantly" (which would fight a live append-heavy table for I/O).
+--
+-- WHY THIS IS SAFE AND REVERSIBLE
+--   - No data is read, written, or moved. No row is touched.
+--   - No lock beyond the brief ACCESS EXCLUSIVE that ALTER TABLE ... SET
+--     storage-parameter changes take to update the catalog entry -- this is
+--     near-instantaneous (metadata-only), unlike VACUUM/ANALYZE which scan
+--     the heap.
+--   - Fully reversible with a single statement that restores the two
+--     pre-existing override values (NOT a RESET -- system_runs never had
+--     these keys unset, so RESET would drop past the pre-existing override
+--     straight to the cluster default, which is not the prior state):
+--       ALTER TABLE public.system_runs SET (
+--         autovacuum_vacuum_scale_factor = 0.05,
+--         autovacuum_analyze_scale_factor = 0.05
+--       );
+--   - Bounded blast radius: this ALTER TABLE affects exactly one table.
+--     Every other table in the database is untouched.
+--
+-- WHAT THIS DOES NOT DO (explicitly out of scope for UTV2-1640 Phase A)
+--   No VACUUM FULL, REINDEX, CLUSTER, pg_repack, table rewrite, deletion,
+--   retention change, fixture cleanup, or provider_offers_legacy_quarantine
+--   reclaim. Those are separate, higher-risk decisions this migration does
+--   not make.
+
+ALTER TABLE public.system_runs SET (
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_analyze_scale_factor = 0.01
+);
