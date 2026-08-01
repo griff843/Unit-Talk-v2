@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1659",
+  "title": "Executable-wiring must ignore gitignored nested worktrees and scan only canonical repository files",
+  "tier": "T1",
+  "status": "ci_staging_proof_pending",
+  "generated_at": "2026-08-01T17:46:24Z",
+  "sha_binding": {
+    "verified_source_sha": "1c67e0b9982f8baa8800d2f1e1c7c69917462d27",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-01T17:46:24Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex/utv2-1659-executable-wiring-canonical-files",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification."
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/executable-wiring.ts",
+      "scripts/ops/executable-wiring.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1659/evidence.json",
+      "docs/06_status/proof/UTV2-1659/model-routing.json",
+      "docs/06_status/proof/UTV2-1659/verification.md",
+      "docs/06_status/proof/UTV2-1659/diff-summary.md"
+    ],
+    "runtime_change": false,
+    "workflow_change": false,
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "tsx --test scripts/ops/executable-wiring.test.ts",
+      "status": "PASS",
+      "tests": 30,
+      "pass": 30,
+      "fail": 0,
+      "detail": "Includes five UTV2-1659 regressions for nested worktrees, tracked .claude documentation, ignored/untracked invariance, newly tracked debt enforcement, and clean-clone/worktree-heavy parity."
+    },
+    "canonical_scan": {
+      "command": "pnpm ops:automation-coverage-check",
+      "status": "PASS",
+      "tracked_tests": 465,
+      "new_unwired": 0,
+      "detail": "The same checkout previously reported 3,321 tests and 2,856 false new findings from nested local worktrees."
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Environment validation, alignment, automation coverage, lint, type-check, build, aggregate tests, Smart Form verification, and command checks passed."
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "CI_STAGING_PENDING",
+      "exit_code": 1,
+      "detail": "All static checks passed; the final local test:live-db stage correctly refused the loopback target. T1 staging DB proof must be harvested from the governed PR CI environment."
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "status": "PENDING_CI_STAGING",
+    "classification": "Governance tooling only; no production runtime, database, deployment, secret, branch-protection, or worktree mutation is part of this lane.",
+    "production_mutation_by_lane": false,
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PENDING_CI_STAGING",
+      "local_result": "REFUSED_NON_STAGING_TARGET"
+    },
+    "queries": [],
+    "row_counts": []
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Nested .claude/worktrees files produce zero findings.",
+      "status": "PASS",
+      "evidence": "A git-backed fixture adds an ignored nested repository containing a test-shaped file; canonical totals remain zero with no findings."
+    },
+    {
+      "criterion": "Tracked .claude policy and command files remain scanned.",
+      "status": "PASS",
+      "evidence": "Tracked policy and command Markdown files remain in listRepoFiles('.claude') and appear as documentation references."
+    },
+    {
+      "criterion": "Ignored or untracked files cannot affect totals.",
+      "status": "PASS",
+      "evidence": "Canonical totals, test entries, and findings remain byte-equivalent after ignored and untracked test-shaped files are added."
+    },
+    {
+      "criterion": "Newly tracked unwired files still fail.",
+      "status": "PASS",
+      "evidence": "A staged test file produces WIRING_TEST_UNWIRED_NEW and a FAIL verdict."
+    },
+    {
+      "criterion": "Clean-clone and worktree-heavy checkout results are identical.",
+      "status": "PASS",
+      "evidence": "Totals, tests, capabilities, findings, and parser errors are identical before and after sixteen local worktree-residue files are created."
+    }
+  ],
+  "known_limitations": [
+    "The mandatory T1 staging DB proof and full pnpm verify verdict remain pending until the governed PR CI run completes."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PENDING_CI_STAGING",
+    "ready_for_pm_review": false
+  }
+}
