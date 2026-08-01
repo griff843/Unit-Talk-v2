@@ -69,12 +69,12 @@ tooling touched. Tier T3.
 
 ## ASSERTIONS:
 
-- `pnpm audit --prod --audit-level high` reports zero vulnerabilities on this commit.
-- `pnpm type-check` exits 0 with no diagnostics.
-- `pnpm lint` exits 0 with no findings.
-- `pnpm build` exits 0.
-- `pnpm test` reports 19 pass, 0 fail.
-- Only `pnpm-workspace.yaml`, `pnpm-lock.yaml`, and this proof file are touched — no application code changed.
+- [x] `pnpm audit --prod --audit-level high` reports zero vulnerabilities on this commit.
+- [x] `pnpm type-check` exits 0 with no diagnostics.
+- [x] `pnpm lint` exits 0 with no findings.
+- [x] `pnpm build` exits 0.
+- [x] `pnpm test` reports 19 pass, 0 fail.
+- [x] Only `pnpm-workspace.yaml`, `pnpm-lock.yaml`, and this proof file are touched — no application code changed.
 
 ## EVIDENCE:
 
