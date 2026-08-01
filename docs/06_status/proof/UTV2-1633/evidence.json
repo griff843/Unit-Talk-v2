@@ -7,7 +7,7 @@
   "status": "blocked_on_operator_authorized_db_apply",
   "pr_url": null,
   "sha_binding": {
-    "verified_source_sha": "b256bce5df9a9afb307ecef37b2d575624fabd4b",
+    "verified_source_sha": "9f5836f9485c266b7a206d77403fab77ea723372",
     "sha_type": "implementation_commit_sha",
     "verified_source_note": "Implementation commit on branch claude/utv2-1633-readonly-postgres-role, pre-PR. Rebound to the real squash-merge SHA post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha, per the same allowance UTV2-1399 used.",
     "evidence_commit_sha": "set-by-ci",

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1633 — least-privilege read-only Postgres role for diagnostics and reporting
 
-MERGE_SHA: b256bce5df9a9afb307ecef37b2d575624fabd4b
+MERGE_SHA: 9f5836f9485c266b7a206d77403fab77ea723372
 
 > **Lane status: STARTED, PR NOT YET MERGED, PRODUCTION APPLICATION BLOCKED.**
 > `MERGE_SHA` above is the implementation-commit SHA (per
