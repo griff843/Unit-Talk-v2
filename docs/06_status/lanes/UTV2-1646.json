@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1646-parked-mode-deploy-fix",
   "branch": "claude/utv2-1646-parked-mode-deploy-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6adaa5d08016971f90ba4cac68bad23e894555a5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1356",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
@@ -22,9 +22,9 @@
     "docs/06_status/proof/UTV2-1646/evidence.json",
     "docs/06_status/proof/UTV2-1646/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-08-01T14:17:05.650Z",
-  "heartbeat_at": "2026-08-01T14:17:05.650Z",
+  "heartbeat_at": "2026-08-01T14:47:47.474Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1646-parked-mode-deploy-fix.json",
