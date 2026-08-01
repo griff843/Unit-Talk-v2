@@ -1,10 +1,74 @@
 # PROOF: UTV2-1618
-MERGE_SHA: 788e227fdbfb122021db440860770879616af91f
+MERGE_SHA: cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12
 
-Bound to the code-only commit carrying the final state of every in-scope file
-(788e227f, extending the original 2e80a15a scope onto `deploy.yml`). Code and
-proof are deliberately separate commits so the proof can name a SHA that
-actually contains the code it describes.
+Bound to the code-only commit carrying the Bounce 3 remediation (cc9fe9ae, on
+top of 788e227f, which extended the original 2e80a15a scope onto
+`deploy.yml`). Code and proof are deliberately separate commits so the proof
+can name a SHA that actually contains the code it describes.
+
+## Bounce 3 remediation (this commit, cc9fe9ae)
+
+PM exact-head review of 788e227f found CI (verify, P0 Protocol, proof, scope,
+lane authority, executor validation) green but posted `PM_VERDICT:
+CHANGES_REQUIRED` on three defects in the new confirm-step verification
+logic itself:
+
+1. **Failure classifiers were unreachable under `bash -e`.** Every ssh
+   capture used `OUTPUT=$(ssh ...)` on its own line followed by `STATUS=$?`
+   on the next. These steps run under `bash -e` (confirmed in CI logs:
+   `shell: /usr/bin/bash -e {0}`) -- a plain assignment statement's exit
+   status IS the wrapped command's exit status, and under `set -e` a failing
+   simple command aborts the shell immediately unless it is the condition of
+   an `if`/`while`/`&&`/`||`/`!`. So a failed ssh/compose call exited the step
+   at the assignment line; `STATUS=$?` and every classification branch after
+   it were dead code on the failure path. The deploy still failed closed
+   (bash -e sees to that), but the claimed precise diagnosis
+   (Compose-evaluation-failed vs container-unresolved vs variable-absent vs
+   value-mismatch) never ran. Fixed by rewriting every capture in both
+   confirm steps as `if VAR=$(...); then STATUS=0; else STATUS=$?; fi`.
+2. **`UNIT_TALK_ENABLED_TARGETS` was not independently verified.** Production
+   readiness checked it only through `docker compose exec`, despite the
+   proof's own claim that every parked value is cross-checked via
+   docker-inspect. Added it as a fifth entry in the docker-inspect loop:
+   parked mode asserts the container's real environment reads exactly
+   `"none"`; active mode cross-checks inspect against whatever compose-exec
+   already reported, since there is no fixed expected value there (it
+   legitimately varies with the `UNIT_TALK_ENABLED_TARGETS` secret).
+3. **Container inspection was not bound to the exact compose project.**
+   `docker ps` filtered only by service label -- it could resolve a stray
+   container from a different compose project sharing a service name, never
+   rejected multiple matches as ambiguous, and never verified ingestor/worker
+   image tags (only canary's own api check did). Fixed: the production
+   confirm step now establishes a trusted project name from the API
+   container (itself already release-tag- and image-verified), filters every
+   subsequent lookup by both service AND that exact project label, rejects
+   the evidence outright if zero or more than one container matches, and
+   verifies each service's exact image reference.
+
+All three were also present in canary's own single-container inspect block
+(same vintage code, same defect class) and were fixed there identically,
+even though the PM's review focused on production.
+
+**On executable regressions:** the PM noted the prior round's 5 new tests
+only checked that certain strings exist in the workflow -- they didn't run
+the shell failure flow or prove the classifier survives `bash -e`. Four new
+tests in `scripts/ci/deploy-parked-mode.test.ts` now execute the real
+production confirm script (extracted from the parsed workflow YAML) under
+`bash -e -c`, against a fake `ssh`/`curl` on `PATH` that simulates specific
+remote responses:
+- One drives an actual compose-exec failure and asserts the classification
+  message is reached; its paired mutation test reverts the capture to the
+  pre-fix `VAR=$(...); STATUS=$?` pattern against the identical mock and
+  asserts the SAME message is now absent -- proving the original bug was
+  real and that this test would have caught it.
+- One injects a live discrepancy between what compose-exec reports for
+  `UNIT_TALK_ENABLED_TARGETS` ("none") and what the container's real
+  environment holds ("best-bets"), and asserts the docker-inspect layer
+  catches it; its paired mutation test removes the loop entry and asserts
+  the identical discrepancy now goes undetected (script exits 0) -- proving
+  finding 2 was a real, exploitable gap.
+- One makes a service+project `docker ps` filter resolve two container IDs
+  instead of one and asserts the script rejects the evidence as ambiguous.
 
 ## Summary
 
@@ -156,13 +220,13 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1881
-# pass 1881
+# tests 1886
+# pass 1886
 # fail 0
 
 $ npx tsx --test scripts/ci/deploy-parked-mode.test.ts
-# tests 20
-# pass 20
+# tests 25
+# pass 25
 # fail 0
 ```
 

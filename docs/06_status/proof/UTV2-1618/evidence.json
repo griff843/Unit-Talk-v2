@@ -2,11 +2,11 @@
   "schema_version": 1,
   "issue_id": "UTV2-1618",
   "sha_binding": {
-    "verified_source_sha": "788e227fdbfb122021db440860770879616af91f",
+    "verified_source_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
     "merge_sha": null,
-    "evidence_commit_sha": "788e227fdbfb122021db440860770879616af91f",
-    "current_pr_head_sha": "788e227fdbfb122021db440860770879616af91f",
-    "verified_source_note": "Bound to the code-only commit carrying the final state of every in-scope file (788e227f, on top of the original 2e80a15a scope). Code and proof are separate commits so the proof names a SHA that contains the code it describes."
+    "evidence_commit_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
+    "current_pr_head_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
+    "verified_source_note": "Bound to the code-only commit carrying the Bounce 3 remediation (cc9fe9ae, on top of the 788e227f/2e80a15a scope). Code and proof are separate commits so the proof names a SHA that contains the code it describes."
   },
   "verifier": {
     "identity": "claude-opus-5",
@@ -26,7 +26,7 @@
     },
     "test_ops": {
       "status": "PASS",
-      "note": "pnpm test:ops: 1881 passing, 0 failing, including 20/20 in scripts/ci/deploy-parked-mode.test.ts (15 pre-existing + 5 new UTV2-1618 regression tests)."
+      "note": "pnpm test:ops: 1886 passing, 0 failing, including 25/25 in scripts/ci/deploy-parked-mode.test.ts (15 pre-existing + 5 static regression tests from the first UTV2-1618 pass + 4 new EXECUTABLE shell regressions added for Bounce 3, addressing the PM finding that string-presence checks alone don't prove the classifier survives bash -e)."
     },
     "test_run_logs": [
       {
