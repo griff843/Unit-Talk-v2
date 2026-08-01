@@ -6,7 +6,7 @@
   "status": "ci_staging_proof_pending",
   "generated_at": "2026-08-01T17:46:24Z",
   "sha_binding": {
-    "verified_source_sha": "1c67e0b9982f8baa8800d2f1e1c7c69917462d27",
+    "verified_source_sha": "6019d32254264be6c2fa33cc59bc724c51d96d20",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
