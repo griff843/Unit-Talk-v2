@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1633",
+  "tier": "T1",
+  "title": "Least-privilege read-only Postgres role for diagnostics and reporting",
+  "generated_at": "2026-08-01T04:20:00.000Z",
+  "status": "blocked_on_operator_authorized_db_apply",
+  "pr_url": null,
+  "sha_binding": {
+    "verified_source_sha": "9f5836f9485c266b7a206d77403fab77ea723372",
+    "sha_type": "implementation_commit_sha",
+    "verified_source_note": "Implementation commit on branch claude/utv2-1633-readonly-postgres-role, pre-PR. Rebound to the real squash-merge SHA post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha, per the same allowance UTV2-1399 used.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "verifier": {
+    "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm and staging xskgrzbteyqdufktjrjx via Supabase MCP execute_sql, 2026-08-01",
+    "method": "Every claim about live database state is quoted alongside the exact SQL that produced it. All statements executed against either live database are SELECT only; no DDL was applied and no row was created, updated, or deleted by this lane.",
+    "verifier_scope": "This identity verifies (a) that schema `reporting` and role `reporting_reader` do not yet exist in production or staging, (b) the pre-existing PUBLIC/schema-level privilege baseline in production, and (c) that the migration's own static/local checks pass. It does NOT verify the role's actual read/write behavior against a live database, because the role does not exist in either environment yet -- see verification.md 'BLOCKED' section."
+  },
+  "required_implementation": {
+    "connect_and_usage_grant": "implemented",
+    "select_only_no_write_no_create_no_role_admin": "implemented_and_guard_tested",
+    "default_privileges_scoped_to_reporting": "implemented",
+    "explicit_grant_on_reporting_star": "implemented_verbatim_per_utv2_1399_prescribed_statements",
+    "no_access_beyond_reporting_consumer_needs": "implemented_zero_grants_outside_reporting",
+    "negative_demonstration_real_error_output": "blocked_role_does_not_exist_live_yet",
+    "positive_demonstration_real_query_result": "blocked_role_does_not_exist_live_yet",
+    "privilege_dump_before": "captured_see_measurement.before_state",
+    "privilege_dump_after": "blocked_role_does_not_exist_live_yet",
+    "migration_recorded_in_ledger_replayable": "implemented_see_static_proof"
+  },
+  "grant_statements": [
+    "GRANT CONNECT ON DATABASE postgres TO reporting_reader;",
+    "GRANT USAGE ON SCHEMA reporting TO reporting_reader;",
+    "GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO reporting_reader;",
+    "ALTER DEFAULT PRIVILEGES IN SCHEMA reporting GRANT SELECT ON TABLES TO reporting_reader;"
+  ],
+  "role": {
+    "name": "reporting_reader",
+    "attributes": "NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS",
+    "granted_to_any_login_or_service_credential": false,
+    "wired_into_any_live_application": false,
+    "note": "Creating and proving this role's privilege boundary is this lane's full scope. Granting it to a login/service credential or replacing an existing credential with it is a separate governed production action requiring explicit PM authorization, per the issue's own 'Governed rollout' section."
+  },
+  "measurement": {
+    "before_state": {
+      "target": "zfzdnfwdarxucxtaojxm (PRODUCTION)",
+      "measured_at": "2026-08-01T04:00:00Z",
+      "access": "read_only_select_only",
+      "current_database": "postgres",
+      "schemas_present": [
+        "auth", "cron", "extensions", "graphql", "graphql_public",
+        "information_schema", "public", "realtime", "storage",
+        "supabase_migrations", "vault"
+      ],
+      "reporting_schema_exists": false,
+      "reporting_reader_role_exists": false,
+      "database_acl": "{=Tc/postgres,postgres=CTc/postgres,supabase_etl_admin=C/postgres,supabase_storage_admin=C/postgres,dashboard_user=CTc/postgres}",
+      "database_acl_note": "PUBLIC (the '=' entry) already holds T (TEMP) and c (CONNECT) on this database -- pre-existing, not introduced by this migration.",
+      "schema_acl": {
+        "auth": "{supabase_admin=UC/supabase_admin,anon=U/supabase_admin,authenticated=U/supabase_admin,service_role=U/supabase_admin,supabase_auth_admin=UC/supabase_admin,dashboard_user=UC/supabase_admin,postgres=U/supabase_admin}",
+        "extensions": "{postgres=UC/postgres,anon=U/postgres,authenticated=U/postgres,service_role=U/postgres,dashboard_user=UC/postgres}",
+        "public": "{pg_database_owner=UC/pg_database_owner,=U/pg_database_owner,postgres=U/pg_database_owner,anon=U/pg_database_owner,authenticated=U/pg_database_owner,service_role=U/pg_database_owner}",
+        "storage": "{supabase_admin=UC/supabase_admin,postgres=U*/supabase_admin,anon=U/supabase_admin,authenticated=U/supabase_admin,service_role=U/supabase_admin,supabase_storage_admin=U*C*/supabase_admin,dashboard_user=UC/supabase_admin}",
+        "vault": "{supabase_admin=UC/supabase_admin,postgres=U*/supabase_admin,service_role=U/supabase_admin}"
+      },
+      "schema_acl_note": "public carries a bare '=U/pg_database_owner' PUBLIC grant (schema USAGE only, pre-existing, not introduced here); auth/vault/storage/extensions grant USAGE only to named privileged roles, no PUBLIC entry on any of them."
+    },
+    "after_state": null,
+    "after_state_note": "Blocked -- reporting_reader and schema reporting do not exist in production or staging. See verification.md 'BLOCKED' section for the exact unblocking action."
+  },
+  "prerequisite_dependency_check": {
+    "target_dependency": "UTV2-1399 (schema reporting)",
+    "utv2_1399_lane_status": "done (merged PR #1343, squash SHA fdc193582f94ad7538fa594b475847eb81a3647f, lane manifest closed)",
+    "utv2_1399_migration_applied_to_production": false,
+    "utv2_1399_migration_applied_to_staging": false,
+    "verification_method": "pg_namespace has no 'reporting' row in either zfzdnfwdarxucxtaojxm or xskgrzbteyqdufktjrjx; supabase_migrations.schema_migrations in production tops out at 20260714231357 (one migration prior to UTV2-1399's 20260731000000); staging (created 2026-07-30) shows only its 3-row baseline set.",
+    "implication": "This lane's own migration cannot be meaningfully applied to a live database until UTV2-1399's migration is applied first. Applying UTV2-1399's migration is not this lane's action to take unilaterally -- it is a separate issue's reviewed-and-merged change awaiting the same operator-authorized supabase db push this lane's own migration also awaits."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "npx eslint scripts/ci/utv2-1633-reporting-reader-role-guard.test.ts",
+      "status": "PASS"
+    },
+    "unit_tests": {
+      "command": "npx tsx --test scripts/ci/utv2-1633-reporting-reader-role-guard.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0
+    },
+    "lint_migrations": {
+      "command": "node scripts/lint-migrations.mjs",
+      "status": "PASS",
+      "note": "4 migration file(s) checked -- no findings"
+    },
+    "check_migration_versions": {
+      "command": "node scripts/check-migration-versions.mjs",
+      "status": "PASS",
+      "note": "5 migration file(s) verified -- no duplicate versions"
+    },
+    "migration_reversibility_gate": {
+      "command": "npx tsx scripts/ci/migration-reversibility-gate.ts --base origin/main",
+      "status": "PASS",
+      "note": "Down-script presence and non-IRREVERSIBLE classification verified locally. The scratch-postgres round-trip drill runs in CI."
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main",
+      "status": "PASS",
+      "note": "No R1-R5 rule in docs/05_operations/r1-r5-rules.json matches supabase/migrations/** paths -- no artifacts required for this diff."
+    },
+    "executable_wiring_gate": {
+      "command": "pnpm ops:automation-coverage-check",
+      "status": "PASS",
+      "note": "UTV2-1624's new WIRING_TEST_UNWIRED_NEW gate correctly flagged the guard test as unwired on the first verify run. Wired into package.json's test:ops list; unwired new=0 after the fix."
+    },
+    "guard_intent": "Mechanically enforces: reporting_reader is NOLOGIN with every role-administration attribute explicitly denied; every GRANT/ALTER DEFAULT PRIVILEGES statement targets only schema reporting with only SELECT/USAGE/CONNECT, never INSERT/UPDATE/DELETE/TRUNCATE/CREATE/ALL, and never schema public or any public.* relation; the migration fails closed if schema reporting is missing; the migration verifies its own grant set in-transaction before committing; the rollback drops the role and revokes every grant without touching schema reporting itself; the migration creates no schema object of any kind other than the role."
+  },
+  "reversibility": {
+    "mechanism": "single role, no owned objects",
+    "objects_created": {
+      "roles": ["reporting_reader"],
+      "schemas": [],
+      "views": [],
+      "tables": []
+    },
+    "privileges_granted": {
+      "database_connect": 1,
+      "schema_usage": 1,
+      "table_select_all_in_schema": 1,
+      "default_privileges_entries": 1
+    },
+    "mutations_performed": {
+      "delete": 0, "update": 0, "truncate": 0, "insert": 0, "alter_table": 0, "drop_column": 0
+    },
+    "down_script": "db/migrations-rollback/20260801000000_utv2_1633_reporting_reader_role.down.sql",
+    "irreversible_exemption_claimed": false,
+    "rollback_restores_prior_behaviour_exactly": "DROP OWNED BY reporting_reader + explicit REVOKEs remove every privilege this migration granted; DROP ROLE IF EXISTS removes the role itself. Schema reporting and its views (owned by UTV2-1399) are never touched -- the rollback asserts this in-transaction.",
+    "round_trip_drill": "deferred_to_ci",
+    "round_trip_drill_note": "No Docker or psql available locally. migration-reversibility-gate.yml replays the full migration ledger (including UTV2-1399's, which precedes this one by timestamp) on scratch postgres:16, so schema reporting exists in that drill regardless of production's current state. That drill's schema-hash comparison uses --schema=public --no-acl, which captures neither roles/grants nor schema reporting, so this migration is expected to be schema-hash-neutral there."
+  },
+  "adjacent_findings": [
+    {
+      "topic": "UTV2-1399's migration merged and closed but never applied to a live database",
+      "status": "investigated_and_recorded_not_fixed_by_this_lane",
+      "blocks_this_lane": true,
+      "detail": "See prerequisite_dependency_check above."
+    },
+    {
+      "topic": "package.json singleton lock held by ghost lane UTV2-1624",
+      "status": "resolved",
+      "blocks_this_lane": false,
+      "detail": "UTV2-1624's PR (#1338) merged (commit 43c36112) but its lane manifest still read status in_progress at lane-start time -- a stale manifest, not a real content conflict. UTV2-1624 also merged a new mechanical gate (WIRING_TEST_UNWIRED_NEW) that correctly flagged this guard test as unwired on the first verify run. Wired the guard test into package.json's test:ops list; pnpm ops:automation-coverage-check reports unwired new=0. File Scope Lock Check (advisory) still reports package.json as outside this lane's originally-declared scope -- a bookkeeping artifact of the same stale manifest, not a real conflict, and not one of the four required contexts."
+    },
+    {
+      "topic": "Live Schema Parity -- 78 unauthorized missing_in_expected findings",
+      "status": "confirmed_unrelated_not_touched",
+      "blocks_this_lane": false,
+      "detail": "Pre-existing drift for command_center_game_threads/command_center_delivery_mappings, already investigated by UTV2-1399. Advisory only; hard-scoped to schema public. This migration creates zero public-schema objects, so it adds nothing to that count."
+    }
+  ],
+  "not_closed": [
+    "Production negative/positive demonstration and after-state privilege dump -- blocked on operator-authorized supabase db push for both UTV2-1399's prerequisite migration and this lane's own migration.",
+    "pnpm test:db / full pnpm verify -- not run locally (needs staging credentials this host does not carry); CI is authoritative. test:ops (including this guard test) verified locally.",
+    "PR open/merge, t1-approved label, pm-verdict/v1, and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this snapshot.",
+    "This role is not granted to any login/service credential and is not wired into any live application by design -- a separate governed action requiring explicit PM authorization."
+  ]
+}
