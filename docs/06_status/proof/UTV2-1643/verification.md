@@ -66,3 +66,41 @@ authoritative CI result.
 
 This is a dependency-pin change only. No application logic, migration, or governance
 tooling touched. Tier T3.
+
+## ASSERTIONS:
+
+- `pnpm audit --prod --audit-level high` reports zero vulnerabilities on this commit.
+- `pnpm type-check` exits 0 with no diagnostics.
+- `pnpm lint` exits 0 with no findings.
+- `pnpm build` exits 0.
+- `pnpm test` reports 19 pass, 0 fail.
+- Only `pnpm-workspace.yaml`, `pnpm-lock.yaml`, and this proof file are touched — no application code changed.
+
+## EVIDENCE:
+
+```
+$ pnpm audit --prod --audit-level high
+No known vulnerabilities found
+
+$ pnpm type-check
+> tsc -b tsconfig.json
+(exit 0, no output)
+
+$ pnpm lint
+> eslint . --cache --cache-location .cache/eslint/
+(exit 0, no output)
+
+$ pnpm build
+> tsc -b tsconfig.json
+(exit 0, no output)
+
+$ pnpm test
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
