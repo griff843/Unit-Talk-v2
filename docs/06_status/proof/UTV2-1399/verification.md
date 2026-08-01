@@ -1,23 +1,20 @@
 # PROOF: UTV2-1399 — reversible, fixture-excluding production reporting view
 
-MERGE_SHA: 25675886a0b2573215dd7b7f4cc44676520b4503
+MERGE_SHA: fdc193582f94ad7538fa594b475847eb81a3647f
 
-> **Lane status: STARTED, PR OPEN.** `migration` is a singleton lane type and
-> `["migration","runtime"]` is a forbidden combination in
-> `docs/governance/CONCURRENCY_CONFIG.json`. The lane was initially blocked by
-> UTV2-1604 (`runtime`, in_review) and then by UTV2-1632 (`runtime`, merged but
-> not yet closed — a ghost lane). Both cleared; `ops:lane-start UTV2-1399`
-> succeeded once UTV2-1632's manifest read `status: done` on `origin/main`.
-> PR: https://github.com/griff843/Unit-Talk-v2/pull/1343. Branch
-> `claude/utv2-1399-fixture-reporting-view`. Every measurement below is real
-> and was taken read-only against production before the lane slot opened.
-> `MERGE_SHA` above is currently the implementation-commit SHA (per
-> `executor-result-validator.yml`'s documented allowance: "proof files to
-> reference the implementation commit SHA rather than their own commit SHA,
-> avoiding the SHA preimage circular dependency" — validated as an ancestor of
-> the current PR head, not required to equal it exactly). It is rebound to
-> the real squash-merge SHA post-merge by `post-merge-lane-close.yml` via
-> `ops:proof-generate --merge-sha`.
+> **Lane status: IMPLEMENTATION MERGED, CLOSEOUT REPAIR IN PROGRESS.**
+> PR #1343 (`claude/utv2-1399-fixture-reporting-view`) merged at `fdc19358`.
+> The automated `post-merge-lane-close.yml` truth-check then failed for real
+> (not a bug) on three checks: `P6` (evidence bundle schema_version must be 1
+> — mine was 2, upgraded earlier for a different, migration-only gate),
+> `R1`/`R2` (runtime_proof.queries / row_counts must be non-empty, from
+> `pnpm test:db`). This is the governed proof-repair path (`pnpm
+> ops:proof-repair scaffold/apply`), branch `claude/utv2-1399-proof-repair`,
+> fixing those three gaps against the already-merged implementation. See §17.
+> `MERGE_SHA` above is bound to the real squash-merge SHA via
+> `ops:proof-generate UTV2-1399 --merge-sha fdc19358...`, confirmed
+> non-destructive (dry-run showed both proof files in preserved/rebound, not
+> replaced, before running for real).
 
 **Verified against branch commit:** `25675886a0b2573215dd7b7f4cc44676520b4503`
 (the parent of the commit that added this section — updated after a trivial
@@ -631,3 +628,75 @@ exist yet in the branch tree at that point (only proof paths are exempt from
 the existence check `ops:lane-start` performs; everything else needs a stub).
 Expanding scope in a later commit will pass `ops:lane-start`'s own check but
 fail `file-scope-guard.ts`'s CI enforcement by design.
+
+### 17. Post-merge closeout repair — real truth-check gaps found and fixed
+
+The implementation PR (#1343) merged at `fdc19358` with all four required
+contexts green (`verify`, `Executor Result Validation`, `Merge Gate`,
+`P0 Protocol`). The automated `post-merge-lane-close.yml` then ran
+`ops:lane-close --repair-merged --post-merge-trusted` and correctly **failed
+closed** rather than synthesizing a passing record — 24 of 27 checks passed
+(M1-M7, L1-L5, G1-G5, P1-P5, C1-C7, R3, S1), and three genuinely failed:
+
+```
+[FAIL] P6 evidence bundle schema_version must be 1
+[FAIL] R1 runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence
+[FAIL] R2 runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db
+```
+
+**P6 — a real cross-gate mismatch, not a bug in either gate alone.**
+`scripts/ci/proof-binding-validator.ts` (migration-reversibility-gate.yml,
+`pull_request`-triggered, path-filtered to `supabase/migrations/**` and
+`db/migrations-rollback/**`) required `schema_version: 2` while PR #1343 was
+open and touching migration files — this repo's evidence.json upgraded to
+that shape earlier in the lane specifically to satisfy that gate.
+`scripts/ops/truth-check-lib.ts`'s P6 check unconditionally requires exactly
+`1`, with no v2 branch at all. Checked whether v2 is sanctioned anywhere
+else: `docs/06_status/proof/UTV2-1205/evidence.json`,
+`.../UTV2-1274/evidence.json`, and `.../UTV2-746/evidence.json` all carry
+`schema_version: 2` already, but there is no evidence any of them passed P6
+under that value — this looks like a genuine, unresolved mismatch between the
+two gates that predates this lane. Not fixed system-wide here (out of scope
+for a single-issue proof repair); flagged instead. Reverted to `1` for this
+bundle: this repair PR touches neither migrations path, so
+proof-binding-validator.ts never runs against it, and P6/truth-check is the
+gate that actually governs post-merge closeout.
+
+**R1/R2 — real, harvested from CI, not fabricated or re-run.** Local
+`pnpm test:db` is genuinely impossible from this host: `ci:assert-staging`
+correctly refuses the containment-stub target
+(`host=127.0.0.1 ref=unidentified`). Harvested the real TAP output and
+seed-fixture row counts instead, from PR #1343's own `Writable DB proof
+(staging only)` CI job (run `30680085299`, job `91315210076`, on head
+`4aaa6c56` which squash-merged to `fdc19358`) — the job that holds the only
+credential to staging `xskgrzbteyqdufktjrjx`. Applied via
+`pnpm ops:proof-repair apply --issue UTV2-1399 --merge-sha fdc19358...
+--runtime-proof-file <harvested> --verifier-identity
+claude/utv2-1399-proof-repair`, after first binding
+`sha_binding.merge_sha` (previously `null` — the automated closeout had
+deliberately skipped its own early bind and deferred to `--repair-merged`,
+which then failed before committing anything) via
+`ops:proof-generate UTV2-1399 --merge-sha fdc19358...`, confirmed
+non-destructive by dry-run before running for real.
+
+**Tool defect found and worked around, not silently accepted.**
+`mergeRuntimeProofIntoEvidence` in `scripts/ops/proof-repair.ts`
+unconditionally replaces the entire `evidence.json` `verifier` object with a
+bare `{identity: <--verifier-identity>}`, discarding this bundle's
+pre-existing rich verifier narrative (method / verifier_scope /
+independence_note — the object that had already satisfied P10 before this
+repair). The tool's own success message ("all other keys ... are
+byte-identical") is true of every *other* top-level key but not of
+`verifier` itself. Verified by running `--dry-run`, then a real
+git-revertible apply, then diffing the file before/after — not by reading
+the source alone. Restored the rich object by hand afterward and folded the
+tool's stamped identity into it, rather than accepting the loss or reverting
+the fix.
+
+Local re-verification after the repair: `pnpm type-check` PASS. P6/R1/R2
+cannot be fully re-verified locally (G1 "pull request is merged" requires
+this repair PR to itself be merged first — the same governed sequence every
+prior repair lane in this repo followed), but the specific field conditions
+those checks test (`schema_version === 1`; `runtime_proof.queries.length > 0`;
+`runtime_proof.row_counts.length > 0`) were confirmed directly against the
+file content.
