@@ -11,7 +11,13 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1361",
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/proof/UTV2-1659",
+    ".ops/sync/UTV2-1659.yml",
+    "docs/06_status/lanes/UTV2-1659.json",
+    "docs/06_status/proof/UTV2-1659/.gitkeep",
+    "docs/06_status/proof/UTV2-1659/diff-summary.md",
+    "docs/06_status/proof/UTV2-1659/evidence.json",
+    "docs/06_status/proof/UTV2-1659/model-routing.json",
+    "docs/06_status/proof/UTV2-1659/verification.md",
     "scripts/ops/executable-wiring.test.ts",
     "scripts/ops/executable-wiring.ts"
   ],
