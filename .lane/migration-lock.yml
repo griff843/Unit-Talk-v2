@@ -1,25 +1,24 @@
 schema_version: 1
-issue_id: UTV2-1399
+issue_id: UTV2-1633
 lane_type: migration
 owner: claude
-acquired_at: 2026-07-31T20:52:38.113Z
+acquired_at: 2026-08-01T04:08:51.890Z
 scope:
-  - supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql
-  - db/migrations-rollback/20260731000000_utv2_1399_fixture_excluding_reporting_views.down.sql
-  - scripts/ci/utv2-1399-reporting-view-guard.test.ts
-  - scripts/generate-types.mjs
-  - packages/db/src/database.types.ts
-  - package.json
-  - docs/06_status/lanes/UTV2-1399.json
-  - docs/06_status/proof/UTV2-1399/evidence.json
-  - docs/06_status/proof/UTV2-1399/verification.md
-  - docs/06_status/proof/UTV2-1399/corrected-inventory.json
-  - .ops/sync/UTV2-1399.yml
+  - supabase/migrations/20260801000000_utv2_1633_reporting_reader_role.sql
+  - db/migrations-rollback/20260801000000_utv2_1633_reporting_reader_role.down.sql
+  - scripts/ci/utv2-1633-reporting-reader-role-guard.test.ts
+  - docs/06_status/lanes/UTV2-1633.json
+  - docs/06_status/proof/UTV2-1633/evidence.json
+  - docs/06_status/proof/UTV2-1633/verification.md
+  - .ops/sync/UTV2-1633.yml
   - .lane/migration-lock.yml
 release_after: merge
 note: >-
-  Re-claimed from UTV2-1086 (acquired 2026-05-24, merged long ago, never
-  released -- scripts/lane-contract.ts only checks file existence, not that
-  the lock matches the current lane, so the stale lock neither blocked nor
-  protected anything). Recorded as an adjacent finding in
+  Re-claimed from UTV2-1399 (acquired 2026-07-31T20:52:38.113Z, release_after:
+  merge). UTV2-1399 merged (PR #1343, squash SHA fdc193582f94ad7538fa594b475847eb81a3647f)
+  and its lane manifest reads status: done on origin/main, but the lock file
+  itself was never released back -- scripts/lane-contract.ts only checks file
+  existence, not that the lock matches the current lane, so the stale lock
+  neither blocked nor protected anything. Re-claimed for UTV2-1633, the next
+  migration-slot lane, per the sequencing note in
   docs/06_status/proof/UTV2-1399/verification.md.
