@@ -1,14 +1,14 @@
 # PROOF: UTV2-1624
 
-MERGE_SHA: c4a5f96af5b1ec2cae46c91e228a5d2c4bf469e6
+MERGE_SHA: 12b0d00ff21ac9c637f821cce99e53950a3a27d9
 
-That SHA is the implementation commit — this lane's work rebased three times
-onto `origin/main`, most recently at `b493a7d5` (past UTV2-1604, UTV2-1632,
-UTV2-1635, UTV2-1613 and UTV2-1594) — and it is a real ancestor of the PR head.
-Every count and every command output below was re-measured on it after this
-third rebase, not carried over from any prior one. The proof bundle itself
-lands in a following commit, so the PR head is one commit later by
-construction; the authoritative binding is the squash merge SHA, written
+That SHA is the implementation commit — this lane's work rebased four times
+onto `origin/main`, most recently at `fdc19358` (past UTV2-1604, UTV2-1632,
+UTV2-1635, UTV2-1613, UTV2-1594 and UTV2-1399) — and it is a real ancestor of
+the PR head. Every count and every command output below was re-measured on it
+after this fourth rebase, not carried over from any prior one. The proof
+bundle itself lands in a following commit, so the PR head is one commit later
+by construction; the authoritative binding is the squash merge SHA, written
 post-merge by `post-merge-lane-close.yml` via `ops:proof-generate --merge-sha`.
 The exact PR head SHA is carried by the `executor-result/v1` comment, which the
 required `Executor Result Validation` context checks against the live PR head.
@@ -34,23 +34,24 @@ The issue quoted a prior audit: 430 test files, 175 unreachable, 8 orphan ops
 scripts. None of those numbers is hardcoded anywhere in this lane, and none of
 them reproduced. The tool re-derives everything.
 
-| Metric | Reported by prior audit | `97fc751d` (rebase 1) | `9db5b4bb` (rebase 2) | `c4a5f96a` (rebase 3) |
-|---|---|---|---|---|
-| Canonical test files | 430 | 457 | 457 | **461** |
-| Reachable from required `pnpm verify` | — | 302 | 302 | **306** |
-| Reachable only from another named command / workflow | — | 36 | 36 | **36** |
-| Unreachable | 175 | 119 | 119 | **119** |
-| Orphan `scripts/ops/**` + `scripts/ci/**` capabilities | 8 | 18 | 18 | **18** |
+| Metric | Reported by prior audit | `97fc751d` (rebase 1) | `9db5b4bb` (rebase 2) | `c4a5f96a` (rebase 3) | `12b0d00f` (rebase 4) |
+|---|---|---|---|---|---|
+| Canonical test files | 430 | 457 | 457 | 461 | **462** |
+| Reachable from required `pnpm verify` | — | 302 | 302 | 306 | **307** |
+| Reachable only from another named command / workflow | — | 36 | 36 | 36 | **36** |
+| Unreachable | 175 | 119 | 119 | 119 | **119** |
+| Orphan `scripts/ops/**` + `scripts/ci/**` capabilities | 8 | 18 | 18 | 18 | **18** |
 
-Total `scripts/ops/**` + `scripts/ci/**` capabilities rose 143 -> 145 -> **149**
-across the rebases. Rebase 2 added `scripts/ci/workflow-bare-binary-guard.ts`
-and `scripts/ops/db-health-checks.ts` (UTV2-1632). Rebase 3 crossed four more
-merged lanes (UTV2-1632's truth-check follow-up, UTV2-1635, UTV2-1613,
-UTV2-1594), which together added 4 more canonical tests (all
-`required-reachable`, none unwired) and 4 more capability files (all wired).
-The orphan count held at 18/18 baselined, 0 new, and unwired held at 119/119
-baselined, 0 new, at every single rebase — confirmed by re-running the checker
-each time rather than assumed from the diff.
+Total `scripts/ops/**` + `scripts/ci/**` capabilities rose 143 -> 145 -> 149 ->
+**149** (unchanged at rebase 4) across four rebases spanning seven merged
+sibling lanes (UTV2-1604, UTV2-1632 x2, UTV2-1635, UTV2-1613, UTV2-1594,
+UTV2-1399). Rebase 4 (UTV2-1399, a reversible fixture-excluding production
+reporting view) added 1 more canonical test, `required-reachable`, and no new
+capability files. The orphan count held at 18/18 baselined, 0 new, and unwired
+held at 119/119 baselined, 0 new, at **every single one** of the four rebases —
+confirmed by re-running the checker each time rather than assumed from the
+diff. This is the staged-enforcement ledger design working exactly as
+intended under real concurrent-lane pressure, not a controlled demonstration.
 
 The prior audit both over-counted unreachable tests and under-counted orphan
 capabilities by more than 2x. It also named `proof-auditor-gate.test.ts` as
@@ -383,8 +384,8 @@ baseline, explicitly, with an owner and an expiry — nothing is suppressed.
 ### 8. Verification commands on the branch, re-run after each rebase
 
 ```text
-$ git rev-parse HEAD   # rebase 3, final pre-merge head
-c4a5f96af5b1ec2cae46c91e228a5d2c4bf469e6
+$ git rev-parse HEAD   # rebase 4, final pre-merge head
+12b0d00ff21ac9c637f821cce99e53950a3a27d9
 
 $ pnpm type-check
 exit 0
@@ -395,22 +396,24 @@ exit 0
 $ pnpm ops:automation-coverage-check
 [automation-coverage] verdict=PASS fail=0 warn=1 classified=15
 [executable-wiring] verdict=PASS required_roots=verify
-[executable-wiring] tests total=461 required-reachable=306 optional-reachable=36 fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
+[executable-wiring] tests total=462 required-reachable=307 optional-reachable=36 fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
 [executable-wiring] capabilities total=149 wired=131 orphan=18 (baselined=18 new=0)
 [executable-wiring] baseline tests=119/119 capabilities=18/18
 
 $ pnpm test:ops
-# tests 1803
-# pass 1803
+# tests 1809
+# pass 1809
 # fail 0
 # skipped 0
 ```
 
-Rebase 2 (`9db5b4bb`, past UTV2-1604/UTV2-1632) measured 457/302/36/119/145/18.
-Rebase 1 (`97fc751d`) measured 457/302/36/119/143/18. All three measurements
-are PASS with 0 new unwired tests and 0 new orphan capabilities -- the ledger
-absorbed every intervening lane's additions without manual intervention,
-which is the staged-enforcement design working as intended.
+Rebase 3 (`c4a5f96a`) measured 461/306/36/119/149/18. Rebase 2 (`9db5b4bb`,
+past UTV2-1604/UTV2-1632) measured 457/302/36/119/145/18. Rebase 1 (`97fc751d`)
+measured 457/302/36/119/143/18. All four measurements are PASS with 0 new
+unwired tests and 0 new orphan capabilities across seven merged sibling lanes
+-- the ledger absorbed every intervening lane's additions without manual
+intervention, which is the staged-enforcement design working as intended, not
+a controlled demonstration.
 
 ### 9. Rebase onto `origin/main` — union resolution, nothing unwired
 

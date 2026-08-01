@@ -6,10 +6,10 @@
   "generated_at": "2026-07-31T12:45:00.000Z",
   "status": "in_progress",
   "sha_binding": {
-    "verified_source_sha": "c4a5f96af5b1ec2cae46c91e228a5d2c4bf469e6",
+    "verified_source_sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
     "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
     "sha_type": "branch_head_pending_merge",
-    "verified_source_note": "Every count and every command output in this bundle was re-measured on c4a5f96a after this lane was rebased a third time onto origin/main (past UTV2-1604, UTV2-1632, UTV2-1635, UTV2-1613 and UTV2-1594). The authoritative binding is the squash merge SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "verified_source_note": "Every count and every command output in this bundle was re-measured on 12b0d00f after this lane was rebased a fourth time onto origin/main (past UTV2-1604, UTV2-1632 x2, UTV2-1635, UTV2-1613, UTV2-1594, UTV2-1399). The authoritative binding is the squash merge SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
     "bound_at": "2026-07-31T12:45:00.000Z"
   },
   "verifier": {
@@ -19,10 +19,10 @@
     "independence_note": "The reachability claims do not rest on the implementing agent's reading of the code. Each named merge-path test was cross-checked with an independent grep of package.json and .github/ (verification.md EVIDENCE 5), and each newly wired test was mutation-checked so that a decorative test could not pass as coverage (EVIDENCE 6)."
   },
   "rederived_inventory": {
-    "measured_at_sha": "c4a5f96af5b1ec2cae46c91e228a5d2c4bf469e6",
+    "measured_at_sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
     "command": "pnpm ops:automation-coverage-check",
-    "test_files_total": 461,
-    "required_reachable": 306,
+    "test_files_total": 462,
+    "required_reachable": 307,
     "optional_reachable": 36,
     "fixture_helper_not_executable": 0,
     "quarantined": 0,
@@ -57,8 +57,8 @@
     },
     "test_ops": {
       "command": "pnpm test:ops",
-      "tests": 1803,
-      "pass": 1803,
+      "tests": 1809,
+      "pass": 1809,
       "fail": 0,
       "skipped": 0,
       "note": "Includes the 12 tests newly wired by this lane."
@@ -196,13 +196,13 @@
     "shrink_only": "max_entries caps both sections. Entries that become reachable, become non-executable fixtures, or point at deleted files are stale and fail, which forces the ledger down. Expiry lapse is a warning, not a failure, so a calendar date can never block every merge in the program."
   },
   "rebase": {
-    "base": "b493a7d5240d5d4e32426a0a60f2f903e8e087fc",
+    "base": "fdc193582f94ad7538fa594b475847eb81a3647f",
     "conflict": "package.json test:ops — UTV2-1604 added an entry concurrently",
     "resolution": "union",
     "main_entries": 105,
     "branch_entries": 117,
     "dropped_from_main": 0,
-    "note": "Rebased a third time onto origin/main after UTV2-1604, UTV2-1632, UTV2-1635, UTV2-1613 and UTV2-1594 all landed. Test/capability counts rose (457->461 tests, 302->306 required-reachable, 143->149 capabilities) but unwired held at 119/119 baselined 0 new and orphan held at 18/18 baselined 0 new at every rebase, confirmed by re-running the checker each time.",
+    "note": "Rebased a fourth time onto origin/main after UTV2-1399 landed. Test count rose 461->462 (1 new required-reachable test), capability count unchanged at 149. Unwired held at 119/119 baselined 0 new and orphan held at 18/18 baselined 0 new at all four rebases.",
     "history": [
       {
         "rebase": 1,
@@ -226,6 +226,14 @@
         "base": "b493a7d5240d5d4e32426a0a60f2f903e8e087fc",
         "tests_total": 461,
         "required_reachable": 306,
+        "capabilities_total": 149
+      },
+      {
+        "rebase": 4,
+        "sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
+        "base": "fdc193582f94ad7538fa594b475847eb81a3647f",
+        "tests_total": 462,
+        "required_reachable": 307,
         "capabilities_total": 149
       }
     ]

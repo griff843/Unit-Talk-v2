@@ -111,5 +111,5 @@
       "source_restored": true
     }
   ],
-  "rebase_note": "This lane was rebased three times onto origin/main after this receipt was generated at head_sha above. Every mutated module (the 9 distinct scripts/ops/*.ts files referenced by mutated_module across the 12 rows) is byte-identical between that head and the final pre-merge head c4a5f96af5b1ec2cae46c91e228a5d2c4bf469e6 -- verified with git diff <original>..HEAD for each file, 0 lines each, after all three rebases -- so these results still hold and were not re-run to avoid re-measuring something unchanged."
+  "rebase_note": "This lane was rebased four times onto origin/main after this receipt was generated at head_sha above. Every mutated module is byte-identical between that head and the final pre-merge head 12b0d00ff21ac9c637f821cce99e53950a3a27d9 -- verified with git diff for each file, 0 lines each, after all four rebases -- so these results still hold and were not re-run."
 }
