@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1633",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1633-readonly-postgres-role",
+  "branch": "claude/utv2-1633-readonly-postgres-role",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/migration-lock.yml",
+    ".ops/sync/UTV2-1633.yml",
+    "db/migrations-rollback/20260801000000_utv2_1633_reporting_reader_role.down.sql",
+    "docs/06_status/proof/UTV2-1633/**",
+    "scripts/ci/utv2-1633-reporting-reader-role-guard.test.ts",
+    "supabase/migrations/20260801000000_utv2_1633_reporting_reader_role.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1633/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-01T04:08:51.890Z",
+  "heartbeat_at": "2026-08-01T04:08:51.890Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1633-readonly-postgres-role.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1633-readonly-postgres-role",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
