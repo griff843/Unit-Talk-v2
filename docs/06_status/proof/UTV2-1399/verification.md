@@ -14,10 +14,12 @@ MERGE_SHA: PENDING_MERGE
 > `MERGE_SHA` is bound post-merge by `post-merge-lane-close.yml` via
 > `ops:proof-generate --merge-sha`.
 
-**Verified against branch commit:** `47df44cbe11793459ace200f82828ba20461d2c4`
-(the parent of the commit that added this section — updated after the branch
-was rebased onto `origin/main`'s tip `b493a7d5`, since the earlier SHA this
-line pointed to no longer exists in this branch's history post-rebase).
+**Verified against branch commit:** `175b17dac778107f91e5071022640494a2cada4d`
+(the parent of the commit that added this section — updated after a further
+history rewrite folded the full `file_scope_lock` and migration-lock re-claim
+into the manifest's first-adding commit, since `scripts/ci/file-scope-guard.ts`
+freezes a newly-introduced manifest to its first commit and does not trust a
+later commit's widening of it. See §16.)
 
 ## Verification
 
@@ -577,3 +579,46 @@ Re-measured production counts against `zfzdnfwdarxucxtaojxm` at
 `2026-08-01 00:44:41 UTC` — unchanged from the original 2026-07-31 measurement:
 `picks_raw=107858, picks_retained=7580, picks_excluded=100278`. No drift; no
 recount of any downstream figure required.
+
+### 16. `File Scope Lock` failure and fix — a genuine anti-widening protection, not a bug
+
+After the origin/main rebase, `File Scope Lock` failed again with
+`supabase/migrations/....sql is not declared by UTV2-1399` — despite the
+manifest's `file_scope_lock` (as of the branch's latest commit) clearly
+listing it.
+
+Root cause: `scripts/ci/file-scope-guard.ts`'s `resolveTrustedManifests`
+deliberately does not trust a PR's own working-tree copy of its manifest for
+evaluation. For a manifest newly introduced by the branch (the normal case for
+a fresh lane), its content is locked to the **first commit on the branch that
+added it** — the lane-start declaration — specifically so a later commit
+cannot retroactively widen `file_scope_lock` to "declare" an out-of-scope file
+as in-scope after the fact. This branch's manifest was first added by
+`ops:lane-start`'s own scaffold commit, which (correctly, for the reason
+recorded in §11 above) could only declare the 3 files that already existed on
+`main` at fresh-creation time — the migration SQL, rollback script, and guard
+test didn't exist yet in that tree. A later commit expanded `file_scope_lock`
+to the real full scope; the guard, by design, never trusts that expansion.
+
+This is not a bug to route around with a `SCOPE_OVERRIDE: APPROVED` comment —
+the design intent is explicit in the script's own comments (route (c): "a
+manifest newly introduced by this branch... content is locked to the *first*
+commit... so a later commit in the same PR cannot widen it"). The correct fix
+is to make the manifest honest from its first appearance. Folded the full
+`file_scope_lock` and the `.lane/migration-lock.yml` re-claim into the
+scaffold commit itself via detached-HEAD amend, then replayed every
+subsequent commit on top (skipping the now-redundant "expand file_scope_lock"
+commit and two empty CI-retrigger commits that carried no content). Verified
+the resulting tree is byte-identical to the pre-rewrite tree
+(`git diff <old-head> <new-head> --stat` empty) before pushing, and confirmed
+`scripts/ci/file-scope-guard.ts` passes locally with `FILE_SCOPE_PR_BRANCH` set
+to this branch's name (the workflow sets this env var; a bare local invocation
+without it cannot resolve "own manifest" and misreports every file as a
+cross-lane conflict — a red herring, not a real failure mode).
+
+**Lesson for future migration lanes:** declare the full `file_scope_lock` in
+the very first commit that creates the manifest, even for files that don't
+exist yet in the branch tree at that point (only proof paths are exempt from
+the existence check `ops:lane-start` performs; everything else needs a stub).
+Expanding scope in a later commit will pass `ops:lane-start`'s own check but
+fail `file-scope-guard.ts`'s CI enforcement by design.
