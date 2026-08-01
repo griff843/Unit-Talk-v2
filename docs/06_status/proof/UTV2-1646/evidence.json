@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1646",
+  "tier": "T1",
+  "title": "Parked-mode deploy must actually stop ingestor/worker autorun and never fall back to best-bets",
+  "generated_at": "2026-08-01T14:20:00.000Z",
+  "status": "pr_open",
+  "sha_binding": {
+    "verified_source_sha": "69cc1f7b58068408c00e646096bae6668c2aecd2",
+    "merge_sha": null,
+    "base_sha": "13a107b29cac1401cc4e7aeb988591903249292c",
+    "sha_type": "pending_merge",
+    "verified_source_note": "69cc1f7b is this branch's single implementation commit, rebased directly onto the tip of main (13a107b2, the just-merged UTV2-1641 squash commit) -- no rebase conflicts. The authoritative binding is the PR's squash-merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
+    "bound_at": "2026-08-01T14:20:00.000Z",
+    "ci_sentinels": {
+      "status": "pending_pr_checks",
+      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for verify / Executor Result Validation / Merge Gate / P0 Protocol on this exact SHA -- fabricating \"pass\" here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha, same as sha_binding.merge_sha above."
+    }
+  },
+  "verifier": {
+    "identity": "claude (implementing agent) -- static/structural verification only; no independent second reviewer in this session",
+    "method": "Every claim below is either a direct pnpm command result (type-check/lint/full test suite) or a node:test assertion against the actual deploy.yml source text (auditParkedModeDeployWorkflow), including 5 new adversarial drift tests that mutate the fixed source back toward the old defect and assert the audit catches it.",
+    "verifier_scope": "Verifies the workflow-YAML wiring is structurally correct and internally self-consistent (case-statement branches, printf substitutions, container-inspection commands, service names cross-checked against deploy/production/docker-compose.yml). Does NOT constitute a live deploy execution against the real Hetzner host -- that is UTV2-1601's own subsequent parked-deploy dispatch, which will exercise this exact code path for the first time against real infrastructure.",
+    "independence_note": "The drift tests are the closest available self-check for a CI/CD-config-only change with no separate human reviewer: each one takes the corrected source, mechanically reverts one specific piece of the fix (e.g. re-hardcodes UNIT_TALK_INGESTOR_AUTORUN=true, or restores the best-bets fallback), and asserts the static audit flags it -- proving the audit would have caught the original defect, not just that the new code happens to look right."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "yaml_validity": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/deploy.yml'))\"",
+      "status": "PASS"
+    },
+    "unit_tests": {
+      "command": "npx tsx --test scripts/ci/deploy-parked-mode.test.ts",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "note": "5 pre-existing tests (unchanged behavior for SYNDICATE_MACHINE_ENABLED) + 5 new tests added by this lane (drift detection for the 4 newly-conditioned vars)."
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "tests": 4381,
+      "pass": 4381,
+      "fail": 0,
+      "skipped": 0,
+      "note": "Sum of every composite pnpm test:* suite's final TAP summary line for this run (grep '^# tests ' | awk sum), cross-checked against '^# fail ' summing to 0; no failures anywhere in the composite."
+    }
+  },
+  "runtime_proof": {
+    "status": "not_run_locally",
+    "reason": "This lane touches only .github/workflows/deploy.yml (CI/CD config) and its own test file -- no application runtime or database code path. No live Supabase connection is made by this lane's tests. R1/R2 for this lane's own closeout are expected to be populated post-merge by ops:proof-generate --merge-sha's auto-harvest mechanism (UTV2-1641, merged immediately prior to this lane) against this PR's own CI staging-db-proof job, same as any other T1 lane."
+  },
+  "service_name_cross_check": {
+    "claim": "docker compose exec -T ingestor / -T worker in the new confirmation step match the actual compose service names",
+    "evidence": "grep '^  [a-z-]*:' deploy/production/docker-compose.yml -> api, worker, ingestor, discord-bot, grading-cron, loki, grafana, caddy -- 'ingestor' and 'worker' confirmed present and spelled exactly as used."
+  },
+  "canary_vs_production_scope_decision": {
+    "claim": "the new container-value confirmation (ingestor/worker/enabled-targets) is added ONLY to the production stage's confirm step, not canary's",
+    "reason": "canary's 'Release API canary' step runs `docker compose up -d --no-deps api` -- only the api service, never ingestor/worker/discord-bot. Asserting against containers that don't exist yet in canary would either always fail or require conditionally skipping the assertion, neither of which proves anything. Only 'Promote all production containers' (`docker compose up -d --remove-orphans`, all services) actually starts ingestor/worker, so that is the only stage where inspecting them is meaningful.",
+    "canary_scope_unchanged": "canary's confirm step still checks only SYNDICATE_MACHINE_ENABLED via the api container, exactly as before this lane."
+  },
+  "active_mode_regression_check": {
+    "claim": "active-mode deploy behavior for all four vars is unchanged by this lane",
+    "evidence": "case-statement active branch sets _ingestor_autorun=true / _ingestor_scheduling_enabled=true / _worker_autorun=true (identical to the previous unconditional literals); _enabled_targets falls back to best-bets when unset in the non-parked branch (identical to the previous ${_enabled_targets:-best-bets} default) -- verified by the unmutated auditParkedModeDeployWorkflow() passing with zero violations against the real, corrected deploy.yml source (test 1 of 10)."
+  },
+  "boundaries": {
+    "production_writes": "none -- this lane edits workflow YAML and a test file only",
+    "production_credentials": "none referenced, read, or written by this lane's diff or tests",
+    "database_access": "none",
+    "deploy_execution": "none -- this lane does not itself trigger workflow_dispatch on deploy.yml; the actual parked deploy is a separate, later step under UTV2-1601 once this correction is merged"
+  },
+  "not_closed": [
+    "This lane's own R1/R2 runtime_proof is left to the post-merge auto-harvest mechanism, same as any T1 lane.",
+    "The corrected deploy.yml has not yet been exercised by a real workflow_dispatch run against the Hetzner host as of this evidence snapshot -- that happens after merge, as UTV2-1601's parked-deploy step."
+  ]
+}

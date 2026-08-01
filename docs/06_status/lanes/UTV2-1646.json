@@ -12,10 +12,15 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
-    "scripts/ci/deploy-parked-mode.test.ts"
+    "scripts/ci/deploy-parked-mode.test.ts",
+    "docs/06_status/proof/UTV2-1646/evidence.json",
+    "docs/06_status/proof/UTV2-1646/verification.md",
+    "docs/06_status/lanes/UTV2-1646.json",
+    ".ops/sync/UTV2-1646.yml"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1646/evidence.json"
+    "docs/06_status/proof/UTV2-1646/evidence.json",
+    "docs/06_status/proof/UTV2-1646/verification.md"
   ],
   "status": "started",
   "started_at": "2026-08-01T14:17:05.650Z",
