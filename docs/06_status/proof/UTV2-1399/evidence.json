@@ -8,14 +8,14 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
   "schema_version_note": "Downgraded from 2 back to 1 in this repair pass. scripts/ci/proof-binding-validator.ts (migration-reversibility-gate.yml, pull_request-triggered, path-filtered to supabase/migrations/** and db/migrations-rollback/**) required schema_version 2 while the implementation PR was open and touching migration files. scripts/ops/truth-check-lib.ts's P6 check unconditionally requires exactly 1, with no v2 branch. This repair PR touches neither migrations path, so proof-binding-validator.ts never runs against it; reverting to 1 is safe for this PR and required for P6/truth-check, which is the gate that matters post-merge. Found schema_version:2 already committed elsewhere in the repo (UTV2-1205, UTV2-1274, UTV2-746 evidence.json) with no evidence any of them passed P6 under that value -- this looks like a genuine unresolved mismatch between the two gates, flagged here rather than silently resolved for every future migration lane.",
   "sha_binding": {
-    "verified_source_sha": "fdc193582f94ad7538fa594b475847eb81a3647f",
-    "merge_sha": "fdc193582f94ad7538fa594b475847eb81a3647f",
+    "verified_source_sha": "c44b3469d222dca19ba611c759b59c16298bdb18",
+    "merge_sha": "c44b3469d222dca19ba611c759b59c16298bdb18",
     "base_sha": "f4c529b51267d86c2dfbd38bdcfab527bd31668c",
     "sha_type": "merge_sha",
     "verified_source_note": "merge_sha bound to fdc19358, the real squash-merge SHA of PR #1343, via `ops:proof-generate UTV2-1399 --merge-sha fdc19358...` in this repair lane -- the mechanism confirmed non-destructive by UTV2-1631's earlier fix (dry-run showed both verification.md and evidence.json in preserved_paths/rebound_paths, not stale_paths_replaced). Prior to this repair, sha_binding.merge_sha was null: the automated Post-Merge Lane Close workflow detected manifest.commit_sha already differed from the push SHA and deliberately skipped its own early proof-generate bind, deferring to ops:lane-close --repair-merged, which then failed closed on P6/R1/R2 before committing anything -- so main never actually carried a bound merge_sha until this repair pass.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "bound_at": "2026-08-01T03:11:16.254Z"
+    "bound_at": "2026-08-01T03:48:32.173Z"
   },
   "verifier": {
     "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm via Supabase MCP execute_sql, 2026-07-31 11:40:28+00 onward; runtime_proof harvested by claude/utv2-1399-proof-repair from CI job 91315210076",

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1399 — reversible, fixture-excluding production reporting view
 
-MERGE_SHA: fdc193582f94ad7538fa594b475847eb81a3647f
+MERGE_SHA: c44b3469d222dca19ba611c759b59c16298bdb18
 
 > **Lane status: IMPLEMENTATION MERGED, CLOSEOUT REPAIR IN PROGRESS.**
 > PR #1343 (`claude/utv2-1399-fixture-reporting-view`) merged at `fdc19358`.
