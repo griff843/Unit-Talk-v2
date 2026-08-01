@@ -74,36 +74,36 @@ the old one, not accumulating narrative the way `verifier`'s prose fields are).
 
 ASSERTIONS:
 
-1. A fixture receipt + job log shaped exactly like a genuine CI run (in fact,
+- [x] A fixture receipt + job log shaped exactly like a genuine CI run (in fact,
    REAL captured data from UTV2-1399's own merge, PR #1343, run 30680085299,
    job 91315210076) harvests real, non-empty `runtime_proof.queries` (7
    entries) and `row_counts` (8 entries) that would flip R1/R2 from FAIL to
    PASS — demonstrated end-to-end through `autoHarvestCiDbProofIntoEvidence`.
-2. The harvested `row_counts` (distribution_receipts:1, distribution_outbox:11,
+- [x] The harvested `row_counts` (distribution_receipts:1, distribution_outbox:11,
    system_runs:1, sports:9, cappers:1, market_families:6, selection_types:3,
    market_types:133) are IDENTICAL to what UTV2-1399's own hand-authored
    evidence.json repair recorded from the same real run (PR #1348) —
    independent cross-validation that the mechanical derivation reproduces what
    a human derived by hand.
-3. A receipt with zero passing TAP tests, or a job log with no `[seed-staging]`
+- [x] A receipt with zero passing TAP tests, or a job log with no `[seed-staging]`
    lines, is refused (`no_queries_derived` / `no_row_counts_derived`) — nothing
    partial is ever written.
-4. A merge SHA with no associated PR, no matching CI run, or no DB-proof job
+- [x] A merge SHA with no associated PR, no matching CI run, or no DB-proof job
    fails closed with a specific code and writes nothing — this is the honest
    behavior for a T2/T3 lane, or a T1 lane whose CI genuinely never ran a live
    DB proof.
-5. Receipt integrity is independently re-verified, not trusted from its own
+- [x] Receipt integrity is independently re-verified, not trusted from its own
    text: editing `captured_output` without updating `output_sha256` is
    detected and rejected; a receipt whose identity doesn't match the CI
    run/job this module just located via the GitHub API is rejected
    (anti-substitution).
-6. A pre-existing rich `verifier` object (`method`/`verifier_scope`/
+- [x] A pre-existing rich `verifier` object (`method`/`verifier_scope`/
    `independence_note`) survives both `proof-repair.ts apply` and the new
    auto-harvest path byte-for-byte except the `identity` field, which is
    extended (not replaced) when a prior identity exists.
-7. `mergeVerifierIdentity` degrades to the previous bare-object behavior when
+- [x] `mergeVerifierIdentity` degrades to the previous bare-object behavior when
    no prior `verifier` object exists (explicitly allowed by the issue).
-8. `pnpm verify:static` (lint, type-check, build, full `pnpm test`, smart-form
+- [x] `pnpm verify:static` (lint, type-check, build, full `pnpm test`, smart-form
    verify, verify:commands) is green on this branch head.
 
 EVIDENCE:

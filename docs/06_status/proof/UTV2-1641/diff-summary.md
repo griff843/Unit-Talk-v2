@@ -1,15 +1,15 @@
 # UTV2-1641 Diff Summary
 
-Generated at: 2026-08-01T06:12:06.121Z
+Generated at: 2026-08-01T06:39:11.012Z
 Issue: UTV2-1641
 Tier: T1
 Lane type: governance
 Branch: claude/utv2-1641-1642-proof-lifecycle-fixes
 PR URL: N/A
-Head SHA: 7176337d00549c824764329f7dad0e2a96d2cc3e
+Head SHA: 2df0a6c04101da6d44fc8df262ad8d71e548e1f0
 Merge SHA: N/A
 Diff base: 6afd7fb6f809d2b8e9db84fa7ecd55e10656d626
-Diff target: 7176337d00549c824764329f7dad0e2a96d2cc3e
+Diff target: 2df0a6c04101da6d44fc8df262ad8d71e548e1f0
 
 ## Git Diff Stat
 ```
@@ -21,7 +21,7 @@ Diff target: 7176337d00549c824764329f7dad0e2a96d2cc3e
  docs/06_status/proof/UTV2-1633/evidence.json       |  138 ++-
  docs/06_status/proof/UTV2-1633/verification.md     |   14 +-
  docs/06_status/proof/UTV2-1641/.gitkeep            |    0
- docs/06_status/proof/UTV2-1641/diff-summary.md     |   68 ++
+ docs/06_status/proof/UTV2-1641/diff-summary.md     |   76 ++
  docs/06_status/proof/UTV2-1641/evidence.json       |  134 +++
  docs/06_status/proof/UTV2-1641/verification.md     |  273 +++++
  docs/06_status/proof/UTV2-1644/.gitkeep            |    0
@@ -37,7 +37,7 @@ Diff target: 7176337d00549c824764329f7dad0e2a96d2cc3e
  scripts/ops/proof-repair.ts                        |   17 +-
  scripts/ops/shared.test.ts                         |   27 +
  scripts/ops/shared.ts                              |   34 +
- 24 files changed, 3755 insertions(+), 42 deletions(-)
+ 24 files changed, 3763 insertions(+), 42 deletions(-)
 ```
 
 ## Git Name Status
@@ -72,5 +72,5 @@ M	scripts/ops/shared.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 7176337d00549c824764329f7dad0e2a96d2cc3e
+Head SHA: 2df0a6c04101da6d44fc8df262ad8d71e548e1f0
 Merge SHA: N/A
