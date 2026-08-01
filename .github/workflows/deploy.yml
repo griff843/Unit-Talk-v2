@@ -192,6 +192,11 @@ jobs:
     needs: [build, verify]
     runs-on: ubuntu-latest
     environment: canary
+    # UTV2-1648: this job only ever needs to pull images build already pushed
+    # -- never write/push. Overrides the workflow-level packages:write default.
+    permissions:
+      contents: read
+      packages: read
     outputs:
       syndicate_machine_mode: ${{ needs.verify.outputs.syndicate_machine_mode }}
     env:
@@ -354,10 +359,35 @@ jobs:
           scp deploy/production/loki-config.yaml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/loki-config.yaml"
           scp deploy/production/Caddyfile "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/Caddyfile"
 
+      # UTV2-1648: replaces the long-lived GHCR_PAT secret. github.token is the
+      # same ephemeral, repository-scoped credential `build` already uses to
+      # PUSH these exact images -- canary/promote only need to pull, so the
+      # same token (read-only via this job's own `permissions:` above) is
+      # sufficient and leaves no standing credential to leak or expire.
       - name: Authenticate GHCR on remote
         env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        run: printf '%s' "$GHCR_PAT" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker login ghcr.io -u griff843 --password-stdin'
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: printf '%s' "$REGISTRY_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+
+      # UTV2-1648: verify the remote host can actually resolve every image
+      # this stage (and the later promote stage) will need, at the exact
+      # requested tag, BEFORE touching any running container. A stale/invalid
+      # token or a tag that never got pushed must fail here, not mid-mutation.
+      - name: Preflight — verify registry auth and resolve all 4 image tags
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          failed=""
+          for svc in api worker ingestor discord-bot; do
+            if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
+              failed="$failed $svc"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
+            exit 1
+          fi
+          echo "Registry preflight passed: all 4 images resolved for tag $IMAGE_TAG."
 
       - name: Release API canary
         env:
@@ -405,6 +435,11 @@ jobs:
     needs: canary
     runs-on: ubuntu-latest
     environment: production
+    # UTV2-1648: this job only ever needs to pull images build already pushed
+    # -- never write/push. Overrides the workflow-level packages:write default.
+    permissions:
+      contents: read
+      packages: read
     env:
       SYNDICATE_MACHINE_MODE: ${{ needs.canary.outputs.syndicate_machine_mode }}
     steps:
@@ -558,10 +593,31 @@ jobs:
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
+      # UTV2-1648: replaces the long-lived GHCR_PAT secret -- see the matching
+      # canary-job comment for the full rationale.
       - name: Authenticate GHCR on remote
         env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        run: printf '%s' "$GHCR_PAT" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker login ghcr.io -u griff843 --password-stdin'
+          REGISTRY_TOKEN: ${{ github.token }}
+        run: printf '%s' "$REGISTRY_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+
+      # UTV2-1648: same pre-mutation registry preflight as the canary job --
+      # this job runs on a fresh runner with its own auth, so it needs its own
+      # check even though canary already verified moments earlier.
+      - name: Preflight — verify registry auth and resolve all 4 image tags
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          failed=""
+          for svc in api worker ingestor discord-bot; do
+            if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
+              failed="$failed $svc"
+            fi
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
+            exit 1
+          fi
+          echo "Registry preflight passed: all 4 images resolved for tag $IMAGE_TAG."
 
       - name: Promote all production containers
         env:
