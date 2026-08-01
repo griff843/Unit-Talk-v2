@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1648-ghcr-token-auth",
   "branch": "claude/utv2-1648-ghcr-token-auth",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "1e027610d57a9ca5722fe04ce6c2562b581a13d8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1358",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
@@ -22,9 +22,9 @@
     "docs/06_status/proof/UTV2-1648/evidence.json",
     "docs/06_status/proof/UTV2-1648/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-08-01T15:49:49.456Z",
-  "heartbeat_at": "2026-08-01T15:49:49.456Z",
+  "heartbeat_at": "2026-08-01T16:16:53.460Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1648-ghcr-token-auth.json",
