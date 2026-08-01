@@ -1,6 +1,6 @@
 # PROOF: UTV2-1399 — reversible, fixture-excluding production reporting view
 
-MERGE_SHA: PENDING_MERGE
+MERGE_SHA: 68035b6ef61c943383e07f910d71076543834744
 
 > **Lane status: STARTED, PR OPEN.** `migration` is a singleton lane type and
 > `["migration","runtime"]` is a forbidden combination in
@@ -11,7 +11,12 @@ MERGE_SHA: PENDING_MERGE
 > PR: https://github.com/griff843/Unit-Talk-v2/pull/1343. Branch
 > `claude/utv2-1399-fixture-reporting-view`. Every measurement below is real
 > and was taken read-only against production before the lane slot opened.
-> `MERGE_SHA` is bound post-merge by `post-merge-lane-close.yml` via
+> `MERGE_SHA` above is currently the implementation-commit SHA (per
+> `executor-result-validator.yml`'s documented allowance: "proof files to
+> reference the implementation commit SHA rather than their own commit SHA,
+> avoiding the SHA preimage circular dependency" — validated as an ancestor of
+> the current PR head, not required to equal it exactly). It is rebound to
+> the real squash-merge SHA post-merge by `post-merge-lane-close.yml` via
 > `ops:proof-generate --merge-sha`.
 
 **Verified against branch commit:** `175b17dac778107f91e5071022640494a2cada4d`
