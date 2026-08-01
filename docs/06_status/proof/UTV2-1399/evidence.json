@@ -7,11 +7,11 @@
   "status": "pr_open",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
   "sha_binding": {
-    "verified_source_sha": "175b17dac778107f91e5071022640494a2cada4d",
+    "verified_source_sha": "25675886a0b2573215dd7b7f4cc44676520b4503",
     "merge_sha": null,
-    "base_sha": "b493a7d5240d5d4e32426a0a60f2f903e8e087fc",
+    "base_sha": "f4c529b51267d86c2dfbd38bdcfab527bd31668c",
     "sha_type": "pending_merge",
-    "verified_source_note": "verified_source_sha is 175b17da, the commit immediately preceding this one. Rebound three times now: after the commit-message-fix rewrite (to bed10124), after the origin/main rebase (to 47df44cb), and here after a further history rewrite that folds the full file_scope_lock and the migration-lock re-claim into this manifest's first-adding commit itself (previously declared in a later commit), because scripts/ci/file-scope-guard.ts's resolveTrustedManifests freezes a newly-introduced manifest's content to its first commit on this branch -- a later commit widening file_scope_lock is, by design, never trusted, to prevent a PR retroactively declaring an out-of-scope file as in-scope. Verified the final tree is byte-identical to the pre-rewrite tree (git diff --stat between the two HEADs is empty) and that scripts/ci/file-scope-guard.ts passes locally with FILE_SCOPE_PR_BRANCH set. .lane/migration-lock.yml required no conflict resolution: origin/main's copy was still the pre-existing stale UTV2-1086 lock, unmodified by any of the 5 intervening merges (all governance-type, none migration/runtime), so this lane's re-claim applied cleanly. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
+    "verified_source_note": "verified_source_sha is 25675886, the commit immediately preceding this one -- rebound a fourth time after a trivial rebase onto origin/main's latest tip (one automated 'ops(readiness): refresh ledger [skip ci]' commit touching only docs/06_status/readiness/readiness-score.json, zero real conflict). All four required contexts (verify, Executor Result Validation, Merge Gate, P0 Protocol) were green before this rebase and are being re-verified after it; this rebase was required by branch protection's required_status_checks.strict=true, not by any conflict. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "bound_at": "2026-07-31T21:15:00.000Z"

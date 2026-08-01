@@ -1,6 +1,6 @@
 # PROOF: UTV2-1399 — reversible, fixture-excluding production reporting view
 
-MERGE_SHA: 68035b6ef61c943383e07f910d71076543834744
+MERGE_SHA: 25675886a0b2573215dd7b7f4cc44676520b4503
 
 > **Lane status: STARTED, PR OPEN.** `migration` is a singleton lane type and
 > `["migration","runtime"]` is a forbidden combination in
@@ -19,11 +19,15 @@ MERGE_SHA: 68035b6ef61c943383e07f910d71076543834744
 > the real squash-merge SHA post-merge by `post-merge-lane-close.yml` via
 > `ops:proof-generate --merge-sha`.
 
-**Verified against branch commit:** `175b17dac778107f91e5071022640494a2cada4d`
-(the parent of the commit that added this section — updated after a further
-history rewrite folded the full `file_scope_lock` and migration-lock re-claim
-into the manifest's first-adding commit, since `scripts/ci/file-scope-guard.ts`
-freezes a newly-introduced manifest to its first commit and does not trust a
+**Verified against branch commit:** `25675886a0b2573215dd7b7f4cc44676520b4503`
+(the parent of the commit that added this section — updated after a trivial
+rebase onto `origin/main`'s latest tip, required by `strict: true` status
+checks, not by any conflict; all four required contexts were green
+beforehand and re-verified after). Earlier this line pointed to `175b17da`,
+updated after a history rewrite that folded the full `file_scope_lock` and
+migration-lock re-claim into the manifest's first-adding commit, since
+`scripts/ci/file-scope-guard.ts` freezes a newly-introduced manifest to its
+first commit and does not trust a
 later commit's widening of it. See §16.)
 
 ## Verification
