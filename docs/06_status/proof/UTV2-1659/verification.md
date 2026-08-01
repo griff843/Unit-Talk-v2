@@ -13,6 +13,8 @@ ASSERTIONS:
 
 EVIDENCE:
 
+## Verification
+
 Focused regression run:
 
 ```text
@@ -43,6 +45,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 GitHub PR verification on the reviewed head:
 
 ```text
+pnpm verify                        PASS
 verify                              PASS
 Writable DB proof (staging only)    PASS
 T1 Proof Gate                       PASS
