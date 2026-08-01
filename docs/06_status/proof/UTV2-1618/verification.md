@@ -145,6 +145,9 @@ artifacts and must be excluded from any production pick or settlement count.
 
 ### Static verification
 
+`pnpm verify` runs env:check + lint + type-check + build + test in sequence.
+Its constituent stages were run individually rather than as one invocation:
+
 ```
 $ pnpm type-check
 (clean)
@@ -163,12 +166,13 @@ $ npx tsx --test scripts/ci/deploy-parked-mode.test.ts
 # fail 0
 ```
 
-`pnpm test` (the full composite) fails inside `test:apps`, earlier in the chain
-than `test:ops`, due to a pre-existing local.env misconfiguration in this
-worktree (`UNIT_TALK_API_RUNTIME_MODE=test`, an invalid value) -- reproduced
-identically with this diff's changes fully `git stash`ed out, confirming it is
-unrelated and pre-existing. `local.env` is gitignored and not part of this
-diff. CI on the merge SHA runs in a clean environment and is authoritative.
+`pnpm verify`'s own `test` stage (the full composite) fails inside `test:apps`,
+earlier in the chain than `test:ops`, due to a pre-existing local.env
+misconfiguration in this worktree (`UNIT_TALK_API_RUNTIME_MODE=test`, an
+invalid value) -- reproduced identically with this diff's changes fully `git
+stash`ed out, confirming it is unrelated and pre-existing. `local.env` is
+gitignored and not part of this diff. CI on the merge SHA runs `pnpm verify`
+in a clean environment and is authoritative there.
 
 ### Scope
 
