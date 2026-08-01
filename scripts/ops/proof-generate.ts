@@ -2,11 +2,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  type HarvestCiDbProofOptions,
+  harvestCiDbProofForMergeSha,
+} from './ci-db-proof-harvest.js';
+import {
   ROOT,
   emitJson,
   ensureDir,
   getFlag,
   git,
+  mergeVerifierIdentity,
   parseArgs,
   readManifest,
   relativeToRoot,
@@ -1083,6 +1088,117 @@ export function generateProofArtifacts(
   };
 }
 
+// ── UTV2-1641: automatic CI-DB-proof harvest into evidence.json ──────────────
+
+export interface AutoHarvestCiDbProofResult {
+  attempted: boolean;
+  applied: boolean;
+  code: string;
+  reason?: string;
+  evidence_path?: string;
+}
+
+/**
+ * UTV2-1641: when a merge SHA is available and `evidence.json` exists but does
+ * not yet carry a populated `runtime_proof` (both `queries` and `row_counts`
+ * non-empty), attempts to harvest CI's own genuine "Writable DB proof (staging
+ * only)" evidence for that merge SHA and merge it in.
+ *
+ * This is deliberately best-effort and additive, mirroring
+ * `scripts/ops/proof-repair.ts`'s idempotency contract:
+ *   - If `evidence.json` doesn't exist at all (T2/T3 lanes, or a T1 lane before
+ *     any proof has been authored), this is a no-op -- nothing to harvest into.
+ *   - If `runtime_proof` is already populated, this is a no-op (never
+ *     overwrites a previously-harvested or hand-authored measurement).
+ *   - If no genuine CI receipt/log evidence can be found or verified for this
+ *     merge SHA, this returns a specific failure code and writes NOTHING --
+ *     `truth-check`'s R1/R2 are left to fail on their own honest terms, which
+ *     is the correct outcome for a lane whose CI truly never ran a live DB
+ *     proof (e.g. T2/T3, or a CI run that predates this job's existence).
+ *   - `verifier` is merged via `mergeVerifierIdentity` (UTV2-1642's fix), never
+ *     replaced -- any pre-existing rich verifier narrative survives.
+ *
+ * The caller (`main`, and therefore `post-merge-lane-close.yml`'s
+ * `pnpm ops:proof-generate ... --merge-sha ...` invocation) treats a failure
+ * here as non-fatal: proof-generate's own artifacts were already written
+ * successfully by the time this runs, and a harvest miss is not a reason to
+ * fail the whole command -- it just means R1/R2 stay failed, same as today,
+ * for a genuinely different reason (CI recorded no live DB proof) rather than
+ * an operator having simply not gotten to it yet.
+ */
+export function autoHarvestCiDbProofIntoEvidence(
+  root: string,
+  issueId: string,
+  mergeSha: string | null,
+  manifestCreatedBy: string | null | undefined,
+  options: HarvestCiDbProofOptions & { write?: boolean } = {},
+): AutoHarvestCiDbProofResult {
+  if (!mergeSha) {
+    return { attempted: false, applied: false, code: 'no_merge_sha' };
+  }
+
+  const evidenceRelPath = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase(), 'evidence.json');
+  const evidenceAbsolutePath = safeRepoPath(root, evidenceRelPath);
+  if (!fs.existsSync(evidenceAbsolutePath)) {
+    return { attempted: false, applied: false, code: 'no_evidence_bundle', evidence_path: evidenceRelPath };
+  }
+
+  let existing: Record<string, unknown>;
+  try {
+    existing = JSON.parse(fs.readFileSync(evidenceAbsolutePath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return { attempted: false, applied: false, code: 'evidence_unparseable', evidence_path: evidenceRelPath };
+  }
+
+  const existingRuntimeProof = existing['runtime_proof'];
+  const existingVerifier = existing['verifier'];
+  const hasNonEmptyArray = (value: unknown, key: string): boolean =>
+    !!value &&
+    typeof value === 'object' &&
+    Array.isArray((value as Record<string, unknown>)[key]) &&
+    ((value as Record<string, unknown>)[key] as unknown[]).length > 0;
+  const alreadyPopulated =
+    hasNonEmptyArray(existingRuntimeProof, 'queries') && hasNonEmptyArray(existingRuntimeProof, 'row_counts');
+  if (alreadyPopulated) {
+    return { attempted: false, applied: false, code: 'already_populated', evidence_path: evidenceRelPath };
+  }
+
+  const harvested = harvestCiDbProofForMergeSha(mergeSha, { root, ...options });
+  if (!harvested.ok) {
+    return { attempted: true, applied: false, code: harvested.code, reason: harvested.reason, evidence_path: evidenceRelPath };
+  }
+
+  const priorIdentity =
+    existingVerifier && typeof existingVerifier === 'object' && typeof (existingVerifier as Record<string, unknown>)['identity'] === 'string'
+      ? ((existingVerifier as Record<string, unknown>)['identity'] as string)
+      : null;
+  const harvestNote =
+    `runtime_proof auto-harvested by ops:proof-generate from CI job "${harvested.runInfo.job}" ` +
+    `(run ${harvested.runInfo.run_id}, job ${harvested.runInfo.job_id})`;
+  const identityCandidate = priorIdentity && priorIdentity.trim() ? `${priorIdentity}; ${harvestNote}` : harvestNote;
+
+  if (manifestCreatedBy && identityCandidate === manifestCreatedBy) {
+    return {
+      attempted: true,
+      applied: false,
+      code: 'verifier_identity_matches_creator',
+      reason: `harvested verifier identity would equal manifest.created_by (${manifestCreatedBy})`,
+      evidence_path: evidenceRelPath,
+    };
+  }
+
+  const next: Record<string, unknown> = {
+    ...existing,
+    verifier: mergeVerifierIdentity(existingVerifier, identityCandidate),
+    runtime_proof: harvested.runtimeProof,
+  };
+  if (options.write ?? true) {
+    fs.writeFileSync(evidenceAbsolutePath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  }
+
+  return { attempted: true, applied: true, code: 'harvested', evidence_path: evidenceRelPath };
+}
+
 function firstGitStdout(commands: string[][], runGit: GitRunner, cwd: string): string | null {
   for (const command of commands) {
     if (command.some((arg) => arg === null || arg === undefined || arg === '')) {
@@ -1201,8 +1317,28 @@ function main(argv = process.argv.slice(2)): number {
     throw error;
   }
 
+  // UTV2-1641: best-effort auto-harvest of CI's own genuine DB-proof evidence.
+  // Never fatal -- proof-generate's own artifacts (above) already succeeded by
+  // this point, and a harvest miss just means R1/R2 stay honestly failed for a
+  // lane whose CI never produced a live DB proof (T2/T3, or no such CI run).
+  let harvestResult: AutoHarvestCiDbProofResult | null = null;
+  if (!bools.has('no-harvest-ci-db-proof')) {
+    try {
+      harvestResult = autoHarvestCiDbProofIntoEvidence(ROOT, issueId, input.gitTruth.merge_sha, manifest.created_by, {
+        write: !bools.has('dry-run'),
+      });
+    } catch (error) {
+      harvestResult = {
+        attempted: true,
+        applied: false,
+        code: 'harvest_threw',
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   if (bools.has('json')) {
-    emitJson(result);
+    emitJson({ ...result, ci_db_proof_harvest: harvestResult });
   } else {
     process.stdout.write(`Generated proof artifacts for ${result.issue_id}\n`);
     for (const generatedPath of result.generated_paths) {
@@ -1217,6 +1353,17 @@ function main(argv = process.argv.slice(2)): number {
     for (const preservedPath of result.preserved_paths) {
       const action = result.rebound_paths.includes(preservedPath) ? 'sha-rebound in place' : 'left byte-identical';
       process.stdout.write(`preserved: ${relativeToRoot(path.resolve(ROOT, preservedPath))} (${action})\n`);
+    }
+    if (harvestResult) {
+      if (harvestResult.applied) {
+        process.stdout.write(`ci_db_proof_harvest: applied (${harvestResult.evidence_path})\n`);
+      } else if (harvestResult.attempted) {
+        process.stdout.write(
+          `ci_db_proof_harvest: not applied -- ${harvestResult.code}${harvestResult.reason ? `: ${harvestResult.reason}` : ''}\n`,
+        );
+      } else {
+        process.stdout.write(`ci_db_proof_harvest: skipped (${harvestResult.code})\n`);
+      }
     }
   }
 

@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { GhExecutor } from './ci-db-proof-harvest.js';
 import {
   buildDiffSummary,
   buildRuntimeVerification,
   applyProofManifestOverrides,
+  autoHarvestCiDbProofIntoEvidence,
   collectProofGitTruth,
   detectCurrentProofContext,
   generateProofArtifacts,
@@ -21,6 +24,8 @@ import {
 } from './proof-generate.js';
 import { ROOT } from './shared.js';
 import type { LaneManifest } from './shared.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const HEAD_SHA = '1111111111111111111111111111111111111111';
 const MERGE_SHA = '2222222222222222222222222222222222222222';
@@ -1902,6 +1907,212 @@ test('UTV2-1631: a MERGE_SHA line quoted inside a fenced evidence block is not r
     // The quoted evidence is a measurement — it survives verbatim.
     assert.match(after, /^MERGE_SHA: 4444444444444444444444444444444444444444$/m);
     assert.match(after, /^Merge SHA: 5555555555555555555555555555555555555555$/m);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── autoHarvestCiDbProofIntoEvidence (UTV2-1641) ──────────────────────────────
+//
+// Real fixture data captured from UTV2-1399's own merge (PR #1343, run
+// 30680085299, job 91315210076) -- see
+// scripts/ops/ci-db-proof-harvest.test.ts's header comment for full provenance.
+
+const HARVEST_FIXTURES_DIR = path.join(__dirname, '__fixtures__', 'utv2-1641-ci-db-proof');
+const HARVEST_REAL_RECEIPT_RAW = fs.readFileSync(path.join(HARVEST_FIXTURES_DIR, 'real-utv2-1399-receipt.json'), 'utf8');
+const HARVEST_REAL_JOB_LOG = fs.readFileSync(path.join(HARVEST_FIXTURES_DIR, 'real-utv2-1399-job-log.txt'), 'utf8');
+const HARVEST_REAL_TEST_SOURCE = fs.readFileSync(path.join(ROOT, 'apps/api/src/database-smoke.test.ts'), 'utf8');
+const HARVEST_MERGE_SHA = 'fdc193582f94ad7538fa594b475847eb81a3647f';
+const HARVEST_HEAD_SHA = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
+const HARVEST_RUN_ID = 30680085299;
+const HARVEST_JOB_ID = 91315210076;
+
+function harvestHappyPathExecutor(): GhExecutor {
+  return (args: string[]) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${HARVEST_MERGE_SHA}/pulls`)) {
+      return Buffer.from(JSON.stringify([{ number: 1343, head: { sha: HARVEST_HEAD_SHA } }]));
+    }
+    if (key.includes(`actions/runs?head_sha=${HARVEST_HEAD_SHA}`)) {
+      return Buffer.from(JSON.stringify({ workflow_runs: [{ id: HARVEST_RUN_ID, name: 'CI', conclusion: 'success' }] }));
+    }
+    if (key.includes(`actions/runs/${HARVEST_RUN_ID}/jobs`)) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [{ id: HARVEST_JOB_ID, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success' }],
+        }),
+      );
+    }
+    if (key.includes(`actions/runs/${HARVEST_RUN_ID}/artifacts`)) {
+      return Buffer.from(
+        JSON.stringify({ artifacts: [{ id: 8811926669, name: `utv2-1630-db-proof-receipt-${HARVEST_RUN_ID}-1`, expired: false }] }),
+      );
+    }
+    if (key.includes('actions/artifacts/8811926669/zip')) {
+      return Buffer.from('FAKE_ZIP');
+    }
+    if (key.includes(`actions/jobs/${HARVEST_JOB_ID}/logs`)) {
+      return Buffer.from(HARVEST_REAL_JOB_LOG, 'utf8');
+    }
+    throw Object.assign(new Error(`harvestHappyPathExecutor: unexpected call "${key}"`), { stderr: 'unexpected' });
+  };
+}
+
+function writeHarvestEvidence(root: string, issueId: string, evidence: Record<string, unknown>): string {
+  const dir = path.join(root, 'docs/06_status/proof', issueId);
+  fs.mkdirSync(dir, { recursive: true });
+  const evidencePath = path.join(dir, 'evidence.json');
+  fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2), 'utf8');
+  return evidencePath;
+}
+
+test('autoHarvestCiDbProofIntoEvidence: no merge SHA -> no-op, nothing attempted', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-no-sha-'));
+  try {
+    writeHarvestEvidence(root, 'UTV2-9001', { schema_version: 1 });
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9001', null, 'claude');
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_merge_sha');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: no evidence.json at all -> no-op (T2/T3 lanes never harvest into nothing)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-no-evidence-'));
+  try {
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9002', HARVEST_MERGE_SHA, 'claude');
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_evidence_bundle');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: already-populated runtime_proof -> no-op, never overwrites', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-already-'));
+  try {
+    writeHarvestEvidence(root, 'UTV2-9003', {
+      schema_version: 1,
+      verifier: { identity: 'existing-verifier' },
+      runtime_proof: { queries: [{ table: 'picks', description: 'x' }], row_counts: [{ table: 'picks', count: 1, status: 'y' }] },
+    });
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9003', HARVEST_MERGE_SHA, 'claude');
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.code, 'already_populated');
+    const untouched = JSON.parse(fs.readFileSync(path.join(root, 'docs/06_status/proof/UTV2-9003/evidence.json'), 'utf8'));
+    assert.strictEqual(untouched.verifier.identity, 'existing-verifier');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('BEFORE/AFTER (UTV2-1641): a genuine CI receipt harvests real runtime_proof into evidence.json and preserves the pre-existing rich verifier (UTV2-1642)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-happy-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9004', {
+      schema_version: 1,
+      issue_id: 'UTV2-9004',
+      verifier: {
+        identity: 'read-only measurement against production Supabase',
+        method: 'every count is quoted alongside the exact SQL that produced it',
+        independence_note: 'measured in the opposite direction, not by narrative',
+      },
+      runtime_proof: { status: 'not_run', reason: 'pnpm test:db requires an active lane' },
+    });
+
+    // BEFORE: R1/R2 would fail -- queries/row_counts are absent.
+    const before = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.strictEqual(Array.isArray(before.runtime_proof?.queries), false);
+
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9004', HARVEST_MERGE_SHA, 'claude', {
+      ghExecutor: harvestHappyPathExecutor(),
+      zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+      testSourceText: HARVEST_REAL_TEST_SOURCE,
+    });
+
+    assert.strictEqual(result.attempted, true, JSON.stringify(result));
+    assert.strictEqual(result.applied, true, JSON.stringify(result));
+    assert.strictEqual(result.code, 'harvested');
+
+    // AFTER: R1/R2 would now pass -- both arrays are real and non-empty.
+    const after = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.ok(Array.isArray(after.runtime_proof.queries) && after.runtime_proof.queries.length > 0);
+    assert.ok(Array.isArray(after.runtime_proof.row_counts) && after.runtime_proof.row_counts.length > 0);
+    assert.strictEqual(after.runtime_proof.queries.length, 7);
+    assert.strictEqual(after.runtime_proof.row_counts.length, 8);
+
+    // UTV2-1642: the pre-existing rich verifier narrative survives; only
+    // identity is extended, never replaced.
+    assert.strictEqual(after.verifier.method, 'every count is quoted alongside the exact SQL that produced it');
+    assert.strictEqual(after.verifier.independence_note, 'measured in the opposite direction, not by narrative');
+    assert.match(after.verifier.identity, /^read-only measurement against production Supabase; runtime_proof auto-harvested/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: no CI evidence exists for this merge SHA -> fails closed, evidence.json untouched (R1/R2 stay honestly failed)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-noci-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9005', {
+      schema_version: 1,
+      issue_id: 'UTV2-9005',
+      runtime_proof: { status: 'not_run' },
+    });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+
+    const noPrExecutor: GhExecutor = () => Buffer.from(JSON.stringify([]));
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9005', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'claude', {
+      ghExecutor: noPrExecutor,
+    });
+
+    assert.strictEqual(result.attempted, true);
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_pr_for_merge_sha');
+
+    const after = fs.readFileSync(evidencePath, 'utf8');
+    assert.strictEqual(after, before, 'evidence.json must be byte-identical when the harvest finds no CI evidence');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: refuses when the harvested verifier identity would equal manifest.created_by', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-identity-'));
+  try {
+    writeHarvestEvidence(root, 'UTV2-9006', { schema_version: 1, runtime_proof: { status: 'not_run' } });
+    const collidingCreator =
+      'runtime_proof auto-harvested by ops:proof-generate from CI job "Writable DB proof (staging only)" ' +
+      `(run ${HARVEST_RUN_ID}, job ${HARVEST_JOB_ID})`;
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9006', HARVEST_MERGE_SHA, collidingCreator, {
+      ghExecutor: harvestHappyPathExecutor(),
+      zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+      testSourceText: HARVEST_REAL_TEST_SOURCE,
+    });
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'verifier_identity_matches_creator');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: --dry-run-equivalent (write:false) computes but does not persist', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-dryrun-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9007', { schema_version: 1, runtime_proof: { status: 'not_run' } });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9007', HARVEST_MERGE_SHA, 'claude', {
+      ghExecutor: harvestHappyPathExecutor(),
+      zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+      testSourceText: HARVEST_REAL_TEST_SOURCE,
+      write: false,
+    });
+    assert.strictEqual(result.applied, true);
+    const after = fs.readFileSync(evidencePath, 'utf8');
+    assert.strictEqual(after, before, 'write:false must not persist anything to disk');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
