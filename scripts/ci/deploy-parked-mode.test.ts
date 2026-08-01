@@ -112,7 +112,7 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
     ['production', productionWrite],
   ] as const) {
     if (
-      !/case "\$SYNDICATE_MACHINE_MODE" in[\s\S]*active\) SYNDICATE_MACHINE_ENABLED=true[\s\S]*parked\) SYNDICATE_MACHINE_ENABLED=false/.test(
+      !/case "\$SYNDICATE_MACHINE_MODE" in[\s\S]*active\)[\s\S]*?SYNDICATE_MACHINE_ENABLED=true[\s\S]*parked\)[\s\S]*?SYNDICATE_MACHINE_ENABLED=false/.test(
         writeScript,
       )
     ) {
@@ -125,6 +125,45 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
     ) {
       violations.push(`${stage} env writer must preserve the validated requested value`);
     }
+
+    // UTV2-1646: parked mode must also stop provider-derived producers (ingestor,
+    // worker) and force public delivery targets to none -- SYNDICATE_MACHINE_ENABLED
+    // alone only gates the API process's own schedulers.
+    if (
+      !/active\)[\s\S]*?_ingestor_autorun=true[\s\S]*?_ingestor_scheduling_enabled=true[\s\S]*?_worker_autorun=true[\s\S]*parked\)[\s\S]*?_ingestor_autorun=false[\s\S]*?_ingestor_scheduling_enabled=false[\s\S]*?_worker_autorun=false/.test(
+        writeScript,
+      )
+    ) {
+      violations.push(
+        `${stage} env writer must derive ingestor/worker autorun+scheduling flags from validated mode`,
+      );
+    }
+    if (!writeScript.includes('"UNIT_TALK_INGESTOR_AUTORUN=$_ingestor_autorun"')) {
+      violations.push(`${stage} env writer must not hardcode UNIT_TALK_INGESTOR_AUTORUN`);
+    }
+    if (
+      !writeScript.includes(
+        '"UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=$_ingestor_scheduling_enabled"',
+      )
+    ) {
+      violations.push(`${stage} env writer must not hardcode UNIT_TALK_INGESTOR_SCHEDULING_ENABLED`);
+    }
+    if (!writeScript.includes('"UNIT_TALK_WORKER_AUTORUN=$_worker_autorun"')) {
+      violations.push(`${stage} env writer must not hardcode UNIT_TALK_WORKER_AUTORUN`);
+    }
+    if (writeScript.includes('_enabled_targets:-best-bets}"')) {
+      violations.push(
+        `${stage} env writer must not use a bare fallback for UNIT_TALK_ENABLED_TARGETS -- parked mode must never resolve to best-bets`,
+      );
+    }
+    if (
+      !/SYNDICATE_MACHINE_MODE"\s*=\s*"parked"\s*\][\s\S]*?_enabled_targets="none"/.test(writeScript)
+    ) {
+      violations.push(`${stage} env writer must force UNIT_TALK_ENABLED_TARGETS to none in parked mode`);
+    }
+    if (!writeScript.includes('"UNIT_TALK_ENABLED_TARGETS=$_enabled_targets"')) {
+      violations.push(`${stage} env writer must write the fully-resolved UNIT_TALK_ENABLED_TARGETS value`);
+    }
   }
 
   for (const [stage, confirmScript] of [
@@ -132,7 +171,7 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
     ['production', productionConfirm],
   ] as const) {
     if (
-      !/case "\$SYNDICATE_MACHINE_MODE" in[\s\S]*active\) REQUESTED_VALUE=true[\s\S]*parked\) REQUESTED_VALUE=false/.test(
+      !/case "\$SYNDICATE_MACHINE_MODE" in[\s\S]*active\)[\s\S]*?REQUESTED_VALUE=true[\s\S]*parked\)[\s\S]*?REQUESTED_VALUE=false/.test(
         confirmScript,
       )
     ) {
@@ -147,6 +186,40 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
       )
     ) {
       violations.push(`${stage} receipt must report the truthful mode and values`);
+    }
+
+    // UTV2-1646: only production actually runs the ingestor/worker containers
+    // (canary deploys the api service alone via --no-deps api), so the deployed-SHA-
+    // bound container-truth proof for the parked contract's other three vars only
+    // makes sense at the production stage.
+    if (stage === 'production') {
+      if (!confirmScript.includes('docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_AUTORUN')) {
+        violations.push('production readiness must inspect the ingestor container for UNIT_TALK_INGESTOR_AUTORUN');
+      }
+      if (
+        !confirmScript.includes(
+          'docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_SCHEDULING_ENABLED',
+        )
+      ) {
+        violations.push(
+          'production readiness must inspect the ingestor container for UNIT_TALK_INGESTOR_SCHEDULING_ENABLED',
+        );
+      }
+      if (!confirmScript.includes('docker compose exec -T worker printenv UNIT_TALK_WORKER_AUTORUN')) {
+        violations.push('production readiness must inspect the worker container for UNIT_TALK_WORKER_AUTORUN');
+      }
+      if (!confirmScript.includes('docker compose exec -T worker printenv UNIT_TALK_ENABLED_TARGETS')) {
+        violations.push('production readiness must inspect the worker container for UNIT_TALK_ENABLED_TARGETS');
+      }
+      if (
+        !confirmScript.includes(
+          '[ "$SYNDICATE_MACHINE_MODE" = "parked" ] && [ "$ENABLED_TARGETS_VALUE" != "none" ]',
+        )
+      ) {
+        violations.push(
+          'production readiness must fail closed if parked mode does not resolve UNIT_TALK_ENABLED_TARGETS to none',
+        );
+      }
     }
   }
 
@@ -264,6 +337,69 @@ test('static deploy audit detects a hardcoded active-mode receipt', () => {
   assert.ok(
     auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
       violation.includes('receipt'),
+    ),
+  );
+});
+
+// ── UTV2-1646: parked mode must also stop ingestor/worker and never fall back
+// to a real delivery target ─────────────────────────────────────────────────
+
+test('static deploy audit detects a hardcoded UNIT_TALK_INGESTOR_AUTORUN', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll(
+    '"UNIT_TALK_INGESTOR_AUTORUN=$_ingestor_autorun"',
+    '"UNIT_TALK_INGESTOR_AUTORUN=true"',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('UNIT_TALK_INGESTOR_AUTORUN'),
+    ),
+  );
+});
+
+test('static deploy audit detects a hardcoded UNIT_TALK_WORKER_AUTORUN', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll(
+    '"UNIT_TALK_WORKER_AUTORUN=$_worker_autorun"',
+    '"UNIT_TALK_WORKER_AUTORUN=true"',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('UNIT_TALK_WORKER_AUTORUN'),
+    ),
+  );
+});
+
+test('static deploy audit detects UNIT_TALK_ENABLED_TARGETS falling back to best-bets instead of forcing none in parked mode', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll(
+    '"UNIT_TALK_ENABLED_TARGETS=$_enabled_targets"',
+    '"UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets}"',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('UNIT_TALK_ENABLED_TARGETS') || violation.includes('best-bets'),
+    ),
+  );
+});
+
+test('static deploy audit detects a missing production ingestor/worker container confirmation', () => {
+  const mutatedSource = deployWorkflowSource.replace(
+    'docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_AUTORUN',
+    'docker compose exec -T api printenv UNIT_TALK_INGESTOR_AUTORUN',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('UNIT_TALK_INGESTOR_AUTORUN'),
+    ),
+  );
+});
+
+test('static deploy audit detects a missing parked-mode UNIT_TALK_ENABLED_TARGETS container assertion', () => {
+  const mutatedSource = deployWorkflowSource.replace(
+    '[ "$SYNDICATE_MACHINE_MODE" = "parked" ] && [ "$ENABLED_TARGETS_VALUE" != "none" ]',
+    '[ "$SYNDICATE_MACHINE_MODE" = "parked" ] && false',
+  );
+  assert.ok(
+    auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
+      violation.includes('UNIT_TALK_ENABLED_TARGETS'),
     ),
   );
 });
