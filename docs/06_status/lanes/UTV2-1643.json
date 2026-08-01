@@ -7,21 +7,29 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1643-next-auth-audit-override",
   "branch": "claude/utv2-1643-next-auth-audit-override",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ad6c84de8ab66e5fe59f0bae5a3501de911cd6ca",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1352",
   "files_changed": [],
   "file_scope_lock": [
     "pnpm-workspace.yaml"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-08-01T04:27:57.513Z",
-  "heartbeat_at": "2026-08-01T04:27:57.513Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-01T05:07:51.176Z",
+  "closed_at": "2026-08-01T05:07:51.176Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1643-next-auth-audit-override.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-01T05:07:48.628Z",
+      "verdict": "pass",
+      "merge_sha": "ad6c84de8ab66e5fe59f0bae5a3501de911cd6ca",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
