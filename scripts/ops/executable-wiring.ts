@@ -20,6 +20,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import YAML from 'yaml';
 
@@ -169,6 +170,12 @@ const CAPABILITY_ROOTS = ['scripts/ops', 'scripts/ci'];
 const SOURCE_SCAN_ROOTS = ['scripts', 'apps', 'packages', 'db', 'deploy', 'supabase'];
 const DOC_SCAN_ROOTS = ['docs', '.claude', '.agents', 'personas'];
 
+const EXCLUDED_LOCAL_PATHS = [
+  '.claude/worktrees',
+  '.out',
+  '.worktrees',
+] as const;
+
 /** Node/tsx flags that consume the following token as a value. */
 const VALUE_FLAGS = new Set([
   '--test-name-pattern',
@@ -233,6 +240,17 @@ function toPosix(value: string): string {
   return value.split(path.sep).join('/');
 }
 
+function isExcludedLocalPath(relativePath: string): boolean {
+  const normalized = toPosix(relativePath).replace(/^\.\//, '').replace(/\/$/, '');
+  const segments = normalized.split('/');
+  return (
+    segments.some(segment => SKIPPED_DIRS.has(segment)) ||
+    EXCLUDED_LOCAL_PATHS.some(
+      excluded => normalized === excluded || normalized.startsWith(`${excluded}/`),
+    )
+  );
+}
+
 function walk(root: string, relativeDir: string, out: string[]): void {
   const absolute = path.join(root, relativeDir);
   let entries: string[];
@@ -244,6 +262,7 @@ function walk(root: string, relativeDir: string, out: string[]): void {
   for (const entry of entries) {
     if (SKIPPED_DIRS.has(entry)) continue;
     const relative = relativeDir ? `${relativeDir}/${entry}` : entry;
+    if (isExcludedLocalPath(relative)) continue;
     let stat;
     try {
       stat = statSync(path.join(root, relative));
@@ -258,7 +277,46 @@ function walk(root: string, relativeDir: string, out: string[]): void {
   }
 }
 
+function listGitTrackedFiles(root: string): string[] | null {
+  const topLevel = spawnSync('git', ['-C', root, 'rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+  });
+  if (topLevel.status !== 0 || path.resolve(topLevel.stdout.trim()) !== path.resolve(root)) {
+    return null;
+  }
+
+  const tracked = spawnSync('git', ['-C', root, 'ls-files', '-z', '--cached'], {
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
+  if (tracked.status !== 0) return null;
+
+  return tracked.stdout
+    .split('\0')
+    .filter(Boolean)
+    .map(toPosix)
+    .filter(relative => !isExcludedLocalPath(relative))
+    .filter(relative => {
+      try {
+        return statSync(path.join(root, relative)).isFile();
+      } catch {
+        return false;
+      }
+    })
+    .sort();
+}
+
 export function listRepoFiles(root: string, subdirectory = ''): string[] {
+  const tracked = listGitTrackedFiles(root);
+  if (tracked) {
+    const normalizedSubdirectory = toPosix(subdirectory).replace(/^\.\//, '').replace(/\/$/, '');
+    if (!normalizedSubdirectory) return tracked;
+    return tracked.filter(
+      relative =>
+        relative === normalizedSubdirectory || relative.startsWith(`${normalizedSubdirectory}/`),
+    );
+  }
+
   const out: string[] = [];
   walk(root, subdirectory, out);
   return out.sort();
