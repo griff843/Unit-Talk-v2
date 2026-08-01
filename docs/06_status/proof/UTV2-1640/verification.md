@@ -1,10 +1,10 @@
 # PROOF: UTV2-1640 Phase A
 
-MERGE_SHA: 272ded3eb6d99f57c3f8d07cc1ab81fd37b39e49
+MERGE_SHA: 3c66f027964a89ea3e8fcba77dd06d883b7a47fd
 
-Bound to the code-only commit carrying the migration file. Code and proof are
-deliberately separate commits so the proof can name a SHA that actually
-contains the code it describes.
+Bound to the code-only commit carrying the migration file and its paired
+down script. Code and proof are deliberately separate commits so the proof
+can name a SHA that actually contains the code it describes.
 
 ## Summary
 
@@ -90,15 +90,22 @@ ALTER TABLE public.system_runs SET (
 );
 ```
 
-Narrows the autovacuum eligibility window for this one table roughly 10x
-(from ~20%/10% of the table's rows to ~2%/1%), so autovacuum reconsiders it
-at roughly 68,000 dead rows / 34,000 changed rows instead of ~680,000 /
-~340,000. No cluster-wide GUC touched; no other table affected. Reversal is
-a single statement:
+**Correction (caught by the schema round-trip drill before merge, not after):**
+`system_runs` was NOT at the cluster default before this migration. Its
+original `CREATE TABLE` (`00000000000000_baseline_live_schema.sql`) already
+carries a table-level override of `autovacuum_vacuum_scale_factor=0.05`,
+`autovacuum_analyze_scale_factor=0.05` (plus `autovacuum_vacuum_threshold=100`,
+`autovacuum_vacuum_cost_delay=10`). This migration's `SET` overwrites the two
+scale factors from 0.05/0.05 to 0.02/0.01 -- a further ~2.5x tightening on
+top of an existing override, not a first override from cluster defaults. The
+reversal is therefore a `SET` back to the true prior values, not a `RESET`
+(which would have dropped past the pre-existing override to the cluster
+default of 0.2/0.1 -- a state `system_runs` was never actually in):
 
 ```sql
-ALTER TABLE public.system_runs RESET (
-  autovacuum_vacuum_scale_factor, autovacuum_analyze_scale_factor
+ALTER TABLE public.system_runs SET (
+  autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.05
 );
 ```
 
@@ -116,10 +123,14 @@ Verified via `pg_class.reloptions`:
 ["autovacuum_vacuum_threshold=100","autovacuum_vacuum_cost_delay=10","autovacuum_vacuum_scale_factor=0.02","autovacuum_analyze_scale_factor=0.01"]
 ```
 
-The two new values are present; two pre-existing overrides
-(`autovacuum_vacuum_threshold=100`, `autovacuum_vacuum_cost_delay=10`, set
-by an earlier, unrelated change) are untouched -- `ALTER TABLE ... SET` only
-updates the keys named, confirming no accidental clobbering.
+The two named keys hold their new values (overwriting the pre-existing
+0.05/0.05, not adding new keys); two other pre-existing overrides
+(`autovacuum_vacuum_threshold=100`, `autovacuum_vacuum_cost_delay=10`) are
+untouched -- `ALTER TABLE ... SET` only updates the keys named, confirming
+no accidental clobbering. This reloptions readback alone doesn't distinguish
+"pre-existing key overwritten" from "new key added"; that distinction only
+surfaced from reading `00000000000000_baseline_live_schema.sql` directly
+after the schema round-trip drill's hash mismatch pointed at this migration.
 
 ## Types regeneration check
 
@@ -176,9 +187,87 @@ worktree's own sandboxed CLI.
 - [x] No `VACUUM FULL`, `REINDEX`, `CLUSTER`, `pg_repack`, table rewrite, deletion, retention change, fixture cleanup, or `provider_offers_legacy_quarantine` reclaim occurred.
 - [x] `pnpm type-check`, `pnpm lint` clean; R-level PASS.
 
+## Post-PR CI gate reconciliation
+
+Opening the PR surfaced two migration-specific gates this lane had not yet
+satisfied, plus one pre-existing, unrelated failure:
+
+- **Migration reversibility gate / schema round-trip drill**: both require a
+  down script at `db/migrations-rollback/<basename>.down.sql` for every new
+  migration. The drill's scratch-Postgres run (which replays every migration
+  from `00000000000000_baseline_live_schema.sql` forward) caught a genuine
+  bug in the first version of the down script: it used `RESET`, which does
+  not restore `system_runs`'s true pre-existing override (see "Correction"
+  above) -- `RESET` overshoots past 0.05/0.05 to the cluster default.
+  Changed to `SET (autovacuum_vacuum_scale_factor = 0.05,
+  autovacuum_analyze_scale_factor = 0.05)` -- but the drill STILL failed
+  after that fix, with a different hash mismatch. Root-caused via a
+  session-local temp-table reproduction against production (isolated,
+  auto-dropped, zero risk, no real object touched):
+
+  ```sql
+  CREATE TEMP TABLE t_repro (id int) WITH (
+    autovacuum_vacuum_scale_factor=0.05, autovacuum_analyze_scale_factor=0.05,
+    autovacuum_vacuum_threshold=100, autovacuum_vacuum_cost_delay=10);
+  -- reloptions: [vacuum_scale_factor, analyze_scale_factor, vacuum_threshold, cost_delay]
+  ALTER TABLE t_repro SET (autovacuum_vacuum_scale_factor=0.02, autovacuum_analyze_scale_factor=0.01);
+  -- reloptions: [vacuum_threshold, cost_delay, vacuum_scale_factor, analyze_scale_factor]  <- reordered!
+  ALTER TABLE t_repro SET (autovacuum_vacuum_scale_factor=0.05, autovacuum_analyze_scale_factor=0.05);
+  -- reloptions: [vacuum_threshold, cost_delay, vacuum_scale_factor, analyze_scale_factor]  <- same order as post-up, NOT the original
+  ```
+
+  Postgres's `ALTER TABLE ... SET` does not update an existing reloption key
+  in place -- it removes the named keys and re-appends them at the end of the
+  array, permanently changing their position. Since the round-trip drill
+  compares a `pg_dump`-rendered DDL hash (which renders reloptions in
+  `pg_class` array order), **no down script built from `ALTER TABLE
+  SET`/`RESET` can ever reproduce a byte-identical pre-up hash** once a
+  pre-existing reloption key is touched by any ALTER. This is a mechanical
+  limitation of hash-based schema verification against ALTER-based reloption
+  changes -- not evidence the change is functionally unsafe or unreversed;
+  the `SET` statement is still the correct, tested functional reversal
+  (verified via `pg_class.reloptions` readback during Phase A).
+
+  Marked the down script `-- IRREVERSIBLE:` per `db/migrations-rollback`'s
+  documented convention (functionally reversible, mechanically
+  hash-unreachable), which requires a matching entry in
+  `db/migrations-rollback/irreversible-exemption-registry.json` with
+  `ratified_by`/`ratified_at` before the gate passes. **That entry is
+  intentionally NOT added in this PR** -- the registry's own existing entries
+  are all PM-ratified (`ratified_by: "griff843"`), and self-adding one here
+  would be exactly the self-certification loophole UTV2-1521 already closed
+  for `file_scope_lock` (the code technically only checks that a matching
+  entry exists, not that `ratified_by` is authentic -- a real, separate
+  hardening gap worth flagging, not exploiting). A draft entry is provided in
+  the PR conversation for the PM to add or ratify.
+
+  `db/migrations-rollback/**` added to this lane's `file_scope_lock`
+  (declaration only -- see the File scope lock note below on why this alone
+  does not satisfy CI).
+- **"Require live-DB proof for runtime changes"**: this gate requires either
+  a code-based live-DB proof test (`apps/api/src/t1-proof-*.test.ts` or a
+  `packages/*|apps/*/src/scripts/*.ts` proof script) or the `skip-proof-coverage`
+  label with justification. This migration has no application code path and no
+  repository/controller logic to exercise -- the InMemory-vs-production
+  divergence risk the gate exists to catch (UTV2-519, UTV2-521) does not apply
+  to a storage-parameter-only `ALTER TABLE`. The actual live-DB proof for this
+  change is the direct production execution documented above (preflight,
+  `ANALYZE`, `VACUUM`, `ALTER TABLE`, and a `pg_class.reloptions` verification
+  against the real Supabase project) -- labeled `skip-proof-coverage` on the
+  PR with this rationale rather than writing a synthetic test around code that
+  doesn't exist.
+- **"Live Schema Parity"**: fails independently of this change, on
+  `command_center_delivery_mappings`/`command_center_game_threads` --
+  the same pre-existing, unrelated schema-parity gap noted in "Types
+  regeneration check" above. This is a standing, repo-wide condition (any PR
+  touching `supabase/migrations/**` currently trips it) with no in-workflow
+  override mechanism; resolving it is out of scope for Phase A and is flagged
+  separately as a genuine blocker, not fixed here.
+
 ## Scope
 
-`supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql`
+`supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql`,
+`db/migrations-rollback/20260801220000_utv2_1640_system_runs_autovacuum_tuning.down.sql`,
 plus lane apparatus. `packages/db/src/database.types.ts` declared in file
 scope but intentionally not modified (see "Types regeneration check" above).
 

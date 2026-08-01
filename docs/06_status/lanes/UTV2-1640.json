@@ -14,7 +14,8 @@
     "docs/06_status/proof/UTV2-1640/evidence.json",
     "docs/06_status/proof/UTV2-1640/verification.md",
     "packages/db/src/database.types.ts",
-    "supabase/migrations/**"
+    "supabase/migrations/**",
+    "db/migrations-rollback/**"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1640/evidence.json"
