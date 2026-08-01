@@ -242,9 +242,24 @@ jobs:
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
+          # UTV2-1646: parked mode must fully stop provider-derived producers and
+          # public delivery, not just the API's own schedulers (SYNDICATE_MACHINE_ENABLED).
+          # These four vars used to be hardcoded literals regardless of mode; a parked
+          # deploy still left the ingestor polling live SGO/Odds APIs and the worker
+          # able to claim/deliver any outbox row not separately kill-switched.
           case "$SYNDICATE_MACHINE_MODE" in
-            active) SYNDICATE_MACHINE_ENABLED=true ;;
-            parked) SYNDICATE_MACHINE_ENABLED=false ;;
+            active)
+              SYNDICATE_MACHINE_ENABLED=true
+              _ingestor_autorun=true
+              _ingestor_scheduling_enabled=true
+              _worker_autorun=true
+              ;;
+            parked)
+              SYNDICATE_MACHINE_ENABLED=false
+              _ingestor_autorun=false
+              _ingestor_scheduling_enabled=false
+              _worker_autorun=false
+              ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for canary deploy."
               exit 1
@@ -263,6 +278,14 @@ jobs:
             # all promotion targets so the target-coverage check doesn't block startup.
             _dist_targets="discord:0"
             [ -z "$_enabled_targets" ] && _enabled_targets="none"
+          fi
+          # UTV2-1646: parked mode must never resolve to a real target (public delivery
+          # must remain impossible), regardless of what UNIT_TALK_ENABLED_TARGETS holds.
+          # Active mode keeps its prior fallback semantics unchanged (best-bets when unset).
+          if [ "$SYNDICATE_MACHINE_MODE" = "parked" ]; then
+            _enabled_targets="none"
+          elif [ -z "$_enabled_targets" ]; then
+            _enabled_targets="best-bets"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
           [ -z "$_target_map" ] && _target_map='{}'
@@ -287,22 +310,22 @@ jobs:
             "UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed" \
             "UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc" \
             "UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity" \
-            "UNIT_TALK_INGESTOR_AUTORUN=true" \
+            "UNIT_TALK_INGESTOR_AUTORUN=$_ingestor_autorun" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
-            "UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=true" \
+            "UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=$_ingestor_scheduling_enabled" \
             "UNIT_TALK_INGESTOR_PEAK_POLL_MS=30000" \
             "UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS=300000" \
             "UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET=12" \
             "UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET=24" \
             "UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true" \
             "UNIT_TALK_WORKER_ID=worker-prod" \
-            "UNIT_TALK_WORKER_AUTORUN=true" \
+            "UNIT_TALK_WORKER_AUTORUN=$_worker_autorun" \
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_ADAPTER=discord" \
             "UNIT_TALK_WORKER_DRY_RUN=false" \
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
-            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets}" \
+            "UNIT_TALK_ENABLED_TARGETS=$_enabled_targets" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
@@ -430,9 +453,24 @@ jobs:
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
+          # UTV2-1646: parked mode must fully stop provider-derived producers and
+          # public delivery, not just the API's own schedulers (SYNDICATE_MACHINE_ENABLED).
+          # These four vars used to be hardcoded literals regardless of mode; a parked
+          # deploy still left the ingestor polling live SGO/Odds APIs and the worker
+          # able to claim/deliver any outbox row not separately kill-switched.
           case "$SYNDICATE_MACHINE_MODE" in
-            active) SYNDICATE_MACHINE_ENABLED=true ;;
-            parked) SYNDICATE_MACHINE_ENABLED=false ;;
+            active)
+              SYNDICATE_MACHINE_ENABLED=true
+              _ingestor_autorun=true
+              _ingestor_scheduling_enabled=true
+              _worker_autorun=true
+              ;;
+            parked)
+              SYNDICATE_MACHINE_ENABLED=false
+              _ingestor_autorun=false
+              _ingestor_scheduling_enabled=false
+              _worker_autorun=false
+              ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for production deploy."
               exit 1
@@ -451,6 +489,14 @@ jobs:
             # all promotion targets so the target-coverage check doesn't block startup.
             _dist_targets="discord:0"
             [ -z "$_enabled_targets" ] && _enabled_targets="none"
+          fi
+          # UTV2-1646: parked mode must never resolve to a real target (public delivery
+          # must remain impossible), regardless of what UNIT_TALK_ENABLED_TARGETS holds.
+          # Active mode keeps its prior fallback semantics unchanged (best-bets when unset).
+          if [ "$SYNDICATE_MACHINE_MODE" = "parked" ]; then
+            _enabled_targets="none"
+          elif [ -z "$_enabled_targets" ]; then
+            _enabled_targets="best-bets"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-}"
           [ -z "$_target_map" ] && _target_map='{}'
@@ -475,22 +521,22 @@ jobs:
             "UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed" \
             "UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc" \
             "UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity" \
-            "UNIT_TALK_INGESTOR_AUTORUN=true" \
+            "UNIT_TALK_INGESTOR_AUTORUN=$_ingestor_autorun" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
-            "UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=true" \
+            "UNIT_TALK_INGESTOR_SCHEDULING_ENABLED=$_ingestor_scheduling_enabled" \
             "UNIT_TALK_INGESTOR_PEAK_POLL_MS=30000" \
             "UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS=300000" \
             "UNIT_TALK_INGESTOR_PEAK_START_HOUR_ET=12" \
             "UNIT_TALK_INGESTOR_PEAK_END_HOUR_ET=24" \
             "UNIT_TALK_INGESTOR_PINNACLE_ONLY_PEAK=true" \
             "UNIT_TALK_WORKER_ID=worker-prod" \
-            "UNIT_TALK_WORKER_AUTORUN=true" \
+            "UNIT_TALK_WORKER_AUTORUN=$_worker_autorun" \
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_ADAPTER=discord" \
             "UNIT_TALK_WORKER_DRY_RUN=false" \
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
-            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets}" \
+            "UNIT_TALK_ENABLED_TARGETS=$_enabled_targets" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
@@ -542,8 +588,18 @@ jobs:
       - name: Confirm syndicate machine gate in production container
         run: |
           case "$SYNDICATE_MACHINE_MODE" in
-            active) REQUESTED_VALUE=true ;;
-            parked) REQUESTED_VALUE=false ;;
+            active)
+              REQUESTED_VALUE=true
+              REQUESTED_INGESTOR_AUTORUN=true
+              REQUESTED_INGESTOR_SCHEDULING=true
+              REQUESTED_WORKER_AUTORUN=true
+              ;;
+            parked)
+              REQUESTED_VALUE=false
+              REQUESTED_INGESTOR_AUTORUN=false
+              REQUESTED_INGESTOR_SCHEDULING=false
+              REQUESTED_WORKER_AUTORUN=false
+              ;;
             *)
               echo "::error::Validated syndicate-machine mode is missing or invalid for production readiness."
               exit 1
@@ -555,8 +611,44 @@ jobs:
             echo "::error::SYNDICATE_MACHINE_ENABLED readiness RED in production container: requested='$REQUESTED_VALUE' runtime='${VALUE:-missing}'"
             exit 1
           fi
-          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s"}\n' \
-            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE"
+
+          # UTV2-1646: prove the deployed-SHA-bound container truth for the full parked
+          # contract, not just SYNDICATE_MACHINE_ENABLED -- these three vars each ran a
+          # separate real risk (ingestor still polling live providers, worker still
+          # claiming/delivering outbox rows) that the API-only check above never covered.
+          INGESTOR_AUTORUN_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_AUTORUN 2>/dev/null || true")
+          if [ "$INGESTOR_AUTORUN_VALUE" != "$REQUESTED_INGESTOR_AUTORUN" ]; then
+            echo "::error::UNIT_TALK_INGESTOR_AUTORUN readiness RED in production container: requested='$REQUESTED_INGESTOR_AUTORUN' runtime='${INGESTOR_AUTORUN_VALUE:-missing}'"
+            exit 1
+          fi
+
+          INGESTOR_SCHEDULING_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_SCHEDULING_ENABLED 2>/dev/null || true")
+          if [ "$INGESTOR_SCHEDULING_VALUE" != "$REQUESTED_INGESTOR_SCHEDULING" ]; then
+            echo "::error::UNIT_TALK_INGESTOR_SCHEDULING_ENABLED readiness RED in production container: requested='$REQUESTED_INGESTOR_SCHEDULING' runtime='${INGESTOR_SCHEDULING_VALUE:-missing}'"
+            exit 1
+          fi
+
+          WORKER_AUTORUN_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T worker printenv UNIT_TALK_WORKER_AUTORUN 2>/dev/null || true")
+          if [ "$WORKER_AUTORUN_VALUE" != "$REQUESTED_WORKER_AUTORUN" ]; then
+            echo "::error::UNIT_TALK_WORKER_AUTORUN readiness RED in production container: requested='$REQUESTED_WORKER_AUTORUN' runtime='${WORKER_AUTORUN_VALUE:-missing}'"
+            exit 1
+          fi
+
+          # UNIT_TALK_ENABLED_TARGETS is asserted only in parked mode: active mode's
+          # value legitimately varies with the UNIT_TALK_ENABLED_TARGETS secret, but
+          # parked mode must NEVER resolve to a real target regardless of that secret.
+          ENABLED_TARGETS_VALUE=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && docker compose exec -T worker printenv UNIT_TALK_ENABLED_TARGETS 2>/dev/null || true")
+          if [ "$SYNDICATE_MACHINE_MODE" = "parked" ] && [ "$ENABLED_TARGETS_VALUE" != "none" ]; then
+            echo "::error::UNIT_TALK_ENABLED_TARGETS readiness RED in production container: parked mode requires 'none', runtime='${ENABLED_TARGETS_VALUE:-missing}'"
+            exit 1
+          fi
+
+          printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s"}\n' \
+            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE"
 
   smoke:
     name: Post-deploy functional smoke
