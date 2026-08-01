@@ -1,26 +1,28 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1399",
   "tier": "T1",
   "title": "Reversible, fixture-excluding production reporting view",
   "generated_at": "2026-07-31T12:10:00.000Z",
-  "status": "pr_open",
+  "status": "merged_awaiting_closeout",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
+  "schema_version_note": "Downgraded from 2 back to 1 in this repair pass. scripts/ci/proof-binding-validator.ts (migration-reversibility-gate.yml, pull_request-triggered, path-filtered to supabase/migrations/** and db/migrations-rollback/**) required schema_version 2 while the implementation PR was open and touching migration files. scripts/ops/truth-check-lib.ts's P6 check unconditionally requires exactly 1, with no v2 branch. This repair PR touches neither migrations path, so proof-binding-validator.ts never runs against it; reverting to 1 is safe for this PR and required for P6/truth-check, which is the gate that matters post-merge. Found schema_version:2 already committed elsewhere in the repo (UTV2-1205, UTV2-1274, UTV2-746 evidence.json) with no evidence any of them passed P6 under that value -- this looks like a genuine unresolved mismatch between the two gates, flagged here rather than silently resolved for every future migration lane.",
   "sha_binding": {
-    "verified_source_sha": "25675886a0b2573215dd7b7f4cc44676520b4503",
-    "merge_sha": null,
+    "verified_source_sha": "fdc193582f94ad7538fa594b475847eb81a3647f",
+    "merge_sha": "fdc193582f94ad7538fa594b475847eb81a3647f",
     "base_sha": "f4c529b51267d86c2dfbd38bdcfab527bd31668c",
-    "sha_type": "pending_merge",
-    "verified_source_note": "verified_source_sha is 25675886, the commit immediately preceding this one -- rebound a fourth time after a trivial rebase onto origin/main's latest tip (one automated 'ops(readiness): refresh ledger [skip ci]' commit touching only docs/06_status/readiness/readiness-score.json, zero real conflict). All four required contexts (verify, Executor Result Validation, Merge Gate, P0 Protocol) were green before this rebase and are being re-verified after it; this rebase was required by branch protection's required_status_checks.strict=true, not by any conflict. The authoritative binding for merge is still the squash SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha; this field only satisfies the pre-merge schema-v2 gate.",
+    "sha_type": "merge_sha",
+    "verified_source_note": "merge_sha bound to fdc19358, the real squash-merge SHA of PR #1343, via `ops:proof-generate UTV2-1399 --merge-sha fdc19358...` in this repair lane -- the mechanism confirmed non-destructive by UTV2-1631's earlier fix (dry-run showed both verification.md and evidence.json in preserved_paths/rebound_paths, not stale_paths_replaced). Prior to this repair, sha_binding.merge_sha was null: the automated Post-Merge Lane Close workflow detected manifest.commit_sha already differed from the push SHA and deliberately skipped its own early proof-generate bind, deferring to ops:lane-close --repair-merged, which then failed closed on P6/R1/R2 before committing anything -- so main never actually carried a bound merge_sha until this repair pass.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "bound_at": "2026-07-31T21:15:00.000Z"
+    "bound_at": "2026-08-01T03:11:16.254Z"
   },
   "verifier": {
-    "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm via Supabase MCP execute_sql, 2026-07-31 11:40:28+00 onward",
+    "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm via Supabase MCP execute_sql, 2026-07-31 11:40:28+00 onward; runtime_proof harvested by claude/utv2-1399-proof-repair from CI job 91315210076",
     "method": "Every count in verification.md is quoted alongside the exact SQL that produced it. All statements are SELECT; no DDL was applied and no row was created, updated or deleted. The partition claim (retained + excluded = raw) is arithmetic over a single scan, not a sampled estimate.",
-    "verifier_scope": "This identity verifies the classifier's behaviour against production data and the read-only counts. It does NOT verify the migration's DDL execution: no local Docker or psql was available, so the round-trip reversibility drill runs in CI (migration-reversibility-gate.yml, scratch postgres:16). It also does not verify pnpm test:db, which requires an active lane.",
-    "independence_note": "The lane's central claim -- that classifying by `source` destroys real data -- is verified by measurement in the opposite direction rather than by narrative: a naive source-based predicate was executed against production and counted 6,462 wrongly-excluded legitimate picks out of 7,580."
+    "verifier_scope": "This identity verifies the classifier's behaviour against production data and the read-only counts. It does NOT verify the migration's DDL execution: no local Docker or psql was available, so the round-trip reversibility drill runs in CI (migration-reversibility-gate.yml, scratch postgres:16).",
+    "independence_note": "The lane's central claim -- that classifying by `source` destroys real data -- is verified by measurement in the opposite direction rather than by narrative: a naive source-based predicate was executed against production and counted 6,462 wrongly-excluded legitimate picks out of 7,580.",
+    "runtime_proof_verifier_note": "scripts/ops/proof-repair.ts's mergeRuntimeProofIntoEvidence unconditionally replaces this entire `verifier` object with a bare `{identity: <verifier-identity flag>}` when adding runtime_proof -- confirmed by running --dry-run then a real (git-revertible) apply and diffing before/after. The pre-repair rich object (method/verifier_scope/independence_note above) was restored by hand afterward rather than accepted as lost, and the tool's stamped identity (claude/utv2-1399-proof-repair, distinct from this manifest's created_by=claude, satisfying P10) is folded into the `identity` line rather than silently discarded. Flagging this for anyone else using proof-repair apply on a bundle with a pre-existing rich verifier object: check the diff before trusting the tool's own 'byte-identical' claim, which is true of every OTHER top-level key but not of `verifier` itself."
   },
   "measurement": {
     "target": "zfzdnfwdarxucxtaojxm (PRODUCTION)",
@@ -46,7 +48,7 @@
       "excluded_pct": 95.81
     },
     "settled_stake_units": {
-      "raw": 18278.0,
+      "raw": 18278,
       "retained": 385.5,
       "synthetic_pct": 97.89,
       "volume_inflation_factor": 47.4
@@ -175,9 +177,97 @@
     "guard_intent": "The guard test mechanically enforces what the lane promised: no DELETE/UPDATE/TRUNCATE/INSERT/ALTER TABLE/DROP COLUMN/GRANT in the migration; every created object inside schema reporting; no materialized views; the down script drops only that schema and claims no irreversibility exemption; the classifier never references a dual-use source name; the classifier is a non-STRICT CASE returning text, filtered IS NULL / IS NOT NULL. Per CLAUDE.md invariant 11."
   },
   "runtime_proof": {
-    "status": "not_run",
-    "reason": "pnpm test:db requires an active lane and runs against staging xskgrzbteyqdufktjrjx via pnpm ci:assert-staging. The lane was not started because the migration/runtime forbidden combination is live. This is the outstanding T1 requirement.",
-    "production_read_only_measurement_substitutes_nothing": "The read-only production measurement above proves the classifier's behaviour on real data. It is not a substitute for the T1 test:db gate and is not offered as one."
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 44580.023432,
+    "queries": [
+      {
+        "table": "submissions,settlement_records",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 7328.86ms)"
+      },
+      {
+        "table": "distribution_outbox,pick_lifecycle",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 6962.77ms)"
+      },
+      {
+        "table": "distribution_outbox,distribution_receipts,pick_lifecycle,audit_log",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 7208.00ms)"
+      },
+      {
+        "table": "settlement_records,pick_lifecycle,audit_log",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 6925.36ms)"
+      },
+      {
+        "table": "market_universe",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 63.68ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows (ok 6, 7461.50ms)"
+      },
+      {
+        "table": "settlement_records,settlement_corrections",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated (ok 7, 7949.87ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-01T02:29:15Z",
+    "row_counts_note": "Harvested (not re-run) from the seed-staging-fixtures.ts step of CI job 'Writable DB proof (staging only)' (run 30680085299, job 91315210076) on PR #1343's own head 4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772 -- the head that squash-merged to fdc19358. That job holds the only credential to staging xskgrzbteyqdufktjrjx; a local re-run is impossible from this host (ci:assert-staging correctly refuses the containment stub target). retained by design: settlement_records, picks, submissions (not reset by the seed step). CI receipt: [ci:db-smoke] sha256=e94648d8fac077a48602b8f1e2f25463097f688f87d60d92f8f6823658fc2d1a, target=xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "ci.yml",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 30680085299,
+      "job_id": 91315210076,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30680085299/job/91315210076",
+      "target_head_sha": "4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772",
+      "target_merge_sha": "fdc193582f94ad7538fa594b475847eb81a3647f",
+      "conclusion": "success"
+    }
   },
   "downstream": {
     "issue": "UTV2-1633",
@@ -192,7 +282,7 @@
   },
   "adjacent_findings": [
     {
-      "topic": "Live Schema Parity \u2014 78 unauthorized missing_in_expected findings",
+      "topic": "Live Schema Parity — 78 unauthorized missing_in_expected findings",
       "status": "investigated_and_recorded_not_fixed",
       "blocks_this_lane": false,
       "cause": "command_center_game_threads and command_center_delivery_mappings exist on live but have no CREATE TABLE anywhere in supabase/migrations/, supabase/migrations_archive/, the baseline dump, or db/migrations-rollback/. Entirely absent from the ledger, not present-but-drifted. Created out-of-band after the UTV2-1274 baseline.",
@@ -214,9 +304,9 @@
     }
   ],
   "not_closed": [
-    "pnpm test:db not run locally \u2014 outstanding T1 requirement; satisfied via CI's staging-db-proof job on the PR, not a local run (ci:assert-staging correctly refuses any non-staging target from this host).",
-    "packages/db/src/database.types.ts not regenerated \u2014 must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges. supabase db push itself is reserved to the human operator per docs/05_operations/DB_MIGRATION_WORKFLOW.md; merge alone does not apply it.",
-    "Round-trip reversibility drill not run locally \u2014 no Docker or psql; confirmed the down-script/exemption-registry checks pass locally via migration-reversibility-gate.ts --base origin/main; the scratch-postgres drill itself runs in CI.",
+    "pnpm test:db not run locally — outstanding T1 requirement; satisfied via CI's staging-db-proof job on the PR, not a local run (ci:assert-staging correctly refuses any non-staging target from this host).",
+    "packages/db/src/database.types.ts not regenerated — must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges. supabase db push itself is reserved to the human operator per docs/05_operations/DB_MIGRATION_WORKFLOW.md; merge alone does not apply it.",
+    "Round-trip reversibility drill not run locally — no Docker or psql; confirmed the down-script/exemption-registry checks pass locally via migration-reversibility-gate.ts --base origin/main; the scratch-postgres drill itself runs in CI.",
     "PR merge and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this evidence snapshot."
   ],
   "sequencing_history": {
@@ -243,7 +333,7 @@
     "artifact": "docs/06_status/proof/UTV2-1399/corrected-inventory.json",
     "supersedes": ".out/fixture-cleanup-packet/inventory.json",
     "authorizes_deletion": false,
-    "relationship_to_packet": "strict superset \u2014 +31 ids, 0 removed",
+    "relationship_to_packet": "strict superset — +31 ids, 0 removed",
     "delta_is_classifier_correction_not_data_drift": {
       "packet_published_sha256": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
       "recomputed_sha256_2026_07_31": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
@@ -269,6 +359,6 @@
       "relationships.md: pick_offer_snapshots fixture-reachable 0 -> actually 20",
       "relationships.md: command_center_delivery_mappings fixture-reachable 0 -> actually 16"
     ],
-    "headline_recommendation": "Scope any future deletion to class `ci` only. The 6 qa_demo picks are the sole source of all 16 command_center_delivery_mappings rows, and that table has no CREATE TABLE in the migration ledger \u2014 deleting them would mutate a table the repo cannot replay. Hold them out of deletion; exclude from reporting only."
+    "headline_recommendation": "Scope any future deletion to class `ci` only. The 6 qa_demo picks are the sole source of all 16 command_center_delivery_mappings rows, and that table has no CREATE TABLE in the migration ledger — deleting them would mutate a table the repo cannot replay. Hold them out of deletion; exclude from reporting only."
   }
 }
