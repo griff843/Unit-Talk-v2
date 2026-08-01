@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1399",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1399-fixture-reporting-view",
+  "branch": "claude/utv2-1399-fixture-reporting-view",
+  "base_branch": "main",
+  "commit_sha": "8cee29474688a929cda9e13daf2dcce170ee7247",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/migration-lock.yml",
+    ".ops/sync/UTV2-1399.yml",
+    "db/migrations-rollback/20260731000000_utv2_1399_fixture_excluding_reporting_views.down.sql",
+    "docs/06_status/lanes/UTV2-1399.json",
+    "docs/06_status/proof/UTV2-1399/**",
+    "package.json",
+    "packages/db/src/database.types.ts",
+    "scripts/ci/utv2-1399-reporting-view-guard.test.ts",
+    "scripts/generate-types.mjs",
+    "supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1399/evidence.json",
+    "docs/06_status/proof/UTV2-1399/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-07-31T20:52:38.113Z",
+  "heartbeat_at": "2026-07-31T20:56:57.989Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1399-fixture-reporting-view.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1399-fixture-reporting-view",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

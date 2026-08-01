@@ -1,21 +1,25 @@
 schema_version: 1
-issue_id: UTV2-1086
+issue_id: UTV2-1399
 lane_type: migration
 owner: claude
-acquired_at: 2026-05-24T16:20:00.000Z
+acquired_at: 2026-07-31T20:52:38.113Z
 scope:
-  - supabase/migrations/20260524001_utv2_1086_snapshot_cutover.sql
-  - db/migrations-rollback/20260524001_utv2_1086_snapshot_cutover.down.sql
-  - packages/db/src/repositories.ts
-  - packages/db/src/runtime-repositories.ts
-  - apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts
-  - apps/ingestor/package.json
-  - scripts/ops/pr-review-packet.ts
-  - docs/06_status/lanes/UTV2-1086.json
-  - docs/06_status/lanes/UTV2-1157-codex.json
-  - docs/06_status/proof/UTV2-1086/evidence.json
-  - docs/06_status/proof/UTV2-1086/verification-log.md
-  - docs/06_status/proof/UTV2-1086/verification.md
-  - .ops/sync/UTV2-1086.yml
+  - supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql
+  - db/migrations-rollback/20260731000000_utv2_1399_fixture_excluding_reporting_views.down.sql
+  - scripts/ci/utv2-1399-reporting-view-guard.test.ts
+  - scripts/generate-types.mjs
+  - packages/db/src/database.types.ts
+  - package.json
+  - docs/06_status/lanes/UTV2-1399.json
+  - docs/06_status/proof/UTV2-1399/evidence.json
+  - docs/06_status/proof/UTV2-1399/verification.md
+  - docs/06_status/proof/UTV2-1399/corrected-inventory.json
+  - .ops/sync/UTV2-1399.yml
   - .lane/migration-lock.yml
 release_after: merge
+note: >-
+  Re-claimed from UTV2-1086 (acquired 2026-05-24, merged long ago, never
+  released -- scripts/lane-contract.ts only checks file existence, not that
+  the lock matches the current lane, so the stale lock neither blocked nor
+  protected anything). Recorded as an adjacent finding in
+  docs/06_status/proof/UTV2-1399/verification.md.
