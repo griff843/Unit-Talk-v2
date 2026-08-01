@@ -1,6 +1,6 @@
 # PROOF: UTV2-1624
 
-MERGE_SHA: 12b0d00ff21ac9c637f821cce99e53950a3a27d9
+MERGE_SHA: 43c36112089a80d7e50bcb7db0bde1764b2d62fe
 
 That SHA is the implementation commit — this lane's work rebased four times
 onto `origin/main`, most recently at `fdc19358` (past UTV2-1604, UTV2-1632,
@@ -462,3 +462,41 @@ both are fixed here rather than deferred:
 - No test was deleted for being unwired.
 - No existing verify, branch-protection or governance requirement was weakened. The
   only behavioural change to an existing gate is additive.
+
+## Post-merge runtime-proof repair (this bundle's `runtime_proof`/`verifier`)
+
+Automated closeout (`pnpm ops:lane-close`/`pnpm ops:truth-check`) surfaced R1/R2
+gaps after PR #1338 merged as `43c36112089a80d7e50bcb7db0bde1764b2d62fe`:
+`runtime_proof.queries` and `runtime_proof.row_counts` were empty. The T1
+live-DB evidence existed the whole time — this PR's own "Writable DB proof
+(staging only)" CI job (run `30681405518`, job `91319015637`) ran `pnpm
+test:db` against staging `xskgrzbteyqdufktjrjx` and passed 7/7 — it had simply
+never been harvested into the bundle.
+
+Repaired via the governed `pnpm ops:proof-repair` path in a follow-up PR,
+never by hand-editing `main`:
+
+- `queries`: the 7 TAP cases from `apps/api/src/database-smoke.test.ts`,
+  transcribed verbatim from the `ci-db-proof-receipt/v2` artifact
+  (`utv2-1630-db-proof-receipt-30681405518-1`, artifact id `8812437341`),
+  downloaded via `gh run download`, not re-run.
+- `row_counts`: the 8 table operations (3 resets, 5 reference-data upserts)
+  logged by `scripts/ci/seed-staging-fixtures.ts` in the same job, transcribed
+  from that job's own log.
+- `verifier`: `mergeRuntimeProofIntoEvidence` in `scripts/ops/proof-repair.ts`
+  unconditionally replaces the whole `verifier` object with a bare
+  `{identity: ...}`, discarding this bundle's existing `method` /
+  `verifier_scope` / `independence_note` narrative. That replacement was
+  reverted by hand: `identity` is kept as the tool set it (distinct from
+  `manifest.created_by: codex-cli`, satisfying P10), everything else is
+  restored verbatim, with one line added noting the harvest.
+- `sha_binding.merge_sha`: this bundle's original `sha_binding` only ever
+  carried `verified_source_sha` (never a sibling `merge_sha` key), so
+  `proof-repair`'s `merge_sha_not_bound` guard — which reads that exact field
+  — could not find a bound SHA even though `verified_source_sha` already
+  equalled the merge SHA. Added `merge_sha: verified_source_sha` by hand
+  before running `apply`; both fields now agree.
+
+Diffed before/after: every top-level key except `verifier`, `runtime_proof`
+and the hand-added `sha_binding.merge_sha` is byte-identical to the pre-repair
+bundle.
