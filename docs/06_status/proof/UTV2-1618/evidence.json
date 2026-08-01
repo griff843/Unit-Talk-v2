@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1618",
+  "sha_binding": {
+    "verified_source_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
+    "merge_sha": null,
+    "evidence_commit_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
+    "current_pr_head_sha": "cc9fe9aeaf03f1ea545390cf0ae478c1cb4eaa12",
+    "verified_source_note": "Bound to the code-only commit carrying the Bounce 3 remediation (cc9fe9ae, on top of the 788e227f/2e80a15a scope). Code and proof are separate commits so the proof names a SHA that contains the code it describes."
+  },
+  "verifier": {
+    "identity": "claude-opus-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "type-check, lint, and test:ops run individually and clean on 788e227f. Full composite `pnpm test` fails earlier in test:apps due to a pre-existing, untracked local.env misconfiguration in this worktree (UNIT_TALK_API_RUNTIME_MODE=test, invalid) unrelated to this diff -- confirmed by reproducing the identical 40 failures with this diff fully stashed out. CI on the merge SHA runs in a clean environment and is authoritative."
+    },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "test_ops": {
+      "status": "PASS",
+      "note": "pnpm test:ops: 1886 passing, 0 failing, including 25/25 in scripts/ci/deploy-parked-mode.test.ts (15 pre-existing + 5 static regression tests from the first UTV2-1618 pass + 4 new EXECUTABLE shell regressions added for Bounce 3, addressing the PM finding that string-presence checks alone don't prove the classifier survives bash -e)."
+    },
+    "test_run_logs": [
+      {
+        "path": "scripts/ci/deploy-parked-mode.test.ts",
+        "merge_sha": null
+      },
+      {
+        "path": "scripts/ci/ops-api-diagnose-workflow.test.ts",
+        "merge_sha": null
+      },
+      {
+        "path": "scripts/ci/ops-p0-containment-workflow.test.ts",
+        "merge_sha": null
+      }
+    ],
+    "mutation_verification": {
+      "status": "PASS",
+      "method": "spot-verified",
+      "note": "Twelve pre-existing guards (diagnostic/containment workflows) plus five new deploy.yml guards (missing UNIT_TALK_IMAGE_TAG, reintroduced stderr suppression, missing release-record cross-check, missing docker-inspect cross-check, missing kill-switch verification) each reverted on scratch copies of the source string; every one fails the suite."
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 9,
+      "rules_matched": "none -- workflow + CI test + lane manifest only; no application, domain, package or migration path touched"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "CARRIED_FORWARD",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 84746,
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 84746,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase, executed against the original 2e80a15a scope. This extension (788e227f) touches only .github/workflows/deploy.yml, scripts/ci/deploy-parked-mode.test.ts, and the lane manifest -- no DB schema, query, or application code -- so the prior live-DB result is unaffected and R-level re-confirmed no new runtime-proof artifact is mechanically required for this diff."
+      }
+    ],
+    "extension_note": "test:db could not be freshly re-executed from this worktree: its local.env intentionally points SUPABASE_URL at an unreachable local sandbox (127.0.0.1) as containment for agent-owned worktrees, and ci:assert-staging correctly refused to run a writable DB check against an unidentified target. This is fail-closed working as intended, not a gap -- the diff has no DB-touching surface for it to exercise.",
+    "production_diagnostic": "The read-only diagnostic executed against production and returned containment verified, container-internal health pass, host endpoint unreachable (advisory, separate defect class). No production mutation occurred."
+  },
+  "incident_record_correction": {
+    "date": "2026-08-01",
+    "statement": "During the re-dispatched parked-mode deploy, only the canary job's API container was recreated (via `docker compose up -d --no-deps api`) before the confirm step's own broken verification misreported that recreation as a readiness failure. Full promotion and every other production service (ingestor, worker, discord-bot) were never touched by this incident.",
+    "note": "Corrects any prior narrative implying broader production impact. This bug was in a verification step's own compose evaluation, not in the release step that actually mutates containers."
+  },
+  "blast_radius": {
+    "production_mutation_on_merge": false,
+    "note": "Merging performs no production mutation. The diagnostic workflows remain read-only; the containment workflow retains dispatch-only triggering and human environment approval; deploy.yml's confirm-step fix only changes verification logic, not what gets deployed."
+  }
+}

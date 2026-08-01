@@ -101,8 +101,21 @@ jobs:
             echo 'ERROR: .env.production is missing; containment stopped.'
             exit 1
           fi
+          # Every `docker compose` evaluation needs UNIT_TALK_IMAGE_TAG, not just the
+          # restart: deploy/production/docker-compose.yml declares
+          # ${UNIT_TALK_IMAGE_TAG:?required} for EVERY service, so compose fails to
+          # interpolate without it. The first production run exported it only on the
+          # `up` line, so its own pre/post `exec` and `ps` checks failed and it could
+          # not verify the containment it had just applied. Exported once, here,
+          # before the first compose call.
           if [ ! -f .unit-talk-release ]; then
             echo 'ERROR: .unit-talk-release is missing; containment stopped.'
+            exit 1
+          fi
+          UNIT_TALK_IMAGE_TAG="$(tr -d '\r\n' < .unit-talk-release)"
+          export UNIT_TALK_IMAGE_TAG
+          if [ -z "$UNIT_TALK_IMAGE_TAG" ]; then
+            echo 'ERROR: .unit-talk-release is empty; containment stopped.'
             exit 1
           fi
 
@@ -116,11 +129,6 @@ jobs:
           echo 'Running container summary:'
           docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' </dev/null
 
-          CURRENT_IMAGE="$(tr -d '\r\n' < .unit-talk-release)"
-          if [ -z "$CURRENT_IMAGE" ]; then
-            echo 'ERROR: .unit-talk-release is empty; containment stopped.'
-            exit 1
-          fi
 
           TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
           BACKUP_FILE=".env.production.utv2-1612.${TIMESTAMP}.bak"
@@ -201,7 +209,7 @@ jobs:
           # 'attempted' until compose returns 0, so a failed restart is reported
           # as such instead of claiming the API was recreated.
           RESTART_DONE=attempted
-          UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api </dev/null
+          docker compose up -d --no-deps --force-recreate api </dev/null
           RESTART_DONE=true
 
           HEALTH_OK=false

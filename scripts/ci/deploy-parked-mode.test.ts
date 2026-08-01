@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -238,6 +238,36 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
         );
       }
     }
+
+    // UTV2-1618: live incident (2026-08-01) -- the production compose file
+    // requires UNIT_TALK_IMAGE_TAG for every service on every compose
+    // evaluation, not just `up`. These checks lock in the fix so the exact
+    // same bug class cannot silently return.
+    if (!confirmScript.includes("UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec")) {
+      violations.push(`${stage} readiness must supply UNIT_TALK_IMAGE_TAG to every docker compose exec`);
+    }
+    if (/docker compose exec[^\n]*2>\/dev\/null\s*\|\|\s*true/.test(confirmScript)) {
+      violations.push(
+        `${stage} readiness must not suppress stderr or swallow exit status (2>/dev/null || true) on a compose exec -- that hides a real Compose evaluation failure as "variable missing"`,
+      );
+    }
+    if (!confirmScript.includes(".unit-talk-release")) {
+      violations.push(`${stage} readiness must cross-check the resolved tag against the host's own release record`);
+    }
+    if (!confirmScript.includes('docker ps -q --filter') || !confirmScript.includes('docker inspect')) {
+      violations.push(`${stage} readiness must independently cross-check via docker inspect + compose labels, not compose-exec alone`);
+    }
+  }
+
+  // UTV2-1618: production must also prove the public kill switches remain
+  // engaged -- defense-in-depth containment that this deploy did not set but
+  // must never silently observe as disengaged.
+  if (
+    !productionConfirm.includes('delivery_kill_switch') ||
+    !productionConfirm.includes('best-bets') ||
+    !productionConfirm.includes('trader-insights')
+  ) {
+    violations.push('production readiness must verify the best-bets/trader-insights kill switches remain engaged');
   }
 
   const directSecretConsumers =
@@ -522,5 +552,324 @@ test('static deploy audit detects a registry preflight that does not fail closed
     auditParkedModeDeployWorkflow(mutatedSource).some((violation) =>
       violation.includes('fail closed'),
     ),
+  );
+});
+
+// ── UTV2-1618: live production incident, 2026-08-01 -- the canary confirm
+// step's `docker compose exec` never received UNIT_TALK_IMAGE_TAG, which the
+// production compose file requires for EVERY service on EVERY compose
+// evaluation. Compose failed closed before printenv ever ran, and
+// `2>/dev/null || true` silently discarded that failure, misreporting a
+// genuine Compose evaluation error as "SYNDICATE_MACHINE_ENABLED missing at
+// runtime". The API container itself was correctly recreated and healthy
+// throughout -- only this verification step's own evaluation was broken.
+// Full promotion and the other production services were never touched.
+
+test('static deploy audit detects a confirm step missing UNIT_TALK_IMAGE_TAG on compose exec', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll(
+    "UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec",
+    'docker compose exec',
+  );
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes('UNIT_TALK_IMAGE_TAG')));
+});
+
+test('static deploy audit detects reintroduced stderr suppression on a confirm-step compose exec', () => {
+  const mutatedSource = deployWorkflowSource.replace(
+    '"cd \'$DEPLOY_PATH\' && UNIT_TALK_IMAGE_TAG=\'$IMAGE_TAG\' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>&1); then',
+    '"cd \'$DEPLOY_PATH\' && UNIT_TALK_IMAGE_TAG=\'$IMAGE_TAG\' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>/dev/null || true); then',
+  );
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(
+    violations.some((violation) => violation.includes('2>/dev/null || true')),
+    `expected a stderr-suppression violation, got: ${JSON.stringify(violations)}`,
+  );
+});
+
+test('static deploy audit detects a missing .unit-talk-release cross-check', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll('.unit-talk-release', '.unused-marker');
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes("release record")));
+});
+
+test('static deploy audit detects a missing docker-inspect independent cross-check', () => {
+  const mutatedSource = deployWorkflowSource.replaceAll('docker inspect', 'docker unused-inspect');
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes('docker inspect')));
+});
+
+test('static deploy audit detects a missing public kill-switch verification in production readiness', () => {
+  const productionMarker = deployWorkflowSource.indexOf(
+    'Confirm syndicate machine gate in production container',
+  );
+  assert.notEqual(productionMarker, -1);
+  const mutatedSource =
+    deployWorkflowSource.slice(0, productionMarker) +
+    deployWorkflowSource.slice(productionMarker).replaceAll('delivery_kill_switch', 'unused_table');
+  const violations = auditParkedModeDeployWorkflow(mutatedSource);
+  assert.ok(violations.some((violation) => violation.includes('kill switch')));
+});
+
+// ── UTV2-1618 PM review, Bounce 3: executable shell regressions ─────────────
+//
+// The static string-presence checks above cannot prove the classification
+// logic is actually *reachable* under `bash -e` (GitHub Actions' real shell
+// for these steps -- confirmed by the workflow logs, `shell: /usr/bin/bash -e
+// {0}`), that UNIT_TALK_ENABLED_TARGETS is independently verified via
+// docker-inspect rather than compose-exec alone, or that container lookups
+// reject ambiguous matches. These tests execute the real production confirm
+// script under `bash -e` against a fake `ssh`/`curl` on PATH, so they run the
+// actual failure-handling code paths rather than grepping for text.
+
+const productionConfirmScript = runScript(
+  workflowStep(
+    workflowJob(parseYaml(deployWorkflowSource) as WorkflowRecord, 'promote'),
+    'Confirm syndicate machine gate in production container',
+  ),
+);
+
+const BASE_ENV = {
+  DEPLOY_USER: 'deployer',
+  DEPLOY_HOST: 'host.example.com',
+  DEPLOY_PATH: '/opt/unit-talk',
+  IMAGE_NAMESPACE: 'ghcr.io/example/unit-talk-v2',
+  IMAGE_TAG: 'sha-abc123',
+  SUPABASE_URL: 'https://example.supabase.co',
+  SUPABASE_SERVICE_ROLE_KEY: 'service-role-test-key',
+};
+
+// Each rule is [substring-to-match-against-the-remote-command, stdout, exitCode, stderr?].
+// Rules are tried in order; the first substring match wins. An unmatched
+// remote command is a hard test failure (exit 99 with the command echoed),
+// not a silent success -- an untested code path must never look "fine" by
+// accident.
+// Single-quotes a string for safe use as a literal bash word, escaping any
+// embedded single quotes via the standard '\'' trick. Match/stdout/stderr
+// text here contains literal double quotes (docker --format strings), so
+// double-quoting is not an option; this is what actually survives them.
+function shQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
+function writeFakeSsh(dir: string, rules: Array<[string, string, number, string?]>) {
+  const arms = rules
+    .map(
+      ([match, stdout, exitCode, stderr]) => `
+  *${shQuote(match)}*)
+    ${stderr ? `printf '%s\\n' ${shQuote(stderr)} >&2` : ':'}
+    printf '%b\\n' ${shQuote(stdout)}
+    exit ${exitCode}
+    ;;`,
+    )
+    .join('');
+  const script = `#!/usr/bin/env bash
+cmd="$2"
+case "$cmd" in${arms}
+  *)
+    echo "UNMOCKED SSH CALL: $cmd" >&2
+    exit 99
+    ;;
+esac
+`;
+  const path = join(dir, 'ssh');
+  writeFileSync(path, script);
+  chmodSync(path, 0o755);
+}
+
+function writeFakeCurl(dir: string, body: string) {
+  const path = join(dir, 'curl');
+  writeFileSync(path, `#!/usr/bin/env bash\nprintf '%s' '${body}'\nexit 0\n`);
+  chmodSync(path, 0o755);
+}
+
+const KILL_SWITCH_BOTH_ENGAGED =
+  '[{"target":"best-bets","killed":true},{"target":"trader-insights","killed":true}]';
+
+function runScriptWithMocks(
+  script: string,
+  sshRules: Array<[string, string, number, string?]>,
+  extraEnv: Record<string, string> = {},
+) {
+  const dir = mkdtempSync(join(tmpdir(), 'utv2-1618-fake-bin-'));
+  try {
+    writeFakeSsh(dir, sshRules);
+    writeFakeCurl(dir, KILL_SWITCH_BOTH_ENGAGED);
+    const result = spawnSync('bash', ['-e', '-c', script], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        PATH: `${dir}:${process.env.PATH}`,
+        SYNDICATE_MACHINE_MODE: 'parked',
+        ...BASE_ENV,
+        ...extraEnv,
+      },
+      encoding: 'utf8',
+    });
+    return result;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+// Standard "everything matches the parked contract" mock table, reused as a
+// base by tests that need to inject exactly one discrepancy.
+const HAPPY_PATH_SSH_RULES: Array<[string, string, number, string?]> = [
+  [".unit-talk-release", BASE_ENV.IMAGE_TAG, 0],
+  ["docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED", "false", 0],
+  ["docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_AUTORUN", "false", 0],
+  ["docker compose exec -T ingestor printenv UNIT_TALK_INGESTOR_SCHEDULING_ENABLED", "false", 0],
+  ["docker compose exec -T worker printenv UNIT_TALK_WORKER_AUTORUN", "false", 0],
+  ["docker compose exec -T worker printenv UNIT_TALK_ENABLED_TARGETS", "none", 0],
+  ["docker ps -q --filter 'label=com.docker.compose.service=api' --filter 'status=running'", "cid-api", 0],
+  ['docker inspect --format \'{{index .Config.Labels "com.docker.compose.project"}}\' \'cid-api\'', "unit-talk", 0],
+  [
+    "docker ps -q --filter 'label=com.docker.compose.service=api' --filter 'label=com.docker.compose.project=unit-talk' --filter 'status=running'",
+    "cid-api",
+    0,
+  ],
+  [
+    "docker ps -q --filter 'label=com.docker.compose.service=ingestor' --filter 'label=com.docker.compose.project=unit-talk' --filter 'status=running'",
+    "cid-ingestor",
+    0,
+  ],
+  [
+    "docker ps -q --filter 'label=com.docker.compose.service=worker' --filter 'label=com.docker.compose.project=unit-talk' --filter 'status=running'",
+    "cid-worker",
+    0,
+  ],
+  ["docker inspect --format '{{.Config.Image}}' 'cid-api'", `${BASE_ENV.IMAGE_NAMESPACE}/api:${BASE_ENV.IMAGE_TAG}`, 0],
+  [
+    "docker inspect --format '{{.Config.Image}}' 'cid-ingestor'",
+    `${BASE_ENV.IMAGE_NAMESPACE}/ingestor:${BASE_ENV.IMAGE_TAG}`,
+    0,
+  ],
+  [
+    "docker inspect --format '{{.Config.Image}}' 'cid-worker'",
+    `${BASE_ENV.IMAGE_NAMESPACE}/worker:${BASE_ENV.IMAGE_TAG}`,
+    0,
+  ],
+  [
+    "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' 'cid-api'",
+    "SYNDICATE_MACHINE_ENABLED=false",
+    0,
+  ],
+  [
+    "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' 'cid-ingestor'",
+    "UNIT_TALK_INGESTOR_AUTORUN=false\\nUNIT_TALK_INGESTOR_SCHEDULING_ENABLED=false",
+    0,
+  ],
+  [
+    "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' 'cid-worker'",
+    "UNIT_TALK_WORKER_AUTORUN=false\\nUNIT_TALK_ENABLED_TARGETS=none",
+    0,
+  ],
+];
+
+test('EXECUTABLE: production confirm step reaches its failure classifier under bash -e when compose-exec fails', () => {
+  const rules: Array<[string, string, number, string?]> = [
+    [".unit-talk-release", BASE_ENV.IMAGE_TAG, 0],
+    [
+      "docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED",
+      "",
+      1,
+      'service "api" is not running',
+    ],
+  ];
+  const result = runScriptWithMocks(productionConfirmScript, rules);
+  assert.notEqual(result.status, 0, 'script must fail closed when compose-exec fails');
+  assert.match(
+    result.stdout,
+    /Production api service\/container could not be resolved/,
+    `expected the classifier to run and identify the failure; got stdout: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test('EXECUTABLE: reverting to the pre-fix VAR=$(...); STATUS=$? pattern makes the classifier unreachable (proves the original bug)', () => {
+  const buggyOldPattern = productionConfirmScript.replace(
+    `if API_EXEC_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \\
+  "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>&1); then
+  API_EXEC_STATUS=0
+else
+  API_EXEC_STATUS=$?
+fi`,
+    `API_EXEC_OUTPUT=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \\
+  "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED" 2>&1)
+API_EXEC_STATUS=$?`,
+  );
+  assert.notEqual(buggyOldPattern, productionConfirmScript, 'the reversion must actually change the script');
+
+  const rules: Array<[string, string, number, string?]> = [
+    [".unit-talk-release", BASE_ENV.IMAGE_TAG, 0],
+    [
+      "docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED",
+      "",
+      1,
+      'service "api" is not running',
+    ],
+  ];
+  const result = runScriptWithMocks(buggyOldPattern, rules);
+  assert.notEqual(result.status, 0, 'the old pattern still fails closed (bash -e aborts) -- that was never the bug');
+  assert.doesNotMatch(
+    result.stdout,
+    /Production api service\/container could not be resolved/,
+    'the pre-fix pattern must NOT reach the classifier -- bash -e should abort at the plain assignment first',
+  );
+});
+
+test('EXECUTABLE: production confirm step independently rejects a docker-inspect UNIT_TALK_ENABLED_TARGETS value that disagrees with compose-exec', () => {
+  const rules = HAPPY_PATH_SSH_RULES.map((rule) => [...rule]) as Array<[string, string, number, string?]>;
+  const workerEnvIdx = rules.findIndex((r) => r[0].includes(".Config.Env") && r[0].includes("'cid-worker'"));
+  // compose-exec reports "none" (satisfies the parked-mode compose-level
+  // assertion), but the container's real environment says "best-bets" --
+  // exactly the scenario an independent cross-check exists to catch.
+  rules[workerEnvIdx] = [
+    "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' 'cid-worker'",
+    "UNIT_TALK_WORKER_AUTORUN=false\\nUNIT_TALK_ENABLED_TARGETS=best-bets",
+    0,
+  ];
+  const result = runScriptWithMocks(productionConfirmScript, rules);
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stdout,
+    /docker-inspect value mismatch for worker\/UNIT_TALK_ENABLED_TARGETS/,
+    `expected the inspect-layer mismatch to be caught; got stdout: ${JSON.stringify(result.stdout)}`,
+  );
+});
+
+test('EXECUTABLE: removing UNIT_TALK_ENABLED_TARGETS from the docker-inspect loop lets the same real discrepancy through undetected (proves the original gap)', () => {
+  const mutatedScript = productionConfirmScript.replace(
+    ` \\
+            "worker:UNIT_TALK_ENABLED_TARGETS:$REQUESTED_ENABLED_TARGETS"`,
+    '',
+  );
+  assert.notEqual(mutatedScript, productionConfirmScript, 'the reversion must actually remove the loop entry');
+
+  const rules = HAPPY_PATH_SSH_RULES.map((rule) => [...rule]) as Array<[string, string, number, string?]>;
+  const workerEnvIdx = rules.findIndex((r) => r[0].includes(".Config.Env") && r[0].includes("'cid-worker'"));
+  rules[workerEnvIdx] = [
+    "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' 'cid-worker'",
+    "UNIT_TALK_WORKER_AUTORUN=false\\nUNIT_TALK_ENABLED_TARGETS=best-bets",
+    0,
+  ];
+  const result = runScriptWithMocks(mutatedScript, rules);
+  assert.equal(
+    result.status,
+    0,
+    `without the loop entry, the real best-bets/none discrepancy should go undetected and the script should exit 0; got: ${JSON.stringify(result)}`,
+  );
+});
+
+test('EXECUTABLE: production confirm step rejects ambiguous container evidence when a service+project filter matches more than one container', () => {
+  const rules = HAPPY_PATH_SSH_RULES.map((rule) => [...rule]) as Array<[string, string, number, string?]>;
+  const workerPsIdx = rules.findIndex(
+    (r) => r[0] === "docker ps -q --filter 'label=com.docker.compose.service=worker' --filter 'label=com.docker.compose.project=unit-talk' --filter 'status=running'",
+  );
+  rules[workerPsIdx] = [rules[workerPsIdx][0], "cid-worker-1\\ncid-worker-2", 0];
+  const result = runScriptWithMocks(productionConfirmScript, rules);
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stdout,
+    /expected exactly one, evidence is ambiguous/,
+    `expected an ambiguous-match rejection; got stdout: ${JSON.stringify(result.stdout)}`,
   );
 });
