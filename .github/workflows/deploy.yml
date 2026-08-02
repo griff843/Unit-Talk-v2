@@ -1130,6 +1130,28 @@ jobs:
           printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","killSwitchEngaged":true}\n' \
             "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG"
 
+          # UTV2-1660: the receipt above is also written to a file and uploaded as
+          # a workflow artifact (not scraped from the printed log) so
+          # readiness-refresh can read it without depending on raw job-log text --
+          # GitHub Actions redacts ANY log content matching ANY registered secret's
+          # value repo/org-wide, which could silently corrupt a log-scraped read of
+          # a receipt field that happens to collide with an unrelated secret's
+          # value (e.g. "none" or "true"). An uploaded artifact file is not subject
+          # to that live-log redaction.
+          mkdir -p .out
+          printf '{"schema":"parked-contract-receipt/v1","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","deployedImageNamespace":"%s","killSwitchEngaged":true,"observedAt":"%s"}\n' \
+            "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG" "$IMAGE_NAMESPACE" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > .out/parked-contract-receipt.json
+
+      - name: Upload parked-contract receipt (same-run artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parked-contract-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/parked-contract-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
   smoke:
     name: Post-deploy functional smoke
     needs: promote
