@@ -6,6 +6,7 @@ Tier: T2
 Lane type: governance
 Branch: codex/utv2-1647-ci-db-proof-harvest-fix
 Implementation SHA: eda33086ad2ff4415cc64facf58c3445619c67b5
+Merge SHA: 75280b8b96ddf9671f510e5c2fe28b1bf81cad82
 
 ## Summary
 
