@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1647-ci-db-proof-harvest-fix",
   "branch": "codex/utv2-1647-ci-db-proof-harvest-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "75280b8b96ddf9671f510e5c2fe28b1bf81cad82",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1369",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/ci-db-proof-harvest.test.ts",
@@ -19,14 +19,32 @@
     "docs/06_status/proof/UTV2-1647/verification.md",
     "docs/06_status/proof/UTV2-1647/model-routing.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-08-01T23:57:10.848Z",
-  "heartbeat_at": "2026-08-01T23:57:10.848Z",
+  "heartbeat_at": "2026-08-02T04:35:17.067Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1647-ci-db-proof-harvest-fix.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-02T04:34:40.091Z",
+      "verdict": "fail",
+      "merge_sha": "75280b8b96ddf9671f510e5c2fe28b1bf81cad82",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-02T04:35:17.067Z",
+      "verdict": "pass",
+      "merge_sha": "75280b8b96ddf9671f510e5c2fe28b1bf81cad82",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
