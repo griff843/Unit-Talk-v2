@@ -1258,6 +1258,51 @@ test('deploy alignment selects by the promote job\'s own completion time, not ru
   assert.equal(result.measured?.['deployed_sha'], 'a'.repeat(40));
 });
 
+test('deploy alignment still trusts a run whose promote succeeded even though a downstream smoke failure turned the overall workflow conclusion red (round 21)', async () => {
+  // PM review (round 21, exact-head 11dcc7ce): probeDeploySha's real
+  // implementation called listRunsByRecency('deploy.yml', { branch: 'main',
+  // status: 'success' }) -- a server-side filter on the workflow run's
+  // OVERALL conclusion. A run where `promote` itself succeeds (mutating
+  // production) but a later, unrelated downstream job (smoke) fails turns
+  // the whole workflow run's conclusion to 'failure' -- that run would never
+  // even appear in `candidates`, so its genuinely successful promote job
+  // (and the production mutation it performed) would be silently invisible
+  // to this dimension. The fix drops the status filter entirely; only the
+  // per-attempt jobConclusionForAttempt(promote) check below decides
+  // trust, never the run's own aggregate status/conclusion fields. This
+  // stub's run object is deliberately status:'completed'/conclusion:'failure'
+  // (as GitHub would report the overall run) to prove the code path never
+  // reads those fields when deciding whether to trust the run.
+  const promoteSucceededSmokeFailed = run({
+    id: 999,
+    head_sha: 'c'.repeat(40),
+    status: 'completed',
+    conclusion: 'failure', // overall workflow run is RED because smoke failed
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/999',
+  });
+  const result = await probeDeploySha(
+    context({
+      githubUnavailableReason: null,
+      github: stubGithub({
+        async headSha() {
+          return 'c'.repeat(40); // main HEAD matches the run that actually promoted
+        },
+        async listRunsByRecency() {
+          return [promoteSucceededSmokeFailed];
+        },
+        async jobConclusionForAttempt(runId, jobName, attempt) {
+          if (runId !== 999 || jobName !== DEPLOY_PROMOTE_JOB_NAME || attempt !== 1) return null;
+          // promote itself succeeded despite the overall run later failing on smoke.
+          return { conclusion: 'success', completedAt: minutesAgo(10) };
+        },
+      }),
+    }),
+  );
+  assert.equal(result.status, 'pass', 'a run whose promote succeeded must still be trusted even if the overall workflow conclusion is failure');
+  assert.equal(result.measured?.['deployed_sha'], 'c'.repeat(40));
+});
+
 test('CI verify scopes its run lookup to the current main HEAD, so an unrelated older rerun cannot shadow it (round 13)', async () => {
   // Codex round 13, third finding (P2): probeCiVerify shares latestRun with
   // the deployment-history probes. If an older ci.yml run on main is

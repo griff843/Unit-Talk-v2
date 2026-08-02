@@ -411,16 +411,26 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
       kind: 'github_api' as const,
       source: 'github:actions/runs',
       query:
-        'latest successful run of deploy.yml on main (head_sha) vs commits/main (sha); ' +
+        'every run of deploy.yml on main (head_sha) vs commits/main (sha), regardless of overall ' +
+        'workflow conclusion, checked job-by-job for a successful "Promote production"; ' +
         'compare base...head for commit distance',
     },
   };
 
   try {
     const github = requireGithub(ctx);
+    // Round 21 (PM review of 11dcc7ce): a server-side status='success' filter
+    // here excludes any run whose OVERALL conclusion is failure -- including
+    // one where `promote` itself succeeded (mutating production) but a
+    // downstream job (smoke) failed afterward, turning the whole workflow
+    // run red. That run would never even reach the per-attempt promote-job
+    // check below, silently losing a genuine production mutation. Fetch
+    // every run on main regardless of overall conclusion; the per-attempt
+    // jobConclusionForAttempt check below is what actually decides whether
+    // promote succeeded, not the workflow's aggregate status.
     const [mainSha, candidates] = await Promise.all([
       github.headSha('main'),
-      github.listRunsByRecency('deploy.yml', { branch: 'main', status: 'success' }),
+      github.listRunsByRecency('deploy.yml', { branch: 'main' }),
     ]);
 
     if (candidates.length === 0) {
@@ -428,7 +438,7 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
         ...base,
         status: 'fail',
         observed_at: ctx.now.toISOString(),
-        evidence: `No successful deploy.yml run exists on main. main HEAD is ${mainSha}; nothing has been proven deployed.`,
+        evidence: `No deploy.yml run of any kind exists on main. main HEAD is ${mainSha}; nothing has been proven deployed.`,
         measured: { main_sha: mainSha, deployed_sha: null, successful_deploy_runs: 0 },
         unreadable_reason: null,
       };
@@ -482,9 +492,9 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
     if (promotedCandidates.length === 0) {
       return unreadable(
         base,
-        `none of the ${candidates.length} most recent successful deploy.yml run(s) on main show a successful ` +
-        `"promote" job in ANY of their attempts -- refusing to trust any of their head_sha values as the ` +
-        `currently deployed SHA: ${rejectedNonPromoting.join('; ')}`,
+        `none of the ${candidates.length} most recent deploy.yml run(s) on main (regardless of overall ` +
+        `workflow conclusion) show a successful "promote" job in ANY of their attempts -- refusing to trust ` +
+        `any of their head_sha values as the currently deployed SHA: ${rejectedNonPromoting.join('; ')}`,
         ctx.now,
       );
     }
