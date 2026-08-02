@@ -1,4 +1,5 @@
-# UTV2-1647 Verification
+# PROOF: UTV2-1647
+MERGE_SHA: 83899e99203c48437f2109b0c7d659bb82c38617
 
 Generated at: 2026-08-02T00:57:25Z
 Issue: UTV2-1647
@@ -6,6 +7,19 @@ Tier: T2
 Lane type: governance
 Branch: codex/utv2-1647-ci-db-proof-harvest-fix
 Implementation SHA: eda33086ad2ff4415cc64facf58c3445619c67b5
+
+ASSERTIONS:
+- [x] Root-caused why `locateCiDbProofRun` missed a CI run that genuinely existed for the exact head SHA (repository-wide `per_page=20` endpoint truncated before reaching item 21/25)
+- [x] Fixed via the workflow-scoped `ci.yml` runs endpoint, with a bounded `per_page=100` repository-wide fallback only if that call itself fails
+- [x] Regression fixture uses the real UTV2-1646/PR #1356 case (exact merge SHA, head SHA, run ID, job ID)
+- [x] 26/26 focused tests, 74/74 integration tests, `pnpm type-check` clean, R-level PASS
+- [x] A regression the fix caused in the out-of-scope `proof-generate.test.ts` was resolved via a bounded compatibility fallback inside the authorized file, not by editing the out-of-scope test
+
+EVIDENCE:
+```text
+See "Issue-Specific Evidence" and "Root Test Evidence" sections below for the
+full pnpm test / focused-suite / R-level output this proof is bound to.
+```
 
 ## Verification
 
