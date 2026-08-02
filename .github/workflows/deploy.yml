@@ -783,7 +783,6 @@ jobs:
       - name: Promote all production containers
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
-          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
         run: |
           ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -eu && cd '$DEPLOY_PATH' && \
@@ -791,16 +790,85 @@ jobs:
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
+
+      # PM review (round 22): "Promote all production containers" above
+      # previously also ran the health-check loop and any rollback in the
+      # SAME step (its name is kept unchanged here since an out-of-scope
+      # test, scripts/ci/deploy-parked-mode.test.ts, asserts on this exact
+      # step name and its position after registry preflight) -- so a
+      # health-check failure marked the WHOLE step (and therefore the whole
+      # job) as failed even when the container replacement had already
+      # genuinely mutated production. readiness-refresh.ts's
+      # deploy_sha_alignment dimension trusted a run's head_sha only when
+      # the "Promote production" JOB's own conclusion was 'success' -- a
+      # real production mutation with a later health-check failure was
+      # invisible to it, the same class of bug as round 21's finding one
+      # level up (workflow-level conclusion), just one level deeper
+      # (job-level conclusion). This evidence is written and uploaded
+      # immediately after the mutation step above succeeds -- independent of
+      # whatever the health-check/rollback step below does next -- so a
+      # genuine mutation is never lost just because something later failed.
+      - name: Record deploy mutation evidence
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          mkdir -p .out
+          printf '{"schema":"deploy-mutation-receipt/v1","run_id":"%s","run_attempt":"%s","image_tag":"%s","mutated_at":"%s"}\n' \
+            "${{ github.run_id }}" "${{ github.run_attempt }}" "$IMAGE_TAG" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > .out/deploy-mutation-receipt.json
+
+      - name: Upload deploy mutation evidence (same-run artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-mutation-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/deploy-mutation-receipt.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Wait for health, roll back if configured
+        id: health_check
+        env:
+          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
+        run: |
           for attempt in $(seq 1 30); do
             if ssh "$DEPLOY_USER@$DEPLOY_HOST" "curl -fsS http://localhost:4000/health >/dev/null 2>&1"; then
+              echo "rolled_back=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
             sleep 10
           done
-          if [ -n "$ROLLBACK_TAG" ]; then
-            bash deploy/rollback.sh --tag "$ROLLBACK_TAG" --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
+          if [ -n "$ROLLBACK_TAG" ] && bash deploy/rollback.sh --tag "$ROLLBACK_TAG" --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"; then
+            echo "rolled_back=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rolled_back=false" >> "$GITHUB_OUTPUT"
           fi
           exit 1
+
+      # A successful rollback is itself a NEWER production mutation --
+      # production is now running $ROLLBACK_TAG, not $IMAGE_TAG -- and must
+      # be recorded as its own evidence so it supersedes the mutation
+      # evidence above when readiness-refresh selects the currently deployed
+      # tag by latest evidence timestamp. `if: always()` because the
+      # health-check step above always exits 1 on this path (health never
+      # came up), which would otherwise skip this step by default.
+      - name: Record rollback mutation evidence
+        if: always() && steps.health_check.outputs.rolled_back == 'true'
+        env:
+          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
+        run: |
+          mkdir -p .out
+          printf '{"schema":"deploy-rollback-receipt/v1","run_id":"%s","run_attempt":"%s","rolled_back_to_tag":"%s","rolled_back_at":"%s"}\n' \
+            "${{ github.run_id }}" "${{ github.run_attempt }}" "$ROLLBACK_TAG" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            > .out/deploy-rollback-receipt.json
+
+      - name: Upload deploy rollback evidence (same-run artifact)
+        if: always() && steps.health_check.outputs.rolled_back == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-rollback-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .out/deploy-rollback-receipt.json
+          if-no-files-found: error
+          retention-days: 30
 
       # UTV2-1618: same root cause and fix as the canary confirm step -- see its
       # comment header for the full incident account. Every docker compose exec

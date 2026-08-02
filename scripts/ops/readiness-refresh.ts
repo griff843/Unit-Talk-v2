@@ -180,7 +180,15 @@ export interface ReadOnlyDb {
     filters: DbFilter[],
     orderColumn: string,
   ): Promise<Record<string, unknown> | null>;
-  countRows(table: string, filters: DbFilter[]): Promise<number>;
+  /**
+   * Round 22 (PM review of 192b597d): the real implementation's count query
+   * must select an actual column of `table` -- not every table in this
+   * schema has an `id` column (e.g. `delivery_kill_switch`), and selecting a
+   * nonexistent column is a hard PostgREST error, not a soft zero. Defaults
+   * to `'id'` for every existing call site that already relies on it;
+   * callers against a table with no `id` column must pass one that exists.
+   */
+  countRows(table: string, filters: DbFilter[], countColumn?: string): Promise<number>;
 }
 
 export interface WorkflowRun {
@@ -251,31 +259,6 @@ export interface GithubReader {
     namePrefix: string,
     expectedAttempt?: number,
   ): Promise<Record<string, unknown> | null>;
-  /**
-   * Round 12: the conclusion of `jobName` within `runId`'s SPECIFIC `attempt`
-   * (via GitHub's `.../runs/{run_id}/attempts/{attempt_number}/jobs`), or
-   * null if that job did not run in that attempt. A failed-jobs-only rerun
-   * of a downstream job (e.g. `smoke`, which needs: `promote`) advances the
-   * run's current attempt without re-running `promote` -- so a run selected
-   * purely by `updated_at` may not actually represent a fresh production
-   * deployment. Callers that treat a run's `head_sha` as "what is currently
-   * deployed" (unlike the artifact-based receipt path, which already has its
-   * own attempt check) must verify `promote` actually executed in that exact
-   * attempt before trusting it.
-   *
-   * Round 16: also returns `completedAt` -- a RUN's own `updated_at` (what
-   * round 10/14's candidate ordering uses) can be bumped by an unrelated
-   * downstream job's rerun that has nothing to do with `promote`, so it is
-   * NOT a trustworthy proxy for "when did this run's promote job actually
-   * finish." Callers comparing production-mutation recency across multiple
-   * runs/attempts must compare by the promote job's OWN completion time,
-   * not by run-level `updated_at`.
-   */
-  jobConclusionForAttempt(
-    runId: number,
-    jobName: string,
-    attempt: number,
-  ): Promise<{ conclusion: string | null; completedAt: string | null } | null>;
   /**
    * Round 14: the same bounded, paginated candidate set `latestRun` selects
    * from, but returned in full (newest-`updated_at`-first) rather than
@@ -412,8 +395,8 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
       source: 'github:actions/runs',
       query:
         'every run of deploy.yml on main (head_sha) vs commits/main (sha), regardless of overall ' +
-        'workflow conclusion, checked job-by-job for a successful "Promote production"; ' +
-        'compare base...head for commit distance',
+        'workflow or job conclusion, checked attempt-by-attempt for a deploy-mutation-receipt/' +
+        'deploy-rollback-receipt artifact; compare base...head for commit distance',
     },
   };
 
@@ -421,13 +404,14 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
     const github = requireGithub(ctx);
     // Round 21 (PM review of 11dcc7ce): a server-side status='success' filter
     // here excludes any run whose OVERALL conclusion is failure -- including
-    // one where `promote` itself succeeded (mutating production) but a
-    // downstream job (smoke) failed afterward, turning the whole workflow
-    // run red. That run would never even reach the per-attempt promote-job
-    // check below, silently losing a genuine production mutation. Fetch
-    // every run on main regardless of overall conclusion; the per-attempt
-    // jobConclusionForAttempt check below is what actually decides whether
-    // promote succeeded, not the workflow's aggregate status.
+    // one where the container-replacement step succeeded (mutating
+    // production) but a downstream job failed afterward, turning the whole
+    // workflow run red. That run would never even reach the per-attempt
+    // mutation-evidence check below, silently losing a genuine production
+    // mutation. Fetch every run on main regardless of overall conclusion;
+    // the per-attempt deploy-mutation-receipt check below (round 22) is what
+    // actually decides whether production was mutated, not any job's or
+    // workflow's aggregate status/conclusion.
     const [mainSha, candidates] = await Promise.all([
       github.headSha('main'),
       github.listRunsByRecency('deploy.yml', { branch: 'main' }),
@@ -445,85 +429,106 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
     }
 
     // Round 12: the most-recently-updated run isn't automatically trustworthy
-    // -- a failed-jobs-only rerun of a downstream job (smoke, needs: promote)
-    // can bump a run's updated_at without re-running promote, the actual
-    // production-mutating step. Round 14: rather than giving up unreadable
-    // at the first (possibly non-promoting) candidate, walk the full
-    // recency-sorted list and use the first one whose current attempt
-    // genuinely ran promote. Round 15: checking ONLY the run's current
-    // (latest) attempt was itself wrong -- if promote succeeded in attempt 1
-    // and a LATER failed-jobs-only rerun of smoke alone created attempt 2
-    // (which never re-runs promote), the round-14 check rejected the entire
-    // run and fell through to an OLDER, less accurate candidate, even though
-    // attempt 1 is exactly what changed production and its head_sha is still
-    // correct. Search every attempt of a candidate (current down to 1), not
-    // just the current one, before moving to the next candidate.
-    // Round 16: a candidate's run-level updated_at (what `candidates` above
-    // is sorted by) is not a trustworthy proxy for "when did promote last
-    // mutate production" -- an unrelated downstream job's rerun can bump it
-    // without touching promote at all. So rather than trusting the first
-    // promoted candidate in recency order, collect the promote completion
-    // time for every candidate that has one, then select the candidate whose
-    // promote job most recently completed in real wall-clock time.
-    const promotedCandidates: { candidate: WorkflowRun; completedAt: string | null }[] = [];
-    const rejectedNonPromoting: string[] = [];
+    // -- a failed-jobs-only rerun of a downstream job can bump a run's
+    // updated_at without re-running the actual production-mutating step.
+    // Round 14: rather than giving up unreadable at the first (possibly
+    // non-mutating) candidate, walk the full recency-sorted list and use the
+    // first one that genuinely mutated production. Round 15: checking ONLY
+    // the run's current (latest) attempt was itself wrong -- search every
+    // attempt of a candidate (current down to 1), not just the current one,
+    // before moving to the next candidate. Round 16: a candidate's run-level
+    // updated_at is not a trustworthy proxy for "when did production last
+    // get mutated" -- collect the mutation time for every candidate that has
+    // one, then select the candidate whose mutation most recently occurred
+    // in real wall-clock time.
+    //
+    // Round 22 (PM review of 192b597d): rounds 12-16 all trusted the
+    // `promote` JOB's own conclusion as the signal that production was
+    // mutated -- but deploy.yml's promote job runs the health-check loop
+    // (and any rollback) in steps AFTER the actual container-replacement
+    // step, in the SAME job. A later health-check failure marks the whole
+    // JOB as failed even when the container replacement had already
+    // genuinely mutated production, discarding real evidence. deploy.yml now
+    // writes a `deploy-mutation-receipt` artifact immediately after the
+    // container-replacement step succeeds -- independent of the job's
+    // eventual overall conclusion -- and a `deploy-rollback-receipt`
+    // artifact if the health-check later fails AND a configured rollback
+    // succeeds (itself a NEWER, separate production mutation to a different
+    // tag). Trust is now keyed to these artifacts' own presence and
+    // timestamps, never any job's conclusion field.
+    const mutatedCandidates: { candidate: WorkflowRun; deployedTag: string; effectiveAt: string }[] = [];
+    const rejectedNonMutating: string[] = [];
     for (const candidate of candidates) {
-      let promotedAt: string | null | undefined;
+      let found: { deployedTag: string; effectiveAt: string } | undefined;
       const attemptResults: string[] = [];
       for (let attempt = candidate.run_attempt; attempt >= 1; attempt -= 1) {
-        const promoteJob = await github.jobConclusionForAttempt(
+        const mutation = await github.latestArtifactJson(
           candidate.id,
-          DEPLOY_PROMOTE_JOB_NAME,
+          DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX,
           attempt,
         );
-        if (promoteJob?.conclusion === 'success') {
-          promotedAt = promoteJob.completedAt;
-          break;
+        const imageTag = typeof mutation?.['image_tag'] === 'string' ? (mutation['image_tag'] as string) : null;
+        const mutatedAt = typeof mutation?.['mutated_at'] === 'string' ? (mutation['mutated_at'] as string) : null;
+        if (!imageTag || !mutatedAt) {
+          attemptResults.push(`attempt ${attempt}=no mutation evidence`);
+          continue;
         }
-        attemptResults.push(`attempt ${attempt}=${promoteJob?.conclusion ?? 'not run'}`);
+        const rollback = await github.latestArtifactJson(
+          candidate.id,
+          DEPLOY_ROLLBACK_RECEIPT_ARTIFACT_PREFIX,
+          attempt,
+        );
+        const rollbackTag =
+          typeof rollback?.['rolled_back_to_tag'] === 'string' ? (rollback['rolled_back_to_tag'] as string) : null;
+        const rollbackAt =
+          typeof rollback?.['rolled_back_at'] === 'string' ? (rollback['rolled_back_at'] as string) : null;
+        found =
+          rollbackTag && rollbackAt
+            ? { deployedTag: rollbackTag, effectiveAt: rollbackAt }
+            : { deployedTag: imageTag, effectiveAt: mutatedAt };
+        break;
       }
-      if (promotedAt !== undefined) {
-        promotedCandidates.push({ candidate, completedAt: promotedAt });
+      if (found) {
+        mutatedCandidates.push({ candidate, deployedTag: found.deployedTag, effectiveAt: found.effectiveAt });
       } else {
-        rejectedNonPromoting.push(`${candidate.html_url} (${attemptResults.join(', ')})`);
+        rejectedNonMutating.push(`${candidate.html_url} (${attemptResults.join(', ')})`);
       }
     }
 
-    if (promotedCandidates.length === 0) {
+    if (mutatedCandidates.length === 0) {
       return unreadable(
         base,
         `none of the ${candidates.length} most recent deploy.yml run(s) on main (regardless of overall ` +
-        `workflow conclusion) show a successful "promote" job in ANY of their attempts -- refusing to trust ` +
-        `any of their head_sha values as the currently deployed SHA: ${rejectedNonPromoting.join('; ')}`,
+        `workflow conclusion) show deploy-mutation-receipt evidence in ANY of their attempts -- refusing to ` +
+        `trust any of their tags as the currently deployed SHA: ${rejectedNonMutating.join('; ')}`,
         ctx.now,
       );
     }
 
-    const winner = promotedCandidates.reduce((latest, entry) => {
-      if (!latest.completedAt) return entry;
-      if (!entry.completedAt) return latest;
-      return isAfter(entry.completedAt, latest.completedAt) ? entry : latest;
-    });
+    const winner = mutatedCandidates.reduce((latest, entry) =>
+      (isAfter(entry.effectiveAt, latest.effectiveAt) ? entry : latest),
+    );
     const deployRun = winner.candidate;
-    const promoteCompletedAt = winner.completedAt ?? deployRun.updated_at;
+    const deployedSha = winner.deployedTag;
+    const effectiveAt = winner.effectiveAt;
 
-    const aligned = deployRun.head_sha === mainSha;
-    const behind = aligned ? 0 : await github.commitsBetween(deployRun.head_sha, mainSha);
-    const ageHours = hoursBetween(promoteCompletedAt, ctx.now);
+    const aligned = deployedSha === mainSha;
+    const behind = aligned ? 0 : await github.commitsBetween(deployedSha, mainSha);
+    const ageHours = hoursBetween(effectiveAt, ctx.now);
 
     return {
       ...base,
       status: aligned ? 'pass' : 'fail',
       observed_at: ctx.now.toISOString(),
       evidence: aligned
-        ? `Last successful deploy (${deployRun.html_url}, promote completed ${promoteCompletedAt}) shipped ${deployRun.head_sha}, which is main HEAD.`
-        : `Last successful deploy (${deployRun.html_url}, promote completed ${promoteCompletedAt}, ${ageHours}h ago) shipped ${deployRun.head_sha}; main HEAD is ${mainSha}` +
+        ? `Last production mutation (${deployRun.html_url}, ${effectiveAt}) shipped ${deployedSha}, which is main HEAD.`
+        : `Last production mutation (${deployRun.html_url}, ${effectiveAt}, ${ageHours}h ago) shipped ${deployedSha}; main HEAD is ${mainSha}` +
           (behind === null ? ' (commit distance unreadable).' : `, ${behind} commits ahead.`),
       measured: {
         main_sha: mainSha,
-        deployed_sha: deployRun.head_sha,
+        deployed_sha: deployedSha,
         deploy_run_url: deployRun.html_url,
-        deploy_run_completed_at: promoteCompletedAt,
+        deploy_run_completed_at: effectiveAt,
         deploy_age_hours: ageHours,
         commits_ahead: behind,
       },
@@ -562,10 +567,14 @@ export type RuntimeState =
 
 export const PARKED_CONTRACT_RECEIPT_ARTIFACT_PREFIX = 'parked-contract-receipt-';
 
-// deploy.yml's `promote` job overrides its GitHub Actions display name via
-// `name: Promote production` -- the jobs API's own `.name` field returns
-// this override, not the YAML job id `promote`.
-export const DEPLOY_PROMOTE_JOB_NAME = 'Promote production';
+// Round 22 (PM review of 192b597d): these two same-run artifacts are written
+// by deploy.yml's `promote` job -- deploy-mutation-receipt immediately after
+// the container-replacement step succeeds (before the health-check loop
+// even starts), and deploy-rollback-receipt only if the health-check later
+// fails AND a configured rollback succeeds. Their presence, not any job's
+// overall conclusion, is what actually proves production was mutated.
+export const DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX = 'deploy-mutation-receipt-';
+export const DEPLOY_ROLLBACK_RECEIPT_ARTIFACT_PREFIX = 'deploy-rollback-receipt-';
 
 export interface ParkedContractReceipt {
   schema: string;
@@ -700,14 +709,26 @@ const REQUIRED_KILL_SWITCH_TARGETS = ['best-bets', 'trader-insights'] as const;
 // row, and that row's own killed column must be strictly true; missing (zero
 // rows), duplicate (more than one row), or a value that isn't literally true
 // (malformed) all fail closed, same as an unreadable query.
+//
+// Round 22 (PM review of 192b597d): countRows' real implementation selects a
+// hardcoded 'id' column by default -- delivery_kill_switch has no id column
+// at all (schema: actor, killed, reason, target, updated_at), so every call
+// here failed at the PostgREST level with a real Supabase client, always
+// falling through to the catch block and returning null (unreadable). This
+// bug predates round 20 -- the original round-1 implementation had the same
+// hardcoded-'id' gap, just never exercised against a real client in tests.
+// 'target' is the column this query already filters on, so it is guaranteed
+// to exist; pass it explicitly as the count column.
 async function verifyKillSwitchesEngagedNow(ctx: ProbeContext): Promise<boolean | null> {
   const db = ctx.db;
   if (!db) return null;
   try {
     for (const target of REQUIRED_KILL_SWITCH_TARGETS) {
-      const rowCount = await db.countRows('delivery_kill_switch', [
-        { column: 'target', op: 'eq', value: target },
-      ]);
+      const rowCount = await db.countRows(
+        'delivery_kill_switch',
+        [{ column: 'target', op: 'eq', value: target }],
+        'target',
+      );
       if (rowCount !== 1) return false;
       const row = await db.latestRow(
         'delivery_kill_switch',
@@ -1601,9 +1622,9 @@ export function wrapReadOnlyClient(client: ReadOnlyClient, projectRef: string): 
       if (error) throw new Error(`${table} read failed: ${error.message}`);
       return data?.[0] ?? null;
     },
-    async countRows(table, filters) {
+    async countRows(table, filters, countColumn = 'id') {
       const { count, error } = await applyFilters(
-        client.from(table).select('id', { count: 'exact', head: true }),
+        client.from(table).select(countColumn, { count: 'exact', head: true }),
         filters,
       );
       if (error) throw new Error(`${table} count failed: ${error.message}`);
@@ -1755,14 +1776,6 @@ export function createGithubReader(): { github: GithubReader | null; reason: str
           } finally {
             fs.rmSync(dir, { recursive: true, force: true });
           }
-        },
-        async jobConclusionForAttempt(runId, jobName, attempt) {
-          const response = ghApi(
-            `repos/${repo}/actions/runs/${runId}/attempts/${attempt}/jobs`,
-          ) as { jobs?: { name: string; conclusion: string | null; completed_at: string | null }[] };
-          const job = (response.jobs ?? []).find((candidate) => candidate.name === jobName);
-          if (!job) return null;
-          return { conclusion: job.conclusion, completedAt: job.completed_at };
         },
       },
       reason: null,

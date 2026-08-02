@@ -9,7 +9,8 @@ import {
   collectLedger,
   computeObservability,
   computeVerdict,
-  DEPLOY_PROMOTE_JOB_NAME,
+  DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX,
+  DEPLOY_ROLLBACK_RECEIPT_ARTIFACT_PREFIX,
   measureProofCoverage,
   probeCiVerify,
   probeConstitutionConvergence,
@@ -124,15 +125,11 @@ function stubGithub(overrides: Partial<GithubReader> = {}): GithubReader {
       return [];
     },
     async latestArtifactJson() {
+      // Default to no artifact of any kind. probeDeploySha tests must
+      // explicitly stub deploy-mutation-receipt/deploy-rollback-receipt
+      // evidence to exercise the happy path; tests proving the fail-closed
+      // no-evidence behavior rely on this default directly.
       return null;
-    },
-    async jobConclusionForAttempt() {
-      // Default to the happy path (promote genuinely ran, completed at a
-      // fixed point in the past) so existing probeDeploySha tests that
-      // don't care about this specific round-12/16 check don't all need
-      // updating; tests proving the new fail-closed or recency-selection
-      // behavior override this explicitly.
-      return { conclusion: 'success', completedAt: minutesAgo(30) };
     },
     async listRunsByRecency(workflowFile, options) {
       // Round 14: default derives from latestRun (wrapping its single
@@ -1061,6 +1058,7 @@ test('worker/outbox health fails on a stale heartbeat even with an empty queue',
 });
 
 test('deploy alignment compares the deployed SHA to main HEAD', async () => {
+  const alignedRun = run({ head_sha: 'c'.repeat(40), html_url: 'https://github.com/unit-talk/v2/actions/runs/1' });
   const aligned = await probeDeploySha(
     context({
       githubUnavailableReason: null,
@@ -1068,20 +1066,29 @@ test('deploy alignment compares the deployed SHA to main HEAD', async () => {
         async headSha() {
           return 'c'.repeat(40);
         },
-        async latestRun() {
-          return run({ head_sha: 'c'.repeat(40) });
+        async listRunsByRecency() {
+          return [alignedRun];
+        },
+        async latestArtifactJson(_runId, namePrefix) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
+          return { image_tag: 'c'.repeat(40), mutated_at: minutesAgo(30) };
         },
       }),
     }),
   );
   assert.equal(aligned.status, 'pass');
 
+  const driftedRun = run({ head_sha: 'd'.repeat(40), html_url: 'https://github.com/unit-talk/v2/actions/runs/2' });
   const drifted = await probeDeploySha(
     context({
       githubUnavailableReason: null,
       github: stubGithub({
-        async latestRun() {
-          return run({ head_sha: 'd'.repeat(40) });
+        async listRunsByRecency() {
+          return [driftedRun];
+        },
+        async latestArtifactJson(_runId, namePrefix) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
+          return { image_tag: 'd'.repeat(40), mutated_at: minutesAgo(30) };
         },
         async commitsBetween() {
           return 285;
@@ -1093,43 +1100,41 @@ test('deploy alignment compares the deployed SHA to main HEAD', async () => {
   assert.match(drifted.evidence, /285 commits ahead/);
 });
 
-test('deploy alignment refuses to trust a run when NO attempt (current or earlier) ever ran promote, and no other candidate exists (round 12/14/15)', async () => {
+test('deploy alignment refuses to trust a run when NO attempt (current or earlier) ever shows mutation evidence, and no other candidate exists (round 12/14/15/22)', async () => {
   // Codex round 12 (review of cc95a8f3): a failed-jobs-only rerun of a
-  // downstream job (smoke, needs: promote) can advance a run's current
-  // attempt and updated_at WITHOUT re-running promote. Round 14 changed
-  // the mechanism from "trust or give up" to "walk the candidate list past
-  // non-promoting candidates." Round 15 further widened the per-candidate
-  // check to search every attempt (current down to 1), not just the
-  // current one (see the next two tests) -- this case proves the search
-  // still fails closed, at every level, when NO attempt of the only
-  // candidate ever ran promote successfully.
+  // downstream job can advance a run's current attempt and updated_at
+  // WITHOUT re-running the actual production-mutating step. Round 14
+  // changed the mechanism from "trust or give up" to "walk the candidate
+  // list past non-mutating candidates." Round 15 further widened the
+  // per-candidate check to search every attempt (current down to 1), not
+  // just the current one (see the next two tests). Round 22 replaced the
+  // job-conclusion-based signal with deploy-mutation-receipt artifact
+  // evidence -- this case proves the search still fails closed, at every
+  // level, when NO attempt of the only candidate ever produced mutation
+  // evidence (the stub's default latestArtifactJson returns null).
   const result = await probeDeploySha(
     context({
       githubUnavailableReason: null,
       github: stubGithub({
-        async latestRun() {
-          return run({ head_sha: 'c'.repeat(40), run_attempt: 2 });
-        },
-        async jobConclusionForAttempt() {
-          // promote never succeeded in ANY attempt of this run.
-          return null;
+        async listRunsByRecency() {
+          return [run({ head_sha: 'c'.repeat(40), run_attempt: 2 })];
         },
       }),
     }),
   );
   assert.equal(result.status, 'unknown');
-  assert.match(result.evidence, /show a successful "promote" job in ANY of their attempts/);
+  assert.match(result.evidence, /show deploy-mutation-receipt evidence in ANY of their attempts/);
 });
 
-test('deploy alignment finds a successful promote in an EARLIER attempt of the SAME run, without falling through to an older candidate (round 15)', async () => {
+test('deploy alignment finds mutation evidence in an EARLIER attempt of the SAME run, without falling through to an older candidate (round 15/22)', async () => {
   // Codex round 15 (review of 3a190143): round 14's fix checked only a
-  // candidate's CURRENT attempt for promote. If promote succeeded in
-  // attempt 1 but a LATER failed-jobs-only rerun of smoke alone created
-  // attempt 2 (which never re-runs promote), round 14 rejected the ENTIRE
-  // run and fell through to an older, less accurate candidate -- even
-  // though attempt 1 is exactly what changed production and this run's
-  // own head_sha is still correct. The fix must search every attempt of
-  // THIS run before moving on, so this run (not an older one) is used.
+  // candidate's CURRENT attempt. If the mutation happened in attempt 1 but
+  // a LATER failed-jobs-only rerun of a downstream job alone created
+  // attempt 2 (which never re-runs the mutation step), round 14 rejected
+  // the ENTIRE run and fell through to an older, less accurate candidate --
+  // even though attempt 1 is exactly what changed production. The fix must
+  // search every attempt of THIS run before moving on, so this run (not an
+  // older one) is used.
   const onlyCandidate = run({
     id: 200,
     head_sha: 'e'.repeat(40),
@@ -1146,10 +1151,10 @@ test('deploy alignment finds a successful promote in an EARLIER attempt of the S
         async listRunsByRecency() {
           return [onlyCandidate];
         },
-        async jobConclusionForAttempt(runId, jobName, attempt) {
-          if (jobName !== DEPLOY_PROMOTE_JOB_NAME || runId !== 200) return null;
-          if (attempt === 1) return { conclusion: 'success', completedAt: minutesAgo(45) }; // promote succeeded here originally
-          return null; // attempt 2 only re-ran smoke, never re-ran promote
+        async latestArtifactJson(runId, namePrefix, attempt) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX || runId !== 200) return null;
+          if (attempt === 1) return { image_tag: 'e'.repeat(40), mutated_at: minutesAgo(45) }; // mutation evidence from the original attempt
+          return null; // attempt 2 only re-ran a downstream job, never re-ran the mutation step
         },
       }),
     }),
@@ -1158,17 +1163,16 @@ test('deploy alignment finds a successful promote in an EARLIER attempt of the S
   assert.equal(result.measured?.['deployed_sha'], 'e'.repeat(40));
 });
 
-test('deploy alignment walks past a non-promoting candidate to the next one that genuinely ran promote (round 14)', async () => {
+test('deploy alignment walks past a non-mutating candidate to the next one that genuinely mutated production (round 14/22)', async () => {
   // Codex round 14 (review of 8bde6b79): giving up unreadable at the very
   // first (most-recently-updated) candidate throws away a recoverable
-  // answer when an OLDER candidate's current attempt genuinely ran promote.
-  // Simulates: the newest run is a downstream-only (smoke) rerun of an
-  // older deploy whose promote never re-ran in its current attempt; the
-  // NEXT candidate (genuinely older by updated_at, but the one that
-  // actually deployed) has a promote job that succeeded in its own current
-  // attempt -- that one's head_sha must be trusted, not treated as
-  // unreadable.
-  const newestNonPromoting = run({
+  // answer when an OLDER candidate genuinely mutated production. Simulates:
+  // the newest run is a downstream-only rerun of an older deploy whose
+  // mutation step never re-ran in its current attempt; the NEXT candidate
+  // (genuinely older by updated_at, but the one that actually deployed) has
+  // mutation evidence in its own current attempt -- that one's tag must be
+  // trusted, not treated as unreadable.
+  const newestNonMutating = run({
     id: 101,
     head_sha: 'c'.repeat(40),
     run_attempt: 2,
@@ -1190,12 +1194,12 @@ test('deploy alignment walks past a non-promoting candidate to the next one that
           return 'd'.repeat(40); // main HEAD matches the older, genuine deploy
         },
         async listRunsByRecency() {
-          return [newestNonPromoting, olderGenuineDeploy];
+          return [newestNonMutating, olderGenuineDeploy];
         },
-        async jobConclusionForAttempt(runId, jobName, attempt) {
-          if (jobName !== DEPLOY_PROMOTE_JOB_NAME) return null;
-          if (runId === 100 && attempt === 1) return { conclusion: 'success', completedAt: minutesAgo(10) };
-          return null; // run 101's attempt 2 never ran promote
+        async latestArtifactJson(runId, namePrefix, attempt) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
+          if (runId === 100 && attempt === 1) return { image_tag: 'd'.repeat(40), mutated_at: minutesAgo(10) };
+          return null; // run 101's attempt 2 never re-ran the mutation step
         },
       }),
     }),
@@ -1204,24 +1208,24 @@ test('deploy alignment walks past a non-promoting candidate to the next one that
   assert.equal(result.measured?.['deployed_sha'], 'd'.repeat(40));
 });
 
-test('deploy alignment selects by the promote job\'s own completion time, not run-level updated_at bumped by an unrelated rerun (round 16)', async () => {
+test('deploy alignment selects by the mutation evidence\'s own timestamp, not run-level updated_at bumped by an unrelated rerun (round 16/22)', async () => {
   // Codex round 16 (review of cb0faf40): candidates are ordered by run-level
   // updated_at (round 10/14's selectMostRecentlyUpdatedRun / listRunsByRecency).
   // An unrelated downstream job's rerun can bump a run's updated_at without
-  // touching promote at all -- so an OLDER run whose promote succeeded long
-  // ago, but whose updated_at was recently bumped by a later smoke-only
+  // touching the mutation step at all -- so an OLDER run whose mutation
+  // happened long ago, but whose updated_at was recently bumped by a later
   // rerun, would otherwise be selected over a genuinely NEWER run whose
-  // promote actually completed more recently in real time. The fix must
-  // compare by the promote job's own completedAt across every candidate,
-  // not by run recency order or per-candidate early-exit.
+  // mutation actually completed more recently in real time. The fix must
+  // compare by the mutation evidence's own timestamp across every
+  // candidate, not by run recency order or per-candidate early-exit.
   const olderRunBumpedRecently = run({
     id: 300,
     head_sha: 'f'.repeat(40),
     run_attempt: 2,
-    updated_at: minutesAgo(1), // bumped by an unrelated smoke-only rerun
+    updated_at: minutesAgo(1), // bumped by an unrelated rerun
     html_url: 'https://github.com/unit-talk/v2/actions/runs/300',
   });
-  const newerRunGenuinePromote = run({
+  const newerRunGenuineMutation = run({
     id: 301,
     head_sha: 'a'.repeat(40),
     run_attempt: 1,
@@ -1236,20 +1240,20 @@ test('deploy alignment selects by the promote job\'s own completion time, not ru
           return 'a'.repeat(40);
         },
         async listRunsByRecency() {
-          // recency order puts the bumped-but-stale-promote run first
-          return [olderRunBumpedRecently, newerRunGenuinePromote];
+          // recency order puts the bumped-but-stale-mutation run first
+          return [olderRunBumpedRecently, newerRunGenuineMutation];
         },
-        async jobConclusionForAttempt(runId, jobName, attempt) {
-          if (jobName !== DEPLOY_PROMOTE_JOB_NAME) return null;
+        async latestArtifactJson(runId, namePrefix, attempt) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
           if (runId === 300 && attempt === 1) {
-            // promote succeeded LONG ago in this run's original attempt
-            return { conclusion: 'success', completedAt: minutesAgo(120) };
+            // mutation happened LONG ago in this run's original attempt
+            return { image_tag: 'f'.repeat(40), mutated_at: minutesAgo(120) };
           }
           if (runId === 301 && attempt === 1) {
-            // promote for the genuinely newer deploy completed more recently
-            return { conclusion: 'success', completedAt: minutesAgo(15) };
+            // the genuinely newer deploy's mutation completed more recently
+            return { image_tag: 'a'.repeat(40), mutated_at: minutesAgo(15) };
           }
-          return null; // run 300's attempt 2 (the smoke-only rerun) never re-ran promote
+          return null; // run 300's attempt 2 (the unrelated rerun) never re-ran the mutation step
         },
       }),
     }),
@@ -1258,26 +1262,22 @@ test('deploy alignment selects by the promote job\'s own completion time, not ru
   assert.equal(result.measured?.['deployed_sha'], 'a'.repeat(40));
 });
 
-test('deploy alignment still trusts a run whose promote succeeded even though a downstream smoke failure turned the overall workflow conclusion red (round 21)', async () => {
-  // PM review (round 21, exact-head 11dcc7ce): probeDeploySha's real
-  // implementation called listRunsByRecency('deploy.yml', { branch: 'main',
-  // status: 'success' }) -- a server-side filter on the workflow run's
-  // OVERALL conclusion. A run where `promote` itself succeeds (mutating
-  // production) but a later, unrelated downstream job (smoke) fails turns
-  // the whole workflow run's conclusion to 'failure' -- that run would never
-  // even appear in `candidates`, so its genuinely successful promote job
-  // (and the production mutation it performed) would be silently invisible
-  // to this dimension. The fix drops the status filter entirely; only the
-  // per-attempt jobConclusionForAttempt(promote) check below decides
-  // trust, never the run's own aggregate status/conclusion fields. This
-  // stub's run object is deliberately status:'completed'/conclusion:'failure'
-  // (as GitHub would report the overall run) to prove the code path never
-  // reads those fields when deciding whether to trust the run.
-  const promoteSucceededSmokeFailed = run({
+test('deploy alignment still trusts a run with mutation evidence even though the overall workflow conclusion is failure (round 21/22)', async () => {
+  // PM review (round 21, exact-head 11dcc7ce): a server-side status='success'
+  // filter excluded any run whose OVERALL conclusion was failure -- including
+  // one where the mutation step itself succeeded (mutating production) but a
+  // later, unrelated downstream job failed, turning the whole workflow run
+  // red. Round 22 replaced job-conclusion-based trust with mutation-evidence
+  // artifacts entirely, so this invariant now holds one level deeper too:
+  // trust never reads any job's or run's own status/conclusion fields at
+  // all, only whether mutation-evidence exists. This stub's run object is
+  // deliberately status:'completed'/conclusion:'failure' to prove the code
+  // path never reads those fields when deciding whether to trust the run.
+  const mutatedButOverallRed = run({
     id: 999,
     head_sha: 'c'.repeat(40),
     status: 'completed',
-    conclusion: 'failure', // overall workflow run is RED because smoke failed
+    conclusion: 'failure', // overall workflow run is RED
     run_attempt: 1,
     html_url: 'https://github.com/unit-talk/v2/actions/runs/999',
   });
@@ -1286,21 +1286,138 @@ test('deploy alignment still trusts a run whose promote succeeded even though a 
       githubUnavailableReason: null,
       github: stubGithub({
         async headSha() {
-          return 'c'.repeat(40); // main HEAD matches the run that actually promoted
+          return 'c'.repeat(40);
         },
         async listRunsByRecency() {
-          return [promoteSucceededSmokeFailed];
+          return [mutatedButOverallRed];
         },
-        async jobConclusionForAttempt(runId, jobName, attempt) {
-          if (runId !== 999 || jobName !== DEPLOY_PROMOTE_JOB_NAME || attempt !== 1) return null;
-          // promote itself succeeded despite the overall run later failing on smoke.
-          return { conclusion: 'success', completedAt: minutesAgo(10) };
+        async latestArtifactJson(runId, namePrefix) {
+          if (runId !== 999 || namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
+          return { image_tag: 'c'.repeat(40), mutated_at: minutesAgo(10) };
         },
       }),
     }),
   );
-  assert.equal(result.status, 'pass', 'a run whose promote succeeded must still be trusted even if the overall workflow conclusion is failure');
+  assert.equal(result.status, 'pass', 'mutation evidence must be trusted even if the overall workflow conclusion is failure');
   assert.equal(result.measured?.['deployed_sha'], 'c'.repeat(40));
+});
+
+test('deploy alignment trusts the mutation evidence tag when health failed and no rollback occurred (round 22)', async () => {
+  // PM review (round 22): the container-replacement step succeeded (docker
+  // compose up -d replaced production containers) but health-check later
+  // failed with no rollback_tag configured -- production is still running
+  // the NEW, unhealthy image. Only deploy-mutation-receipt exists; no
+  // deploy-rollback-receipt was ever written. The mutation evidence's own
+  // tag must be trusted as currently deployed.
+  const candidate = run({
+    id: 400,
+    head_sha: 'b'.repeat(40),
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/400',
+  });
+  const result = await probeDeploySha(
+    context({
+      githubUnavailableReason: null,
+      github: stubGithub({
+        async headSha() {
+          return 'b'.repeat(40);
+        },
+        async listRunsByRecency() {
+          return [candidate];
+        },
+        async latestArtifactJson(runId, namePrefix) {
+          if (runId !== 400) return null;
+          if (namePrefix === DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) {
+            return { image_tag: 'b'.repeat(40), mutated_at: minutesAgo(20) };
+          }
+          return null; // no rollback receipt -- rollback never ran or was never configured
+        },
+      }),
+    }),
+  );
+  assert.equal(result.status, 'pass');
+  assert.equal(result.measured?.['deployed_sha'], 'b'.repeat(40));
+});
+
+test('deploy alignment trusts the ROLLBACK tag, not the original mutation tag, once a rollback succeeds (round 22)', async () => {
+  // PM review (round 22): the container-replacement step succeeded to the
+  // NEW tag, health-check failed, and a configured rollback then succeeded
+  // -- production is now running the OLDER rollback tag, a SEPARATE, LATER
+  // production mutation. The rollback evidence's own tag and timestamp must
+  // supersede the original mutation evidence for this same attempt.
+  const candidate = run({
+    id: 401,
+    head_sha: 'b'.repeat(40),
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/401',
+  });
+  const rollbackTag = 'd'.repeat(40);
+  const result = await probeDeploySha(
+    context({
+      githubUnavailableReason: null,
+      github: stubGithub({
+        async headSha() {
+          return rollbackTag; // main HEAD matches the tag production was rolled back to
+        },
+        async listRunsByRecency() {
+          return [candidate];
+        },
+        async latestArtifactJson(runId, namePrefix) {
+          if (runId !== 401) return null;
+          if (namePrefix === DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) {
+            return { image_tag: 'b'.repeat(40), mutated_at: minutesAgo(30) };
+          }
+          if (namePrefix === DEPLOY_ROLLBACK_RECEIPT_ARTIFACT_PREFIX) {
+            return { rolled_back_to_tag: rollbackTag, rolled_back_at: minutesAgo(15) };
+          }
+          return null;
+        },
+      }),
+    }),
+  );
+  assert.equal(result.status, 'pass', 'the rollback tag must be trusted as currently deployed, not the original failed mutation tag');
+  assert.equal(result.measured?.['deployed_sha'], rollbackTag);
+});
+
+test('deploy alignment finds no evidence at all when the run failed BEFORE the mutation step ever ran (round 22)', async () => {
+  // PM review (round 22): e.g. the registry preflight step failed before
+  // "Promote all production containers" even started -- no container
+  // replacement occurred, so no deploy-mutation-receipt was ever written or
+  // uploaded. This attempt must contribute nothing, exactly like the
+  // no-evidence-in-any-attempt case, falling through to an older candidate
+  // that genuinely mutated production.
+  const failedBeforeMutation = run({
+    id: 402,
+    head_sha: 'c'.repeat(40),
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/402',
+  });
+  const olderGenuineDeploy = run({
+    id: 100,
+    head_sha: 'd'.repeat(40),
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/100',
+  });
+  const result = await probeDeploySha(
+    context({
+      githubUnavailableReason: null,
+      github: stubGithub({
+        async headSha() {
+          return 'd'.repeat(40);
+        },
+        async listRunsByRecency() {
+          return [failedBeforeMutation, olderGenuineDeploy];
+        },
+        async latestArtifactJson(runId, namePrefix) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
+          if (runId === 100) return { image_tag: 'd'.repeat(40), mutated_at: minutesAgo(60) };
+          return null; // run 402 failed before ever reaching the mutation step -- no evidence
+        },
+      }),
+    }),
+  );
+  assert.equal(result.status, 'pass', 'a run that failed before mutation must contribute no evidence and fall through to an older genuine deploy');
+  assert.equal(result.measured?.['deployed_sha'], 'd'.repeat(40));
 });
 
 test('CI verify scopes its run lookup to the current main HEAD, so an unrelated older rerun cannot shadow it (round 13)', async () => {
@@ -1532,6 +1649,83 @@ test('the read-only wrapper issues select reads and surfaces errors instead of r
     () => wrapReadOnlyClient(failing as never, 'zfzdnfwdarxucxtaojxm').latestRow('picks', 'id', [], 'id'),
     /permission denied/,
   );
+});
+
+test('countRows against a reader that rejects nonexistent columns: the default id column fails on delivery_kill_switch, an explicit existing column succeeds (round 22)', async () => {
+  // PM review (round 22, exact-head 192b597d): the real countRows()
+  // implementation selected a hardcoded 'id' column for every table --
+  // delivery_kill_switch has no id column at all (schema: actor, killed,
+  // reason, target, updated_at), so every real call against it failed at
+  // the PostgREST level, always falling through to the catch block in
+  // verifyKillSwitchesEngagedNow and returning null (unreadable). A
+  // dictionary-based stubDb fixture could never catch this, since it just
+  // returns whatever count a test wired up regardless of what column was
+  // actually requested. This test goes through wrapReadOnlyClient with a
+  // fake PostgREST-shaped client that genuinely rejects a select on a
+  // column that doesn't exist for the table, proving both the bug (default
+  // 'id' column fails) and the fix (an explicit, existing column succeeds).
+  const TABLE_COLUMNS: Record<string, string[]> = {
+    delivery_kill_switch: ['actor', 'killed', 'reason', 'target', 'updated_at'],
+  };
+  function chainFor(table: string, column: string) {
+    const known = TABLE_COLUMNS[table]?.includes(column) ?? false;
+    const result = known
+      ? { data: null, error: null, count: 3 }
+      : { data: null, error: { message: `column ${table}.${column} does not exist` }, count: null };
+    const chain = {
+      eq() {
+        return chain;
+      },
+      neq() {
+        return chain;
+      },
+      gt() {
+        return chain;
+      },
+      gte() {
+        return chain;
+      },
+      lt() {
+        return chain;
+      },
+      like() {
+        return chain;
+      },
+      order() {
+        return chain;
+      },
+      limit() {
+        return chain;
+      },
+      then<R>(resolve: (value: typeof result) => R): R {
+        return resolve(result);
+      },
+    };
+    return chain;
+  }
+  const client = {
+    from(table: string) {
+      return {
+        select(column: string) {
+          return chainFor(table, column);
+        },
+      };
+    },
+  };
+  const db = wrapReadOnlyClient(client as never, 'zfzdnfwdarxucxtaojxm');
+
+  await assert.rejects(
+    () => db.countRows('delivery_kill_switch', [{ column: 'target', op: 'eq', value: 'best-bets' }]), // default 'id' column
+    /does not exist/,
+    'the default id column must fail against a table that has no id column',
+  );
+
+  const count = await db.countRows(
+    'delivery_kill_switch',
+    [{ column: 'target', op: 'eq', value: 'best-bets' }],
+    'target',
+  );
+  assert.equal(count, 3, 'an explicit, existing column must succeed');
 });
 
 // ── Repo-scanned dimension ───────────────────────────────────────────────────
