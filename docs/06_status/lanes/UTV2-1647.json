@@ -21,12 +21,30 @@
   ],
   "status": "merged",
   "started_at": "2026-08-01T23:57:10.848Z",
-  "heartbeat_at": "2026-08-02T04:30:30.775Z",
+  "heartbeat_at": "2026-08-02T04:35:17.067Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1647-ci-db-proof-harvest-fix.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-02T04:34:40.091Z",
+      "verdict": "fail",
+      "merge_sha": "75280b8b96ddf9671f510e5c2fe28b1bf81cad82",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-02T04:35:17.067Z",
+      "verdict": "pass",
+      "merge_sha": "75280b8b96ddf9671f510e5c2fe28b1bf81cad82",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
