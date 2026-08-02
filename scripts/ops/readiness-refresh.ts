@@ -394,8 +394,8 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
       kind: 'github_api' as const,
       source: 'github:actions/runs',
       query:
-        'every run of deploy.yml on main (head_sha) vs commits/main (sha), regardless of overall ' +
-        'workflow or job conclusion, checked attempt-by-attempt for a deploy-mutation-receipt/' +
+        'every run of deploy.yml across every ref (head_sha) vs commits/main (sha), regardless of ' +
+        'overall workflow or job conclusion, checked attempt-by-attempt for a deploy-mutation-receipt/' +
         'deploy-rollback-receipt artifact; compare base...head for commit distance',
     },
   };
@@ -412,9 +412,23 @@ export async function probeDeploySha(ctx: ProbeContext): Promise<ReadinessDimens
     // the per-attempt deploy-mutation-receipt check below (round 22) is what
     // actually decides whether production was mutated, not any job's or
     // workflow's aggregate status/conclusion.
+    //
+    // Round 23 (PM review of cb03437d): a server-side branch='main' filter
+    // is the exact same class of blind spot one level up -- deploy.yml's
+    // workflow_dispatch is unrestricted (round 8 already established this
+    // for the parked-contract-receipt path) and a manual dispatch from a
+    // hotfix branch or tag mutates the SAME production host. Restricting
+    // discovery to main-only runs means a newer off-main mutation is
+    // invisible, letting an older main-only deployment stand in as
+    // "currently deployed" -- precisely the drift this dimension exists to
+    // catch, since deploy_sha_alignment's whole point is comparing what's
+    // ACTUALLY deployed against main's HEAD, not merely the newest thing
+    // that happened to run on main. Discovery must scan every ref; the
+    // dimension still correctly reports drift/fail when the true deployed
+    // tag (from any ref) doesn't match main's HEAD.
     const [mainSha, candidates] = await Promise.all([
       github.headSha('main'),
-      github.listRunsByRecency('deploy.yml', { branch: 'main' }),
+      github.listRunsByRecency('deploy.yml'),
     ]);
 
     if (candidates.length === 0) {

@@ -1420,6 +1420,59 @@ test('deploy alignment finds no evidence at all when the run failed BEFORE the m
   assert.equal(result.measured?.['deployed_sha'], 'd'.repeat(40));
 });
 
+test('deploy alignment discovers deploy.yml runs across every ref, never scoped to branch:main, so a newer non-main mutation supersedes an older main mutation (round 23)', async () => {
+  // PM review (round 23, exact-head cb03437d): deploy.yml's workflow_dispatch
+  // is unrestricted (round 8 already established this for the
+  // parked-contract-receipt path) -- a manual dispatch from a hotfix branch
+  // or tag mutates the SAME production host. Scoping candidate discovery to
+  // `branch: 'main'` made such a run invisible to this dimension entirely,
+  // letting an older main-only deployment stand in as "currently deployed"
+  // even though a genuinely newer off-main mutation had already superseded
+  // it -- precisely the drift deploy_sha_alignment exists to catch. Proven
+  // two ways: (1) listRunsByRecency is called with no branch filter at all,
+  // and (2) given both an older "main" candidate and a newer
+  // hotfix-dispatch-representative candidate (WorkflowRun carries no ref
+  // field to assert on directly, so its distinctness from main is
+  // represented purely by its mutation happening later), the newer one's
+  // tag wins as the deployed SHA, matching main HEAD.
+  let capturedOptions: { branch?: string; status?: string } | undefined = 'unset' as never;
+  const olderMainDeploy = run({
+    id: 500,
+    head_sha: 'e'.repeat(40),
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/500',
+  });
+  const newerHotfixDispatch = run({
+    id: 501,
+    head_sha: 'f'.repeat(40),
+    run_attempt: 1,
+    html_url: 'https://github.com/unit-talk/v2/actions/runs/501',
+  });
+  const result = await probeDeploySha(
+    context({
+      githubUnavailableReason: null,
+      github: stubGithub({
+        async headSha() {
+          return 'f'.repeat(40); // main HEAD matches the newer hotfix dispatch's tag
+        },
+        async listRunsByRecency(_workflowFile, options) {
+          capturedOptions = options;
+          return [olderMainDeploy, newerHotfixDispatch];
+        },
+        async latestArtifactJson(runId, namePrefix) {
+          if (namePrefix !== DEPLOY_MUTATION_RECEIPT_ARTIFACT_PREFIX) return null;
+          if (runId === 500) return { image_tag: 'e'.repeat(40), mutated_at: minutesAgo(120) }; // older main deploy
+          if (runId === 501) return { image_tag: 'f'.repeat(40), mutated_at: minutesAgo(10) }; // newer, off-main hotfix
+          return null;
+        },
+      }),
+    }),
+  );
+  assert.deepEqual(capturedOptions, undefined, 'deploy.yml discovery must never filter by branch, since workflow_dispatch is unrestricted');
+  assert.equal(result.status, 'pass', 'the newer off-main mutation must be trusted, not the older main-only deployment');
+  assert.equal(result.measured?.['deployed_sha'], 'f'.repeat(40));
+});
+
 test('CI verify scopes its run lookup to the current main HEAD, so an unrelated older rerun cannot shadow it (round 13)', async () => {
   // Codex round 13, third finding (P2): probeCiVerify shares latestRun with
   // the deployment-history probes. If an older ci.yml run on main is
