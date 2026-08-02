@@ -252,7 +252,7 @@ test('locateCiDbProofRun: happy path resolves PR -> head SHA -> CI run -> DB pro
   const headSha = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
   const ghExecutor = fakeGhExecutor({
     [`commits/${mergeSha}/pulls`]: JSON.stringify([{ number: 1343, head: { sha: headSha } }]),
-    [`actions/runs?head_sha=${headSha}`]: JSON.stringify({
+    [`actions/workflows/ci.yml/runs?head_sha=${headSha}`]: JSON.stringify({
       workflow_runs: [{ id: 30680085299, name: 'CI', conclusion: 'success' }],
     }),
     'actions/runs/30680085299/jobs': JSON.stringify({
@@ -273,6 +273,101 @@ test('locateCiDbProofRun: happy path resolves PR -> head SHA -> CI run -> DB pro
   }
 });
 
+test('locateCiDbProofRun: UTV2-1646 regression queries ci.yml directly when CI is item 21 of 25 repository-wide runs', () => {
+  // Real captured identity from UTV2-1646 / PR #1356. GitHub's unfiltered
+  // actions/runs response contained 25 runs for this exact head SHA; CI run
+  // 30704058474 was item 21, outside the old per_page=20 lookup. The
+  // workflow-specific endpoint returns the same completed CI run directly.
+  const mergeSha = '6adaa5d08016971f90ba4cac68bad23e894555a5';
+  const headSha = '37f0c092a7903af2db49ad5f53ce04a039ca6088';
+  const ciRunId = 30704058474;
+  const dbProofJobId = 91379988421;
+  const unrelatedRuns = Array.from({ length: 20 }, (_, index) => ({
+    id: 30704449052 - index,
+    name: `Unrelated workflow ${index + 1}`,
+    conclusion: 'success',
+  }));
+  const ghExecutor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${mergeSha}/pulls`)) {
+      return Buffer.from(JSON.stringify([{ number: 1356, head: { sha: headSha } }]));
+    }
+    if (key.includes(`actions/workflows/ci.yml/runs?head_sha=${headSha}`)) {
+      return Buffer.from(
+        JSON.stringify({
+          total_count: 1,
+          workflow_runs: [{ id: ciRunId, name: 'CI', conclusion: 'success' }],
+        }),
+      );
+    }
+    if (key.includes(`actions/runs?head_sha=${headSha}`)) {
+      // This is what the old repository-wide per_page=20 query saw: no CI.
+      return Buffer.from(JSON.stringify({ total_count: 25, workflow_runs: unrelatedRuns }));
+    }
+    if (key.includes(`actions/runs/${ciRunId}/jobs`)) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [
+            {
+              id: dbProofJobId,
+              name: 'Writable DB proof (staging only)',
+              run_attempt: 1,
+              conclusion: 'success',
+              html_url: `https://github.com/griff843/Unit-Talk-v2/actions/runs/${ciRunId}/job/${dbProofJobId}`,
+            },
+          ],
+        }),
+      );
+    }
+    throw Object.assign(new Error(`unexpected GitHub request: ${key}`), { stderr: 'not found' });
+  };
+
+  const result = locateCiDbProofRun(mergeSha, { ghExecutor });
+  assert.strictEqual(result.ok, true);
+  if (result.ok) {
+    assert.strictEqual(result.runInfo.run_id, ciRunId);
+    assert.strictEqual(result.runInfo.job_id, dbProofJobId);
+    assert.strictEqual(result.runInfo.target_head_sha, headSha);
+    assert.strictEqual(result.runInfo.target_merge_sha, mergeSha);
+  }
+});
+
+test('locateCiDbProofRun: falls back to a 100-run repository page when the workflow-specific endpoint is unavailable', () => {
+  const mergeSha = 'c'.repeat(40);
+  const headSha = 'd'.repeat(40);
+  const ciRunId = 12345;
+  const dbProofJobId = 67890;
+  const ghExecutor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${mergeSha}/pulls`)) {
+      return Buffer.from(JSON.stringify([{ number: 99, head: { sha: headSha } }]));
+    }
+    if (key.includes(`actions/workflows/ci.yml/runs?head_sha=${headSha}&per_page=100`)) {
+      throw Object.assign(new Error('workflow endpoint unavailable'), { stderr: 'not found' });
+    }
+    if (key.includes(`actions/runs?head_sha=${headSha}&per_page=100`)) {
+      return Buffer.from(
+        JSON.stringify({ workflow_runs: [{ id: ciRunId, name: 'CI', conclusion: 'success' }] }),
+      );
+    }
+    if (key.includes(`actions/runs/${ciRunId}/jobs`)) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [{ id: dbProofJobId, name: 'Writable DB proof (staging only)', conclusion: 'success' }],
+        }),
+      );
+    }
+    throw Object.assign(new Error(`unexpected GitHub request: ${key}`), { stderr: 'not found' });
+  };
+
+  const result = locateCiDbProofRun(mergeSha, { ghExecutor });
+  assert.strictEqual(result.ok, true);
+  if (result.ok) {
+    assert.strictEqual(result.runInfo.run_id, ciRunId);
+    assert.strictEqual(result.runInfo.job_id, dbProofJobId);
+  }
+});
+
 test('locateCiDbProofRun: no associated PR fails closed with no_pr_for_merge_sha (never invents a head SHA)', () => {
   const ghExecutor = fakeGhExecutor({ 'commits/': JSON.stringify([]) });
   const result = locateCiDbProofRun('deadbeef', { ghExecutor });
@@ -284,7 +379,7 @@ test('locateCiDbProofRun: no CI workflow run for the head SHA fails closed hones
   const headSha = 'a'.repeat(40);
   const ghExecutor = fakeGhExecutor({
     'commits/': JSON.stringify([{ number: 1, head: { sha: headSha } }]),
-    'actions/runs?head_sha=': JSON.stringify({ workflow_runs: [] }),
+    'actions/workflows/ci.yml/runs?head_sha=': JSON.stringify({ workflow_runs: [] }),
   });
   const result = locateCiDbProofRun('deadbeef', { ghExecutor });
   assert.strictEqual(result.ok, false);
@@ -295,7 +390,9 @@ test('locateCiDbProofRun: CI ran but never included the DB proof job fails close
   const headSha = 'b'.repeat(40);
   const ghExecutor = fakeGhExecutor({
     'commits/': JSON.stringify([{ number: 1, head: { sha: headSha } }]),
-    'actions/runs?head_sha=': JSON.stringify({ workflow_runs: [{ id: 999, name: 'CI', conclusion: 'success' }] }),
+    'actions/workflows/ci.yml/runs?head_sha=': JSON.stringify({
+      workflow_runs: [{ id: 999, name: 'CI', conclusion: 'success' }],
+    }),
     'actions/runs/999/jobs': JSON.stringify({ jobs: [{ id: 1, name: 'verify', conclusion: 'success' }] }),
   });
   const result = locateCiDbProofRun('deadbeef', { ghExecutor });
@@ -373,7 +470,7 @@ function fullHappyPathExecutor(): GhExecutor {
     if (key.includes(`commits/${mergeSha}/pulls`)) {
       return Buffer.from(JSON.stringify([{ number: 1343, head: { sha: headSha } }]));
     }
-    if (key.includes(`actions/runs?head_sha=${headSha}`)) {
+    if (key.includes(`actions/workflows/ci.yml/runs?head_sha=${headSha}`)) {
       return Buffer.from(JSON.stringify({ workflow_runs: [{ id: REAL_RUN_INFO.run_id, name: 'CI', conclusion: 'success' }] }));
     }
     if (key.includes(`actions/runs/${REAL_RUN_INFO.run_id}/jobs`)) {

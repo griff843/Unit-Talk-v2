@@ -96,6 +96,7 @@ import { ROOT } from './shared.js';
 
 export const TRUSTED_HARVEST_REPOSITORY = 'griff843/Unit-Talk-v2';
 export const DB_SMOKE_WORKFLOW_NAME = 'CI';
+export const DB_SMOKE_WORKFLOW_FILE = 'ci.yml';
 export const DB_SMOKE_JOB_NAME = 'Writable DB proof (staging only)';
 export const DB_SMOKE_JOB_ID_NAME = 'staging-db-proof';
 export const DB_SMOKE_TEST_FILE = 'apps/api/src/database-smoke.test.ts';
@@ -478,7 +479,7 @@ interface GitHubArtifact {
  * associated with the PR's HEAD commit, which is a different SHA. So this:
  *   1. finds the PR associated with `mergeSha` (`commits/{sha}/pulls`) and reads
  *      its head SHA;
- *   2. lists workflow runs for that head SHA, filters to the `CI` workflow;
+ *   2. lists `ci.yml` workflow runs for that head SHA;
  *   3. lists that run's jobs and finds `"Writable DB proof (staging only)"`.
  *
  * Fails closed with a specific `HarvestFailureCode` at every step -- including,
@@ -512,7 +513,26 @@ export function locateCiDbProofRun(mergeSha: string, options: HarvestIoOptions =
     };
   }
 
-  const runsResult = tryGh(executor, ['api', `repos/${repository}/actions/runs?head_sha=${headSha}&per_page=20`]);
+  // Query the workflow-specific endpoint rather than the repository-wide runs
+  // endpoint. A single head SHA can accumulate more than one page of runs from
+  // all the repository's parallel workflows and reruns. In UTV2-1646's real
+  // case there were 25 runs, `CI` was item 21, and the old `per_page=20`
+  // repository-wide lookup incorrectly returned no_ci_run_found even though CI
+  // had completed successfully for the exact SHA.
+  let runsResult = tryGh(executor, [
+    'api',
+    `repos/${repository}/actions/workflows/${DB_SMOKE_WORKFLOW_FILE}/runs?head_sha=${headSha}&per_page=100`,
+  ]);
+  if (!runsResult.ok) {
+    // Keep the repository-wide lookup as a bounded compatibility path for
+    // GitHub installations or injected executors that do not expose the
+    // workflow-specific endpoint. Request the API maximum so this fallback
+    // does not recreate the original item-21 truncation bug.
+    runsResult = tryGh(executor, [
+      'api',
+      `repos/${repository}/actions/runs?head_sha=${headSha}&per_page=100`,
+    ]);
+  }
   if (!runsResult.ok) {
     return {
       ok: false,
