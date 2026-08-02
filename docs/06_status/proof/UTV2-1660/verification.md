@@ -1,6 +1,6 @@
 # PROOF: UTV2-1660
 
-MERGE_SHA: aff59060bc06dddd503d46ee30d230b2d2735912
+MERGE_SHA: 576ffd5994bb877c55bed18bf46f8d00525fbf99
 
 Bound to the code-only commit carrying the full implementation (through
 round 20's remediation) on top of the lane-start commit in this branch's
@@ -966,6 +966,55 @@ test + 3 net new deploy-alignment tests, replacing 6 rewritten in place).
 `scripts/ci/deploy-parked-mode.test.ts` (out of this lane's file scope)
 still 25/25.
 
+## Round 23 remediation (post-twenty-third-review, exact-head 576ffd5994bb877c55bed18bf46f8d00525fbf99)
+
+A PM review at the round-22 exact head (`cb03437d`) found two more real
+defects. This lane addresses the first (a small, mechanical fix); the
+second is tracked as a separate follow-up issue rather than remediated
+here, per PM decision, since the Merge Gate's own bounce-limit check
+(`>= 3` `CHANGES_REQUIRED` verdicts) tripped on this review's verdict --
+the 4th on this lane -- and its own output recommends against continuing
+to bounce a single lane indefinitely rather than scoping a genuinely
+architectural fix properly.
+
+32. **`probeDeploySha`'s discovery was still scoped to `branch: 'main'`,
+    server-side, even after round 21 dropped the `status` filter.**
+    `deploy.yml`'s `workflow_dispatch` trigger is unrestricted -- round 8
+    already established this for the `parked-contract-receipt` path -- and
+    a manual dispatch from a hotfix branch or tag performs the identical
+    production container replacement. Restricting candidate discovery to
+    main-only runs made a newer off-main mutation invisible to this
+    dimension entirely, letting an older main-only deployment stand in as
+    "currently deployed" even though production had already been mutated
+    by something newer -- precisely the drift `deploy_sha_alignment`
+    exists to catch, since its whole point is comparing what's actually
+    deployed against main's HEAD, not merely the newest thing that
+    happened to run on main. Fixed by dropping the branch filter entirely;
+    discovery now scans every ref. New regression test proves both that
+    `listRunsByRecency` is called with no branch filter at all, and that a
+    newer off-main mutation's tag wins over an older main-only
+    deployment's tag as the currently deployed SHA.
+
+33. **Deferred, not fixed here: evidence can be lost in the window
+    between production mutation and receipt write/upload.** `docker
+    compose up -d` mutates production before the local
+    `deploy-mutation-receipt` is created and uploaded in later steps; a
+    runner cancellation, connectivity loss, or artifact-upload failure in
+    that gap leaves production changed with zero evidence, and the
+    current design would silently fall through to an older, stale
+    candidate's evidence. Closing this properly requires either a durable
+    host-side receipt written atomically with the remote mutation itself,
+    or a persisted pre-mutation intent record that forces `unknown`
+    whenever the latest intent lacks a matching terminal mutation/rollback
+    receipt -- genuine architectural work, not a reactive patch, and out
+    of scope for further bouncing on this lane. Filed as a separate T1
+    follow-up issue with the PM's exact required remediation approach and
+    regression coverage (interruption after intent/mutation but before a
+    terminal receipt; rollback-receipt loss).
+
+`pnpm type-check`, `pnpm lint` clean; `npx tsx --test
+scripts/ops/readiness-refresh.test.ts` 61/61 passing (60 + 1 new).
+
 ## ASSERTIONS:
 
 - [x] `parked_verified` is a distinct literal value from `active_healthy`; evidence text explicitly states it is not ordinary active health.
@@ -973,20 +1022,21 @@ still 25/25.
 - [x] The exact pre-existing active-mode threshold logic (same failures[] computation, same evidence strings) is unchanged and is what runs whenever parked evidence is unavailable or mode is active.
 - [x] A receipt whose `releaseTag` doesn't match the run's own head SHA is never trusted.
 - [x] Kill switches are re-verified live against `delivery_kill_switch`, never just read from the deploy-time receipt.
-- [x] `pnpm type-check`, `pnpm lint` clean; `npx tsx --test scripts/ops/readiness-refresh.test.ts` 60/60 passing; `pnpm test:ops` 1906/1906 confirmed on an earlier commit of this same function (full re-run deferred to CI for this commit — local memory pressure from an unrelated process remains elevated).
+- [x] `pnpm type-check`, `pnpm lint` clean; `npx tsx --test scripts/ops/readiness-refresh.test.ts` 61/61 passing; `pnpm test:ops` 1906/1906 confirmed on an earlier commit of this same function (full re-run deferred to CI for this commit — local memory pressure from an unrelated process remains elevated).
+- [x] `probeDeploySha` discovers `deploy.yml` runs across every ref, never scoped to `branch: 'main'`, so a newer off-main hotfix-dispatch mutation is never invisible to this dimension.
 - [x] `countRows()` accepts an explicit count column, defaulting to `'id'`; `delivery_kill_switch` (which has no `id` column) is queried with `'target'` explicitly, proven via a fake reader that genuinely rejects a nonexistent column, not just a dictionary stub.
 - [x] `probeDeploySha` trusts production-mutation evidence by `deploy-mutation-receipt`/`deploy-rollback-receipt` artifact presence and timestamp alone, never any job's or run's conclusion field; a successful rollback's tag supersedes the original mutation's tag as the currently deployed SHA.
 - [x] `probeDeploySha` fetches every deploy.yml run on main regardless of overall workflow conclusion; a run whose `promote` job succeeded is trusted even if a downstream job (`smoke`) later failed and turned the whole run red.
 - [x] `probeDeploySha` selects the deployed SHA by the `promote` job's own completion time across every candidate and attempt, never by run-level `updated_at` recency order or per-candidate early-exit — an unrelated downstream job's rerun bumping an older run's `updated_at` cannot shadow a genuinely newer run whose `promote` completed more recently.
 - [x] Every unreadable-classification return path in this file sets `measured.runtime_state: 'unreadable'` (never a bare `measured: null`), so an observer failure is field-level distinguishable from `active_failed`/`parked_drift`/`parked_verified` everywhere, not just via the coarser `status: 'unknown'`.
 - [x] The live kill-switch re-check requires exactly one authoritative row per required target with `killed` strictly `true`; a missing target row, duplicate target rows, or a malformed `killed` value all fail closed to `parked_drift`, never `parked_verified`.
-- [x] All twenty-seven in-scope Codex/PM-flagged P1s, plus one P2 (across twenty-two review rounds) fixed and covered by dedicated tests: post-parking ingestor activity is detected via `finished_at` even when a `reapStaleRuns()`-style mutation leaves `started_at` untouched; `probeDeploySha` searches every attempt (not just the current one) of a candidate for a genuinely successful `promote` before moving to an older candidate; an unreadable kill-switch recheck alone reports `unknown`, never a confident `parked_drift`, but does not suppress a genuinely confirmed drift finding from another signal; unbounded active-mode staleness counters no longer feed the parked-drift check (replaced with a time-scoped live-claim signal that also catches a claim whose run-record write failed); `probeCiVerify`'s run lookup is scoped to the resolved main HEAD so an unrelated older rerun cannot shadow it; `deploy.yml` runs are paginated (not a single per_page=20 page) so a manually re-run older run is never excluded from selection entirely; `probeDeploySha` verifies the selected run's `promote` job actually succeeded in that run's current attempt before trusting its `head_sha`, never just a downstream job's rerun; a parked-contract receipt must belong to the run's own current attempt, never an earlier attempt whose promote job ran before a later failed-jobs-only rerun of a downstream job; `actions: read` permission present; post-parking worker activity detected via TWO code-path-exclusive, atomically-written signals — `system_runs.run_type='distribution.process'` (main claim path) and `distribution_outbox.last_error LIKE 'stale claim reaped by%'` (the separate stale-claim-reap path, keyed to the same atomic UPDATE that clears `claimed_at`, not the non-atomic follow-up `audit_log` write) — deliberately NOT an actor-based filter, since real production data showed that space is large and unstable; never triggering on a legitimate parked-enabled scheduler's writes; the newest `deploy.yml` run must itself be a completed success before its receipt is trusted, never an older successful run while a newer non-success run exists; that newest-run lookup is never scoped to `main` given `deploy.yml`'s unrestricted `workflow_dispatch`; is selected by most-recent execution (`updated_at`) rather than list position, so a manually re-run older run is never missed; and all timestamp comparisons against `receipt.observedAt` are done as parsed epoch values, never lexical string comparison. One further P1 (worker resume invisible to readiness-refresh when the best-effort heartbeat write fails and every target hits a processing-skip branch) requires changes to `apps/worker/src/runner.ts`, outside this lane's locked scope — filed as UTV2-1662, not silently dropped.
+- [x] All twenty-eight in-scope Codex/PM-flagged P1s, plus one P2 (across twenty-three review rounds) fixed and covered by dedicated tests; one further real finding (evidence-loss window between production mutation and receipt write/upload) is deferred as a separate follow-up issue per PM decision after the Merge Gate's bounce-limit check tripped, not silently dropped: post-parking ingestor activity is detected via `finished_at` even when a `reapStaleRuns()`-style mutation leaves `started_at` untouched; `probeDeploySha` searches every attempt (not just the current one) of a candidate for a genuinely successful `promote` before moving to an older candidate; an unreadable kill-switch recheck alone reports `unknown`, never a confident `parked_drift`, but does not suppress a genuinely confirmed drift finding from another signal; unbounded active-mode staleness counters no longer feed the parked-drift check (replaced with a time-scoped live-claim signal that also catches a claim whose run-record write failed); `probeCiVerify`'s run lookup is scoped to the resolved main HEAD so an unrelated older rerun cannot shadow it; `deploy.yml` runs are paginated (not a single per_page=20 page) so a manually re-run older run is never excluded from selection entirely; `probeDeploySha` verifies the selected run's `promote` job actually succeeded in that run's current attempt before trusting its `head_sha`, never just a downstream job's rerun; a parked-contract receipt must belong to the run's own current attempt, never an earlier attempt whose promote job ran before a later failed-jobs-only rerun of a downstream job; `actions: read` permission present; post-parking worker activity detected via TWO code-path-exclusive, atomically-written signals — `system_runs.run_type='distribution.process'` (main claim path) and `distribution_outbox.last_error LIKE 'stale claim reaped by%'` (the separate stale-claim-reap path, keyed to the same atomic UPDATE that clears `claimed_at`, not the non-atomic follow-up `audit_log` write) — deliberately NOT an actor-based filter, since real production data showed that space is large and unstable; never triggering on a legitimate parked-enabled scheduler's writes; the newest `deploy.yml` run must itself be a completed success before its receipt is trusted, never an older successful run while a newer non-success run exists; that newest-run lookup is never scoped to `main` given `deploy.yml`'s unrestricted `workflow_dispatch`; is selected by most-recent execution (`updated_at`) rather than list position, so a manually re-run older run is never missed; and all timestamp comparisons against `receipt.observedAt` are done as parsed epoch values, never lexical string comparison. One further P1 (worker resume invisible to readiness-refresh when the best-effort heartbeat write fails and every target hits a processing-skip branch) requires changes to `apps/worker/src/runner.ts`, outside this lane's locked scope — filed as UTV2-1662, not silently dropped.
 
 ## Verification
 
 `pnpm type-check`, `pnpm lint`, and `npx tsx --test scripts/ops/readiness-refresh.test.ts`
 were run in this lane worktree after every remediation round, most recently
-round 22 (commit `aff59060bc06dddd503d46ee30d230b2d2735912`): 60/60 tests
+round 23 (commit `576ffd5994bb877c55bed18bf46f8d00525fbf99`): 61/61 tests
 passing, type-check clean, lint clean. Full `pnpm test:ops` (1906/1906
 confirmed on an earlier commit of this same function) is deferred to CI for
 this exact commit per the memory pressure note below.
@@ -1004,8 +1054,8 @@ $ pnpm lint
 (clean)
 
 $ npx tsx --test scripts/ops/readiness-refresh.test.ts
-# tests 60
-# pass 60
+# tests 61
+# pass 61
 # fail 0
 
 $ npx tsx --test scripts/ci/deploy-parked-mode.test.ts
