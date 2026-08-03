@@ -1,10 +1,13 @@
 # PROOF: UTV2-1640 Phase A
 
-MERGE_SHA: 3c66f027964a89ea3e8fcba77dd06d883b7a47fd
+MERGE_SHA: 714fb9c619daa0424999bfa767d8f9764a32e367
 
-Bound to the code-only commit carrying the migration file and its paired
-down script. Code and proof are deliberately separate commits so the proof
-can name a SHA that actually contains the code it describes.
+Bound to the merge commit of the implementation PR, produced by GitHub's
+normal exact-head merge endpoint. Previously this named the pre-merge
+code-only commit; that commit is not an ancestor of any post-merge head
+because the PR was squash-merged, so the merge SHA is now the only value
+that both names the shipped code and satisfies the validator's
+ancestor-of-HEAD requirement.
 
 ## Summary
 
