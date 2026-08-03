@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue_id": "UTV2-1666",
   "tier": "T2",
-  "title": "Deployment-truth design \u2014 PM_VERDICT round-7 bounded corrections (label-authoritative rollback provenance, corrected observer read-path under 0700 journal, proof-packet reconciliation)",
+  "title": "Deployment-truth design — PM_VERDICT round-7 bounded corrections (label-authoritative rollback provenance, corrected observer read-path under 0700 journal, proof-packet reconciliation)",
   "generated_at": "2026-08-03T02:00:00.000Z",
   "status": "merged",
   "sha_binding": {
@@ -11,7 +11,7 @@
     "base_sha": null,
     "sha_type": "merge_sha",
     "verified_source_note": "Bound to the ratified merge commit of PR #1372, confirmed from GitHub's merge state (mergeCommit.oid = 010158bb7ee36f2467a5abfe885d61ab066207de, mergedAt 2026-08-03T03:22:39Z). Previously cbf72e92 (a pre-merge head); PR #1372 was squash-merged, so no pre-merge head remains an ancestor of main and the merge SHA is the only valid binding.",
-    "bound_at": "2026-08-03T02:00:00.000Z",
+    "bound_at": "2026-08-03T06:53:34.337Z",
     "ci_sentinels": {
       "status": "green_on_merged_head",
       "note": "At the final pre-merge head e5c0bdf6 all four required contexts were green: verify, Executor Result Validation, Merge Gate, P0 Protocol. Readiness Regression Gate was red for pre-existing unrelated production degradation and is not a required context."
@@ -20,7 +20,7 @@
   "verifier": {
     "identity": "claude/utv2-1666-deployment-truth-design",
     "method": "Every claim below is a direct pnpm command result run locally against this exact diff, or a direct grep/read of the real production config files (deploy.yml, topology-spec.yml, docker-compose.yml) cited by the design doc's findings, or a direct check of real Unix filesystem-permission semantics (sticky bit vs. owner-unlink, chmod vs. directory write, and 0700 mode vs. group-readability) for the journal-immutability and observer-access corrections.",
-    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself \u2014 the journal/sequence/service-set/host-observer/rollback-provenance mechanisms described are design-only as of this commit; a future implementation PR needs each of the 42 regression-matrix rows covered by an executable test."
+    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself — the journal/sequence/service-set/host-observer/rollback-provenance mechanisms described are design-only as of this commit; a future implementation PR needs each of the 42 regression-matrix rows covered by an executable test."
   },
   "static_proof": {
     "type_check": {
@@ -48,35 +48,35 @@
     "r_level_check": {
       "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "note": "Verdict: PASS, Changed files: 5, Rules matched: (none) \u2014 docs-only diff matches no r1-r5-rules.json path pattern"
+      "note": "Verdict: PASS, Changed files: 5, Rules matched: (none) — docs-only diff matches no r1-r5-rules.json path pattern"
     }
   },
   "runtime_proof": {
     "status": "not_applicable",
-    "reason": "This lane touches only docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md and its own lane/proof files \u2014 no application runtime or database code path. No live Supabase connection is made or needed by this diff."
+    "reason": "This lane touches only docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md and its own lane/proof files — no application runtime or database code path. No live Supabase connection is made or needed by this diff."
   },
   "tier_correction": {
     "original_tier": "T1",
     "corrected_tier": "T2",
-    "reason": "truth-check-lib.ts's T1 path hard-requires runtime_proof.queries/row_counts (R1/R2) with no waiver \u2014 `--no-runtime is rejected for T1` (truth-check-lib.ts:992). This lane has no DB interaction to prove; fabricating queries against a real database that were never run would be a false evidence claim. T2's merge authority (GitHub PR review approval or pm-verdict/v1 APPROVED) is unchanged from what is already in effect on this PR (PM verdict is the operative gate either way)."
+    "reason": "truth-check-lib.ts's T1 path hard-requires runtime_proof.queries/row_counts (R1/R2) with no waiver — `--no-runtime is rejected for T1` (truth-check-lib.ts:992). This lane has no DB interaction to prove; fabricating queries against a real database that were never run would be a false evidence claim. T2's merge authority (GitHub PR review approval or pm-verdict/v1 APPROVED) is unchanged from what is already in effect on this PR (PM verdict is the operative gate either way)."
   },
   "pm_verdict_round_5": {
     "source": "PR #1372 review comment 5160913992, 2026-08-02T23:43:26Z, verified via gh api",
     "corrections_applied": [
-      "Append-only host journal architecture \u2014 immutable per-operation record paths, atomic index, retention/compaction, unresolved-operation protection (DEPLOYMENT_TRUTH_DESIGN.md \u00a75.5)",
-      "Monotonic host-generated sequence replacing wall-clock ordering as the correctness-determining mechanism (\u00a74, \u00a75, \u00a710)",
-      "Canonical release-managed service set defined mechanically via the ${IMAGE_NAMESPACE}/ image-prefix rule, excluding Loki/Grafana/Caddy; topology-spec.yml's own service list confirmed to omit grading-cron and is not consumed programmatically by the rule (\u00a75)",
-      "Host-observer hardening decision folded into \u00a712a (environment-scoped secret, unprivileged no-docker-group account, root-owned forced-command wrapper, no PTY/agent/TCP/X11 forwarding, pinned host-key verification, bounded sanitized output); \u00a712b explicitly marked not pre-authorized"
+      "Append-only host journal architecture — immutable per-operation record paths, atomic index, retention/compaction, unresolved-operation protection (DEPLOYMENT_TRUTH_DESIGN.md §5.5)",
+      "Monotonic host-generated sequence replacing wall-clock ordering as the correctness-determining mechanism (§4, §5, §10)",
+      "Canonical release-managed service set defined mechanically via the ${IMAGE_NAMESPACE}/ image-prefix rule, excluding Loki/Grafana/Caddy; topology-spec.yml's own service list confirmed to omit grading-cron and is not consumed programmatically by the rule (§5)",
+      "Host-observer hardening decision folded into §12a (environment-scoped secret, unprivileged no-docker-group account, root-owned forced-command wrapper, no PTY/agent/TCP/X11 forwarding, pinned host-key verification, bounded sanitized output); §12b explicitly marked not pre-authorized"
     ],
     "proof_packet_reconciliation": "PR #1372 body updated 13 -> 35 regression scenarios; design doc status line updated to pending PM ratification; this evidence.json and the accompanying diff-summary-verification.md created to replace the previously undeclared .gitkeep."
   },
   "pm_verdict_round_6": {
     "source": "PR #1372 review comment 5161105854, 2026-08-03T00:27:45Z, verified via gh api",
     "corrections_applied": [
-      "Journal write-boundary corrected: round 5's claim that sticky-bit mode 1770 plus chmod 0444 prevents the deploy account from deleting/renaming its own finalized entries was false (sticky bit protects against non-owner deletion, not owner-on-own-file; chmod governs content access, not unlink/rename, which depend on directory write permission). Replaced with a root-owned write boundary: journal directory root:root mode 0700, deploy account has zero direct filesystem access, all writes go through a fixed sudoers-scoped root-owned helper (\u00a75.5)",
-      "Sequence/index crash recovery fully enumerated: introduced sequence-addressable canonical storage (journal/ops/{sequence}/) plus a tuple-to-sequence index, replacing tuple-path-only addressing that had no bounded-scan mechanism. journal/current now points at operation identity (a directory), not a cached record snapshot, closing the case round 5's staleness check could not detect (confirmation lands, current's recorded sequence unchanged since it equals the intent's). Six crash states enumerated and classified unknown (\u00a75.5)",
-      "Every remaining pre-round-5 timestamp-ordering/shape-checked-provenance reference swept and corrected to the single journal_sequence rule: \u00a73.5's selection rule, \u00a79's rollback-precedence and SHA-shape language, \u00a713's selection description, and regression row 12",
-      "\u00a712's stale 'Open decision for PM' language resolved to reflect round-5's approval-in-principle for \u00a712a and round-6's reconfirmation that \u00a712b remains not pre-authorized"
+      "Journal write-boundary corrected: round 5's claim that sticky-bit mode 1770 plus chmod 0444 prevents the deploy account from deleting/renaming its own finalized entries was false (sticky bit protects against non-owner deletion, not owner-on-own-file; chmod governs content access, not unlink/rename, which depend on directory write permission). Replaced with a root-owned write boundary: journal directory root:root mode 0700, deploy account has zero direct filesystem access, all writes go through a fixed sudoers-scoped root-owned helper (§5.5)",
+      "Sequence/index crash recovery fully enumerated: introduced sequence-addressable canonical storage (journal/ops/{sequence}/) plus a tuple-to-sequence index, replacing tuple-path-only addressing that had no bounded-scan mechanism. journal/current now points at operation identity (a directory), not a cached record snapshot, closing the case round 5's staleness check could not detect (confirmation lands, current's recorded sequence unchanged since it equals the intent's). Six crash states enumerated and classified unknown (§5.5)",
+      "Every remaining pre-round-5 timestamp-ordering/shape-checked-provenance reference swept and corrected to the single journal_sequence rule: §3.5's selection rule, §9's rollback-precedence and SHA-shape language, §13's selection description, and regression row 12",
+      "§12's stale 'Open decision for PM' language resolved to reflect round-5's approval-in-principle for §12a and round-6's reconfirmation that §12b remains not pre-authorized"
     ],
     "mechanical_proof_corrections": "Runtime Verifier Gate's diff-local failure (verification.md contained no commit-SHA reference at all) fixed by adding an honest prior-reviewed-head SHA line, following the same pending_merge convention already used in this file's own sha_binding. Stale diff-summary table (referenced the deleted .gitkeep, showed a mid-commit file count) regenerated against the real current diff."
   },
@@ -90,7 +90,7 @@
   },
   "not_closed": [
     "This document is design-only. No implementation of the journal, monotonic sequence, canonical service-set rule, or hardened SSH observer exists yet.",
-    "Phase 2 (\u00a712b, live Docker daemon reconciliation) remains not pre-authorized and requires its own separate implementation review per the PM's decision.",
+    "Phase 2 (§12b, live Docker daemon reconciliation) remains not pre-authorized and requires its own separate implementation review per the PM's decision.",
     "PR #1365 implementation remains paused until this design is ratified by the PM."
   ]
 }
