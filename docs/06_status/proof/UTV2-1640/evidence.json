@@ -1,14 +1,14 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1640",
   "sha_binding": {
-    "verified_source_sha": "3c06a46ff057f0f849d51a97a02b8a9240a11c40",
-    "merge_sha": null,
+    "verified_source_sha": "714fb9c619daa0424999bfa767d8f9764a32e367",
+    "merge_sha": "714fb9c619daa0424999bfa767d8f9764a32e367",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "verified_source_note": "Rebound from 3c66f027964a89ea... to 3c06a46f after the PM-ratified irreversible-exemption registry commit and intervening main merges moved the branch head. proof-binding-validator requires that only PROOF_ONLY_PREFIXES paths (docs/06_status/proof/, docs/06_status/lanes/) change between verified_source_sha and HEAD; seven non-proof files had changed since the previous binding (the registry entry plus six files carried in by main merges). 3c06a46f is the branch head containing every substantive commit for this lane -- the migration, its paired down script, and the ratified registry entry -- so the only commit after it is this proof-only rebind. No measured production evidence, migration, down script, registry decision or implementation behavior is altered by this rebind.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-08-03T12:50:00.000Z",
+    "verified_source_note": "Bound to the merge commit of the implementation PR, confirmed from GitHub's merge state. schema_version set to 1: truth-check's T1 evidence gate (P6) accepts only version 1 and has no version-2 path, and every other merged T1 lane in this repo uses version 1. This lane was pushed to version 2 by the migration-lane proof-binding validator, which requires version 2 pre-merge -- the two gates are mutually exclusive for a T1 migration lane. The pre-merge validator has already passed and does not re-run post-merge, so version 1 is the correct terminal state. No measured production evidence is altered.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-03T14:10:00.000Z",
     "ci_sentinels": {
       "type_check": "pass",
       "lint": "pass",
