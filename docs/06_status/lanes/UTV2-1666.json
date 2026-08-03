@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1666-deployment-truth-design",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1372",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md"
