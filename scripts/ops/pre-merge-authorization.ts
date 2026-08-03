@@ -96,8 +96,31 @@ export interface PreMergeAuthorizationInput {
   token: string;
 }
 
+export interface PullRequestAuthorizationState {
+  /** The PR's CURRENT live head SHA, or null when it could not be resolved. */
+  headSha: string | null;
+  /** The PR's label names, used to resolve the merge-authority tier. */
+  labels: string[];
+}
+
 export interface PreMergeAuthorizationDeps {
-  /** Fetches the PR's CURRENT live head SHA. Called last, closest to the decision. */
+  /**
+   * Fetches the PR's CURRENT live head SHA *and* its labels in one call.
+   * Called last, closest to the decision. Preferred over `fetchHeadSha`:
+   * the tier that decides whether a pm-verdict is required must be read from
+   * the same instant as the head SHA it is being evaluated against.
+   */
+  fetchPullRequestState?: (
+    input: PreMergeAuthorizationInput,
+  ) => Promise<PullRequestAuthorizationState>;
+  /**
+   * Legacy head-SHA-only fetch. Still honoured so existing callers/fixtures
+   * keep working, but it surfaces no labels, so the tier resolves to null and
+   * this module falls back to REQUIRING a pm-verdict (see
+   * `pmVerdictRequiredForTier`). Prefer `fetchPullRequestState`.
+   *
+   * @deprecated Use `fetchPullRequestState`.
+   */
   fetchHeadSha?: (input: PreMergeAuthorizationInput) => Promise<string | null>;
   /** Fetches the required-check context list from branch protection. */
   fetchRequiredCheckContexts?: (input: PreMergeAuthorizationInput) => Promise<RequiredCheckIdentity[]>;
@@ -124,6 +147,46 @@ export interface PmVerdictReceipt {
   valid: boolean;
 }
 
+export type MergeAuthorityTier = 'T1' | 'T2' | 'T3';
+
+/**
+ * Resolves the merge-authority tier from a PR's label names, using the same
+ * `tier:T[123]` convention every other tier consumer in this repo reads
+ * (scripts/ops/executor-result-validate.ts's resolveTier, merge-gate.yml).
+ * Returns null when no tier label is present.
+ */
+export function resolveTierFromLabels(labels: string[]): MergeAuthorityTier | null {
+  const tierLabel = labels.find((label) => /^tier:T[123]$/i.test(label));
+  return tierLabel ? (tierLabel.split(':')[1]!.toUpperCase() as MergeAuthorityTier) : null;
+}
+
+/**
+ * Whether a schema-valid pm-verdict/v1 comment is REQUIRED for this tier.
+ *
+ * Per CLAUDE.md's Verification-expectations table, only T1 requires a
+ * pm-verdict/v1 APPROVED comment. T2 is satisfied by a GitHub review approval
+ * OR a verdict, and T3 needs neither -- and "Merge Gate", which is already one
+ * of the four required checks this module evaluates, is the ratified single
+ * source of truth that encodes that per-tier OR-logic. Re-requiring a verdict
+ * here for T2/T3 double-gates them against a rule that does not apply.
+ *
+ * Unknown tier (null) fails CLOSED: absent a proven T2/T3 classification this
+ * returns true, so a PR with a missing or malformed tier label is held to the
+ * strictest rule rather than silently relaxed. Only a *proven* T2/T3 relaxes.
+ */
+export function pmVerdictRequiredForTier(tier: MergeAuthorityTier | null): boolean {
+  return tier !== 'T2' && tier !== 'T3';
+}
+
+export interface TierReceipt {
+  /** Resolved tier, or null when no `tier:T[123]` label was present. */
+  resolved: MergeAuthorityTier | null;
+  /** Where the tier came from -- 'pr_labels', or 'unresolved' when absent. */
+  source: 'pr_labels' | 'unresolved';
+  /** Whether a valid pm-verdict/v1 was required to authorize this merge. */
+  pmVerdictRequired: boolean;
+}
+
 /**
  * The authorization-receipt schema. Keep this shape stable -- it is the
  * artifact both merge-wrapper.ts's gate and this module's CLI/tests key on.
@@ -133,6 +196,8 @@ export interface PreMergeAuthorizationReceipt {
   headSha: string;
   requiredChecks: RequiredCheckReceiptEntry[];
   pmVerdict: PmVerdictReceipt;
+  /** Tier resolution and whether it required a pm-verdict. Diagnostic + auditable. */
+  tier: TierReceipt;
   authorized: boolean;
   reason?: string;
 }
@@ -208,12 +273,30 @@ export async function evaluatePreMergeAuthorization(
     deps.fetchComments ??
     (({ owner, repo, prNumber, token }: PreMergeAuthorizationInput) =>
       fetchGitHubPullRequestComments(owner, repo, prNumber, token));
-  const fetchHeadSha =
-    deps.fetchHeadSha ??
-    (async ({ owner, repo, prNumber, token }: PreMergeAuthorizationInput) => {
-      const pullRequest = await fetchGitHubPullRequest(owner, repo, prNumber, token);
-      return pullRequest.head?.sha ?? null;
-    });
+  // A caller that supplied only the legacy head-SHA fetch gets no labels, so
+  // the tier stays unresolved and pmVerdictRequiredForTier() holds the PR to
+  // the strict rule. That is deliberate: never relax on absent data.
+  const fetchPullRequestState =
+    deps.fetchPullRequestState ??
+    (deps.fetchHeadSha
+      ? async (args: PreMergeAuthorizationInput): Promise<PullRequestAuthorizationState> => ({
+          headSha: await deps.fetchHeadSha!(args),
+          labels: [],
+        })
+      : async ({
+          owner,
+          repo,
+          prNumber,
+          token,
+        }: PreMergeAuthorizationInput): Promise<PullRequestAuthorizationState> => {
+          const pullRequest = await fetchGitHubPullRequest(owner, repo, prNumber, token);
+          return {
+            headSha: pullRequest.head?.sha ?? null,
+            labels: (pullRequest.labels ?? [])
+              .map((label) => label?.name)
+              .filter((name): name is string => typeof name === 'string'),
+          };
+        });
 
   // Fetches that do not depend on the live head SHA go first.
   const requiredChecks = await fetchRequiredCheckContexts(input);
@@ -222,7 +305,16 @@ export async function evaluatePreMergeAuthorization(
   // Race-prevention: fetch the live head SHA LAST, as close as possible to
   // the authorization decision, so a push landing after the checks/comments
   // fetches above is still caught rather than evaluated against stale state.
-  const headSha = await fetchHeadSha(input);
+  // Labels ride along on the same fetch so the tier and the head SHA are read
+  // from one instant -- a relabel racing the decision cannot split them.
+  const { headSha, labels } = await fetchPullRequestState(input);
+  const tier = resolveTierFromLabels(labels);
+  const verdictRequired = pmVerdictRequiredForTier(tier);
+  const tierReceipt: TierReceipt = {
+    resolved: tier,
+    source: tier ? 'pr_labels' : 'unresolved',
+    pmVerdictRequired: verdictRequired,
+  };
 
   if (!headSha) {
     return {
@@ -230,6 +322,7 @@ export async function evaluatePreMergeAuthorization(
       headSha: '',
       requiredChecks: [],
       pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: false },
+      tier: tierReceipt,
       authorized: false,
       reason: "could not resolve the pull request's current head SHA",
     };
@@ -265,17 +358,23 @@ export async function evaluatePreMergeAuthorization(
       `required checks missing or failing on head ${headSha}: ${requiredCheckResult.missing.join(', ')}`,
     );
   }
-  if (verdictErrors.length > 0) {
+  // Verdict defects only block when the tier actually requires a verdict.
+  // On T2/T3 they are still recorded in the receipt's pmVerdict block for
+  // diagnostics, but they are not merge-blocking reasons -- surfacing a
+  // T1-only failure message on a T2 PR is the exact defect this lane fixes
+  // (observed live on a T2 PR whose four required checks were all green).
+  if (verdictErrors.length > 0 && verdictRequired) {
     reasons.push(...verdictErrors);
   }
 
-  const authorized = requiredCheckResult.passed && pmVerdict.valid;
+  const authorized = requiredCheckResult.passed && (!verdictRequired || pmVerdict.valid);
 
   return {
     prNumber: input.prNumber,
     headSha,
     requiredChecks: receiptChecks,
     pmVerdict,
+    tier: tierReceipt,
     authorized,
     ...(reasons.length > 0 ? { reason: reasons.join(' | ') } : {}),
   };
@@ -310,6 +409,7 @@ async function runCli(): Promise<void> {
       headSha: null,
       requiredChecks: [],
       pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: false },
+      tier: { resolved: null, source: 'unresolved', pmVerdictRequired: true },
     });
     process.exitCode = 1;
     return;

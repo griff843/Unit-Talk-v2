@@ -269,3 +269,121 @@ test('an unresolvable head SHA fails closed instead of skipping the check', asyn
   assert.strictEqual(receipt.authorized, false);
   assert.ok(receipt.reason);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1661: tier-aware pm-verdict requirement.
+//
+// `authorized` used to unconditionally AND in `pmVerdict.valid`, which
+// double-gated T2/T3 PRs against a rule that only applies to T1. Per CLAUDE.md,
+// only T1 requires a pm-verdict/v1 comment; T2 is satisfied by a GitHub review
+// approval OR a verdict, and T3 by green CI alone -- and the "Merge Gate"
+// required check (already evaluated above) is the ratified encoder of that
+// per-tier OR-logic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function stateDeps(labels: string[]): Pick<PreMergeAuthorizationDeps, 'fetchPullRequestState'> {
+  return { fetchPullRequestState: async () => ({ headSha: CURRENT_HEAD_SHA, labels }) };
+}
+
+test('UTV2-1661 regression: a T2 PR with all required checks green and NO pm-verdict is authorized', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T2']),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, true);
+  assert.strictEqual(receipt.tier.resolved, 'T2');
+  assert.strictEqual(receipt.tier.source, 'pr_labels');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, false);
+  // The T1-only message must not appear on a T2 PR -- that was the live symptom.
+  assert.strictEqual(receipt.reason, undefined);
+});
+
+test('UTV2-1661: a T3 PR with all required checks green and no pm-verdict is authorized', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T3']),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, true);
+  assert.strictEqual(receipt.tier.resolved, 'T3');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, false);
+});
+
+test('UTV2-1661: a T1 PR with all required checks green but NO pm-verdict is still refused', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T1']),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, 'T1');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661 fail-closed: an UNLABELLED PR is held to the strict T1 rule, not relaxed', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps([]),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, null);
+  assert.strictEqual(receipt.tier.source, 'unresolved');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661 fail-closed: a malformed tier label does not resolve and does not relax the gate', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T4', 'tier-T2', 'T2']),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, null);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: tier never overrides required checks -- a T3 PR with a failing check is refused', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, [
+      checkRun('Merge Gate', 'failure', 1),
+      checkRun('Executor Result Validation', 'success', 2),
+    ]),
+    ...stateDeps(['tier:T3']),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.match(receipt.reason ?? '', /required checks missing or failing/);
+});
+
+test('UTV2-1661: the legacy fetchHeadSha dep surfaces no labels, so it stays on the strict path', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    fetchHeadSha: async () => CURRENT_HEAD_SHA,
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, null);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: a stale-SHA verdict on a T2 PR is recorded but is not merge-blocking', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T2']),
+    fetchComments: async () => [pmVerdictComment(approvedVerdictBody(STALE_HEAD_SHA))],
+  });
+
+  assert.strictEqual(receipt.authorized, true);
+  assert.strictEqual(receipt.pmVerdict.valid, false);
+  assert.strictEqual(receipt.pmVerdict.parsedHeadSha, STALE_HEAD_SHA);
+  assert.strictEqual(receipt.reason, undefined);
+});
