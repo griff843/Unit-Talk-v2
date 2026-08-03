@@ -22,6 +22,13 @@
       "pitr_runbook_ref": "docs/05_operations/DB_ROLLBACK_RUNBOOK.md",
       "ratified_at": "2026-06-15",
       "ratified_by": "griff843"
+    },
+    {
+      "migration": "20260801220000_utv2_1640_system_runs_autovacuum_tuning",
+      "reason": "The migration is functionally reversible by restoring the documented pre-migration table-level scale factors to 0.05 and 0.05. It is marked IRREVERSIBLE only for the repository's byte-identical schema round-trip contract: PostgreSQL removes and re-appends altered reloption keys, changing pg_class.reloptions ordering, so ALTER TABLE SET or RESET cannot reproduce the original pg_dump hash after touching pre-existing keys. The executable down script remains the correct operational rollback; PITR is the constitutional fallback if byte-identical restoration is required.",
+      "pitr_runbook_ref": "docs/05_operations/DB_ROLLBACK_RUNBOOK.md",
+      "ratified_at": "2026-08-03",
+      "ratified_by": "griff843"
     }
   ]
 }

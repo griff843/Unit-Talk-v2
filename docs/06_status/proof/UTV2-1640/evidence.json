@@ -1,0 +1,96 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1640",
+  "sha_binding": {
+    "verified_source_sha": "3c06a46ff057f0f849d51a97a02b8a9240a11c40",
+    "merge_sha": null,
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "verified_source_note": "Rebound from 3c66f027964a89ea... to 3c06a46f after the PM-ratified irreversible-exemption registry commit and intervening main merges moved the branch head. proof-binding-validator requires that only PROOF_ONLY_PREFIXES paths (docs/06_status/proof/, docs/06_status/lanes/) change between verified_source_sha and HEAD; seven non-proof files had changed since the previous binding (the registry entry plus six files carried in by main merges). 3c06a46f is the branch head containing every substantive commit for this lane -- the migration, its paired down script, and the ratified registry entry -- so the only commit after it is this proof-only rebind. No measured production evidence, migration, down script, registry decision or implementation behavior is altered by this rebind.",
+    "sha_type": "branch_head",
+    "bound_at": "2026-08-03T12:50:00.000Z",
+    "ci_sentinels": {
+      "type_check": "pass",
+      "lint": "pass",
+      "r_level_check": "pass"
+    }
+  },
+  "verifier": {
+    "identity": "claude-opus-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "risk_classification": {
+    "class": "storage-parameter tuning (does not map cleanly to any of the 5 named classes in DB_MIGRATION_WORKFLOW.md; closest in risk profile to additive-safe -- no data mutation, no existing object structural change, fully reversible)",
+    "reversible": true,
+    "reversal_statement": "ALTER TABLE public.system_runs SET (autovacuum_vacuum_scale_factor = 0.05, autovacuum_analyze_scale_factor = 0.05); -- functionally correct (restores the true pre-existing values), but marked IRREVERSIBLE per db/migrations-rollback's documented convention because no ALTER TABLE SET/RESET can reproduce byte-identical pg_dump DDL once a pre-existing reloption key is touched (Postgres re-appends touched keys to the end of the reloptions array rather than updating in place -- verified empirically via a session-local temp-table reproduction, 2026-08-01, no production mutation). See 'Post-PR CI gate reconciliation' below; requires PM ratification in db/migrations-rollback/irreversible-exemption-registry.json before this gate can pass -- not self-ratified."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "type-check and lint run individually in the lane worktree, both clean."
+    },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 1,
+      "rules_matched": "none -- storage-parameter ALTER TABLE, no schema shape change"
+    }
+  },
+  "runtime_proof": {
+    "command": "Supabase MCP execute_sql / apply_migration against project zfzdnfwdarxucxtaojxm (canonical production)",
+    "status": "PASS",
+    "queries": [
+      {
+        "description": "Preflight before any maintenance: pg_stat_activity (non-idle sessions), pg_locks (blocked waits), pg_settings (connections/maintenance_work_mem/statement_timeout/autovacuum)",
+        "result": "0 non-idle sessions besides the query itself, 0 blocked lock waits, 25/60 connections used, autovacuum=on, no conflicting vacuum/analyze running"
+      },
+      {
+        "description": "ANALYZE public.system_runs; ANALYZE public.raw_payloads;",
+        "result": "both succeeded; pg_stat_user_tables.last_analyze updated to 2026-08-01 for both"
+      },
+      {
+        "description": "Preflight re-check between ANALYZE and VACUUM, and again between the two VACUUM calls",
+        "result": "0 blocked lock waits, 0 non-idle sessions, each time"
+      },
+      {
+        "description": "VACUUM (ANALYZE) public.raw_payloads; then VACUUM (ANALYZE) public.system_runs; (smaller table first)",
+        "result": "both succeeded; pg_stat_user_tables.last_vacuum updated to 2026-08-01 for both; system_runs n_dead_tup dropped from ~25,871 to 0"
+      },
+      {
+        "description": "ALTER TABLE public.system_runs SET (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.01);",
+        "result": "applied via mcp apply_migration; pg_class.reloptions confirms the two named keys updated to their new values (0.02/0.01, overwriting a pre-existing table-level override of 0.05/0.05 that predates this lane -- see 00000000000000_baseline_live_schema.sql), alongside two other pre-existing overrides (autovacuum_vacuum_threshold=100, autovacuum_vacuum_cost_delay=10) which SET left untouched since they were not named"
+      }
+    ],
+    "row_counts": [
+      {
+        "description": "system_runs post-vacuum",
+        "table": "system_runs",
+        "n_live_tup": 3495257,
+        "n_dead_tup": 0,
+        "total_size": "1287 MB"
+      },
+      {
+        "description": "raw_payloads post-vacuum",
+        "table": "raw_payloads",
+        "n_live_tup": 16856,
+        "n_dead_tup": 2,
+        "total_size": "694 MB"
+      }
+    ],
+    "extension_note": "test:db could not be run from this lane worktree: its local.env intentionally points SUPABASE_URL at an unreachable local sandbox as containment for agent-owned worktrees (same fail-closed posture confirmed for every other worktree this session). The runtime proof above is the ACTUAL production maintenance operation and its ACTUAL verification queries -- not a substitute or a simulation. supabase CLI (migration list/link/db push) is similarly unreachable from this sandboxed worktree; the migration was applied via the Supabase MCP apply_migration tool under this session's explicit operator instruction (UTV2-1640 Phase A), which DB_MIGRATION_WORKFLOW.md's Agent Operational Rules names as the exception to 'agents must not apply_migration without explicit operator instruction in the current session'.",
+    "types_regen_check": "pnpm exec supabase generate typescript types (via MCP) was run and diffed against the committed database.types.ts. system_runs' own type definition is byte-identical (storage parameters are invisible to generated TS types, as expected). The only diff present -- command_center_delivery_mappings/command_center_game_threads -- is the pre-existing, already-tracked schema-parity gap from earlier in this program, unrelated to this migration; not committed here to avoid conflating two unrelated changes.",
+    "production_diagnostic": "DB Health Tripwire and readiness-refresh both re-dispatched via workflow_dispatch immediately after this maintenance to capture a fresh post-maintenance read; see the P0 certification packet for their results."
+  },
+  "blast_radius": {
+    "production_mutation_on_merge": false,
+    "note": "The migration itself is a single ALTER TABLE ... SET storage-parameter change on one table, already applied and verified live (see runtime_proof above) -- merging this PR only lands the SAME statement into supabase/migrations/ as the durable source-of-truth record; it does not re-apply anything or mutate any additional state. No row was read, written, or moved by this change."
+  },
+  "status": "PASS"
+}
