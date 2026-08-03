@@ -32,7 +32,7 @@ $ git diff --stat origin/main
  .ops/sync/UTV2-1666.yml                                                |  10 +
  docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                          | 358 +++++++++++++++++++++
  docs/06_status/lanes/UTV2-1666.json                                    |  36 +++
- docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 178 ++++++++++
+ docs/06_status/proof/UTV2-1666/verification.md                        | 178 ++++++++++
  docs/06_status/proof/UTV2-1666/evidence.json                           |  86 ++++++
  5 files changed, 668 insertions(+)
 ```
