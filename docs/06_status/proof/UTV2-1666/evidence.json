@@ -2,25 +2,25 @@
   "schema_version": 1,
   "issue_id": "UTV2-1666",
   "tier": "T2",
-  "title": "Deployment-truth design — PM_VERDICT round-5 bounded corrections (host journal, monotonic sequence, canonical service set, host-observer hardening, proof-packet reconciliation)",
-  "generated_at": "2026-08-02T23:59:00.000Z",
+  "title": "Deployment-truth design — PM_VERDICT round-6 bounded corrections (journal write-boundary fix, sequence/index crash-recovery enumeration, single-authority ordering sweep, proof-packet reconciliation)",
+  "generated_at": "2026-08-03T00:45:00.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "6012dd55d33f6a270ae559f933904ebabab8c2f8",
+    "verified_source_sha": "0cfeca32c1b7df991695bcdb78636d7fad075490",
     "merge_sha": null,
     "base_sha": null,
     "sha_type": "pending_merge",
-    "verified_source_note": "6012dd55 is PR #1372's head at the time PM_VERDICT: CHANGES_REQUIRED was posted (rounds 1-4). This evidence bundle documents round-5's corrections, committed on top of it in this worktree. The authoritative binding is the PR's merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
-    "bound_at": "2026-08-02T23:59:00.000Z",
+    "verified_source_note": "0cfeca32 is PR #1372's head at the time PM_VERDICT: CHANGES_REQUIRED (round 6) was posted. This evidence bundle documents round-6's corrections, committed on top of it in this worktree. The authoritative binding is the PR's merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
+    "bound_at": "2026-08-03T00:45:00.000Z",
     "ci_sentinels": {
       "status": "pending_pr_checks",
-      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for Merge Gate / branch-discipline / proof-auditor-gate on this exact SHA — fabricating pass here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha."
+      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for Merge Gate / branch-discipline / proof-auditor-gate / Runtime Verifier Gate on this exact SHA — fabricating pass here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha. At the prior head (0cfeca32), Proof Auditor Gate PASSed; Runtime Verifier Gate FAILed specifically because the verification markdown contained no commit-SHA reference — corrected in this revision (see this file's 'Prior reviewed head' line)."
     }
   },
   "verifier": {
     "identity": "claude/utv2-1666-deployment-truth-design",
-    "method": "Every claim below is a direct pnpm command result run locally against this exact diff, or a direct grep/read of the real production config files (deploy.yml, topology-spec.yml, docker-compose.yml) cited by the design doc's round-5 findings.",
-    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself — the journal/sequence/service-set/host-observer mechanisms described are design-only as of this commit; a future implementation PR needs each of the 35 regression-matrix rows covered by an executable test."
+    "method": "Every claim below is a direct pnpm command result run locally against this exact diff, or a direct grep/read of the real production config files (deploy.yml, topology-spec.yml, docker-compose.yml) cited by the design doc's findings, or a direct check of real Unix filesystem-permission semantics (sticky bit vs. owner-unlink, chmod vs. directory write) for the journal-immutability correction.",
+    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself — the journal/sequence/service-set/host-observer mechanisms described are design-only as of this commit; a future implementation PR needs each of the 40 regression-matrix rows covered by an executable test."
   },
   "static_proof": {
     "type_check": { "command": "pnpm type-check", "status": "PASS", "note": "silent clean exit under tsc -b" },
@@ -38,7 +38,7 @@
     "r_level_check": {
       "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "note": "Verdict: PASS, Changed files: 4, Rules matched: (none) — docs-only diff matches no r1-r5-rules.json path pattern"
+      "note": "Verdict: PASS, Changed files: 5, Rules matched: (none) — docs-only diff matches no r1-r5-rules.json path pattern"
     }
   },
   "runtime_proof": {
@@ -59,6 +59,16 @@
       "Host-observer hardening decision folded into §12a (environment-scoped secret, unprivileged no-docker-group account, root-owned forced-command wrapper, no PTY/agent/TCP/X11 forwarding, pinned host-key verification, bounded sanitized output); §12b explicitly marked not pre-authorized"
     ],
     "proof_packet_reconciliation": "PR #1372 body updated 13 -> 35 regression scenarios; design doc status line updated to pending PM ratification; this evidence.json and the accompanying diff-summary-verification.md created to replace the previously undeclared .gitkeep."
+  },
+  "pm_verdict_round_6": {
+    "source": "PR #1372 review comment 5161105854, 2026-08-03T00:27:45Z, verified via gh api",
+    "corrections_applied": [
+      "Journal write-boundary corrected: round 5's claim that sticky-bit mode 1770 plus chmod 0444 prevents the deploy account from deleting/renaming its own finalized entries was false (sticky bit protects against non-owner deletion, not owner-on-own-file; chmod governs content access, not unlink/rename, which depend on directory write permission). Replaced with a root-owned write boundary: journal directory root:root mode 0700, deploy account has zero direct filesystem access, all writes go through a fixed sudoers-scoped root-owned helper (§5.5)",
+      "Sequence/index crash recovery fully enumerated: introduced sequence-addressable canonical storage (journal/ops/{sequence}/) plus a tuple-to-sequence index, replacing tuple-path-only addressing that had no bounded-scan mechanism. journal/current now points at operation identity (a directory), not a cached record snapshot, closing the case round 5's staleness check could not detect (confirmation lands, current's recorded sequence unchanged since it equals the intent's). Six crash states enumerated and classified unknown (§5.5)",
+      "Every remaining pre-round-5 timestamp-ordering/shape-checked-provenance reference swept and corrected to the single journal_sequence rule: §3.5's selection rule, §9's rollback-precedence and SHA-shape language, §13's selection description, and regression row 12",
+      "§12's stale 'Open decision for PM' language resolved to reflect round-5's approval-in-principle for §12a and round-6's reconfirmation that §12b remains not pre-authorized"
+    ],
+    "mechanical_proof_corrections": "Runtime Verifier Gate's diff-local failure (verification.md contained no commit-SHA reference at all) fixed by adding an honest prior-reviewed-head SHA line, following the same pending_merge convention already used in this file's own sha_binding. Stale diff-summary table (referenced the deleted .gitkeep, showed a mid-commit file count) regenerated against the real current diff."
   },
   "not_closed": [
     "This document is design-only. No implementation of the journal, monotonic sequence, canonical service-set rule, or hardened SSH observer exists yet.",

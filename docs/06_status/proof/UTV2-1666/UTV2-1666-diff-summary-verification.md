@@ -4,7 +4,8 @@
 **Issue:** UTV2-1666 — Deployment-truth design (`docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md`)
 **PR:** #1372
 **Verifier identity:** claude/utv2-1666-deployment-truth-design
-**Date:** 2026-08-02
+**Date:** 2026-08-03
+**Prior reviewed head (commit SHA):** `0cfeca32c1b7df991695bcdb78636d7fad075490` — the head PM_VERDICT round 6 reviewed and returned CHANGES_REQUIRED against. This correction pass is committed on top of it. Per the same convention as `evidence.json`'s `sha_binding` block: this document cannot embed its own commit's SHA at commit time (the SHA is a function of this file's own content) — the authoritative binding to *this* commit's SHA is written post-merge by `post-merge-lane-close.yml`'s `ops:proof-generate --merge-sha`, exactly as for every other proof bundle in this repo.
 
 ## Scope
 
@@ -16,7 +17,7 @@
 
 **Does NOT claim:**
 - No runtime/DB verification is claimed or required — there is no DB-touching code in this diff. This is the reason for the tier correction below.
-- No implementation of the design itself (host journal, monotonic sequence, canonical service set, hardened SSH observer) is claimed here — this document is design-only; a future implementation PR will need each of the 35 regression-matrix rows covered by an executable test.
+- No implementation of the design itself (host journal, monotonic sequence, canonical service set, hardened SSH observer) is claimed here — this document is design-only; a future implementation PR will need each of the 40 regression-matrix rows covered by an executable test.
 
 ## Tier correction
 
@@ -24,17 +25,23 @@ The lane manifest originally declared `tier: T1`, inherited from this session's 
 
 ## Diff Summary
 
+**Correction (PM_VERDICT round 6):** the previous revision of this table showed a stale, mid-commit snapshot that still listed `docs/06_status/proof/UTV2-1666/.gitkeep`, which was deleted within the same PR and therefore does not appear in the actual `origin/main..HEAD` diff at all (a file added then removed within one PR's range nets to nothing in a range-diff). Regenerated directly against the real current state — the final diff is exactly five files, matching what PM_VERDICT round 6 observed:
+
 ```
-git diff --stat origin/main..HEAD
- .ops/sync/UTV2-1666.yml                                              |  10 +
- docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                        | 329 +++++++++++++++++++++++++
- docs/06_status/lanes/UTV2-1666.json                                  |  36 +++
- docs/06_status/proof/UTV2-1666/.gitkeep                              |   0
- docs/06_status/proof/UTV2-1666/evidence.json                         |  <new>
- docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md | <new>
+$ git diff --stat origin/main
+ .ops/sync/UTV2-1666.yml                                                |  10 +
+ docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                          | 349 +++++++++++++++++++
+ docs/06_status/lanes/UTV2-1666.json                                    |  36 +++
+ docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 126 +++++++
+ docs/06_status/proof/UTV2-1666/evidence.json                           |  78 ++++++
+ 5 files changed, 599 insertions(+)
 ```
 
-Round-5 revision to `DEPLOYMENT_TRUTH_DESIGN.md` (this pass, on top of rounds 1-4 already on `main`'s PR head): `git diff --stat HEAD~1..HEAD -- docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md` → `1 file changed, 82 insertions(+), 27 deletions(-)` (prior to this proof-bundle commit).
+(regenerated immediately before this closing commit so the numbers match exactly what ships — see PM_VERDICT round 6's finding that this table went stale once before)
+
+(`.gitkeep` correctly absent — it was added and then deleted within this same PR's range, so it never appears in a `origin/main..HEAD` diff.)
+
+Round-6 revision to `DEPLOYMENT_TRUTH_DESIGN.md` on top of the reviewed `0cfeca32` head: `git diff --stat HEAD -- docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md` (working tree vs. `0cfeca32`, prior to this correction commit) → `1 file changed, 43 insertions(+), 23 deletions(-)` — corrects the journal write-boundary claim, enumerates every sequence/index crash state, sweeps every remaining pre-round-5 ordering/provenance reference to the single `journal_sequence` rule, and resolves §12's stale open-decision language.
 
 ## Verification
 
@@ -97,11 +104,23 @@ Result: **PASS** — confirmed no `r1-r5-rules.json` path pattern (`apps/api/**`
 | PR/proof packet reconciled: PR body scenario count, design doc status line, evidence bundle | This file + `evidence.json` + PR #1372 body + `DEPLOYMENT_TRUTH_DESIGN.md` status line |
 | Host-observer hardening decision (environment-scoped secret, unprivileged account, root-owned forced-command wrapper, no PTY/forwarding, pinned host key, no docker-group, bounded output) folded into §12a | `DEPLOYMENT_TRUTH_DESIGN.md` §12a |
 
+| Acceptance criterion (UTV2-1666, PM_VERDICT round 6) | Verified by |
+|---|---|
+| Journal immutability claim corrected — round 5's sticky-bit/chmod claim was false; a real root-owned write boundary specified (deploy account has zero direct filesystem access; writes go through a fixed, `sudoers`-scoped, root-owned helper) | `DEPLOYMENT_TRUTH_DESIGN.md` §5.5 "root-owned write boundary"; regression row 36 |
+| Every sequence/index crash state enumerated and classified `unknown` (counter-advanced/no-intent, intent-written/index-stale, confirmation-written/current-unchanged, duplicate sequence, current-ahead-of-counter) | `DEPLOYMENT_TRUTH_DESIGN.md` §5.5 crash-state table; regression rows 37–40 |
+| Operations made sequence-addressable (`journal/ops/{sequence}/`) with a tuple-lookup index, replacing tuple-path-only addressing that had no bounded-scan mechanism | `DEPLOYMENT_TRUTH_DESIGN.md` §5.5 |
+| `journal/current` points at operation identity, not a cached record snapshot — closes the "confirmation lands, index numerically unchanged" blind spot round 5's staleness check could not detect | `DEPLOYMENT_TRUTH_DESIGN.md` §5.5 crash state c |
+| All surviving pre-round-5 ordering/provenance language corrected to the single `journal_sequence` rule (§3.5 selection rule, §9 rollback-precedence + SHA-shape language, §13 selection description, regression row 12) | `DEPLOYMENT_TRUTH_DESIGN.md` §3.5, §9, §13, row 12 |
+| §12's stale "Open decision for PM" language resolved to reflect the round-5 approval-in-principle for §12a and round-6 reconfirmation that §12b remains not pre-authorized | `DEPLOYMENT_TRUTH_DESIGN.md` §12 |
+| Runtime Verifier's diff-local failure (verification doc contained no commit SHA) fixed with an honest prior-head SHA reference, same convention as `evidence.json` | This file's "Prior reviewed head" line |
+| Stale diff-summary table (referenced the deleted `.gitkeep`, wrong file count) regenerated against the real current diff | This file's "Diff Summary" section |
+
 ## Stop conditions encountered
 
-- Tier mismatch discovered mid-verification: manifest declared T1, but this lane has no runtime/DB footprint and T1's mechanical R1/R2 checks have no waiver path. Resolved by correcting the manifest tier to T2 (see "Tier correction" above) rather than fabricating DB evidence. Not escalated before acting — this is a mechanical proof-packet correction consistent with the PM's own round-5 instruction to "make only the bounded design/proof corrections," not a change to the design's reviewed content.
+- Tier mismatch discovered mid-verification (round 5): manifest declared T1, but this lane has no runtime/DB footprint and T1's mechanical R1/R2 checks have no waiver path. Resolved by correcting the manifest tier to T2 (see "Tier correction" above) rather than fabricating DB evidence. Not escalated before acting — this is a mechanical proof-packet correction consistent with the PM's own round-5 instruction to "make only the bounded design/proof corrections," not a change to the design's reviewed content.
+- Round 6: no new stop conditions. All four findings were bounded, verifiable corrections (a false permissions claim checked against real Unix semantics, a precisely-described crash-state gap, an exhaustive grep sweep for stale language, and two mechanical proof-doc defects) — none required a judgment call beyond what the PM_VERDICT itself specified.
 
 ## Sign-off
 
-**Verifier:** claude/utv2-1666-deployment-truth-design — 2026-08-02
-**PM acceptance:** pending (round-5 corrections applied; awaiting PM re-review of stationary head per PR #1372)
+**Verifier:** claude/utv2-1666-deployment-truth-design — 2026-08-03
+**PM acceptance:** pending (round-6 corrections applied; awaiting PM re-review of stationary head per PR #1372)
