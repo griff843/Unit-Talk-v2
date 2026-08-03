@@ -5,7 +5,7 @@
 **PR:** #1372
 **Verifier identity:** claude/utv2-1666-deployment-truth-design
 **Date:** 2026-08-03
-**Prior reviewed head (commit SHA):** `0cfeca32c1b7df991695bcdb78636d7fad075490` — the head PM_VERDICT round 6 reviewed and returned CHANGES_REQUIRED against. This correction pass is committed on top of it. Per the same convention as `evidence.json`'s `sha_binding` block: this document cannot embed its own commit's SHA at commit time (the SHA is a function of this file's own content) — the authoritative binding to *this* commit's SHA is written post-merge by `post-merge-lane-close.yml`'s `ops:proof-generate --merge-sha`, exactly as for every other proof bundle in this repo.
+**Prior reviewed head (commit SHA):** `cbf72e92296131b2f864dea0f91136ed4d0d765a` — the head PM_VERDICT round 7 reviewed and returned CHANGES_REQUIRED against (round 6's own reviewed head, `0cfeca32c1b7df991695bcdb78636d7fad075490`, remains valid history one commit further back). This correction pass is committed on top of it. Per the same convention as `evidence.json`'s `sha_binding` block: this document cannot embed its own commit's SHA at commit time (the SHA is a function of this file's own content) — the authoritative binding to *this* commit's SHA is written post-merge by `post-merge-lane-close.yml`'s `ops:proof-generate --merge-sha`, exactly as for every other proof bundle in this repo.
 
 ## Scope
 
@@ -17,7 +17,7 @@
 
 **Does NOT claim:**
 - No runtime/DB verification is claimed or required — there is no DB-touching code in this diff. This is the reason for the tier correction below.
-- No implementation of the design itself (host journal, monotonic sequence, canonical service set, hardened SSH observer) is claimed here — this document is design-only; a future implementation PR will need each of the 40 regression-matrix rows covered by an executable test.
+- No implementation of the design itself (host journal, monotonic sequence, canonical service set, hardened SSH observer) is claimed here — this document is design-only; a future implementation PR will need each of the 42 regression-matrix rows covered by an executable test.
 
 ## Tier correction
 
@@ -30,11 +30,11 @@ The lane manifest originally declared `tier: T1`, inherited from this session's 
 ```
 $ git diff --stat origin/main
  .ops/sync/UTV2-1666.yml                                                |  10 +
- docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                          | 349 +++++++++++++++++++
+ docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                          | 358 +++++++++++++++++++++
  docs/06_status/lanes/UTV2-1666.json                                    |  36 +++
- docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 126 +++++++
- docs/06_status/proof/UTV2-1666/evidence.json                           |  78 ++++++
- 5 files changed, 599 insertions(+)
+ docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 135 +++++++++
+ docs/06_status/proof/UTV2-1666/evidence.json                           |  86 ++++++
+ 5 files changed, 625 insertions(+)
 ```
 
 (regenerated immediately before this closing commit so the numbers match exactly what ships — see PM_VERDICT round 6's finding that this table went stale once before)
@@ -115,12 +115,21 @@ Result: **PASS** — confirmed no `r1-r5-rules.json` path pattern (`apps/api/**`
 | Runtime Verifier's diff-local failure (verification doc contained no commit SHA) fixed with an honest prior-head SHA reference, same convention as `evidence.json` | This file's "Prior reviewed head" line |
 | Stale diff-summary table (referenced the deleted `.gitkeep`, wrong file count) regenerated against the real current diff | This file's "Diff Summary" section |
 
+| Acceptance criterion (UTV2-1666, PM_VERDICT round 7) | Verified by |
+|---|---|
+| Rollback provenance made label-authoritative: the rolled-back image's own `org.opencontainers.image.revision` label is the sole verified source; a historical `deployed_tag`→`source_sha` mapping corroborates only, never substitutes, since tags are mutable | `DEPLOYMENT_TRUTH_DESIGN.md` §8, §9 row, regression row 41 |
+| Tag-repoint hazard named explicitly: label present but disagreeing with an available historical mapping is `unreadable`/`unknown`, never resolved by preferring either value | `DEPLOYMENT_TRUTH_DESIGN.md` §8; regression row 41 |
+| Supplementary-reader-group option removed as incoherent under the root-owned `0700` journal directory; observer reads only through the fixed root-owned forced-command helper | `DEPLOYMENT_TRUTH_DESIGN.md` §5.5 |
+| Forced-command reader's contract specified as allowlisted-fields-only, no caller-controlled paths or arbitrary subcommands | `DEPLOYMENT_TRUTH_DESIGN.md` §5.5; regression row 42 |
+| PR body and review history reconciled to the stationary head (42 scenarios, rounds 1–7 recorded) | PR #1372 body |
+
 ## Stop conditions encountered
 
 - Tier mismatch discovered mid-verification (round 5): manifest declared T1, but this lane has no runtime/DB footprint and T1's mechanical R1/R2 checks have no waiver path. Resolved by correcting the manifest tier to T2 (see "Tier correction" above) rather than fabricating DB evidence. Not escalated before acting — this is a mechanical proof-packet correction consistent with the PM's own round-5 instruction to "make only the bounded design/proof corrections," not a change to the design's reviewed content.
 - Round 6: no new stop conditions. All four findings were bounded, verifiable corrections (a false permissions claim checked against real Unix semantics, a precisely-described crash-state gap, an exhaustive grep sweep for stale language, and two mechanical proof-doc defects) — none required a judgment call beyond what the PM_VERDICT itself specified.
+- Round 7: no new stop conditions. The rollback-provenance finding required design judgment (deciding the label-authoritative/history-corroborates-only relationship and how disagreement should be scored), but the direction was fully specified by the PM_VERDICT itself; the observer-access finding was a direct logical consequence of round 6's own `0700` permission choice, not a new architectural decision.
 
 ## Sign-off
 
 **Verifier:** claude/utv2-1666-deployment-truth-design — 2026-08-03
-**PM acceptance:** pending (round-6 corrections applied; awaiting PM re-review of stationary head per PR #1372)
+**PM acceptance:** pending (round-7 corrections applied; awaiting PM re-review of stationary head per PR #1372)

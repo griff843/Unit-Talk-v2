@@ -2,25 +2,25 @@
   "schema_version": 1,
   "issue_id": "UTV2-1666",
   "tier": "T2",
-  "title": "Deployment-truth design — PM_VERDICT round-6 bounded corrections (journal write-boundary fix, sequence/index crash-recovery enumeration, single-authority ordering sweep, proof-packet reconciliation)",
-  "generated_at": "2026-08-03T00:45:00.000Z",
+  "title": "Deployment-truth design — PM_VERDICT round-7 bounded corrections (label-authoritative rollback provenance, corrected observer read-path under 0700 journal, proof-packet reconciliation)",
+  "generated_at": "2026-08-03T02:00:00.000Z",
   "status": "pr_open",
   "sha_binding": {
-    "verified_source_sha": "0cfeca32c1b7df991695bcdb78636d7fad075490",
+    "verified_source_sha": "cbf72e92296131b2f864dea0f91136ed4d0d765a",
     "merge_sha": null,
     "base_sha": null,
     "sha_type": "pending_merge",
-    "verified_source_note": "0cfeca32 is PR #1372's head at the time PM_VERDICT: CHANGES_REQUIRED (round 6) was posted. This evidence bundle documents round-6's corrections, committed on top of it in this worktree. The authoritative binding is the PR's merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
-    "bound_at": "2026-08-03T00:45:00.000Z",
+    "verified_source_note": "cbf72e92 is PR #1372's head at the time PM_VERDICT: CHANGES_REQUIRED (round 7) was posted. This evidence bundle documents round-7's corrections, committed on top of it in this worktree. The authoritative binding is the PR's merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
+    "bound_at": "2026-08-03T02:00:00.000Z",
     "ci_sentinels": {
       "status": "pending_pr_checks",
-      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for Merge Gate / branch-discipline / proof-auditor-gate / Runtime Verifier Gate on this exact SHA — fabricating pass here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha. At the prior head (0cfeca32), Proof Auditor Gate PASSed; Runtime Verifier Gate FAILed specifically because the verification markdown contained no commit-SHA reference — corrected in this revision (see this file's 'Prior reviewed head' line)."
+      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for Merge Gate / branch-discipline / proof-auditor-gate / Runtime Verifier Gate on this exact SHA — fabricating pass here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha. At the prior head (cbf72e92), per the round-7 PM_VERDICT: exact-head CI, Proof Auditor Gate, Runtime Verifier Gate, Return Review Packet, File Scope Lock, R-Level Compliance, Executor Result Validator, P0 Protocol, and Merge Gate were all green."
     }
   },
   "verifier": {
     "identity": "claude/utv2-1666-deployment-truth-design",
-    "method": "Every claim below is a direct pnpm command result run locally against this exact diff, or a direct grep/read of the real production config files (deploy.yml, topology-spec.yml, docker-compose.yml) cited by the design doc's findings, or a direct check of real Unix filesystem-permission semantics (sticky bit vs. owner-unlink, chmod vs. directory write) for the journal-immutability correction.",
-    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself — the journal/sequence/service-set/host-observer mechanisms described are design-only as of this commit; a future implementation PR needs each of the 40 regression-matrix rows covered by an executable test."
+    "method": "Every claim below is a direct pnpm command result run locally against this exact diff, or a direct grep/read of the real production config files (deploy.yml, topology-spec.yml, docker-compose.yml) cited by the design doc's findings, or a direct check of real Unix filesystem-permission semantics (sticky bit vs. owner-unlink, chmod vs. directory write, and 0700 mode vs. group-readability) for the journal-immutability and observer-access corrections.",
+    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself — the journal/sequence/service-set/host-observer/rollback-provenance mechanisms described are design-only as of this commit; a future implementation PR needs each of the 42 regression-matrix rows covered by an executable test."
   },
   "static_proof": {
     "type_check": { "command": "pnpm type-check", "status": "PASS", "note": "silent clean exit under tsc -b" },
@@ -69,6 +69,14 @@
       "§12's stale 'Open decision for PM' language resolved to reflect round-5's approval-in-principle for §12a and round-6's reconfirmation that §12b remains not pre-authorized"
     ],
     "mechanical_proof_corrections": "Runtime Verifier Gate's diff-local failure (verification.md contained no commit-SHA reference at all) fixed by adding an honest prior-reviewed-head SHA line, following the same pending_merge convention already used in this file's own sha_binding. Stale diff-summary table (referenced the deleted .gitkeep, showed a mid-commit file count) regenerated against the real current diff."
+  },
+  "pm_verdict_round_7": {
+    "source": "PR #1372 review comment 5161476245, 2026-08-03T01:47:45Z, verified via gh api",
+    "corrections_applied": [
+      "Rollback provenance corrected: round 6's rule treated a historical deployed_tag->source_sha mapping as an equally-valid verified source alongside the image's own embedded org.opencontainers.image.revision label. That is unsound because deployed_tag is a mutable registry reference (this document's own section 5 establishes that) -- a tag can be re-pointed at a new image after an earlier confirmation, silently invalidating the historical mapping. Fixed: the label, read via docker inspect after the rollback mutation, is now the sole authoritative source; a matching historical mapping may only corroborate it; disagreement between the two is unreadable/unknown, never resolved by preferring either value; absent/malformed label is likewise unknown (section 8, section 9, regression row 41)",
+      "Observer read-path corrected: round 6 offered a supplementary reader group as an alternative to the root-owned forced-command helper, but this is incoherent under the journal directory's own root:root mode 0700 -- no group can read a 0700 directory without changing its mode. Removed the group alternative entirely; the observer reads only through the fixed root-owned helper's read-only subcommand, with an explicit allowlisted-fields-only contract (no caller-controlled paths, no arbitrary subcommands) (section 5.5, regression row 42)",
+      "PR body and review history reconciled to the stationary head: scenario count corrected (35 -> 42), round 6 and round 7 review history recorded (previously only round 5 was documented)"
+    ]
   },
   "not_closed": [
     "This document is design-only. No implementation of the journal, monotonic sequence, canonical service-set rule, or hardened SSH observer exists yet.",
