@@ -32,7 +32,7 @@ $ git diff --stat origin/main
  .ops/sync/UTV2-1666.yml                                                |  10 +
  docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                          | 358 +++++++++++++++++++++
  docs/06_status/lanes/UTV2-1666.json                                    |  36 +++
- docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 178 ++++++++++
+ docs/06_status/proof/UTV2-1666/verification.md                        | 178 ++++++++++
  docs/06_status/proof/UTV2-1666/evidence.json                           |  86 ++++++
  5 files changed, 668 insertions(+)
 ```
@@ -132,15 +132,17 @@ Result: **PASS** — confirmed no `r1-r5-rules.json` path pattern (`apps/api/**`
 ## Sign-off
 
 **Verifier:** claude/utv2-1666-deployment-truth-design — 2026-08-03
-**PM acceptance:** pending (round-7 corrections applied; awaiting PM re-review of stationary head per PR #1372)
+**PM acceptance:** RATIFIED — PR #1372 merged 2026-08-03T03:22:39Z as `010158bb7ee36f2467a5abfe885d61ab066207de`.
 
 ---
 
-# PROOF: UTV2-1666 — deployment-truth design (ratification candidate)
+# PROOF: UTV2-1666 — deployment-truth design (ratified)
 
-MERGE_SHA: 6677e0c0bfd7204290b5500f48f9f485771445ff
+MERGE_SHA: 010158bb7ee36f2467a5abfe885d61ab066207de
 
-This section carries the mechanical tokens the Executor Result Validator requires to create the `Executor Result Validation` required status context. It adds **no design content**: `6677e0c0bfd7204290b5500f48f9f485771445ff` is the PM-designated final design candidate, and `DEPLOYMENT_TRUTH_DESIGN.md` is byte-identical to that commit. The only change on top of it is this proof-token section.
+This section carries the mechanical tokens the Executor Result Validator requires to create the `Executor Result Validation` required status context. It adds **no design content**.
+
+`MERGE_SHA` is the ratified merge commit of PR #1372, confirmed from GitHub's own merge state (`mergeCommit.oid`), not asserted from narrative. It was previously the pre-merge design candidate `6677e0c0bfd7204290b5500f48f9f485771445ff`; that value had to be replaced rather than merely supplemented, because **PR #1372 was squash-merged**, so `6677e0c0` is not an ancestor of any post-merge head and the validator's ancestor-of-HEAD requirement can no longer be satisfied by it. `DEPLOYMENT_TRUTH_DESIGN.md` as merged is byte-identical to `6677e0c0`'s copy, so the design content this proof attests to is unchanged by the rebind.
 
 ASSERTIONS:
 
