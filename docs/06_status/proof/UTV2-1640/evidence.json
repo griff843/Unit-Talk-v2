@@ -2,13 +2,13 @@
   "schema_version": 2,
   "issue_id": "UTV2-1640",
   "sha_binding": {
-    "verified_source_sha": "3c66f027964a89ea3e8fcba77dd06d883b7a47fd",
+    "verified_source_sha": "3c06a46ff057f0f849d51a97a02b8a9240a11c40",
     "merge_sha": null,
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "verified_source_note": "Code and proof are separate commits so the proof names a SHA that contains the code it describes. verified_source_sha includes the migration file and its paired down script in the same commit (both are code, not proof/evidence, per proof-binding-validator's PROOF_ONLY_PREFIXES).",
+    "verified_source_note": "Rebound from 3c66f027964a89ea... to 3c06a46f after the PM-ratified irreversible-exemption registry commit and intervening main merges moved the branch head. proof-binding-validator requires that only PROOF_ONLY_PREFIXES paths (docs/06_status/proof/, docs/06_status/lanes/) change between verified_source_sha and HEAD; seven non-proof files had changed since the previous binding (the registry entry plus six files carried in by main merges). 3c06a46f is the branch head containing every substantive commit for this lane -- the migration, its paired down script, and the ratified registry entry -- so the only commit after it is this proof-only rebind. No measured production evidence, migration, down script, registry decision or implementation behavior is altered by this rebind.",
     "sha_type": "branch_head",
-    "bound_at": "2026-08-01T22:30:00.000Z",
+    "bound_at": "2026-08-03T12:50:00.000Z",
     "ci_sentinels": {
       "type_check": "pass",
       "lint": "pass",
@@ -30,8 +30,12 @@
       "status": "PASS",
       "note": "type-check and lint run individually in the lane worktree, both clean."
     },
-    "type_check": { "status": "PASS" },
-    "lint": { "status": "PASS" },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
     "r_level_check": {
       "status": "PASS",
       "verdict": "PASS",
