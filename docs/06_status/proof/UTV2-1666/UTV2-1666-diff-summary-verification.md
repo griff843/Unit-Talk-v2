@@ -32,9 +32,9 @@ $ git diff --stat origin/main
  .ops/sync/UTV2-1666.yml                                                |  10 +
  docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md                          | 358 +++++++++++++++++++++
  docs/06_status/lanes/UTV2-1666.json                                    |  36 +++
- docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 135 +++++++++
+ docs/06_status/proof/UTV2-1666/UTV2-1666-diff-summary-verification.md  | 178 ++++++++++
  docs/06_status/proof/UTV2-1666/evidence.json                           |  86 ++++++
- 5 files changed, 625 insertions(+)
+ 5 files changed, 668 insertions(+)
 ```
 
 (regenerated immediately before this closing commit so the numbers match exactly what ships — see PM_VERDICT round 6's finding that this table went stale once before)
@@ -133,3 +133,46 @@ Result: **PASS** — confirmed no `r1-r5-rules.json` path pattern (`apps/api/**`
 
 **Verifier:** claude/utv2-1666-deployment-truth-design — 2026-08-03
 **PM acceptance:** pending (round-7 corrections applied; awaiting PM re-review of stationary head per PR #1372)
+
+---
+
+# PROOF: UTV2-1666 — deployment-truth design (ratification candidate)
+
+MERGE_SHA: 6677e0c0bfd7204290b5500f48f9f485771445ff
+
+This section carries the mechanical tokens the Executor Result Validator requires to create the `Executor Result Validation` required status context. It adds **no design content**: `6677e0c0bfd7204290b5500f48f9f485771445ff` is the PM-designated final design candidate, and `DEPLOYMENT_TRUTH_DESIGN.md` is byte-identical to that commit. The only change on top of it is this proof-token section.
+
+ASSERTIONS:
+
+- [x] Docs-only diff — no application code, no CI-workflow code, no database code, no `deploy.yml` or `readiness-refresh.ts` change.
+- [x] `pnpm type-check` passes clean against this diff.
+- [x] `pnpm test` passes: 3860 subtests, 0 failures, exit code 0.
+- [x] `pnpm verify:static` passes — every step `pnpm verify` runs prior to the environment-gated `test:live-db`.
+- [x] `scripts/ci/r-level-check.ts` reports PASS with zero rules matched (docs-only paths match no `r1-r5-rules.json` pattern).
+- [x] All findings from Codex design-review rounds 1–4 and PM verdict rounds 5–7 are resolved in the document; 42 regression-matrix rows are specified for the future Phase 1 implementation lane.
+- [x] No implementation is claimed or included — this document is design authority only, and Phase 2 daemon/container inspection remains explicitly not pre-authorized.
+
+EVIDENCE:
+
+```
+$ pnpm type-check
+> @unit-talk/v2@0.1.0 type-check
+> pnpm exec tsc -b tsconfig.json
+(clean exit, no diagnostics emitted — tsc -b is silent on success)
+```
+
+```
+$ pnpm test
+# pass 3860
+# fail 0
+# cancelled 0
+# skipped 0
+exit=0
+```
+
+```
+$ tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 5
+Rules matched: (none) — no R-level artifacts required for this diff
+```
