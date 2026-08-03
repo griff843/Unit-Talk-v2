@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1666",
+  "tier": "T2",
+  "title": "Deployment-truth design — PM_VERDICT round-5 bounded corrections (host journal, monotonic sequence, canonical service set, host-observer hardening, proof-packet reconciliation)",
+  "generated_at": "2026-08-02T23:59:00.000Z",
+  "status": "pr_open",
+  "sha_binding": {
+    "verified_source_sha": "6012dd55d33f6a270ae559f933904ebabab8c2f8",
+    "merge_sha": null,
+    "base_sha": null,
+    "sha_type": "pending_merge",
+    "verified_source_note": "6012dd55 is PR #1372's head at the time PM_VERDICT: CHANGES_REQUIRED was posted (rounds 1-4). This evidence bundle documents round-5's corrections, committed on top of it in this worktree. The authoritative binding is the PR's merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
+    "bound_at": "2026-08-02T23:59:00.000Z",
+    "ci_sentinels": {
+      "status": "pending_pr_checks",
+      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for Merge Gate / branch-discipline / proof-auditor-gate on this exact SHA — fabricating pass here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha."
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1666-deployment-truth-design",
+    "method": "Every claim below is a direct pnpm command result run locally against this exact diff, or a direct grep/read of the real production config files (deploy.yml, topology-spec.yml, docker-compose.yml) cited by the design doc's round-5 findings.",
+    "verifier_scope": "Verifies this is a docs-only change (no application/CI code touched), that static verification passes cleanly, and that zero R-level rules trigger. Does NOT constitute implementation verification of the design itself — the journal/sequence/service-set/host-observer mechanisms described are design-only as of this commit; a future implementation PR needs each of the 35 regression-matrix rows covered by an executable test."
+  },
+  "static_proof": {
+    "type_check": { "command": "pnpm type-check", "status": "PASS", "note": "silent clean exit under tsc -b" },
+    "full_test_suite": { "command": "pnpm test", "tests": 3860, "pass": 3860, "fail": 0, "skipped": 0 },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "note": "env:check + lint + type-check + build + test + command-manifest/migration-lint checks, exit 0"
+    },
+    "verify_full": {
+      "command": "pnpm verify",
+      "status": "test:live-db step refused locally",
+      "note": "ci:assert-staging refuses non-staging-ci hosts (host=127.0.0.1); known local-execution gate per UTV2-1630 CI/staging isolation, not a defect introduced by this diff. Every step before test:live-db (verify:static) passed clean."
+    },
+    "r_level_check": {
+      "command": "tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "note": "Verdict: PASS, Changed files: 4, Rules matched: (none) — docs-only diff matches no r1-r5-rules.json path pattern"
+    }
+  },
+  "runtime_proof": {
+    "status": "not_applicable",
+    "reason": "This lane touches only docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md and its own lane/proof files — no application runtime or database code path. No live Supabase connection is made or needed by this diff."
+  },
+  "tier_correction": {
+    "original_tier": "T1",
+    "corrected_tier": "T2",
+    "reason": "truth-check-lib.ts's T1 path hard-requires runtime_proof.queries/row_counts (R1/R2) with no waiver — `--no-runtime is rejected for T1` (truth-check-lib.ts:992). This lane has no DB interaction to prove; fabricating queries against a real database that were never run would be a false evidence claim. T2's merge authority (GitHub PR review approval or pm-verdict/v1 APPROVED) is unchanged from what is already in effect on this PR (PM verdict is the operative gate either way)."
+  },
+  "pm_verdict_round_5": {
+    "source": "PR #1372 review comment 5160913992, 2026-08-02T23:43:26Z, verified via gh api",
+    "corrections_applied": [
+      "Append-only host journal architecture — immutable per-operation record paths, atomic index, retention/compaction, unresolved-operation protection (DEPLOYMENT_TRUTH_DESIGN.md §5.5)",
+      "Monotonic host-generated sequence replacing wall-clock ordering as the correctness-determining mechanism (§4, §5, §10)",
+      "Canonical release-managed service set defined mechanically via the ${IMAGE_NAMESPACE}/ image-prefix rule, excluding Loki/Grafana/Caddy; topology-spec.yml's own service list confirmed to omit grading-cron and is not consumed programmatically by the rule (§5)",
+      "Host-observer hardening decision folded into §12a (environment-scoped secret, unprivileged no-docker-group account, root-owned forced-command wrapper, no PTY/agent/TCP/X11 forwarding, pinned host-key verification, bounded sanitized output); §12b explicitly marked not pre-authorized"
+    ],
+    "proof_packet_reconciliation": "PR #1372 body updated 13 -> 35 regression scenarios; design doc status line updated to pending PM ratification; this evidence.json and the accompanying diff-summary-verification.md created to replace the previously undeclared .gitkeep."
+  },
+  "not_closed": [
+    "This document is design-only. No implementation of the journal, monotonic sequence, canonical service-set rule, or hardened SSH observer exists yet.",
+    "Phase 2 (§12b, live Docker daemon reconciliation) remains not pre-authorized and requires its own separate implementation review per the PM's decision.",
+    "PR #1365 implementation remains paused until this design is ratified by the PM."
+  ]
+}
