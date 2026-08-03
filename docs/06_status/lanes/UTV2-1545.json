@@ -1,0 +1,37 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1545",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1545-awaiting-approval-drift-rootcause",
+  "branch": "claude/utv2-1545-awaiting-approval-drift-rootcause",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1545/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1545/diff-summary.md",
+    "docs/06_status/proof/UTV2-1545/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-08-03T14:00:29.019Z",
+  "heartbeat_at": "2026-08-03T14:00:29.019Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1545-awaiting-approval-drift-rootcause.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "verification_target": "UTV2-1545",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1545-awaiting-approval-drift-rootcause",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
