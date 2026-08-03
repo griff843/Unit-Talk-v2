@@ -186,6 +186,40 @@ worktree's own sandboxed CLI.
 - [x] The autovacuum tuning migration is scoped to exactly one table, touches only two storage-parameter keys, preserves pre-existing unrelated overrides, and is reversible with one statement.
 - [x] No `VACUUM FULL`, `REINDEX`, `CLUSTER`, `pg_repack`, table rewrite, deletion, retention change, fixture cleanup, or `provider_offers_legacy_quarantine` reclaim occurred.
 - [x] `pnpm type-check`, `pnpm lint` clean; R-level PASS.
+- [x] Applied production state matches the repository migration exactly, re-verified 2026-08-03 (see EVIDENCE below).
+
+## EVIDENCE:
+
+Live production verification that the already-applied migration matches the repository migration byte-for-byte in effect. Read-only query against Supabase project `zfzdnfwdarxucxtaojxm`, executed 2026-08-03:
+
+```sql
+select relname, reloptions
+from pg_class
+where relname = 'system_runs'
+  and relnamespace = 'public'::regnamespace;
+```
+
+```
+relname     | reloptions
+------------+--------------------------------------------------------------
+system_runs | {autovacuum_vacuum_threshold=100,
+            |  autovacuum_vacuum_cost_delay=10,
+            |  autovacuum_vacuum_scale_factor=0.02,
+            |  autovacuum_analyze_scale_factor=0.01}
+```
+
+Repository migration `supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql` sets exactly:
+
+```sql
+ALTER TABLE public.system_runs SET (
+  autovacuum_vacuum_scale_factor = 0.02,
+  autovacuum_analyze_scale_factor = 0.01
+);
+```
+
+Production reports `autovacuum_vacuum_scale_factor=0.02` and `autovacuum_analyze_scale_factor=0.01` — an exact match on both keys the migration sets, with no drift.
+
+The two unrelated pre-existing overrides (`autovacuum_vacuum_threshold=100`, `autovacuum_vacuum_cost_delay=10`) are still present and untouched, confirming the migration preserved them. This is also why the rollback must be `SET (… = 0.05, … = 0.05)` and **not** `RESET`: `RESET` would drop the two targeted keys to cluster defaults rather than restoring the documented pre-existing 0.05/0.05 values.
 
 ## Post-PR CI gate reconciliation
 
