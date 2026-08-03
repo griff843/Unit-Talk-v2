@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1640-autovacuum-tuning-phase-a",
   "branch": "claude/utv2-1640-autovacuum-tuning-phase-a",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "714fb9c619daa0424999bfa767d8f9764a32e367",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1367",
+  "files_changed": [
+    "db/migrations-rollback/20260801220000_utv2_1640_system_runs_autovacuum_tuning.down.sql",
+    "db/migrations-rollback/irreversible-exemption-registry.json",
+    "docs/06_status/proof/UTV2-1640/evidence.json",
+    "docs/06_status/proof/UTV2-1640/verification.md",
+    "supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1640/evidence.json",
     "docs/06_status/proof/UTV2-1640/verification.md",
@@ -20,14 +26,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1640/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-08-01T22:27:48.322Z",
-  "heartbeat_at": "2026-08-01T22:27:48.322Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-03T21:42:51.875Z",
+  "closed_at": "2026-08-03T21:42:51.875Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1640-autovacuum-tuning-phase-a.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-03T21:42:49.574Z",
+      "verdict": "pass",
+      "merge_sha": "714fb9c619daa0424999bfa767d8f9764a32e367",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

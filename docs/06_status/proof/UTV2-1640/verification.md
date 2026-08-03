@@ -310,5 +310,5 @@ scope but intentionally not modified (see "Types regeneration check" above).
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: pending
+Merge SHA: `714fb9c619daa0424999bfa767d8f9764a32e367`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1367
