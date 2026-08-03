@@ -10,6 +10,7 @@ import {
   evaluateCloseoutTruthGate,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateScopeDiff,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
@@ -25,6 +26,7 @@ import {
   type GitHubCheckRun,
 } from './truth-check-lib.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
+import { getRepoRoot } from './shared.js';
 import type { CheckResult, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
@@ -1369,4 +1371,75 @@ test('integration: R1/R2/R3 fail against a pre-repair bundle and pass against th
   const postClassification = classifyRuntimeProofGap(postRepairChecks);
   assert.strictEqual(postClassification.isRuntimeProofGap, false);
   assert.strictEqual(hasRuntimeReferences(postRepairBundle.bundle.runtime_proof), true);
+});
+
+// ── UTV2-1640: S1 must honour `/**` scope patterns ──────────────────────────
+// Regression cover for a defect where S1 matched scope with an exact Set
+// lookup, so a `dir/**` entry could never match a real file. The pre-merge
+// file-scope guard passed the same diff, so the two gates disagreed about what
+// a scope lock means. Matching now delegates to the guard's own helper.
+
+const UTV2_1640_SCOPE = [
+  'docs/06_status/proof/UTV2-1640/evidence.json',
+  'docs/06_status/proof/UTV2-1640/verification.md',
+  'packages/db/src/database.types.ts',
+  'supabase/migrations/**',
+  'db/migrations-rollback/**',
+];
+
+test('S1: supabase/migrations/** matches the UTV2-1640 migration', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: db/migrations-rollback/** matches the down script and the exemption registry', () => {
+  const result = evaluateScopeDiff(
+    [
+      'db/migrations-rollback/20260801220000_utv2_1640_system_runs_autovacuum_tuning.down.sql',
+      'db/migrations-rollback/irreversible-exemption-registry.json',
+    ],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: an unrelated path outside every scope entry still fails', () => {
+  const result = evaluateScopeDiff(
+    ['apps/api/src/submission-service.ts'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /apps\/api\/src\/submission-service\.ts/);
+});
+
+test('S1: a glob does not match a sibling directory sharing a prefix', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations-archive/legacy.sql'],
+    ['supabase/migrations/**'],
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+});
+
+test('S1: exact (non-glob) scope entries still match, and expected_proof_paths are honoured', () => {
+  const result = evaluateScopeDiff(
+    ['packages/db/src/database.types.ts', 'docs/06_status/proof/UTV2-1640/evidence.json'],
+    UTV2_1640_SCOPE,
+    ['docs/06_status/proof/UTV2-1640/evidence.json'],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: the historical UTV2-1640 scope lock is unchanged by this repair', () => {
+  const repoRoot = getRepoRoot();
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'docs/06_status/lanes/UTV2-1640.json'), 'utf8'),
+  ) as { file_scope_lock: string[] };
+  assert.deepStrictEqual(manifest.file_scope_lock, UTV2_1640_SCOPE);
 });
