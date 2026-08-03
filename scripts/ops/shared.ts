@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
@@ -745,6 +745,187 @@ export function readAllManifests(): LaneManifest[] {
   return readAllManifestPaths().map((filePath) => parseJsonFile<LaneManifest>(filePath));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634: authoritative active-lane discovery.
+//
+// readAllManifests() above enumerates docs/06_status/lanes/*.json from the LOCAL
+// working tree only. A lane's manifest is created on its own branch at
+// ops:lane-start and does not reach `main` until the lane merges -- so for the
+// entire time a lane is active, which is precisely when concurrency control
+// matters, its manifest is invisible to every other worktree.
+//
+// That makes every gate built on it fail OPEN: an empty board and a full board
+// are indistinguishable, so the ABSENCE of a violation gets read as PROOF of no
+// violation. Measured 2026-07-31: six lanes active, two visible.
+//
+// The fix is to resolve the active set from authoritative remote state -- open
+// PRs and their head-ref manifests -- and to treat "could not enumerate" as
+// fail-CLOSED rather than as an empty board.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Thrown when the active-lane set cannot be established. Callers admitting new
+ * work MUST refuse on this rather than proceeding: an unknown board is not an
+ * empty board.
+ */
+export class ActiveLaneDiscoveryError extends Error {
+  readonly code = 'active_lane_discovery_failed';
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = 'ActiveLaneDiscoveryError';
+  }
+}
+
+export interface OpenPullRequestRef {
+  number: number;
+  headRefName: string;
+  url?: string;
+}
+
+/** How a resolved manifest was located -- recorded in the admission receipt. */
+export type LaneManifestSource = 'local_worktree' | 'open_pr_head';
+
+export interface ResolvedActiveLane {
+  manifest: LaneManifest;
+  source: LaneManifestSource;
+  /** PR number when the manifest came from an open PR head. */
+  prNumber?: number;
+}
+
+export interface ActiveLaneDiscovery {
+  /** Active manifests only (ACTIVE_LOCK_STATUSES), deduped by issue_id. */
+  lanes: ResolvedActiveLane[];
+  /** Convenience projection for callers that just want the manifests. */
+  manifests: LaneManifest[];
+  /** Open PRs whose branch carried no parseable issue id -- diagnostic only. */
+  skippedPullRequests: Array<{ number: number; headRefName: string; reason: string }>;
+}
+
+export interface ActiveLaneDiscoveryDeps {
+  listOpenPullRequests?: () => OpenPullRequestRef[];
+  readManifestAtRef?: (issueId: string, ref: string) => LaneManifest | null;
+  readLocalManifests?: () => LaneManifest[];
+}
+
+/**
+ * Extracts the canonical issue id from a lane branch name
+ * (`claude/utv2-1634-slug` -> `UTV2-1634`). Returns null for branches that are
+ * not lane branches, which are skipped rather than treated as failures.
+ */
+export function issueIdFromBranchName(branch: string): string | null {
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(branch);
+  return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
+}
+
+function defaultListOpenPullRequests(): OpenPullRequestRef[] {
+  const stdout = execFileSync(
+    'gh',
+    ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,headRefName,url'],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  const parsed = JSON.parse(stdout) as OpenPullRequestRef[];
+  if (!Array.isArray(parsed)) {
+    throw new Error('gh pr list did not return an array');
+  }
+  return parsed;
+}
+
+function defaultReadManifestAtRef(issueId: string, ref: string): LaneManifest | null {
+  try {
+    const stdout = execFileSync(
+      'gh',
+      [
+        'api',
+        `repos/{owner}/{repo}/contents/docs/06_status/lanes/${issueId}.json?ref=${encodeURIComponent(ref)}`,
+        '--jq',
+        '.content',
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ).trim();
+    if (!stdout) return null;
+    return JSON.parse(Buffer.from(stdout, 'base64').toString('utf8')) as LaneManifest;
+  } catch {
+    // A 404 means this PR simply has no manifest for that id at that head --
+    // a normal, non-lane PR. That is genuinely absent data about ONE PR, not a
+    // failure to enumerate the board, so it is not fail-closed-worthy.
+    return null;
+  }
+}
+
+/**
+ * Resolves the set of currently-active lanes from authoritative state: every
+ * open PR's manifest at its own head ref, unioned with the local working tree.
+ *
+ * Precedence: an open-PR-head manifest WINS over a local copy of the same
+ * issue_id. The PR head is where an active lane's manifest actually lives and
+ * is kept current; a local copy on `main` is either a stale merged snapshot or
+ * this worktree's own in-progress file.
+ *
+ * Fail-closed: if the open-PR enumeration itself throws, this throws
+ * ActiveLaneDiscoveryError. Callers must refuse to admit work rather than
+ * proceeding against an unknown board.
+ */
+export function resolveActiveLaneManifests(
+  deps: ActiveLaneDiscoveryDeps = {},
+): ActiveLaneDiscovery {
+  const listOpenPullRequests = deps.listOpenPullRequests ?? defaultListOpenPullRequests;
+  const readManifestAtRef = deps.readManifestAtRef ?? defaultReadManifestAtRef;
+  const readLocalManifests = deps.readLocalManifests ?? readAllManifests;
+
+  let openPullRequests: OpenPullRequestRef[];
+  try {
+    openPullRequests = listOpenPullRequests();
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      'Could not enumerate open pull requests, so the active-lane set is unknown. ' +
+        'Refusing to treat an unknown board as an empty one.',
+      error,
+    );
+  }
+
+  const byIssueId = new Map<string, ResolvedActiveLane>();
+  const skippedPullRequests: ActiveLaneDiscovery['skippedPullRequests'] = [];
+
+  // Local first, so open-PR-head manifests overwrite them below.
+  for (const manifest of readLocalManifests()) {
+    if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) continue;
+    byIssueId.set(manifest.issue_id, { manifest, source: 'local_worktree' });
+  }
+
+  for (const pullRequest of openPullRequests) {
+    const issueId = issueIdFromBranchName(pullRequest.headRefName ?? '');
+    if (!issueId) {
+      skippedPullRequests.push({
+        number: pullRequest.number,
+        headRefName: pullRequest.headRefName ?? '',
+        reason: 'branch name carries no UTV2-/UNI- issue id',
+      });
+      continue;
+    }
+
+    const manifest = readManifestAtRef(issueId, pullRequest.headRefName);
+    if (!manifest) continue;
+
+    if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) {
+      // A merged/done lane still holding an open PR must NOT keep its locks.
+      byIssueId.delete(manifest.issue_id);
+      continue;
+    }
+
+    byIssueId.set(manifest.issue_id, {
+      manifest,
+      source: 'open_pr_head',
+      prNumber: pullRequest.number,
+    });
+  }
+
+  const lanes = [...byIssueId.values()].sort((left, right) =>
+    left.manifest.issue_id.localeCompare(right.manifest.issue_id),
+  );
+
+  return { lanes, manifests: lanes.map((entry) => entry.manifest), skippedPullRequests };
+}
+
 export function validateManifestSchemaDependencies(): void {
   if (!fs.existsSync(LANE_MANIFEST_SCHEMA_PATH)) {
     throw new Error(
@@ -1044,11 +1225,22 @@ export function pathsOverlap(a: string, b: string): boolean {
   return na === nb || na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`);
 }
 
+/**
+ * Finds an active lane whose file_scope_lock overlaps the requested files.
+ *
+ * UTV2-1634: `candidateManifests` lets the caller pass the authoritative
+ * active-lane set (see resolveActiveLaneManifests) instead of this function
+ * re-reading the local working tree. Omitting it preserves the historical
+ * local-only behaviour for callers outside the admission path -- but note that
+ * the local-only set under-reports active lanes, so admission gates must pass
+ * the resolved set explicitly.
+ */
 export function activeManifestOverlap(
   issueId: string,
   requestedFiles: string[],
+  candidateManifests?: LaneManifest[],
 ): { issue_id: string; overlapping_files: string[] } | null {
-  for (const manifest of readAllManifests()) {
+  for (const manifest of candidateManifests ?? readAllManifests()) {
     if (manifest.issue_id === issueId) {
       continue;
     }

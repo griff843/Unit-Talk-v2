@@ -591,3 +591,177 @@ test('mergeVerifierIdentity treats non-object existing values (string/array) as 
   assert.deepStrictEqual(mergeVerifierIdentity('not-an-object', 'claude/x'), { identity: 'claude/x' });
   assert.deepStrictEqual(mergeVerifierIdentity(['a', 'b'], 'claude/x'), { identity: 'claude/x' });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634: authoritative active-lane discovery.
+//
+// readAllManifests() reads only the local working tree, but an active lane's
+// manifest lives on its own PR branch until it merges. That made the governor
+// fail OPEN -- an empty board and a full board were indistinguishable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  ActiveLaneDiscoveryError,
+  issueIdFromBranchName,
+  resolveActiveLaneManifests,
+  type LaneManifest,
+  type OpenPullRequestRef,
+} from './shared.js';
+
+function laneManifest(overrides: Partial<LaneManifest> & { issue_id: string }): LaneManifest {
+  return {
+    schema_version: 2,
+    lane_type: 'governance',
+    executor: 'claude',
+    tier: 'T2',
+    worktree_path: `/tmp/${overrides.issue_id}`,
+    branch: `claude/${overrides.issue_id.toLowerCase()}-slug`,
+    base_branch: 'main',
+    commit_sha: null,
+    pr_url: null,
+    files_changed: [],
+    file_scope_lock: [],
+    expected_proof_paths: [],
+    status: 'in_progress',
+    started_at: '2026-07-31T00:00:00.000Z',
+    heartbeat_at: '2026-07-31T00:00:00.000Z',
+    closed_at: null,
+    blocked_by: [],
+    preflight_token: 'dispatch-auto',
+    created_by: 'claude',
+    truth_check_history: [],
+    reopen_history: [],
+    ...overrides,
+  } as LaneManifest;
+}
+
+test('UTV2-1634 issueIdFromBranchName extracts the canonical id from lane branches', () => {
+  assert.strictEqual(issueIdFromBranchName('claude/utv2-1634-lane-discovery'), 'UTV2-1634');
+  assert.strictEqual(issueIdFromBranchName('codex/utv2-1604-parked-mode'), 'UTV2-1604');
+  assert.strictEqual(issueIdFromBranchName('griffadavi/uni-100-thing'), 'UNI-100');
+  assert.strictEqual(issueIdFromBranchName('main'), null);
+  assert.strictEqual(issueIdFromBranchName('dependabot/npm_and_yarn/foo-1.2.3'), null);
+});
+
+test('UTV2-1634: a lane whose manifest exists ONLY on its PR branch is counted as active', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: (): OpenPullRequestRef[] => [
+      { number: 1319, headRefName: 'codex/utv2-1604-parked-mode-scheduler-policy' },
+    ],
+    readManifestAtRef: (issueId) =>
+      issueId === 'UTV2-1604'
+        ? laneManifest({ issue_id: 'UTV2-1604', lane_type: 'runtime', status: 'in_review' })
+        : null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests.map((m) => m.issue_id), ['UTV2-1604']);
+  assert.strictEqual(discovery.lanes[0]!.source, 'open_pr_head');
+  assert.strictEqual(discovery.lanes[0]!.prNumber, 1319);
+});
+
+test('UTV2-1634 exact reported case: a runtime lane visible only on a PR branch is discoverable, so a migration lane-start can be refused', () => {
+  const discovery = resolveActiveLaneManifests({
+    // The UTV2-1399 worktree could see none of this locally -- that was the bug.
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 1319, headRefName: 'codex/utv2-1604-parked-mode-scheduler-policy' },
+    ],
+    readManifestAtRef: () =>
+      laneManifest({ issue_id: 'UTV2-1604', lane_type: 'runtime', status: 'in_review' }),
+  });
+
+  const runtimeLanes = discovery.manifests.filter((m) => m.lane_type === 'runtime');
+  assert.strictEqual(
+    runtimeLanes.length,
+    1,
+    'the active runtime lane must be visible so ["migration","runtime"] can be detected as forbidden',
+  );
+});
+
+test('UTV2-1634: executor cap is enforceable when N-1 manifests are unmerged', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [laneManifest({ issue_id: 'UTV2-1000' })],
+    listOpenPullRequests: () => [
+      { number: 1, headRefName: 'claude/utv2-1001-a' },
+      { number: 2, headRefName: 'claude/utv2-1002-b' },
+      { number: 3, headRefName: 'claude/utv2-1003-c' },
+    ],
+    readManifestAtRef: (issueId) => laneManifest({ issue_id: issueId }),
+  });
+
+  assert.deepStrictEqual(
+    discovery.manifests.map((m) => m.issue_id),
+    ['UTV2-1000', 'UTV2-1001', 'UTV2-1002', 'UTV2-1003'],
+    'all four lanes must count toward the executor cap, not just the one on disk',
+  );
+});
+
+test('UTV2-1634 fail-closed: enumeration failure throws rather than reporting an empty board', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        readLocalManifests: () => [],
+        listOpenPullRequests: () => {
+          throw new Error('gh: network unreachable');
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.strictEqual(error.code, 'active_lane_discovery_failed');
+      return true;
+    },
+    'an unknown board must never be silently treated as an empty one',
+  );
+});
+
+test('UTV2-1634: merged lanes still release their locks even with an open PR', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [laneManifest({ issue_id: 'UTV2-1500', status: 'in_progress' })],
+    listOpenPullRequests: () => [{ number: 9, headRefName: 'claude/utv2-1500-thing' }],
+    // Head says the lane has since merged -- authoritative over the stale local copy.
+    readManifestAtRef: () => laneManifest({ issue_id: 'UTV2-1500', status: 'merged' }),
+  });
+
+  assert.deepStrictEqual(discovery.manifests, [], 'a merged lane must not keep holding locks');
+});
+
+test('UTV2-1634: the PR-head manifest wins over a stale local copy of the same lane', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [
+      laneManifest({ issue_id: 'UTV2-1600', lane_type: 'hygiene', status: 'started' }),
+    ],
+    listOpenPullRequests: () => [{ number: 7, headRefName: 'claude/utv2-1600-thing' }],
+    readManifestAtRef: () =>
+      laneManifest({ issue_id: 'UTV2-1600', lane_type: 'migration', status: 'in_review' }),
+  });
+
+  assert.strictEqual(discovery.manifests.length, 1);
+  assert.strictEqual(discovery.manifests[0]!.lane_type, 'migration');
+  assert.strictEqual(discovery.lanes[0]!.source, 'open_pr_head');
+});
+
+test('UTV2-1634: non-lane PRs are skipped diagnostically, not treated as discovery failures', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 42, headRefName: 'dependabot/npm_and_yarn/lodash-4.17.21' },
+    ],
+    readManifestAtRef: () => null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests, []);
+  assert.strictEqual(discovery.skippedPullRequests.length, 1);
+  assert.strictEqual(discovery.skippedPullRequests[0]!.number, 42);
+});
+
+test('UTV2-1634: a PR whose head has no manifest for its id contributes nothing and does not throw', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [{ number: 5, headRefName: 'claude/utv2-9999-no-manifest' }],
+    readManifestAtRef: () => null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests, []);
+  assert.deepStrictEqual(discovery.skippedPullRequests, []);
+});

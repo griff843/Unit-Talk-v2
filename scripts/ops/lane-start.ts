@@ -25,6 +25,8 @@ import {
   normalizeFileScope,
   parseArgs,
   readAllManifests,
+  resolveActiveLaneManifests,
+  type ActiveLaneDiscovery,
   readManifest,
   relativeToRoot,
   requireIssueId,
@@ -420,9 +422,34 @@ function main(): void {
     const existingManifestForResume = manifestExists(issueId) ? readManifest(issueId) : null;
     const effectiveVerificationTarget = verificationTargetFlag ?? existingManifestForResume?.verification_target;
 
+    // UTV2-1634: the active-lane set must come from authoritative remote state
+    // (open PRs and their head-ref manifests), not from this worktree's local
+    // docs/06_status/lanes/*.json. An active lane's manifest lives only on its
+    // own branch until it merges, so a local-only read makes a full board look
+    // empty and admits lanes that violate caps, singletons and forbidden
+    // combinations. Discovery failure is fail-CLOSED: refuse the lane rather
+    // than admit it against an unknown board.
+    let activeLaneDiscovery: ActiveLaneDiscovery;
+    try {
+      activeLaneDiscovery = resolveActiveLaneManifests();
+    } catch (error) {
+      emitJson({
+        ok: false,
+        code: 'active_lane_discovery_failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not resolve the active-lane set from open pull requests.',
+        remediation:
+          'Restore `gh` authentication and network access, then retry. An unknown board is never treated as an empty one.',
+      });
+      process.exit(1);
+    }
+
+    const activeManifests = activeLaneDiscovery.manifests.filter((m) => m.issue_id !== issueId);
     const concurrencyConfig = getEffectiveConfig(loadConcurrencyConfig());
     const concurrencyViolations = checkConcurrencyLimits(
-      readAllManifests().filter((m) => m.issue_id !== issueId),
+      activeManifests,
       canonicalLaneType,
       executor,
       concurrencyConfig,
@@ -435,11 +462,23 @@ function main(): void {
         message: concurrencyViolations[0]!.message,
         violations: concurrencyViolations,
         config_path: 'docs/governance/CONCURRENCY_CONFIG.json',
+        // UTV2-1634: emit the exact board the decision was made against, so a
+        // wrong refusal (or a wrong admission) is diagnosable after the fact
+        // instead of requiring the state to be reconstructed by hand.
+        active_lanes: activeLaneDiscovery.lanes.map((lane) => ({
+          issue_id: lane.manifest.issue_id,
+          lane_type: lane.manifest.lane_type,
+          executor: lane.manifest.executor,
+          status: lane.manifest.status,
+          source: lane.source,
+          ...(lane.prNumber === undefined ? {} : { pr_number: lane.prNumber }),
+        })),
+        skipped_pull_requests: activeLaneDiscovery.skippedPullRequests,
       });
       process.exit(1);
     }
 
-    const overlap = activeManifestOverlap(issueId, normalizedFiles);
+    const overlap = activeManifestOverlap(issueId, normalizedFiles, activeManifests);
     if (overlap) {
       emitJson({
         ok: false,

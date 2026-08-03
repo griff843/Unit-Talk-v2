@@ -166,15 +166,55 @@ test('lane-start backfills verification_target from the existing manifest on res
   );
   assert.match(
     concurrencyCallBlock,
-    /readAllManifests\(\)\.filter\(\(m\) => m\.issue_id !== issueId\)/,
-    'checkConcurrencyLimits must exclude the incoming issue\'s own active manifest from the conflict-search set -- ' +
-      'a lane must never be treated as conflicting with itself on resume',
+    /activeManifests/,
+    'checkConcurrencyLimits must receive the authoritative active-lane set (UTV2-1634), ' +
+      'not a local-only readAllManifests() read',
   );
 });
 
 // PR #1213 Codex review fix: a malformed --verification-target must fail before
 // createBranchAndWorktree/reserveLease run, not deep inside createManifest -- otherwise a
 // typo leaves an orphaned branch/worktree/lease behind it.
+test('UTV2-1634: lane-start resolves the active-lane set from authoritative remote state and fails closed', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  assert.match(
+    source,
+    /resolveActiveLaneManifests\(\)/,
+    'lane-start must resolve active lanes via resolveActiveLaneManifests(), not a local-only manifest read',
+  );
+  assert.match(
+    source,
+    /code: 'active_lane_discovery_failed'/,
+    'lane-start must fail closed with active_lane_discovery_failed when the board cannot be enumerated',
+  );
+
+  const discoveryIndex = source.indexOf("code: 'active_lane_discovery_failed'");
+  // Anchor on the real call site, not the doc comment above the import that
+  // also mentions `checkConcurrencyLimits()`.
+  const concurrencyIndex = source.indexOf('const concurrencyViolations = checkConcurrencyLimits(');
+  assert.ok(
+    discoveryIndex !== -1 && discoveryIndex < concurrencyIndex,
+    'the discovery failure guard must run BEFORE checkConcurrencyLimits, so an unknown board never reaches admission',
+  );
+
+  assert.match(
+    source,
+    /activeManifests = activeLaneDiscovery\.manifests\.filter\(\(m\) => m\.issue_id !== issueId\)/,
+    'the incoming issue must still be excluded from its own conflict-search set on resume',
+  );
+  assert.match(
+    source,
+    /activeManifestOverlap\(issueId, normalizedFiles, activeManifests\)/,
+    'the file-scope overlap check must use the authoritative set too, not fall back to local-only',
+  );
+  assert.match(
+    source,
+    /active_lanes: activeLaneDiscovery\.lanes\.map/,
+    'the refusal receipt must emit the resolved active-lane set for after-the-fact diagnosis',
+  );
+});
+
 test('lane-start validates verification_target format before creating branch/worktree/lease state', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
 
