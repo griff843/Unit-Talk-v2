@@ -168,6 +168,142 @@ export function isMergeGateGreenOnHead(
   return entries[0]!.matched === true && entries[0]!.passed === true;
 }
 
+/**
+ * Raised when the lane manifest could not be READ at the head. Distinct from
+ * "the manifest is confirmed absent": absence is a knowable fact that resolves
+ * the tier to null (strict), whereas an unreadable manifest is an UNKNOWN and
+ * must never be mistaken for absence.
+ */
+export class LaneManifestLookupError extends Error {
+  readonly code = 'lane_manifest_lookup_failed';
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = 'LaneManifestLookupError';
+  }
+}
+
+/**
+ * True only for a GitHub contents-API failure that positively proves the
+ * manifest is absent at that ref. Auth loss, rate limiting, network failure and
+ * 5xx are UNKNOWN, never absence. Mirrors the same discrimination the lane
+ * governor applies, for the same reason.
+ */
+export function isConfirmedManifestAbsent(message: string, status: number | null): boolean {
+  const text = (message || '').toLowerCase();
+  if (status !== 404 && !/\b404\b/.test(text)) return false;
+  if (/\b(401|403|429|5\d{2})\b/.test(text)) return false;
+  if (/bad credentials|rate limit|abuse detection|could not resolve|timeout|timed out|connection reset|network|socket hang up/.test(text)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Decodes a contents-API payload into a lane manifest and checks that it is the
+ * manifest it claims to be. A manifest whose `issue_id` does not match the id
+ * derived from the head ref is a mis-binding, not a tier source, and is
+ * rejected rather than trusted.
+ */
+export function decodeLaneManifestPayload(
+  payload: { content?: unknown; encoding?: unknown },
+  expectedIssueId: string,
+): { tier?: unknown } {
+  if (typeof payload?.content !== 'string' || payload.content.length === 0) {
+    throw new LaneManifestLookupError(
+      `The contents API returned no body for ${expectedIssueId}'s manifest; refusing to infer a tier from it.`,
+    );
+  }
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(payload.content, 'base64').toString('utf8');
+  } catch (error) {
+    throw new LaneManifestLookupError(`Base64 decoding failed for ${expectedIssueId}'s manifest.`, error);
+  }
+
+  let parsed: { issue_id?: unknown; tier?: unknown };
+  try {
+    parsed = JSON.parse(decoded) as typeof parsed;
+  } catch (error) {
+    throw new LaneManifestLookupError(
+      `${expectedIssueId}'s manifest at the PR head is not valid JSON; a malformed manifest is an unknown tier, not a T2/T3 one.`,
+      error,
+    );
+  }
+
+  if (typeof parsed.issue_id !== 'string' || parsed.issue_id.toUpperCase() !== expectedIssueId) {
+    throw new LaneManifestLookupError(
+      `Manifest identity mismatch: expected issue_id "${expectedIssueId}", manifest declares "${String(parsed.issue_id)}".`,
+    );
+  }
+
+  return parsed;
+}
+
+/**
+ * Production reader for the authoritative tier: fetches
+ * docs/06_status/lanes/<ISSUE>.json at the PR's EXACT current head SHA.
+ *
+ * Pinning to the head SHA (not the branch name) matters -- a branch ref moves,
+ * and the whole point of this module is that the decision is bound to the head
+ * it was made against.
+ *
+ * Returns null only for a CONFIRMED absence, which resolves the tier to
+ * unresolved and therefore keeps the strict pm-verdict requirement. Every other
+ * failure throws LaneManifestLookupError, which the caller also treats as
+ * strict -- so both branches fail closed, and neither can relax the gate.
+ */
+export async function defaultFetchLaneManifestAtHead(
+  input: PreMergeAuthorizationInput & { issueId: string; headSha: string },
+): Promise<{ tier?: unknown } | null> {
+  const { owner, repo, token, issueId, headSha } = input;
+  const url =
+    `https://api.github.com/repos/${owner}/${repo}/contents/` +
+    `docs/06_status/lanes/${issueId}.json?ref=${encodeURIComponent(headSha)}`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'unit-talk-pre-merge-authorization',
+      },
+    });
+  } catch (error) {
+    throw new LaneManifestLookupError(
+      `Network failure reading ${issueId}'s manifest at ${headSha}: ${(error as Error)?.message ?? 'unknown'}`,
+      error,
+    );
+  }
+
+  if (response.status === 404) {
+    // Confirmed absent: this PR head carries no manifest for that id. The tier
+    // stays unresolved, which keeps the verdict requirement in force.
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new LaneManifestLookupError(
+      `Reading ${issueId}'s manifest at ${headSha} failed with HTTP ${response.status}. ` +
+        'Refusing to treat an unreadable manifest as a T2/T3 classification.',
+    );
+  }
+
+  let payload: { content?: unknown; encoding?: unknown };
+  try {
+    payload = (await response.json()) as typeof payload;
+  } catch (error) {
+    throw new LaneManifestLookupError(
+      `The contents API response for ${issueId} at ${headSha} was not valid JSON.`,
+      error,
+    );
+  }
+
+  return decodeLaneManifestPayload(payload, issueId);
+}
+
 export interface RequiredCheckReceiptEntry {
   context: string;
   matched: boolean;
@@ -373,7 +509,7 @@ export async function evaluatePreMergeAuthorization(
           };
         });
 
-  const fetchLaneManifestAtHead = deps.fetchLaneManifestAtHead ?? (async () => null);
+  const fetchLaneManifestAtHead = deps.fetchLaneManifestAtHead ?? defaultFetchLaneManifestAtHead;
 
   // Fetches that do not depend on the live head SHA go first.
   const requiredChecks = await fetchRequiredCheckContexts(input);

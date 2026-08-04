@@ -6,6 +6,11 @@ import { ROOT } from './shared.js';
 import {
   evaluatePreMergeAuthorization,
   isMergeGateGreenOnHead,
+  defaultFetchLaneManifestAtHead,
+  decodeLaneManifestPayload,
+  resolveTierFromManifest,
+  pmVerdictRequiredForTier,
+  LaneManifestLookupError,
   type PreMergeAuthorizationDeps,
   type PreMergeAuthorizationInput,
 } from './pre-merge-authorization.js';
@@ -545,4 +550,156 @@ test('UTV2-1661: the corrected lane manifest records the Codex executor identity
     /^codex\//,
     'the routing identity in the manifest must match the codex/ branch it runs on',
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1661 production-wiring round. The default fetchLaneManifestAtHead used
+// to be `async () => null`, so real CLI execution could never resolve a T2/T3
+// manifest and the original double-gate survived in production even though the
+// injected-fixture tests all passed. These exercise the DEFAULT path.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const MANIFEST_INPUT = { ...INPUT, issueId: 'UTV2-1661', headSha: CURRENT_HEAD_SHA };
+
+function b64(value: unknown): string {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64');
+}
+
+function withStubbedFetch<T>(stub: typeof fetch, run: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = stub;
+  return run().finally(() => {
+    globalThis.fetch = original;
+  });
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    json: async () => body,
+  } as unknown as Response;
+}
+
+test('UTV2-1661 default path: reads the manifest at the EXACT head SHA, not the branch ref', async () => {
+  let requestedUrl = '';
+  const manifest = await withStubbedFetch(
+    (async (url: string) => {
+      requestedUrl = String(url);
+      return jsonResponse(200, { content: b64({ issue_id: 'UTV2-1661', tier: 'T2' }) });
+    }) as unknown as typeof fetch,
+    () => defaultFetchLaneManifestAtHead(MANIFEST_INPUT),
+  );
+
+  assert.strictEqual(resolveTierFromManifest(manifest), 'T2');
+  assert.match(requestedUrl, /docs\/06_status\/lanes\/UTV2-1661\.json/);
+  assert.match(
+    requestedUrl,
+    new RegExp(`ref=${CURRENT_HEAD_SHA}`),
+    'the manifest must be pinned to the exact head SHA -- a branch ref moves',
+  );
+});
+
+test('UTV2-1661 default path: a confirmed 404 resolves to unresolved/strict, not an error', async () => {
+  const manifest = await withStubbedFetch(
+    (async () => jsonResponse(404, { message: 'Not Found' })) as unknown as typeof fetch,
+    () => defaultFetchLaneManifestAtHead(MANIFEST_INPUT),
+  );
+
+  assert.strictEqual(manifest, null);
+  assert.strictEqual(resolveTierFromManifest(manifest), null);
+  assert.strictEqual(
+    pmVerdictRequiredForTier({ manifestTier: null, labelTier: 'T2', mergeGateGreenOnHead: true }),
+    true,
+    'a confirmed-absent manifest must keep the strict requirement',
+  );
+});
+
+for (const status of [401, 403, 429, 500, 502, 503]) {
+  test(`UTV2-1661 default path: HTTP ${status} fails closed rather than resolving a tier`, async () => {
+    await assert.rejects(
+      withStubbedFetch(
+        (async () => jsonResponse(status, { message: 'nope' })) as unknown as typeof fetch,
+        () => defaultFetchLaneManifestAtHead(MANIFEST_INPUT),
+      ),
+      (error: unknown) => {
+        assert.ok(error instanceof LaneManifestLookupError);
+        assert.strictEqual(error.code, 'lane_manifest_lookup_failed');
+        return true;
+      },
+    );
+  });
+}
+
+test('UTV2-1661 default path: a network failure fails closed', async () => {
+  await assert.rejects(
+    withStubbedFetch(
+      (async () => {
+        throw new Error('could not resolve host: api.github.com');
+      }) as unknown as typeof fetch,
+      () => defaultFetchLaneManifestAtHead(MANIFEST_INPUT),
+    ),
+    LaneManifestLookupError,
+  );
+});
+
+test('UTV2-1661 default path: malformed base64 / JSON / identity mismatch each fail closed', () => {
+  assert.throws(
+    () => decodeLaneManifestPayload({ content: '' }, 'UTV2-1661'),
+    LaneManifestLookupError,
+    'an empty body is not a tier',
+  );
+  assert.throws(
+    () => decodeLaneManifestPayload({ content: Buffer.from('not json', 'utf8').toString('base64') }, 'UTV2-1661'),
+    LaneManifestLookupError,
+    'a malformed manifest is an unknown tier, not a T2/T3 one',
+  );
+  assert.throws(
+    () => decodeLaneManifestPayload({ content: b64({ issue_id: 'UTV2-9999', tier: 'T3' }) }, 'UTV2-1661'),
+    LaneManifestLookupError,
+    'a manifest for a different issue must never supply this lane its tier',
+  );
+});
+
+test('UTV2-1661 integration: the default path drives a real T2 authorization end-to-end', async () => {
+  const receipt = await withStubbedFetch(
+    (async () => jsonResponse(200, { content: b64({ issue_id: 'UTV2-1661', tier: 'T2' }) })) as unknown as typeof fetch,
+    () =>
+      evaluatePreMergeAuthorization(INPUT, {
+        ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+        // NOTE: fetchLaneManifestAtHead deliberately NOT injected -- this
+        // exercises the production default that previously returned null.
+        fetchPullRequestState: async () => ({
+          headSha: CURRENT_HEAD_SHA,
+          labels: ['tier:T2'],
+          headRef: 'codex/utv2-1661-tier-aware-merge-authorization',
+        }),
+        fetchComments: async () => [],
+      }),
+  );
+
+  assert.strictEqual(receipt.authorized, true, 'the default production path must resolve T2 and relax the verdict');
+  assert.strictEqual(receipt.tier.resolved, 'T2');
+  assert.strictEqual(receipt.tier.source, 'lane_manifest');
+  assert.strictEqual(receipt.tier.mergeGateGreenOnHead, true);
+});
+
+test('UTV2-1661 integration: the default path keeps a T1 lane strict end-to-end', async () => {
+  const receipt = await withStubbedFetch(
+    (async () => jsonResponse(200, { content: b64({ issue_id: 'UTV2-1661', tier: 'T1' }) })) as unknown as typeof fetch,
+    () =>
+      evaluatePreMergeAuthorization(INPUT, {
+        ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+        fetchPullRequestState: async () => ({
+          headSha: CURRENT_HEAD_SHA,
+          labels: ['tier:T2'],
+          headRef: 'codex/utv2-1661-tier-aware-merge-authorization',
+        }),
+        fetchComments: async () => [],
+      }),
+  );
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, 'T1');
+  assert.strictEqual(receipt.tier.labelDisagreement, true);
 });
