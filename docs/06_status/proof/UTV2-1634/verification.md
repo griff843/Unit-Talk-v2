@@ -1,6 +1,6 @@
 # PROOF: UTV2-1634 authoritative active-lane discovery
 
-MERGE_SHA: b457e03f3c84f8aac1e85be301952d9710f0f1a7
+MERGE_SHA: 5b0c20b3dab2cc67587fd5e187f16d8a31d51aec
 
 ## Summary
 
