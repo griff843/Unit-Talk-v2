@@ -269,6 +269,31 @@ function main(): void {
     validateBranchName(branch);
     const normalizedFiles = normalizeFileScope(fileArgs);
 
+    // UTV2-1634: authoritative active-lane discovery runs HERE, before any
+    // admission path branches -- including --docs-only-fast-path. No lane-start
+    // mode may bypass remote active-lane scope enforcement: the fast path still
+    // reserves real files against real concurrent lanes, so a local-only view
+    // there is the same fail-open as anywhere else. Discovery failure refuses
+    // both paths.
+    let activeLaneDiscovery: ActiveLaneDiscovery;
+    try {
+      activeLaneDiscovery = resolveActiveLaneManifests();
+    } catch (error) {
+      emitJson({
+        ok: false,
+        code: 'active_lane_discovery_failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not resolve the active-lane set from open pull requests.',
+        remediation:
+          'Restore `gh` authentication and network access, then retry. An unknown board is never treated as an empty one.',
+      });
+      process.exit(1);
+    }
+
+    const activeManifests = activeLaneDiscovery.manifests.filter((m) => m.issue_id !== issueId);
+
     if (docsOnlyFastPath) {
       const nonDocsFiles = normalizedFiles.filter((filePath) => !isDocsOnlyFastPathFile(filePath));
       if (tier !== 'T3') {
@@ -299,7 +324,7 @@ function main(): void {
       // current manifest state immediately before emitting success so a
       // fast-path lane can never silently coexist with a conflicting active
       // lane on the same file.
-      const overlap = activeManifestOverlap(issueId, normalizedFiles);
+      const overlap = activeManifestOverlap(issueId, normalizedFiles, activeManifests);
       if (overlap) {
         emitJson({
           ok: false,
@@ -422,31 +447,6 @@ function main(): void {
     const existingManifestForResume = manifestExists(issueId) ? readManifest(issueId) : null;
     const effectiveVerificationTarget = verificationTargetFlag ?? existingManifestForResume?.verification_target;
 
-    // UTV2-1634: the active-lane set must come from authoritative remote state
-    // (open PRs and their head-ref manifests), not from this worktree's local
-    // docs/06_status/lanes/*.json. An active lane's manifest lives only on its
-    // own branch until it merges, so a local-only read makes a full board look
-    // empty and admits lanes that violate caps, singletons and forbidden
-    // combinations. Discovery failure is fail-CLOSED: refuse the lane rather
-    // than admit it against an unknown board.
-    let activeLaneDiscovery: ActiveLaneDiscovery;
-    try {
-      activeLaneDiscovery = resolveActiveLaneManifests();
-    } catch (error) {
-      emitJson({
-        ok: false,
-        code: 'active_lane_discovery_failed',
-        message:
-          error instanceof Error
-            ? error.message
-            : 'Could not resolve the active-lane set from open pull requests.',
-        remediation:
-          'Restore `gh` authentication and network access, then retry. An unknown board is never treated as an empty one.',
-      });
-      process.exit(1);
-    }
-
-    const activeManifests = activeLaneDiscovery.manifests.filter((m) => m.issue_id !== issueId);
     const concurrencyConfig = getEffectiveConfig(loadConcurrencyConfig());
     const concurrencyViolations = checkConcurrencyLimits(
       activeManifests,

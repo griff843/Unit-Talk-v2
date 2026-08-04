@@ -65,12 +65,19 @@ test('lane-start rechecks file-scope overlap inside the docs-only fast path befo
   assert.notStrictEqual(successIndex, -1, 'expected the docs_only_fast_path success emit inside the fast-path block');
   const fastPathBlock = source.slice(blockStart, successIndex);
 
-  const overlapCallIndex = fastPathBlock.indexOf('activeManifestOverlap(issueId, normalizedFiles)');
+  // UTV2-1634 updated the signature to take the authoritative active-lane set;
+  // this assertion keeps its original intent (the recheck happens here, after
+  // preflight, before success) while additionally requiring that the set passed
+  // in is the remote-resolved one rather than a local-only read.
+  const overlapCallIndex = fastPathBlock.indexOf(
+    'activeManifestOverlap(issueId, normalizedFiles, activeManifests)',
+  );
   assert.notStrictEqual(
     overlapCallIndex,
     -1,
-    'the docs-only fast path must call activeManifestOverlap on current manifest state before emitting success -- ' +
-      'trusting the preflight token alone allows a concurrent lane to lock the same file after preflight ran',
+    'the docs-only fast path must call activeManifestOverlap on the authoritative active-lane set before emitting ' +
+      'success -- trusting the preflight token alone allows a concurrent lane to lock the same file after preflight ' +
+      'ran, and trusting a local-only manifest read misses lanes that exist only on their own PR branch',
   );
 
   const preflightCallIndex = fastPathBlock.indexOf('validatePreflightToken(issueId, branch, currentHead)');
@@ -314,4 +321,50 @@ test('lane-start exits non-zero (refuses) when delegation is suspended', () => {
   );
   assert.match(delegationBlock, /delegation_suspended/);
   assert.match(delegationBlock, /process\.exit\(1\)/);
+});
+
+// UTV2-1634 correction round: no lane-start mode may bypass authoritative
+// active-lane discovery. --docs-only-fast-path still reserves real files
+// against real concurrent lanes, so a local-only view there is the same
+// fail-open as on the normal path.
+test('UTV2-1634: authoritative discovery runs BEFORE the docs-only fast path, and that path uses the resolved set', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const discoveryIndex = source.indexOf('activeLaneDiscovery = resolveActiveLaneManifests()');
+  const fastPathIndex = source.indexOf('if (docsOnlyFastPath) {');
+  assert.notStrictEqual(discoveryIndex, -1, 'expected authoritative discovery in lane-start');
+  assert.notStrictEqual(fastPathIndex, -1, 'expected a docs-only fast path branch');
+  assert.ok(
+    discoveryIndex < fastPathIndex,
+    'discovery must run before the docs-only fast path so that path cannot bypass remote scope enforcement',
+  );
+
+  // Exactly one discovery site -- a second copy would be a re-introduction risk.
+  assert.strictEqual(
+    source.split('resolveActiveLaneManifests()').length - 1,
+    1,
+    'there must be exactly one authoritative discovery call site in lane-start',
+  );
+
+  // Both overlap checks (fast path and normal) must take the authoritative set.
+  const overlapCalls = source.match(/activeManifestOverlap\([^)]*\)/g) ?? [];
+  assert.strictEqual(overlapCalls.length, 2, 'expected exactly two overlap call sites');
+  for (const call of overlapCalls) {
+    assert.match(
+      call,
+      /activeManifests/,
+      `every activeManifestOverlap call must receive the authoritative set, got: ${call}`,
+    );
+  }
+});
+
+test('UTV2-1634: discovery failure blocks the docs-only fast path as well as normal admission', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+
+  const guardIndex = source.indexOf("code: 'active_lane_discovery_failed'");
+  const fastPathIndex = source.indexOf('if (docsOnlyFastPath) {');
+  assert.ok(
+    guardIndex !== -1 && guardIndex < fastPathIndex,
+    'the fail-closed discovery guard must precede the docs-only fast path, so an unknown board refuses both routes',
+  );
 });

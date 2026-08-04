@@ -817,22 +817,77 @@ export function issueIdFromBranchName(branch: string): string | null {
   return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
 }
 
+/**
+ * Hard cap on the open-PR listing. If the API returns exactly this many rows we
+ * cannot prove the list is complete, so discovery fails closed rather than
+ * silently treating a truncated page as the whole board.
+ */
+export const OPEN_PR_LISTING_LIMIT = 500;
+
 function defaultListOpenPullRequests(): OpenPullRequestRef[] {
+  // --paginate walks every page; --slurp merges them into one array. The limit
+  // below is a truncation *detector*, not a page size.
   const stdout = execFileSync(
     'gh',
-    ['pr', 'list', '--state', 'open', '--limit', '200', '--json', 'number,headRefName,url'],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    [
+      'api',
+      '--paginate',
+      '--slurp',
+      `repos/{owner}/{repo}/pulls?state=open&per_page=100`,
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
   );
-  const parsed = JSON.parse(stdout) as OpenPullRequestRef[];
-  if (!Array.isArray(parsed)) {
-    throw new Error('gh pr list did not return an array');
+
+  const pages = JSON.parse(stdout) as Array<Array<{ number?: number; head?: { ref?: string }; html_url?: string }>>;
+  if (!Array.isArray(pages)) {
+    throw new Error('gh api --paginate --slurp did not return an array of pages');
   }
-  return parsed;
+
+  const refs: OpenPullRequestRef[] = [];
+  for (const page of pages) {
+    if (!Array.isArray(page)) {
+      throw new Error('gh api --paginate --slurp returned a non-array page');
+    }
+    for (const entry of page) {
+      if (typeof entry?.number !== 'number' || typeof entry?.head?.ref !== 'string') {
+        throw new Error(`open pull request entry is malformed: ${JSON.stringify(entry)}`);
+      }
+      refs.push({ number: entry.number, headRefName: entry.head.ref, url: entry.html_url });
+    }
+  }
+
+  if (refs.length >= OPEN_PR_LISTING_LIMIT) {
+    throw new Error(
+      `open pull request listing returned ${refs.length} rows, at or beyond the ${OPEN_PR_LISTING_LIMIT} ` +
+        'safety cap -- completeness cannot be proven, refusing to treat it as the whole board.',
+    );
+  }
+
+  return refs;
+}
+
+/**
+ * True only for a gh/GitHub failure that positively proves the file is absent
+ * at that ref. Everything else -- auth loss, rate limiting, network failure,
+ * 5xx, an unrecognised message -- is an UNKNOWN, not an absence.
+ */
+export function isConfirmedManifestNotFound(stderr: string, status: number | null): boolean {
+  // gh exits 1 for both "404 Not Found" and "401 Bad credentials", so the exit
+  // code alone can never be the discriminator. Require the explicit 404 marker
+  // AND the absence of any other error signature.
+  const text = stderr.toLowerCase();
+  if (status !== 1) return false;
+  if (/\b(401|403|429|5\d{2})\b/.test(text)) return false;
+  if (/bad credentials|rate limit|abuse detection|could not resolve host|timeout|timed out|connection reset|network/.test(text)) {
+    return false;
+  }
+  return /http 404|404 not found|not found \(http 404\)/.test(text);
 }
 
 function defaultReadManifestAtRef(issueId: string, ref: string): LaneManifest | null {
+  let stdout: string;
   try {
-    const stdout = execFileSync(
+    stdout = execFileSync(
       'gh',
       [
         'api',
@@ -842,13 +897,50 @@ function defaultReadManifestAtRef(issueId: string, ref: string): LaneManifest | 
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     ).trim();
-    if (!stdout) return null;
-    return JSON.parse(Buffer.from(stdout, 'base64').toString('utf8')) as LaneManifest;
-  } catch {
-    // A 404 means this PR simply has no manifest for that id at that head --
-    // a normal, non-lane PR. That is genuinely absent data about ONE PR, not a
-    // failure to enumerate the board, so it is not fail-closed-worthy.
-    return null;
+  } catch (error) {
+    const err = error as { status?: number | null; stderr?: Buffer | string };
+    const stderr = typeof err.stderr === 'string' ? err.stderr : (err.stderr?.toString() ?? '');
+    // A CONFIRMED 404 means this PR simply has no manifest for that id at that
+    // head -- a normal, non-lane PR. That is genuinely absent data about ONE
+    // PR, and skipping it is correct.
+    if (isConfirmedManifestNotFound(stderr, err.status ?? null)) {
+      return null;
+    }
+    // Everything else -- auth, rate limit, network, 5xx -- is UNKNOWN. Treating
+    // an unknown as an absence is precisely the fail-open this lane exists to
+    // remove: it would silently drop an active lane from the board.
+    throw new ActiveLaneDiscoveryError(
+      `Could not read the lane manifest for ${issueId} at ref "${ref}", and the failure is not a confirmed 404. ` +
+        `Refusing to treat an unreadable manifest as an absent one. Underlying error: ${stderr.trim() || 'unknown'}`,
+      error,
+    );
+  }
+
+  if (!stdout) {
+    throw new ActiveLaneDiscoveryError(
+      `The contents API returned an empty body for ${issueId} at ref "${ref}" without a 404. ` +
+        'Refusing to infer absence from an empty response.',
+    );
+  }
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(stdout, 'base64').toString('utf8');
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      `Base64 decoding failed for ${issueId}'s manifest at ref "${ref}".`,
+      error,
+    );
+  }
+
+  try {
+    return JSON.parse(decoded) as LaneManifest;
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      `The lane manifest for ${issueId} at ref "${ref}" is not valid JSON. ` +
+        'A malformed manifest is an unknown lane state, not an absent one.',
+      error,
+    );
   }
 }
 
@@ -903,7 +995,20 @@ export function resolveActiveLaneManifests(
       continue;
     }
 
-    const manifest = readManifestAtRef(issueId, pullRequest.headRefName);
+    // Any throw here is an UNKNOWN lane state. Normalise it to
+    // ActiveLaneDiscoveryError so every caller sees one fail-closed type,
+    // whether the failure came from the default gh path or an injected dep.
+    let manifest: LaneManifest | null;
+    try {
+      manifest = readManifestAtRef(issueId, pullRequest.headRefName);
+    } catch (error) {
+      if (error instanceof ActiveLaneDiscoveryError) throw error;
+      throw new ActiveLaneDiscoveryError(
+        `Could not resolve the lane manifest for ${issueId} on PR #${pullRequest.number}. ` +
+          'Refusing to admit work against an incompletely-known board.',
+        error,
+      );
+    }
     if (!manifest) continue;
 
     if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) {

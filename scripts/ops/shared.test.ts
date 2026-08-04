@@ -765,3 +765,97 @@ test('UTV2-1634: a PR whose head has no manifest for its id contributes nothing 
   assert.deepStrictEqual(discovery.manifests, []);
   assert.deepStrictEqual(discovery.skippedPullRequests, []);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634 correction round: a manifest lookup may be treated as ABSENT only
+// on a confirmed 404. Auth loss, rate limiting, network failure, 5xx, malformed
+// base64/JSON and any other lookup failure are UNKNOWN lane state and must
+// refuse admission -- treating unknown as absent is the same fail-open this
+// lane exists to remove, just one level down.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { isConfirmedManifestNotFound, OPEN_PR_LISTING_LIMIT } from './shared.js';
+
+test('UTV2-1634: only a confirmed 404 counts as manifest-absent', () => {
+  assert.strictEqual(isConfirmedManifestNotFound('gh: Not Found (HTTP 404)', 1), true);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 404: Not Found', 1), true);
+
+  // Auth, rate limit, server and transport failures are never absence.
+  assert.strictEqual(isConfirmedManifestNotFound('gh: Bad credentials (HTTP 401)', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 403: rate limit exceeded', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 429 too many requests', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 502 Bad Gateway', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('could not resolve host: api.github.com', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('connection reset by peer', 1), false);
+  // A 404 string alongside an auth failure is ambiguous -- refuse.
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 404 Not Found; HTTP 401 Bad credentials', 1), false);
+  // Non-1 exit codes are not the documented gh 404 shape.
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 404 Not Found', 127), false);
+  assert.strictEqual(isConfirmedManifestNotFound('', null), false);
+});
+
+test('UTV2-1634: a confirmed 404 skips exactly one PR and leaves the rest of the board intact', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 1, headRefName: 'claude/utv2-2001-has-manifest' },
+      { number: 2, headRefName: 'claude/utv2-2002-no-manifest' },
+    ],
+    readManifestAtRef: (issueId) =>
+      issueId === 'UTV2-2001' ? laneManifest({ issue_id: 'UTV2-2001' }) : null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests.map((m) => m.issue_id), ['UTV2-2001']);
+});
+
+for (const failure of [
+  'HTTP 401: Bad credentials',
+  'HTTP 403: rate limit exceeded',
+  'could not resolve host: api.github.com',
+  'HTTP 500 Internal Server Error',
+  'Unexpected token < in JSON at position 0',
+]) {
+  test(`UTV2-1634 fail-closed: manifest lookup failure "${failure}" refuses admission`, () => {
+    assert.throws(
+      () =>
+        resolveActiveLaneManifests({
+          readLocalManifests: () => [],
+          listOpenPullRequests: () => [{ number: 1, headRefName: 'claude/utv2-2100-thing' }],
+          readManifestAtRef: () => {
+            throw new Error(failure);
+          },
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof ActiveLaneDiscoveryError);
+        assert.strictEqual(error.code, 'active_lane_discovery_failed');
+        return true;
+      },
+      'an unreadable manifest must never be treated as an absent one',
+    );
+  });
+}
+
+test('UTV2-1634: a lookup failure does not get masked by other lanes resolving fine', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        readLocalManifests: () => [],
+        listOpenPullRequests: () => [
+          { number: 1, headRefName: 'claude/utv2-2201-ok' },
+          { number: 2, headRefName: 'claude/utv2-2202-broken' },
+        ],
+        readManifestAtRef: (issueId) => {
+          if (issueId === 'UTV2-2201') return laneManifest({ issue_id: 'UTV2-2201' });
+          throw new Error('HTTP 401: Bad credentials');
+        },
+      }),
+    ActiveLaneDiscoveryError,
+  );
+});
+
+test('UTV2-1634: the open-PR listing limit is a truncation detector, not a page size', () => {
+  assert.ok(
+    OPEN_PR_LISTING_LIMIT >= 200,
+    'the cap must be well above any plausible real open-PR count so it only trips on genuine truncation risk',
+  );
+});
