@@ -24,7 +24,6 @@ import {
   manifestExists,
   normalizeFileScope,
   parseArgs,
-  readAllManifests,
   resolveActiveLaneManifests,
   type ActiveLaneDiscovery,
   readManifest,
