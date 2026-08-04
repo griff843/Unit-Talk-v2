@@ -24,7 +24,8 @@ import {
   manifestExists,
   normalizeFileScope,
   parseArgs,
-  readAllManifests,
+  resolveActiveLaneManifests,
+  type ActiveLaneDiscovery,
   readManifest,
   relativeToRoot,
   requireIssueId,
@@ -267,6 +268,31 @@ function main(): void {
     validateBranchName(branch);
     const normalizedFiles = normalizeFileScope(fileArgs);
 
+    // UTV2-1634: authoritative active-lane discovery runs HERE, before any
+    // admission path branches -- including --docs-only-fast-path. No lane-start
+    // mode may bypass remote active-lane scope enforcement: the fast path still
+    // reserves real files against real concurrent lanes, so a local-only view
+    // there is the same fail-open as anywhere else. Discovery failure refuses
+    // both paths.
+    let activeLaneDiscovery: ActiveLaneDiscovery;
+    try {
+      activeLaneDiscovery = resolveActiveLaneManifests();
+    } catch (error) {
+      emitJson({
+        ok: false,
+        code: 'active_lane_discovery_failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not resolve the active-lane set from open pull requests.',
+        remediation:
+          'Restore `gh` authentication and network access, then retry. An unknown board is never treated as an empty one.',
+      });
+      process.exit(1);
+    }
+
+    const activeManifests = activeLaneDiscovery.manifests.filter((m) => m.issue_id !== issueId);
+
     if (docsOnlyFastPath) {
       const nonDocsFiles = normalizedFiles.filter((filePath) => !isDocsOnlyFastPathFile(filePath));
       if (tier !== 'T3') {
@@ -297,7 +323,7 @@ function main(): void {
       // current manifest state immediately before emitting success so a
       // fast-path lane can never silently coexist with a conflicting active
       // lane on the same file.
-      const overlap = activeManifestOverlap(issueId, normalizedFiles);
+      const overlap = activeManifestOverlap(issueId, normalizedFiles, activeManifests);
       if (overlap) {
         emitJson({
           ok: false,
@@ -422,7 +448,7 @@ function main(): void {
 
     const concurrencyConfig = getEffectiveConfig(loadConcurrencyConfig());
     const concurrencyViolations = checkConcurrencyLimits(
-      readAllManifests().filter((m) => m.issue_id !== issueId),
+      activeManifests,
       canonicalLaneType,
       executor,
       concurrencyConfig,
@@ -435,11 +461,23 @@ function main(): void {
         message: concurrencyViolations[0]!.message,
         violations: concurrencyViolations,
         config_path: 'docs/governance/CONCURRENCY_CONFIG.json',
+        // UTV2-1634: emit the exact board the decision was made against, so a
+        // wrong refusal (or a wrong admission) is diagnosable after the fact
+        // instead of requiring the state to be reconstructed by hand.
+        active_lanes: activeLaneDiscovery.lanes.map((lane) => ({
+          issue_id: lane.manifest.issue_id,
+          lane_type: lane.manifest.lane_type,
+          executor: lane.manifest.executor,
+          status: lane.manifest.status,
+          source: lane.source,
+          ...(lane.prNumber === undefined ? {} : { pr_number: lane.prNumber }),
+        })),
+        skipped_pull_requests: activeLaneDiscovery.skippedPullRequests,
       });
       process.exit(1);
     }
 
-    const overlap = activeManifestOverlap(issueId, normalizedFiles);
+    const overlap = activeManifestOverlap(issueId, normalizedFiles, activeManifests);
     if (overlap) {
       emitJson({
         ok: false,
