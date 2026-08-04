@@ -29,14 +29,22 @@
     "docs/06_status/proof/UTV2-1661/diff-summary.md",
     "docs/06_status/proof/UTV2-1661/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-08-03T13:56:11.008Z",
-  "heartbeat_at": "2026-08-03T13:56:11.008Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-04T19:48:04.065Z",
+  "closed_at": "2026-08-04T19:48:04.065Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1661-tier-aware-merge-authorization.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-04T19:48:01.866Z",
+      "verdict": "pass",
+      "merge_sha": "f5c5fa44c6f663721c360337ba0e8558c93de920",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
