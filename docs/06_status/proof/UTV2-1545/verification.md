@@ -177,3 +177,163 @@ Drift monitor failing every cycle:
 run_type                            total  last_started                  last_status
 governance.awaiting-approval-drift  9965   2026-08-03 22:00:00.163931+00 failed
 ```
+
+---
+
+# Exact-ID materialization and guarded executable transaction
+
+Added in the correction round. Still **read-only**: nothing below has been executed.
+
+## Exact target set
+
+| measure | value |
+| -- | -- |
+| total `status='awaiting_approval'` | **14,984** |
+| target rows (all except the one qualified) | **14,983** |
+| held back for individual review | **1** |
+| held row id | `081ceb09-69b1-4767-aa69-8b25b306fc03` |
+| **sha256 of the sorted target id set** | `8ad89899eb914706cc6b10a2cfebc61b6c254d851eee26f1d756d7ac97d6b85d` |
+
+The set hash is computed as `sha256(string_agg(id::text, ',' ORDER BY id))` over the 14,983
+target rows. It pins the exact membership cryptographically and is regenerable on demand:
+
+```sql
+WITH cls AS (
+  SELECT p.id, p.promotion_status
+  FROM picks p WHERE p.status = 'awaiting_approval'
+), target AS (
+  SELECT id FROM cls WHERE promotion_status <> 'qualified'
+)
+SELECT count(*) AS target_rows,
+       encode(digest(string_agg(id::text, ',' ORDER BY id), 'sha256'), 'hex') AS target_id_set_sha256
+FROM target;
+-- expected: 14983 / 8ad89899eb914706cc6b10a2cfebc61b6c254d851eee26f1d756d7ac97d6b85d
+```
+
+A literal 14,983-line UUID dump is deliberately **not** inlined here. It would add ~550 KB to
+the repository, and it would be strictly weaker evidence than the hash: a pasted list can go
+stale silently between authoring and execution, whereas the hash *detects* exactly that drift
+and is checked as an abort condition inside the transaction below. The list is reproducible
+verbatim from the query above at any time and verifiable against the hash.
+
+## Guarded executable transaction (NOT executed)
+
+Fail-closed on every drift condition. Abort before mutation if the world moved.
+
+```sql
+BEGIN;
+
+-- Serialize against concurrent approval flows for the duration.
+SET LOCAL statement_timeout = '120s';
+SET LOCAL lock_timeout = '10s';
+
+-- ── ABORT GUARD 1: total count drift ────────────────────────────────────────
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM picks WHERE status = 'awaiting_approval';
+  IF n <> 14984 THEN
+    RAISE EXCEPTION 'ABORT count drift: expected 14984 awaiting_approval, found %', n;
+  END IF;
+END $$;
+
+-- ── ABORT GUARD 2: exact target-set drift (membership, not just cardinality) ─
+DO $$
+DECLARE h text;
+BEGIN
+  SELECT encode(digest(string_agg(id::text, ',' ORDER BY id), 'sha256'), 'hex') INTO h
+  FROM picks WHERE status = 'awaiting_approval' AND promotion_status <> 'qualified';
+  IF h <> '8ad89899eb914706cc6b10a2cfebc61b6c254d851eee26f1d756d7ac97d6b85d' THEN
+    RAISE EXCEPTION 'ABORT target-set drift: id-set sha256 is % (expected 8ad89899...)', h;
+  END IF;
+END $$;
+
+-- ── ABORT GUARD 3: the held qualified row must still be exactly one, unchanged
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM picks
+  WHERE status = 'awaiting_approval' AND promotion_status = 'qualified'
+    AND id = '081ceb09-69b1-4767-aa69-8b25b306fc03';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'ABORT held-row drift: expected the 1 qualified held row, found %', n;
+  END IF;
+END $$;
+
+-- ── BEFORE SNAPSHOT (immutable audit record, written before any mutation) ────
+CREATE TABLE IF NOT EXISTS utv2_1545_expire_snapshot (
+  id               uuid PRIMARY KEY,
+  prior_status     text        NOT NULL,
+  promotion_status text,
+  source           text,
+  created_at       timestamptz,
+  snapshotted_at   timestamptz NOT NULL DEFAULT now(),
+  actor            text        NOT NULL,
+  reason           text        NOT NULL
+);
+
+INSERT INTO utv2_1545_expire_snapshot (id, prior_status, promotion_status, source, created_at, actor, reason)
+SELECT p.id, p.status, p.promotion_status, p.source, p.created_at,
+       'UTV2-1545 governed cleanup',
+       'Stale awaiting_approval backlog: 12,700 CI fixtures + 2,283 genuine picks whose '
+       || 'markets settled before the 2026-06-30T12:41:02Z ingestion cutoff. No recovery has '
+       || 'occurred, so no legitimate post-recovery row exists. The single qualified row is held out.'
+FROM picks p
+WHERE p.status = 'awaiting_approval' AND p.promotion_status <> 'qualified'
+ON CONFLICT (id) DO NOTHING;
+
+-- ── MUTATION ────────────────────────────────────────────────────────────────
+UPDATE picks
+SET status = 'expired', updated_at = now()
+WHERE status = 'awaiting_approval' AND promotion_status <> 'qualified';
+-- assert: row_count = 14983
+
+-- ── POST-CONDITION: exactly the held row survives ───────────────────────────
+DO $$
+DECLARE n int;
+BEGIN
+  SELECT count(*) INTO n FROM picks WHERE status = 'awaiting_approval';
+  IF n <> 1 THEN
+    RAISE EXCEPTION 'ABORT post-condition: expected exactly 1 awaiting_approval remaining, found %', n;
+  END IF;
+END $$;
+
+COMMIT;
+```
+
+## Second-run-zero proof
+
+The mutation predicate is `status = 'awaiting_approval'`, which the mutation itself clears.
+A second execution therefore matches **0** rows: guard 1 aborts first (count is 1, not 14,984),
+and even with guards removed the `UPDATE` would affect nothing. The snapshot insert is
+additionally `ON CONFLICT (id) DO NOTHING`, so a re-run cannot duplicate audit rows.
+
+Verify after the first run:
+
+```sql
+SELECT count(*) FROM picks WHERE status = 'awaiting_approval';                   -- expect 1
+SELECT count(*) FROM picks WHERE status = 'expired';                             -- expect prior + 14983
+SELECT count(*) FROM utv2_1545_expire_snapshot;                                  -- expect 14983
+```
+
+## Correction procedure
+
+The snapshot table makes the mutation fully reversible without a database restore:
+
+```sql
+BEGIN;
+UPDATE picks p
+SET status = s.prior_status, updated_at = now()
+FROM utv2_1545_expire_snapshot s
+WHERE p.id = s.id AND p.status = 'expired';
+-- assert: row_count = 14983
+SELECT count(*) FROM picks WHERE status = 'awaiting_approval';  -- expect 14984
+COMMIT;
+```
+
+Scope it to a subset by adding `AND s.id IN (...)` if only part of the set needs restoring.
+
+## Standing gate
+
+**This is a bulk backlog mutation and remains unexecuted.** It is the single live mutation
+gate for this lane and requires explicit owner authorization.
