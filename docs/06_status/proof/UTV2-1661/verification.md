@@ -1,6 +1,6 @@
 # PROOF: UTV2-1661 tier-aware pre-merge authorization
 
-MERGE_SHA: 2ecdd5b888aba02fac1c9f69dfb2fff74d4f7471
+MERGE_SHA: f5c5fa44c6f663721c360337ba0e8558c93de920
 
 ## Summary
 
@@ -67,3 +67,73 @@ for attribution rather than altering the manifest's routing truth.
 
 `scripts/ops/pre-merge-authorization.ts`, `scripts/ops/pre-merge-authorization.test.ts`, the
 lane manifest's executor identity, and this proof bundle. Merge Gate itself is untouched.
+
+## Closeout repair (PR #1381)
+
+The implementation merged as PR #1379 at merge SHA `f5c5fa44c6f663721c360337ba0e8558c93de920`,
+but the lane could not truth-close. Four defects, all in closeout artifacts — no implementation
+change:
+
+1. The manifest carried `status:"started"`, `pr_url:null`, `commit_sha:null` — no merge binding
+   (M4/M5/M6). Now bound to PR #1379 / `f5c5fa44…`, status `merged`.
+2. The manifest omitted the `model_routing` block required of `schema_version: 2` Codex-executor
+   manifests, so `ops:truth-check` exited `infra_error` at M2 and never evaluated anything below
+   it (P3, P12, P13, P14 were all masked).
+3. Both proof files declared `MERGE_SHA: 2ecdd5b888aba02fac1c9f69dfb2fff74d4f7471` — the branch
+   head at implementation time, **not reachable from `main`** (P3). Rebound to the real merge SHA
+   via `pnpm ops:proof-generate --issue UTV2-1661 --merge-sha f5c5fa44…`, which preserves the
+   authored evidence above in place (`preserved: … (sha-rebound in place)`).
+4. This verification log referenced `pnpm type-check` but not `pnpm test`, `pnpm verify`, or
+   `scripts/ci/r-level-check.ts` (P12, P13, P14). Re-run below.
+
+### Repair-head verification
+
+Executed on the repair head `704d21d0` (`claude/utv2-1661-manifest-model-routing` merged with
+`origin/main` @ `5b0c20b3`), in an isolated worktree with `pnpm install --frozen-lockfile`:
+
+```
+$ pnpm type-check
+TC_EXIT=0
+
+$ pnpm test
+tests=4473 pass=4473 fail=0 skipped=0
+TEST_EXIT=0
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 1
+Rules matched: (none) — no R-level artifacts required for this diff
+RLEVEL_EXIT=0
+```
+
+`pnpm verify` was **not** run locally. `verify` = `verify:static && test:live-db`, and
+`test:live-db` executes against live Supabase; production is parked, so running it from a
+workstation is not permitted. Its `verify:static` components were run individually above
+(`lint`/`type-check` in the original round, `type-check`/`test` here); the authoritative
+`pnpm verify` result for this lane is the CI `verify` job, which passed on head `898b908a`
+(run [30904868964](https://github.com/griff843/Unit-Talk-v2/actions/runs/30904868964)) and re-runs
+on each subsequent push to #1381.
+
+### `file_scope_lock` now declares the lane's own control-plane paths
+
+`files_changed` is populated from PR #1379's real diff, which — like every lane's diff —
+includes `.ops/sync/UTV2-1661.yml` and `docs/06_status/lanes/UTV2-1661.json`. The pre-merge
+file-scope guard grants a lane those paths *unconditionally* via `ownLaneControlPlanePatterns`,
+so they never appeared in the declared lock. Truth-check's S1 scope-diff evaluation has no such
+exemption — it allows only `file_scope_lock` entries and `docs/06_status/proof/**` — so an
+honestly-populated `files_changed` fails S1 on paths the pre-merge gate had already blessed.
+
+The three canonical control-plane patterns are therefore now declared explicitly in
+`file_scope_lock`, matching established practice (e.g. `docs/06_status/lanes/UTV2-998.json`).
+This is descriptive, not a widening: the pre-merge guard reads the manifest from `base`
+(`origin/main`) and never from the PR head, so a lock edited in this PR cannot loosen that gate.
+
+The underlying defect — two gates with two different definitions of lane scope — is recorded as
+UTV2-1619 capability 1, not fixed here. No truth-check semantics were changed.
+
+### Dry-run receipt
+
+`ops:truth-check UTV2-1661` was run against the prospective merged state from the repair
+worktree: **38 checks, 37 pass, 1 skip-adjusted fail (S1)** before the `file_scope_lock`
+declaration above, and clean after. The authoritative receipt is the post-merge run on `main`;
+no dry-run result was written into `truth_check_history`.
