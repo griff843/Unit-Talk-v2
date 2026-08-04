@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { ROOT } from './shared.js';
 import {
   evaluatePreMergeAuthorization,
+  isMergeGateGreenOnHead,
   type PreMergeAuthorizationDeps,
   type PreMergeAuthorizationInput,
 } from './pre-merge-authorization.js';
@@ -281,20 +285,30 @@ test('an unresolvable head SHA fails closed instead of skipping the check', asyn
 // per-tier OR-logic.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function stateDeps(labels: string[]): Pick<PreMergeAuthorizationDeps, 'fetchPullRequestState'> {
-  return { fetchPullRequestState: async () => ({ headSha: CURRENT_HEAD_SHA, labels }) };
+function stateDeps(
+  labels: string[],
+  manifestTier: string | null = null,
+): Pick<PreMergeAuthorizationDeps, 'fetchPullRequestState' | 'fetchLaneManifestAtHead'> {
+  return {
+    fetchPullRequestState: async () => ({
+      headSha: CURRENT_HEAD_SHA,
+      labels,
+      headRef: 'codex/utv2-1661-tier-aware-merge-authorization',
+    }),
+    fetchLaneManifestAtHead: async () => (manifestTier === null ? null : { tier: manifestTier }),
+  };
 }
 
 test('UTV2-1661 regression: a T2 PR with all required checks green and NO pm-verdict is authorized', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
-    ...stateDeps(['tier:T2']),
+    ...stateDeps(['tier:T2'], 'T2'),
     fetchComments: async () => [],
   });
 
   assert.strictEqual(receipt.authorized, true);
   assert.strictEqual(receipt.tier.resolved, 'T2');
-  assert.strictEqual(receipt.tier.source, 'pr_labels');
+  assert.strictEqual(receipt.tier.source, 'lane_manifest');
   assert.strictEqual(receipt.tier.pmVerdictRequired, false);
   // The T1-only message must not appear on a T2 PR -- that was the live symptom.
   assert.strictEqual(receipt.reason, undefined);
@@ -303,7 +317,7 @@ test('UTV2-1661 regression: a T2 PR with all required checks green and NO pm-ver
 test('UTV2-1661: a T3 PR with all required checks green and no pm-verdict is authorized', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
-    ...stateDeps(['tier:T3']),
+    ...stateDeps(['tier:T3'], 'T3'),
     fetchComments: async () => [],
   });
 
@@ -315,7 +329,7 @@ test('UTV2-1661: a T3 PR with all required checks green and no pm-verdict is aut
 test('UTV2-1661: a T1 PR with all required checks green but NO pm-verdict is still refused', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
-    ...stateDeps(['tier:T1']),
+    ...stateDeps(['tier:T1'], 'T1'),
     fetchComments: async () => [],
   });
 
@@ -327,7 +341,7 @@ test('UTV2-1661: a T1 PR with all required checks green but NO pm-verdict is sti
 test('UTV2-1661 fail-closed: an UNLABELLED PR is held to the strict T1 rule, not relaxed', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
-    ...stateDeps([]),
+    ...stateDeps([], null),
     fetchComments: async () => [],
   });
 
@@ -340,7 +354,7 @@ test('UTV2-1661 fail-closed: an UNLABELLED PR is held to the strict T1 rule, not
 test('UTV2-1661 fail-closed: a malformed tier label does not resolve and does not relax the gate', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
-    ...stateDeps(['tier:T4', 'tier-T2', 'T2']),
+    ...stateDeps(['tier:T4', 'tier-T2', 'T2'], null),
     fetchComments: async () => [],
   });
 
@@ -355,7 +369,7 @@ test('UTV2-1661: tier never overrides required checks -- a T3 PR with a failing 
       checkRun('Merge Gate', 'failure', 1),
       checkRun('Executor Result Validation', 'success', 2),
     ]),
-    ...stateDeps(['tier:T3']),
+    ...stateDeps(['tier:T3'], 'T3'),
     fetchComments: async () => [],
   });
 
@@ -378,7 +392,7 @@ test('UTV2-1661: the legacy fetchHeadSha dep surfaces no labels, so it stays on 
 test('UTV2-1661: a stale-SHA verdict on a T2 PR is recorded but is not merge-blocking', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
-    ...stateDeps(['tier:T2']),
+    ...stateDeps(['tier:T2'], 'T2'),
     fetchComments: async () => [pmVerdictComment(approvedVerdictBody(STALE_HEAD_SHA))],
   });
 
@@ -386,4 +400,149 @@ test('UTV2-1661: a stale-SHA verdict on a T2 PR is recorded but is not merge-blo
   assert.strictEqual(receipt.pmVerdict.valid, false);
   assert.strictEqual(receipt.pmVerdict.parsedHeadSha, STALE_HEAD_SHA);
   assert.strictEqual(receipt.reason, undefined);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1661 correction round. Two changes to the authority model:
+//   (a) the tier comes from the LANE MANIFEST at the PR head; PR labels are
+//       mirrored evidence only and can never be what relaxes T1 authority;
+//   (b) relaxation additionally requires the exact `Merge Gate` context to be
+//       present and green ON THE CURRENT HEAD, closing the relabel/check race.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('UTV2-1661: a T1 manifest with a mutable T2 label cannot relax authority', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T2'], 'T1'),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false, 'a label must never downgrade a T1 lane');
+  assert.strictEqual(receipt.tier.resolved, 'T1');
+  assert.strictEqual(receipt.tier.source, 'lane_manifest');
+  assert.strictEqual(receipt.tier.labelTier, 'T2');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: manifest/label disagreement fails closed even when both are non-T1', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T3'], 'T2'),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false, 'disagreement means the classification is unproven');
+  assert.strictEqual(receipt.tier.labelDisagreement, true);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: a T2 manifest with Merge Gate MISSING from required-check discovery fails closed', async () => {
+  // Discovery returns only Executor Result Validation -- no Merge Gate identity at all.
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(
+      [{ context: 'Executor Result Validation', app_id: null }],
+      [checkRun('Executor Result Validation', 'success', 2)],
+    ),
+    ...stateDeps(['tier:T2'], 'T2'),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false, 'an omitted Merge Gate must not silently relax the gate');
+  assert.strictEqual(receipt.tier.mergeGateGreenOnHead, false);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: a T2 manifest with an empty required-check set fails closed', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns([], []),
+    ...stateDeps(['tier:T2'], 'T2'),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false, 'an empty evidence set is not proof of a green Merge Gate');
+  assert.strictEqual(receipt.tier.mergeGateGreenOnHead, false);
+});
+
+test('UTV2-1661: a T2 manifest with a stale / non-current-head Merge Gate fails closed', async () => {
+  // Merge Gate is required but produced no run on THIS head, so it cannot be
+  // bound to the current head -- exactly the relabel/check race being closed.
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, [
+      checkRun('Executor Result Validation', 'success', 2),
+    ]),
+    ...stateDeps(['tier:T2'], 'T2'),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.mergeGateGreenOnHead, false);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: a T2 manifest with a current-head GREEN Merge Gate and no verdict is authorized', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    ...stateDeps(['tier:T2'], 'T2'),
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, true);
+  assert.strictEqual(receipt.tier.mergeGateGreenOnHead, true);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, false);
+  assert.strictEqual(receipt.reason, undefined);
+});
+
+test('UTV2-1661: a manifest read failure fails closed rather than relaxing', async () => {
+  const receipt = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+    fetchPullRequestState: async () => ({
+      headSha: CURRENT_HEAD_SHA,
+      labels: ['tier:T2'],
+      headRef: 'codex/utv2-1661-tier-aware-merge-authorization',
+    }),
+    fetchLaneManifestAtHead: async () => {
+      throw new Error('HTTP 401: Bad credentials');
+    },
+    fetchComments: async () => [],
+  });
+
+  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.tier.resolved, null);
+  assert.strictEqual(receipt.tier.source, 'unresolved');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+});
+
+test('UTV2-1661: isMergeGateGreenOnHead is exact-identity and fails closed on ambiguity', () => {
+  assert.strictEqual(isMergeGateGreenOnHead([{ context: 'Merge Gate', matched: true, passed: true }]), true);
+  assert.strictEqual(isMergeGateGreenOnHead([{ context: 'Merge Gate', matched: true, passed: false }]), false);
+  assert.strictEqual(isMergeGateGreenOnHead([{ context: 'Merge Gate', matched: false, passed: true }]), false);
+  // "Merge Gate Evaluator" is the job name, never a substitute for the context.
+  assert.strictEqual(
+    isMergeGateGreenOnHead([{ context: 'Merge Gate Evaluator', matched: true, passed: true }]),
+    false,
+  );
+  // Duplicate identities are ambiguous.
+  assert.strictEqual(
+    isMergeGateGreenOnHead([
+      { context: 'Merge Gate', matched: true, passed: true },
+      { context: 'Merge Gate', matched: true, passed: false },
+    ]),
+    false,
+  );
+  assert.strictEqual(isMergeGateGreenOnHead([]), false);
+  assert.strictEqual(isMergeGateGreenOnHead(null), false);
+});
+
+test('UTV2-1661: the corrected lane manifest records the Codex executor identity, not claude', () => {
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'docs', '06_status', 'lanes', 'UTV2-1661.json'), 'utf8'),
+  ) as { executor: string; created_by: string; branch: string };
+
+  assert.strictEqual(manifest.executor, 'codex-cli');
+  assert.strictEqual(manifest.created_by, 'codex-cli');
+  assert.match(
+    manifest.branch,
+    /^codex\//,
+    'the routing identity in the manifest must match the codex/ branch it runs on',
+  );
 });

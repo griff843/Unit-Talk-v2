@@ -99,8 +99,10 @@ export interface PreMergeAuthorizationInput {
 export interface PullRequestAuthorizationState {
   /** The PR's CURRENT live head SHA, or null when it could not be resolved. */
   headSha: string | null;
-  /** The PR's label names, used to resolve the merge-authority tier. */
+  /** The PR's label names -- mirrored evidence only, never the tier authority. */
   labels: string[];
+  /** The PR's head branch name, used to locate the lane manifest. */
+  headRef: string | null;
 }
 
 export interface PreMergeAuthorizationDeps {
@@ -130,6 +132,40 @@ export interface PreMergeAuthorizationDeps {
   ) => Promise<CommitCheckResult>;
   /** Fetches the PR's issue comments (to locate the latest pm-verdict/v1). */
   fetchComments?: (input: PreMergeAuthorizationInput) => Promise<PullRequestComment[]>;
+  /**
+   * Reads the lane manifest for `issueId` at the PR's head SHA -- the
+   * AUTHORITATIVE tier source. Returning null means "could not establish the
+   * lane's tier", which fails closed to requiring a pm-verdict.
+   */
+  fetchLaneManifestAtHead?: (
+    input: PreMergeAuthorizationInput & { issueId: string; headSha: string },
+  ) => Promise<{ tier?: unknown } | null>;
+}
+
+/**
+ * Extracts the lane issue id from a branch name (`codex/utv2-1661-slug` ->
+ * `UTV2-1661`), which is how the manifest path is located.
+ */
+export function issueIdFromHeadRef(headRef: string): string | null {
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(headRef);
+  return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
+}
+
+/**
+ * True only when the exact `Merge Gate` context is present in the evidence for
+ * THIS head and passed. An omitted context, an empty evidence set, an
+ * unmatched entry, or a non-passing result all return false -- the caller then
+ * keeps the verdict requirement in force.
+ */
+export function isMergeGateGreenOnHead(
+  evidence: Array<{ context: string; matched: boolean; passed: boolean }> | null | undefined,
+): boolean {
+  if (!Array.isArray(evidence) || evidence.length === 0) return false;
+  const entries = evidence.filter((entry) => entry.context === MERGE_GATE_CONTEXT);
+  // Exactly one authoritative entry; zero means discovery omitted it, more than
+  // one means the identity is ambiguous. Both fail closed.
+  if (entries.length !== 1) return false;
+  return entries[0]!.matched === true && entries[0]!.passed === true;
 }
 
 export interface RequiredCheckReceiptEntry {
@@ -149,40 +185,77 @@ export interface PmVerdictReceipt {
 
 export type MergeAuthorityTier = 'T1' | 'T2' | 'T3';
 
+/** The exact required-check context whose green state may relax T2/T3. */
+export const MERGE_GATE_CONTEXT = 'Merge Gate';
+
+function normalizeTier(value: string | null | undefined): MergeAuthorityTier | null {
+  if (typeof value !== 'string') return null;
+  const upper = value.trim().toUpperCase();
+  return upper === 'T1' || upper === 'T2' || upper === 'T3' ? upper : null;
+}
+
 /**
- * Resolves the merge-authority tier from a PR's label names, using the same
- * `tier:T[123]` convention every other tier consumer in this repo reads
- * (scripts/ops/executor-result-validate.ts's resolveTier, merge-gate.yml).
- * Returns null when no tier label is present.
+ * Reads the tier from a PR's label names (`tier:T[123]`).
+ *
+ * UTV2-1661 correction round: labels are MIRRORED EVIDENCE ONLY. A label is
+ * mutable by anyone with write access and is not lane truth, so it must never
+ * be the authority that relaxes a verdict requirement. It is used here solely
+ * to cross-check the manifest and to fail closed on disagreement.
  */
 export function resolveTierFromLabels(labels: string[]): MergeAuthorityTier | null {
   const tierLabel = labels.find((label) => /^tier:T[123]$/i.test(label));
-  return tierLabel ? (tierLabel.split(':')[1]!.toUpperCase() as MergeAuthorityTier) : null;
+  return tierLabel ? normalizeTier(tierLabel.split(':')[1]) : null;
+}
+
+/** Reads the authoritative tier from the lane manifest at the PR head. */
+export function resolveTierFromManifest(manifest: { tier?: unknown } | null): MergeAuthorityTier | null {
+  return normalizeTier(typeof manifest?.tier === 'string' ? manifest.tier : null);
 }
 
 /**
- * Whether a schema-valid pm-verdict/v1 comment is REQUIRED for this tier.
+ * Decides whether a schema-valid pm-verdict/v1 comment is REQUIRED.
  *
- * Per CLAUDE.md's Verification-expectations table, only T1 requires a
- * pm-verdict/v1 APPROVED comment. T2 is satisfied by a GitHub review approval
- * OR a verdict, and T3 needs neither -- and "Merge Gate", which is already one
- * of the four required checks this module evaluates, is the ratified single
- * source of truth that encodes that per-tier OR-logic. Re-requiring a verdict
- * here for T2/T3 double-gates them against a rule that does not apply.
+ * Per CLAUDE.md, only T1 requires a pm-verdict/v1 APPROVED comment; T2 is
+ * satisfied by a GitHub review approval OR a verdict, and T3 by green CI plus a
+ * valid executor result. "Merge Gate" is the ratified encoder of that per-tier
+ * OR-logic, so re-requiring a verdict here double-gates T2/T3.
  *
- * Unknown tier (null) fails CLOSED: absent a proven T2/T3 classification this
- * returns true, so a PR with a missing or malformed tier label is held to the
- * strictest rule rather than silently relaxed. Only a *proven* T2/T3 relaxes.
+ * Three independent conditions must ALL hold before the requirement relaxes:
+ *
+ *  1. the AUTHORITATIVE tier (lane manifest at the PR head) is T2 or T3;
+ *  2. the mirrored label tier does not DISAGREE with it -- a disagreement means
+ *     one of the two is stale and the classification is unproven;
+ *  3. the exact `Merge Gate` context is present and green ON THE CURRENT HEAD.
+ *
+ * Condition 3 closes the relabel/check race: without it, a PR could be
+ * downgraded to T2 after a green run and skip the verdict on evidence that
+ * never evaluated the current tier. If required-check discovery omits
+ * `Merge Gate`, returns an empty set, or cannot bind the check to this head,
+ * the requirement stays in force. Every unknown fails CLOSED.
  */
-export function pmVerdictRequiredForTier(tier: MergeAuthorityTier | null): boolean {
-  return tier !== 'T2' && tier !== 'T3';
+export function pmVerdictRequiredForTier(input: {
+  manifestTier: MergeAuthorityTier | null;
+  labelTier: MergeAuthorityTier | null;
+  mergeGateGreenOnHead: boolean;
+}): boolean {
+  const { manifestTier, labelTier, mergeGateGreenOnHead } = input;
+  if (manifestTier !== 'T2' && manifestTier !== 'T3') return true;
+  if (labelTier !== null && labelTier !== manifestTier) return true;
+  if (!mergeGateGreenOnHead) return true;
+  return false;
 }
 
 export interface TierReceipt {
-  /** Resolved tier, or null when no `tier:T[123]` label was present. */
+  /** Authoritative tier from the lane manifest at the PR head. */
   resolved: MergeAuthorityTier | null;
-  /** Where the tier came from -- 'pr_labels', or 'unresolved' when absent. */
-  source: 'pr_labels' | 'unresolved';
+  /** Where the authority came from. */
+  source: 'lane_manifest' | 'unresolved';
+  /** Mirrored, non-authoritative label tier -- recorded for cross-check only. */
+  labelTier: MergeAuthorityTier | null;
+  /** True when the label contradicts the manifest (forces the strict path). */
+  labelDisagreement: boolean;
+  /** Whether the exact `Merge Gate` context was green on the current head. */
+  mergeGateGreenOnHead: boolean;
   /** Whether a valid pm-verdict/v1 was required to authorize this merge. */
   pmVerdictRequired: boolean;
 }
@@ -282,6 +355,7 @@ export async function evaluatePreMergeAuthorization(
       ? async (args: PreMergeAuthorizationInput): Promise<PullRequestAuthorizationState> => ({
           headSha: await deps.fetchHeadSha!(args),
           labels: [],
+          headRef: null,
         })
       : async ({
           owner,
@@ -295,8 +369,11 @@ export async function evaluatePreMergeAuthorization(
             labels: (pullRequest.labels ?? [])
               .map((label) => label?.name)
               .filter((name): name is string => typeof name === 'string'),
+            headRef: pullRequest.head?.ref ?? null,
           };
         });
+
+  const fetchLaneManifestAtHead = deps.fetchLaneManifestAtHead ?? (async () => null);
 
   // Fetches that do not depend on the live head SHA go first.
   const requiredChecks = await fetchRequiredCheckContexts(input);
@@ -307,14 +384,8 @@ export async function evaluatePreMergeAuthorization(
   // fetches above is still caught rather than evaluated against stale state.
   // Labels ride along on the same fetch so the tier and the head SHA are read
   // from one instant -- a relabel racing the decision cannot split them.
-  const { headSha, labels } = await fetchPullRequestState(input);
-  const tier = resolveTierFromLabels(labels);
-  const verdictRequired = pmVerdictRequiredForTier(tier);
-  const tierReceipt: TierReceipt = {
-    resolved: tier,
-    source: tier ? 'pr_labels' : 'unresolved',
-    pmVerdictRequired: verdictRequired,
-  };
+  const { headSha, labels, headRef } = await fetchPullRequestState(input);
+  const labelTier = resolveTierFromLabels(labels);
 
   if (!headSha) {
     return {
@@ -322,7 +393,14 @@ export async function evaluatePreMergeAuthorization(
       headSha: '',
       requiredChecks: [],
       pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: false },
-      tier: tierReceipt,
+      tier: {
+        resolved: null,
+        source: 'unresolved',
+        labelTier,
+        labelDisagreement: false,
+        mergeGateGreenOnHead: false,
+        pmVerdictRequired: true,
+      },
       authorized: false,
       reason: "could not resolve the pull request's current head SHA",
     };
@@ -358,6 +436,36 @@ export async function evaluatePreMergeAuthorization(
       `required checks missing or failing on head ${headSha}: ${requiredCheckResult.missing.join(', ')}`,
     );
   }
+  // Authoritative tier comes from the lane manifest AT THIS HEAD, never from
+  // the mutable PR label. Any failure to read it leaves manifestTier null,
+  // which fails closed to requiring a verdict.
+  let manifestTier: MergeAuthorityTier | null = null;
+  const issueId = headRef ? issueIdFromHeadRef(headRef) : null;
+  if (issueId) {
+    try {
+      manifestTier = resolveTierFromManifest(
+        await fetchLaneManifestAtHead({ ...input, issueId, headSha }),
+      );
+    } catch {
+      manifestTier = null;
+    }
+  }
+
+  const mergeGateGreenOnHead = isMergeGateGreenOnHead(receiptChecks);
+  const verdictRequired = pmVerdictRequiredForTier({
+    manifestTier,
+    labelTier,
+    mergeGateGreenOnHead,
+  });
+  const tierReceipt: TierReceipt = {
+    resolved: manifestTier,
+    source: manifestTier ? 'lane_manifest' : 'unresolved',
+    labelTier,
+    labelDisagreement: labelTier !== null && manifestTier !== null && labelTier !== manifestTier,
+    mergeGateGreenOnHead,
+    pmVerdictRequired: verdictRequired,
+  };
+
   // Verdict defects only block when the tier actually requires a verdict.
   // On T2/T3 they are still recorded in the receipt's pmVerdict block for
   // diagnostics, but they are not merge-blocking reasons -- surfacing a
@@ -409,7 +517,14 @@ async function runCli(): Promise<void> {
       headSha: null,
       requiredChecks: [],
       pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: false },
-      tier: { resolved: null, source: 'unresolved', pmVerdictRequired: true },
+      tier: {
+        resolved: null,
+        source: 'unresolved',
+        labelTier: null,
+        labelDisagreement: false,
+        mergeGateGreenOnHead: false,
+        pmVerdictRequired: true,
+      },
     });
     process.exitCode = 1;
     return;
