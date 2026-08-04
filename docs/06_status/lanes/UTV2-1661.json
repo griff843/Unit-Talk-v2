@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1661",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1661-tier-aware-merge-authorization",
+  "branch": "codex/utv2-1661-tier-aware-merge-authorization",
+  "base_branch": "main",
+  "commit_sha": "f5c5fa44c6f663721c360337ba0e8558c93de920",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1379",
+  "files_changed": [
+    ".ops/sync/UTV2-1661.yml",
+    "docs/06_status/lanes/UTV2-1661.json",
+    "docs/06_status/proof/UTV2-1661/.gitkeep",
+    "docs/06_status/proof/UTV2-1661/diff-summary.md",
+    "docs/06_status/proof/UTV2-1661/verification.md",
+    "scripts/ops/pre-merge-authorization.test.ts",
+    "scripts/ops/pre-merge-authorization.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1661.yml",
+    "docs/06_status/lanes/UTV2-1661.json",
+    "docs/06_status/proof/UTV2-1661/**",
+    "scripts/ops/pre-merge-authorization.test.ts",
+    "scripts/ops/pre-merge-authorization.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1661/diff-summary.md",
+    "docs/06_status/proof/UTV2-1661/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-08-03T13:56:11.008Z",
+  "heartbeat_at": "2026-08-04T19:48:04.065Z",
+  "closed_at": "2026-08-04T19:48:04.065Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-04T19:48:01.866Z",
+      "verdict": "pass",
+      "merge_sha": "f5c5fa44c6f663721c360337ba0e8558c93de920",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1661-tier-aware-merge-authorization",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  }
+}
