@@ -4,47 +4,33 @@
   "lane_type": "governance",
   "executor": "claude",
   "tier": "T2",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-lifecycle-resource-release",
-  "branch": "claude/utv2-1619-lifecycle-resource-release",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-truth-gated-lifecycle-completion",
+  "branch": "claude/utv2-1619-truth-gated-lifecycle-completion",
   "base_branch": "main",
-  "commit_sha": "d2f371be10b9f82ba489e40139bc96f4c896e905",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1387",
+  "commit_sha": null,
+  "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    ".ops/sync/UTV2-1619.yml",
-    "docs/06_status/lanes/UTV2-1619.json",
-    "docs/06_status/proof/UTV2-1619",
-    "scripts/ops/concurrency-rules.test.ts",
-    "scripts/ops/concurrency-rules.ts",
-    "scripts/ops/lease-registry.test.ts",
-    "scripts/ops/lease-registry.ts",
-    "scripts/ops/shared.test.ts",
-    "scripts/ops/shared.ts"
+    ".github/workflows/linear-auto-close.yml",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1619/diff-summary.md",
     "docs/06_status/proof/UTV2-1619/verification.md"
   ],
-  "status": "done",
-  "started_at": "2026-08-05T13:21:42.042Z",
-  "heartbeat_at": "2026-08-05T17:38:37.129Z",
-  "closed_at": "2026-08-05T17:38:37.129Z",
+  "status": "started",
+  "started_at": "2026-08-05T19:59:32.474Z",
+  "heartbeat_at": "2026-08-05T19:59:32.474Z",
+  "closed_at": null,
   "blocked_by": [],
-  "preflight_token": "dispatch-auto",
+  "preflight_token": ".out/ops/preflight/claude/utv2-1619-truth-gated-lifecycle-completion.json",
   "created_by": "claude",
-  "truth_check_history": [
-    {
-      "checked_at": "2026-08-05T17:38:35.350Z",
-      "verdict": "pass",
-      "merge_sha": "d2f371be10b9f82ba489e40139bc96f4c896e905",
-      "failures": [],
-      "runner": "ops:lane-close"
-    }
-  ],
+  "truth_check_history": [],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-lifecycle-resource-release",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-truth-gated-lifecycle-completion",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true

@@ -4,8 +4,8 @@
   "issue_id": "UTV2-1619",
   "lane_type": "governance",
   "tier": "T2",
-  "branch": "claude/utv2-1619-lifecycle-resource-release",
-  "admitted_at": "2026-08-05T13:21:42.053Z",
+  "branch": "claude/utv2-1619-truth-gated-lifecycle-completion",
+  "admitted_at": "2026-08-05T19:59:32.479Z",
   "authorization": {
     "issue_id": "UTV2-1619",
     "lane_type": "governance",
@@ -19,7 +19,7 @@
   "authorization_source": {
     "path": "docs/governance/BOOTSTRAP_AUTHORIZATIONS.json",
     "ref": "origin/main",
-    "sha": "c499719f8dcd577164c50b2ba63cfe224d7141c0"
+    "sha": "ff7c7da1bcb135d50a686428f90fce68dcf18915"
   },
   "suppressed_violations": [
     {
@@ -28,7 +28,7 @@
     },
     {
       "code": "claude_cap_exceeded",
-      "message": "Claude active lanes (11) is at the cap of 4. Close a Claude lane before starting another."
+      "message": "Claude active lanes (8) is at the cap of 4. Close a Claude lane before starting another."
     },
     {
       "code": "governance_type_cap_exceeded",
