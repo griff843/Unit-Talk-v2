@@ -15,7 +15,13 @@ ASSERTIONS:
 - [x] A bootstrap governance identity supplies Merge Gate's tier only when no lane manifest
       resolves one, and can never override, weaken, or shadow a real manifest.
 - [x] An invalid or invented tier invalidates the authorization file rather than defaulting.
-- [x] Merge Gate reports a bootstrap admission distinctly and never passes it silently.
+- [x] Merge Gate reports a bootstrap admission distinctly and never passes it silently, and
+      names whether the identity came from base (canonical) or the PR head (bootstrap
+      transition).
+- [x] Base is consulted before head; head is read only when base has nothing, only for the
+      single initial bootstrap issue, and only when every changed file is inside a strict
+      allowlist containing no application or runtime path.
+- [x] Failure to enumerate the PR diff refuses head-read rather than allowing it.
 - [x] A bootstrap admission writes a durable, committed receipt recording the grant verbatim,
       the exact commit it was read from, the suppressed violations, and the board.
 - [x] No production, runtime, migration, or delivery path is touched. The only workflow
@@ -53,11 +59,12 @@ LINT_EXIT=0
 
 ```
 blocks reporting a nonzero '# fail': 0
-aggregate pass=4495 fail=0
+aggregate pass=4502 fail=0
 TEST_EXIT=0
 ```
 
-The 4495 aggregate is 4473 baseline plus the 22 tests added here.
+The 4502 aggregate is 4473 baseline plus the 29 tests added here (22 for the
+authorization mechanism, 7 guarding the phase-1 head-read exception).
 
 **Correction — the first run of this suite did not execute the new tests.** They
 were initially written without being wired into any test command, so `pnpm test`
@@ -86,8 +93,8 @@ moved by exactly the expected amount:
 suite aggregate moved 4473 -> 4490, a delta of exactly 17 — the count of the tests
 that existed then — which is the direct evidence that `pnpm test` executes them
 rather than merely tolerating their existence. Capability 19 later added 5 more
-tests, taking the count to 22 and the aggregate to 4495; the same delta identity
-holds (4473 + 22 = 4495).
+tests, taking the count to 22, and the constrained head fallback added 7 more,
+taking the aggregate to 4502; the same delta identity holds (4473 + 29 = 4502).
 
 The new unit suite, as executed inside the full run:
 
@@ -181,6 +188,53 @@ from the merge ref, so this change applies to this PR itself; the `checkout` ste
 pins `base.sha`, which governs checked-out files only. Logic placed in a script
 file would have been read from base and been inert here — the same stale-source
 class as a re-run replaying its original event payload.
+
+## Two-phase authority resolution, and why head-read is constrained
+
+An earlier revision of this change read the bootstrap identity from the PR head
+before base. That was wrong, and it was wrong in the exact way this issue exists
+to prevent: **a PR must not be able to introduce its own authority artifact and
+use that artifact to authorize itself.** A manifest-less PR could have added
+`BOOTSTRAP_AUTHORIZATIONS.json` declaring `T3` and converted "cannot merge at
+all" into "merges under T3 rules with no PM verdict".
+
+Base-only reading is the correct steady-state rule, but it recreates the
+deadlock: the artifact cannot reach base until the PR introducing it merges.
+
+The resolution is a lifecycle rather than a single rule:
+
+```
+Phase 1  bootstrap introduction  (head-scoped, constrained)
+Phase 2  bootstrap operation     (base/main-scoped, canonical)
+Phase 3  bootstrap retirement    (no active grants)
+```
+
+Phase 1 is permitted only when **every** one of these holds:
+
+* no lane manifest resolved a tier;
+* the artifact is absent from base and present on head;
+* the issue is exactly the single declared initial-bootstrap issue;
+* `lane_type` is `governance` and the tier is valid;
+* **every changed file in the PR is inside a strict allowlist** — the
+  authorization artifact, the Merge Gate resolution logic, the bootstrap
+  mechanism, its tests, and its proof artifacts. No application or runtime path
+  is allowlisted.
+
+If the diff cannot be enumerated, head-read is refused rather than allowed — an
+unprovable scope is not a satisfied one.
+
+Phase 2 begins the moment this PR merges: base carries the artifact, base is
+consulted first, and the head copy is never read again. Retirement of the phase-1
+branch is tracked as its own issue, so a temporary bridge cannot quietly become a
+permanent loophole.
+
+`scripts/ops/bootstrap-head-fallback-guard.test.ts` pins the exception in place:
+7 assertions covering the issue pin, the exact allowlist contents, the absence of
+any application/runtime path, the issue-scoped proof prefix, base-before-head
+ordering, source disclosure in the verdict, and fail-closed behavior on diff
+enumeration failure. The constraint lives in inline workflow JavaScript that no
+unit test would otherwise execute, so widening it now requires deliberately
+editing an assertion.
 
 ## Admission receipt
 

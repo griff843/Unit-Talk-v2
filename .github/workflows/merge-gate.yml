@@ -281,7 +281,37 @@ jobs:
               //
               // Deliberately narrow: consulted ONLY when no real manifest resolved
               // a tier, so it can never override, weaken, or shadow a genuine lane.
+              //
+              // TWO-PHASE AUTHORITY RESOLUTION (PM, 2026-08-05).
+              //   Phase 1 -- bootstrap introduction: the artifact does not exist on
+              //     base yet, because the PR introducing it is the one that needs it.
+              //     Reading it from the PR head is a self-declared authority, so it is
+              //     permitted ONLY under the hard constraints below, and it is
+              //     announced in the verdict rather than applied silently.
+              //   Phase 2 -- bootstrap operation: the artifact is on base. Base is
+              //     canonical and the head copy is never consulted.
+              //   Phase 3 -- retirement: no active grants remain.
+              // A PR must never be able to introduce its own authority artifact and
+              // use it to authorize itself. Phase 1 is the single, narrowly-bounded
+              // exception that exists only so the bridge can be built; it is scoped to
+              // one issue and one diff shape, and is removed once base carries it.
+              const BOOTSTRAP_INTRODUCTION_ISSUE = 'UTV2-1619';
+              // Strict changed-file allowlist for the phase-1 transition. Anything
+              // outside this set refuses head-read entirely -- no application or
+              // runtime file may ride in on a self-declared authority.
+              const BOOTSTRAP_ALLOWED_FILES = new Set([
+                'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
+                '.github/workflows/merge-gate.yml',
+                'scripts/ops/bootstrap-authorization.ts',
+                'scripts/ops/bootstrap-authorization.test.ts',
+                'scripts/ops/bootstrap-head-fallback-guard.test.ts',
+                'scripts/ops/lane-start.ts',
+                'package.json',
+              ]);
+              const BOOTSTRAP_ALLOWED_PREFIXES = ['docs/06_status/proof/UTV2-1619/'];
+
               let bootstrapIdentity = null;
+              let bootstrapSource = null;
               if (!authoritativeTier && issueId) {
                 async function readBootstrapAuthorizations(ref) {
                   if (!ref) return null;
@@ -298,8 +328,56 @@ jobs:
                     throw error;
                   }
                 }
-                const doc = await readBootstrapAuthorizations(headSha)
-                  || await readBootstrapAuthorizations(baseSha);
+
+                // Base first, always. Head is consulted only when base has nothing.
+                let doc = await readBootstrapAuthorizations(baseSha);
+                let candidateSource = doc ? 'base' : null;
+
+                if (!doc) {
+                  const headDoc = await readBootstrapAuthorizations(headSha);
+                  if (headDoc) {
+                    // Phase 1 gate. Every condition must hold or head-read is refused.
+                    const introductionIssueOk = issueId === BOOTSTRAP_INTRODUCTION_ISSUE;
+                    let diffScopeOk = true;
+                    const offendingFiles = [];
+                    try {
+                      const changed = await github.paginate(github.rest.pulls.listFiles, {
+                        owner, repo, pull_number: prNumber, per_page: 100,
+                      });
+                      for (const file of changed) {
+                        const name = file.filename;
+                        const allowed = BOOTSTRAP_ALLOWED_FILES.has(name)
+                          || BOOTSTRAP_ALLOWED_PREFIXES.some(prefix => name.startsWith(prefix));
+                        if (!allowed) { diffScopeOk = false; offendingFiles.push(name); }
+                      }
+                    } catch (error) {
+                      // Cannot enumerate the diff -> cannot prove scope -> refuse.
+                      diffScopeOk = false;
+                      offendingFiles.push(`<diff enumeration failed: ${error.message}>`);
+                    }
+
+                    if (!introductionIssueOk) {
+                      errors.push(
+                        `A bootstrap identity was found on the PR head but not on base. Head-read is ` +
+                        `permitted only for the initial governance bootstrap of ` +
+                        `${BOOTSTRAP_INTRODUCTION_ISSUE}; this PR is for ${issueId}. A PR may not ` +
+                        `introduce its own authority artifact and use it to authorize itself.`
+                      );
+                    } else if (!diffScopeOk) {
+                      errors.push(
+                        `A bootstrap identity was found on the PR head but not on base, and the PR ` +
+                        `changes files outside the bootstrap allowlist: ${offendingFiles.join(', ')}. ` +
+                        `The initial bootstrap transition may only touch the authorization artifact, ` +
+                        `the Merge Gate resolution logic, the bootstrap mechanism, its tests, and its ` +
+                        `proof artifacts.`
+                      );
+                    } else {
+                      doc = headDoc;
+                      candidateSource = 'head';
+                    }
+                  }
+                }
+                bootstrapSource = candidateSource;
                 const entries = doc && Array.isArray(doc.authorizations) ? doc.authorizations : [];
                 const now = Date.now();
                 const active = entries.filter(entry => {
@@ -357,6 +435,21 @@ jobs:
                   `expires ${bootstrapIdentity.expires_at}. Milestone: ${bootstrapIdentity.milestone}. ` +
                   `This is not normal lane admission and does not assert that a lane exists.`
                 );
+                // The source is the trust-relevant fact and must never be implicit.
+                if (bootstrapSource === 'head') {
+                  notes.push(
+                    `Source: PR HEAD bootstrap artifact (not base). Reason: initial governance ` +
+                    `bootstrap transition -- the artifact cannot exist on base until this PR merges. ` +
+                    `This is a self-declared authority, permitted here ONLY because the issue is ` +
+                    `${BOOTSTRAP_INTRODUCTION_ISSUE} and every changed file falls inside the bootstrap ` +
+                    `allowlist. Once this PR merges, base carries the artifact and head is never ` +
+                    `consulted again; the head fallback is scheduled for removal.`
+                  );
+                } else {
+                  notes.push(
+                    `Source: base bootstrap artifact (canonical). The PR head copy was not consulted.`
+                  );
+                }
               }
 
               // ── 5. Verify GitHub tier evidence mirrors manifest ─────
