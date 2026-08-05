@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-lifecycle-resource-release",
   "branch": "claude/utv2-1619-lifecycle-resource-release",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "d2f371be10b9f82ba489e40139bc96f4c896e905",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1387",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1619.yml",
@@ -25,14 +25,22 @@
     "docs/06_status/proof/UTV2-1619/diff-summary.md",
     "docs/06_status/proof/UTV2-1619/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-08-05T13:21:42.042Z",
-  "heartbeat_at": "2026-08-05T13:21:42.042Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-05T17:38:37.129Z",
+  "closed_at": "2026-08-05T17:38:37.129Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1619-lifecycle-resource-release.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-05T17:38:35.350Z",
+      "verdict": "pass",
+      "merge_sha": "d2f371be10b9f82ba489e40139bc96f4c896e905",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

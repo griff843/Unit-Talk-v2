@@ -1,6 +1,6 @@
 # UTV2-1619 diff summary — capability 13: lifecycle capacity + resource release
 
-MERGE_SHA: c499719f8dcd577164c50b2ba63cfe224d7141c0
+MERGE_SHA: d2f371be10b9f82ba489e40139bc96f4c896e905
 
 - `shared.ts`: added truthful terminal states `failed`, `superseded`, `cancelled` and a
   `parked` state, with transitions from every in-flight state and no direct path into

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1619 — capability 13: lifecycle capacity and resource release
 
-MERGE_SHA: c499719f8dcd577164c50b2ba63cfe224d7141c0
+MERGE_SHA: d2f371be10b9f82ba489e40139bc96f4c896e905
 
 ASSERTIONS:
 - [x] Truthful terminal states exist: `failed`, `superseded`, `cancelled`, plus `parked`.
