@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
-  "_doc": "Governance bootstrap authorizations (UTV2-1619 capability 18). Each entry admits exactly ONE named governance lane past the concurrency caps. This is not a cap increase: a raised cap admits any lane that asks, an authorization admits only the issue it names. Entries are read from origin/main by scripts/ops/bootstrap-authorization.ts and are never read from a working tree, so a branch cannot grant itself admission. At most one entry may be unexpired at a time; a second active entry refuses every lane rather than being resolved by precedence. Remove an entry through a governance PR once its milestone completes -- do not let it sit until it lapses.",
+  "_doc": "Governance bootstrap authorizations (UTV2-1619 capabilities 18 and 19). Each entry is a BOOTSTRAP GOVERNANCE IDENTITY: it admits exactly one named governance lane past the concurrency caps, and supplies the tier that Merge Gate needs when no lane manifest exists yet. It is NOT a lane manifest and must never be treated as one -- it records that governance self-repair was authorized, without pretending normal lane admission occurred. This is not a cap increase: a raised cap admits any lane that asks, an authorization admits only the issue it names. Entries are read from origin/main by scripts/ops/bootstrap-authorization.ts and are never read from a working tree, so a branch cannot grant itself admission. A bootstrap identity is accepted only when no real lane manifest exists; it can never override one. At most one entry may be unexpired at a time; a second active entry refuses every lane rather than being resolved by precedence. Remove an entry through a governance PR once its milestone completes, and verify its absence -- a lapsed-but-present entry reads identically to an active one.",
   "authorizations": [
     {
       "issue_id": "UTV2-1619",
       "lane_type": "governance",
+      "tier": "T2",
       "authorized_by": "griff843",
       "authorized_at": "2026-08-05",
       "expires_at": "2026-09-05",

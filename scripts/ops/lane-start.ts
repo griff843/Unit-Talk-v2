@@ -53,9 +53,11 @@ export type { ConcurrencyViolation, IncomingLaneScope } from './concurrency-rule
 import { checkConcurrencyLimits } from './concurrency-rules.js';
 import {
   BOOTSTRAP_AUTHORIZATIONS_PATH,
+  buildBootstrapAdmissionReceipt,
   evaluateBootstrapAuthorization,
   partitionViolations,
   readAuthorizationsFromMain,
+  resolveAuthorizationSourceSha,
   type BootstrapAuthorization,
 } from './bootstrap-authorization.js';
 
@@ -719,6 +721,42 @@ function main(): void {
     if (!fs.existsSync(worktreeProofGitkeep)) {
       fs.writeFileSync(worktreeProofGitkeep, '', 'utf8');
     }
+    // UTV2-1619 capability 19: a bootstrap admission leaves a durable, committed
+    // receipt on the lane branch. The JSON emitted to stdout is ephemeral -- if
+    // the only record of an out-of-caps admission is a terminal scrollback, the
+    // audit trail cannot be closed later. The receipt records the grant verbatim,
+    // the exact commit it was read from, the violations it suppressed, and the
+    // board the decision was made against.
+    const bootstrapReceiptRelPath = `docs/06_status/proof/${issueId}/bootstrap-admission-receipt.json`;
+    if (bootstrapAuthorization !== null) {
+      const suppressed = concurrencyViolations
+        .filter((violation) => !effectiveViolations.includes(violation))
+        .map((violation) => ({ code: violation.code, message: violation.message }));
+      const receipt = buildBootstrapAdmissionReceipt({
+        authorization: bootstrapAuthorization,
+        laneType: canonicalLaneType,
+        branch,
+        admittedAt: new Date().toISOString(),
+        sourceSha: resolveAuthorizationSourceSha(ROOT),
+        suppressed,
+        remaining: effectiveViolations.map((violation) => ({
+          code: violation.code,
+          message: violation.message,
+        })),
+        board: activeLaneDiscovery.lanes.map((lane) => ({
+          issue_id: lane.manifest.issue_id,
+          lane_type: lane.manifest.lane_type,
+          executor: lane.manifest.executor,
+          status: lane.manifest.status,
+          source: lane.source,
+          ...(lane.prNumber === undefined ? {} : { pr_number: lane.prNumber }),
+        })),
+      });
+      const receiptPath = path.join(worktreePath, bootstrapReceiptRelPath);
+      fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
+      fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    }
+
     spawnSync(
       'git',
       [
@@ -726,6 +764,7 @@ function main(): void {
         `docs/06_status/lanes/${issueId}.json`,
         `.ops/sync/${issueId}.yml`,
         `docs/06_status/proof/${issueId}/.gitkeep`,
+        ...(bootstrapAuthorization === null ? [] : [bootstrapReceiptRelPath]),
       ],
       { cwd: worktreePath, stdio: 'inherit' }
     );
@@ -764,6 +803,7 @@ function main(): void {
               expires_at: bootstrapAuthorization.expires_at,
               milestone: bootstrapAuthorization.milestone,
               source: `main:${BOOTSTRAP_AUTHORIZATIONS_PATH}`,
+              receipt_path: bootstrapReceiptRelPath,
               suppressed_violations: concurrencyViolations
                 .filter((violation) => !effectiveViolations.includes(violation))
                 .map((violation) => ({ code: violation.code, message: violation.message })),

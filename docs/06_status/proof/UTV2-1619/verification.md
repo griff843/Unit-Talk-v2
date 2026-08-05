@@ -1,4 +1,4 @@
-# PROOF: UTV2-1619 — governance bootstrap authorization (capability 18)
+# PROOF: UTV2-1619 — governance bootstrap authorization and identity (capabilities 18, 19)
 
 MERGE_SHA: 9722ef7120fcb98f7287a7d5ab03fbbe65813fa2
 
@@ -12,7 +12,14 @@ ASSERTIONS:
 - [x] The grant is read from `origin/main`, never the working tree, so a branch cannot
       grant itself admission.
 - [x] An authorized admission is recorded in `lane-start` output with the suppressed violations.
-- [x] No production, runtime, migration, workflow, or delivery path is touched.
+- [x] A bootstrap governance identity supplies Merge Gate's tier only when no lane manifest
+      resolves one, and can never override, weaken, or shadow a real manifest.
+- [x] An invalid or invented tier invalidates the authorization file rather than defaulting.
+- [x] Merge Gate reports a bootstrap admission distinctly and never passes it silently.
+- [x] A bootstrap admission writes a durable, committed receipt recording the grant verbatim,
+      the exact commit it was read from, the suppressed violations, and the board.
+- [x] No production, runtime, migration, or delivery path is touched. The only workflow
+      change is Merge Gate's tier resolution.
 
 EVIDENCE:
 
@@ -45,11 +52,12 @@ LINT_EXIT=0
 ### `pnpm test`
 
 ```
-TAP summary blocks: 97
 blocks reporting a nonzero '# fail': 0
-aggregate pass=4490 fail=0
+aggregate pass=4495 fail=0
 TEST_EXIT=0
 ```
+
+The 4495 aggregate is 4473 baseline plus the 22 tests added here.
 
 **Correction — the first run of this suite did not execute the new tests.** They
 were initially written without being wired into any test command, so `pnpm test`
@@ -74,18 +82,20 @@ moved by exactly the expected amount:
 [executable-wiring] tests total=466 required-reachable=311 unwired=119 (baselined=119 new=0)
 ```
 
-`required-reachable` 310 -> 311, `unwired` 120 -> 119, `new=0`. The suite
-aggregate moved 4473 -> 4490, a delta of exactly 17 — the count of the new
-tests — which is the direct evidence that `pnpm test` now executes them rather
-than merely tolerating their existence.
+`required-reachable` 310 -> 311, `unwired` 120 -> 119, `new=0`. At that moment the
+suite aggregate moved 4473 -> 4490, a delta of exactly 17 — the count of the tests
+that existed then — which is the direct evidence that `pnpm test` executes them
+rather than merely tolerating their existence. Capability 19 later added 5 more
+tests, taking the count to 22 and the aggregate to 4495; the same delta identity
+holds (4473 + 22 = 4495).
 
 The new unit suite, as executed inside the full run:
 
 ```
-1..17
-# tests 17
+1..22
+# tests 22
 # suites 0
-# pass 17
+# pass 22
 # fail 0
 # cancelled 0
 # skipped 0
@@ -96,7 +106,22 @@ Coverage is deliberately weighted toward refusal rather than admission — a gra
 that admits too much is the failure mode that matters here. BA-3 through BA-14
 are all refusals: wrong issue, wrong lane type in either direction, expired,
 boundary-expired, unparseable expiry, missing file, malformed JSON, entry missing
-a required field, two active grants, and an empty grant list.
+a required field, two active grants, and an empty grant list. BA-18 and BA-19 add
+tier refusals: a missing tier, and invented tiers (`T4`, `TX`, `high`, `2`, empty)
+each invalidate the file rather than defaulting to one.
+
+### Workflow validation
+
+`merge-gate.yml` carries the only workflow change. Both its YAML and its embedded
+`github-script` body were validated before push:
+
+```
+YAML OK, jobs: ['gate', 'wfr-validators']
+gate script#1: OK        (node --check on the extracted script body)
+```
+
+This matters more than usual: Merge Gate is a required check for every PR in the
+repository, so a syntax error here would block the whole repo, not just this lane.
 
 ### R-level check (`scripts/ci/r-level-check.ts`)
 
@@ -117,6 +142,64 @@ runs `pnpm verify` on this PR's head, and that run is the authoritative one.
 `pnpm test:db` was not executed. This change is governance tooling with no
 database access, and production is parked. No live-DB proof is claimed and none
 is required at this tier.
+
+## Capability 19: bootstrap governance identity
+
+The lane system could not bootstrap itself. Merge Gate errors unconditionally on a
+missing authoritative tier:
+
+```js
+if (!authoritativeTier) {
+  errors.push('No authoritative lane manifest tier found ...');
+}
+```
+
+The only producer of a lane manifest is `ops:lane-start`, and `lane-start` refuses
+when the caps are exhausted. So the change that repairs admission could never
+merge — verified by grep to have no skip, exempt, or bootstrap path, and
+unavoidable by any branch naming, since a branch without an issue ID merely adds a
+second error.
+
+A bootstrap governance identity resolves this **without fabricating a lane
+manifest**. It supplies the tier, and records that governance self-repair was
+authorized, rather than pretending normal lane admission occurred.
+
+Deliberately narrow:
+
+* consulted **only** when no real manifest resolved a tier, so it can never
+  override, weaken, or shadow a genuine lane;
+* `lane_type` must be `governance` and the tier must be one of `T1`/`T2`/`T3`;
+* expiry is required, and more than one live identity fails closed in the gate
+  exactly as it does in `lane-start`;
+* the verdict is reported distinctly — title `Merge Gate: APPROVED (bootstrap
+  identity)`, plus a governance note naming the authorizer, expiry and milestone,
+  and stating that this is not normal lane admission.
+
+The recognition is inline in `merge-gate.yml` rather than in a script file, and
+that is load-bearing. For `pull_request` events the workflow *definition* comes
+from the merge ref, so this change applies to this PR itself; the `checkout` step
+pins `base.sha`, which governs checked-out files only. Logic placed in a script
+file would have been read from base and been inert here — the same stale-source
+class as a re-run replaying its original event payload.
+
+## Admission receipt
+
+An admission fact that exists only in stdout cannot close an audit trail. A
+bootstrap admission therefore writes
+`docs/06_status/proof/<ISSUE>/bootstrap-admission-receipt.json`, committed with the
+lane apparatus, recording:
+
+* the grant verbatim as it read at admission;
+* `authorization_source.sha` — the exact `main` commit it was read from, so the
+  grant can be re-verified later even if the file is subsequently edited or
+  removed;
+* `suppressed_violations` and `remaining_violations` as separate fields, so a
+  reader can confirm the authorization only ever touched capacity;
+* the board the decision was made against;
+* a `note` stating in words that normal lane admission did not occur.
+
+An unresolvable source SHA is recorded as `null` rather than omitted, so a receipt
+never silently looks complete.
 
 ## Design note: why this is not a bypass
 

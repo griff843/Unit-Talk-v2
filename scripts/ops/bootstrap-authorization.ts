@@ -47,9 +47,20 @@ const SUPPRESSIBLE_VIOLATION_CODES = new Set([
 /** The only lane type a bootstrap authorization may ever admit. */
 const ALLOWED_LANE_TYPE = 'governance';
 
+/** Tiers a bootstrap identity may declare. */
+const VALID_TIERS = new Set(['T1', 'T2', 'T3']);
+
 export interface BootstrapAuthorization {
   issue_id: string;
   lane_type: string;
+  /**
+   * UTV2-1619 capability 19: the tier Merge Gate resolves when no lane manifest
+   * exists. This is what makes the artifact a *governance identity* rather than
+   * only an admission grant -- without it, a bootstrap PR is unmergeable, since
+   * Merge Gate errors unconditionally on a missing authoritative tier and the
+   * only producer of a lane manifest is the `lane-start` the caps refuse.
+   */
+  tier: string;
   authorized_by: string;
   authorized_at: string;
   expires_at: string;
@@ -95,6 +106,92 @@ export function readAuthorizationsFromMain(cwd: string): string | null {
   return null;
 }
 
+/**
+ * Resolve the exact commit the authorization was read from.
+ *
+ * Recorded in the admission receipt so the grant can be re-verified later
+ * against the precise content that authorized the admission. Without it, a
+ * receipt names an authorization whose text may since have been edited or
+ * removed, and the audit trail cannot be closed.
+ */
+export function resolveAuthorizationSourceSha(cwd: string): string | null {
+  for (const ref of ['origin/main', 'main']) {
+    try {
+      return execFileSync('git', ['rev-parse', ref], {
+        cwd,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      // fall through
+    }
+  }
+  return null;
+}
+
+export interface BootstrapAdmissionReceipt {
+  schema_version: 1;
+  kind: 'bootstrap_admission_receipt';
+  issue_id: string;
+  lane_type: string;
+  tier: string;
+  branch: string;
+  admitted_at: string;
+  /** The grant, copied verbatim, as it read at admission time. */
+  authorization: BootstrapAuthorization;
+  authorization_source: {
+    path: string;
+    ref: string;
+    /** Commit the grant was read from; null if it could not be resolved. */
+    sha: string | null;
+  };
+  /** Cap violations the authorization suppressed. Never structural ones. */
+  suppressed_violations: { code: string; message: string }[];
+  /** Violations that still had to pass on their own merits. */
+  remaining_violations: { code: string; message: string }[];
+  /** The board the admission decision was made against. */
+  board_at_admission: unknown;
+  /**
+   * Stated plainly so a later reader cannot mistake this for a normal
+   * admission, which is the entire point of a bootstrap identity.
+   */
+  note: string;
+}
+
+export function buildBootstrapAdmissionReceipt(input: {
+  authorization: BootstrapAuthorization;
+  laneType: string;
+  branch: string;
+  admittedAt: string;
+  sourceSha: string | null;
+  suppressed: { code: string; message: string }[];
+  remaining: { code: string; message: string }[];
+  board: unknown;
+}): BootstrapAdmissionReceipt {
+  return {
+    schema_version: 1,
+    kind: 'bootstrap_admission_receipt',
+    issue_id: input.authorization.issue_id,
+    lane_type: input.laneType,
+    tier: input.authorization.tier,
+    branch: input.branch,
+    admitted_at: input.admittedAt,
+    authorization: input.authorization,
+    authorization_source: {
+      path: BOOTSTRAP_AUTHORIZATIONS_PATH,
+      ref: 'origin/main',
+      sha: input.sourceSha,
+    },
+    suppressed_violations: input.suppressed,
+    remaining_violations: input.remaining,
+    board_at_admission: input.board,
+    note:
+      'This lane was admitted under a bootstrap governance identity, not under the ' +
+      'concurrency caps. It does not assert that normal lane admission occurred. Only ' +
+      'capacity violations were suppressed; every structural rule was applied unchanged.',
+  };
+}
+
 export function parseAuthorizations(raw: string): BootstrapAuthorization[] | null {
   let parsed: unknown;
   try {
@@ -109,6 +206,7 @@ export function parseAuthorizations(raw: string): BootstrapAuthorization[] | nul
   const required: (keyof BootstrapAuthorization)[] = [
     'issue_id',
     'lane_type',
+    'tier',
     'authorized_by',
     'authorized_at',
     'expires_at',
@@ -123,6 +221,11 @@ export function parseAuthorizations(raw: string): BootstrapAuthorization[] | nul
       const value = record[field];
       if (typeof value !== 'string' || value.trim() === '') return null;
     }
+    // An unrecognised tier fails the whole file rather than defaulting. A
+    // bootstrap identity supplies the tier Merge Gate would otherwise read from
+    // a lane manifest, so a wrong or invented tier would silently move a PR
+    // between verification regimes.
+    if (!VALID_TIERS.has(String(record['tier']).toUpperCase())) return null;
     out.push(record as unknown as BootstrapAuthorization);
   }
   return out;

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  buildBootstrapAdmissionReceipt,
   evaluateBootstrapAuthorization,
   parseAuthorizations,
   partitionViolations,
@@ -14,6 +15,7 @@ function grant(overrides: Partial<BootstrapAuthorization> = {}): BootstrapAuthor
   return {
     issue_id: 'UTV2-1619',
     lane_type: 'governance',
+    tier: 'T2',
     authorized_by: 'griff843',
     authorized_at: '2026-08-05',
     expires_at: '2026-09-05',
@@ -183,6 +185,47 @@ test('BA-14: an empty authorizations array authorizes nothing', () => {
   assert.equal(result.authorized === false && result.code, 'no_authorization_for_issue');
 });
 
+test('BA-18: a missing tier invalidates the file (capability 19)', () => {
+  const raw = JSON.stringify({
+    schema_version: 1,
+    authorizations: [
+      {
+        issue_id: 'UTV2-1619',
+        lane_type: 'governance',
+        authorized_by: 'g',
+        authorized_at: '2026-08-05',
+        expires_at: '2026-09-05',
+        milestone: 'm',
+        reason: 'r',
+      },
+    ],
+  });
+  const result = evaluateBootstrapAuthorization({
+    issueId: 'UTV2-1619',
+    laneType: 'governance',
+    authorizationsRaw: raw,
+    now: NOW,
+  });
+  assert.equal(result.authorized, false);
+  assert.equal(result.authorized === false && result.code, 'malformed_authorization_file');
+});
+
+test('BA-19: an invented tier invalidates the file rather than defaulting', () => {
+  for (const tier of ['T4', 'TX', 'high', '2', '']) {
+    assert.equal(
+      parseAuthorizations(file(grant({ tier }))),
+      null,
+      `tier ${JSON.stringify(tier)} must invalidate the file`,
+    );
+  }
+});
+
+test('BA-20: a valid tier is accepted case-insensitively and preserved', () => {
+  const parsed = parseAuthorizations(file(grant({ tier: 't3' })));
+  assert.notEqual(parsed, null);
+  assert.equal(parsed?.[0]?.tier, 't3');
+});
+
 test('BA-15: parseAuthorizations rejects a non-array authorizations field', () => {
   assert.equal(parseAuthorizations('{"authorizations": {}}'), null);
   assert.equal(parseAuthorizations('[]'), null);
@@ -224,4 +267,44 @@ test('BA-17: partitioning an empty violation list yields two empty lists', () =>
   const { suppressible, blocking } = partitionViolations([]);
   assert.deepEqual(suppressible, []);
   assert.deepEqual(blocking, []);
+});
+
+test('BA-21: an admission receipt records the grant, its source, and the board', () => {
+  const authorization = grant();
+  const receipt = buildBootstrapAdmissionReceipt({
+    authorization,
+    laneType: 'governance',
+    branch: 'claude/utv2-1619-x',
+    admittedAt: '2026-08-05T00:00:00.000Z',
+    sourceSha: 'a'.repeat(40),
+    suppressed: [{ code: 'total_cap_exceeded', message: 'total' }],
+    remaining: [],
+    board: [{ issue_id: 'UTV2-1398', status: 'started' }],
+  });
+  assert.equal(receipt.kind, 'bootstrap_admission_receipt');
+  assert.equal(receipt.issue_id, 'UTV2-1619');
+  assert.equal(receipt.tier, 'T2');
+  assert.deepEqual(receipt.authorization, authorization);
+  assert.equal(receipt.authorization_source.sha, 'a'.repeat(40));
+  assert.equal(receipt.authorization_source.path, 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json');
+  assert.deepEqual(receipt.suppressed_violations, [{ code: 'total_cap_exceeded', message: 'total' }]);
+  assert.equal(receipt.board_at_admission.length, 1);
+  // The receipt must say in words that this was not normal admission, so a later
+  // reader cannot mistake it for one.
+  assert.match(receipt.note, /not assert that normal lane admission occurred/);
+});
+
+test('BA-22: an unresolvable authorization source sha is recorded as null, not omitted', () => {
+  const receipt = buildBootstrapAdmissionReceipt({
+    authorization: grant(),
+    laneType: 'governance',
+    branch: 'b',
+    admittedAt: '2026-08-05T00:00:00.000Z',
+    sourceSha: null,
+    suppressed: [],
+    remaining: [],
+    board: [],
+  });
+  assert.equal(receipt.authorization_source.sha, null);
+  assert.ok('sha' in receipt.authorization_source);
 });

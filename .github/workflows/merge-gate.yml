@@ -223,6 +223,11 @@ jobs:
             }
 
             const errors = [];
+            // UTV2-1619 capability 19: non-blocking facts the verdict depends on
+            // and that a reviewer must see. A merge authorized under a bootstrap
+            // governance identity would otherwise pass with the same "all
+            // requirements satisfied" summary as an ordinary lane.
+            const notes = [];
             let evaluatorError = null;
 
             try {
@@ -260,17 +265,98 @@ jobs:
               }
 
               const manifest = await readManifest(headSha) || await readManifest(baseSha);
-              const authoritativeTier = manifest && /^(T1|T2|T3)$/.test(String(manifest.tier))
+              let authoritativeTier = manifest && /^(T1|T2|T3)$/.test(String(manifest.tier))
                 ? String(manifest.tier).toUpperCase()
                 : null;
+
+              // ── 4b. Bootstrap governance identity (UTV2-1619 capability 19) ──
+              // The lane system cannot bootstrap itself: Merge Gate errors
+              // unconditionally on a missing authoritative tier, the only producer
+              // of a lane manifest is `ops:lane-start`, and `lane-start` refuses
+              // when the caps are exhausted. So the change that repairs admission
+              // can never be merged. A bootstrap governance identity resolves that
+              // WITHOUT fabricating a lane manifest -- it records that governance
+              // self-repair was authorized rather than pretending normal lane
+              // admission occurred.
+              //
+              // Deliberately narrow: consulted ONLY when no real manifest resolved
+              // a tier, so it can never override, weaken, or shadow a genuine lane.
+              let bootstrapIdentity = null;
+              if (!authoritativeTier && issueId) {
+                async function readBootstrapAuthorizations(ref) {
+                  if (!ref) return null;
+                  try {
+                    const { data } = await github.rest.repos.getContent({
+                      owner, repo,
+                      path: 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
+                      ref,
+                    });
+                    if (Array.isArray(data) || !data.content) return null;
+                    return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
+                  } catch (error) {
+                    if (error.status === 404) return null;
+                    throw error;
+                  }
+                }
+                const doc = await readBootstrapAuthorizations(headSha)
+                  || await readBootstrapAuthorizations(baseSha);
+                const entries = doc && Array.isArray(doc.authorizations) ? doc.authorizations : [];
+                const now = Date.now();
+                const active = entries.filter(entry => {
+                  const expiry = Date.parse(String(entry && entry.expires_at));
+                  return Number.isFinite(expiry) && expiry > now;
+                });
+                // Accumulation is refused, not resolved: more than one live
+                // identity means "which one applied" has more than one answer.
+                if (active.length > 1) {
+                  errors.push(
+                    `${active.length} unexpired bootstrap governance identities exist. ` +
+                    'At most one may be active; expire or remove the others.'
+                  );
+                } else {
+                  const candidate = active.find(
+                    entry => String(entry.issue_id || '').toUpperCase() === issueId
+                  );
+                  if (candidate) {
+                    const candidateTier = String(candidate.tier || '').toUpperCase();
+                    if (candidate.lane_type !== 'governance') {
+                      errors.push(
+                        `Bootstrap governance identity for ${issueId} declares lane_type ` +
+                        `"${candidate.lane_type}"; only "governance" may be bootstrapped.`
+                      );
+                    } else if (!/^(T1|T2|T3)$/.test(candidateTier)) {
+                      errors.push(
+                        `Bootstrap governance identity for ${issueId} declares an invalid tier ` +
+                        `"${candidate.tier}".`
+                      );
+                    } else {
+                      authoritativeTier = candidateTier;
+                      bootstrapIdentity = candidate;
+                    }
+                  }
+                }
+              }
 
               if (!authoritativeTier) {
                 errors.push(
                   `No authoritative lane manifest tier found${issueId ? ` for ${issueId}` : ''}. ` +
                   'GitHub tier labels are evidence only and cannot authorize merge by themselves.'
                 );
-              } else if (manifest.issue_id && String(manifest.issue_id).toUpperCase() !== issueId) {
+              } else if (manifest && manifest.issue_id && String(manifest.issue_id).toUpperCase() !== issueId) {
                 errors.push(`Lane manifest issue_id ${manifest.issue_id} does not match PR issue ${issueId}.`);
+              }
+
+              // A bootstrap admission must never be silently indistinguishable
+              // from an ordinary one. Surface it in the gate's own output.
+              if (bootstrapIdentity) {
+                notes.push(
+                  `Tier ${authoritativeTier} resolved from a BOOTSTRAP GOVERNANCE IDENTITY, not a lane ` +
+                  `manifest. ${issueId} has no lane manifest because the concurrency governor refuses ` +
+                  `its admission, and the change that repairs admission cannot merge without a tier. ` +
+                  `Authorized by ${bootstrapIdentity.authorized_by} on ${bootstrapIdentity.authorized_at}, ` +
+                  `expires ${bootstrapIdentity.expires_at}. Milestone: ${bootstrapIdentity.milestone}. ` +
+                  `This is not normal lane admission and does not assert that a lane exists.`
+                );
               }
 
               // ── 5. Verify GitHub tier evidence mirrors manifest ─────
@@ -409,11 +495,16 @@ jobs:
               completed_at: new Date().toISOString(),
               output: {
                 title: passed
-                  ? 'Merge Gate: APPROVED'
+                  ? (notes.length > 0 ? 'Merge Gate: APPROVED (bootstrap identity)' : 'Merge Gate: APPROVED')
                   : 'Merge Gate: BLOCKED',
-                summary: passed
-                  ? 'All tier-appropriate merge requirements satisfied.'
-                  : `**Merge blocked:**\n\n${errors.map(e => '- ' + e).join('\n')}`
+                summary: [
+                  passed
+                    ? 'All tier-appropriate merge requirements satisfied.'
+                    : `**Merge blocked:**\n\n${errors.map(e => '- ' + e).join('\n')}`,
+                  notes.length > 0
+                    ? `\n\n**Governance notes:**\n\n${notes.map(n => '- ' + n).join('\n')}`
+                    : ''
+                ].join('')
               }
             });
 
