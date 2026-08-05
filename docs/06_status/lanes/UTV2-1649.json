@@ -29,12 +29,12 @@
     "docs/06_status/proof/UTV2-1649/verification.md",
     "docs/06_status/proof/UTV2-1649/model-routing.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-08-01T21:55:58.264Z",
-  "heartbeat_at": "2026-08-05T03:22:32.449Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-05T03:34:47.049Z",
+  "closed_at": "2026-08-05T03:34:47.049Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1649-linear-truth-sweep.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
   "truth_check_history": [
     {
@@ -56,6 +56,13 @@
       "merge_sha": "a561e00c3991c3701b4cd863a21ec4389194ee74",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-05T03:34:44.714Z",
+      "verdict": "pass",
+      "merge_sha": "a561e00c3991c3701b4cd863a21ec4389194ee74",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
