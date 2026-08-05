@@ -11,7 +11,9 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1366",
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/proof/UTV2-1649"
+    "docs/06_status/proof/UTV2-1649",
+    ".ops/sync/UTV2-1649.yml",
+    "docs/06_status/lanes/UTV2-1649.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1649/diff-summary.md",
