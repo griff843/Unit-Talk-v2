@@ -13,6 +13,9 @@ import {
   LaneManifestLookupError,
   type PreMergeAuthorizationDeps,
   type PreMergeAuthorizationInput,
+  resolveBootstrapTier,
+  isBootstrapDiffInScope,
+  BOOTSTRAP_ALLOWED_FILES,
 } from './pre-merge-authorization.js';
 import {
   evaluateRequiredCheckResults,
@@ -702,4 +705,140 @@ test('UTV2-1661 integration: the default path keeps a T1 lane strict end-to-end'
   assert.strictEqual(receipt.authorized, false);
   assert.strictEqual(receipt.tier.resolved, 'T1');
   assert.strictEqual(receipt.tier.labelDisagreement, true);
+});
+
+// ── UTV2-1619 capability 19: bootstrap identity in the merge wrapper ──────────
+// The merge wrapper is a second, independent authority. These assertions exist
+// because a bootstrap PR passed every required check and was still refused here,
+// which reintroduced the deadlock at the final step.
+
+const BOOTSTRAP_NOW = new Date('2026-08-05T00:00:00Z');
+
+function bootstrapDoc(overrides: Record<string, unknown> = {}) {
+  return {
+    authorizations: [
+      {
+        issue_id: 'UTV2-1619',
+        lane_type: 'governance',
+        tier: 'T2',
+        authorized_by: 'griff843',
+        authorized_at: '2026-08-05',
+        expires_at: '2026-09-05',
+        milestone: 'Milestone 1',
+        reason: 'admission dependency',
+        ...overrides,
+      },
+    ],
+  };
+}
+
+test('BMW-1: a matching unexpired governance identity resolves the tier', () => {
+  assert.strictEqual(
+    resolveBootstrapTier({ doc: bootstrapDoc(), issueId: 'UTV2-1619', now: BOOTSTRAP_NOW }),
+    'T2',
+  );
+});
+
+test('BMW-2: an identity for a different issue does not resolve', () => {
+  assert.strictEqual(
+    resolveBootstrapTier({ doc: bootstrapDoc(), issueId: 'UTV2-1620', now: BOOTSTRAP_NOW }),
+    null,
+  );
+});
+
+test('BMW-3: a non-governance identity does not resolve', () => {
+  assert.strictEqual(
+    resolveBootstrapTier({
+      doc: bootstrapDoc({ lane_type: 'runtime' }),
+      issueId: 'UTV2-1619',
+      now: BOOTSTRAP_NOW,
+    }),
+    null,
+  );
+});
+
+test('BMW-4: an expired identity does not resolve', () => {
+  assert.strictEqual(
+    resolveBootstrapTier({
+      doc: bootstrapDoc({ expires_at: '2026-08-04' }),
+      issueId: 'UTV2-1619',
+      now: BOOTSTRAP_NOW,
+    }),
+    null,
+  );
+});
+
+test('BMW-5: an invalid tier does not resolve', () => {
+  for (const tier of ['T4', 'high', '', 'TX']) {
+    assert.strictEqual(
+      resolveBootstrapTier({
+        doc: bootstrapDoc({ tier }),
+        issueId: 'UTV2-1619',
+        now: BOOTSTRAP_NOW,
+      }),
+      null,
+      `tier ${JSON.stringify(tier)} must not resolve`,
+    );
+  }
+});
+
+test('BMW-6: two active identities fail closed rather than selecting one', () => {
+  const doc = {
+    authorizations: [
+      ...bootstrapDoc().authorizations,
+      { ...bootstrapDoc().authorizations[0], issue_id: 'UTV2-1620' },
+    ],
+  };
+  assert.strictEqual(
+    resolveBootstrapTier({ doc, issueId: 'UTV2-1619', now: BOOTSTRAP_NOW }),
+    null,
+  );
+});
+
+test('BMW-7: a missing or empty document does not resolve', () => {
+  assert.strictEqual(resolveBootstrapTier({ doc: null, issueId: 'UTV2-1619', now: BOOTSTRAP_NOW }), null);
+  assert.strictEqual(
+    resolveBootstrapTier({ doc: { authorizations: [] }, issueId: 'UTV2-1619', now: BOOTSTRAP_NOW }),
+    null,
+  );
+});
+
+test('BMW-8: the diff-scope constraint accepts only bootstrap-related paths', () => {
+  assert.strictEqual(
+    isBootstrapDiffInScope([
+      'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
+      '.github/workflows/merge-gate.yml',
+      'scripts/ops/bootstrap-authorization.ts',
+      'docs/06_status/proof/UTV2-1619/verification.md',
+      'package.json',
+    ]),
+    true,
+  );
+});
+
+test('BMW-9: any application or runtime file refuses the head fallback', () => {
+  for (const intruder of [
+    'apps/worker/src/index.ts',
+    'packages/domain/src/scoring.ts',
+    'supabase/migrations/0001_x.sql',
+    'docs/06_status/proof/UTV2-1620/verification.md',
+  ]) {
+    assert.strictEqual(
+      isBootstrapDiffInScope(['docs/governance/BOOTSTRAP_AUTHORIZATIONS.json', intruder]),
+      false,
+      `${intruder} must refuse the head fallback`,
+    );
+  }
+});
+
+test('BMW-10: an empty changed-file list proves nothing and is refused', () => {
+  assert.strictEqual(isBootstrapDiffInScope([]), false);
+});
+
+test('BMW-11: the merge wrapper allowlist admits no application or runtime path', () => {
+  for (const entry of BOOTSTRAP_ALLOWED_FILES) {
+    for (const prefix of ['apps/', 'packages/', 'supabase/', 'infra/']) {
+      assert.ok(!entry.startsWith(prefix), `${entry} must not be allowlisted`);
+    }
+  }
 });

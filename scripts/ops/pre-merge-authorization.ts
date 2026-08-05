@@ -140,6 +140,15 @@ export interface PreMergeAuthorizationDeps {
   fetchLaneManifestAtHead?: (
     input: PreMergeAuthorizationInput & { issueId: string; headSha: string },
   ) => Promise<{ tier?: unknown } | null>;
+  /**
+   * Reads the bootstrap governance identity file at a given ref (UTV2-1619
+   * capability 19). Consulted ONLY when the lane manifest yields no tier.
+   */
+  fetchBootstrapAuthorizations?: (
+    input: PreMergeAuthorizationInput & { ref: string },
+  ) => Promise<{ authorizations?: unknown } | null>;
+  /** Lists the PR's changed file paths, for the phase-1 diff-scope constraint. */
+  fetchChangedFiles?: (input: PreMergeAuthorizationInput) => Promise<string[]>;
 }
 
 /**
@@ -253,6 +262,71 @@ export function decodeLaneManifestPayload(
  * failure throws LaneManifestLookupError, which the caller also treats as
  * strict -- so both branches fail closed, and neither can relax the gate.
  */
+/**
+ * Reads the bootstrap governance identity file at a ref. A 404 means "absent",
+ * which is a normal answer (no bootstrap identity exists there), not an error.
+ * Any other failure propagates so the caller fails closed rather than treating
+ * an unreadable file as an absent one.
+ */
+export async function defaultFetchBootstrapAuthorizations(
+  input: PreMergeAuthorizationInput & { ref: string },
+): Promise<{ authorizations?: unknown } | null> {
+  const { owner, repo, token, ref } = input;
+  const url =
+    `https://api.github.com/repos/${owner}/${repo}/contents/` +
+    `docs/governance/BOOTSTRAP_AUTHORIZATIONS.json?ref=${encodeURIComponent(ref)}`;
+  const response = await fetch(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'unit-talk-pre-merge-authorization',
+    },
+  });
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`Bootstrap authorization lookup at ${ref} failed: HTTP ${response.status}`);
+  }
+  const body = (await response.json()) as { content?: string; encoding?: string };
+  if (!body.content) return null;
+  return JSON.parse(
+    Buffer.from(body.content, (body.encoding as BufferEncoding) || 'base64').toString('utf8'),
+  ) as { authorizations?: unknown };
+}
+
+/**
+ * Lists the PR's changed file paths for the phase-1 diff-scope constraint.
+ * Throwing on failure is deliberate: an unprovable diff scope must refuse the
+ * head fallback, never silently satisfy it.
+ */
+export async function defaultFetchChangedFiles(
+  input: PreMergeAuthorizationInput,
+): Promise<string[]> {
+  const { owner, repo, token, prNumber } = input;
+  const files: string[] = [];
+  for (let page = 1; page <= 30; page += 1) {
+    const url =
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files` +
+      `?per_page=100&page=${page}`;
+    const response = await fetch(url, {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'unit-talk-pre-merge-authorization',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Changed-file lookup for #${prNumber} failed: HTTP ${response.status}`);
+    }
+    const batch = (await response.json()) as { filename?: string }[];
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    for (const entry of batch) if (entry.filename) files.push(entry.filename);
+    if (batch.length < 100) break;
+  }
+  return files;
+}
+
 export async function defaultFetchLaneManifestAtHead(
   input: PreMergeAuthorizationInput & { issueId: string; headSha: string },
 ): Promise<{ tier?: unknown } | null> {
@@ -344,6 +418,66 @@ export function resolveTierFromLabels(labels: string[]): MergeAuthorityTier | nu
 }
 
 /** Reads the authoritative tier from the lane manifest at the PR head. */
+/**
+ * Bootstrap governance identity resolution for the merge wrapper
+ * (UTV2-1619 capability 19).
+ *
+ * The merge wrapper is a SECOND authority, independent of Merge Gate: it resolves
+ * the tier itself and fails closed to T1 when it cannot. Without this, a
+ * bootstrap PR passes every required check and is still refused at the sanctioned
+ * merge path, which reintroduces the deadlock at the last step.
+ *
+ * The constraints mirror Merge Gate's exactly and deliberately. Two authorities
+ * disagreeing about what a bootstrap identity permits would be worse than either
+ * rule alone.
+ */
+export const BOOTSTRAP_INTRODUCTION_ISSUE = 'UTV2-1619';
+
+export const BOOTSTRAP_ALLOWED_FILES: ReadonlySet<string> = new Set([
+  'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
+  '.github/workflows/merge-gate.yml',
+  'scripts/ops/bootstrap-authorization.ts',
+  'scripts/ops/bootstrap-authorization.test.ts',
+  'scripts/ops/bootstrap-head-fallback-guard.test.ts',
+  'scripts/ops/lane-start.ts',
+  'scripts/ops/pre-merge-authorization.ts',
+  'scripts/ops/pre-merge-authorization.test.ts',
+  'package.json',
+]);
+
+export const BOOTSTRAP_ALLOWED_PREFIXES: readonly string[] = [
+  'docs/06_status/proof/UTV2-1619/',
+];
+
+export function isBootstrapDiffInScope(files: readonly string[]): boolean {
+  if (files.length === 0) return false; // an empty/unknown diff proves nothing
+  return files.every(
+    (file) =>
+      BOOTSTRAP_ALLOWED_FILES.has(file) ||
+      BOOTSTRAP_ALLOWED_PREFIXES.some((prefix) => file.startsWith(prefix)),
+  );
+}
+
+export function resolveBootstrapTier(input: {
+  doc: { authorizations?: unknown } | null;
+  issueId: string;
+  now?: Date;
+}): MergeAuthorityTier | null {
+  const list = input.doc && Array.isArray(input.doc.authorizations) ? input.doc.authorizations : [];
+  const now = (input.now ?? new Date()).getTime();
+  const active = list.filter((entry) => {
+    const expiry = Date.parse(String((entry as { expires_at?: unknown })?.expires_at));
+    return Number.isFinite(expiry) && expiry > now;
+  });
+  // Accumulation fails closed, exactly as in Merge Gate and lane-start.
+  if (active.length !== 1) return null;
+  const grant = active[0] as { issue_id?: unknown; lane_type?: unknown; tier?: unknown };
+  if (String(grant.issue_id ?? '').toUpperCase() !== input.issueId.toUpperCase()) return null;
+  if (grant.lane_type !== 'governance') return null;
+  const tier = String(grant.tier ?? '').toUpperCase();
+  return tier === 'T1' || tier === 'T2' || tier === 'T3' ? (tier as MergeAuthorityTier) : null;
+}
+
 export function resolveTierFromManifest(manifest: { tier?: unknown } | null): MergeAuthorityTier | null {
   return normalizeTier(typeof manifest?.tier === 'string' ? manifest.tier : null);
 }
@@ -385,7 +519,11 @@ export interface TierReceipt {
   /** Authoritative tier from the lane manifest at the PR head. */
   resolved: MergeAuthorityTier | null;
   /** Where the authority came from. */
-  source: 'lane_manifest' | 'unresolved';
+  source:
+    | 'lane_manifest'
+    | 'bootstrap_identity_base'
+    | 'bootstrap_identity_head'
+    | 'unresolved';
   /** Mirrored, non-authoritative label tier -- recorded for cross-check only. */
   labelTier: MergeAuthorityTier | null;
   /** True when the label contradicts the manifest (forces the strict path). */
@@ -510,6 +648,9 @@ export async function evaluatePreMergeAuthorization(
         });
 
   const fetchLaneManifestAtHead = deps.fetchLaneManifestAtHead ?? defaultFetchLaneManifestAtHead;
+  const fetchBootstrapAuthorizations =
+    deps.fetchBootstrapAuthorizations ?? defaultFetchBootstrapAuthorizations;
+  const fetchChangedFiles = deps.fetchChangedFiles ?? defaultFetchChangedFiles;
 
   // Fetches that do not depend on the live head SHA go first.
   const requiredChecks = await fetchRequiredCheckContexts(input);
@@ -576,6 +717,7 @@ export async function evaluatePreMergeAuthorization(
   // the mutable PR label. Any failure to read it leaves manifestTier null,
   // which fails closed to requiring a verdict.
   let manifestTier: MergeAuthorityTier | null = null;
+  let tierSource: TierReceipt['source'] = 'unresolved';
   const issueId = headRef ? issueIdFromHeadRef(headRef) : null;
   if (issueId) {
     try {
@@ -583,6 +725,40 @@ export async function evaluatePreMergeAuthorization(
         await fetchLaneManifestAtHead({ ...input, issueId, headSha }),
       );
     } catch {
+      manifestTier = null;
+    }
+  }
+  if (manifestTier) tierSource = 'lane_manifest';
+
+  // UTV2-1619 capability 19: bootstrap governance identity. Consulted ONLY when
+  // the lane manifest yields no tier, so it can never override a real lane.
+  // Base is canonical; the PR head is consulted only under the constrained
+  // phase-1 transition, whose conditions mirror Merge Gate's exactly.
+  let bootstrapTierSourceRef: 'base' | 'head' | null = null;
+  if (!manifestTier && issueId) {
+    try {
+      const baseDoc = await fetchBootstrapAuthorizations({ ...input, ref: 'main' });
+      let resolved = resolveBootstrapTier({ doc: baseDoc, issueId });
+      if (resolved) {
+        bootstrapTierSourceRef = 'base';
+      } else if (!baseDoc && issueId.toUpperCase() === BOOTSTRAP_INTRODUCTION_ISSUE) {
+        const headDoc = await fetchBootstrapAuthorizations({ ...input, ref: headSha });
+        if (headDoc) {
+          const changed = await fetchChangedFiles(input);
+          if (isBootstrapDiffInScope(changed)) {
+            resolved = resolveBootstrapTier({ doc: headDoc, issueId });
+            if (resolved) bootstrapTierSourceRef = 'head';
+          }
+        }
+      }
+      if (resolved) {
+        manifestTier = resolved;
+        tierSource = bootstrapTierSourceRef === 'head'
+          ? 'bootstrap_identity_head'
+          : 'bootstrap_identity_base';
+      }
+    } catch {
+      // Any failure leaves the tier unresolved, which fails closed to T1.
       manifestTier = null;
     }
   }
@@ -595,7 +771,7 @@ export async function evaluatePreMergeAuthorization(
   });
   const tierReceipt: TierReceipt = {
     resolved: manifestTier,
-    source: manifestTier ? 'lane_manifest' : 'unresolved',
+    source: manifestTier ? tierSource : 'unresolved',
     labelTier,
     labelDisagreement: labelTier !== null && manifestTier !== null && labelTier !== manifestTier,
     mergeGateGreenOnHead,

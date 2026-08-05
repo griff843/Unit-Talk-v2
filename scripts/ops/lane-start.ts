@@ -51,6 +51,15 @@ import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js'
 export { checkConcurrencyLimits } from './concurrency-rules.js';
 export type { ConcurrencyViolation, IncomingLaneScope } from './concurrency-rules.js';
 import { checkConcurrencyLimits } from './concurrency-rules.js';
+import {
+  BOOTSTRAP_AUTHORIZATIONS_PATH,
+  buildBootstrapAdmissionReceipt,
+  evaluateBootstrapAuthorization,
+  partitionViolations,
+  readAuthorizationsFromMain,
+  resolveAuthorizationSourceSha,
+  type BootstrapAuthorization,
+} from './bootstrap-authorization.js';
 
 const CANONICAL_LANE_TYPES: CanonicalLaneType[] = [
   'runtime',
@@ -454,12 +463,35 @@ function main(): void {
       concurrencyConfig,
       { fileScopeLock: normalizedFiles, verificationTarget: effectiveVerificationTarget },
     );
+    // UTV2-1619 capability 18: a governance bootstrap authorization may admit one
+    // named governance lane past the CAP violations only. It is not a flag and
+    // cannot be asserted by this caller -- the grant is read from `origin/main`,
+    // so issuing one requires landing a reviewed governance PR. Structural
+    // violations (forbidden combinations, singleton conflicts, verification
+    // target rules) are never suppressed; they are safety properties, not
+    // capacity limits.
+    let bootstrapAuthorization: BootstrapAuthorization | null = null;
+    let effectiveViolations = concurrencyViolations;
     if (concurrencyViolations.length > 0) {
+      const { suppressible, blocking } = partitionViolations(concurrencyViolations);
+      if (suppressible.length > 0) {
+        const decision = evaluateBootstrapAuthorization({
+          issueId,
+          laneType: canonicalLaneType,
+          authorizationsRaw: readAuthorizationsFromMain(ROOT),
+        });
+        if (decision.authorized) {
+          bootstrapAuthorization = decision.authorization;
+          effectiveViolations = blocking;
+        }
+      }
+    }
+    if (effectiveViolations.length > 0) {
       emitJson({
         ok: false,
         code: 'concurrency_limit_exceeded',
-        message: concurrencyViolations[0]!.message,
-        violations: concurrencyViolations,
+        message: effectiveViolations[0]!.message,
+        violations: effectiveViolations,
         config_path: 'docs/governance/CONCURRENCY_CONFIG.json',
         // UTV2-1634: emit the exact board the decision was made against, so a
         // wrong refusal (or a wrong admission) is diagnosable after the fact
@@ -689,6 +721,42 @@ function main(): void {
     if (!fs.existsSync(worktreeProofGitkeep)) {
       fs.writeFileSync(worktreeProofGitkeep, '', 'utf8');
     }
+    // UTV2-1619 capability 19: a bootstrap admission leaves a durable, committed
+    // receipt on the lane branch. The JSON emitted to stdout is ephemeral -- if
+    // the only record of an out-of-caps admission is a terminal scrollback, the
+    // audit trail cannot be closed later. The receipt records the grant verbatim,
+    // the exact commit it was read from, the violations it suppressed, and the
+    // board the decision was made against.
+    const bootstrapReceiptRelPath = `docs/06_status/proof/${issueId}/bootstrap-admission-receipt.json`;
+    if (bootstrapAuthorization !== null) {
+      const suppressed = concurrencyViolations
+        .filter((violation) => !effectiveViolations.includes(violation))
+        .map((violation) => ({ code: violation.code, message: violation.message }));
+      const receipt = buildBootstrapAdmissionReceipt({
+        authorization: bootstrapAuthorization,
+        laneType: canonicalLaneType,
+        branch,
+        admittedAt: new Date().toISOString(),
+        sourceSha: resolveAuthorizationSourceSha(ROOT),
+        suppressed,
+        remaining: effectiveViolations.map((violation) => ({
+          code: violation.code,
+          message: violation.message,
+        })),
+        board: activeLaneDiscovery.lanes.map((lane) => ({
+          issue_id: lane.manifest.issue_id,
+          lane_type: lane.manifest.lane_type,
+          executor: lane.manifest.executor,
+          status: lane.manifest.status,
+          source: lane.source,
+          ...(lane.prNumber === undefined ? {} : { pr_number: lane.prNumber }),
+        })),
+      });
+      const receiptPath = path.join(worktreePath, bootstrapReceiptRelPath);
+      fs.mkdirSync(path.dirname(receiptPath), { recursive: true });
+      fs.writeFileSync(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`, 'utf8');
+    }
+
     spawnSync(
       'git',
       [
@@ -696,6 +764,7 @@ function main(): void {
         `docs/06_status/lanes/${issueId}.json`,
         `.ops/sync/${issueId}.yml`,
         `docs/06_status/proof/${issueId}/.gitkeep`,
+        ...(bootstrapAuthorization === null ? [] : [bootstrapReceiptRelPath]),
       ],
       { cwd: worktreePath, stdio: 'inherit' }
     );
@@ -721,6 +790,25 @@ function main(): void {
       expected_proof_paths: manifest.expected_proof_paths,
       preflight_token: preflight.tokenRelativePath,
       status: 'started',
+      // UTV2-1619 capability 18: an authorized admission must never look like an
+      // ordinary one. Absent when the lane was admitted under the caps.
+      ...(bootstrapAuthorization === null
+        ? {}
+        : {
+            admitted_under_bootstrap_authorization: {
+              issue_id: bootstrapAuthorization.issue_id,
+              lane_type: bootstrapAuthorization.lane_type,
+              authorized_by: bootstrapAuthorization.authorized_by,
+              authorized_at: bootstrapAuthorization.authorized_at,
+              expires_at: bootstrapAuthorization.expires_at,
+              milestone: bootstrapAuthorization.milestone,
+              source: `main:${BOOTSTRAP_AUTHORIZATIONS_PATH}`,
+              receipt_path: bootstrapReceiptRelPath,
+              suppressed_violations: concurrencyViolations
+                .filter((violation) => !effectiveViolations.includes(violation))
+                .map((violation) => ({ code: violation.code, message: violation.message })),
+            },
+          }),
     });
   } catch (error) {
     emitJson({
