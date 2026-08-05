@@ -51,6 +51,13 @@ import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js'
 export { checkConcurrencyLimits } from './concurrency-rules.js';
 export type { ConcurrencyViolation, IncomingLaneScope } from './concurrency-rules.js';
 import { checkConcurrencyLimits } from './concurrency-rules.js';
+import {
+  BOOTSTRAP_AUTHORIZATIONS_PATH,
+  evaluateBootstrapAuthorization,
+  partitionViolations,
+  readAuthorizationsFromMain,
+  type BootstrapAuthorization,
+} from './bootstrap-authorization.js';
 
 const CANONICAL_LANE_TYPES: CanonicalLaneType[] = [
   'runtime',
@@ -454,12 +461,35 @@ function main(): void {
       concurrencyConfig,
       { fileScopeLock: normalizedFiles, verificationTarget: effectiveVerificationTarget },
     );
+    // UTV2-1619 capability 18: a governance bootstrap authorization may admit one
+    // named governance lane past the CAP violations only. It is not a flag and
+    // cannot be asserted by this caller -- the grant is read from `origin/main`,
+    // so issuing one requires landing a reviewed governance PR. Structural
+    // violations (forbidden combinations, singleton conflicts, verification
+    // target rules) are never suppressed; they are safety properties, not
+    // capacity limits.
+    let bootstrapAuthorization: BootstrapAuthorization | null = null;
+    let effectiveViolations = concurrencyViolations;
     if (concurrencyViolations.length > 0) {
+      const { suppressible, blocking } = partitionViolations(concurrencyViolations);
+      if (suppressible.length > 0) {
+        const decision = evaluateBootstrapAuthorization({
+          issueId,
+          laneType: canonicalLaneType,
+          authorizationsRaw: readAuthorizationsFromMain(ROOT),
+        });
+        if (decision.authorized) {
+          bootstrapAuthorization = decision.authorization;
+          effectiveViolations = blocking;
+        }
+      }
+    }
+    if (effectiveViolations.length > 0) {
       emitJson({
         ok: false,
         code: 'concurrency_limit_exceeded',
-        message: concurrencyViolations[0]!.message,
-        violations: concurrencyViolations,
+        message: effectiveViolations[0]!.message,
+        violations: effectiveViolations,
         config_path: 'docs/governance/CONCURRENCY_CONFIG.json',
         // UTV2-1634: emit the exact board the decision was made against, so a
         // wrong refusal (or a wrong admission) is diagnosable after the fact
@@ -721,6 +751,24 @@ function main(): void {
       expected_proof_paths: manifest.expected_proof_paths,
       preflight_token: preflight.tokenRelativePath,
       status: 'started',
+      // UTV2-1619 capability 18: an authorized admission must never look like an
+      // ordinary one. Absent when the lane was admitted under the caps.
+      ...(bootstrapAuthorization === null
+        ? {}
+        : {
+            admitted_under_bootstrap_authorization: {
+              issue_id: bootstrapAuthorization.issue_id,
+              lane_type: bootstrapAuthorization.lane_type,
+              authorized_by: bootstrapAuthorization.authorized_by,
+              authorized_at: bootstrapAuthorization.authorized_at,
+              expires_at: bootstrapAuthorization.expires_at,
+              milestone: bootstrapAuthorization.milestone,
+              source: `main:${BOOTSTRAP_AUTHORIZATIONS_PATH}`,
+              suppressed_violations: concurrencyViolations
+                .filter((violation) => !effectiveViolations.includes(violation))
+                .map((violation) => ({ code: violation.code, message: violation.message })),
+            },
+          }),
     });
   } catch (error) {
     emitJson({

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "_doc": "Governance bootstrap authorizations (UTV2-1619 capability 18). Each entry admits exactly ONE named governance lane past the concurrency caps. This is not a cap increase: a raised cap admits any lane that asks, an authorization admits only the issue it names. Entries are read from origin/main by scripts/ops/bootstrap-authorization.ts and are never read from a working tree, so a branch cannot grant itself admission. At most one entry may be unexpired at a time; a second active entry refuses every lane rather than being resolved by precedence. Remove an entry through a governance PR once its milestone completes -- do not let it sit until it lapses.",
+  "authorizations": [
+    {
+      "issue_id": "UTV2-1619",
+      "lane_type": "governance",
+      "authorized_by": "griff843",
+      "authorized_at": "2026-08-05",
+      "expires_at": "2026-09-05",
+      "milestone": "UTV2-1619 Milestone 1: lane lifecycle capacity semantics, truth-gated completion transitions, close eligibility preflight, closeout artifact verification",
+      "reason": "Capability 13 (lane lifecycle capacity semantics) is the admission dependency for this milestone and lives inside the issue the caps refuse to admit. Measured 2026-08-05: total 15/10, claude 11/4, governance 8/3. A PM-directed read-only investigation of the three multi-identity Merge Gate PRs recovered no capacity -- all are genuinely blocked on CHANGES_REQUIRED verdicts and a missing t1-approved label, not on stale duplicate check identities. Scope is governance work only, no production writes, no feature work. Remove this entry when Milestone 1 completes."
+    }
+  ]
+}
