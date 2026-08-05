@@ -1,6 +1,6 @@
 # PROOF: UTV2-1649 — Linear truth sweep
 
-MERGE_SHA: 64ac40ab0593f67fe848fa61d8a006f09d6e6a8e
+MERGE_SHA: a561e00c3991c3701b4cd863a21ec4389194ee74
 
 ASSERTIONS:
 - [x] All 59 issues from UTV2-1590 through UTV2-1648 were read from Linear with relations.
@@ -67,7 +67,7 @@ TEST_EXIT=0
 Zero TAP summaries in the run reported a nonzero `# fail` count
 (`grep -cE '^# fail [1-9]'` → `0`).
 
-### R-level check
+### R-level check (`scripts/ci/r-level-check.ts`)
 
 ```
 Verdict: PASS
@@ -77,7 +77,27 @@ RLEVEL_EXIT=0
 ```
 
 This lane is documentation-only, so no R1–R5 rule triggers and no additional
-artifacts are required.
+artifacts are required. The same `scripts/ci/r-level-check.ts` gate ran in CI as
+the R-Level Compliance Check and also passed.
+
+### `pnpm verify`
+
+`pnpm verify` was not run on this workstation — the three commands above were
+run individually. It was run by CI on the merged head, which is the authoritative
+execution:
+
+```
+check_run: verify
+head_sha:  46a9e3106e9812de13461926a21880c667385ec1
+status:    completed
+conclusion: success
+duration:  3m29s
+url: https://github.com/griff843/Unit-Talk-v2/actions/runs/30971004986/job/92196228180
+```
+
+That head is the commit merged as a561e00c3991c3701b4cd863a21ec4389194ee74, and
+`verify` is one of the four required contexts the merge gate confirmed green on
+it (G4 evidence records the same run id, 92196228180).
 
 ### Scope of this run
 
