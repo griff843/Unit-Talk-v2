@@ -37,6 +37,8 @@ test('BHF-2: the allowlist contains exactly the approved bootstrap paths', () =>
     'scripts/ops/bootstrap-authorization.ts',
     'scripts/ops/bootstrap-head-fallback-guard.test.ts',
     'scripts/ops/lane-start.ts',
+    'scripts/ops/pre-merge-authorization.test.ts',
+    'scripts/ops/pre-merge-authorization.ts',
   ]);
 });
 
@@ -79,4 +81,26 @@ test('BHF-6: a head-sourced admission must disclose its source in the verdict', 
 
 test('BHF-7: failure to enumerate the diff refuses head-read rather than allowing it', () => {
   assert.match(WORKFLOW, /diffScopeOk = false;\s*\n\s*offendingFiles\.push\(`<diff enumeration failed/);
+});
+
+test('BHF-8: the Merge Gate and merge-wrapper allowlists must not drift apart', async () => {
+  // Two independent authorities decide bootstrap admission: Merge Gate (inline
+  // workflow JS) and pre-merge-authorization (the sanctioned merge path). If
+  // their allowlists disagree, one will admit a diff the other refuses, and the
+  // effective policy becomes whichever ran last. Caught in practice: the
+  // merge-wrapper list was extended and the workflow list was not.
+  const mod = await import('./pre-merge-authorization.js');
+  const wrapper = [...(mod.BOOTSTRAP_ALLOWED_FILES as ReadonlySet<string>)].sort();
+  assert.deepEqual(allowlistFromWorkflow().sort(), wrapper);
+
+  const workflowPrefixes = [
+    ...WORKFLOW.match(/const BOOTSTRAP_ALLOWED_PREFIXES = \[([\s\S]*?)\]/)![1].matchAll(/'([^']+)'/g),
+  ].map((m) => m[1]);
+  assert.deepEqual(workflowPrefixes, [...(mod.BOOTSTRAP_ALLOWED_PREFIXES as readonly string[])]);
+});
+
+test('BHF-9: both authorities pin the same initial bootstrap issue', async () => {
+  const mod = await import('./pre-merge-authorization.js');
+  const workflowIssue = WORKFLOW.match(/const BOOTSTRAP_INTRODUCTION_ISSUE = '([^']+)'/)![1];
+  assert.equal(workflowIssue, mod.BOOTSTRAP_INTRODUCTION_ISSUE);
 });

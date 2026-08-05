@@ -306,6 +306,8 @@ jobs:
                 'scripts/ops/bootstrap-authorization.test.ts',
                 'scripts/ops/bootstrap-head-fallback-guard.test.ts',
                 'scripts/ops/lane-start.ts',
+                'scripts/ops/pre-merge-authorization.ts',
+                'scripts/ops/pre-merge-authorization.test.ts',
                 'package.json',
               ]);
               const BOOTSTRAP_ALLOWED_PREFIXES = ['docs/06_status/proof/UTV2-1619/'];

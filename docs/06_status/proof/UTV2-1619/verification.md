@@ -59,12 +59,13 @@ LINT_EXIT=0
 
 ```
 blocks reporting a nonzero '# fail': 0
-aggregate pass=4502 fail=0
+aggregate pass=4515 fail=0
 TEST_EXIT=0
 ```
 
-The 4502 aggregate is 4473 baseline plus the 29 tests added here (22 for the
-authorization mechanism, 7 guarding the phase-1 head-read exception).
+The 4515 aggregate is 4473 baseline plus the 42 tests added here: 22 for the
+authorization mechanism, 9 guarding the phase-1 head-read exception, and 11 for
+bootstrap identity resolution in the merge wrapper.
 
 **Correction — the first run of this suite did not execute the new tests.** They
 were initially written without being wired into any test command, so `pnpm test`
@@ -235,6 +236,47 @@ ordering, source disclosure in the verdict, and fail-closed behavior on diff
 enumeration failure. The constraint lives in inline workflow JavaScript that no
 unit test would otherwise execute, so widening it now requires deliberately
 editing an assertion.
+
+## The merge wrapper is a second authority
+
+Merge Gate approving a bootstrap PR is necessary but not sufficient. The
+sanctioned merge path runs its own `pre-merge-authorization`, which resolves the
+tier independently from the lane manifest and **fails closed to T1** when it
+cannot. Observed on this PR: all four required checks green, Merge Gate APPROVED,
+and the merge still refused with
+
+```
+"tier": { "resolved": null, "source": "unresolved", "labelTier": "T2",
+          "mergeGateGreenOnHead": true, "pmVerdictRequired": true },
+"authorized": false,
+"reason": "T1 requires a valid pm-verdict/v1 comment."
+```
+
+Failing closed to the strictest tier on an unresolved tier is correct behavior in
+general. It simply means bootstrap identity had to be taught to both authorities,
+not one.
+
+The constraints in `pre-merge-authorization.ts` mirror Merge Gate's **exactly and
+deliberately** — two authorities disagreeing about what a bootstrap identity
+permits would be worse than either rule alone. The tier receipt distinguishes
+`bootstrap_identity_base` from `bootstrap_identity_head`, so the receipt records
+which phase authorized the merge rather than only that a bootstrap identity did.
+
+Three deliberate choices:
+
+* an **empty changed-file list is refused** — an unknown diff proves nothing, so
+  it cannot satisfy a scope constraint;
+* the changed-file lookup **throws** on API failure rather than returning empty,
+  so a transient error can never masquerade as "no files changed";
+* any failure in bootstrap resolution leaves the tier unresolved, which fails
+  closed to requiring a verdict.
+
+**Drift between the two allowlists was caught during implementation**: the
+wrapper's list was extended and the workflow's was not, and nothing failed
+loudly — the effective policy would have become whichever authority ran last.
+That is the same duplicated-authority class as capabilities 11 and 15. Guard
+assertions BHF-8 and BHF-9 now require the two allowlists to be deep-equal and to
+pin the same bootstrap issue, so divergence cannot be introduced silently.
 
 ## Admission receipt
 
