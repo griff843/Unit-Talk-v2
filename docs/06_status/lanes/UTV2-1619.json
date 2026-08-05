@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1619",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-lifecycle-resource-release",
+  "branch": "claude/utv2-1619-lifecycle-resource-release",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/concurrency-rules.test.ts",
+    "scripts/ops/concurrency-rules.ts",
+    "scripts/ops/lease-registry.test.ts",
+    "scripts/ops/lease-registry.ts",
+    "scripts/ops/shared.test.ts",
+    "scripts/ops/shared.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1619/diff-summary.md",
+    "docs/06_status/proof/UTV2-1619/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-08-05T13:21:42.042Z",
+  "heartbeat_at": "2026-08-05T13:21:42.042Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1619-lifecycle-resource-release.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-lifecycle-resource-release",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
