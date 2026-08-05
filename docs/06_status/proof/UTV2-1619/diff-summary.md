@@ -12,6 +12,8 @@ MERGE_SHA: 9722ef7120fcb98f7287a7d5ab03fbbe65813fa2
 - Success output gains `admitted_under_bootstrap_authorization`, naming the grant and the
   exact violations it suppressed, so an authorized admission is never indistinguishable from
   an ordinary one.
-- Added 17 unit tests, weighted toward refusal paths.
+- Added 17 unit tests, weighted toward refusal paths, and wired them into `test:ops` so
+  `pnpm test` actually executes them (CI's executable-wiring guard rejected the first
+  attempt, in which the tests existed but ran nowhere).
 
 No production code, no runtime path, no migration, no workflow, no delivery path is touched.

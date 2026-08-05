@@ -44,15 +44,42 @@ LINT_EXIT=0
 
 ### `pnpm test`
 
-Full suite, 13 sub-suites, 97 node:test TAP summary blocks:
-
 ```
 TAP summary blocks: 97
 blocks reporting a nonzero '# fail': 0
+aggregate pass=4490 fail=0
 TEST_EXIT=0
 ```
 
-The new unit suite specifically:
+**Correction — the first run of this suite did not execute the new tests.** They
+were initially written without being wired into any test command, so `pnpm test`
+passed while never running them, and running them directly with `tsx --test` was
+a separate execution. Reporting the two together would have implied a single
+inclusive result that did not exist.
+
+CI's `executable-wiring` guard caught this on the first attempt:
+
+```
+[FAIL] WIRING_TEST_UNWIRED_NEW scripts/ops/bootstrap-authorization.test.ts
+  - test file is not reachable from any package script or workflow command
+    and is not in the reviewed wiring baseline
+```
+
+Fixed by wiring the file into `test:ops`. The guard then passed, and the counts
+moved by exactly the expected amount:
+
+```
+[automation-coverage] verdict=PASS fail=0
+[executable-wiring] verdict=PASS required_roots=verify
+[executable-wiring] tests total=466 required-reachable=311 unwired=119 (baselined=119 new=0)
+```
+
+`required-reachable` 310 -> 311, `unwired` 120 -> 119, `new=0`. The suite
+aggregate moved 4473 -> 4490, a delta of exactly 17 — the count of the new
+tests — which is the direct evidence that `pnpm test` now executes them rather
+than merely tolerating their existence.
+
+The new unit suite, as executed inside the full run:
 
 ```
 1..17
