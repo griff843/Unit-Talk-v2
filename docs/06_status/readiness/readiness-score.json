@@ -1,15 +1,15 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-08-05T02:02:30.679Z",
+  "generated_at": "2026-08-05T08:28:44.448Z",
   "observation_window": {
-    "started_at": "2026-08-05T02:02:22.227Z",
-    "completed_at": "2026-08-05T02:02:30.679Z"
+    "started_at": "2026-08-05T08:28:36.135Z",
+    "completed_at": "2026-08-05T08:28:44.448Z"
   },
   "generator": {
     "script": "scripts/ops/readiness-refresh.ts",
     "generator_version": "1.0.0",
-    "git_head_sha": "0799e25ff3442f1e42c14eec19b419196f879007",
-    "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30968151758"
+    "git_head_sha": "9722ef7120fcb98f7287a7d5ab03fbbe65813fa2",
+    "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30989145894"
   },
   "freshness": {
     "max_age_hours": 24,
@@ -20,7 +20,7 @@
     "expected_production_project_ref": "zfzdnfwdarxucxtaojxm",
     "production_target_confirmed": true
   },
-  "main_sha": "0799e25ff3442f1e42c14eec19b419196f879007",
+  "main_sha": "9722ef7120fcb98f7287a7d5ab03fbbe65813fa2",
   "deployed_sha": "ca6d66c1277b5cd3ec19cadb3887b252b3d88e22",
   "verdict": "RED",
   "observability": "degraded",
@@ -35,15 +35,15 @@
         "query": "latest successful run of deploy.yml on main (head_sha) vs commits/main (sha); compare base...head for commit distance"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "Last successful deploy (https://github.com/griff843/Unit-Talk-v2/actions/runs/30712489763, 2026-08-01T18:36:45Z, 79.4h ago) shipped ca6d66c1277b5cd3ec19cadb3887b252b3d88e22; main HEAD is 0799e25ff3442f1e42c14eec19b419196f879007, 38 commits ahead.",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "Last successful deploy (https://github.com/griff843/Unit-Talk-v2/actions/runs/30712489763, 2026-08-01T18:36:45Z, 85.9h ago) shipped ca6d66c1277b5cd3ec19cadb3887b252b3d88e22; main HEAD is 9722ef7120fcb98f7287a7d5ab03fbbe65813fa2, 42 commits ahead.",
       "measured": {
-        "main_sha": "0799e25ff3442f1e42c14eec19b419196f879007",
+        "main_sha": "9722ef7120fcb98f7287a7d5ab03fbbe65813fa2",
         "deployed_sha": "ca6d66c1277b5cd3ec19cadb3887b252b3d88e22",
         "deploy_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30712489763",
         "deploy_run_completed_at": "2026-08-01T18:36:45Z",
-        "deploy_age_hours": 79.4,
-        "commits_ahead": 38
+        "deploy_age_hours": 85.9,
+        "commits_ahead": 42
       },
       "unreadable_reason": null
     },
@@ -57,14 +57,14 @@
         "query": "system_runs where run_type='ingestor.cycle' order by started_at desc limit 1; provider_cycle_status where stage_status='merged' order by updated_at desc limit 1; game_results order by created_at desc limit 1"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "latest ingestor.cycle started 2026-06-30T12:55:01.189873+00:00 (51187m old, threshold 30m); latest ingestor.cycle status is \"failed\"; latest merged provider cycle updated 2026-06-30T12:24:44.890623+00:00 (51218m old, threshold 30m). Latest game_results row: 2026-06-30T07:27:28.089891+00:00. Read-only observation; no restart or mutation performed.",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "latest ingestor.cycle started 2026-06-30T12:55:01.189873+00:00 (51574m old, threshold 30m); latest ingestor.cycle status is \"failed\"; latest merged provider cycle updated 2026-06-30T12:24:44.890623+00:00 (51604m old, threshold 30m). Latest game_results row: 2026-06-30T07:27:28.089891+00:00. Read-only observation; no restart or mutation performed.",
       "measured": {
         "latest_cycle_started_at": "2026-06-30T12:55:01.189873+00:00",
         "latest_cycle_status": "failed",
-        "latest_cycle_age_minutes": 51187,
+        "latest_cycle_age_minutes": 51574,
         "latest_merged_cycle_at": "2026-06-30T12:24:44.890623+00:00",
-        "latest_merged_cycle_age_minutes": 51218,
+        "latest_merged_cycle_age_minutes": 51604,
         "latest_game_result_at": "2026-06-30T07:27:28.089891+00:00"
       },
       "unreadable_reason": null
@@ -79,12 +79,12 @@
         "query": "system_runs where run_type='worker.heartbeat' order by started_at desc limit 1; count distribution_outbox where status='processing' and updated_at < now-5m; count distribution_outbox where status='pending' and attempt_count>0 and updated_at < now-30m; count distribution_outbox where status in ('pending','processing')"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "Queue buckets per docs/05_operations/QUEUE_READINESS_SEMANTICS.md v1.0: pending=5, processing=32, stale_unknown=32, attempted-and-stuck=0. worker.heartbeat 2026-07-16T03:48:17.780927+00:00 (28694m, status succeeded). FAIL: worker.heartbeat is 28694m old (threshold 30m), last status \"succeeded\"; 32 bucket:stale_unknown rows (processing > 5m).",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "Queue buckets per docs/05_operations/QUEUE_READINESS_SEMANTICS.md v1.0: pending=5, processing=32, stale_unknown=32, attempted-and-stuck=0. worker.heartbeat 2026-07-16T03:48:17.780927+00:00 (29080m, status succeeded). FAIL: worker.heartbeat is 29080m old (threshold 30m), last status \"succeeded\"; 32 bucket:stale_unknown rows (processing > 5m).",
       "measured": {
         "heartbeat_started_at": "2026-07-16T03:48:17.780927+00:00",
         "heartbeat_status": "succeeded",
-        "heartbeat_age_minutes": 28694,
+        "heartbeat_age_minutes": 29080,
         "pending_count": 5,
         "processing_count": 32,
         "stale_unknown_count": 32,
@@ -102,7 +102,7 @@
         "query": "count distribution_outbox where status='dead_letter'; count distribution_outbox where status='dead_letter' and attempt_count=0 (bucket:governance_hold); count distribution_outbox where status='dead_letter' and attempt_count>0 (bucket:true_failure)"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
+      "observed_at": "2026-08-05T08:28:36.135Z",
       "evidence": "1952 dead_letter rows: 1951 bucket:governance_hold (attempt_count=0) + 1 bucket:true_failure (attempt_count>0). Governance holds do not fail readiness under docs/05_operations/QUEUE_READINESS_SEMANTICS.md v1.0; true delivery failures do.",
       "measured": {
         "dead_letter_total": 1952,
@@ -121,10 +121,10 @@
         "query": "latest completed run of db-health-tripwire.yml (conclusion, completed_at)"
       },
       "status": "unknown",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "UNREADABLE at 2026-08-05T02:02:22.227Z: db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/30966386209 concluded \"failure\" (failed step(s): Report DB health verdict) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven. Not scored as passing.",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "UNREADABLE at 2026-08-05T08:28:36.135Z: db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/30988177770 concluded \"failure\" (failed step(s): Report DB health verdict) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven. Not scored as passing.",
       "measured": null,
-      "unreadable_reason": "db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/30966386209 concluded \"failure\" (failed step(s): Report DB health verdict) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven"
+      "unreadable_reason": "db-health-tripwire.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/30988177770 concluded \"failure\" (failed step(s): Report DB health verdict) — a red observer cannot distinguish a fired tripwire from a broken observation, so tripwire state is unproven"
     },
     {
       "id": "pnpm_verify",
@@ -136,10 +136,10 @@
         "query": "latest completed run of ci.yml on main (head_sha, conclusion) vs commits/main"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "ci.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/30905393347 on 5b0c20b3dab2cc67587fd5e187f16d8a31d51aec concluded \"success\" at 2026-08-04T11:43:04Z (14.3h ago). main HEAD is 0799e25ff3442f1e42c14eec19b419196f879007, so main HEAD itself has no completed CI result.",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "ci.yml run https://github.com/griff843/Unit-Talk-v2/actions/runs/30905393347 on 5b0c20b3dab2cc67587fd5e187f16d8a31d51aec concluded \"success\" at 2026-08-04T11:43:04Z (20.8h ago). main HEAD is 9722ef7120fcb98f7287a7d5ab03fbbe65813fa2, so main HEAD itself has no completed CI result.",
       "measured": {
-        "main_sha": "0799e25ff3442f1e42c14eec19b419196f879007",
+        "main_sha": "9722ef7120fcb98f7287a7d5ab03fbbe65813fa2",
         "run_head_sha": "5b0c20b3dab2cc67587fd5e187f16d8a31d51aec",
         "conclusion": "success",
         "completed_at": "2026-08-04T11:43:04Z",
@@ -157,16 +157,16 @@
         "query": "latest run of each of: ingestor-staleness-alert.yml, grading-staleness-check.yml, pipeline-health-monitor.yml, db-health-tripwire.yml, reconcile-stale-lanes.yml"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
+      "observed_at": "2026-08-05T08:28:36.135Z",
       "evidence": "Observer problems (these are observer failures, not by themselves product failures): ingestor-staleness-alert.yml concluded \"failure\" (failed step: Check provider-offer freshness); grading-staleness-check.yml concluded \"failure\" (failed step: Check grading staleness); pipeline-health-monitor.yml concluded \"failure\" (failed step: Generate pipeline health report); db-health-tripwire.yml concluded \"failure\" (failed step: Report DB health verdict); reconcile-stale-lanes.yml concluded \"failure\" (failed step: Commit manifest mutations (no-op if nothing changed)).",
       "measured": {
         "observers": [
           {
             "workflow": "ingestor-staleness-alert.yml",
             "conclusion": "failure",
-            "completed_at": "2026-08-05T01:00:27Z",
-            "age_hours": 1,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30965050436",
+            "completed_at": "2026-08-05T06:46:50Z",
+            "age_hours": 1.7,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30982516501",
             "failed_steps": [
               "Check provider-offer freshness"
             ]
@@ -175,7 +175,7 @@
             "workflow": "grading-staleness-check.yml",
             "conclusion": "failure",
             "completed_at": "2026-08-04T08:40:13Z",
-            "age_hours": 17.4,
+            "age_hours": 23.8,
             "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30892905218",
             "failed_steps": [
               "Check grading staleness"
@@ -185,7 +185,7 @@
             "workflow": "pipeline-health-monitor.yml",
             "conclusion": "failure",
             "completed_at": "2026-08-04T12:04:55Z",
-            "age_hours": 14,
+            "age_hours": 20.4,
             "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30907494910",
             "failed_steps": [
               "Generate pipeline health report"
@@ -194,9 +194,9 @@
           {
             "workflow": "db-health-tripwire.yml",
             "conclusion": "failure",
-            "completed_at": "2026-08-05T01:27:10Z",
-            "age_hours": 0.6,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30966386209",
+            "completed_at": "2026-08-05T08:14:22Z",
+            "age_hours": 0.2,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30988177770",
             "failed_steps": [
               "Report DB health verdict"
             ]
@@ -204,9 +204,9 @@
           {
             "workflow": "reconcile-stale-lanes.yml",
             "conclusion": "failure",
-            "completed_at": "2026-08-04T19:45:23Z",
-            "age_hours": 6.3,
-            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30944685905",
+            "completed_at": "2026-08-05T03:14:56Z",
+            "age_hours": 5.2,
+            "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30971685291",
             "failed_steps": [
               "Commit manifest mutations (no-op if nothing changed)"
             ]
@@ -225,13 +225,12 @@
         "query": "manifests with status=done and closed_at within 30d; verification.md must contain a merge SHA"
       },
       "status": "fail",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "98/102 lanes closed in the window carry a merge-SHA binding in verification.md; unbound: UTV2-1365, UTV2-1393, UTV2-1476, UTV2-1520.",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "98/101 lanes closed in the window carry a merge-SHA binding in verification.md; unbound: UTV2-1393, UTV2-1476, UTV2-1520.",
       "measured": {
-        "considered": 102,
+        "considered": 101,
         "bound": 98,
         "unbound": [
-          "UTV2-1365",
           "UTV2-1393",
           "UTV2-1476",
           "UTV2-1520"
@@ -249,8 +248,8 @@
         "query": "no mechanical convergence measurement exists; constitution:check proves artifact preservation and structure only"
       },
       "status": "unknown",
-      "observed_at": "2026-08-05T02:02:22.227Z",
-      "evidence": "UNREADABLE at 2026-08-05T02:02:22.227Z: convergence percentage has no generator in this repo — previous ledgers carried a hand-entered \"~68%\", which this generator refuses to reproduce as a measurement. Not scored as passing.",
+      "observed_at": "2026-08-05T08:28:36.135Z",
+      "evidence": "UNREADABLE at 2026-08-05T08:28:36.135Z: convergence percentage has no generator in this repo — previous ledgers carried a hand-entered \"~68%\", which this generator refuses to reproduce as a measurement. Not scored as passing.",
       "measured": null,
       "unreadable_reason": "convergence percentage has no generator in this repo — previous ledgers carried a hand-entered \"~68%\", which this generator refuses to reproduce as a measurement"
     }
