@@ -11,6 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1619.yml",
+    "docs/06_status/lanes/UTV2-1619.json",
+    "docs/06_status/proof/UTV2-1619",
     "scripts/ops/concurrency-rules.test.ts",
     "scripts/ops/concurrency-rules.ts",
     "scripts/ops/lease-registry.test.ts",

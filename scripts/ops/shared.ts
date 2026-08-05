@@ -10,6 +10,29 @@ export type LaneManifestStatus =
   | 'in_review'
   | 'merged'
   | 'done'
+  /**
+   * UTV2-1619 capability 13. Truthful terminal states, added because the enum
+   * previously offered only `merged` and `done` as non-consuming terminals --
+   * so a lane that failed, was parked, or was superseded could only release its
+   * resources by having a completion written over it, which fabricates an
+   * outcome that never happened.
+   *
+   * `failed`     - the lane ended without completing. Releases resources,
+   *                asserts NO completion, and is refused as success by the
+   *                done-gate.
+   * `parked`     - deliberately set aside, retaining identity, scope lock and
+   *                history. Releases executor attention but keeps the lane.
+   * `superseded` - the work was overtaken by other work that shipped.
+   * `cancelled`  - the work was withdrawn and will not be done.
+   *
+   * `superseded` and `cancelled` are deliberately distinct from `done`:
+   * collapsing them destroys the difference between work that shipped and work
+   * that was abandoned because something else did.
+   */
+  | 'failed'
+  | 'parked'
+  | 'superseded'
+  | 'cancelled'
   | 'blocked'
   | 'reopened';
 export type CanonicalLaneType =
@@ -287,11 +310,90 @@ const ISSUE_PATTERN = /^(?:UTV2|UNI)-\d+$/;
 const VERIFICATION_TARGET_PATTERN = /^UTV2-\d+$/;
 const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN = 'dispatch-auto';
+/**
+ * UTV2-1619 capability 13: capacity is a MATRIX, not one flat set.
+ *
+ * Before this, `ACTIVE_LOCK_STATUSES` answered every capacity question --
+ * total, executor, and type caps were all computed from the same membership.
+ * That conflates two different things: whether a lane occupies a slot, and
+ * whether it occupies an executor's attention. A lane sitting in `in_review`
+ * waiting on a human consumed executor capacity identically to one being
+ * actively worked, so lanes nobody was working denied admission to lanes
+ * somebody would have.
+ *
+ * The sets below are deliberately declared separately rather than derived from
+ * each other, so that changing one cap's semantics cannot silently change
+ * another's.
+ */
+
+/** Occupies a lane slot: counts against the total cap. */
+export const TOTAL_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
+  'started',
+  'in_progress',
+  'in_review',
+  'blocked',
+  'parked',
+  'reopened',
+]);
+
+/**
+ * Occupies an executor's attention: counts against per-executor caps.
+ *
+ * Excludes `in_review`, `blocked` and `parked` -- in all three the lane is
+ * waiting on something outside the executor (a human verdict, a dependency, a
+ * deliberate pause), so no executor is working it and holding an executor slot
+ * misrepresents the board.
+ */
+export const EXECUTOR_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
+  'started',
+  'in_progress',
+  'reopened',
+]);
+
+/**
+ * Occupies a lane-type slot (governance, hygiene, ...): counts against type
+ * caps. Type caps exist to bound concurrent change to a shared surface, which a
+ * lane still does while awaiting review -- so this tracks slot occupancy, not
+ * executor attention.
+ */
+export const TYPE_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
+  'started',
+  'in_progress',
+  'in_review',
+  'blocked',
+  'parked',
+  'reopened',
+]);
+
+/**
+ * Terminal states: the lane has ended. Reaching one of these MUST release every
+ * resource the lane holds -- capacity, lease, locks, worktree, branch. Only
+ * `done` and `merged` assert success; the others explicitly do not.
+ */
+export const TERMINAL_STATUSES = new Set<LaneManifestStatus>([
+  'merged',
+  'done',
+  'failed',
+  'superseded',
+  'cancelled',
+]);
+
+/** Terminal states that assert the work completed. `failed` is never here. */
+export const SUCCESS_TERMINAL_STATUSES = new Set<LaneManifestStatus>(['merged', 'done']);
+
+/**
+ * Retained for existing callers (reconcile, orchestration-reconciler, and the
+ * file-scope guard's mirror). Semantically identical to the total-capacity set
+ * minus `parked`: a parked lane keeps its scope lock, but callers of this
+ * historical name expect "actively holding" membership. Kept as its own literal
+ * rather than derived, so a future change to either set is visible in review.
+ */
 export const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
   'started',
   'in_progress',
   'in_review',
   'blocked',
+  'parked',
   'reopened',
 ]);
 const MANIFEST_STATUSES = new Set<LaneManifestStatus>([
@@ -300,6 +402,10 @@ const MANIFEST_STATUSES = new Set<LaneManifestStatus>([
   'in_review',
   'merged',
   'done',
+  'failed',
+  'parked',
+  'superseded',
+  'cancelled',
   'blocked',
   'reopened',
 ]);
@@ -310,14 +416,31 @@ const LEGACY_LANE_TYPE_TO_EXECUTOR: Partial<Record<LegacyLaneType, LaneExecutor>
   'codex-cloud': 'codex-cloud',
 };
 const CODEX_EXECUTORS = new Set<LaneExecutor>(['codex-cli', 'codex-cloud']);
+/**
+ * UTV2-1619 capability 13: every non-terminal state may reach a truthful
+ * terminal. `failed`, `superseded` and `cancelled` are reachable from anywhere
+ * work can be in flight, because a lane can be abandoned at any point -- and if
+ * the only reachable terminals were `merged`/`done`, recording an honest
+ * outcome would remain impossible, which is the defect this closes.
+ *
+ * `failed`, `superseded` and `cancelled` accept `reopened` so a mistaken
+ * terminal can be corrected, but never transition directly into `done`: a
+ * failed lane that is later completed must be reopened and re-closed through
+ * the normal gate, leaving both facts in the history.
+ */
+const NON_SUCCESS_TERMINALS: LaneManifestStatus[] = ['failed', 'superseded', 'cancelled'];
 const TRANSITIONS: Record<LaneManifestStatus, LaneManifestStatus[]> = {
-  started: ['in_progress', 'blocked', 'reopened', 'started'],
-  in_progress: ['in_review', 'blocked', 'reopened', 'in_progress'],
-  in_review: ['merged', 'blocked', 'reopened', 'in_review'],
-  merged: ['done', 'reopened', 'merged'],
+  started: ['in_progress', 'blocked', 'parked', 'reopened', 'started', ...NON_SUCCESS_TERMINALS],
+  in_progress: ['in_review', 'blocked', 'parked', 'reopened', 'in_progress', ...NON_SUCCESS_TERMINALS],
+  in_review: ['merged', 'blocked', 'parked', 'reopened', 'in_review', ...NON_SUCCESS_TERMINALS],
+  merged: ['done', 'reopened', 'merged', ...NON_SUCCESS_TERMINALS],
   done: ['done', 'reopened'],
-  blocked: ['started', 'in_progress', 'blocked', 'reopened'],
-  reopened: ['in_progress', 'blocked', 'reopened'],
+  blocked: ['started', 'in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
+  parked: ['started', 'in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
+  failed: ['reopened', 'failed'],
+  superseded: ['reopened', 'superseded'],
+  cancelled: ['reopened', 'cancelled'],
+  reopened: ['in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
 };
 
 export function getRepoRoot(): string {
