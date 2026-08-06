@@ -12,6 +12,9 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/close-eligibility-preflight.yml",
+    ".ops/sync/UTV2-1619.yml",
+    "docs/06_status/lanes/UTV2-1619.json",
+    "docs/06_status/proof/UTV2-1619",
     "scripts/ops/truth-check-lib.test.ts",
     "scripts/ops/truth-check-lib.ts"
   ],

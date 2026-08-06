@@ -271,6 +271,299 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
  * Matching now delegates to `matchesLockPattern`, the same helper the pre-merge
  * guard uses, so there is one definition of scope semantics rather than two.
  */
+/**
+ * Close-eligibility preflight (UTV2-1619).
+ *
+ * WHY THIS EXISTS. Five lanes merged green and were then discovered incapable of
+ * producing a truth receipt, each requiring a repair PR after the fact:
+ *
+ *   UTV2-1661  manifest missing `model_routing` -> truth-check exits infra_error
+ *              at M2, masking every later failure; proof MERGE_SHA unreachable
+ *              from main; proof missing pnpm test / pnpm verify / r-level-check.
+ *   UTV2-1634  same shape.
+ *   UTV2-1649  model-routing sidecar missing `override_used` -> the fatal
+ *              sidecar_manifest_routing_mismatch; diff-summary carried no
+ *              merge-SHA anchor so proof-generate refused to rebind it; proof
+ *              missing pnpm verify and r-level-check.
+ *   UTV2-1619  proof missing pnpm verify and r-level-check (capability 17 lane).
+ *
+ * Every one of those defects was present in the packet BEFORE the merge and was
+ * knowable from the PR head alone. The code that rejected them post-merge is
+ * ordinary library code that could have run pre-merge and did not.
+ *
+ * DESIGN: this is a decision module shared by the merge and close paths, not a
+ * second implementation. It calls `evaluateT2ProofEvidence` -- the very function
+ * the close gate uses for P11-P14 -- so the two can never disagree about what a
+ * conformant proof packet is. Re-deriving those rules here would recreate the
+ * duplicated-authority drift class this program keeps finding.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO: pre-merge there is no merge SHA, so merge
+ * reachability (G3), CI results on the merge commit, and the receipt itself are
+ * genuinely unknowable. Those are reported as `not_knowable_pre_merge` rather
+ * than passed or failed. Reporting an unknowable check as `pass` would make the
+ * preflight assert something it cannot see, which is the failure mode the whole
+ * issue exists to eliminate.
+ */
+export type CloseEligibilityCategory = 'evidence' | 'manifest' | 'close' | 'lifecycle';
+
+export type CloseEligibilityStatus = 'pass' | 'fail' | 'not_knowable_pre_merge';
+
+export interface CloseEligibilityFinding {
+  id: string;
+  category: CloseEligibilityCategory;
+  status: CloseEligibilityStatus;
+  detail: string;
+  /** The historical lane whose failure this check exists to prevent, when applicable. */
+  regression_source?: string;
+}
+
+export interface CloseEligibilityPreflightInput {
+  manifest: Pick<
+    LaneManifest,
+    'issue_id' | 'tier' | 'schema_version' | 'created_by' | 'expected_proof_paths' | 'pr_url'
+  > & { model_routing?: unknown };
+  /** Proof artifacts as they exist at the PR head. */
+  proof_artifacts: CloseoutProofArtifact[];
+}
+
+export interface CloseEligibilityPreflightResult {
+  /** False when any check FAILED. `not_knowable_pre_merge` never blocks. */
+  eligible: boolean;
+  findings: CloseEligibilityFinding[];
+  blocking: CloseEligibilityFinding[];
+}
+
+/** Executors whose manifests require a model_routing block at schema_version 2. */
+function requiresModelRouting(manifest: { schema_version?: unknown; created_by?: unknown }): boolean {
+  return Number(manifest.schema_version) >= 2 && String(manifest.created_by ?? '') !== 'claude';
+}
+
+/**
+ * Can `ops:proof-generate` bind this artifact to a merge SHA later?
+ *
+ * UTV2-1649: `diff-summary.md` carried no anchor, so proof-generate refused with
+ * `unbindable_proof_artifact` rather than silently overwriting authored proof.
+ * The refusal was correct; the packet was not bindable and nothing said so
+ * before the merge.
+ */
+export function hasBindableShaAnchor(content: string): boolean {
+  return content
+    .split(/\r?\n/)
+    .some(
+      (line) =>
+        /^\s*MERGE_SHA:/i.test(line) ||
+        /^\s*Merge SHA:/i.test(line) ||
+        /\|\s*Commit SHA\(s\)\s*\|/i.test(line),
+    );
+}
+
+/**
+ * Is a model-routing sidecar structurally conformant?
+ *
+ * UTV2-1649: `override_used` was absent. `proof-generate` requires it to be a
+ * boolean so a sidecar cannot misrepresent who authorized an execution, and 22
+ * of the 23 sidecars on main already carried it -- the rule was near-universally
+ * satisfied and still unenforced at the boundary.
+ */
+export function evaluateModelRoutingSidecar(content: string): { ok: boolean; detail: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return { ok: false, detail: 'model-routing sidecar is not valid JSON' };
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { ok: false, detail: 'model-routing sidecar is not a JSON object' };
+  }
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.override_used !== 'boolean') {
+    return {
+      ok: false,
+      detail:
+        'model-routing sidecar must carry a boolean override_used; without it proof-generate ' +
+        'fails closed with sidecar_manifest_routing_mismatch after the merge',
+    };
+  }
+  for (const field of ['issue_id', 'model', 'reasoning_effort'] as const) {
+    if (typeof record[field] !== 'string' || String(record[field]).trim() === '') {
+      return { ok: false, detail: `model-routing sidecar is missing required field "${field}"` };
+    }
+  }
+  return { ok: true, detail: 'model-routing sidecar carries override_used and execution provenance' };
+}
+
+export function evaluateCloseEligibilityPreflight(
+  input: CloseEligibilityPreflightInput,
+): CloseEligibilityPreflightResult {
+  const findings: CloseEligibilityFinding[] = [];
+  const add = (
+    id: string,
+    category: CloseEligibilityCategory,
+    status: CloseEligibilityStatus,
+    detail: string,
+    regression_source?: string,
+  ): void => {
+    findings.push({ id, category, status, detail, ...(regression_source ? { regression_source } : {}) });
+  };
+
+  const artifacts = input.proof_artifacts ?? [];
+  const byPath = new Map(artifacts.map((a) => [a.path, a]));
+  const combined = artifacts.map((a) => a.content).join('\n');
+
+  // ── 1. Evidence readiness ────────────────────────────────────────────────
+  const expected = input.manifest.expected_proof_paths ?? [];
+  const missing = expected.filter((p) => !byPath.has(p));
+  add(
+    'CEP-E1',
+    'evidence',
+    missing.length === 0 && expected.length > 0 ? 'pass' : 'fail',
+    expected.length === 0
+      ? 'manifest declares no expected_proof_paths'
+      : missing.length === 0
+        ? 'every declared proof artifact is present at the PR head'
+        : `declared proof artifacts missing at the PR head: ${missing.join(', ')}`,
+  );
+
+  const empty = artifacts.filter((a) => a.content.trim() === '').map((a) => a.path);
+  add(
+    'CEP-E2',
+    'evidence',
+    empty.length === 0 ? 'pass' : 'fail',
+    empty.length === 0 ? 'no proof artifact is empty' : `empty proof artifacts: ${empty.join(', ')}`,
+  );
+
+  // Required sections, checked on the verification document specifically.
+  const verification = artifacts.find((a) => /verification\.md$/i.test(a.path));
+  if (verification) {
+    const required = ['# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:'];
+    const absent = required.filter((token) => !verification.content.includes(token));
+    add(
+      'CEP-E3',
+      'evidence',
+      absent.length === 0 ? 'pass' : 'fail',
+      absent.length === 0
+        ? 'verification document carries every required section'
+        : `verification document missing required sections: ${absent.join(', ')}`,
+      'UTV2-1661',
+    );
+  } else {
+    add('CEP-E3', 'evidence', 'fail', 'no verification document found among proof artifacts', 'UTV2-1661');
+  }
+
+  // Required command references -- REUSES the close gate's own P11-P14 rules.
+  for (const check of evaluateT2ProofEvidence({
+    proofPaths: artifacts.map((a) => a.path),
+    proofContents: combined,
+  })) {
+    add(
+      `CEP-E4/${check.id}`,
+      'evidence',
+      check.status === 'pass' ? 'pass' : 'fail',
+      check.detail,
+      check.id === 'P13' || check.id === 'P14' ? 'UTV2-1619' : 'UTV2-1661',
+    );
+  }
+
+  // SHA binding possible.
+  const unbindable = artifacts
+    .filter((a) => /\.(md)$/i.test(a.path))
+    .filter((a) => !hasBindableShaAnchor(a.content))
+    .map((a) => a.path);
+  add(
+    'CEP-E5',
+    'evidence',
+    unbindable.length === 0 ? 'pass' : 'fail',
+    unbindable.length === 0
+      ? 'every markdown proof artifact carries a rebindable merge-SHA anchor'
+      : `proof artifacts cannot be SHA-bound after merge (no MERGE_SHA anchor): ${unbindable.join(', ')}`,
+    'UTV2-1649',
+  );
+
+  const sidecar = artifacts.find((a) => /model-routing\.json$/i.test(a.path));
+  if (sidecar) {
+    const verdict = evaluateModelRoutingSidecar(sidecar.content);
+    add('CEP-E6', 'evidence', verdict.ok ? 'pass' : 'fail', verdict.detail, 'UTV2-1649');
+  }
+
+  // ── 2. Manifest readiness ────────────────────────────────────────────────
+  const tierOk = /^T[123]$/.test(String(input.manifest.tier ?? ''));
+  add(
+    'CEP-M1',
+    'manifest',
+    tierOk ? 'pass' : 'fail',
+    tierOk ? `tier resolves to ${input.manifest.tier}` : `tier "${input.manifest.tier}" is not resolvable`,
+  );
+
+  const needsRouting = requiresModelRouting(input.manifest);
+  const hasRouting = typeof input.manifest.model_routing === 'object' && input.manifest.model_routing !== null;
+  add(
+    'CEP-M2',
+    'manifest',
+    !needsRouting || hasRouting ? 'pass' : 'fail',
+    !needsRouting
+      ? 'model_routing not required for this executor/schema combination'
+      : hasRouting
+        ? 'manifest carries the required model_routing block'
+        : 'manifest is missing model_routing, which makes ops:truth-check exit infra_error at M2 ' +
+          'and mask every later check',
+    'UTV2-1661',
+  );
+
+  let prOk = false;
+  try {
+    prOk = Boolean(input.manifest.pr_url) && Boolean(parsePullRequestUrl(String(input.manifest.pr_url)));
+  } catch {
+    prOk = false;
+  }
+  add(
+    'CEP-M3',
+    'manifest',
+    prOk ? 'pass' : 'fail',
+    prOk ? 'manifest.pr_url is present and parseable' : 'manifest.pr_url is missing or unparseable',
+  );
+
+  // ── 3. Close readiness ───────────────────────────────────────────────────
+  const evidenceBlocking = findings.filter((f) => f.category === 'evidence' && f.status === 'fail');
+  const manifestBlocking = findings.filter((f) => f.category === 'manifest' && f.status === 'fail');
+  add(
+    'CEP-C1',
+    'close',
+    evidenceBlocking.length === 0 && manifestBlocking.length === 0 ? 'pass' : 'fail',
+    evidenceBlocking.length === 0 && manifestBlocking.length === 0
+      ? 'no pre-merge-knowable condition would prevent ops:lane-close from producing a receipt'
+      : `ops:lane-close would fail after merge on: ${[...evidenceBlocking, ...manifestBlocking].map((f) => f.id).join(', ')}`,
+  );
+
+  add(
+    'CEP-C2',
+    'close',
+    'not_knowable_pre_merge',
+    'merge-SHA reachability, CI results on the merge commit, and the receipt itself cannot be ' +
+      'evaluated before the merge exists; they remain the close gate\'s responsibility',
+  );
+
+  // ── 4. Lifecycle readiness ───────────────────────────────────────────────
+  add(
+    'CEP-L1',
+    'lifecycle',
+    'pass',
+    'lane completion and issue completion are separate decisions: ops:lane-close completes a lane ' +
+      'and completes an issue only under the five-condition gate, which requires an explicit ' +
+      'completion intent that a lane closing cannot supply for itself',
+  );
+
+  add(
+    'CEP-L2',
+    'lifecycle',
+    'not_knowable_pre_merge',
+    'whether an automatic Done path exists OUTSIDE this repository cannot be determined from lane ' +
+      'data; external mutation authorities are inventoried and governed separately',
+  );
+
+  const blocking = findings.filter((f) => f.status === 'fail');
+  return { eligible: blocking.length === 0, findings, blocking };
+}
+
 export function evaluateScopeDiff(
   filesChanged: string[],
   fileScopeLock: string[],
