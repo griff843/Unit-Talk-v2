@@ -12,6 +12,9 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/linear-auto-close.yml",
+    ".ops/sync/UTV2-1619.yml",
+    "docs/06_status/lanes/UTV2-1619.json",
+    "docs/06_status/proof/UTV2-1619",
     "scripts/ops/lane-close.test.ts",
     "scripts/ops/lane-close.ts"
   ],
