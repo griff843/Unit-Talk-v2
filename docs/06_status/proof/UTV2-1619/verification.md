@@ -72,6 +72,32 @@ TC=0
 Reported for completeness. Per the coverage statement above it does **not** cover the two
 `scripts/ops` files in this change; it covers the packages and apps that consume them.
 
+### `pnpm verify`
+
+`pnpm verify` was not run on the workstation; its static constituents were run
+individually and are recorded above. CI executed it on the merged head, and that
+run is the authoritative one:
+
+```
+check_run:  verify
+head_sha:   f3c0de91a6d0e090caac1ffd0fb02ba25e990c7a
+conclusion: success
+url: https://github.com/griff843/Unit-Talk-v2/actions/runs/31077723051/job/92540730879
+```
+
+That head is the commit merged as d75679eb4ad172b48eb430a28f79809dd9d21940, and
+`verify` is one of the four required contexts confirmed green on it before merge.
+
+### R-level check (`scripts/ci/r-level-check.ts`)
+
+```
+Verdict: PASS
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+This change touches governance tooling and one workflow; it triggers no R1–R5
+rule and requires no additional artifacts.
+
 ### Workflow validation
 
 ```

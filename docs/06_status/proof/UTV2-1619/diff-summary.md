@@ -1,6 +1,6 @@
 # UTV2-1619 diff summary — capability 17: truth-gated lifecycle completion
 
-MERGE_SHA: ff7c7da1bcb135d50a686428f90fce68dcf18915
+MERGE_SHA: d75679eb4ad172b48eb430a28f79809dd9d21940
 
 - `lane-close.ts`: added `evaluateIssueCompletionEligibility` implementing the five
   completion conditions, and gated the Linear transition in
