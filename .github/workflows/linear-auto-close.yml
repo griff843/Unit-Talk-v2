@@ -154,7 +154,49 @@ jobs:
 
             echo "  uuid=$issue_uuid current_state=$current_state"
 
-            if [ "$current_state" = "Done" ]; then
+            # UTV2-1619 capability 17: truth-gated lifecycle completion.
+            #
+            # A merge event is NOT evidence of completion. This workflow
+            # previously moved an issue to Done purely because a merge commit
+            # named it, which produced three distinct false-Done reproductions
+            # in one day:
+            #   1. post-merge-lane-close FAILED and this still said Done
+            #   2. no lane manifest existed at all, so no receipt was possible
+            #   3. a lane closed truthfully on a multi-increment issue that had
+            #      three capabilities still outstanding
+            #
+            # Completion now requires a lane manifest that is BOTH terminal-
+            # successful AND bound to this exact merge SHA, with a passing
+            # truth-check receipt recorded against that same SHA. Anything else
+            # leaves the issue open and says why. Absence of a manifest means
+            # "not complete" -- the fail-closed direction, and precisely case 2.
+            manifest_path="docs/06_status/lanes/${identifier}.json"
+            completion_block=""
+            if [ ! -f "$manifest_path" ]; then
+              completion_block="no lane manifest at $manifest_path; a merge alone is not evidence of completion"
+            else
+              m_status=$(jq -r '.status // ""' "$manifest_path")
+              m_sha=$(jq -r '.commit_sha // ""' "$manifest_path")
+              r_verdict=$(jq -r '(.truth_check_history // []) | last | .verdict // ""' "$manifest_path")
+              r_sha=$(jq -r '(.truth_check_history // []) | last | .merge_sha // ""' "$manifest_path")
+              r_runner=$(jq -r '(.truth_check_history // []) | last | .runner // ""' "$manifest_path")
+              if [ "$m_status" != "done" ] && [ "$m_status" != "merged" ]; then
+                completion_block="lane status \"$m_status\" does not assert successful completion"
+              elif [ "$r_verdict" != "pass" ]; then
+                completion_block="latest truth-check verdict is \"$r_verdict\", not \"pass\""
+              elif [ "$r_runner" != "ops:lane-close" ] && [ "$r_runner" != "ops:reconcile" ]; then
+                completion_block="truth-check runner \"$r_runner\" is not a canonical runner"
+              elif [ -z "$m_sha" ] || [ "$m_sha" != "$MERGE_SHA" ]; then
+                completion_block="manifest commit_sha \"$m_sha\" is not this merge SHA $MERGE_SHA"
+              elif [ "$r_sha" != "$m_sha" ]; then
+                completion_block="truth-check receipt is bound to $r_sha, not to the manifest's $m_sha"
+              fi
+            fi
+
+            if [ -n "$completion_block" ]; then
+              echo "::notice title=Completion withheld::$identifier left open — $completion_block"
+              echo "  NOT completing $identifier: $completion_block"
+            elif [ "$current_state" = "Done" ]; then
               echo "  already Done — attaching merge comment only"
             else
               # Update to Done

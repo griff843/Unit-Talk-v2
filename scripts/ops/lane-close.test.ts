@@ -28,6 +28,7 @@ import {
   completeIdempotentReclose,
   releaseSelfAcquiredMergeLock,
   selectInferredMergedPr,
+  evaluateIssueCompletionEligibility,
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import {
@@ -2338,7 +2339,10 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
     assert.strictEqual(fs.existsSync(syncPath), false);
     assert.strictEqual(completion.worktree_cleanup, 'removed');
     assert.deepStrictEqual(cleanupCalls, [
-      'linear',
+      // UTV2-1619 capability 17: 'linear' is deliberately absent. This lane
+      // closes successfully, but no explicit final-completion intent was
+      // declared, so the ISSUE is left open. Lane completion is not issue
+      // completion.
       `locks:${manifest.issue_id}:${manifest.branch}`,
       'worktree',
     ]);
@@ -3093,4 +3097,142 @@ test('UTV2-1613: manifestForFailedRepairClose is a no-op when the receipt never 
 
   assert.deepStrictEqual(persisted, repairedManifest);
   assert.deepStrictEqual(persisted.truth_check_history, []);
+});
+
+// ── UTV2-1619 capability 17: truth-gated lifecycle completion ────────────────
+// Acceptance is stated as three preventions, and they are deliberately
+// different in kind. A design that stops only the first two is incomplete:
+//   1. closeout FAILED  -> Done            (no receipt at all)
+//   2. bootstrap/no lane -> Done           (no lane, so no receipt possible)
+//   3. completed LANE   -> multi-increment issue Done   (valid receipt!)
+// The third is the one a receipt-only gate lets through, because its receipt is
+// real and honest. It is why the gate needs five conditions rather than one.
+
+function completionManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
+  return {
+    issue_id: 'UTV2-9500',
+    status: 'done',
+    commit_sha: 'a'.repeat(40),
+    file_scope_lock: ['scripts/ops/lane-close.ts'],
+    files_changed: ['scripts/ops/lane-close.ts'],
+    ...overrides,
+  } as unknown as LaneManifest;
+}
+
+function completionReceipt(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
+  return {
+    verdict: 'pass',
+    merge_sha: 'a'.repeat(40),
+    runner: 'ops:lane-close',
+    checked_at: '2026-08-05T00:00:00.000Z',
+    failures: [],
+    ...overrides,
+  } as unknown as TruthCheckResult;
+}
+
+test('TGC-1: all five conditions satisfied -> the issue may be completed', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt(),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, true, JSON.stringify(result.unsatisfied));
+  assert.strictEqual(result.satisfied.length, 5);
+});
+
+test('TGC-2: PREVENTION 1 -- a failing closeout can never complete an issue', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt({ verdict: 'fail' } as never),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'evidence_truth'));
+});
+
+test('TGC-3: PREVENTION 2 -- no lane means no receipt, so no completion', () => {
+  // The bootstrap case: no manifest existed, so there is no commit_sha, no
+  // delivered scope, and no receipt bound to anything.
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({ commit_sha: null, files_changed: [] } as never),
+    truthCheck: completionReceipt({ merge_sha: '' } as never),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  const failed = result.unsatisfied.map((u) => u.condition);
+  assert.ok(failed.includes('authority_truth'));
+  assert.ok(failed.includes('scope_truth'));
+});
+
+test('TGC-4: PREVENTION 3 -- a truthfully completed lane does NOT complete a multi-increment issue', () => {
+  // Every evidence condition holds: passing receipt, canonical runner, bound to
+  // the merge SHA, scope delivered, terminal success state. Only the explicit
+  // completion intent is absent -- which is exactly the observed reproduction.
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt(),
+    // completionIntent deliberately omitted
+  });
+  assert.strictEqual(result.eligible, false, 'a valid receipt alone must not complete an issue');
+  assert.deepStrictEqual(
+    result.unsatisfied.map((u) => u.condition),
+    ['completion_intent'],
+    'evidence, authority, scope and state all hold; only intent is missing',
+  );
+  assert.strictEqual(result.satisfied.length, 4);
+});
+
+test('TGC-5: a receipt bound to a different commit cannot complete the issue', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({ commit_sha: 'b'.repeat(40) } as never),
+    truthCheck: completionReceipt(),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'authority_truth'));
+});
+
+test('TGC-6: a non-canonical runner is not evidence', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt({ runner: 'some-script' } as never),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'evidence_truth'));
+});
+
+test('TGC-7: terminal states that assert no success cannot complete an issue', () => {
+  for (const status of ['failed', 'superseded', 'cancelled'] as const) {
+    const result = evaluateIssueCompletionEligibility({
+      manifest: completionManifest({ status } as never),
+      truthCheck: completionReceipt(),
+      completionIntent: true,
+    });
+    assert.strictEqual(result.eligible, false, `"${status}" must never complete an issue`);
+    assert.ok(result.unsatisfied.some((u) => u.condition === 'state_truth'));
+  }
+});
+
+test('TGC-8: delivering outside the declared scope lock fails scope truth', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({
+      files_changed: ['scripts/ops/lane-close.ts', 'apps/worker/src/index.ts'],
+    } as never),
+    truthCheck: completionReceipt(),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'scope_truth'));
+});
+
+test('TGC-9: every failing condition is reported, not just the first', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({ status: 'failed', commit_sha: null, files_changed: [] } as never),
+    truthCheck: completionReceipt({ verdict: 'fail', merge_sha: '' } as never),
+  });
+  assert.strictEqual(result.eligible, false);
+  // Fixing these one CI cycle at a time is the failure mode the truth-check M2
+  // short-circuit already demonstrated.
+  assert.strictEqual(result.unsatisfied.length, 5);
 });

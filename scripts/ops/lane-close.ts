@@ -13,6 +13,7 @@ import {
   validatePreflightTokenPathValue,
   writeManifest,
   type TruthCheckResult,
+  SUCCESS_TERMINAL_STATUSES,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
 import {
@@ -44,6 +45,7 @@ import {
   type LaneCloseRepairPacket,
   type MeasuredTruthCheckReceipt,
   type MergeBindingInference,
+  isCanonicalRunner,
 } from './lane-close-repair-packet.js';
 
 /**
@@ -1404,6 +1406,13 @@ export interface SuccessfulLaneCloseResult {
   warnings: string[];
   sync_removed: boolean;
   worktree_cleanup: LaneWorktreeCleanup;
+  /**
+   * UTV2-1619 capability 17: whether the ISSUE was completed, and if not, why.
+   * Surfaced so a lane closing without completing its issue is visibly a
+   * deliberate outcome rather than a silent omission.
+   */
+  issue_completed: boolean;
+  issue_completion: IssueCompletionEligibility;
 }
 
 /**
@@ -1443,7 +1452,149 @@ export function completeAlreadyClosedLaneCleanup(
     warnings: closeoutLocks.warnings,
     sync_removed: syncRemoved,
     worktree_cleanup: worktreeCleanup,
+    // UTV2-1619 capability 17: this path replays residual cleanup for a lane
+    // that was ALREADY closed. It completes nothing and must never be read as a
+    // statement about the issue.
+    issue_completed: false,
+    issue_completion: {
+      eligible: false,
+      satisfied: [],
+      unsatisfied: [
+        {
+          condition: 'completion_intent',
+          reason:
+            'cleanup replay for an already-closed lane never completes an issue; it releases ' +
+            'coordination state only',
+        },
+      ],
+    },
   };
+}
+
+/**
+ * Truth-gated lifecycle completion (UTV2-1619 capability 17).
+ *
+ * WHY THIS EXISTS. Closing a lane and completing an issue were the same act, so
+ * an issue was declared complete whenever any of its lanes closed. That produced
+ * three distinct false-`Done` reproductions in a single day, and they fail in
+ * different ways on purpose -- a design that fixes only the first two is
+ * incomplete:
+ *
+ *   1. Closeout FAILED and the issue was marked Done anyway. `post-merge-lane-close`
+ *      exited non-zero while `Linear Auto-Close`, triggered by the same merge,
+ *      succeeded. No receipt existed.
+ *   2. NO LANE existed at all. A governance bootstrap PR merged for an issue with
+ *      no manifest; completion was asserted with no evidence available, and none
+ *      could have been.
+ *   3. The lane closed TRUTHFULLY -- valid receipt, `runner: ops:lane-close`,
+ *      bound to the merge SHA -- on a multi-increment issue with three
+ *      capabilities still outstanding.
+ *
+ * The third is the one that matters for design: a receipt-only gate PERMITS it,
+ * because the receipt is real and honest. Evidence was never the missing piece.
+ * The missing piece is that lane completion and issue completion are different
+ * facts, and only the first was ever represented.
+ *
+ * Fail-closed direction: absence of an explicit completion intent means "the
+ * issue is not complete". A lane that says nothing about its issue closes the
+ * lane and leaves the issue open.
+ */
+export type IssueCompletionCondition =
+  | 'evidence_truth'
+  | 'authority_truth'
+  | 'scope_truth'
+  | 'state_truth'
+  | 'completion_intent';
+
+export interface IssueCompletionEligibility {
+  eligible: boolean;
+  satisfied: IssueCompletionCondition[];
+  unsatisfied: { condition: IssueCompletionCondition; reason: string }[];
+}
+
+/**
+ * Decide whether closing this lane may also complete its ISSUE.
+ *
+ * All five conditions must hold. Each is checked independently and every failure
+ * is reported, rather than short-circuiting on the first -- an operator who has
+ * to fix these one CI cycle at a time is the failure mode the truth-check M2
+ * short-circuit already demonstrated.
+ */
+export function evaluateIssueCompletionEligibility(input: {
+  manifest: LaneManifest;
+  truthCheck: TruthCheckResult;
+  /**
+   * Explicit operator declaration that this lane completes the issue. Absent or
+   * false leaves the issue open. This is deliberately an explicit act rather
+   * than an inference from lane state: inferring it from a terminal lane is
+   * precisely reproduction 3.
+   */
+  completionIntent?: boolean;
+}): IssueCompletionEligibility {
+  const satisfied: IssueCompletionCondition[] = [];
+  const unsatisfied: { condition: IssueCompletionCondition; reason: string }[] = [];
+  const record = (condition: IssueCompletionCondition, ok: boolean, reason: string): void => {
+    if (ok) satisfied.push(condition);
+    else unsatisfied.push({ condition, reason });
+  };
+
+  // 1. Evidence truth -- a passing receipt from a canonical runner. A merge
+  //    event is never evidence of completion (reproductions 1 and 2).
+  const verdictPass = input.truthCheck.verdict === 'pass';
+  const runnerCanonical = isCanonicalRunner(input.truthCheck.runner ?? 'manual');
+  record(
+    'evidence_truth',
+    verdictPass && runnerCanonical,
+    !verdictPass
+      ? `truth-check verdict is "${input.truthCheck.verdict}", not "pass"`
+      : `truth-check runner "${String(input.truthCheck.runner)}" is not a canonical runner`,
+  );
+
+  // 2. Authority truth -- the receipt is bound to the merge SHA the manifest
+  //    records. A receipt for a different commit proves nothing about this one.
+  const receiptSha = (input.truthCheck.merge_sha ?? '').trim();
+  const manifestSha = (input.manifest.commit_sha ?? '').trim();
+  record(
+    'authority_truth',
+    receiptSha.length > 0 && manifestSha.length > 0 && receiptSha === manifestSha,
+    receiptSha.length === 0 || manifestSha.length === 0
+      ? 'truth-check merge_sha or manifest.commit_sha is missing'
+      : `truth-check merge_sha ${receiptSha} does not match manifest.commit_sha ${manifestSha}`,
+  );
+
+  // 3. Scope truth -- the lane actually delivered, and delivered inside what it
+  //    declared. An empty files_changed cannot substantiate a completion claim.
+  const filesChanged = input.manifest.files_changed ?? [];
+  const lock = input.manifest.file_scope_lock ?? [];
+  const outsideLock = filesChanged.filter(
+    (file) => !lock.some((entry) => file === entry || file.startsWith(`${entry}/`)),
+  );
+  record(
+    'scope_truth',
+    filesChanged.length > 0 && outsideLock.length === 0,
+    filesChanged.length === 0
+      ? 'manifest.files_changed is empty; the lane delivered nothing to substantiate completion'
+      : `files delivered outside the declared scope lock: ${outsideLock.join(', ')}`,
+  );
+
+  // 4. State truth -- the lane reached a terminal state that ASSERTS success.
+  //    `failed`, `superseded` and `cancelled` are terminal but assert no
+  //    completion, and must never complete an issue.
+  const statusAssertsSuccess = SUCCESS_TERMINAL_STATUSES.has(input.manifest.status);
+  record(
+    'state_truth',
+    statusAssertsSuccess,
+    `manifest status "${input.manifest.status}" does not assert successful completion`,
+  );
+
+  // 5. Completion intent -- declared, never inferred.
+  record(
+    'completion_intent',
+    input.completionIntent === true,
+    'no explicit final-completion intent was declared for this issue; the lane closes and the issue stays open',
+  );
+
+  return { eligible: unsatisfied.length === 0, satisfied, unsatisfied };
 }
 
 /**
@@ -1460,6 +1611,11 @@ export async function completeSuccessfulLaneClose(
     repoRoot?: string;
     finalizeManifest?: (issue: string, result: TruthCheckResult) => LaneManifest;
     transitionLinear?: (issue: string) => Promise<void>;
+    /**
+     * UTV2-1619 capability 17: explicit declaration that this lane completes the
+     * ISSUE, not merely the lane. Absent means the issue stays open.
+     */
+    completionIntent?: boolean;
     releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
     cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
   } = {},
@@ -1468,7 +1624,17 @@ export async function completeSuccessfulLaneClose(
     issueId,
     authorizedTruthCheck,
   );
-  await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+  // UTV2-1619 capability 17: lane completion is not issue completion. The
+  // transition happens only when all five conditions hold; otherwise the lane
+  // closes and the issue is deliberately left open, with the reasons recorded.
+  const completionEligibility = evaluateIssueCompletionEligibility({
+    manifest,
+    truthCheck: authorizedTruthCheck,
+    completionIntent: options.completionIntent,
+  });
+  if (completionEligibility.eligible) {
+    await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+  }
 
   let syncRemoved = false;
   let worktreeCleanup: LaneWorktreeCleanup = 'not_requested';

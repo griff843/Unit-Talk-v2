@@ -1,140 +1,126 @@
-# PROOF: UTV2-1619 — capability 13: lifecycle capacity and resource release
+# PROOF: UTV2-1619 — capability 17: truth-gated lifecycle completion
 
-MERGE_SHA: d2f371be10b9f82ba489e40139bc96f4c896e905
+MERGE_SHA: ff7c7da1bcb135d50a686428f90fce68dcf18915
 
 ASSERTIONS:
-- [x] Truthful terminal states exist: `failed`, `superseded`, `cancelled`, plus `parked`.
-- [x] No non-success terminal transitions directly into `done`; correction requires `reopened`.
-- [x] Capacity is a matrix — total, executor and type populations are declared separately.
-- [x] `in_review`, `blocked` and `parked` release executor capacity.
-- [x] `parked` still occupies a lane slot and a type slot, so parking cannot defeat the caps.
-- [x] Every terminal state releases all three capacity kinds.
-- [x] Leases held by ended lanes are detected, with completion distinguished from failure.
-- [x] Detection reports rather than mutates; an unknown lane state is never assumed terminal.
-- [x] `ACTIVE_LOCK_STATUSES` keeps its meaning for out-of-scope consumers.
-- [x] No production, runtime, migration, workflow, or delivery path is touched.
+- [x] Lane completion and issue completion are separate facts; closing a lane no longer
+      completes its issue by itself.
+- [x] A failing closeout cannot complete an issue (prevention 1).
+- [x] A merge with no lane manifest cannot complete an issue (prevention 2).
+- [x] A truthfully completed lane cannot complete a multi-increment issue (prevention 3).
+- [x] Completion requires all five conditions: evidence, authority, scope, state, intent.
+- [x] Every failing condition is reported, not only the first.
+- [x] Absence of completion intent leaves the issue open — the fail-closed direction.
+- [x] A cleanup replay for an already-closed lane completes nothing.
+- [x] No production, runtime, migration, or delivery path is touched.
 
 EVIDENCE:
 
 ## Verification
 
-Executed 2026-08-05 in `.out/worktrees/claude__utv2-1619-lifecycle-resource-release`,
-branch `claude/utv2-1619-lifecycle-resource-release`, based on `c499719f`.
+Executed 2026-08-05 in `.out/worktrees/claude__utv2-1619-truth-gated-lifecycle-completion`,
+branch `claude/utv2-1619-truth-gated-lifecycle-completion`, based on `ff7c7da1`.
 
-### `pnpm type-check`
+### Coverage statement — read this before the numbers
+
+`pnpm type-check` runs `tsc -b tsconfig.json`, whose root config declares 15 project
+references and 0 files, all of them `packages/` or `apps/`. **`scripts/` is in no project
+graph and is therefore not statically type-checked.** Verified empirically: a file in
+`scripts/ops/` whose whole body is `return definitelyNotDefinedAnywhere.value;` passes both
+`pnpm type-check` (exit 0) and `pnpm lint` (exit 0).
+
+So for the two `scripts/ops` files in this change, the real evidence is **`pnpm test`
+(runtime, via tsx) plus lint**. No static type coverage is claimed. This is recorded as
+capability 20.
+
+That is not theoretical here. Three missing-binding errors were introduced while writing
+this change — a variable referenced across function boundaries, and two missing imports
+(`SUCCESS_TERMINAL_STATUSES`, `isCanonicalRunner`). All three passed `type-check` and
+`lint`. Two were found by direct inspection and the third by a runtime test failure:
 
 ```
-> pnpm exec tsc -b tsconfig.json
-TC=0
-```
-
-Clean project-wide. This is the load-bearing result for the enum change: `ACTIVE_LOCK_STATUSES`
-has three consumers outside this lane's scope (`reconcile.ts`, `orchestration-reconciler.ts`,
-and the `file-scope-guard.ts` mirror). Its meaning was left intact and the new terminal states
-were simply excluded from it, so those consumers release capacity for the new states without
-being modified.
-
-### `pnpm lint`
-
-```
-> eslint . --cache --cache-location .cache/eslint/
-LINT=0
+error: 'isCanonicalRunner is not defined'
+  evaluateIssueCompletionEligibility (scripts/ops/lane-close.ts:1543:27)
+  completeSuccessfulLaneClose        (scripts/ops/lane-close.ts:1629:33)
 ```
 
 ### `pnpm test`
 
 ```
 blocks reporting a nonzero '# fail': 0
-aggregate pass=4526 fail=0
+aggregate pass=4535 fail=0
 TEST_EXIT=0
 ```
 
-4515 baseline plus the 11 tests added here. No new test file was created — the tests extend
-`concurrency-rules.test.ts` and `lease-registry.test.ts`, both already wired into `test:ops`,
-so no `package.json` change was needed. That mattered: `package.json` is inside UTV2-1570's
-`file_scope_lock`, and this lane will not override another lane's declared scope.
+4526 baseline plus the 9 tests added here. No new test file — the tests extend
+`lane-close.test.ts`, already wired into `test:ops`, so no `package.json` change was
+needed. That was required rather than convenient: `package.json` is inside another active
+lane's declared `file_scope_lock`, and this lane does not override another lane's scope.
+
+### `pnpm lint`
 
 ```
-[automation-coverage] verdict=PASS fail=0
-[executable-wiring] verdict=PASS required_roots=verify
+LINT=0
 ```
 
-### R-level check (`scripts/ci/r-level-check.ts`)
+### `pnpm type-check`
 
 ```
-Verdict: PASS
-Rules matched: (none) — no R-level artifacts required for this diff
+TC=0
 ```
 
-### `pnpm verify`
+Reported for completeness. Per the coverage statement above it does **not** cover the two
+`scripts/ops` files in this change; it covers the packages and apps that consume them.
 
-`pnpm verify` was not run on this workstation; its static constituents (`type-check`, `lint`,
-`test`) were run individually and are recorded above. CI runs `pnpm verify` on this PR's head
-and that run is authoritative.
+### Workflow validation
+
+```
+YAML OK, jobs: ['linear-auto-close']
+```
 
 ### Scope
 
 ```
- M scripts/ops/concurrency-rules.test.ts
- M scripts/ops/concurrency-rules.ts
- M scripts/ops/lease-registry.test.ts
- M scripts/ops/lease-registry.ts
- M scripts/ops/shared.ts
+ M .github/workflows/linear-auto-close.yml
+ M scripts/ops/lane-close.test.ts
+ M scripts/ops/lane-close.ts
 ```
 
-Five files, all inside the lane's declared `file_scope_lock`. `pnpm test:db` was not run:
-governance tooling with no database access, production parked. No live-DB proof is claimed
-and none is required at T2.
+Exactly the three files this lane declared. `pnpm test:db` was not run: governance tooling
+with no database access, production parked. No live-DB proof is claimed or required at T2.
 
-## What this fixes, measured
+## The three preventions
 
-### Executor capacity counted lane existence, not executor attention
+Acceptance is three preventions, and they fail in **different ways on purpose**. A design
+that stops only the first two is incomplete.
 
-Before this change one set answered every capacity question, so a lane waiting on a human
-consumed an executor slot identically to one being actively worked. On 2026-08-04 three of
-the sixteen active lanes were waiting solely on a PM verdict, each holding a Claude slot
-nobody was using.
+| # | reproduction | receipt present? | test |
+|---|---|---|---|
+| 1 | closeout FAILED, issue marked Done | none | TGC-2 |
+| 2 | no lane existed at all | impossible | TGC-3 |
+| 3 | lane closed truthfully, multi-increment issue | **valid** | TGC-4 |
 
-`CAP-1` is the regression fixture: four lanes in `in_review` against a Claude cap of 4 must
-not exhaust it. `CAP-2` asserts the opposite direction — `in_progress` does consume an
-executor slot — so the fix cannot be satisfied by simply counting less.
+**Prevention 3 is the one that defeats a receipt-only gate.** In the observed case the
+receipt was real: `verdict: pass`, `runner: ops:lane-close`, bound to the merge SHA. The
+lane genuinely finished. The issue did not. TGC-4 encodes exactly that shape — all four
+evidence conditions satisfied (`satisfied.length === 4`) with `completion_intent` as the
+sole unsatisfied condition — so the test fails if anyone later "simplifies" the gate back
+to checking evidence alone.
 
-### Parking freed nothing
+## Design notes
 
-`parked` releases executor capacity while retaining the lane's identity, scope lock and
-history. `CAP-3` asserts both halves: no executor slot, but still a lane slot. The second
-half is the important one — without it, "park it" becomes the way to defeat the caps that
-capability 9 just made real.
+**Intent is declared, never inferred.** Inferring completion from a lane reaching a
+terminal state *is* reproduction 3. Absence of intent means the issue stays open.
 
-### There was no truthful way to end a failed lane
+**All failures are reported together.** `TGC-9` asserts five simultaneous failures produce
+five reasons. Discovering blocking conditions one CI cycle at a time is the failure mode
+the truth-check M2 short-circuit already demonstrated on this program.
 
-The enum offered only `merged` and `done` as non-consuming terminals, so a lane that failed
-could release its resources only by having a completion written over it. `failed`,
-`superseded` and `cancelled` are now reachable from every in-flight state. `CAP-4` asserts
-all five terminals release all three capacity kinds.
+**The cleanup-replay path completes nothing.** `completeAlreadyClosedLaneCleanup` releases
+coordination state for a lane that was already closed; it now returns
+`issue_completed: false` with a stated reason rather than borrowing another function's
+verdict.
 
-### A closed lane kept its lease for seventeen hours
-
-UTV2-1634 truth-closed at `2026-08-04T20:03:44Z` — manifest on `main` reads `status: done`,
-`commit_sha: 5b0c20b3`. Its lease was still `status: "active"` the next day, holding
-`scripts/ops/shared.ts` and `scripts/ops/concurrency-rules.ts` — the exact files this lane
-needed. Release was bound to TTL expiry, not to the lane's recorded transition; left alone
-the lease would have expired at 19:18 by clock, with the lane's `done` state playing no part.
-
-`ORPH-1` uses that exact case as its fixture. `ORPH-2` covers all five terminals and asserts
-`lane_completed` distinguishes `done`/`merged` from `failed`/`superseded`/`cancelled`, so a
-report can never imply a failed lane succeeded.
-
-Two deliberate refusals, both asserted:
-
-* `ORPH-3` — no live state is ever reported, including `parked`, which is not terminal.
-* `ORPH-4` — an **unknown** lane state is skipped rather than treated as terminal. Reclaiming
-  on absence would destroy a live lane's lease whenever a manifest read failed.
-
-## Scope of this increment
-
-This delivers the lifecycle states, the capacity matrix, and lease detection. Still open in
-capability 13, and not claimed here: automatic lease release on terminal transition, worktree
-and branch cleanup, file lock release, residue cleanup, and shadow artifact reconciliation.
-Detection is the prerequisite for those and lands first deliberately — a sweep that mutates
-before its classification is trustworthy is how real lane state gets destroyed.
+**Both authorities are gated.** `lane-close.ts` covers the sanctioned closure path;
+`linear-auto-close.yml` covers the merge-triggered path that produced reproductions 1 and
+2. Gating only one would leave the other able to complete an issue unaided.
