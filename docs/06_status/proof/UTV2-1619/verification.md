@@ -1,6 +1,6 @@
 # PROOF: UTV2-1619 — capability 17: truth-gated lifecycle completion
 
-MERGE_SHA: ff7c7da1bcb135d50a686428f90fce68dcf18915
+MERGE_SHA: d75679eb4ad172b48eb430a28f79809dd9d21940
 
 ASSERTIONS:
 - [x] Lane completion and issue completion are separate facts; closing a lane no longer

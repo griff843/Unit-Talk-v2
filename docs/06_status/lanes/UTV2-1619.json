@@ -9,7 +9,14 @@
   "base_branch": "main",
   "commit_sha": "d75679eb4ad172b48eb430a28f79809dd9d21940",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1388",
-  "files_changed": [],
+  "files_changed": [
+    ".github/workflows/linear-auto-close.yml",
+    "docs/06_status/proof/UTV2-1619/bootstrap-admission-receipt.json",
+    "docs/06_status/proof/UTV2-1619/diff-summary.md",
+    "docs/06_status/proof/UTV2-1619/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows/linear-auto-close.yml",
     ".ops/sync/UTV2-1619.yml",
@@ -22,12 +29,12 @@
     "docs/06_status/proof/UTV2-1619/diff-summary.md",
     "docs/06_status/proof/UTV2-1619/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-08-05T19:59:32.474Z",
-  "heartbeat_at": "2026-08-06T12:14:07.046Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-06T16:13:36.573Z",
+  "closed_at": "2026-08-06T16:13:36.573Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1619-truth-gated-lifecycle-completion.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -58,6 +65,13 @@
       "merge_sha": "d75679eb4ad172b48eb430a28f79809dd9d21940",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-06T16:13:34.119Z",
+      "verdict": "pass",
+      "merge_sha": "d75679eb4ad172b48eb430a28f79809dd9d21940",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
