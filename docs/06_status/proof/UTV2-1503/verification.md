@@ -120,6 +120,60 @@ Terminal summary:
 
 The smoke ran against Supabase project `zfzdnfwdarxucxtaojxm` and used the repository/service paths already defined by the suite. Test-created submission and pick records are cleaned up by the tests. This documentation-only lane performs no separate production mutation.
 
+### Standalone type-check and unit suites
+
+Added during the close-eligibility repair. `CEP-E4/P12` requires the verification
+log to reference `pnpm type-check` and `pnpm test` explicitly. Both were already
+covered by `pnpm verify` above, but the requirement is for the commands to be
+evidenced in their own right — so they were **executed standalone against this
+head**, not asserted from the `verify` run.
+
+Command executed:
+
+```text
+pnpm type-check
+```
+
+Result: PASS, exit code 0. (`pnpm exec tsc -b tsconfig.json` — full project-
+references build, no diagnostics emitted.)
+
+Command executed:
+
+```text
+pnpm test
+```
+
+Terminal summary:
+
+```text
+# tests 4579
+# suites 0
+# pass 4579
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Exit code 0. No `not ok` lines and no lifecycle errors across the run.
+
+**Environment note, recorded because it produced a false red.** The first
+execution of `pnpm test` in this worktree failed 40/569, every failure sharing
+one cause:
+
+```text
+RuntimeConfigError: api runtime mode UNIT_TALK_API_RUNTIME_MODE
+must be fail_open or fail_closed.   (runtimeMode: "test")
+```
+
+That was **not** a defect in this lane. The worktree's `local.env` was a stale
+copy predating a tightening of that validation on `main`, carrying
+`UNIT_TALK_API_RUNTIME_MODE=test`. It was repaired through the sanctioned
+`scripts/link-worktree-env.ts` path after confirming the worktree copy held no
+keys absent from the control checkout, restoring the hardlink. The run above is
+post-repair. The failing run is recorded here rather than discarded, because a
+proof bundle that silently omits a red run is not a proof bundle.
+
 ### R-level compliance
 
 Command executed:
