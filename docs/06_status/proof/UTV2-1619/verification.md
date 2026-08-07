@@ -1,6 +1,6 @@
 # PROOF: UTV2-1619 — close eligibility preflight
 
-MERGE_SHA: 773b582d0306c67c118731652cfed18c5a6ea102
+MERGE_SHA: f541fe51b1e781729385b9212ecd9a6d8a135cd1
 
 ASSERTIONS:
 - [x] A lane fails before merge if it would otherwise require a repair PR after merge.
