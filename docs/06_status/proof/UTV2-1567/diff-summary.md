@@ -1,5 +1,13 @@
 # UTV2-1567 — Diff Summary
 
+MERGE_SHA: pending
+
+Rebindable anchor, added for CEP-E5 (UTV2-1649). `post-merge-lane-close.yml`
+rewrites this line with the real merge commit after the PR lands; without the
+anchor line the binder refuses the artifact rather than overwriting authored
+proof, and `ops:lane-close` fails after merge — which CEP caught here, before
+the merge, on this lane's own head.
+
 Issue: UTV2-1567
 Tier: T2
 Lane type: governance

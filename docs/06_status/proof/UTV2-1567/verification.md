@@ -110,6 +110,86 @@ $ pnpm verify
 (exit code 0)
 ```
 
+## Standalone type-check, unit suite, and R-level compliance
+
+Added for the close-eligibility repair. CEP flagged `CEP-E4/P12` (verification
+log must reference `pnpm type-check` and `pnpm test`) and `CEP-E4/P14` (must
+reference `scripts/ci/r-level-check.ts`) on this lane's head **before merge**.
+Both were executed standalone against the post-merge head rather than asserted
+from the `pnpm verify` run.
+
+```text
+$ pnpm type-check
+```
+
+Result: PASS, exit code 0 (`pnpm exec tsc -b tsconfig.json`, full
+project-references build, no diagnostics).
+
+```text
+$ pnpm lint
+```
+
+Result: PASS, exit code 0.
+
+```text
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+
+Verdict: PASS
+Changed files: 7
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+Exit code 0.
+
+```text
+$ pnpm test
+
+# tests 4579
+# pass 4579
+# fail 0
+```
+
+Exit code 0, aggregated across all suites; zero `not ok` lines in the run. See
+the regression note below for the failure this run initially produced and how
+it was fixed.
+
+### Recorded red run: this merge broke three of UTV2-1589's own tests
+
+The first `pnpm test` after the merge failed **3 / 2055**, all in
+`scripts/ops/lane-close.test.ts`:
+
+```text
+not ok 968 - UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts …" step
+not ok 969 - UTV2-1589 "Bind proof artifacts …" also skips when a governed manifest-only repair PR merges via push
+not ok 970 - UTV2-1589 "Bind proof artifacts …" never binds model-routing.json itself
+```
+
+Cause — and it is a genuine latent fragility in the *checking* code, not just
+an authoring slip. Those tests locate the step under test with a bare
+first-occurrence scan:
+
+```js
+const bindStepIndex = workflow.indexOf('Bind proof artifacts to merge SHA');
+```
+
+The honest-partial comment added to the `Resolve merge SHA` step referred to
+its consumer **by that exact name**. Because the comment sits *above* the real
+step, `indexOf` matched the comment, and all three tests silently asserted
+against the wrong step's `if:` — reporting a UTV2-1589 safety regression that
+did not exist. The push-only guard was intact the whole time.
+
+Fixed by removing every occurrence of that string above the step's own
+`- name:` line, and leaving a comment at the site explaining why it must stay
+that way. Notably the *first* fix attempt still failed, because it quoted the
+offending string verbatim while explaining the hazard — recorded here because
+that is precisely how this class of defect survives review.
+
+**This is a name-collision fragility worth generalizing:** a static workflow
+assertion that locates its target by unanchored `indexOf` on a human-readable
+step name can be retargeted by any prose that mentions the name. It fails
+*loudly but misleadingly* — pointing at a safety regression rather than at
+itself. Anchoring the scan to `- name: ` would remove the whole class.
+
 ## Tier
 
 T2 — CI workflow logic + regression test only.

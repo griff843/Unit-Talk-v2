@@ -202,9 +202,21 @@ jobs:
         # HONEST PARTIAL -- READ BEFORE TRUSTING THIS STEP (PM decision
         # 2026-08-04, tracked as UTV2-1673). This step's workflow_dispatch
         # branch is currently UNREACHABLE in effect. Its only consumer is the
-        # "Bind proof artifacts to merge SHA" step below, which UTV2-1589
-        # restricted to `github.event_name == 'push'` for a documented
-        # safety reason (see that step's comment: an early bind on a replay
+        # proof-binding step below, which UTV2-1589 restricted to
+        # `github.event_name == 'push'` for a documented safety reason.
+        #
+        # NOTE: do not write that step's full name anywhere above its own
+        # `- name:` line -- not even inside a comment, and not even to quote
+        # it as an example. UTV2-1589's regression tests in
+        # scripts/ops/lane-close.test.ts locate that step with a bare
+        # `workflow.indexOf(<its full name>)` first-occurrence scan, so any
+        # earlier occurrence silently retargets them at the wrong step and
+        # they assert against this step's `if:` instead. Three of them failed
+        # exactly that way while this comment was being written -- and then
+        # again on the first attempt to fix it, because the fix quoted the
+        # offending string verbatim while explaining the hazard.
+        #
+        # (See the binding step's own comment: an early bind on a replay
         # trusts manifest.pr_url from disk, without the GitHub-backed
         # validation `ops:lane-close --repair-merged` performs immediately
         # afterward, and can permanently deadlock model-routing.json's
