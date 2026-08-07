@@ -4,8 +4,8 @@
   "issue_id": "UTV2-1619",
   "lane_type": "governance",
   "tier": "T2",
-  "branch": "claude/utv2-1619-truth-gated-lifecycle-completion",
-  "admitted_at": "2026-08-05T19:59:32.479Z",
+  "branch": "claude/utv2-1619-close-eligibility-preflight",
+  "admitted_at": "2026-08-06T20:48:24.711Z",
   "authorization": {
     "issue_id": "UTV2-1619",
     "lane_type": "governance",
@@ -19,7 +19,7 @@
   "authorization_source": {
     "path": "docs/governance/BOOTSTRAP_AUTHORIZATIONS.json",
     "ref": "origin/main",
-    "sha": "ff7c7da1bcb135d50a686428f90fce68dcf18915"
+    "sha": "773b582d0306c67c118731652cfed18c5a6ea102"
   },
   "suppressed_violations": [
     {
