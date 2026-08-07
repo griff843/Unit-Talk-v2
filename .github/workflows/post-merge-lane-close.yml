@@ -188,6 +188,75 @@ jobs:
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve merge SHA
+        # UTV2-1567: github.sha is only correct for the push trigger, where it
+        # genuinely is the new merge commit. For a workflow_dispatch replay
+        # (e.g. re-closing an already-merged ghost lane), github.sha resolves
+        # to whatever commit is checked out at dispatch time -- today's main
+        # HEAD -- not the historical merge SHA of the target issue's actual
+        # PR. This step resolves the real merge SHA from the manifest's own
+        # pr_url via the GitHub API. Falls back to github.sha if the PR lookup
+        # fails for any reason (e.g. missing/malformed pr_url) so a
+        # push-triggered close is never blocked by this step.
+        #
+        # HONEST PARTIAL -- READ BEFORE TRUSTING THIS STEP (PM decision
+        # 2026-08-04, tracked as UTV2-1673). This step's workflow_dispatch
+        # branch is currently UNREACHABLE in effect. Its only consumer is the
+        # proof-binding step below, which UTV2-1589 restricted to
+        # `github.event_name == 'push'` for a documented safety reason.
+        #
+        # NOTE: do not write that step's full name anywhere above its own
+        # `- name:` line -- not even inside a comment, and not even to quote
+        # it as an example. UTV2-1589's regression tests in
+        # scripts/ops/lane-close.test.ts locate that step with a bare
+        # `workflow.indexOf(<its full name>)` first-occurrence scan, so any
+        # earlier occurrence silently retargets them at the wrong step and
+        # they assert against this step's `if:` instead. Three of them failed
+        # exactly that way while this comment was being written -- and then
+        # again on the first attempt to fix it, because the fix quoted the
+        # offending string verbatim while explaining the hazard.
+        #
+        # (See the binding step's own comment: an early bind on a replay
+        # trusts manifest.pr_url from disk, without the GitHub-backed
+        # validation `ops:lane-close --repair-merged` performs immediately
+        # afterward, and can permanently deadlock model-routing.json's
+        # immutable closeout_binding). On `push`, this step returns
+        # github.sha -- i.e. behavior is unchanged from before UTV2-1567.
+        #
+        # Both are preserved deliberately: this lane does NOT deliver
+        # correct workflow_dispatch replay binding, and must not be read as
+        # having done so. Widening the gate to
+        # `push' || 'workflow_dispatch'` is the WRONG fix and is explicitly
+        # out of scope here. UTV2-1673 owns the real fix: make replay
+        # binding safe (PR identity validation + merge-SHA ownership and
+        # reachability + separate authorization for immutable artifacts),
+        # then allow it. Until UTV2-1673 lands, correct replay binding comes
+        # from `ops:lane-close --repair-merged`, which resolves the SHA from
+        # GitHub's authoritative pr.mergeSha on every trigger.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        id: resolve_sha
+        env:
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            pr_url=$(jq -r '.pr_url // empty' "$MANIFEST_PATH")
+            pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$' || true)
+            merge_sha=""
+            if [ -n "$pr_number" ]; then
+              merge_sha=$(gh pr view "$pr_number" --json mergeCommit -q '.mergeCommit.oid // empty' 2>/dev/null || true)
+            fi
+            if [ -n "$merge_sha" ]; then
+              echo "::notice title=post-merge-lane-close::workflow_dispatch replay resolved merge SHA $merge_sha from PR #$pr_number (not github.sha)."
+              echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+            else
+              echo "::warning title=post-merge-lane-close::Could not resolve merge SHA from manifest.pr_url ($pr_url) — falling back to github.sha, which may be wrong for a workflow_dispatch replay."
+              echo "merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Bind proof artifacts to merge SHA
         # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
         # the script below. ops:proof-generate never binds model-routing.json
@@ -238,7 +307,7 @@ jobs:
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
-          MERGE_SHA: ${{ github.sha }}
+          MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

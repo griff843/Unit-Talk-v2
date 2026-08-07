@@ -24,6 +24,7 @@ import {
   type CommitCheckResult,
   type EvidenceBundleV1,
   type GitHubCheckRun,
+  evaluateCloseEligibilityPreflight,
 } from './truth-check-lib.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import { getRepoRoot } from './shared.js';
@@ -1442,4 +1443,251 @@ test('S1: the historical UTV2-1640 scope lock is unchanged by this repair', () =
     fs.readFileSync(path.join(repoRoot, 'docs/06_status/lanes/UTV2-1640.json'), 'utf8'),
   ) as { file_scope_lock: string[] };
   assert.deepStrictEqual(manifest.file_scope_lock, UTV2_1640_SCOPE);
+});
+
+// ── UTV2-1619: close-eligibility preflight ──────────────────────────────────
+// Every fixture below is reconstructed from a lane that actually merged green
+// and then could not truth-close, each requiring a repair PR afterwards. The
+// acceptance criterion is exactly that: a lane must fail BEFORE merge if it
+// would otherwise require a repair PR AFTER merge.
+
+const CEP_CONFORMANT_VERIFICATION = [
+  '# PROOF: UTV2-9000 — example',
+  '',
+  'MERGE_SHA: ' + 'a'.repeat(40),
+  '',
+  'ASSERTIONS:',
+  '- [x] something was verified',
+  '',
+  'EVIDENCE:',
+  '',
+  '## Verification',
+  '',
+  '```',
+  'pnpm type-check -> 0',
+  'pnpm test -> 0',
+  'pnpm verify -> green in CI',
+  'scripts/ci/r-level-check.ts -> PASS',
+  '```',
+].join('\n');
+
+const CEP_CONFORMANT_DIFF_SUMMARY = [
+  '# UTV2-9000 diff summary',
+  '',
+  'MERGE_SHA: ' + 'a'.repeat(40),
+  '',
+  '- did a thing',
+].join('\n');
+
+const CEP_CONFORMANT_SIDECAR = JSON.stringify({
+  issue_id: 'UTV2-9000',
+  model: 'gpt-5.6-sol',
+  reasoning_effort: 'high',
+  override_used: false,
+});
+
+function cepInput(overrides: Record<string, unknown> = {}) {
+  const artifacts = (overrides.proof_artifacts as unknown[]) ?? [
+    { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+  ];
+  return {
+    manifest: {
+      issue_id: 'UTV2-9000',
+      tier: 'T2',
+      schema_version: 2,
+      created_by: 'claude',
+      expected_proof_paths: (artifacts as { path: string }[]).map((a) => a.path),
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1234',
+      ...(overrides.manifest as object ?? {}),
+    },
+    proof_artifacts: artifacts,
+  } as never;
+}
+
+test('CEP-0: a conformant packet is eligible before merge', () => {
+  const r = evaluateCloseEligibilityPreflight(cepInput());
+  assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking, null, 2));
+});
+
+// CEP-E2 scope. Found live on this lane's own PR (#1390): the check globbed the
+// proof directory and failed on `docs/06_status/proof/UTV2-1619/.gitkeep`, a
+// directory placeholder that exists precisely to be empty and is not a declared
+// artifact. These two tests pin both directions so the repair cannot drift into
+// a weakening — an undeclared placeholder must be ignored, and a DECLARED empty
+// artifact must still fail.
+test('CEP-E2: an undeclared empty placeholder does not block eligibility', () => {
+  const declared = [
+    { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+  ];
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      // `.gitkeep` is present at the head but absent from expected_proof_paths.
+      proof_artifacts: [...declared, { path: 'docs/06_status/proof/UTV2-9000/.gitkeep', content: '' }],
+      manifest: { expected_proof_paths: declared.map((a) => a.path) },
+    }),
+  );
+  assert.ok(
+    !r.blocking.some((f) => f.id === 'CEP-E2'),
+    `CEP-E2 must ignore undeclared placeholders: ${JSON.stringify(r.blocking, null, 2)}`,
+  );
+});
+
+test('CEP-E2: a DECLARED empty proof artifact still blocks eligibility', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: '   \n  ' },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(
+    r.blocking.some((f) => f.id === 'CEP-E2'),
+    'an empty DECLARED artifact must still fail — the repair narrows the input set, not the rule',
+  );
+});
+
+test('CEP-1: UTV2-1661 regression — manifest missing model_routing is caught pre-merge', () => {
+  // The real defect: truth-check exits infra_error at M2 and masks every later
+  // check, so the lane merged and then could not close.
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { created_by: 'codex-cli', schema_version: 2 } }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-M2'));
+  assert.strictEqual(r.blocking.find((f) => f.id === 'CEP-M2')?.regression_source, 'UTV2-1661');
+});
+
+test('CEP-2: UTV2-1661/1619 regression — proof missing pnpm verify is caught pre-merge', () => {
+  const stripped = CEP_CONFORMANT_VERIFICATION.replace('pnpm verify -> green in CI', 'nothing here');
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: stripped },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E4/P13'));
+});
+
+test('CEP-3: UTV2-1619 regression — proof missing r-level-check is caught pre-merge', () => {
+  const stripped = CEP_CONFORMANT_VERIFICATION.replace('scripts/ci/r-level-check.ts -> PASS', 'R-level check ok');
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: stripped },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E4/P14'));
+});
+
+test('CEP-4: UTV2-1649 regression — unbindable diff-summary is caught pre-merge', () => {
+  // proof-generate refused this after the merge with unbindable_proof_artifact.
+  const noAnchor = '# UTV2-9000 diff summary\n\n- did a thing\n';
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: noAnchor },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  const f = r.blocking.find((x) => x.id === 'CEP-E5');
+  assert.ok(f, 'unbindable artifact must block');
+  assert.strictEqual(f?.regression_source, 'UTV2-1649');
+});
+
+test('CEP-5: UTV2-1649 regression — sidecar missing override_used is caught pre-merge', () => {
+  const bad = JSON.stringify({ issue_id: 'UTV2-9000', model: 'gpt-5.6-sol', reasoning_effort: 'high' });
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+        { path: 'docs/06_status/proof/UTV2-9000/model-routing.json', content: bad },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E6'));
+});
+
+test('CEP-6: a valid sidecar passes', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+        { path: 'docs/06_status/proof/UTV2-9000/model-routing.json', content: CEP_CONFORMANT_SIDECAR },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking));
+});
+
+test('CEP-7: a declared proof path absent at the head is caught pre-merge', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { expected_proof_paths: ['docs/06_status/proof/UTV2-9000/evidence.json'] } }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E1'));
+});
+
+test('CEP-8: missing required verification sections are caught pre-merge', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: 'MERGE_SHA: ' + 'a'.repeat(40) },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E3'));
+});
+
+test('CEP-9: an unresolvable tier and unparseable pr_url are caught pre-merge', () => {
+  const r = evaluateCloseEligibilityPreflight(cepInput({ manifest: { tier: 'T9', pr_url: null } }));
+  assert.strictEqual(r.eligible, false);
+  const ids = r.blocking.map((f) => f.id);
+  assert.ok(ids.includes('CEP-M1'));
+  assert.ok(ids.includes('CEP-M3'));
+});
+
+test('CEP-10: unknowable-before-merge checks never block, and are never reported as pass', () => {
+  const r = evaluateCloseEligibilityPreflight(cepInput());
+  const unknowable = r.findings.filter((f) => f.status === 'not_knowable_pre_merge');
+  assert.ok(unknowable.length >= 2, 'merge-SHA/CI and external-authority checks must be unknowable');
+  // Asserting them as pass would make the preflight claim something it cannot see.
+  assert.strictEqual(unknowable.some((f) => r.blocking.includes(f)), false);
+  assert.ok(unknowable.some((f) => f.id === 'CEP-C2'));
+  assert.ok(unknowable.some((f) => f.id === 'CEP-L2'));
+});
+
+test('CEP-11: close readiness reports which conditions would fail lane-close after merge', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { created_by: 'codex-cli', schema_version: 2 } }),
+  );
+  const c1 = r.findings.find((f) => f.id === 'CEP-C1');
+  assert.strictEqual(c1?.status, 'fail');
+  assert.match(c1?.detail ?? '', /ops:lane-close would fail after merge on:.*CEP-M2/);
+});
+
+test('CEP-12: every blocking finding names a category, so failures are actionable by area', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { tier: 'T9', created_by: 'codex-cli', schema_version: 2, pr_url: null } }),
+  );
+  assert.ok(r.blocking.length >= 3);
+  for (const f of r.blocking) {
+    assert.ok(['evidence', 'manifest', 'close', 'lifecycle'].includes(f.category), f.id);
+  }
 });
