@@ -27,7 +27,7 @@
   "status": "superseded",
   "started_at": "2026-07-31T12:39:06.080Z",
   "heartbeat_at": "2026-07-31T21:30:29.572Z",
-  "closed_at": "2026-08-07T00:45:00.000Z",
+  "closed_at": "2026-08-07T10:17:59.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1635-resolve-c1-proof-bundles.result.json",
   "created_by": "claude",
@@ -51,7 +51,7 @@
       "detected_by": "claude"
     },
     {
-      "at": "2026-08-07T00:45:00.000Z",
+      "at": "2026-08-07T10:17:59.000Z",
       "reason": "PM 2026-08-07: main is authoritative for UTV2-1635. The lane truth-closed on main as `done` (closed_at 2026-07-31T21:34:04.245Z, bound to PR #1337). PR #1344 is a superseded alternative implementation and will not merge.",
       "by": "pm"
     }
