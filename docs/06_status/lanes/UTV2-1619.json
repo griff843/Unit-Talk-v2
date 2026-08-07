@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1619-close-eligibility-preflight",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1390",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/close-eligibility-preflight.yml",

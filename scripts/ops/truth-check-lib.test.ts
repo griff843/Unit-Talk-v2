@@ -1510,6 +1510,46 @@ test('CEP-0: a conformant packet is eligible before merge', () => {
   assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking, null, 2));
 });
 
+// CEP-E2 scope. Found live on this lane's own PR (#1390): the check globbed the
+// proof directory and failed on `docs/06_status/proof/UTV2-1619/.gitkeep`, a
+// directory placeholder that exists precisely to be empty and is not a declared
+// artifact. These two tests pin both directions so the repair cannot drift into
+// a weakening — an undeclared placeholder must be ignored, and a DECLARED empty
+// artifact must still fail.
+test('CEP-E2: an undeclared empty placeholder does not block eligibility', () => {
+  const declared = [
+    { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+  ];
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      // `.gitkeep` is present at the head but absent from expected_proof_paths.
+      proof_artifacts: [...declared, { path: 'docs/06_status/proof/UTV2-9000/.gitkeep', content: '' }],
+      manifest: { expected_proof_paths: declared.map((a) => a.path) },
+    }),
+  );
+  assert.ok(
+    !r.blocking.some((f) => f.id === 'CEP-E2'),
+    `CEP-E2 must ignore undeclared placeholders: ${JSON.stringify(r.blocking, null, 2)}`,
+  );
+});
+
+test('CEP-E2: a DECLARED empty proof artifact still blocks eligibility', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: '   \n  ' },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(
+    r.blocking.some((f) => f.id === 'CEP-E2'),
+    'an empty DECLARED artifact must still fail — the repair narrows the input set, not the rule',
+  );
+});
+
 test('CEP-1: UTV2-1661 regression — manifest missing model_routing is caught pre-merge', () => {
   // The real defect: truth-check exits infra_error at M2 and masks every later
   // check, so the lane merged and then could not close.

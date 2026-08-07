@@ -424,12 +424,27 @@ export function evaluateCloseEligibilityPreflight(
         : `declared proof artifacts missing at the PR head: ${missing.join(', ')}`,
   );
 
-  const empty = artifacts.filter((a) => a.content.trim() === '').map((a) => a.path);
+  // Emptiness is only meaningful for artifacts the manifest actually DECLARES.
+  // Scanning every file under the proof directory also catches structural
+  // placeholders -- a `.gitkeep` exists precisely to be empty, and failing a
+  // lane for it reports a defect where there is none. CEP-E1 above already
+  // scopes to `expected_proof_paths`; this check is scoped the same way so the
+  // two agree on what a proof artifact is.
+  //
+  // This does not weaken the gate: a declared artifact that is empty still
+  // fails, which is the case that actually matters. It narrows the input set to
+  // the declared one rather than relaxing the rule applied to it.
+  const expectedSet = new Set(expected);
+  const empty = artifacts
+    .filter((a) => expectedSet.has(a.path) && a.content.trim() === '')
+    .map((a) => a.path);
   add(
     'CEP-E2',
     'evidence',
     empty.length === 0 ? 'pass' : 'fail',
-    empty.length === 0 ? 'no proof artifact is empty' : `empty proof artifacts: ${empty.join(', ')}`,
+    empty.length === 0
+      ? 'no declared proof artifact is empty'
+      : `empty proof artifacts: ${empty.join(', ')}`,
   );
 
   // Required sections, checked on the verification document specifically.
