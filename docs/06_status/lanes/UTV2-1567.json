@@ -15,8 +15,7 @@
     "docs/06_status/lanes/UTV2-1567.json",
     "docs/06_status/proof/UTV2-1567/.gitkeep",
     "docs/06_status/proof/UTV2-1567/diff-summary.md",
-    "docs/06_status/proof/UTV2-1567/verification.md",
-    "scripts/ops/post-merge-lane-close-workflow.test.ts"
+    "docs/06_status/proof/UTV2-1567/verification.md"
   ],
   "file_scope_lock": [
     ".github/workflows/post-merge-lane-close.yml",

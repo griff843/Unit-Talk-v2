@@ -42,15 +42,31 @@ lane/proof/sync artifacts verified byte-identical across the merge.
 ## Fix
 
 - `.github/workflows/post-merge-lane-close.yml`: new "Resolve merge SHA" step. For `workflow_dispatch`, resolves the real merge SHA via `gh pr view <manifest.pr_url> --json mergeCommit` instead of `github.sha`; falls back to `github.sha` if the lookup fails for any reason. For `push`, behavior is unchanged (`github.sha` is correct there). The "Bind proof artifacts" step now consumes `steps.resolve_sha.outputs.merge_sha` instead of `github.sha` directly.
-- `scripts/ops/post-merge-lane-close-workflow.test.ts` (new): static assertions that the resolve step branches on `workflow_dispatch`, calls `gh pr view ... --json mergeCommit`, still uses `github.sha` for the non-dispatch branch, and that the bind step no longer references `github.sha` directly.
+No test file is added by this PR. A `scripts/ops/post-merge-lane-close-workflow.test.ts` carrying three static assertions was written and then **removed** on PM decision (2026-08-07); the coverage is reassigned to UTV2-1673. See `verification.md` § "Regression coverage moved out of this lane" for the assertions, the reason, and the negative-control result that must travel with them.
 
-**Known deferred gap — the regression tests do not run in CI.** `pnpm test` composes explicit test lists, not globs; `scripts/ops/post-merge-lane-close-workflow.test.ts` is not in `test:ops`, so it is absent from `pnpm test`, `pnpm verify`, and the required `verify` check. It passes only when invoked directly (3/3). **Read that green run accordingly: nothing in CI enforces these assertions today.**
+**Why no test ships here.** `pnpm test` composes explicit test lists, not globs, so a new test file is unreachable until named in `package.json`'s `test:ops` — and `verify` fails closed on exactly that:
 
-*The original note here blamed active locks held by UTV2-1550 and UTV2-1554. That explanation is stale and was re-checked on 2026-08-07: UTV2-1554 is `done`, and `scripts/ci/file-scope-guard.ts` (line ~33) explicitly holds that `"merged" alone, with no live continuation, must never count as active`, so UTV2-1550's `merged` manifest holds no lock either. Neither lane blocks this today.*
+```text
+[FAIL] WIRING_TEST_UNWIRED_NEW scripts/ops/post-merge-lane-close-workflow.test.ts
+```
 
-The real reason is structural and cannot be resolved inside this PR. `package.json` is absent from UTV2-1567's `file_scope_lock`, and `resolveTrustedManifests` locks a branch-introduced manifest's declared scope to **the first commit that added it** (`13032fa0`, the lane-start declaration) precisely so a later commit cannot widen its own scope to bless an out-of-scope edit. Adding `package.json` to the manifest now would be ignored by the guard and the edit would fail as scope bleed. Wiring therefore requires a **separate lane** whose declared scope includes `package.json` from lane-start — it is not a one-line follow-up that can be slipped into this branch.
+`package.json` is absent from UTV2-1567's `file_scope_lock`, and `resolveTrustedManifests` locks a branch-introduced manifest's declared scope to **the first commit that added it** (`13032fa0`, the lane-start declaration) precisely so a later commit cannot widen its own scope to bless an out-of-scope edit. The reviewed-baseline alternative lives in `docs/05_operations/executable-wiring-baseline.json` — also out of scope, and capped by its own `max_entries`. Both remedies therefore required a PM scope override.
 
-Surfaced for PM disposition rather than worked around: this is the second consecutive finding in this lane where a check that appears to provide coverage does not (the other being the push-only guard test that passed under a widened gate until negative-controlled). Both are the same failure shape — **an artifact that looks like enforcement but never executes against the condition it names.**
+**PM declined the override and directed removal instead (2026-08-07):** the bootstrap path exists to remove future bootstrap needs, so spending one to land a test that still would not execute contradicts the objective. UTV2-1673 must touch this same workflow anyway and can declare `package.json` in scope from lane-start, so the assertions land there wired rather than here inert.
+
+*An earlier revision of this note blamed active locks held by UTV2-1550 and UTV2-1554. That was stale, and was re-checked on 2026-08-07: UTV2-1554 is `done`, and `scripts/ci/file-scope-guard.ts` (line ~33) explicitly holds that `"merged" alone, with no live continuation, must never count as active`, so UTV2-1550's `merged` manifest holds no lock either. Neither lane blocks this.*
+
+### The generalized finding
+
+**Controls must be validated by execution path, not artifact presence alone.**
+
+Three separate instances surfaced in this one lane, all the same shape — an artifact that looks like enforcement but never executes against the condition it names:
+
+1. **The unwired test.** Present, green when run by hand, and reachable by nothing in CI.
+2. **The push-only guard.** Asserted `match(/'push'/)`, which still matches inside a widened `('push' || 'workflow_dispatch')` disjunction — it passed while the gate it guarded was open. Caught only by deliberately widening the gate and confirming the test failed.
+3. **UTV2-1589's own tests.** They locate their target via unanchored `workflow.indexOf(<step name>)`; a comment mentioning that name above the step captured the scan, so all three asserted against the wrong step and reported a safety regression that did not exist.
+
+Presence, and even a green run, are not evidence a control is wired to what it claims to check. The test is: can this control be made to fail on the condition it names? If not, it is documentation.
 
 No runtime, domain, or DB code touched.
 
@@ -58,7 +74,7 @@ No runtime, domain, or DB code touched.
 
 - Populated `docs/06_status/lanes/UTV2-1567.json`'s `pr_url` (previously null), which was blocking the post-merge auto-close repair path from binding proof or closing the lane.
 - Added a real `pnpm test:db` run to `verification.md` to satisfy Proof Auditor Gate's blanket requirement (applies to every touched proof directory regardless of tier).
-- Removed the `package.json` edit (see deferred-gap note above) rather than force a cross-lane conflict with UTV2-1550/UTV2-1554's own locks on that same line.
+- Removed the `package.json` edit rather than force a cross-lane conflict on that same line. *(That was the reasoning at the time. The lock rationale was later found stale — see "Why no test ships here" above; the edit is out of this lane's declared scope regardless, which is the durable reason.)*
 
 ## PM verdict fix (2026-07-21, this revision — bind-cycle)
 
@@ -72,4 +88,4 @@ Investigation of the actual mechanics (read directly, not assumed):
 
 Fix: set `commit_sha` back to `null` in this manifest (its pre-merge default per spec) instead of chasing a self-referencing value, and documented why in the manifest's own `notes` field. This is the terminal fix — no further push needs to "catch up" the field, because the field intentionally does not track the live head pre-merge.
 
-The actual mechanical Return Review Packet failure is unrelated to head-binding: it is the pre-existing `test_wiring` check (`scripts/ops/post-merge-lane-close-workflow.test.ts` not wired into `package.json`'s `test:ops` script), which remains genuinely blocked by the active UTV2-1554 lock on that same `package.json` line (confirmed via `scripts/ci/file-scope-guard.ts`, which treats `in_review` manifests as still-active locks regardless of whether the underlying PR has since merged). Also confirmed via `gh api repos/griff843/Unit-Talk-v2/branches/main/protection`: the only branch-protection-required status checks are `verify`, `Executor Result Validation`, `Merge Gate`, and `P0 Protocol` — all green on this head. `Return Review Packet` and `Readiness Regression Gate` are advisory/non-blocking checks, not required checks.
+The mechanical Return Review Packet failure at that time was unrelated to head-binding: it was the `test_wiring` check on the then-present test file. **Resolved as of 2026-08-07 by removing that file** (see "Why no test ships here"), so `test_wiring` no longer has an unwired target. Confirmed via `gh api repos/griff843/Unit-Talk-v2/branches/main/protection`: the only branch-protection-required status checks are `verify`, `Executor Result Validation`, `Merge Gate`, and `P0 Protocol`. `Return Review Packet` and `Readiness Regression Gate` are advisory/non-blocking. The Readiness gate is independently red for a parked-production reason unrelated to this lane.

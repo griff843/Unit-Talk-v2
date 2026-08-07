@@ -45,40 +45,77 @@ artifacts) — after which the gate may be widened, and not before.
 - [x] `post-merge-lane-close.yml` has a "Resolve merge SHA" step that reads the merge SHA via `gh pr view <pr_url> --json mergeCommit` on `workflow_dispatch` — **present and correct, but unreachable in effect; see SCOPE LIMITATION above**
 - [x] The `push`-triggered path is unchanged (still resolves to `github.sha`, which is correct there)
 - [x] "Bind proof artifacts to merge SHA" consumes `steps.resolve_sha.outputs.merge_sha`, not `github.sha` directly
-- [x] **UTV2-1589's `github.event_name == 'push'` restriction on that step is preserved verbatim through the merge, and is now enforced by a regression test**
+- [x] **UTV2-1589's `github.event_name == 'push'` restriction on that step is preserved verbatim through the merge.** It is *not* enforced by a new test in this PR — see "Regression coverage moved out of this lane" below
 - [x] Merged `origin/main` into this branch as a true merge (no rebase), per PM directive 2026-08-07. One conflict, in this PR's own file, resolved as described above
 - [x] All five lane/proof/sync artifacts verified byte-identical (blob hashes) before and after the merge
-- [x] Regression tests added and passing: `scripts/ops/post-merge-lane-close-workflow.test.ts` (3 tests)
-- [x] The new push-only guard test was **negative-controlled**: proven to fail when the gate is widened, not merely to pass as written
+- [x] Regression coverage **deliberately removed from this PR** and reassigned to UTV2-1673 (PM decision 2026-08-07) — see below
+- [x] The push-only guard test was **negative-controlled** while it existed: proven to fail when the gate is widened, not merely to pass as written. That method, and the three assertions themselves, transfer to UTV2-1673
 - [x] YAML parses validly
-- [x] `pnpm verify` PASS
+- [x] `pnpm verify` PASS on gates and suites: `system-alignment` PASS, `automation-coverage` PASS, `executable-wiring` PASS, lint/type-check/build clean, 0 `not ok`. Locally it stops at `pnpm test:db`, which **refuses by design** off-CI (`[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx`). That step is executed by CI's staging-only writable-DB proof, not waived
 
-## EVIDENCE:
+## Regression coverage moved out of this lane (PM decision 2026-08-07)
 
-Regression suite on the post-merge head:
+This PR originally added `scripts/ops/post-merge-lane-close-workflow.test.ts`
+with three assertions, including a guard that UTV2-1589's push-only
+restriction survives. **That file has been removed from this PR**, and the
+coverage is reassigned to UTV2-1673. Nothing about the workflow change itself
+is affected.
+
+Why: `pnpm test` composes explicit test lists, not globs, so a new test file is
+unreachable until it is named in `package.json`'s `test:ops`. `package.json` is
+outside this lane's `file_scope_lock`, and scope cannot be widened after the
+fact — `resolveTrustedManifests` in `scripts/ci/file-scope-guard.ts` pins a
+branch-introduced manifest's declared scope to the first commit that added it,
+precisely so a later commit cannot bless its own out-of-scope edit. The gate
+said so directly:
 
 ```text
-$ npx tsx --test scripts/ops/post-merge-lane-close-workflow.test.ts
-# tests 3
-# pass 3
-# fail 0
+[FAIL] WIRING_TEST_UNWIRED_NEW scripts/ops/post-merge-lane-close-workflow.test.ts
+  - test file is not reachable from any package script or workflow command and
+    is not in the reviewed wiring baseline
 ```
 
-### Negative control for the push-only guard
+The two sanctioned remedies (wire it in, or add a reviewed baseline entry) both
+require an out-of-scope file, so both would have needed a PM scope override.
+**PM declined to spend one on a test that still would not execute in CI** — the
+override budget exists to remove future bootstrap needs, not to land inert
+enforcement. UTV2-1673 must touch this same workflow to make replay binding
+safe, and can declare `package.json` in scope from lane-start, so the
+assertions land there **wired** instead of here **inert**.
 
-A guard test that cannot fail is not a guard. The third test was verified
-against a deliberately widened gate before being accepted. An earlier revision
-of this guard asserted only `match(/github\.event_name == 'push'/)`, which
-**still matched inside** a widened
+What transfers to UTV2-1673, in full:
+
+1. `resolve_sha` branches on `workflow_dispatch` and reads the merge SHA via
+   `gh pr view … --json mergeCommit`.
+2. The bind step consumes `steps.resolve_sha.outputs.merge_sha`, never
+   `github.sha` directly.
+3. The push-only guard: the bind step's `if:` must match
+   `github.event_name == 'push'` **and** must not match `workflow_dispatch`
+   at all.
+
+Assertion 3 needs both halves, and that is the transferable lesson. A first
+revision asserted only `match(/github\.event_name == 'push'/)` — which **still
+matches inside** a widened
 `(github.event_name == 'push' || github.event_name == 'workflow_dispatch')`
-disjunction — it passed the negative control and was therefore useless. It was
-strengthened with an explicit `doesNotMatch(/workflow_dispatch/)` and re-run:
+disjunction. Verified by negative control against a deliberately widened gate:
+
+```text
+A) clean tree                        -> ok 3   (# pass 3, # fail 0)
+B) gate widened to admit dispatch    -> ok 3   (# pass 3, # fail 0)   <-- useless
+```
+
+After adding `doesNotMatch(/workflow_dispatch/)`:
 
 ```text
 A) clean tree                        -> ok 3   (# pass 3, # fail 0)
 B) gate widened to admit dispatch    -> not ok 3 (# pass 2, # fail 1)
 C) restored                          -> ok 3   (# pass 3, # fail 0)
 ```
+
+State B is the failure the guard exists to produce. A guard that cannot be made
+to fail is not a guard — write the negative control before trusting it.
+
+## EVIDENCE:
 
 State B is the failure this guard exists to produce.
 
@@ -149,9 +186,24 @@ $ pnpm test
 # fail 0
 ```
 
-Exit code 0, aggregated across all suites; zero `not ok` lines in the run. See
-the regression note below for the failure this run initially produced and how
-it was fixed.
+Exit code 0, aggregated across all suites; zero `not ok` lines in the run.
+
+**This total is unchanged — to the test — from the run taken while
+`scripts/ops/post-merge-lane-close-workflow.test.ts` was still present:**
+
+```text
+with the test file present:  # tests 4579  # pass 4579  # fail 0
+with the test file removed:  # tests 4579  # pass 4579  # fail 0
+```
+
+Deleting a three-assertion test file moved the suite count by **zero**, because
+`pnpm test` never reached it. That is the finding demonstrating itself, and it
+is the most direct evidence in this bundle for the principle recorded in
+`diff-summary.md`: presence is not enforcement. Had the file shipped, the proof
+would have cited "3/3 passing" as coverage while `verify` executed none of it.
+
+See the regression note below for the failure the first of these runs produced
+and how it was fixed.
 
 ### Recorded red run: this merge broke three of UTV2-1589's own tests
 
@@ -192,7 +244,8 @@ itself. Anchoring the scan to `- name: ` would remove the whole class.
 
 ## Tier
 
-T2 — CI workflow logic + regression test only.
+T2 — CI workflow logic only. No runtime, domain, or DB code touched, and no
+test file ships with this PR (coverage reassigned to UTV2-1673).
 
 ## Live-DB proof (T2 CI-workflow-only lane, no runtime/DB code touched)
 
