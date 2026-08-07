@@ -15,6 +15,7 @@ import {
   reserveLease,
   validateActiveLeaseForLane,
   writeLeaseAtomic,
+  findLeasesHeldByTerminalLanes,
 } from './lease-registry.js';
 import { buildStaleLaneAlertMessage } from './stale-lane-alerter.js';
 
@@ -551,4 +552,98 @@ test('stale lane alert message exposes stale locks and infra skips visibly', () 
   assert.match(message, /lease_stale_reclaim_required/);
   assert.match(message, /explicit reclaim required/);
   assert.match(message, /1 check\(s\) skipped/);
+});
+
+// ── UTV2-1619 capability 13: resource release must be lifecycle-driven ───────
+// Regression fixture for the measured defect: UTV2-1634 truth-closed at
+// 2026-08-04T20:03:44Z and its lease was still `active` seventeen hours later,
+// holding the exact files the next lane needed. Release was bound to TTL expiry
+// rather than to the lane's recorded terminal transition.
+
+test('ORPH-1: a lease held by a done lane is reported', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1634', ['scripts/ops/shared.ts', 'scripts/ops/concurrency-rules.ts']);
+    const findings = findLeasesHeldByTerminalLanes(
+      new Map([['UTV2-1634', 'done']]),
+      registryDir,
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0]?.issue_id, 'UTV2-1634');
+    assert.equal(findings[0]?.lane_status, 'done');
+    assert.equal(findings[0]?.lane_completed, true);
+    assert.deepEqual(findings[0]?.held_scope, [
+      'scripts/ops/concurrency-rules.ts',
+      'scripts/ops/shared.ts',
+    ]);
+  });
+});
+
+test('ORPH-2: every terminal state is reported, and failure is distinguished from completion', () => {
+  for (const [status, completed] of [
+    ['done', true],
+    ['merged', true],
+    ['failed', false],
+    ['superseded', false],
+    ['cancelled', false],
+  ] as const) {
+    withTempRegistry((registryDir) => {
+      reserve(registryDir, 'UTV2-9100', ['scripts/ops/shared.ts']);
+      const findings = findLeasesHeldByTerminalLanes(
+        new Map([['UTV2-9100', status]]),
+        registryDir,
+      );
+      assert.equal(findings.length, 1, `terminal state "${status}" must be reported`);
+      assert.equal(
+        findings[0]?.lane_completed,
+        completed,
+        `"${status}" must report lane_completed=${completed}`,
+      );
+    });
+  }
+});
+
+test('ORPH-3: a lease held by a live lane is not reported', () => {
+  for (const status of ['started', 'in_progress', 'in_review', 'blocked', 'parked', 'reopened'] as const) {
+    withTempRegistry((registryDir) => {
+      reserve(registryDir, 'UTV2-9101', ['scripts/ops/shared.ts']);
+      assert.deepEqual(
+        findLeasesHeldByTerminalLanes(new Map([['UTV2-9101', status]]), registryDir),
+        [],
+        `"${status}" is not terminal and must not be reclaimed`,
+      );
+    });
+  }
+});
+
+test('ORPH-4: an unknown lane state is skipped, never assumed terminal', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9102', ['scripts/ops/shared.ts']);
+    // Empty map = the lane's manifest could not be read. Reclaiming on absence
+    // would destroy a live lane's lease whenever manifest lookup failed.
+    assert.deepEqual(findLeasesHeldByTerminalLanes(new Map(), registryDir), []);
+  });
+});
+
+test('ORPH-5: an already-released lease is not re-reported', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9103', ['scripts/ops/shared.ts']);
+    releaseLease(
+      { issue_id: 'UTV2-9103', actor: 'griff843', reason: 'lane closed' },
+      { registryDir },
+    );
+    assert.deepEqual(
+      findLeasesHeldByTerminalLanes(new Map([['UTV2-9103', 'done']]), registryDir),
+      [],
+    );
+  });
+});
+
+test('ORPH-6: issue id matching is case-insensitive', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9104', ['scripts/ops/shared.ts']);
+    assert.equal(
+      findLeasesHeldByTerminalLanes(new Map([['utv2-9104'.toUpperCase(), 'failed']]), registryDir).length,
+      1,
+    );
+  });
 });

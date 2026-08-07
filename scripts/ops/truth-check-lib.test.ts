@@ -1,21 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
+  evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateScopeDiff,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
+  fetchCommitChecks,
+  fetchGitHubPullRequestComments,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
   isLinearStatePermittedForL3,
+  normalizeRequiredChecks,
   parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
   type EvidenceBundleV1,
+  type GitHubCheckRun,
 } from './truth-check-lib.js';
+import { rebindModelRoutingJsonSha } from './proof-generate.js';
+import { getRepoRoot } from './shared.js';
 import type { CheckResult, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
@@ -155,8 +166,8 @@ test('G4 admin-merge recovery fails closed when non-governance checks are missin
   });
 
   assert.strictEqual(result.passed, false);
-  assert.strictEqual(result.checkedSha, 'merge');
-  assert.deepStrictEqual(result.missing, ['verify', 'Executor Result Validation', 'Merge Gate']);
+  assert.strictEqual(result.checkedSha, 'head');
+  assert.deepStrictEqual(result.missing, ['verify', 'Merge Gate']);
 });
 
 test('G4 admin-merge recovery is disabled unless caller confirms merged PR context', async () => {
@@ -173,7 +184,296 @@ test('G4 admin-merge recovery is disabled unless caller confirms merged PR conte
   });
 
   assert.strictEqual(result.passed, false);
-  assert.strictEqual(result.checkedSha, 'merge');
+  assert.strictEqual(result.checkedSha, 'head');
+});
+
+test('G4 historical PR #1305 fixture selects the latest exact required check failure', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: [{ context: 'Executor Result Validation', app_id: 15368 }],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 89531830423,
+        name: 'Executor Result Validator',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:17:54Z',
+        app: { id: 15368 },
+      },
+      {
+        id: 89533838816,
+        name: 'Executor Result Validation',
+        status: 'completed',
+        conclusion: 'failure',
+        completed_at: '2026-07-24T16:27:48Z',
+        details_url: 'https://github.com/griff843/Unit-Talk-v2/runs/89533838816',
+        app: { id: 15368 },
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.deepStrictEqual(result.missing, ['Executor Result Validation']);
+  assert.deepStrictEqual(result.evidence, [
+    {
+      context: 'Executor Result Validation',
+      required_app_id: 15368,
+      matched: true,
+      source: 'check_run',
+      candidate_id: 89533838816,
+      candidate_name: 'Executor Result Validation',
+      candidate_app_id: 15368,
+      state: 'completed',
+      conclusion: 'failure',
+      timestamp: '2026-07-24T16:27:48Z',
+      passed: false,
+      details_url: 'https://github.com/griff843/Unit-Talk-v2/runs/89533838816',
+      selection_reason: 'latest result with exact required context and app identity',
+    },
+  ]);
+});
+
+test('G4 newer failure beats older success for the same exact context', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: ['verify'],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 1,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:00:00Z',
+      },
+      {
+        id: 2,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        completed_at: '2026-07-24T16:10:00Z',
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 2);
+  assert.strictEqual(result.evidence?.[0]?.conclusion, 'failure');
+});
+
+test('G4 newer success beats older failure for the same exact context', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: ['verify'],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 1,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'failure',
+        completed_at: '2026-07-24T16:00:00Z',
+      },
+      {
+        id: 2,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:10:00Z',
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 2);
+  assert.strictEqual(result.evidence?.[0]?.conclusion, 'success');
+});
+
+test('G4 app-bound required check rejects a successful same-name run from another app', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: [{ context: 'verify', app_id: 42 }],
+    statuses: [
+      {
+        id: 99,
+        context: 'verify',
+        state: 'success',
+        updated_at: '2026-07-24T16:20:00Z',
+      },
+    ],
+    checkRuns: [
+      {
+        id: 100,
+        name: 'verify',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:20:00Z',
+        app: { id: 43 },
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.evidence?.[0]?.matched, false);
+  assert.strictEqual(result.evidence?.[0]?.required_app_id, 42);
+});
+
+test('G4 missing exact required context fails even when a similarly named check passes', () => {
+  const result = evaluateRequiredCheckResults({
+    requiredChecks: ['Executor Result Validation'],
+    statuses: [],
+    checkRuns: [
+      {
+        id: 1,
+        name: 'Executor Result Validator',
+        status: 'completed',
+        conclusion: 'success',
+        completed_at: '2026-07-24T16:17:54Z',
+      },
+    ],
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.evidence?.[0]?.matched, false);
+});
+
+test('G4 paginates beyond 100 check runs before evaluating required contexts', async () => {
+  const requestedUrls: string[] = [];
+  const firstPage: GitHubCheckRun[] = Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    name: `unrelated-${index + 1}`,
+    status: 'completed',
+    conclusion: 'success',
+    completed_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.includes('/statuses?')) return [] as T;
+    if (url.endsWith('page=1')) return { check_runs: firstPage } as T;
+    if (url.endsWith('page=2')) {
+      return {
+        check_runs: [{
+          id: 101,
+          name: 'Executor Result Validation',
+          status: 'completed',
+          conclusion: 'success',
+          completed_at: '2026-07-24T16:30:00Z',
+        }],
+      } as T;
+    }
+    return { check_runs: [] } as T;
+  };
+
+  const result = await fetchCommitChecks({
+    owner: 'griff843',
+    repo: 'Unit-Talk-v2',
+    sha: '9425e96f91cc7c525cb1a71336b6806e5dac059d',
+    token: 'test-token',
+    requiredChecks: ['Executor Result Validation'],
+    fetchPage,
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 101);
+  assert.ok(requestedUrls.some((url) => url.includes('/check-runs?filter=all&per_page=100&page=2')));
+});
+
+test('G4 paginates beyond 100 commit statuses before evaluating required contexts', async () => {
+  const requestedUrls: string[] = [];
+  const firstPage: Array<{
+    id: number;
+    context: string;
+    state: string;
+    updated_at: string;
+  }> = Array.from({ length: 100 }, (_, index) => ({
+    id: index + 1,
+    context: `unrelated-${index + 1}`,
+    state: 'success',
+    updated_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.includes('/check-runs?')) return { check_runs: [] } as T;
+    if (url.endsWith('page=1')) return firstPage as T;
+    if (url.endsWith('page=2')) {
+      return [{
+        id: 101,
+        context: 'classic-required',
+        state: 'success',
+        updated_at: '2026-07-24T16:30:00Z',
+      }] as T;
+    }
+    return [] as T;
+  };
+
+  const result = await fetchCommitChecks({
+    owner: 'griff843',
+    repo: 'Unit-Talk-v2',
+    sha: '9425e96f91cc7c525cb1a71336b6806e5dac059d',
+    token: 'test-token',
+    requiredChecks: ['classic-required'],
+    fetchPage,
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.evidence?.[0]?.candidate_id, 101);
+  assert.strictEqual(result.evidence?.[0]?.source, 'status');
+  assert.ok(requestedUrls.some((url) => url.includes('/statuses?per_page=100&page=2')));
+});
+
+test('UTV2-1592 amendment: fetchGitHubPullRequestComments paginates beyond 100 comments before returning', async () => {
+  // Reproduces the same class of gap G4's pagination tests above guard
+  // against, but for PR/issue comments: a PM verdict posted after the 100th
+  // comment used to be silently dropped because this fetch only ever
+  // requested page 1.
+  const requestedUrls: string[] = [];
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({
+    body: `unrelated comment #${index + 1}`,
+    user: { login: 'someone', type: 'User' },
+    html_url: `https://github.com/griff843/Unit-Talk-v2/pull/1592#issuecomment-${index + 1}`,
+    created_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.endsWith('page=1')) return firstPage as T;
+    if (url.endsWith('page=2')) {
+      return [
+        {
+          body: 'PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: UTV2-1592\nPR: 1592\nHead SHA: deadbeef',
+          user: { login: 'griff843', type: 'User' },
+          html_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1592#issuecomment-101',
+          created_at: '2026-07-24T16:30:00Z',
+        },
+      ] as T;
+    }
+    return [] as T;
+  };
+
+  const comments = await fetchGitHubPullRequestComments(
+    'griff843',
+    'Unit-Talk-v2',
+    1592,
+    'test-token',
+    fetchPage,
+  );
+
+  assert.strictEqual(comments.length, 101);
+  assert.match(comments[100]?.body ?? '', /PM_VERDICT: APPROVED/);
+  assert.ok(requestedUrls.some((url) => url.includes('/issues/1592/comments?per_page=100&page=2')));
+});
+
+test('branch-protection required checks preserve app identity and suppress legacy duplicates', () => {
+  assert.deepStrictEqual(
+    normalizeRequiredChecks({
+      contexts: ['verify', 'Executor Result Validation', 'classic-only'],
+      checks: [
+        { context: 'verify', app_id: 42 },
+        { context: 'Executor Result Validation', app_id: 43 },
+      ],
+    }),
+    [
+      { context: 'verify', app_id: 42 },
+      { context: 'Executor Result Validation', app_id: 43 },
+      { context: 'classic-only', app_id: null },
+    ],
+  );
 });
 
 test('required check fallback parses branch-protection script contexts', () => {
@@ -594,6 +894,70 @@ test('closeout truth gate requires merge SHA binding when merge SHA is available
   );
 });
 
+test('P3/C4 fail before model-routing rebind and pass after genuine merge binding', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-truth-gate-'));
+  try {
+    const mergeSha = 'fe09f637a7eeebf216e062dd4a003d7e38932d1a';
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      `${JSON.stringify({
+        issue_id: 'UTV2-1586',
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'high',
+        generated_at: '2026-07-24T21:17:17.042Z',
+      }, null, 2)}\n`,
+      'utf8',
+    );
+
+    const p3Passes = (content: string): boolean =>
+      content.includes(mergeSha) ||
+      new RegExp(`merge_sha:\\s*${mergeSha}`, 'i').test(content);
+    const before = fs.readFileSync(routingPath, 'utf8');
+    assert.strictEqual(p3Passes(before), false);
+    assert.deepStrictEqual(
+      failedCloseoutIds(
+        closeoutInput({
+          manifest: {
+            ...closeoutInput().manifest,
+            commit_sha: mergeSha,
+            expected_proof_paths: ['docs/06_status/proof/UTV2-1586/model-routing.json'],
+          },
+          pr_merge_sha: mergeSha,
+          proof_artifacts: [{ path: routingPath, content: before, mtime_ms: 2000 }],
+        }),
+      ),
+      ['C4'],
+    );
+
+    rebindModelRoutingJsonSha(
+      routingPath,
+      mergeSha,
+      '2026-07-25T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1306',
+      { required: true },
+    );
+    const after = fs.readFileSync(routingPath, 'utf8');
+    assert.strictEqual(p3Passes(after), true);
+    assert.deepStrictEqual(
+      failedCloseoutIds(
+        closeoutInput({
+          manifest: {
+            ...closeoutInput().manifest,
+            commit_sha: mergeSha,
+            expected_proof_paths: ['docs/06_status/proof/UTV2-1586/model-routing.json'],
+          },
+          pr_merge_sha: mergeSha,
+          proof_artifacts: [{ path: routingPath, content: after, mtime_ms: 2000 }],
+        }),
+      ),
+      [],
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('closeout truth gate can use head SHA only when no merge SHA is available', () => {
   const input = closeoutInput({
     linear_state: 'In Review',
@@ -854,6 +1218,10 @@ test('L3: accepts the actual workspace PM-review state "In PM Review"', () => {
   assert.strictEqual(isLinearStatePermittedForL3('In PM Review'), true);
 });
 
+test('L3: accepts the canonical "Ready to Close" state', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('Ready to Close'), true);
+});
+
 test('L3: accepts "Done"', () => {
   assert.strictEqual(isLinearStatePermittedForL3('Done'), true);
 });
@@ -863,7 +1231,18 @@ test('L3: rejects the stale "In Review" state that does not exist in this worksp
 });
 
 test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abandoned)', () => {
-  for (const state of ['Backlog', 'Blocked', 'Cancelled', 'Abandoned', 'Todo', 'In Progress']) {
+  for (const state of [
+    'Backlog',
+    'Blocked',
+    'Blocked Internal',
+    'Cancelled',
+    'Abandoned',
+    'Todo',
+    'In Progress',
+    'In Codex',
+    'In Claude',
+    'In Proof',
+  ]) {
     assert.strictEqual(isLinearStatePermittedForL3(state), false, `expected ${state} to fail closed`);
   }
 });
@@ -992,4 +1371,75 @@ test('integration: R1/R2/R3 fail against a pre-repair bundle and pass against th
   const postClassification = classifyRuntimeProofGap(postRepairChecks);
   assert.strictEqual(postClassification.isRuntimeProofGap, false);
   assert.strictEqual(hasRuntimeReferences(postRepairBundle.bundle.runtime_proof), true);
+});
+
+// ── UTV2-1640: S1 must honour `/**` scope patterns ──────────────────────────
+// Regression cover for a defect where S1 matched scope with an exact Set
+// lookup, so a `dir/**` entry could never match a real file. The pre-merge
+// file-scope guard passed the same diff, so the two gates disagreed about what
+// a scope lock means. Matching now delegates to the guard's own helper.
+
+const UTV2_1640_SCOPE = [
+  'docs/06_status/proof/UTV2-1640/evidence.json',
+  'docs/06_status/proof/UTV2-1640/verification.md',
+  'packages/db/src/database.types.ts',
+  'supabase/migrations/**',
+  'db/migrations-rollback/**',
+];
+
+test('S1: supabase/migrations/** matches the UTV2-1640 migration', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: db/migrations-rollback/** matches the down script and the exemption registry', () => {
+  const result = evaluateScopeDiff(
+    [
+      'db/migrations-rollback/20260801220000_utv2_1640_system_runs_autovacuum_tuning.down.sql',
+      'db/migrations-rollback/irreversible-exemption-registry.json',
+    ],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: an unrelated path outside every scope entry still fails', () => {
+  const result = evaluateScopeDiff(
+    ['apps/api/src/submission-service.ts'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /apps\/api\/src\/submission-service\.ts/);
+});
+
+test('S1: a glob does not match a sibling directory sharing a prefix', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations-archive/legacy.sql'],
+    ['supabase/migrations/**'],
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+});
+
+test('S1: exact (non-glob) scope entries still match, and expected_proof_paths are honoured', () => {
+  const result = evaluateScopeDiff(
+    ['packages/db/src/database.types.ts', 'docs/06_status/proof/UTV2-1640/evidence.json'],
+    UTV2_1640_SCOPE,
+    ['docs/06_status/proof/UTV2-1640/evidence.json'],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: the historical UTV2-1640 scope lock is unchanged by this repair', () => {
+  const repoRoot = getRepoRoot();
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'docs/06_status/lanes/UTV2-1640.json'), 'utf8'),
+  ) as { file_scope_lock: string[] };
+  assert.deepStrictEqual(manifest.file_scope_lock, UTV2_1640_SCOPE);
 });

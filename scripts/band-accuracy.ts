@@ -11,7 +11,7 @@
  *
  * Usage: npx tsx scripts/band-accuracy.ts [--after YYYY-MM-DD]
  */
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,7 +60,7 @@ async function main() {
   const afterArg = process.argv.find(a => a.startsWith('--after='))?.split('=')[1];
   const afterDate = afterArg ?? '2026-05-10';
 
-  const sb = createClient(
+  const sb = createPrivilegedClient(
     process.env['SUPABASE_URL']!,
     process.env['SUPABASE_SERVICE_ROLE_KEY']!
   );

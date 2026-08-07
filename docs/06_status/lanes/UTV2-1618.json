@@ -1,0 +1,78 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1618",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
+  "branch": "claude/utv2-1618-readonly-diagnostic-hardening",
+  "base_branch": "main",
+  "commit_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1314",
+  "files_changed": [
+    ".github/workflows/ops-api-diagnose.yml",
+    ".github/workflows/ops-p0-containment.yml",
+    ".ops/sync/UTV2-1618.yml",
+    "docs/06_status/lanes/UTV2-1618.json",
+    "docs/06_status/proof/UTV2-1618/evidence.json",
+    "docs/06_status/proof/UTV2-1618/verification.md",
+    "package.json",
+    "scripts/ci/ops-api-diagnose-workflow.test.ts",
+    "scripts/ci/ops-p0-containment-workflow.test.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/ops-api-diagnose.yml",
+    ".github/workflows/ops-p0-containment.yml",
+    ".github/workflows/deploy.yml",
+    "scripts/ci/ops-api-diagnose-workflow.test.ts",
+    "scripts/ci/ops-p0-containment-workflow.test.ts",
+    "scripts/ci/deploy-parked-mode.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1618/evidence.json",
+    "docs/06_status/proof/UTV2-1618/verification.md",
+    "docs/06_status/lanes/UTV2-1618.json",
+    ".ops/sync/UTV2-1618.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1618/evidence.json",
+    "docs/06_status/proof/UTV2-1618/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-28T14:30:00.000Z",
+  "heartbeat_at": "2026-08-01T18:14:18.140Z",
+  "closed_at": "2026-08-01T18:14:18.140Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-01T18:02:30.161Z",
+      "verdict": "pass",
+      "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-01T18:04:06.387Z",
+      "verdict": "pass",
+      "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-01T18:14:15.567Z",
+      "verdict": "pass",
+      "merge_sha": "147462572b46d80b18c38d3960053ccc272ba087",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

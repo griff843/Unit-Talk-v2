@@ -14,7 +14,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -187,7 +187,7 @@ async function collectOutboxCounts(): Promise<OutboxCounts | null> {
   }
 
   try {
-    const db = createClient(supabaseUrl, supabaseKey, {
+    const db = createPrivilegedClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
@@ -231,7 +231,7 @@ async function collectIngestorFreshness(): Promise<IngestorResult> {
   }
 
   try {
-    const db = createClient(supabaseUrl, supabaseKey, {
+    const db = createPrivilegedClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 

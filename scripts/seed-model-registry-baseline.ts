@@ -15,7 +15,7 @@
  * Safe to re-run: uses upsert logic, will not create duplicates.
  */
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 const BASELINE_VERSION = 'v0.1-baseline-2026-04-22';
 
@@ -29,7 +29,7 @@ function deriveMarketFamily(marketTypeId: string | null): string | null {
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   // 1. Find distinct sport/market_family from recent market_universe
   const { data: universes, error: uError } = await db

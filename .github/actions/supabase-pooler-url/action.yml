@@ -10,6 +10,12 @@ description: >
   the log mask before the value is written and neither URL is ever printed; diagnostics
   report only WHETHER each URL is configured, never their values. (UTV2-1274)
 
+  UTV2-1629: the selected URL is also available as the `selected-url` OUTPUT. Prefer the
+  output over `out-env` in any pull-request-reachable job. `$GITHUB_ENV` is job-wide — every
+  subsequent step in the job inherits the credential, including steps that have no business
+  holding a live database connection — whereas an output is only in scope where a step's own
+  `env:` block names it. Set `out-env: ''` to suppress the job-wide export entirely.
+
 inputs:
   pooler-url:
     description: Session-mode Supabase pooler URL (the SUPABASE_DB_POOLER_URL secret). Preferred.
@@ -20,14 +26,24 @@ inputs:
     required: false
     default: ''
   out-env:
-    description: Name of the environment variable to export the selected URL into.
+    description: >
+      Name of the environment variable to export the selected URL into, job-wide. Pass an
+      empty string to skip the export and consume the `selected-url` output instead — the
+      narrower path, and the required one for pull-request-reachable jobs.
     required: false
     default: POOLER_DB_URL
+
+outputs:
+  selected-url:
+    description: >
+      The chosen connection URL, scoped to whichever steps name it in their own `env:`.
+    value: ${{ steps.select.outputs.selected-url }}
 
 runs:
   using: composite
   steps:
-    - shell: bash
+    - id: select
+      shell: bash
       env:
         POOLER_URL: ${{ inputs.pooler-url }}
         DIRECT_URL: ${{ inputs.direct-url }}
@@ -51,10 +67,19 @@ runs:
           exit 1
         fi
 
-        # Mask the password (encoded and decoded forms) before exporting, then write the
-        # selected URL only to $GITHUB_ENV. The URL itself is never echoed.
+        if [ -n "$OUT_ENV" ]; then
+          echo "Job-wide export: $OUT_ENV (every subsequent step in this job inherits it)"
+        else
+          echo "Job-wide export: disabled — consume the selected-url output instead (UTV2-1629)"
+        fi
+
+        # Mask the password (encoded and decoded forms) before writing anywhere, then write
+        # the selected URL to $GITHUB_OUTPUT (always) and $GITHUB_ENV (only when out-env is
+        # non-empty). The URL itself is never echoed. A random heredoc delimiter is used for
+        # the output file so a value containing a newline cannot forge a second key.
         SELECTED="$SELECTED" OUT_ENV="$OUT_ENV" node --input-type=module -e '
           import { appendFileSync } from "node:fs";
+          import { randomUUID } from "node:crypto";
           const sel = process.env.SELECTED;
           try {
             const u = new URL(sel);
@@ -65,5 +90,12 @@ runs:
           } catch {
             // Not a parseable URL — still export it; the consuming tool will surface the error.
           }
-          appendFileSync(process.env.GITHUB_ENV, `${process.env.OUT_ENV}=${sel}\n`);
+          const delimiter = `EOF_${randomUUID()}`;
+          appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `selected-url<<${delimiter}\n${sel}\n${delimiter}\n`,
+          );
+          if (process.env.OUT_ENV) {
+            appendFileSync(process.env.GITHUB_ENV, `${process.env.OUT_ENV}=${sel}\n`);
+          }
         '

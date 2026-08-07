@@ -12,7 +12,7 @@
  */
 
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 // ---------------------------------------------------------------------------
 // Canonical training row shape for MLB moneyline/spread/total models
@@ -55,7 +55,7 @@ const FEATURE_MATRIX = [
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   console.log('=== UTV2-321: MLB Feature Inventory & Dataset Audit ===\n');
 

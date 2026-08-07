@@ -300,7 +300,50 @@ swap ceiling have been sized for that load. This does **not** change
 `scripts/ops/lane-maximizer.ts` reports the current full-verification throttle
 state in `lane_saturation_forecast.full_verify_throttle`. If that throttle is
 saturated, do not start another manual full `pnpm verify`/`pnpm test` run until a
-slot clears, even if executor lane slots are still available.
+slot clears, even if executor lane slots are still available. A slot counts
+against that forecast only when its owner is provably alive — a slot left by a
+dead process is reported as reclaimable, not as saturation.
+
+#### 10a.1 Slot ownership and reclaim (UTV2-1594)
+
+The semaphore is implemented in `scripts/ops/verify-semaphore.ts`. Each occupied
+slot holds a **durable ownership record** — operation id, pid plus process-start
+identity, hostname and boot id, issue/branch/worktree, command, acquired-at,
+heartbeat, lease expiry and an absolute hard deadline. The record is
+self-describing: any process that can read the directory can decide whether the
+owner is alive without help from the process that wrote it.
+
+Reclaim is **proof-based, not clock-based**. A slot is reclaimed only when its
+owner is provably gone:
+
+| Reclaimed | Never reclaimed automatically |
+|---|---|
+| owner pid is dead on this host | owner pid is alive |
+| pid was recycled into a different process (start-time mismatch) | owner is alive but its heartbeat merely lapsed |
+| the host rebooted since acquisition (kernel boot id changed) | owner ran on another host and its lease has not expired |
+| an unverifiable foreign-host owner whose lease expired | a slot created seconds ago whose record is not written yet |
+| the absolute hard deadline elapsed | — |
+
+The hard deadline is the single bound that can retire a still-running owner; a
+heartbeat renews the lease but never the hard deadline. Every reclaim is
+appended to `reap-log.jsonl` in the semaphore directory with its reason.
+
+Operator command:
+
+```bash
+pnpm ops:verify-slots            # who holds each slot, age, heartbeat, reason
+pnpm ops:verify-slots --json     # same, machine-readable
+pnpm ops:verify-slots reap       # safe pass: removes only provably dead owners
+```
+
+`pnpm ops:verify-slots` also lists **waiting** processes (issue, branch, pid,
+how long they have waited). A queued preflight prints its own progress to stderr
+rather than appearing hung.
+
+The semaphore directory remains per worktree checkout, as specified above. An
+operator who wants one host-wide semaphore across worktrees can point every
+checkout at a shared path with `UNIT_TALK_FULL_VERIFY_SEMAPHORE_DIR=<path>`;
+that is an opt-in and does not change the default policy.
 
 Example 5-lane topology (safe class mix):
 ```

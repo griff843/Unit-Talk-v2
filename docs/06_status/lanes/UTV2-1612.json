@@ -1,0 +1,81 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1612",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
+  "branch": "codex/utv2-1612-p0-containment-workflow",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1313",
+  "files_changed": [
+    ".github/workflows/ops-p0-containment.yml",
+    ".ops/sync/UTV2-1612.yml",
+    "docs/06_status/lanes/UTV2-1612.json",
+    "docs/06_status/proof/UTV2-1612/.gitkeep",
+    "docs/06_status/proof/UTV2-1612/evidence.json",
+    "docs/06_status/proof/UTV2-1612/model-routing.json",
+    "docs/06_status/proof/UTV2-1612/verification.md",
+    "package.json",
+    "scripts/ci/ops-p0-containment-workflow.test.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/ops-p0-containment.yml",
+    "scripts/ci/ops-p0-containment-workflow.test.ts",
+    "package.json",
+    "docs/06_status/proof/UTV2-1612/.gitkeep",
+    "docs/06_status/proof/UTV2-1612/evidence.json",
+    "docs/06_status/proof/UTV2-1612/model-routing.json",
+    "docs/06_status/proof/UTV2-1612/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1612/evidence.json",
+    "docs/06_status/proof/UTV2-1612/model-routing.json",
+    "docs/06_status/proof/UTV2-1612/verification.md"
+  ],
+  "status": "merged",
+  "started_at": "2026-07-28T01:04:59.142Z",
+  "heartbeat_at": "2026-07-30T19:50:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1612-p0-containment-workflow.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "reconcile_notes": [
+    {
+      "at": "2026-07-30T19:50:00Z",
+      "action": "capacity-and-lock release only",
+      "from": "in_review",
+      "to": "merged",
+      "evidence": {
+        "pr": 1313,
+        "merged_at": "2026-07-28T13:18:52Z",
+        "merge_sha": "2822b709c74c43dc24a50dc6df35597e1a0463fe"
+      },
+      "basis": "merged is excluded from ACTIVE_LOCK_STATUSES (scripts/ops/shared.ts)",
+      "explicitly_not": [
+        "not done",
+        "no truth_check_history appended",
+        "no implementation proof altered",
+        "no terminal closeout claimed",
+        "open reconciliation PR untouched"
+      ]
+    }
+  ]
+}

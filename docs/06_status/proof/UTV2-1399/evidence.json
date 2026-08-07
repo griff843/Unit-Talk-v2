@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1399",
+  "tier": "T1",
+  "title": "Reversible, fixture-excluding production reporting view",
+  "generated_at": "2026-07-31T12:10:00.000Z",
+  "status": "merged_awaiting_closeout",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1343",
+  "schema_version_note": "Downgraded from 2 back to 1 in this repair pass. scripts/ci/proof-binding-validator.ts (migration-reversibility-gate.yml, pull_request-triggered, path-filtered to supabase/migrations/** and db/migrations-rollback/**) required schema_version 2 while the implementation PR was open and touching migration files. scripts/ops/truth-check-lib.ts's P6 check unconditionally requires exactly 1, with no v2 branch. This repair PR touches neither migrations path, so proof-binding-validator.ts never runs against it; reverting to 1 is safe for this PR and required for P6/truth-check, which is the gate that matters post-merge. Found schema_version:2 already committed elsewhere in the repo (UTV2-1205, UTV2-1274, UTV2-746 evidence.json) with no evidence any of them passed P6 under that value -- this looks like a genuine unresolved mismatch between the two gates, flagged here rather than silently resolved for every future migration lane.",
+  "sha_binding": {
+    "verified_source_sha": "c44b3469d222dca19ba611c759b59c16298bdb18",
+    "merge_sha": "c44b3469d222dca19ba611c759b59c16298bdb18",
+    "base_sha": "f4c529b51267d86c2dfbd38bdcfab527bd31668c",
+    "sha_type": "merge_sha",
+    "verified_source_note": "merge_sha bound to fdc19358, the real squash-merge SHA of PR #1343, via `ops:proof-generate UTV2-1399 --merge-sha fdc19358...` in this repair lane -- the mechanism confirmed non-destructive by UTV2-1631's earlier fix (dry-run showed both verification.md and evidence.json in preserved_paths/rebound_paths, not stale_paths_replaced). Prior to this repair, sha_binding.merge_sha was null: the automated Post-Merge Lane Close workflow detected manifest.commit_sha already differed from the push SHA and deliberately skipped its own early proof-generate bind, deferring to ops:lane-close --repair-merged, which then failed closed on P6/R1/R2 before committing anything -- so main never actually carried a bound merge_sha until this repair pass.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "bound_at": "2026-08-01T03:48:32.173Z"
+  },
+  "verifier": {
+    "identity": "read-only measurement against production Supabase zfzdnfwdarxucxtaojxm via Supabase MCP execute_sql, 2026-07-31 11:40:28+00 onward; runtime_proof harvested by claude/utv2-1399-proof-repair from CI job 91315210076",
+    "method": "Every count in verification.md is quoted alongside the exact SQL that produced it. All statements are SELECT; no DDL was applied and no row was created, updated or deleted. The partition claim (retained + excluded = raw) is arithmetic over a single scan, not a sampled estimate.",
+    "verifier_scope": "This identity verifies the classifier's behaviour against production data and the read-only counts. It does NOT verify the migration's DDL execution: no local Docker or psql was available, so the round-trip reversibility drill runs in CI (migration-reversibility-gate.yml, scratch postgres:16).",
+    "independence_note": "The lane's central claim -- that classifying by `source` destroys real data -- is verified by measurement in the opposite direction rather than by narrative: a naive source-based predicate was executed against production and counted 6,462 wrongly-excluded legitimate picks out of 7,580.",
+    "runtime_proof_verifier_note": "scripts/ops/proof-repair.ts's mergeRuntimeProofIntoEvidence unconditionally replaces this entire `verifier` object with a bare `{identity: <verifier-identity flag>}` when adding runtime_proof -- confirmed by running --dry-run then a real (git-revertible) apply and diffing before/after. The pre-repair rich object (method/verifier_scope/independence_note above) was restored by hand afterward rather than accepted as lost, and the tool's stamped identity (claude/utv2-1399-proof-repair, distinct from this manifest's created_by=claude, satisfying P10) is folded into the `identity` line rather than silently discarded. Flagging this for anyone else using proof-repair apply on a bundle with a pre-existing rich verifier object: check the diff before trusting the tool's own 'byte-identical' claim, which is true of every OTHER top-level key but not of `verifier` itself."
+  },
+  "measurement": {
+    "target": "zfzdnfwdarxucxtaojxm (PRODUCTION)",
+    "measured_at": "2026-07-31T11:40:28.899985+00:00",
+    "access": "read_only_select_only",
+    "picks": {
+      "raw": 107858,
+      "retained": 7580,
+      "excluded": 100278,
+      "excluded_pct": 92.97,
+      "partition_exhaustive_and_disjoint": true
+    },
+    "submissions": {
+      "raw": 107428,
+      "retained": 7580,
+      "excluded": 99848,
+      "submissions_straddling_both_sides": 0
+    },
+    "settlement_records": {
+      "raw": 37496,
+      "retained": 1573,
+      "excluded": 35923,
+      "excluded_pct": 95.81
+    },
+    "settled_stake_units": {
+      "raw": 18278,
+      "retained": 385.5,
+      "synthetic_pct": 97.89,
+      "volume_inflation_factor": 47.4
+    },
+    "roi_distortion": {
+      "settlement_volume_inflation_factor": 23.8,
+      "raw_win_pct": 61.9,
+      "retained_win_pct": 59.5,
+      "raw_settlements": 37496,
+      "retained_settlements": 1573
+    },
+    "exclusions_by_reason": {
+      "utv2_selection_prefix": 60208,
+      "proof_issue_metadata": 19351,
+      "proof_only_source": 8586,
+      "db_smoke_event": 8100,
+      "utv2_event_name": 4011,
+      "proof_run_id_metadata": 9,
+      "command_center_qa": 5,
+      "utv2_run_tag_selection": 5,
+      "placeholder_selection": 2,
+      "staff_only_dry_run": 1
+    }
+  },
+  "false_positive_check": {
+    "mandatory": true,
+    "result": "PASS",
+    "naive_source_predicate_would_wrongly_exclude": 6462,
+    "naive_source_predicate_wrongly_excluded_pct_of_legitimate": 85.2,
+    "this_classifier_wrongly_excludes": 0,
+    "naive_substring_leftover_in_retained_set": 0,
+    "retained_with_real_event_name": 7180,
+    "excluded_with_real_event_name": 6,
+    "excluded_with_real_event_name_note": "All 6 accounted for: 5 are the utv2-803 proof family (real Cavaliers/Raptors event, explicit per-run tag in selection) and 1 is the UTV2-654 canary-proof NHL row. No unexplained exclusion carries a real event name.",
+    "demonstrated_retained_legitimate_records": [
+      "a122bcca | system-pick-scanner | settled | Los Angeles Dodgers vs. San Diego Padres | player_batting_total_bases_ou | stake 1.00",
+      "d9b96f8d | system-pick-scanner | settled | Vegas Golden Knights vs. Utah Mammoth | player_hockey_points_ou",
+      "a3072fdc | system-pick-scanner | settled | Tampa Bay Rays vs. Cleveland Guardians | player_batting_doubles_ou",
+      "26e4adb9 | system-pick-scanner | settled | Oklahoma City Thunder vs. Phoenix Suns | player_rebounds_ou | stake 1.00",
+      "22d89bb7 | smart-form | settled | Toronto Raptors vs. Cleveland Cavaliers | moneyline | stake 1.00"
+    ],
+    "packet_claim_reverified": "false-positive-audit.md's 0.00% false-positive rate still holds against current data; its 100,247/7,611 split reproduced exactly on 2026-07-31."
+  },
+  "packet_defects_found": [
+    {
+      "severity": "medium",
+      "finding": "classifier.sql under-matches by design and the packet says so, but the gap is larger than a footnote: `^UTV2-[0-9]+` and `^utv2-` both require a hyphen immediately after UTV2 and are ^-anchored, so the entire 'UTV2 <space> Proof Player <hex>' CLV-harness family and all mid-string '[utv2-<issue>-<run>]' / '(utv2-<issue>-<run>)' run tags escape into the legitimate bucket. Measured: 23 rows, several settled with stake 1.00, directly contaminating ROI. Closed here by the [ _-] character class plus bracketed/parenthesised run-tag patterns.",
+      "action": "fixed_in_this_lane"
+    },
+    {
+      "severity": "low",
+      "finding": "false-positive-audit.md section 1c uses 'has player_id populated' as structural counter-evidence that a row is real (12 in the legitimate bucket, 0 in the fixture bucket). All 12 are in fact `UTV2 Proof Player` fixtures that the hyphen-anchored regex missed. player_id is not a realness signal. The audit's overall conclusion was still correct; this supporting signal was not. After this classifier, retained_with_player_id = 0.",
+      "action": "recorded"
+    },
+    {
+      "severity": "high",
+      "finding": "The three-valued-logic trap the packet documents (411 rows where the raw OR-chain evaluates to SQL NULL, so `WHERE NOT (predicate)` drops them from BOTH sides) is a property of the OR-chain shape itself. Reconfirmed at exactly 411 rows on 2026-07-31.",
+      "action": "structurally_eliminated: the classifier is a CASE returning a reason code, retention is IS NULL and exclusion is IS NOT NULL, which are total and mutually exclusive by construction; the migration additionally aborts in-transaction if retained + excluded != raw"
+    }
+  ],
+  "reversibility": {
+    "mechanism": "single schema",
+    "objects_created": {
+      "schemas": [
+        "reporting"
+      ],
+      "functions": [
+        "reporting.pick_fixture_reason(jsonb,text,text,text)"
+      ],
+      "views": [
+        "reporting.picks",
+        "reporting.excluded_picks",
+        "reporting.submissions",
+        "reporting.settlement_records",
+        "reporting.contamination_summary"
+      ],
+      "materialized_views": [],
+      "base_table_alterations": []
+    },
+    "mutations_performed": {
+      "delete": 0,
+      "update": 0,
+      "truncate": 0,
+      "insert": 0,
+      "alter_table": 0,
+      "drop_column": 0
+    },
+    "down_script": "db/migrations-rollback/20260731000000_utv2_1399_fixture_excluding_reporting_views.down.sql",
+    "irreversible_exemption_claimed": false,
+    "rollback_restores_prior_behaviour_exactly": "DROP SCHEMA reporting CASCADE removes the entire surface. No object outside `reporting` is created or altered, and the dependency direction is reporting -> public only, so consumers reading public.* are unaffected before, during and after. The down script guards this: it counts cross-schema dependents and raises rather than cascading into public.",
+    "round_trip_drill": "deferred_to_ci",
+    "round_trip_drill_note": "No Docker or psql available locally. migration-reversibility-gate.yml runs the drill on scratch postgres:16. The migration's fail-closed partition guard is conditioned on v_raw > 0 so a replay against an empty database does not abort -- a defect caught and fixed before commit."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "npx eslint scripts/ci/utv2-1399-reporting-view-guard.test.ts scripts/generate-types.mjs",
+      "status": "PASS"
+    },
+    "unit_tests": {
+      "command": "npx tsx --test scripts/ci/utv2-1399-reporting-view-guard.test.ts",
+      "tests": 6,
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 810.149062
+    },
+    "ops_suite": {
+      "command": "pnpm test:ops",
+      "tests": 1497,
+      "suites": 6,
+      "pass": 1497,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 51294.532839,
+      "note": "Full ops suite green with the new guard wired into the test:ops file list."
+    },
+    "migration_reversibility_gate": {
+      "command": "npx tsx scripts/ci/migration-reversibility-gate.ts --base origin/main",
+      "status": "PASS",
+      "note": "Down-script presence and non-IRREVERSIBLE classification verified locally. The scratch-postgres round-trip drill still runs in CI."
+    },
+    "guard_intent": "The guard test mechanically enforces what the lane promised: no DELETE/UPDATE/TRUNCATE/INSERT/ALTER TABLE/DROP COLUMN/GRANT in the migration; every created object inside schema reporting; no materialized views; the down script drops only that schema and claims no irreversibility exemption; the classifier never references a dual-use source name; the classifier is a non-STRICT CASE returning text, filtered IS NULL / IS NOT NULL. Per CLAUDE.md invariant 11."
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 44580.023432,
+    "queries": [
+      {
+        "table": "submissions,settlement_records",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 7328.86ms)"
+      },
+      {
+        "table": "distribution_outbox,pick_lifecycle",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 6962.77ms)"
+      },
+      {
+        "table": "distribution_outbox,distribution_receipts,pick_lifecycle,audit_log",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 7208.00ms)"
+      },
+      {
+        "table": "settlement_records,pick_lifecycle,audit_log",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 6925.36ms)"
+      },
+      {
+        "table": "market_universe",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 63.68ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows (ok 6, 7461.50ms)"
+      },
+      {
+        "table": "settlement_records,settlement_corrections",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated (ok 7, 7949.87ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-01T02:29:15Z",
+    "row_counts_note": "Harvested (not re-run) from the seed-staging-fixtures.ts step of CI job 'Writable DB proof (staging only)' (run 30680085299, job 91315210076) on PR #1343's own head 4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772 -- the head that squash-merged to fdc19358. That job holds the only credential to staging xskgrzbteyqdufktjrjx; a local re-run is impossible from this host (ci:assert-staging correctly refuses the containment stub target). retained by design: settlement_records, picks, submissions (not reset by the seed step). CI receipt: [ci:db-smoke] sha256=e94648d8fac077a48602b8f1e2f25463097f688f87d60d92f8f6823658fc2d1a, target=xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "ci.yml",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 30680085299,
+      "job_id": 91315210076,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30680085299/job/91315210076",
+      "target_head_sha": "4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772",
+      "target_merge_sha": "fdc193582f94ad7538fa594b475847eb81a3647f",
+      "conclusion": "success"
+    }
+  },
+  "downstream": {
+    "issue": "UTV2-1633",
+    "dependency": "least-privilege read-only Postgres role, granted SELECT on this view",
+    "grant_statements": [
+      "GRANT USAGE ON SCHEMA reporting TO <readonly_role>;",
+      "GRANT SELECT ON ALL TABLES IN SCHEMA reporting TO <readonly_role>;",
+      "ALTER DEFAULT PRIVILEGES IN SCHEMA reporting GRANT SELECT ON TABLES TO <readonly_role>;"
+    ],
+    "design_note": "Views are deliberately NOT security_invoker. The base tables have RLS enabled and are owned by postgres, so security-definer views let the role read the reporting surface with no grant at all on public.* -- the least-privilege property UTV2-1633 needs. The role must not be granted anything on public or it regains a path to the contaminated tables.",
+    "naming_note": "A dedicated `reporting` schema (rather than public.reporting_picks etc.) makes the grant a single schema-level statement, keeps every object removable by one DROP SCHEMA, and keeps the objects outside the public-only Live Schema Parity comparison surface."
+  },
+  "adjacent_findings": [
+    {
+      "topic": "Live Schema Parity — 78 unauthorized missing_in_expected findings",
+      "status": "investigated_and_recorded_not_fixed",
+      "blocks_this_lane": false,
+      "cause": "command_center_game_threads and command_center_delivery_mappings exist on live but have no CREATE TABLE anywhere in supabase/migrations/, supabase/migrations_archive/, the baseline dump, or db/migrations-rollback/. Entirely absent from the ledger, not present-but-drifted. Created out-of-band after the UTV2-1274 baseline.",
+      "breakdown": "2 relations + 43 columns + 14 constraints + 17 indexes + 2 triggers = 78",
+      "safely_repairable": true,
+      "recommended_fix": "Pure additive ledger repair in a separate migration lane: one forward migration with the two CREATE TABLEs, constraints, indexes, RLS enable and set_updated_at triggers, plus a matching .down.sql. ~120-180 lines, zero live DDL. A baseline re-dump would also work but would silently absorb any other unaudited live drift.",
+      "why_not_blocking": "Branch protection requires exactly [verify, Executor Result Validation, Merge Gate, P0 Protocol]; rulesets are empty; Live Schema Parity is advisory. The comparison is additionally hard-scoped to schema `public` and never inspects pg_proc, so a `reporting` schema of views and one function adds zero new findings in either direction.",
+      "trap_recorded": "The lane manifest must NOT set runtime_proof_kind: live-schema-parity -- that field makes t1-proof-gate.yml and proof-auditor-gate.yml call assert-live-schema-parity-pass.ts, which would fail closed on these pre-existing findings."
+    },
+    {
+      "topic": "scripts/generate-types.mjs hardcoded --schema public",
+      "status": "fixed_in_this_lane",
+      "detail": "All three credential branches passed --schema public, so reporting.* could never appear in packages/db/src/database.types.ts and every consumer would have kept reading the contaminated public.* tables. Replaced with a single TYPED_SCHEMAS = 'public,reporting' constant. Additive to the generated Database type; pnpm type-check PASS."
+    },
+    {
+      "topic": ".lane/migration-lock.yml holds a stale lock",
+      "status": "recorded",
+      "detail": "The lock names issue_id UTV2-1086 with release_after: merge, acquired 2026-05-24. That migration merged long ago and the lock was never released. scripts/lane-contract.ts only checks that the file EXISTS, not that it matches the current lane, so a stale lock neither blocks nor protects anything. This lane did not claim it, because claiming it is part of lane-start, which was not run."
+    }
+  ],
+  "not_closed": [
+    "pnpm test:db not run locally — outstanding T1 requirement; satisfied via CI's staging-db-proof job on the PR, not a local run (ci:assert-staging correctly refuses any non-staging target from this host).",
+    "packages/db/src/database.types.ts not regenerated — must be post-merge, because pnpm supabase:types reads the live database and the migration is not on live until it merges. supabase db push itself is reserved to the human operator per docs/05_operations/DB_MIGRATION_WORKFLOW.md; merge alone does not apply it.",
+    "Round-trip reversibility drill not run locally — no Docker or psql; confirmed the down-script/exemption-registry checks pass locally via migration-reversibility-gate.ts --base origin/main; the scratch-postgres drill itself runs in CI.",
+    "PR merge and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this evidence snapshot."
+  ],
+  "sequencing_history": {
+    "note": "Recorded because it materially affected how this lane reached PR: two separate runtime-singleton blocks, one tooling gap, one root-checkout staleness issue.",
+    "events": [
+      "Initially blocked: UTV2-1604 (runtime, in_review) held the singleton slot. Prepared all work read-only per original instructions; did not lane-start.",
+      "UTV2-1604 merged and closed; slot appeared free.",
+      "First ops:lane-start attempt succeeded on the concurrency check but hit 'Branch exists but worktree does not exist' -- the pre-assigned worktree was created via a raw `git worktree add` at a flat custom path, never through ops:lane-start, so worktreePathForBranch()'s canonical nested-path expectation could never be satisfied from within it. Verified this mechanically (no code path exists for existing-branch + zero-worktree adoption with commits preserved) before taking any action, per repeated instruction not to force or fabricate past a governance gate.",
+      "Root cause fixed by the coordinator: removed the flat worktree, deleted the LOCAL branch ref only (origin untouched, verified via ls-remote), making a genuinely fresh ops:lane-start creation possible.",
+      "Second blocker discovered: UTV2-1632 (runtime) had merged but its lane-close had not yet run, so its manifest still read status: started -- a ghost lane occupying the same runtime singleton slot UTV2-1604 had vacated. Verified from origin/main, not asserted from memory. Did not touch UTV2-1632's own worktree.",
+      "UTV2-1632 lane-close completed by a sibling session; root checkout's local main was separately found stale (behind origin by 3 commits including the UTV2-1632 closeout) and fast-forwarded via git pull --ff-only -- sanctioned per CLAUDE.md session-start guidance, non-destructive.",
+      "ops:lane-start succeeded with a minimal file_scope_lock (only files that existed pre-branch, since normalizeFileScopePath requires existence for every non-proof-path entry at admission time); running it from the root checkout left two untracked leftover files there (byte-identical to what it also committed into the new worktree) -- found and removed to restore root-checkout cleanliness.",
+      "The fresh branch's one auto-generated scaffold commit was rebased onto origin's real 4 commits after confirming zero file overlap conflict risk; file_scope_lock and the migration lock were then expanded/re-claimed from within the new worktree.",
+      "Pushed for real and opened PR #1343."
+    ]
+  },
+  "governance_finding": {
+    "severity": "high",
+    "title": "The concurrency governor cannot see lanes whose manifests live only on unmerged branches",
+    "detail": "scripts/ops/shared.ts readAllManifests() reads only the local filesystem docs/06_status/lanes/*.json. UTV2-1604's manifest exists solely on its PR branch codex/utv2-1604-parked-mode-scheduler-policy and is therefore invisible from any other checkout. Running `ops:lane-start UTV2-1399` would have been MECHANICALLY ADMITTED -- the governor would have seen only two governance lanes and raised no forbidden_combination violation -- while SUBSTANTIVELY violating the [\"migration\",\"runtime\"] rule. Four of the six currently active worktrees (UTV2-1594, 1613, 1624, 1632) likewise have no committed manifest, so the governor is blind to most of the live board.",
+    "action_taken": "Did not lane-start. The mechanical loophole was not used; the substantive rule was honoured. Recommend a governor change that resolves active lanes from open PRs / remote branches rather than the local working tree alone."
+  },
+  "corrected_inventory": {
+    "artifact": "docs/06_status/proof/UTV2-1399/corrected-inventory.json",
+    "supersedes": ".out/fixture-cleanup-packet/inventory.json",
+    "authorizes_deletion": false,
+    "relationship_to_packet": "strict superset — +31 ids, 0 removed",
+    "delta_is_classifier_correction_not_data_drift": {
+      "packet_published_sha256": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
+      "recomputed_sha256_2026_07_31": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
+      "match": true
+    },
+    "sha256_fixture_v2": "618ca94a27d7d033089b18adaf3ff499c2a296325b9e170d748bab20df06796d",
+    "sha256_legitimate_v2": "27b7bf563f0b2b29ab3d52c431df36a4d775c5f4fb20b6fda108cd6db1886b2e",
+    "counts": {
+      "picks_total": 107858,
+      "fixture_v1": 100247,
+      "fixture_v2": 100278,
+      "legitimate_v1": 7611,
+      "legitimate_v2": 7580,
+      "newly_classified": 31,
+      "removed": 0
+    },
+    "exclusion_classes": {
+      "ci": 100270,
+      "qa_demo": 6,
+      "junk": 2
+    },
+    "packet_figures_now_provably_wrong": [
+      "relationships.md: pick_offer_snapshots fixture-reachable 0 -> actually 20",
+      "relationships.md: command_center_delivery_mappings fixture-reachable 0 -> actually 16"
+    ],
+    "headline_recommendation": "Scope any future deletion to class `ci` only. The 6 qa_demo picks are the sole source of all 16 command_center_delivery_mappings rows, and that table has no CREATE TABLE in the migration ledger — deleting them would mutate a table the repo cannot replay. Hold them out of deletion; exclude from reporting only."
+  }
+}

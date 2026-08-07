@@ -10,7 +10,7 @@
  */
 
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { buildSegmentReadinessResult } from '../packages/domain/src/models/segment-readiness.ts';
 
 type PickRow = {
@@ -56,7 +56,7 @@ function deriveSegmentLabel(pick: PickRow) {
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   console.log('=== UTV2-320: NBA Prop Segment Benchmark ===\n');
 

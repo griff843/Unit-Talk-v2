@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1574",
+  "title": "Sole-Owner Governance Ratification -- nine decisions + five-PR migration authorization",
+  "tier": "T1",
+  "lane_type": "governance",
+  "generated_at": "2026-07-22T14:30:00.000Z",
+  "head_sha": null,
+  "merge_sha": null,
+  "sha_binding": {
+    "verified_source_sha": "18de0721cd5a8577de18147bbeb18bef8fc43d77",
+    "verified_source_note": "Filled in at commit time by ops:proof-generate --merge-sha during post-merge lane-close reconciliation.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-25T04:28:49.187Z",
+    "ci_sentinels": {
+      "verify": "pass",
+      "merge_gate": "not_yet_run"
+    }
+  },
+  "verifier": {
+    "identity": "claude/utv2-1574",
+    "role": "implementer",
+    "independent_owner_certifier": false,
+    "note": "This is a decision-record PR authored at griff843's direct chat instruction, recording his ruling on SOLE_OWNER_GOVERNANCE_CONVERGENCE_PROPOSAL.md §7. Not an independent model recommendation -- the ratified decisions are the Converged rec. already agreed by both Claude's and Codex's independent prior analyses."
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "target_supabase_project": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "table": "picks",
+        "description": "database-smoke.test.ts persists a submission and settlement through the live database repository bundle and cleans up its fixtures."
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "database-smoke.test.ts (UTV2-920) verifies invalid atomic enqueue, delivery confirmation, and settlement operations leave no partial lifecycle-event writes."
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "database-smoke.test.ts (UTV2-920) verifies invalid atomic enqueue and delivery confirmation leave no partial outbox row or status mutation."
+      },
+      {
+        "table": "audit_log",
+        "description": "database-smoke.test.ts (UTV2-920) verifies rollback behavior on invalid writes leaves no partial audit row; UTV2-996 verifies additive correction audit writes."
+      },
+      {
+        "table": "settlement_records",
+        "description": "database-smoke.test.ts (UTV2-883) verifies no duplicate participants for the same external_id/sport; (UTV2-996) verifies re-settlement creates an additive correction without mutating the original settlement row."
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "count": 101737,
+        "status": "observed"
+      },
+      {
+        "table": "pick_lifecycle",
+        "count": 145277,
+        "status": "observed"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 10191,
+        "status": "observed"
+      },
+      {
+        "table": "audit_log",
+        "count": 244298,
+        "status": "observed"
+      },
+      {
+        "table": "settlement_records",
+        "count": 34956,
+        "status": "observed"
+      }
+    ],
+    "row_counts_captured_at": "2026-07-25T03:47:00Z",
+    "note": "This lane's own diff (docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md) changed no code, workflow, or branch-protection configuration and has no runtime behavior of its own to exercise. This database-smoke result satisfies the mandatory T1 runtime-evidence policy (a live, real-Supabase pass with non-empty queries and monitored-table row counts) -- it does not claim the governance document itself altered runtime behavior."
+  },
+  "scope": {
+    "implementation_paths": [
+      "docs/06_status/SOLE_OWNER_GOVERNANCE_RATIFICATION_2026-07-22.md"
+    ],
+    "not_changed": [
+      "docs/06_status/T1M_DELEGATION_FINAL_PM_DECISION.md (amended by reference, not edited)",
+      "any branch protection configuration",
+      "any workflow file",
+      "any product/runtime code"
+    ],
+    "branch_protection_changed": false,
+    "required_status_check_contexts_changed": false,
+    "other_workflow_files_changed": false
+  },
+  "acceptance_criteria": {
+    "rows_1_to_7_and_9_ratified_as_converged_rec": "PASS",
+    "row_8_explicitly_deferred_not_silently_assumed": "PASS",
+    "does_not_replace_or_silently_override_t1m_delegation_final_pm_decision": "PASS_AMENDS_BY_REFERENCE",
+    "authorizes_pr1_only_not_pr2_through_pr5": "PASS",
+    "no_mechanism_change_in_this_diff": "PASS_DOCUMENTATION_ONLY"
+  },
+  "owner_boundary": {
+    "t1_approved_label": "not_yet_applied",
+    "pm_verdict_v1": "not_yet_posted",
+    "merge_authorized": false
+  },
+  "known_gaps": [
+    "Row 8 (acceptable annualized bad-merge probability) remains unfilled -- explicitly deferred per griff843's direct instruction, blocking only PR5's cutover, not PR1's start."
+  ],
+  "verdict": "READY_FOR_PM_REVIEW"
+}

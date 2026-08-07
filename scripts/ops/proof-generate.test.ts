@@ -3,20 +3,29 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { GhExecutor } from './ci-db-proof-harvest.js';
 import {
   buildDiffSummary,
   buildRuntimeVerification,
   applyProofManifestOverrides,
+  autoHarvestCiDbProofIntoEvidence,
   collectProofGitTruth,
   detectCurrentProofContext,
   generateProofArtifacts,
   rebindEvidenceJsonSha,
   rebindMergeSha,
+  rebindModelRoutingJsonSha,
   rebindVerificationMdSha,
   standardProofPaths,
+  ModelRoutingRebindError,
+  ProofPreservationError,
   type ProofGitTruth,
 } from './proof-generate.js';
+import { ROOT } from './shared.js';
 import type { LaneManifest } from './shared.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const HEAD_SHA = '1111111111111111111111111111111111111111';
 const MERGE_SHA = '2222222222222222222222222222222222222222';
@@ -126,13 +135,19 @@ test('generated verification.md satisfies truth-check-lib P13/P14 requirements',
   assert.match(content, /\bscripts\/ci\/r-level-check\.ts\b/i);
 });
 
-test('existing artifacts are updated when they are missing current SHA bindings', () => {
+/**
+ * UTV2-1631: this test previously asserted that existing artifacts missing the
+ * current SHA are REPLACED wholesale with a generated template. That assertion
+ * was the defect, written down. Existing artifacts are now SHA-rebound in
+ * place; the stale label is rebound and nothing else about the file moves.
+ */
+test('existing artifacts are rebound in place, not replaced, when their merge SHA is stale', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-stale-'));
   try {
     const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
     fs.mkdirSync(proofDir, { recursive: true });
-    fs.writeFileSync(path.join(proofDir, 'diff-summary.md'), 'Merge SHA: stale\n', 'utf8');
-    fs.writeFileSync(path.join(proofDir, 'verification.md'), 'Head SHA: stale\n', 'utf8');
+    fs.writeFileSync(path.join(proofDir, 'diff-summary.md'), '# Authored diff notes\n\nMerge SHA: stale\n', 'utf8');
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), '# PROOF: UTV2-1170\n\nMERGE_SHA: stale\n\nASSERTIONS: measured\n', 'utf8');
 
     const result = generateProofArtifacts(input(), { root });
 
@@ -141,13 +156,19 @@ test('existing artifacts are updated when they are missing current SHA bindings'
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
       'docs/06_status/proof/UTV2-1170/verification.md',
     ]);
-    assert.deepStrictEqual(result.stale_paths_replaced, [
+    assert.deepStrictEqual(result.rebound_paths, [
       'docs/06_status/proof/UTV2-1170/diff-summary.md',
       'docs/06_status/proof/UTV2-1170/verification.md',
     ]);
-    assert.match(
+    assert.deepStrictEqual(result.stale_paths_replaced, []);
+
+    assert.strictEqual(
       fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'),
-      new RegExp(`Merge SHA: ${MERGE_SHA}`),
+      `# PROOF: UTV2-1170\n\nMERGE_SHA: ${MERGE_SHA}\n\nASSERTIONS: measured\n`,
+    );
+    assert.strictEqual(
+      fs.readFileSync(path.join(proofDir, 'diff-summary.md'), 'utf8'),
+      `# Authored diff notes\n\nMerge SHA: ${MERGE_SHA}\n`,
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -303,6 +324,29 @@ function preMergeVerificationMd(): string {
   ].join('\n');
 }
 
+function preMergeModelRoutingJson(overrides: Record<string, unknown> = {}): string {
+  return `${JSON.stringify(
+    {
+      issue_id: 'UTV2-1170',
+      manifest_schema_version: 2,
+      model_profile: 'codex-sol-high',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      policy_version: '1.0.0',
+      codex_cli_version: 'codex-cli 0.145.0',
+      legacy_compatibility_used: false,
+      override_used: false,
+      override_authorized_by: null,
+      codex_exit_code: 0,
+      generated_at: '2026-05-25T10:00:00.000Z',
+      forward_compatible_field: { retained: true },
+      ...overrides,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 test('rebindEvidenceJsonSha rewrites sha_binding to the merge SHA and flips pre-merge status', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-evidence-'));
   try {
@@ -451,6 +495,1017 @@ test('rebindMergeSha reports missing for lanes with no evidence.json/verificatio
   }
 });
 
+test('rebindModelRoutingJsonSha adds closeout binding and preserves all execution provenance', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const original = JSON.parse(preMergeModelRoutingJson());
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson(), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    const { closeout_binding: closeoutBinding, ...preserved } = rebound;
+    assert.deepStrictEqual(preserved, original);
+    assert.deepStrictEqual(closeoutBinding, {
+      sha_type: 'merge_sha',
+      merge_sha: MERGE_SHA,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      bound_at: '2026-05-26T00:00:00.000Z',
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects a legacy top-level merge_sha that conflicts with the authoritative SHA', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-legacy-conflict-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Real historical shape (e.g. docs/06_status/proof/UTV2-1531/model-routing.json):
+    // a top-level merge_sha field pre-dating closeout_binding.
+    const content = preMergeModelRoutingJson({ merge_sha: 'a-different-legacy-sha' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'legacy_binding_conflict',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content, 'no proof mutation on legacy conflict');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha accepts a legacy top-level merge_sha that already agrees with the authoritative SHA', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-legacy-agree-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ merge_sha: MERGE_SHA }), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.strictEqual(rebound.merge_sha, MERGE_SHA, 'legacy field is preserved, not overwritten');
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha replay is idempotent and preserves the original bound_at', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-idempotent-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson(), 'utf8');
+
+    rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true },
+    );
+    const afterFirst = fs.readFileSync(routingPath, 'utf8');
+    const second = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-27T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170/',
+      { required: true },
+    );
+
+    assert.strictEqual(second.status, 'unchanged');
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), afterFirst);
+    assert.strictEqual(
+      JSON.parse(afterFirst).closeout_binding.bound_at,
+      '2026-05-26T00:00:00.000Z',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const conflict of [
+  {
+    name: 'merge SHA',
+    closeoutBinding: {
+      sha_type: 'merge_sha',
+      merge_sha: '3333333333333333333333333333333333333333',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      bound_at: '2026-05-26T00:00:00.000Z',
+    },
+  },
+  {
+    name: 'PR URL',
+    closeoutBinding: {
+      sha_type: 'merge_sha',
+      merge_sha: MERGE_SHA,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/9999',
+      bound_at: '2026-05-26T00:00:00.000Z',
+    },
+  },
+]) {
+  test(`rebindModelRoutingJsonSha fails closed on a conflicting ${conflict.name}`, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-conflict-'));
+    try {
+      const routingPath = path.join(root, 'model-routing.json');
+      const content = preMergeModelRoutingJson({ closeout_binding: conflict.closeoutBinding });
+      fs.writeFileSync(routingPath, content, 'utf8');
+
+      assert.throws(
+        () => rebindModelRoutingJsonSha(
+          routingPath,
+          MERGE_SHA,
+          '2026-05-27T00:00:00.000Z',
+          'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+          { required: true },
+        ),
+        (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
+      );
+      assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('rebindModelRoutingJsonSha rejects invalid JSON without overwriting it', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-invalid-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = '{ invalid json\n';
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'malformed_required_sidecar',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects malformed JSON objects without overwriting them', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-malformed-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ closeout_binding: { sha_type: 'merge_sha' } });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'malformed_required_sidecar',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails when a required sidecar is missing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-missing-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'missing_required_sidecar',
+    );
+    assert.strictEqual(fs.existsSync(routingPath), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails without an authoritative PR URL', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-no-pr-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson();
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        null,
+        { required: true },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'missing_pr_url',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects a required sidecar whose issue_id does not match the lane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-identity-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ issue_id: 'UTV2-9999' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'sidecar_identity_mismatch',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects an identity-less sidecar (e.g. {}) even though it is otherwise valid JSON', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-empty-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = `${JSON.stringify({})}\n`;
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'sidecar_identity_mismatch',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects a required sidecar truncated to only issue_id, even with a matching issue_id', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-truncated-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Matches the lane's issue_id but was truncated/tampered so it carries no
+    // execution-provenance fields at all -- the exact attack an independent
+    // review flagged: this must not silently receive an authoritative binding.
+    const content = `${JSON.stringify({ issue_id: 'UTV2-1170' })}\n`;
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) =>
+        error instanceof ModelRoutingRebindError &&
+        error.code === 'incomplete_required_sidecar' &&
+        error.message.includes('model') &&
+        error.message.includes('reasoning_effort'),
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha rejects a required sidecar with model present but reasoning_effort blank', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-blank-effort-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ issue_id: 'UTV2-1170', reasoning_effort: '   ' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170' },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'incomplete_required_sidecar',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha does not require execution-provenance fields for an optional (non-required) sidecar', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-optional-truncated-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, `${JSON.stringify({ issue_id: 'UTV2-1170' })}\n`, 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { expectedIssueId: 'UTV2-1170' },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── UTV2-1589: sidecar-vs-manifest routing agreement ────────────────────────
+
+function matchingManifestRouting(overrides: Partial<{
+  profile: string;
+  model: string;
+  reasoning_effort: string;
+  policy_version: string;
+}> = {}) {
+  return {
+    profile: 'codex-sol-high',
+    model: 'gpt-5.6-sol',
+    reasoning_effort: 'high',
+    selected_by: 'three-brain' as const,
+    policy_version: '1.0.0',
+    ...overrides,
+  };
+}
+
+test('rebindModelRoutingJsonSha binds when sidecar routing exactly matches the manifest', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-manifest-match-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true, expectedIssueId: 'UTV2-1170', manifestModelRouting: matchingManifestRouting() },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar model differs from manifest model_routing.model', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-model-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = preMergeModelRoutingJson({ issue_id: 'UTV2-1170' });
+    fs.writeFileSync(routingPath, content, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: matchingManifestRouting({ model: 'claude-sonnet-5' }),
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+    assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content, 'no proof mutation on mismatch');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar reasoning_effort differs from manifest model_routing.reasoning_effort', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-effort-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: matchingManifestRouting({ reasoning_effort: 'medium' }),
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar model_profile differs from manifest model_routing.profile (both present)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-profile-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: matchingManifestRouting({ profile: 'claude-sol-high' }),
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar policy_version differs from manifest model_routing.policy_version (both present)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-policy-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: matchingManifestRouting({ policy_version: '2.0.0' }),
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha does not fail on profile/policy_version absent from only one side', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-optional-fields-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Sidecar carries model_profile/policy_version; manifest routing (constructed
+    // without overriding those) still carries them too per ModelRoutingBlock's
+    // required fields -- so exercise the other direction: sidecar omits them.
+    fs.writeFileSync(
+      routingPath,
+      `${JSON.stringify({
+        issue_id: 'UTV2-1170',
+        model: 'gpt-5.6-sol',
+        reasoning_effort: 'high',
+        override_used: false,
+      })}\n`,
+      'utf8',
+    );
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true, expectedIssueId: 'UTV2-1170', manifestModelRouting: matchingManifestRouting() },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when the manifest model_routing block itself is missing required fields', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-manifest-incomplete-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          // Malformed manifest content: model present but blank.
+          manifestModelRouting: matchingManifestRouting({ model: '   ' }),
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar override_used disagrees with manifest selected_by', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    // Sidecar claims no override was used; manifest says one was.
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: false, override_authorized_by: null }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: {
+            ...matchingManifestRouting(),
+            selected_by: 'manual-override',
+            override: { authorized_by: 'griff843', reason: 'urgent capacity swap' },
+          },
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar override_authorized_by disagrees with manifest override.authorized_by', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-authorizer-mismatch-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: true, override_authorized_by: 'someone-else' }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: {
+            ...matchingManifestRouting(),
+            selected_by: 'manual-override',
+            override: { authorized_by: 'griff843', reason: 'urgent capacity swap' },
+          },
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when manifest selected_by is manual-override but override.authorized_by is missing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-manifest-incomplete-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: true, override_authorized_by: 'griff843' }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        {
+          required: true,
+          expectedIssueId: 'UTV2-1170',
+          manifestModelRouting: {
+            ...matchingManifestRouting(),
+            selected_by: 'manual-override',
+            // No `override` object at all -- malformed manifest.
+          },
+        },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha binds when sidecar override provenance agrees with a manual-override manifest', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-agree-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(
+      routingPath,
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', override_used: true, override_authorized_by: 'griff843' }),
+      'utf8',
+    );
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      {
+        required: true,
+        expectedIssueId: 'UTV2-1170',
+        manifestModelRouting: {
+          ...matchingManifestRouting(),
+          selected_by: 'manual-override',
+          override: { authorized_by: 'griff843', reason: 'urgent capacity swap' },
+        },
+      },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha fails closed when sidecar is missing override_used entirely', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-override-used-absent-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const content = JSON.parse(preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }));
+    delete content.override_used;
+    fs.writeFileSync(routingPath, `${JSON.stringify(content, null, 2)}\n`, 'utf8');
+
+    assert.throws(
+      () => rebindModelRoutingJsonSha(
+        routingPath,
+        MERGE_SHA,
+        '2026-05-26T00:00:00.000Z',
+        'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+        { required: true, expectedIssueId: 'UTV2-1170', manifestModelRouting: matchingManifestRouting() },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'sidecar_manifest_routing_mismatch',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha leaves ordinary closeout unchanged when the manifest has no model_routing block at all', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-routing-no-manifest-block-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    // No manifestModelRouting passed at all -- e.g. a Claude-authored or
+    // schema_version 1 lane with no model_routing block. Behavior must be
+    // identical to before this cross-check existed.
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true, expectedIssueId: 'UTV2-1170' },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha accepts a sidecar whose issue_id matches the lane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-identity-match-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+      { required: true, expectedIssueId: 'UTV2-1170' },
+    );
+    assert.strictEqual(outcome.status, 'updated');
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('rebindModelRoutingJsonSha leaves an optional missing sidecar unaffected', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-model-routing-optional-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      MERGE_SHA,
+      '2026-05-26T00:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+    );
+    assert.deepStrictEqual(outcome, { path: routingPath, status: 'missing' });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+for (const fixture of [
+  {
+    issueId: 'UTV2-1586',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1306',
+    mergeSha: 'fe09f637a7eeebf216e062dd4a003d7e38932d1a',
+  },
+  {
+    issueId: 'UTV2-1585',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
+  },
+]) {
+  test(`${fixture.issueId} fixture binds to its authoritative PR and merge SHA`, () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-real-fixture-'));
+    try {
+      const proofDir = path.join(root, 'docs/06_status/proof', fixture.issueId);
+      const routingPath = path.join(proofDir, 'model-routing.json');
+      fs.mkdirSync(proofDir, { recursive: true });
+      // Read the REAL committed sidecar for this lane, not a synthesized
+      // stand-in, so this test actually proves the real historical record
+      // passes the new manifest-agreement validation (UTV2-1589 PM directive).
+      const realSidecarContent = fs.readFileSync(
+        path.join(ROOT, 'docs/06_status/proof', fixture.issueId, 'model-routing.json'),
+        'utf8',
+      );
+      fs.writeFileSync(routingPath, realSidecarContent, 'utf8');
+      // Read the REAL lane manifest's own model_routing block too -- not
+      // derived from the sidecar just read, which would make this
+      // comparison tautological and unable to catch a future drift between
+      // the two real, independently-authored files (independent review
+      // finding on the first version of this fixture).
+      const realManifest = JSON.parse(
+        fs.readFileSync(path.join(ROOT, 'docs/06_status/lanes', `${fixture.issueId}.json`), 'utf8'),
+      ) as LaneManifest;
+      assert.ok(realManifest.model_routing, `${fixture.issueId} manifest must declare model_routing`);
+
+      const fixtureInput = input({
+        issue_id: fixture.issueId,
+        commit_sha: fixture.mergeSha,
+        pr_url: fixture.prUrl,
+        expected_proof_paths: [
+          `docs/06_status/proof/${fixture.issueId}/model-routing.json`,
+        ],
+        model_routing: realManifest.model_routing,
+      });
+      fixtureInput.gitTruth = gitTruth({
+        merge_sha: fixture.mergeSha,
+        diff_base_ref: `${fixture.mergeSha}^1`,
+        diff_target_ref: fixture.mergeSha,
+      });
+      generateProofArtifacts(fixtureInput, { root, bindModelRouting: true });
+
+      // The real committed sidecar may already be bound to this exact merge
+      // SHA (once a lane's own governed closeout replay has run for real) --
+      // rebindModelRoutingJsonSha treats that as idempotent-unchanged and
+      // preserves the sidecar's own bound_at rather than overwriting it with
+      // this fixture's injected generatedAt. Assert against whichever of the
+      // two is actually correct for the real file's current state, instead
+      // of a fixed literal that goes stale the moment the real lane closes.
+      const realClosoutBinding = JSON.parse(realSidecarContent).closeout_binding;
+      const alreadyBoundToThisMergeSha =
+        realClosoutBinding?.sha_type === 'merge_sha' && realClosoutBinding?.merge_sha === fixture.mergeSha;
+      assert.deepStrictEqual(
+        JSON.parse(fs.readFileSync(routingPath, 'utf8')).closeout_binding,
+        {
+          sha_type: 'merge_sha',
+          merge_sha: fixture.mergeSha,
+          pr_url: fixture.prUrl,
+          bound_at: alreadyBoundToThisMergeSha ? realClosoutBinding.bound_at : '2026-05-25T16:00:00.000Z',
+        },
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('generateProofArtifacts validates required model-routing authority before any write', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-routing-atomic-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'model-routing.json'),
+      preMergeModelRoutingJson({
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: '3333333333333333333333333333333333333333',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+          bound_at: '2026-05-26T00:00:00.000Z',
+        },
+      }),
+      'utf8',
+    );
+
+    assert.throws(
+      () => generateProofArtifacts(
+        input({
+          expected_proof_paths: [
+            'docs/06_status/proof/UTV2-1170/model-routing.json',
+          ],
+        }),
+        { root, bindModelRouting: true },
+      ),
+      (error) => error instanceof ModelRoutingRebindError && error.code === 'binding_conflict',
+    );
+    assert.strictEqual(fs.existsSync(path.join(proofDir, 'diff-summary.md')), false);
+    assert.strictEqual(fs.existsSync(path.join(proofDir, 'verification.md')), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts does not bind model-routing.json by default -- bindModelRouting must be explicitly opted into', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-skip-routing-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'evidence.json'), preMergeEvidenceJson(), 'utf8');
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), preMergeVerificationMd(), 'utf8');
+    const routingContent = preMergeModelRoutingJson();
+    fs.writeFileSync(path.join(proofDir, 'model-routing.json'), routingContent, 'utf8');
+
+    const result = generateProofArtifacts(
+      input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
+      { root },
+    );
+
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
+    assert.ok(!result.updated_paths.some((p) => p.endsWith('model-routing.json')));
+    assert.strictEqual(
+      fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'),
+      routingContent,
+      'model-routing.json is byte-for-byte untouched when bindModelRouting is not set',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts does not validate or throw on an otherwise-conflicting sidecar when bindModelRouting is not set', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-skip-routing-no-validate-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'model-routing.json'),
+      preMergeModelRoutingJson({
+        closeout_binding: {
+          sha_type: 'merge_sha',
+          merge_sha: '3333333333333333333333333333333333333333',
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1170',
+          bound_at: '2026-05-26T00:00:00.000Z',
+        },
+      }),
+      'utf8',
+    );
+
+    assert.doesNotThrow(() => generateProofArtifacts(
+      input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
+      { root },
+    ));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts binds model-routing.json only when bindModelRouting is explicitly true (CLI --bind-model-routing)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-explicit-bind-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'model-routing.json'), preMergeModelRoutingJson(), 'utf8');
+
+    const result = generateProofArtifacts(
+      input({ expected_proof_paths: ['docs/06_status/proof/UTV2-1170/model-routing.json'] }),
+      { root, bindModelRouting: true },
+    );
+
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/model-routing.json'));
+    const rebound = JSON.parse(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(rebound.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generateProofArtifacts binds every declared model-routing.json sidecar, not just the first', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-routing-multi-'));
+  try {
+    const primaryDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    const secondaryDir = path.join(root, 'docs/06_status/proof/UTV2-1170/secondary-executor');
+    fs.mkdirSync(primaryDir, { recursive: true });
+    fs.mkdirSync(secondaryDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(primaryDir, 'model-routing.json'),
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170' }),
+      'utf8',
+    );
+    fs.writeFileSync(
+      path.join(secondaryDir, 'model-routing.json'),
+      preMergeModelRoutingJson({ issue_id: 'UTV2-1170', model: 'claude-sonnet-5' }),
+      'utf8',
+    );
+
+    const result = generateProofArtifacts(
+      input({
+        expected_proof_paths: [
+          'docs/06_status/proof/UTV2-1170/model-routing.json',
+          'docs/06_status/proof/UTV2-1170/secondary-executor/model-routing.json',
+        ],
+      }),
+      { root, bindModelRouting: true },
+    );
+
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/model-routing.json'));
+    assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/secondary-executor/model-routing.json'));
+
+    const primary = JSON.parse(fs.readFileSync(path.join(primaryDir, 'model-routing.json'), 'utf8'));
+    const secondary = JSON.parse(fs.readFileSync(path.join(secondaryDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(primary.closeout_binding.merge_sha, MERGE_SHA);
+    assert.strictEqual(secondary.closeout_binding.merge_sha, MERGE_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('generateProofArtifacts rebinds evidence.json and verification.md when a merge SHA is present', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-generate-rebind-'));
   try {
@@ -463,8 +1518,10 @@ test('generateProofArtifacts rebinds evidence.json and verification.md when a me
 
     assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
     assert.ok(result.updated_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
-    assert.ok(result.stale_paths_replaced.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
-    assert.ok(result.stale_paths_replaced.includes('docs/06_status/proof/UTV2-1170/verification.md'));
+    assert.ok(result.rebound_paths.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
+    assert.ok(result.rebound_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
+    // UTV2-1631: rebinding is not replacement. Nothing was replaced.
+    assert.deepStrictEqual(result.stale_paths_replaced, []);
 
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
     assert.strictEqual(evidence.sha_binding.verified_source_sha, MERGE_SHA);
@@ -503,6 +1560,559 @@ test('generateProofArtifacts second run on rebound evidence/verification is unch
     assert.ok(second.unchanged_paths.includes('docs/06_status/proof/UTV2-1170/evidence.json'));
     assert.ok(second.unchanged_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
     assert.deepStrictEqual(second.stale_paths_replaced, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1631 — destructive-mutation regression suite.
+//
+// These tests exist because `ops:proof-generate --merge-sha` used to replace a
+// real measured T1 bundle with an empty `result: not_run` template and report
+// the loss as `stale_paths_replaced`. `post-merge-lane-close.yml` runs it on
+// every merge, so the destruction was automatic and silent while the lane still
+// read as closed. Every assertion below fails against the pre-fix
+// implementation; that was verified by restoring the pre-fix file and re-running
+// this suite (see docs/06_status/proof/UTV2-1631/verification.md).
+// ---------------------------------------------------------------------------
+
+const PRIOR_MERGE_SHA = '3333333333333333333333333333333333333333';
+
+/** Modeled on the real UTV2-1628 bundle: prose, assertions, and measurements. */
+function measuredVerificationMd(mergeSha: string): string {
+  return [
+    '# PROOF: UTV2-1170',
+    '',
+    `MERGE_SHA: ${mergeSha}`,
+    '',
+    'That is the authoritative merge SHA. The pre-fix baseline this lane measures',
+    'against is a different commit, named throughout below.',
+    '',
+    '## Summary',
+    '',
+    'Every privileged database client is constructed in one place, and that place',
+    'refuses to open a connection to canonical production from a test process.',
+    '',
+    'ASSERTIONS:',
+    '',
+    '1. 93 call sites collapsed to 1 constructor. Measured, not estimated.',
+    '2. `pnpm verify` is green on the merge SHA.',
+    '',
+    '## Verification',
+    '',
+    '- `pnpm verify` — PASS (CI run 30591605559)',
+    '- `pnpm type-check` — PASS',
+    '',
+    'EVIDENCE:',
+    '',
+    '## Evidence',
+    '',
+    '| Query | Rows |',
+    '|---|---|',
+    '| select count(*) from picks where lane = $1 | 1042 |',
+    '| select count(*) from provider_offer_history | 1390221 |',
+    '',
+    '## Row Counts (custom section)',
+    '',
+    'picks=1042 outbox=17 delivery_outcomes=17',
+    '',
+  ].join('\n');
+}
+
+function measuredEvidenceJson(mergeSha: string): string {
+  return `${JSON.stringify(
+    {
+      schema_version: 1,
+      issue_id: 'UTV2-1170',
+      tier: 'T1',
+      title: 'One enforced boundary for every privileged database client',
+      implementation_sha: 'a35030ebb3130e5c61b697fa421b13bbb2c1b7f5',
+      status: 'merged',
+      sha_binding: {
+        verified_source_sha: mergeSha,
+        merge_sha: mergeSha,
+        base_sha: 'fd0b3a114a403065238e562f1ea5b82033f78cdf',
+        sha_type: 'merge_sha',
+        verified_source_note: 'Every static measurement below was taken on the implementation commit.',
+        bound_at: '2026-07-31T00:53:51.470Z',
+      },
+      verifier: {
+        identity: 'github-actions/CI — run 30591605559, job staging-db-proof',
+        method: 'scripts/ci/verify-db-proof-receipt.ts re-checked the receipt and printed Verdict: PASS.',
+      },
+      ci_receipt: {
+        run_id: '30591605559',
+        job: 'staging-db-proof',
+        conclusion: 'success',
+        receipt_digest: 'sha256:9f2c1e',
+      },
+      runtime_proof: {
+        queries: [
+          { sql: 'select count(*) from picks where lane = $1', rows: 1042 },
+          { sql: 'select count(*) from provider_offer_history', rows: 1390221 },
+          { sql: 'select count(*) from outbox where status = $1', rows: 17 },
+        ],
+        row_counts: {
+          picks: 1042,
+          outbox: 17,
+          delivery_outcomes: 17,
+          provider_offer_history: 1390221,
+        },
+      },
+      static_proof: { verify: { command: 'pnpm verify', status: 'PASS' } },
+      custom_lane_section: { note: 'hand-authored, must survive verbatim' },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function seedMeasuredBundle(root: string, mergeSha: string): string {
+  const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+  fs.mkdirSync(proofDir, { recursive: true });
+  fs.writeFileSync(path.join(proofDir, 'verification.md'), measuredVerificationMd(mergeSha), 'utf8');
+  fs.writeFileSync(path.join(proofDir, 'evidence.json'), measuredEvidenceJson(mergeSha), 'utf8');
+  fs.writeFileSync(
+    path.join(proofDir, 'diff-summary.md'),
+    `# UTV2-1170 authored diff notes\n\nMerge SHA: ${mergeSha}\n\nThe rename in packages/db was mechanical; the behaviour change is in the guard.\n`,
+    'utf8',
+  );
+  return proofDir;
+}
+
+test('UTV2-1631: measured verification.md survives rebinding byte-identically except its MERGE_SHA line', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-preserve-md-'));
+  try {
+    const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
+    const before = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+
+    const result = generateProofArtifacts(input(), { root });
+
+    const after = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+
+    // The ONLY difference is the merge SHA token.
+    assert.strictEqual(after, before.replace(PRIOR_MERGE_SHA, MERGE_SHA));
+    assert.strictEqual(after, measuredVerificationMd(MERGE_SHA));
+
+    // Nothing was scaffolded over the top of it.
+    assert.doesNotMatch(after, /result: not_run/);
+    assert.doesNotMatch(after, /not run by proof-generate/);
+    assert.doesNotMatch(after, /Generated foundation artifact/);
+
+    // Every measurement, assertion, custom section and prose block survives.
+    assert.match(after, /1390221/);
+    assert.match(after, /93 call sites collapsed to 1 constructor/);
+    assert.match(after, /## Row Counts \(custom section\)/);
+    assert.match(after, /picks=1042 outbox=17 delivery_outcomes=17/);
+    assert.match(after, /CI run 30591605559/);
+    assert.match(after, /## Summary/);
+    assert.match(after, /## Evidence/);
+
+    assert.deepStrictEqual(result.stale_paths_replaced, []);
+    assert.ok(result.preserved_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
+    assert.ok(result.rebound_paths.includes('docs/06_status/proof/UTV2-1170/verification.md'));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: measured evidence.json keeps queries, row_counts, verifier.identity and ci_receipt; only SHA fields move', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-preserve-json-'));
+  try {
+    const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
+    const before = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+
+    generateProofArtifacts(input(), { root });
+
+    const after = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+
+    assert.deepStrictEqual(after.runtime_proof.queries, before.runtime_proof.queries);
+    assert.deepStrictEqual(after.runtime_proof.row_counts, before.runtime_proof.row_counts);
+    assert.strictEqual(after.runtime_proof.row_counts.provider_offer_history, 1390221);
+    assert.deepStrictEqual(after.verifier, before.verifier);
+    assert.strictEqual(after.verifier.identity, before.verifier.identity);
+    assert.deepStrictEqual(after.ci_receipt, before.ci_receipt);
+    assert.deepStrictEqual(after.static_proof, before.static_proof);
+    assert.deepStrictEqual(after.custom_lane_section, before.custom_lane_section);
+    assert.strictEqual(after.title, before.title);
+    assert.strictEqual(after.sha_binding.verified_source_note, before.sha_binding.verified_source_note);
+    assert.strictEqual(after.sha_binding.base_sha, before.sha_binding.base_sha);
+
+    // implementation_sha names the commit the measurements were taken on — it is
+    // not a merge-SHA-bearing field and must NOT be rewritten to the merge SHA.
+    assert.strictEqual(after.implementation_sha, before.implementation_sha);
+
+    // Only the merge-SHA-bearing fields (and bound_at) differ.
+    assert.strictEqual(after.sha_binding.verified_source_sha, MERGE_SHA);
+    assert.strictEqual(after.sha_binding.merge_sha, MERGE_SHA);
+    assert.strictEqual(after.sha_binding.sha_type, 'merge_sha');
+    assert.notStrictEqual(after.sha_binding.bound_at, before.sha_binding.bound_at);
+
+    const volatile = new Set(['verified_source_sha', 'merge_sha', 'sha_type', 'bound_at']);
+    for (const key of Object.keys(before.sha_binding)) {
+      if (!volatile.has(key)) {
+        assert.deepStrictEqual(after.sha_binding[key], before.sha_binding[key], `sha_binding.${key} changed`);
+      }
+    }
+    for (const key of Object.keys(before)) {
+      if (key !== 'sha_binding') {
+        assert.deepStrictEqual(after[key], before[key], `${key} changed`);
+      }
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: a sibling sha_binding.merge_sha is rebound too, so the bundle cannot assert two merge identities', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-sibling-sha-'));
+  try {
+    const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
+
+    generateProofArtifacts(input(), { root });
+
+    const after = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(after.sha_binding.verified_source_sha, after.sha_binding.merge_sha);
+    assert.ok(!JSON.stringify(after.sha_binding).includes(PRIOR_MERGE_SHA));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: authored diff-summary.md is preserved and rebound, never regenerated', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-preserve-diff-'));
+  try {
+    const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
+
+    generateProofArtifacts(input(), { root });
+
+    const after = fs.readFileSync(path.join(proofDir, 'diff-summary.md'), 'utf8');
+    assert.match(after, /The rename in packages\/db was mechanical/);
+    assert.match(after, new RegExp(`Merge SHA: ${MERGE_SHA}`));
+    assert.doesNotMatch(after, /## Git Name Status/);
+    assert.doesNotMatch(after, /## Manifest Files Changed/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: an unparseable evidence.json is left byte-identical and the run throws', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-unparseable-'));
+  try {
+    const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
+    const corrupt = '{ "schema_version": 1, "runtime_proof": { "queries": [ TRUNCATED\n';
+    fs.writeFileSync(path.join(proofDir, 'evidence.json'), corrupt, 'utf8');
+    const verificationBefore = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+
+    assert.throws(
+      () => generateProofArtifacts(input(), { root }),
+      (error: unknown) =>
+        error instanceof ProofPreservationError && error.code === 'malformed_evidence_json',
+    );
+
+    // Untouched — and because validation runs before any write, the rest of the
+    // bundle is untouched too.
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'), corrupt);
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), verificationBefore);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: an authored artifact with no merge-SHA anchor fails loudly and is left untouched', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-unbindable-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    const authored = '# PROOF: UTV2-1170\n\nASSERTIONS: measured, but no SHA anchor anywhere.\n';
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), authored, 'utf8');
+
+    assert.throws(
+      () => generateProofArtifacts(input(), { root }),
+      (error: unknown) =>
+        error instanceof ProofPreservationError && error.code === 'unbindable_proof_artifact',
+    );
+
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), authored);
+    assert.ok(!fs.existsSync(path.join(proofDir, 'diff-summary.md')));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: a pre-merge run never touches an authored bundle', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-premerge-'));
+  try {
+    const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
+    const before = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+
+    const preMergeInput = {
+      ...input({ commit_sha: null }),
+      gitTruth: gitTruth({ merge_sha: null, diff_base_ref: 'base-sha', diff_target_ref: HEAD_SHA }),
+    };
+    const result = generateProofArtifacts(preMergeInput, { root });
+
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), before);
+    assert.deepStrictEqual(result.generated_paths, []);
+    assert.deepStrictEqual(result.stale_paths_replaced, []);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: templates are still written when no bundle exists yet', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-template-'));
+  try {
+    const result = generateProofArtifacts(input(), { root });
+    assert.deepStrictEqual(result.generated_paths, [
+      'docs/06_status/proof/UTV2-1170/diff-summary.md',
+      'docs/06_status/proof/UTV2-1170/verification.md',
+    ]);
+    assert.deepStrictEqual(result.preserved_paths, []);
+    const verification = fs.readFileSync(
+      path.join(root, 'docs/06_status/proof/UTV2-1170/verification.md'),
+      'utf8',
+    );
+    assert.match(verification, /result: not_run/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1631: a MERGE_SHA line quoted inside a fenced evidence block is not rewritten', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1631-fence-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    const authored = [
+      '# PROOF: UTV2-1170',
+      '',
+      `MERGE_SHA: ${PRIOR_MERGE_SHA}`,
+      '',
+      '## Evidence',
+      '',
+      '```',
+      'MERGE_SHA: 4444444444444444444444444444444444444444',
+      'Merge SHA: 5555555555555555555555555555555555555555',
+      '```',
+      '',
+    ].join('\n');
+    fs.writeFileSync(path.join(proofDir, 'verification.md'), authored, 'utf8');
+
+    generateProofArtifacts(input(), { root });
+
+    const after = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(after, new RegExp(`^MERGE_SHA: ${MERGE_SHA}$`, 'm'));
+    // The quoted evidence is a measurement — it survives verbatim.
+    assert.match(after, /^MERGE_SHA: 4444444444444444444444444444444444444444$/m);
+    assert.match(after, /^Merge SHA: 5555555555555555555555555555555555555555$/m);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── autoHarvestCiDbProofIntoEvidence (UTV2-1641) ──────────────────────────────
+//
+// Real fixture data captured from UTV2-1399's own merge (PR #1343, run
+// 30680085299, job 91315210076) -- see
+// scripts/ops/ci-db-proof-harvest.test.ts's header comment for full provenance.
+
+const HARVEST_FIXTURES_DIR = path.join(__dirname, '__fixtures__', 'utv2-1641-ci-db-proof');
+const HARVEST_REAL_RECEIPT_RAW = fs.readFileSync(path.join(HARVEST_FIXTURES_DIR, 'real-utv2-1399-receipt.json'), 'utf8');
+const HARVEST_REAL_JOB_LOG = fs.readFileSync(path.join(HARVEST_FIXTURES_DIR, 'real-utv2-1399-job-log.txt'), 'utf8');
+const HARVEST_REAL_TEST_SOURCE = fs.readFileSync(path.join(ROOT, 'apps/api/src/database-smoke.test.ts'), 'utf8');
+const HARVEST_MERGE_SHA = 'fdc193582f94ad7538fa594b475847eb81a3647f';
+const HARVEST_HEAD_SHA = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
+const HARVEST_RUN_ID = 30680085299;
+const HARVEST_JOB_ID = 91315210076;
+
+function harvestHappyPathExecutor(): GhExecutor {
+  return (args: string[]) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${HARVEST_MERGE_SHA}/pulls`)) {
+      return Buffer.from(JSON.stringify([{ number: 1343, head: { sha: HARVEST_HEAD_SHA } }]));
+    }
+    if (key.includes(`actions/runs?head_sha=${HARVEST_HEAD_SHA}`)) {
+      return Buffer.from(JSON.stringify({ workflow_runs: [{ id: HARVEST_RUN_ID, name: 'CI', conclusion: 'success' }] }));
+    }
+    if (key.includes(`actions/runs/${HARVEST_RUN_ID}/jobs`)) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [{ id: HARVEST_JOB_ID, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success' }],
+        }),
+      );
+    }
+    if (key.includes(`actions/runs/${HARVEST_RUN_ID}/artifacts`)) {
+      return Buffer.from(
+        JSON.stringify({ artifacts: [{ id: 8811926669, name: `utv2-1630-db-proof-receipt-${HARVEST_RUN_ID}-1`, expired: false }] }),
+      );
+    }
+    if (key.includes('actions/artifacts/8811926669/zip')) {
+      return Buffer.from('FAKE_ZIP');
+    }
+    if (key.includes(`actions/jobs/${HARVEST_JOB_ID}/logs`)) {
+      return Buffer.from(HARVEST_REAL_JOB_LOG, 'utf8');
+    }
+    throw Object.assign(new Error(`harvestHappyPathExecutor: unexpected call "${key}"`), { stderr: 'unexpected' });
+  };
+}
+
+function writeHarvestEvidence(root: string, issueId: string, evidence: Record<string, unknown>): string {
+  const dir = path.join(root, 'docs/06_status/proof', issueId);
+  fs.mkdirSync(dir, { recursive: true });
+  const evidencePath = path.join(dir, 'evidence.json');
+  fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2), 'utf8');
+  return evidencePath;
+}
+
+test('autoHarvestCiDbProofIntoEvidence: no merge SHA -> no-op, nothing attempted', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-no-sha-'));
+  try {
+    writeHarvestEvidence(root, 'UTV2-9001', { schema_version: 1 });
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9001', null, 'claude');
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_merge_sha');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: no evidence.json at all -> no-op (T2/T3 lanes never harvest into nothing)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-no-evidence-'));
+  try {
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9002', HARVEST_MERGE_SHA, 'claude');
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_evidence_bundle');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: already-populated runtime_proof -> no-op, never overwrites', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-already-'));
+  try {
+    writeHarvestEvidence(root, 'UTV2-9003', {
+      schema_version: 1,
+      verifier: { identity: 'existing-verifier' },
+      runtime_proof: { queries: [{ table: 'picks', description: 'x' }], row_counts: [{ table: 'picks', count: 1, status: 'y' }] },
+    });
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9003', HARVEST_MERGE_SHA, 'claude');
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.code, 'already_populated');
+    const untouched = JSON.parse(fs.readFileSync(path.join(root, 'docs/06_status/proof/UTV2-9003/evidence.json'), 'utf8'));
+    assert.strictEqual(untouched.verifier.identity, 'existing-verifier');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('BEFORE/AFTER (UTV2-1641): a genuine CI receipt harvests real runtime_proof into evidence.json and preserves the pre-existing rich verifier (UTV2-1642)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-happy-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9004', {
+      schema_version: 1,
+      issue_id: 'UTV2-9004',
+      verifier: {
+        identity: 'read-only measurement against production Supabase',
+        method: 'every count is quoted alongside the exact SQL that produced it',
+        independence_note: 'measured in the opposite direction, not by narrative',
+      },
+      runtime_proof: { status: 'not_run', reason: 'pnpm test:db requires an active lane' },
+    });
+
+    // BEFORE: R1/R2 would fail -- queries/row_counts are absent.
+    const before = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.strictEqual(Array.isArray(before.runtime_proof?.queries), false);
+
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9004', HARVEST_MERGE_SHA, 'claude', {
+      ghExecutor: harvestHappyPathExecutor(),
+      zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+      testSourceText: HARVEST_REAL_TEST_SOURCE,
+    });
+
+    assert.strictEqual(result.attempted, true, JSON.stringify(result));
+    assert.strictEqual(result.applied, true, JSON.stringify(result));
+    assert.strictEqual(result.code, 'harvested');
+
+    // AFTER: R1/R2 would now pass -- both arrays are real and non-empty.
+    const after = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.ok(Array.isArray(after.runtime_proof.queries) && after.runtime_proof.queries.length > 0);
+    assert.ok(Array.isArray(after.runtime_proof.row_counts) && after.runtime_proof.row_counts.length > 0);
+    assert.strictEqual(after.runtime_proof.queries.length, 7);
+    assert.strictEqual(after.runtime_proof.row_counts.length, 8);
+
+    // UTV2-1642: the pre-existing rich verifier narrative survives; only
+    // identity is extended, never replaced.
+    assert.strictEqual(after.verifier.method, 'every count is quoted alongside the exact SQL that produced it');
+    assert.strictEqual(after.verifier.independence_note, 'measured in the opposite direction, not by narrative');
+    assert.match(after.verifier.identity, /^read-only measurement against production Supabase; runtime_proof auto-harvested/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: no CI evidence exists for this merge SHA -> fails closed, evidence.json untouched (R1/R2 stay honestly failed)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-noci-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9005', {
+      schema_version: 1,
+      issue_id: 'UTV2-9005',
+      runtime_proof: { status: 'not_run' },
+    });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+
+    const noPrExecutor: GhExecutor = () => Buffer.from(JSON.stringify([]));
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9005', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'claude', {
+      ghExecutor: noPrExecutor,
+    });
+
+    assert.strictEqual(result.attempted, true);
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_pr_for_merge_sha');
+
+    const after = fs.readFileSync(evidencePath, 'utf8');
+    assert.strictEqual(after, before, 'evidence.json must be byte-identical when the harvest finds no CI evidence');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: refuses when the harvested verifier identity would equal manifest.created_by', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-identity-'));
+  try {
+    writeHarvestEvidence(root, 'UTV2-9006', { schema_version: 1, runtime_proof: { status: 'not_run' } });
+    const collidingCreator =
+      'runtime_proof auto-harvested by ops:proof-generate from CI job "Writable DB proof (staging only)" ' +
+      `(run ${HARVEST_RUN_ID}, job ${HARVEST_JOB_ID})`;
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9006', HARVEST_MERGE_SHA, collidingCreator, {
+      ghExecutor: harvestHappyPathExecutor(),
+      zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+      testSourceText: HARVEST_REAL_TEST_SOURCE,
+    });
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'verifier_identity_matches_creator');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoHarvestCiDbProofIntoEvidence: --dry-run-equivalent (write:false) computes but does not persist', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-dryrun-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9007', { schema_version: 1, runtime_proof: { status: 'not_run' } });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9007', HARVEST_MERGE_SHA, 'claude', {
+      ghExecutor: harvestHappyPathExecutor(),
+      zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+      testSourceText: HARVEST_REAL_TEST_SOURCE,
+      write: false,
+    });
+    assert.strictEqual(result.applied, true);
+    const after = fs.readFileSync(evidencePath, 'utf8');
+    assert.strictEqual(after, before, 'write:false must not persist anything to disk');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
