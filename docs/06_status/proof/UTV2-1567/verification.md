@@ -1,6 +1,6 @@
 # PROOF: UTV2-1567
 
-MERGE_SHA: 7c25ed65882caf8d99b5c0290f3161159624c8ba
+MERGE_SHA: 116f3f3ff1b49ecf7b5a819bf42a651bc31c59d9
 
 The SHA above is `main`'s HEAD at the time this lane branched, an ancestor
 of the eventual PR merge commit — per this repo's accepted proof-binding
