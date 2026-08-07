@@ -1,9 +1,9 @@
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   const HORNETS_EVENT_ID = 'a003026a-bc03-48f7-8fa3-e3135fd865e2';
   const JB_PARTICIPANT_ID = '8c4d79d3-dbeb-41a6-a9cf-38724817012e';

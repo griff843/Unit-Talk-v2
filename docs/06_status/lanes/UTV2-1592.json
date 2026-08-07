@@ -1,0 +1,109 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1592",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1592-pre-merge-authorization",
+  "branch": "claude/utv2-1592-pre-merge-authorization",
+  "base_branch": "main",
+  "commit_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1311",
+  "files_changed": [
+    ".ops/sync/UTV2-1592.yml",
+    "docs/06_status/lanes/UTV2-1592.json",
+    "docs/06_status/proof/UTV2-1592/.gitkeep",
+    "docs/06_status/proof/UTV2-1592/evidence.json",
+    "docs/06_status/proof/UTV2-1592/verification.md",
+    "package.json",
+    "scripts/ops/merge-wrapper.test.ts",
+    "scripts/ops/merge-wrapper.ts",
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    "scripts/ops/ops-merge-wrapper.ts",
+    "scripts/ops/pre-merge-authorization.test.ts",
+    "scripts/ops/pre-merge-authorization.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1592.yml",
+    "docs/06_status/lanes/UTV2-1592.json",
+    "docs/06_status/proof/UTV2-1592/.gitkeep",
+    "package.json",
+    "scripts/ops/merge-wrapper.test.ts",
+    "scripts/ops/merge-wrapper.ts",
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    "scripts/ops/ops-merge-wrapper.ts",
+    "scripts/ops/pre-merge-authorization.test.ts",
+    "scripts/ops/pre-merge-authorization.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1592/evidence.json",
+    "docs/06_status/proof/UTV2-1592/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-27T04:11:15.770Z",
+  "heartbeat_at": "2026-07-28T01:03:41.020Z",
+  "closed_at": "2026-07-28T01:03:41.020Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-27T22:25:13.383Z",
+      "verdict": "fail",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [
+        "L3",
+        "S1"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-27T22:25:38.116Z",
+      "verdict": "fail",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [
+        "L3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-27T22:50:43.650Z",
+      "verdict": "pass",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-28T01:03:37.965Z",
+      "verdict": "pass",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1311",
+      "repaired_fields": [
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-28T01:03:37.974Z",
+      "verdict": "pass",
+      "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1592-pre-merge-authorization",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

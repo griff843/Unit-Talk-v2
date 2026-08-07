@@ -40,6 +40,11 @@ import {
   validateTruthResultSchemaDependencies,
   writeManifest,
 } from './shared.js';
+// UTV2-1640: S1 previously tested scope membership with an exact Set lookup, so a
+// `dir/**` entry in file_scope_lock could never match a real file path. The
+// pre-merge guard already implements the correct `/**`-and-prefix semantics, so
+// reuse that single definition here rather than adding a third independent one.
+import { matchesLockPattern } from '../ci/file-scope-guard.js';
 
 interface RunTruthCheckOptions {
   issueId: string;
@@ -252,6 +257,40 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   }
 
   return checks;
+}
+
+/**
+ * UTV2-1640: S1 scope-diff evaluation, extracted so it is directly testable.
+ *
+ * Previously this matched with an exact `Set` lookup, so a `dir/**` entry in
+ * `file_scope_lock` could never match a real file path — every lane declaring a
+ * directory glob failed S1 once `files_changed` was populated, while the
+ * pre-merge file-scope guard passed the identical diff. The two gates disagreed
+ * about what a scope lock means.
+ *
+ * Matching now delegates to `matchesLockPattern`, the same helper the pre-merge
+ * guard uses, so there is one definition of scope semantics rather than two.
+ */
+export function evaluateScopeDiff(
+  filesChanged: string[],
+  fileScopeLock: string[],
+  expectedProofPaths: string[],
+): { status: 'pass' | 'fail'; detail: string } {
+  if (filesChanged.length === 0 || fileScopeLock.length === 0) {
+    return { status: 'pass', detail: 'scope-diff check not applicable (empty files_changed or scope)' };
+  }
+
+  const allowedPatterns = [...fileScopeLock, ...expectedProofPaths];
+  const outOfScope = filesChanged.filter(
+    (f) =>
+      !allowedPatterns.some((pattern) => matchesLockPattern(f, pattern)) &&
+      !f.includes('deleted-file') &&
+      !f.startsWith('docs/06_status/proof/'),
+  );
+
+  return outOfScope.length > 0
+    ? { status: 'fail', detail: `files_changed outside file_scope_lock: ${outOfScope.join(', ')}` }
+    : { status: 'pass', detail: 'all files_changed are within file_scope_lock or proof paths' };
 }
 
 export function evaluateT2ProofEvidence(input: {
@@ -768,25 +807,12 @@ export async function runTruthCheck(
       }
     }
 
-    if (manifest.files_changed.length > 0 && manifest.file_scope_lock.length > 0) {
-      const allowedPaths = new Set([
-        ...manifest.file_scope_lock,
-        ...manifest.expected_proof_paths,
-      ]);
-      const outOfScope = manifest.files_changed.filter(
-        (f) =>
-          !allowedPaths.has(f) &&
-          !f.includes('deleted-file') &&
-          !f.startsWith('docs/06_status/proof/'),
-      );
-      if (outOfScope.length > 0) {
-        addCheck('S1', 'fail', `files_changed outside file_scope_lock: ${outOfScope.join(', ')}`);
-      } else {
-        addCheck('S1', 'pass', 'all files_changed are within file_scope_lock or proof paths');
-      }
-    } else {
-      addCheck('S1', 'pass', 'scope-diff check not applicable (empty files_changed or scope)');
-    }
+    const scopeDiff = evaluateScopeDiff(
+      manifest.files_changed,
+      manifest.file_scope_lock,
+      manifest.expected_proof_paths,
+    );
+    addCheck('S1', scopeDiff.status, scopeDiff.detail);
 
     const finalizedFilesForPostMergeTouchCheck = manifest.files_changed.filter(
       (filePath) =>
@@ -1212,7 +1238,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
   return payload.data.issue;
 }
 
-function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
+export function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
   const url = new URL(prUrl);
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
   if (!match) {
@@ -1226,7 +1252,7 @@ function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; numb
   };
 }
 
-async function fetchGitHubPullRequest(
+export async function fetchGitHubPullRequest(
   owner: string,
   repo: string,
   number: number,
@@ -1251,16 +1277,25 @@ interface GitHubIssueComment {
   created_at?: string;
 }
 
-async function fetchGitHubPullRequestComments(
+export async function fetchGitHubPullRequestComments(
   owner: string,
   repo: string,
   number: number,
   token: string,
+  fetchPage: JsonPageFetcher = fetchJson,
 ): Promise<GitHubIssueComment[]> {
-  return fetchJson<GitHubIssueComment[]>(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+  // UTV2-1592 amendment: a PR/issue with more than 100 comments used to
+  // silently drop everything past page 1 -- including, potentially, the
+  // latest pm-verdict/v1 comment. Paginate the same way fetchCommitChecks
+  // already does for statuses/check-runs (fetchAllPages below), rather than
+  // reimplementing pagination a third time.
+  return fetchAllPages<GitHubIssueComment[]>(
+    (page) =>
+      `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+    (payload) => payload,
+    fetchPage,
     { headers: githubHeaders(token) },
-  );
+  ) as Promise<GitHubIssueComment[]>;
 }
 
 const PM_VERDICT_CODEOWNERS = new Set(['griff843']);
@@ -1361,7 +1396,7 @@ export function normalizeRequiredChecks(input: {
   return normalized;
 }
 
-async function fetchRequiredChecks(
+export async function fetchRequiredChecks(
   owner: string,
   repo: string,
   token: string,
@@ -1867,7 +1902,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   throw new Error(`Request failed for ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
-function githubHeaders(token: string): HeadersInit {
+export function githubHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',

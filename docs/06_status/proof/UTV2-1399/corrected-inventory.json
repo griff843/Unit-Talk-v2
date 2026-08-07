@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1399",
+  "artifact": "corrected fixture inventory — supersedes .out/fixture-cleanup-packet/inventory.json",
+  "purpose": "The cleanup packet's exact-ID set is incomplete. This artifact re-derives it on measured ground so the deletion packet can be rebuilt. IT AUTHORIZES NOTHING: no row may be deleted on the strength of this file. Deletion still requires a separate, independently reviewed packet and explicit PM authorization.",
+  "measured_at": "2026-07-31T12:20:00Z",
+  "target": "zfzdnfwdarxucxtaojxm (PRODUCTION)",
+  "access": "read_only_select_only",
+  "supersedes": {
+    "file": ".out/fixture-cleanup-packet/inventory.json",
+    "defect_notice": ".out/fixture-cleanup-packet/00-DEFECT-NOTICE-DO-NOT-EXECUTE.md",
+    "relationship": "strict superset — v2 adds 31 ids and removes none"
+  },
+
+  "reproducibility_check": {
+    "claim": "The packet's stale classifier reproduces its own published checksum against current data, so the delta below is a genuine classifier correction and not data drift.",
+    "packet_published_sha256": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
+    "recomputed_sha256_2026_07_31": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1",
+    "match": true,
+    "method": "encode(sha256(string_agg(id::text, ',' ORDER BY id::text)::bytea), 'hex') over the v1 predicate — the same construction classifier.sql documents"
+  },
+
+  "counts": {
+    "picks_total": 107858,
+    "fixture_v1_stale_packet": 100247,
+    "fixture_v2_corrected": 100278,
+    "legitimate_v1_stale_packet": 7611,
+    "legitimate_v2_corrected": 7580,
+    "newly_classified_as_fixture_by_v2": 31,
+    "removed_from_fixture_by_v2": 0,
+    "partition_exhaustive_and_disjoint": true
+  },
+
+  "checksums": {
+    "note": "sha256 of the sorted id::text list joined by ','. Anyone can re-derive the full id list from the published predicate and verify against these.",
+    "sha256_fixture_v2": "618ca94a27d7d033089b18adaf3ff499c2a296325b9e170d748bab20df06796d",
+    "sha256_legitimate_v2": "27b7bf563f0b2b29ab3d52c431df36a4d775c5f4fb20b6fda108cd6db1886b2e",
+    "sha256_fixture_v1_recomputed": "203174d82c2faaefb4e1c7dab8c6efc6d4d2d645726f2e8bdc3a8a95aefc1aa1"
+  },
+
+  "predicate_of_record": {
+    "implementation": "reporting.pick_fixture_reason(metadata, selection, market, source) in supabase/migrations/20260731000000_utv2_1399_fixture_excluding_reporting_views.sql",
+    "semantics": "returns NULL for a legitimate pick, else a reason code; fixture set is `IS NOT NULL`, legitimate set is `IS NULL`",
+    "why_not_an_or_chain": "A bare OR-chain is three-valued: metadata->>'eventName' is SQL NULL when the key is absent, so `false OR NULL` is NULL for 411 of 107,858 rows, and `WHERE NOT (predicate)` drops them from BOTH sides. Any rebuilt deletion packet MUST use this CASE form or an explicit captured id list."
+  },
+
+  "exclusion_classes": {
+    "note": "These three classes have materially different deletion risk and MUST NOT be merged into a single deletion scope.",
+    "ci": {
+      "picks": 100270,
+      "description": "CI / proof-harness fixtures. Self-identifying via proof_issue / proofRunId metadata keys, db-smoke event names, UTV2 selection or event prefixes, per-run [utv2-<issue>-<run>] tags, or the purely synthetic t1-proof / canary-proof sources.",
+      "dependents": {
+        "settlement_records": 35923,
+        "pick_offer_snapshots": 20,
+        "command_center_delivery_mappings": 0
+      }
+    },
+    "qa_demo": {
+      "picks": 6,
+      "description": "Operator QA and dry-run rows: 5 'Command Center QA 202606' (submittedBy codex-command-center-p…) and 1 'STAFF-ONLY DRY RUN'. Not CI fixtures — human-driven demo traffic.",
+      "dependents": {
+        "settlement_records": 0,
+        "pick_offer_snapshots": 0,
+        "command_center_delivery_mappings": 16
+      },
+      "deletion_recommendation": "EXCLUDE FROM ANY DELETION SCOPE. These 6 picks are the sole source of command_center_delivery_mappings entanglement (all 16 rows), and command_center_delivery_mappings is one of the two tables with no CREATE TABLE in the migration ledger. Deleting them would mutate a table whose DDL the repo cannot replay. Exclude from reporting only."
+    },
+    "junk": {
+      "picks": 2,
+      "description": "Placeholder rows from 2026-04-22, day 2 of the database: selection='test', one with market='test'. No dependents.",
+      "dependents": {
+        "settlement_records": 0,
+        "pick_offer_snapshots": 0,
+        "command_center_delivery_mappings": 0
+      }
+    }
+  },
+
+  "dependent_table_recount": {
+    "note": "Recomputed under the corrected classifier. Two packet figures were WRONG and both moved off zero — relationships.md declared them 'not in scope'.",
+    "pick_lifecycle":                   { "v2": 135803, "packet_v1": 135732, "delta": 71 },
+    "pick_promotion_history":           { "v2": 105348, "packet_v1": 105261, "delta": 87 },
+    "settlement_records":               { "v2": 35923,  "packet_v1": 35912,  "delta": 11 },
+    "pick_reviews":                     { "v2": 8336,   "packet_v1": 8336,   "delta": 0 },
+    "distribution_outbox":              { "v2": 5332,   "packet_v1": 5307,   "delta": 25 },
+    "pick_offer_snapshots":             { "v2": 20,     "packet_v1": 0,      "delta": 20, "packet_was_wrong": true },
+    "command_center_delivery_mappings": { "v2": 16,     "packet_v1": 0,      "delta": 16, "packet_was_wrong": true },
+    "fixture_submissions":              { "v2": 92518,  "packet_v1": 92487,  "delta": 31 },
+    "consistency_check": "pick_offer_snapshots 20 (fixture) + 173 (legitimate) = 193 = the packet's stated table total, so the reclassification is internally consistent."
+  },
+
+  "packet_claims_now_invalid": [
+    "relationships.md table 1: `pick_offer_snapshots` fixture-reachable = 0. Actually 20.",
+    "relationships.md table 1: `command_center_delivery_mappings` fixture-reachable = 0. Actually 16.",
+    "relationships.md section 2: 'command_center_delivery_mappings pointing at a fixture pick — 0'. Actually 16.",
+    "relationships.md section 4 deletion order: lists `pick_offer_snapshots (0) not in scope` and `command_center_delivery_mappings (0) not in scope`. Both are now in scope and must be sequenced before `picks`.",
+    "relationships.md section 4 total: 518,037 rows across 11 tables. Understated — the corrected scope adds 261 dependent rows across 8 tables plus 31 picks and 31 submissions."
+  ],
+
+  "delta_ids_missing_from_packet": {
+    "count": 31,
+    "description": "Exact ids the stale packet classifies as LEGITIMATE and the corrected classifier classifies as FIXTURE. Every one was inspected individually. None is a real pick.",
+    "ids": [
+      { "id": "2848bb63-e1ee-4ffd-bb0c-dfb8fa122dd2", "reason": "command_center_qa",      "class": "qa_demo" },
+      { "id": "3577a78e-bdc3-4d67-afba-d24f5f9d7252", "reason": "command_center_qa",      "class": "qa_demo" },
+      { "id": "38526b7f-7c4a-423d-b251-b8a43ce88b10", "reason": "proof_run_id_metadata",  "class": "ci" },
+      { "id": "39fb496e-6142-4d47-be1c-786c4188e320", "reason": "utv2_run_tag_selection", "class": "ci" },
+      { "id": "3a1d4542-f88d-4b14-9427-8b705fac1695", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "3da6e348-a9a0-42d6-b275-f457bbdea010", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "3dcfc6d3-9fa7-4b48-ba39-1dc47ba089f6", "reason": "utv2_run_tag_selection", "class": "ci" },
+      { "id": "4725244b-07b6-4082-9d09-9a520e67ba4e", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "4e720d11-7505-4cc1-9df8-db39c91f98c8", "reason": "proof_run_id_metadata",  "class": "ci" },
+      { "id": "677152f0-a3c5-44e2-8c8a-fc17f70898dd", "reason": "utv2_selection_prefix",  "class": "ci" },
+      { "id": "6bc79e8c-cb0c-4a16-aad7-6eb16f93d248", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "6f1f8da5-1e01-40a4-b7b2-677cf094d926", "reason": "utv2_run_tag_selection", "class": "ci" },
+      { "id": "74d8da1b-9f89-4643-ab7d-fd992eb80e13", "reason": "placeholder_selection",  "class": "junk" },
+      { "id": "7f4ffaaa-ab60-4118-ad50-21a8326c7f21", "reason": "placeholder_selection",  "class": "junk" },
+      { "id": "85cd0410-4a88-4c2b-885a-1d144b353278", "reason": "utv2_run_tag_selection", "class": "ci" },
+      { "id": "870de98e-58c7-4ed2-ac82-20c719a631ae", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "8ff6dd60-750b-46e3-a78a-de9cfef0adb1", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "947df253-f4a2-48b5-9d12-c85033128576", "reason": "proof_run_id_metadata",  "class": "ci" },
+      { "id": "95518625-1328-4ba3-8fe4-e916de892800", "reason": "command_center_qa",      "class": "qa_demo" },
+      { "id": "b8d1fb1e-22d2-4550-9aa3-b21be4e73668", "reason": "proof_run_id_metadata",  "class": "ci" },
+      { "id": "bb3bc5b0-4208-4057-a711-e583292a1c25", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "d50e42af-2012-4edc-a325-fe7a666ab56e", "reason": "command_center_qa",      "class": "qa_demo" },
+      { "id": "da09731c-33fe-4302-aa81-16de7cd6e518", "reason": "utv2_run_tag_selection", "class": "ci" },
+      { "id": "e1f121ee-9b9d-481c-abb5-8dfc343ffba2", "reason": "proof_run_id_metadata",  "class": "ci" },
+      { "id": "e250b64f-46c9-4d5f-bec4-dcb8045289f6", "reason": "utv2_selection_prefix",  "class": "ci" },
+      { "id": "e33f5253-9178-4327-8149-eed56ddba3c8", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "e8c0d828-7e1f-4628-8497-d57ab0777c0c", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "e99501e5-cf03-4999-9acc-38b3cc2ccd89", "reason": "utv2_event_name",        "class": "ci" },
+      { "id": "ed0a53f8-580b-46c7-aff4-cd035431f95f", "reason": "staff_only_dry_run",     "class": "qa_demo" },
+      { "id": "eec18342-1eea-413f-b543-1ecd306be24e", "reason": "command_center_qa",      "class": "qa_demo" },
+      { "id": "f35d9659-24dc-4c8c-8d6d-7b8e68f674b0", "reason": "proof_run_id_metadata",  "class": "ci" }
+    ]
+  },
+
+  "rebuild_guidance_for_the_deletion_packet": [
+    "Re-derive the id set from reporting.pick_fixture_reason, not from the stale inventory.json.",
+    "Scope deletion to class `ci` only (100,270 picks). Hold `qa_demo` (6) and `junk` (2) out — the qa_demo rows alone drag in all 16 command_center_delivery_mappings rows, in a table with no CREATE TABLE in the migration ledger.",
+    "Add pick_offer_snapshots (20) to the dependency-resolved order; relationships.md omits it as out of scope.",
+    "The blocking conditions relationships.md identified are unchanged and still governing: settlement_records is DELETE-blocked by trigger trg_settlement_records_immutable (35,923 rows now), audit_log is immutable, settlement_records.corrects_id is RESTRICT and needs depth-first ordering, and pick_reviews is NO ACTION and must be deleted explicitly.",
+    "Nothing in this artifact authorizes deletion. It exists so that when deletion IS authorized, it is authorized against a measured id set rather than a stale one."
+  ]
+}

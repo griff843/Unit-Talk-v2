@@ -1,23 +1,37 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   loadEnvironment,
-  requireSupabaseEnvironment,
   type AppEnv,
 } from '../../../../../packages/config/dist/env.js';
+import {
+  createDatabaseConnectionConfig as createSharedConnectionConfig,
+  createDatabaseClientFromConnection as createSharedClientFromConnection,
+  type DatabaseConnectionConfig,
+  type DatabaseClientOptions as SharedDatabaseClientOptions,
+} from '../../../../../packages/db/dist/client.js';
 import { assertCommandCenterAuthConfig } from '../server-api';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-interface DatabaseConnectionConfig {
-  url: string;
-  key: string;
-  role: 'anon' | 'service_role';
-}
+/**
+ * UTV2-1628 — this module used to carry its own copy of the connection builder
+ * and its own `createClient(...)` call, so `@unit-talk/db`'s behaviour and this
+ * app's behaviour could drift silently and neither passed any target check.
+ *
+ * Both now come from `@unit-talk/db`: the shape of the connection from
+ * `createDatabaseConnectionConfig`, and the connection itself from
+ * `createDatabaseClientFromConnection`, which opens it through the privileged
+ * client boundary. What remains local is the one thing that is genuinely
+ * Command Center's: the operator-auth precondition on service-role access, and
+ * the workspace root this app resolves its environment from.
+ *
+ * The import is the built `dist` entry rather than the workspace source,
+ * matching how this file already reaches `@unit-talk/config` — Next's bundler
+ * does not transpile TypeScript out of the workspace packages.
+ */
+export type { DatabaseConnectionConfig };
 
-interface DatabaseClientOptions {
-  env?: AppEnv | undefined;
-  useServiceRole?: boolean;
-}
+type DatabaseClientOptions = SharedDatabaseClientOptions;
 
 let _client: SupabaseClient | null = null;
 
@@ -36,18 +50,13 @@ export function createDatabaseConnectionConfig(
   options: DatabaseClientOptions = {},
 ): DatabaseConnectionConfig {
   const env = options.env ?? loadEnvironment(resolveWorkspaceRoot());
-  const supabase = requireSupabaseEnvironment(env);
   const useServiceRole = options.useServiceRole ?? false;
 
   if (useServiceRole) {
     assertCommandCenterAuthConfig(toCommandCenterAuthEnv(env));
   }
 
-  return {
-    url: supabase.url,
-    key: useServiceRole ? supabase.serviceRoleKey : supabase.anonKey,
-    role: useServiceRole ? 'service_role' : 'anon',
-  };
+  return createSharedConnectionConfig({ env, useServiceRole });
 }
 
 export function createServiceRoleDatabaseConnectionConfig(
@@ -59,12 +68,7 @@ export function createServiceRoleDatabaseConnectionConfig(
 export function createDatabaseClientFromConnection(
   connection: DatabaseConnectionConfig,
 ): SupabaseClient {
-  return createClient(connection.url, connection.key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
+  return createSharedClientFromConnection(connection);
 }
 
 export function getDataClient(): SupabaseClient {

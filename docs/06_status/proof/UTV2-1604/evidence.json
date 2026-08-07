@@ -1,0 +1,276 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1604",
+  "title": "P0 deploy parked mode — explicit mode contract and scheduler policy",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-29T21:55:37Z",
+  "sha_binding": {
+    "verified_source_sha": "9879d1f97f81ca596822b5debf972d784ee1087b",
+    "verified_source_note": "Implementation commit on the origin/main-rebased branch containing the shared exact validator, strict environment value preservation, scheduler outcomes, deploy/canary/production propagation, post-start equality assertions, required test wiring, and mutation coverage. Rebased from pre-rebase 8bdb94418cf459dbd21dc9658f08f7f4f3c0b473 onto origin/main; the only conflict was the package.json test:ops script, resolved as a union of main's entries plus this lane's two new suites.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": "9879d1f97f81ca596822b5debf972d784ee1087b",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-31T11:59:00.132Z"
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1604-parked-mode-scheduler-policy",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not exact-head independent review, PM approval, deployment authorization, or production certification."
+  },
+  "scope": {
+    "runtime_change": true,
+    "deploy_workflow_change": true,
+    "database_change": false,
+    "production_mutation_by_lane": false,
+    "implementation_paths": [
+      ".env.example",
+      ".github/workflows/deploy.yml",
+      "apps/api/src/index.ts",
+      "apps/api/src/scheduler-policy.ts",
+      "apps/api/src/scheduler-policy.test.ts",
+      "package.json",
+      "packages/config/src/env.ts",
+      "packages/config/src/env.test.ts",
+      "scripts/ci/deploy-parked-mode.test.ts",
+      "scripts/ci/scheduler-classification.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1604/evidence.json",
+      "docs/06_status/proof/UTV2-1604/model-routing.json",
+      "docs/06_status/proof/UTV2-1604/verification.md"
+    ],
+    "does_not_claim": [
+      "No GitHub secret was created or changed.",
+      "No canary or production deployment was performed.",
+      "No API restart or production scheduler was started.",
+      "No deployed-SHA, service-health, producer-containment, or GREEN readiness claim is made.",
+      "No public distribution target was activated.",
+      "No merge authorization or T1 PM verdict is claimed."
+    ]
+  },
+  "mode_contract": {
+    "exact_values": {
+      "true": "active",
+      "false": "parked"
+    },
+    "invalid_values_fail_closed": [
+      "missing",
+      "empty",
+      "case-variant",
+      "whitespace-padded",
+      "0",
+      "enabled",
+      "any other value"
+    ],
+    "canonical_validator": "packages/config/src/env.ts::parseSyndicateMachineMode",
+    "raw_secret_consumers_in_deploy_workflow": 1,
+    "canary_and_production_consume_validated_mode": true,
+    "post_start_checks_require_requested_runtime_equality": true
+  },
+  "scheduler_contract": {
+    "inventory_count": 14,
+    "parked_enabled": [
+      "recap",
+      "trial-expiry",
+      "participant-enrichment",
+      "system-pick-scanner",
+      "closing-line-recovery",
+      "market-universe-materializer",
+      "line-movement-detector",
+      "model-health-scanner"
+    ],
+    "parked_disabled": [
+      "board-scan",
+      "candidate-scoring",
+      "ranked-selection",
+      "board-construction",
+      "board-pick-writer",
+      "candidate-pick-scanner"
+    ],
+    "actual_outcome_statuses": [
+      "started",
+      "suppressed_by_mode",
+      "skipped_by_runtime_condition"
+    ],
+    "receipt_emitted_after_registration_callbacks": true,
+    "board_writer_override_allowed_while_parked": false
+  },
+  "static_proof": {
+    "focused_safety_tests": {
+      "command": "npx tsx --test scripts/ci/deploy-parked-mode.test.ts scripts/ci/scheduler-classification.test.ts apps/api/src/scheduler-policy.test.ts packages/config/src/env.test.ts",
+      "status": "PASS",
+      "tests": 31,
+      "pass": 31,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 4131.456023,
+      "measured_on": "origin/main-rebased head"
+    },
+    "existing_deploy_regressions": {
+      "command": "npx tsx --test scripts/deploy-check.test.ts scripts/ops/workflow-hardening.test.ts scripts/ci/ops-p0-containment-workflow.test.ts",
+      "status": "PASS",
+      "tests": 73,
+      "pass": 73,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 3654.657095,
+      "measured_on": "origin/main-rebased head"
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "exit_code": 0,
+      "includes": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "excludes": [
+        "test:db",
+        "test:t1-proof:live"
+      ],
+      "excludes_reason": "UTV2-1630 made test:db begin with ci:assert-staging; this worktree holds no staging credential, so the live half fails closed locally by design. Live-database evidence for this head comes from the required CI verify context (staging-ci environment, ci-db-proof-receipt/v2 re-verified by scripts/ci/verify-db-proof-receipt.ts)."
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 16,
+      "rules_matched": [],
+      "artifact_requirements": []
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "environment": "local policy execution in the lane worktree; live-database evidence delegated to the required CI verify context against staging. No API process started, no deployment performed.",
+    "run_at": "2026-07-31T11:47:50Z",
+    "policy_execution": {
+      "command": "npx tsx -e <run all scheduler ids through createSchedulerRegistrationPolicy for false and true>",
+      "status": "PASS",
+      "parked": {
+        "requested_value": "false",
+        "mode": "parked",
+        "started_count": 7,
+        "skipped_by_runtime_condition": [
+          {
+            "scheduler": "system-pick-scanner",
+            "reason": "SYSTEM_PICK_SCANNER_ENABLED=false"
+          }
+        ],
+        "suppressed_by_mode": [
+          "board-scan",
+          "candidate-scoring",
+          "ranked-selection",
+          "board-construction",
+          "board-pick-writer",
+          "candidate-pick-scanner"
+        ]
+      },
+      "active": {
+        "requested_value": "true",
+        "mode": "active",
+        "eligible_count": 14,
+        "started_count": 13,
+        "skipped_by_runtime_condition": [
+          {
+            "scheduler": "system-pick-scanner",
+            "reason": "SYSTEM_PICK_SCANNER_ENABLED=false"
+          }
+        ],
+        "suppressed_by_mode": []
+      }
+    },
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "DELEGATED_TO_CI",
+      "executed_locally": false,
+      "reason": "UTV2-1630 staging isolation: test:db runs ci:assert-staging first and this worktree holds no staging credential. Enforcement moved to the required verify context, which runs the smoke inside the staging-ci environment and emits a ci-db-proof-receipt/v2 that scripts/ci/verify-db-proof-receipt.ts re-verifies in the same run.",
+      "authoritative_source": "required GitHub check context \"verify\" on the exact PR head SHA",
+      "supabase_project": "staging (per EXPECTED_STAGING_SUPABASE_PROJECT_REF); production is not touched"
+    },
+    "queries": [
+      {
+        "note": "The seven-case live smoke inventory is executed by ci:db-smoke inside the required verify context against staging; its TAP counts are attested by the ci-db-proof-receipt/v2 artifact rather than restated here."
+      }
+    ],
+    "row_counts": [
+      {
+        "scope": "database writes attributable to this lane",
+        "database_writes_added_by_lane": 0,
+        "note": "This lane changes no DB, repository, or migration code."
+      },
+      {
+        "scope": "parked-mode policy execution",
+        "eligible_schedulers": 8,
+        "started_schedulers": 7,
+        "runtime_condition_skips": 1,
+        "mode_suppressions": 6
+      }
+    ],
+    "credential_transport": {
+      "method": "none",
+      "production_credentials_used": false,
+      "note": "No production credential was sourced, copied, or exported by this lane. The worktree local.env points at unreachable hosts and no local run reached any database."
+    },
+    "production_api_started": false,
+    "production_deployment_performed": false,
+    "production_mutation_by_lane": false
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Use one shared validator: true to active, false to parked, and any undeclared or invalid value fails closed.",
+      "status": "PASS",
+      "evidence": "Canonical config parser tests plus executable deploy secret-validation tests."
+    },
+    {
+      "criterion": "Canary and production preserve the same validated value and post-start checks compare runtime to the requested mode.",
+      "status": "PASS",
+      "evidence": "Workflow audit verifies one secret consumer, canonical job-output propagation, stage mapping, equality checks, and drift mutations."
+    },
+    {
+      "criterion": "Runtime and deploy receipts report actual mode without a hardcoded active claim.",
+      "status": "PASS",
+      "evidence": "Deploy receipt mutation test and API receipt emitted after actual registration outcomes."
+    },
+    {
+      "criterion": "Parked mode suppresses all six provider-derived producer schedulers while active mode preserves eligibility.",
+      "status": "PASS",
+      "evidence": "Policy unit tests, runtime policy receipts, classification audit, and gate-removal mutations."
+    },
+    {
+      "criterion": "All safety tests execute through the canonical pnpm test and pnpm verify paths and removal is detected.",
+      "status": "PASS",
+      "evidence": "package.json wiring plus three negative wiring mutations; pnpm verify:static passes (exit 0)."
+    },
+    {
+      "criterion": "Existing deploy, rollback, workflow-hardening, static verification, and DB smoke remain green.",
+      "status": "PASS",
+      "evidence": "73 existing deploy regression tests pass and pnpm verify:static passes on the rebased head; the live DB smoke is proven by the required CI verify context against staging, not by a local run."
+    },
+    {
+      "criterion": "Done additionally requires secret=false, parked deployment, deployed-SHA proof, expected service health, producer observation, and truthful readiness.",
+      "status": "PENDING_GRIFF_RESERVED_ACTIONS",
+      "evidence": "No secret creation, deployment, restart, production mutation, or readiness certification was performed by this lane."
+    }
+  ],
+  "known_limitations": [
+    "Direct policy execution proves scheduler registration semantics without starting the API because startup would activate unrelated parked-enabled DB schedulers.",
+    "The live-database half of pnpm verify was not run locally: UTV2-1630 fails it closed without staging credentials. Live-DB proof for this head is the required CI verify context and its ci-db-proof-receipt/v2.",
+    "Implementation readiness is not production readiness.",
+    "Secret creation, deployment, and deployed-SHA evidence remain outstanding and are performed outside this lane."
+  ],
+  "verdict": "PASS_IMPLEMENTATION_ONLY"
+}

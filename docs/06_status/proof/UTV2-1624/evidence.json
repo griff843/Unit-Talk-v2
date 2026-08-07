@@ -1,0 +1,367 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1624",
+  "tier": "T1",
+  "title": "Executable wiring coverage for tests and ops capabilities",
+  "generated_at": "2026-07-31T12:45:00.000Z",
+  "status": "in_progress",
+  "sha_binding": {
+    "verified_source_sha": "43c36112089a80d7e50bcb7db0bde1764b2d62fe",
+    "base_sha": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+    "sha_type": "merge_sha",
+    "verified_source_note": "Every count and every command output in this bundle was re-measured on 12b0d00f after this lane was rebased a fourth time onto origin/main (past UTV2-1604, UTV2-1632 x2, UTV2-1635, UTV2-1613, UTV2-1594, UTV2-1399). The authoritative binding is the squash merge SHA, written post-merge by post-merge-lane-close.yml via ops:proof-generate --merge-sha.",
+    "bound_at": "2026-08-01T03:48:07.130Z",
+    "merge_sha": "43c36112089a80d7e50bcb7db0bde1764b2d62fe"
+  },
+  "verifier": {
+    "identity": "codex/utv2-1624-runtime-proof-repair",
+    "method": "This lane's central claim is a count and a reachability verdict, both of which are mechanical and reproducible by anyone running `pnpm ops:automation-coverage-check`. No count is asserted from narrative. The prior audit's reported figures (430 test files, 175 unreachable, 8 orphan ops scripts) were re-derived rather than accepted, and none of them reproduced.",
+    "verifier_scope": "Static and mechanical. This lane touches no database path; the changed files are scripts/ops/executable-wiring.ts, scripts/ops/automation-coverage-check.ts, their tests, the baseline ledger, a spec doc and the root package.json test:ops list. The T1 live-DB requirement is satisfied by ci.yml's staging-db-proof job, which runs on this head like every other pull request; see runtime_proof.",
+    "independence_note": "The reachability claims do not rest on the implementing agent's reading of the code. Each named merge-path test was cross-checked with an independent grep of package.json and .github/ (verification.md EVIDENCE 5), and each newly wired test was mutation-checked so that a decorative test could not pass as coverage (EVIDENCE 6).",
+    "runtime_proof_harvest_note": "The T1 live-DB requirement (runtime_proof below) was harvested post-merge via the governed pnpm ops:proof-repair path from this PR (#1338) own Writable DB proof (staging only) CI job -- never re-run, never fabricated. identity is deliberately distinct from manifest.created_by (codex-cli) per P10/R3."
+  },
+  "rederived_inventory": {
+    "measured_at_sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
+    "command": "pnpm ops:automation-coverage-check",
+    "test_files_total": 462,
+    "required_reachable": 307,
+    "optional_reachable": 36,
+    "fixture_helper_not_executable": 0,
+    "quarantined": 0,
+    "unwired": 119,
+    "unwired_baselined": 119,
+    "unwired_new": 0,
+    "capabilities_total": 149,
+    "capabilities_wired": 131,
+    "capabilities_orphan": 18,
+    "capabilities_orphan_new": 0,
+    "reported_by_prior_audit": {
+      "test_files_total": 430,
+      "unreachable": 175,
+      "orphan_ops_scripts": 8,
+      "reproduced": false,
+      "note": "Not hardcoded anywhere in the implementation. The prior audit over-counted unreachable tests, under-counted orphan capabilities by more than 2x, and named proof-auditor-gate.test.ts as unexecuted when it is in fact required-reachable."
+    }
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "test_ops": {
+      "command": "pnpm test:ops",
+      "tests": 1809,
+      "pass": 1809,
+      "fail": 0,
+      "skipped": 0,
+      "note": "Includes the 12 tests newly wired by this lane."
+    },
+    "wiring_fixtures": {
+      "command": "pnpm exec tsx --test scripts/ops/executable-wiring.test.ts",
+      "tests": 25,
+      "pass": 25,
+      "fail": 0
+    },
+    "coverage_check_fixtures": {
+      "command": "pnpm exec tsx --test scripts/ops/automation-coverage-check.test.ts",
+      "tests": 8,
+      "pass": 8,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 19066.999168ms)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 16616.294763ms)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 18066.672674ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 17906.627022ms)"
+      },
+      {
+        "table": "participants",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 137.388711ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows (ok 6, 19590.470814ms)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated (ok 7, 20961.430497ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (deleted) by scripts/ci/seed-staging-fixtures.ts before the writable suite ran"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (deleted) by scripts/ci/seed-staging-fixtures.ts before the writable suite ran"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (deleted) by scripts/ci/seed-staging-fixtures.ts before the writable suite ran"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (reference data) by scripts/ci/seed-staging-fixtures.ts"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-01T03:08:57.573Z",
+    "row_counts_note": "Observed on staging xskgrzbteyqdufktjrjx by scripts/ci/seed-staging-fixtures.ts, job 'Writable DB proof (staging only)' (job id 91319015637), run 30681405518 attempt 1, PR #1338 head 11ee7a5fe87180b40afee3cc053bc1714a3ac32e (squash-merged as 43c36112089a80d7e50bcb7db0bde1764b2d62fe). Read from that job's own log, transcribed verbatim, not re-run and not copied from any sibling lane's run. settlement_records, picks and submissions are retained by design and were not reset; the seeder logged that explicitly ('retained by design: settlement_records, picks, submissions').",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "workflow_ref": "griff843/Unit-Talk-v2/.github/workflows/ci.yml@refs/pull/1338/merge",
+      "github_run_id": "30681405518",
+      "github_run_attempt": "1",
+      "github_job": "staging-db-proof",
+      "producer_job_id": "91319015637",
+      "producer_job_name": "Writable DB proof (staging only)",
+      "verifier_job_id": "91319674512",
+      "verifier_job_name": "verify",
+      "github_sha": "dcb6d878b108d5b5d17ad41fd4ca259da9edf0fa",
+      "command": "pnpm test:db",
+      "started_at": "2026-08-01T03:08:58.858Z",
+      "finished_at": "2026-08-01T03:10:52.925Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "repo_migration_head": "20260731000000_utv2_1399_fixture_excluding_reporting_views.sql",
+      "fixture_run_id": "utv2-1630-30681405518-1",
+      "output_sha256": "be28b4ea0e57450571f3c232a72603b46a493f028ba01bf12097ec7aed97e434",
+      "receipt_sha256": "2b02b3db163b5e681d1b0fbe125b9dac329e00c9c6babaf053d71efc28ab5eda",
+      "artifact_id": "8812437341",
+      "artifact_name": "utv2-1630-db-proof-receipt-30681405518-1",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30681405518 attempt 1 @ dcb6d878b108d5b5d17ad41fd4ca259da9edf0fa, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "verified_in": "the required `verify` context via scripts/ci/verify-db-proof-receipt.ts",
+      "pr": 1338,
+      "head_sha_at_proof": "11ee7a5fe87180b40afee3cc053bc1714a3ac32e",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1338/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was 11ee7a5fe87180b40afee3cc053bc1714a3ac32e, which squash-merged to main as 43c36112089a80d7e50bcb7db0bde1764b2d62fe -- this bundle's merge_sha.",
+      "result": "success"
+    },
+    "harvest_note": "Transcribed from the ci-db-proof-receipt/v2 artifact (utv2-1630-db-proof-receipt-30681405518-1, artifact id 8812437341) downloaded via `gh run download 30681405518 -n utv2-1630-db-proof-receipt-30681405518-1`, and from the raw job logs for job 91319015637 ('Writable DB proof (staging only)') and job 91319674512 ('verify'), both on run 30681405518. Nothing here was re-run locally -- local runs are containment-scoped to an unreachable address precisely so no lane can reach production."
+  },
+  "negative_demonstrations": [
+    {
+      "claim": "A newly added unwired test fails the required gate.",
+      "method": "Created scripts/ops/utv2-1624-negative-demo.test.ts, ran pnpm ops:automation-coverage-check, removed the file.",
+      "result": "FAIL — WIRING_TEST_UNWIRED_NEW, unwired new=1"
+    },
+    {
+      "claim": "An active orphan ops capability with no disposition fails.",
+      "method": "Created scripts/ops/utv2-1624-negative-demo-capability.ts, ran the gate, removed the file.",
+      "result": "FAIL — WIRING_CAPABILITY_ORPHAN, orphan new=1"
+    },
+    {
+      "claim": "A baseline entry that loses its owner, issue or expiry fails.",
+      "method": "Deleted owner from one test entry and expiry from one capability entry, ran the gate, restored the ledger.",
+      "result": "FAIL — WIRING_BASELINE_TEST_ENTRY_INCOMPLETE and WIRING_BASELINE_CAPABILITY_ENTRY_INCOMPLETE"
+    },
+    {
+      "claim": "The new gate would fail on pristine origin/main on exactly this lane's delta and nothing else.",
+      "method": "git archive origin/main into a scratch tree, copy this branch's baseline ledger in, run buildWiringReport against it.",
+      "result": "FAIL — 11 WIRING_TEST_UNWIRED_NEW (the 11 tests this lane wires that exist on main) plus 1 WIRING_CAPABILITY_ORPHAN (scripts/ops/agent-result-schema.ts, which becomes test-covered-library once its test is wired). No other finding; nothing suppressed."
+    }
+  ],
+  "mutation_check": {
+    "receipt": "docs/06_status/proof/UTV2-1624/mutation-check.json",
+    "method": "Each newly wired test is paired with the module it actually imports or spawns. The module is mutated (every === inverted to !== and every && to ||; for the CLI-spawning contract test, one of its five declared checks is removed), the test re-run, and the module byte-restored. A test that survives mutation is decorative.",
+    "killed": 12,
+    "total": 12,
+    "harness_correction": "An earlier round paired review.test.ts, review-verdict.test.ts and proof-check.test.ts with their same-named CLI entrypoints and recorded SURVIVED. That was a harness error: those tests import review-state-schema.ts and proof-schema.ts. Re-pairing against the module actually under test kills all three. Recorded rather than dropped."
+  },
+  "wired_in_this_lane": [
+    "scripts/ops/review.test.ts",
+    "scripts/ops/review-verdict.test.ts",
+    "scripts/ops/review-state-schema.test.ts",
+    "scripts/ops/agent-result-schema.test.ts",
+    "scripts/ops/merge-risk.test.ts",
+    "scripts/ops/ci-dispatch-watchdog.test.ts",
+    "scripts/ops/p0-detect.test.ts",
+    "scripts/ops/proof-check.test.ts",
+    "scripts/ops/proof-schema.test.ts",
+    "scripts/ops/concurrency-rules.test.ts",
+    "scripts/ops/runtime-contract-check.test.ts",
+    "scripts/ops/executable-wiring.test.ts"
+  ],
+  "proven_already_reachable": [
+    {
+      "path": "scripts/ops/proof-auditor-gate.test.ts",
+      "reached_by": "pnpm verify -> verify:static -> test -> test:ops -> tsx --test",
+      "note": "The prior audit reported this as present but not executed. It is required-reachable; no action needed."
+    },
+    {
+      "path": "scripts/ops/automation-coverage-check.test.ts",
+      "reached_by": "pnpm verify -> verify:static -> test -> test:ops -> tsx --test"
+    }
+  ],
+  "defects_surfaced": [
+    {
+      "path": "scripts/ops/runtime-verifier-gate.test.ts",
+      "state": "RED, never executed",
+      "detail": "The Runtime Verifier Gate exits 0 when a merge SHA is supplied and is absent from the proof file, so core invariant 4 (proof must tie to the merge SHA) is not enforced by the gate that exists to enforce it.",
+      "filed_as": "UTV2-1639"
+    },
+    {
+      "path": "scripts/ops/policy-engine.test.ts",
+      "state": "RED, never executed",
+      "detail": "12 failures; the merge policy engine has drifted from its test contract.",
+      "filed_as": "UTV2-1638"
+    },
+    {
+      "path": "scripts/ops/fix-sync-yml.test.ts",
+      "state": "RED, never executed",
+      "detail": "Asserts scripts/ops/worktree-setup.ps1 is a deprecated stub; it is not.",
+      "filed_as": "UTV2-1638"
+    },
+    {
+      "path": "apps/qa-agent/src/**/*.test.ts",
+      "state": "glob-shadowed",
+      "detail": "POSIX sh collapses ** to a single path segment, so the nested test under apps/qa-agent/src/adapters/... never runs. Verified against pnpm directly, not assumed. Reported as WIRING_GLOB_SHADOWED (warn).",
+      "filed_as": "UTV2-1636"
+    },
+    {
+      "path": "packages/invariants, packages/observability",
+      "state": "optional-reachable only",
+      "detail": "Their package test scripts exist but the root test script never chains them, so proof-bundle, proof-validator, merge-sha-binding, proof-freshness and certification tests are outside the required verify floor.",
+      "filed_as": "UTV2-1637"
+    }
+  ],
+  "baseline": {
+    "path": "docs/05_operations/executable-wiring-baseline.json",
+    "tests": {
+      "entries": 119,
+      "max_entries": 119,
+      "by_disposition": {
+        "phase-b-wiring": 77,
+        "external-service": 32,
+        "failing-triage": 10
+      },
+      "by_issue": {
+        "UTV2-1636": 68,
+        "UTV2-1637": 38,
+        "UTV2-1638": 12,
+        "UTV2-1639": 1
+      }
+    },
+    "capabilities": {
+      "entries": 18,
+      "max_entries": 18,
+      "by_disposition": {
+        "archive-delete-candidate": 11,
+        "manual-diagnostic": 5,
+        "one-shot-migration-aid": 2
+      }
+    },
+    "shrink_only": "max_entries caps both sections. Entries that become reachable, become non-executable fixtures, or point at deleted files are stale and fail, which forces the ledger down. Expiry lapse is a warning, not a failure, so a calendar date can never block every merge in the program."
+  },
+  "rebase": {
+    "base": "fdc193582f94ad7538fa594b475847eb81a3647f",
+    "conflict": "package.json test:ops — UTV2-1604 added an entry concurrently",
+    "resolution": "union",
+    "main_entries": 105,
+    "branch_entries": 117,
+    "dropped_from_main": 0,
+    "note": "Rebased a fourth time onto origin/main after UTV2-1399 landed. Test count rose 461->462 (1 new required-reachable test), capability count unchanged at 149. Unwired held at 119/119 baselined 0 new and orphan held at 18/18 baselined 0 new at all four rebases.",
+    "history": [
+      {
+        "rebase": 1,
+        "sha": "97fc751d7443e466167f3b088859ddb42a8e57af",
+        "base": "b5ebdc2367fa10a85a648d90e463fd15c770a5d8",
+        "tests_total": 457,
+        "required_reachable": 302,
+        "capabilities_total": 143
+      },
+      {
+        "rebase": 2,
+        "sha": "9db5b4bb8d5589d60f8a7f15a139d3335d6a57ac",
+        "base": "2cce459967197925c058d4b2dad77305bfe7cbb8",
+        "tests_total": 457,
+        "required_reachable": 302,
+        "capabilities_total": 145
+      },
+      {
+        "rebase": 3,
+        "sha": "c4a5f96af5b1ec2cae46c91e228a5d2c4bf469e6",
+        "base": "b493a7d5240d5d4e32426a0a60f2f903e8e087fc",
+        "tests_total": 461,
+        "required_reachable": 306,
+        "capabilities_total": 149
+      },
+      {
+        "rebase": 4,
+        "sha": "12b0d00ff21ac9c637f821cce99e53950a3a27d9",
+        "base": "fdc193582f94ad7538fa594b475847eb81a3647f",
+        "tests_total": 462,
+        "required_reachable": 307,
+        "capabilities_total": 149
+      }
+    ]
+  },
+  "follow_ups": [
+    "UTV2-1636",
+    "UTV2-1637",
+    "UTV2-1638",
+    "UTV2-1639"
+  ]
+}

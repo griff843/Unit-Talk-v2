@@ -8,6 +8,7 @@ import {
   assertProductionRuntimeConfig,
   createRuntimeConfigFailureLogFields,
   loadEnvironment,
+  parseSyndicateMachineMode,
   type AppEnv,
 } from './env.js';
 
@@ -43,6 +44,7 @@ const ISOLATED_ENV_KEYS = [
   'UNIT_TALK_PROVIDER_OFFER_STAGING_MODE',
   'UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_DIR',
   'UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_MODE',
+  'SYNDICATE_MACHINE_ENABLED',
 ] as const;
 const previousIsolatedEnv: Record<string, string | undefined> = {};
 before(() => {
@@ -59,6 +61,52 @@ after(() => {
     } else {
       process.env[key] = value;
     }
+  }
+});
+
+test('parseSyndicateMachineMode accepts only exact active and parked declarations', () => {
+  assert.deepEqual(parseSyndicateMachineMode('true'), {
+    mode: 'active',
+    requestedValue: 'true',
+  });
+  assert.deepEqual(parseSyndicateMachineMode('false'), {
+    mode: 'parked',
+    requestedValue: 'false',
+  });
+
+  for (const invalidValue of [undefined, '', 'TRUE', 'False', ' true ', '0', 'enabled']) {
+    assert.throws(
+      () => parseSyndicateMachineMode(invalidValue),
+      /SYNDICATE_MACHINE_ENABLED must be declared as exactly "true".*"false"/,
+    );
+  }
+});
+
+test('loadEnvironment preserves syndicate-machine padding for strict validation', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-env-syndicate-mode-'));
+
+  try {
+    fs.writeFileSync(
+      path.join(rootDir, '.env.example'),
+      [
+        'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
+        'LINEAR_TEAM_KEY=UTV2',
+        'LINEAR_TEAM_NAME=unit-talk-v2',
+        'NOTION_WORKSPACE_NAME=unit-talk-v2',
+        'SLACK_WORKSPACE_NAME=unit-talk-v2',
+        'SYNDICATE_MACHINE_ENABLED= true ',
+      ].join('\n'),
+    );
+
+    const env = loadEnvironment(rootDir);
+
+    assert.equal(env.SYNDICATE_MACHINE_ENABLED, ' true ');
+    assert.throws(
+      () => parseSyndicateMachineMode(env.SYNDICATE_MACHINE_ENABLED),
+      /SYNDICATE_MACHINE_ENABLED must be declared as exactly "true".*"false"/,
+    );
+  } finally {
+    fs.rmSync(rootDir, { recursive: true, force: true });
   }
 });
 

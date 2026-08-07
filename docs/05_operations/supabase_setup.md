@@ -190,9 +190,39 @@ npx supabase db push
 pnpm supabase:types
 ```
 
-## PR Preview Branch Validation
+## PR Preview Branch Validation — REMOVED (UTV2-1629)
 
-The repository ships a pull-request-only workflow at [supabase-pr-db-branch.yml](/C:/Dev/Unit-Talk-v2-main/.github/workflows/supabase-pr-db-branch.yml) for migration-safe `pnpm test:db` validation on an isolated non-production Supabase branch.
+> **This workflow no longer exists.** `.github/workflows/supabase-pr-db-branch.yml`
+> was deleted on 2026-07-30. Everything below this box is retained as a record of
+> what it did and why it went, not as a description of current CI.
+>
+> **Why it was removed**
+> - It had been dormant since the `vars.SUPABASE_BRANCHING_ENABLED == 'true'`
+>   gate was added: that repository variable is not set, so `validate` never ran.
+> - Even enabled, it could no longer pass. UTV2-1630 made `pnpm test:db` run
+>   `ci:assert-staging` first, which refuses any target that is not the approved
+>   staging project. A preview branch is its own project ref, so the step would
+>   refuse on every run. Teaching `assert-staging` to accept a caller-supplied
+>   ref would reintroduce exactly the fail-open shape UTV2-1630 removed.
+> - Its `teardown` job was NOT behind the branching gate, so it held
+>   `SUPABASE_ACCESS_TOKEN` — a management-API token that can create, delete and
+>   read credentials for every project in the org — on every closed migration PR,
+>   while `validate` never created anything to tear down.
+> - Teardown was also not working: four preview branches parented on production
+>   were still live on 2026-07-30, three of them created in April.
+>
+> **What covers migration validation now**
+> - `live-schema-parity.yml` replays EVERY repo migration from scratch against a
+>   fresh Supabase local stack (`supabase db reset`) and diffs the resulting
+>   schema against live. That is a stronger check than the preview branch ran —
+>   full replay rather than pending-only push — and it holds no management token.
+> - `ci.yml` and `staging-db-proof.yml` run `pnpm test:db` against the dedicated
+>   staging project through the `staging-ci` environment.
+>
+> Deleting the workflow removed `SUPABASE_ACCESS_TOKEN` from the pull-request
+> surface entirely. The secret itself is now referenced by no workflow.
+
+The repository previously shipped a pull-request-only workflow at `.github/workflows/supabase-pr-db-branch.yml` for migration-safe `pnpm test:db` validation on an isolated non-production Supabase branch.
 
 ### Usage policy
 

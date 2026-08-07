@@ -26,6 +26,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   ROOT,
+  currentHeadSha,
   emitJson,
   getFlag,
   manifestExists,
@@ -41,6 +42,20 @@ import {
   validatePersistedModelRouting,
   type ModelRoutingBlock,
 } from './model-routing.js';
+import {
+  beginAttempt,
+  buildResumeBrief,
+  buildResumePlan,
+  checkpointPath,
+  classifyCheckpointLiveness,
+  failVisiblyAndRelease,
+  finishAttempt,
+  readCheckpoint,
+  resolveExecutionTimeout,
+  type ExecutionCheckpoint,
+  type ResumePlan,
+  type TimeoutPolicyDecision,
+} from './execution-checkpoint.js';
 
 interface CodexExecResult {
   ok: boolean;
@@ -51,6 +66,9 @@ interface CodexExecResult {
     | 'MODEL_ROUTING_INVALID'
     | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
+    | 'EXECUTION_TIMED_OUT'
+    | 'EXECUTION_SILENT'
+    | 'EXECUTION_CANCELLED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'DRY_RUN';
   issue_id: string;
@@ -65,6 +83,48 @@ interface CodexExecResult {
   policy_version?: string;
   legacy_compatibility_used?: boolean;
   codex_cli_version?: string | null;
+  execution?: ExecutionSummary;
+}
+
+/**
+ * The resume/timeout facts a caller needs to decide whether to re-dispatch:
+ * which attempt this was, what phase it resumed at, what the bounded timeout
+ * was and where it came from, and whether the executor went silent.
+ */
+export interface ExecutionSummary {
+  attempt: number;
+  resumed: boolean;
+  phase: string;
+  resumed_from_phase: string;
+  skipped_phases: string[];
+  carried_findings: number;
+  timeout_ms: number;
+  timeout_policy_id: string;
+  timeout_clamped: TimeoutPolicyDecision['clamped'];
+  checkpoint_path: string;
+  outcome?: string;
+  heartbeat_state?: string;
+  released_resources?: string[];
+}
+
+function buildExecutionSummary(
+  checkpoint: ExecutionCheckpoint,
+  resume: ResumePlan,
+  policy: TimeoutPolicyDecision,
+  checkpointPathValue: string,
+): ExecutionSummary {
+  return {
+    attempt: checkpoint.attempt,
+    resumed: resume.resumed,
+    phase: checkpoint.phase,
+    resumed_from_phase: resume.resume_from_phase,
+    skipped_phases: resume.skipped_phases,
+    carried_findings: resume.carried_findings.length,
+    timeout_ms: policy.timeout_ms,
+    timeout_policy_id: policy.policy_id,
+    timeout_clamped: policy.clamped,
+    checkpoint_path: checkpointPathValue,
+  };
 }
 
 export interface ModelRoutingExecResolution {
@@ -284,7 +344,7 @@ function checkExecSubcommand(): { available: boolean; error: string | null } {
   return { available: true, error: null };
 }
 
-function buildCodexPrompt(packet: ExecutionPacket): string {
+export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string): string {
   return [
     `# Unit Talk V2 — Lane Execution Packet`,
     ``,
@@ -301,6 +361,10 @@ function buildCodexPrompt(packet: ExecutionPacket): string {
     ``,
     `## Closeout instructions`,
     packet.closeout_instructions.map(c => `- ${c}`).join('\n'),
+    // The resume brief goes ahead of the (long) repo brief so a resumed run
+    // reads "here is what is already settled" before it reads anything that
+    // would tempt it to start the investigation over.
+    ...(resumeBrief ? [``, resumeBrief] : []),
     ``,
     `## Repo brief (critical — read before touching any code)`,
     packet.repo_brief,
@@ -398,9 +462,24 @@ async function main(): Promise<void> {
     );
   }
 
+  // UTV2-1594: resume before building the prompt. A prior attempt that timed
+  // out left a checkpoint behind; the resume brief turns that into "these
+  // phases are already settled, start at X" instead of a fresh investigation.
+  // The timeout for this attempt is derived from tier + reasoning effort + the
+  // phase we are actually resuming at -- never one fixed constant for every
+  // lane and every phase.
+  const existingCheckpoint = readCheckpoint(issueId);
+  const resumeBrief = buildResumeBrief(existingCheckpoint);
+  const resumePlan = buildResumePlan(existingCheckpoint);
+  const timeoutPolicy = resolveExecutionTimeout({
+    tier: manifest.tier,
+    reasoningEffort: modelRouting.reasoning_effort,
+    phase: resumePlan.resume_from_phase,
+  });
+
   // Build packet and prompt
   const packet = generateExecutionPacket(manifest);
-  const prompt = buildCodexPrompt(packet);
+  const prompt = buildCodexPrompt(packet, resumeBrief);
 
   if (dryRun) {
     emitJson({
@@ -416,6 +495,18 @@ async function main(): Promise<void> {
       policy_version: modelRouting.policy_version,
       legacy_compatibility_used: routing.legacy_compatibility_used,
       codex_cli_version: health.version,
+      execution: {
+        attempt: (existingCheckpoint?.attempt ?? 0) + 1,
+        resumed: resumePlan.resumed,
+        phase: resumePlan.resume_from_phase,
+        resumed_from_phase: resumePlan.resume_from_phase,
+        skipped_phases: resumePlan.skipped_phases,
+        carried_findings: resumePlan.carried_findings.length,
+        timeout_ms: timeoutPolicy.timeout_ms,
+        timeout_policy_id: timeoutPolicy.policy_id,
+        timeout_clamped: timeoutPolicy.clamped,
+        checkpoint_path: checkpointPath(issueId),
+      },
     } satisfies CodexExecResult);
     process.stdout.write('\n--- CODEX INVOCATION (would run) ---\n');
     process.stdout.write(
@@ -464,20 +555,70 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  // UTV2-1594: operator cancellation. `pnpm ops:exec-checkpoint cancel --issue
+  // <ID> --reason <why>` sets this flag; it is honoured here, immediately
+  // before the spawn, so a cancelled lane cannot be resumed by a stale
+  // dispatch that was already in flight.
+  if (existingCheckpoint?.cancel_requested) {
+    emitJson({
+      ok: false,
+      code: 'EXECUTION_CANCELLED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        `Execution for ${issueId} was cancelled by an operator: ${existingCheckpoint.cancel_reason ?? 'no reason recorded'}. ` +
+        `Clear it with \`pnpm ops:exec-checkpoint status --issue ${issueId}\` and a fresh dispatch decision.`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
+
   // Execute Codex — pass prompt as CLI argument (codex exec <PROMPT>), with the
   // resolved model and reasoning effort passed explicitly. Never fall back to the
   // Codex CLI's own default model.
   // Use danger-full-access so Codex can commit/push inside the isolated worktree.
   // workspace-write (the default) blocks git index writes (.git/worktrees/.../index.lock).
+  // Open the durable attempt immediately before the spawn, so a process that
+  // dies mid-run still leaves an open attempt behind for the next dispatch to
+  // find, classify and resume from.
+  const attemptStart = beginAttempt({
+    issueId,
+    branch: manifest.branch,
+    worktree: resolvedCwd,
+    headSha: currentHeadSha(resolvedCwd),
+    timeoutPolicy,
+  });
+  const executionSummary = buildExecutionSummary(
+    attemptStart.checkpoint,
+    attemptStart.resume,
+    timeoutPolicy,
+    attemptStart.path,
+  );
+  process.stderr.write(
+    `[codex-exec] attempt ${executionSummary.attempt} for ${issueId}: phase=${executionSummary.phase} ` +
+      `timeout=${Math.round(timeoutPolicy.timeout_ms / 60_000)}m (policy ${timeoutPolicy.policy_id}, tier ${manifest.tier}, ` +
+      `effort ${modelRouting.reasoning_effort}, clamped=${timeoutPolicy.clamped})` +
+      (attemptStart.resume.resumed
+        ? `, resuming past ${attemptStart.resume.skipped_phases.length} completed phase(s) with ` +
+          `${attemptStart.resume.carried_findings.length} carried finding(s)\n`
+        : '\n'),
+  );
+
   const codexArgs = ['exec', ...buildCodexModelArgs(modelRouting), '-s', 'danger-full-access', prompt];
   const child = spawnSync('codex', codexArgs, {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
     env: buildCodexChildEnv(resolvedCwd),
-    timeout: 30 * 60 * 1000,
+    timeout: timeoutPolicy.timeout_ms,
   });
 
+  // A spawnSync killed by its own `timeout` reports ETIMEDOUT (or the kill
+  // signal). Distinguish that from a plain non-zero exit so a resumable
+  // timeout is never filed as an unrecoverable failure -- and so a run that
+  // stopped reporting progress entirely is called what it is.
+  const timedOut =
+    (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || child.signal === 'SIGTERM';
+  const liveness = classifyCheckpointLiveness(readCheckpoint(issueId));
   const exitCode = child.status ?? 1;
   const evidence = buildModelRoutingEvidence({
     issueId,
@@ -500,13 +641,26 @@ async function main(): Promise<void> {
   );
 
   if (child.error || child.status !== 0) {
+    // Silence is never success. A run that produced no heartbeat inside the
+    // silence window is reported as EXECUTION_SILENT, and either way the
+    // attempt is closed on the checkpoint and any verify slot whose owner is
+    // provably dead is handed back before this process exits.
+    const outcome = liveness.silent ? 'silent_no_heartbeat' : timedOut ? 'timed_out' : 'failed';
+    const reason = liveness.silent
+      ? `executor produced no heartbeat: ${liveness.reason}`
+      : timedOut
+        ? `attempt exceeded its bounded timeout of ${Math.round(timeoutPolicy.timeout_ms / 60_000)}m (${timeoutPolicy.policy_id})`
+        : `codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}`;
+    const closed = failVisiblyAndRelease({ issueId, outcome, reason });
+
     emitJson({
       ok: false,
-      code: 'EXECUTION_FAILED',
+      code: liveness.silent ? 'EXECUTION_SILENT' : timedOut ? 'EXECUTION_TIMED_OUT' : 'EXECUTION_FAILED',
       issue_id: issueId,
       branch: manifest.branch,
       message:
-        `Codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}. ` +
+        `${reason}. Progress is checkpointed at ${attemptStart.path}; the next dispatch resumes from ` +
+        `phase '${closed.checkpoint?.phase ?? attemptStart.checkpoint.phase}' instead of repeating completed analysis. ` +
         `Model routing evidence: ${evidencePath} (persistence: ${persistence.ok ? persistence.detail : `FAILED at ${persistence.step}: ${persistence.detail}`})`,
       codex_exit_code: child.status ?? 1,
       model_profile: modelRouting.profile,
@@ -515,6 +669,13 @@ async function main(): Promise<void> {
       policy_version: modelRouting.policy_version,
       legacy_compatibility_used: routing.legacy_compatibility_used,
       codex_cli_version: health.version,
+      execution: {
+        ...executionSummary,
+        phase: closed.checkpoint?.phase ?? executionSummary.phase,
+        outcome,
+        heartbeat_state: liveness.state,
+        released_resources: closed.released.map((record) => `verify-slot-${record.slot}:${record.state}`),
+      },
     } satisfies CodexExecResult);
     process.exit(1);
   }
@@ -523,6 +684,11 @@ async function main(): Promise<void> {
     // Codex itself succeeded, but the evidence sidecar failed to commit/push -- the
     // invariant "a successful execution cannot leave dangling evidence" means this run
     // must NOT report SUCCESS/READY_FOR_REVIEW. Fail closed instead.
+    const closed = failVisiblyAndRelease({
+      issueId,
+      outcome: 'failed',
+      reason: `model-routing evidence failed to persist at ${persistence.step}: ${persistence.detail}`,
+    });
     emitJson({
       ok: false,
       code: 'EVIDENCE_PERSISTENCE_FAILED',
@@ -536,9 +702,21 @@ async function main(): Promise<void> {
       policy_version: modelRouting.policy_version,
       legacy_compatibility_used: routing.legacy_compatibility_used,
       codex_cli_version: health.version,
+      execution: {
+        ...executionSummary,
+        outcome: 'failed',
+        heartbeat_state: liveness.state,
+        released_resources: closed.released.map((record) => `verify-slot-${record.slot}:${record.state}`),
+      },
     } satisfies CodexExecResult);
     process.exit(1);
   }
+
+  const completed = finishAttempt({
+    issueId,
+    outcome: 'completed',
+    reason: 'codex exited 0 and evidence persisted',
+  });
 
   emitJson({
     ok: true,
@@ -553,6 +731,12 @@ async function main(): Promise<void> {
     policy_version: modelRouting.policy_version,
     legacy_compatibility_used: routing.legacy_compatibility_used,
     codex_cli_version: health.version,
+    execution: {
+      ...executionSummary,
+      phase: completed?.phase ?? executionSummary.phase,
+      outcome: 'completed',
+      heartbeat_state: liveness.state,
+    },
   } satisfies CodexExecResult);
 }
 

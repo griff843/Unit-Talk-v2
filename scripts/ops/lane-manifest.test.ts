@@ -43,7 +43,7 @@ function mergedPr(overrides = {}) {
   };
 }
 
-test('applyPrMergeToManifest records merge SHA, PR URL, heartbeat, status, and source history', () => {
+test('applyPrMergeToManifest records merge SHA, PR URL, heartbeat, and status -- but no truth_check_history entry', () => {
   const result = applyPrMergeToManifest({
     manifest: manifest(),
     pr: mergedPr(),
@@ -54,18 +54,13 @@ test('applyPrMergeToManifest records merge SHA, PR URL, heartbeat, status, and s
   assert.strictEqual(result.manifest.commit_sha, MERGE_SHA);
   assert.strictEqual(result.manifest.pr_url, PR_URL);
   assert.strictEqual(result.manifest.heartbeat_at, '2026-05-19T13:00:00.000Z');
-  assert.strictEqual(result.historyAppended, true);
-  assert.deepStrictEqual(result.manifest.truth_check_history, [
-    {
-      checked_at: '2026-05-19T13:00:00.000Z',
-      verdict: 'pass',
-      merge_sha: MERGE_SHA,
-      failures: [],
-      runner: 'manual',
-      source: 'github_pr_merge_commit',
-      pr_url: PR_URL,
-    },
-  ]);
+  // UTV2-1613: this used to assert historyAppended === true and a fabricated
+  // { verdict: 'pass', runner: 'manual', source: 'github_pr_merge_commit' }
+  // entry -- a governance verdict this function never measured. record-merge
+  // only binds GitHub merge state; it must never write to
+  // truth_check_history at all.
+  assert.strictEqual(result.historyAppended, false);
+  assert.deepStrictEqual(result.manifest.truth_check_history, []);
 });
 
 test('applyPrMergeToManifest preserves Done status and existing PR URL', () => {
@@ -83,7 +78,12 @@ test('applyPrMergeToManifest preserves Done status and existing PR URL', () => {
   assert.strictEqual(result.manifest.commit_sha, MERGE_SHA);
 });
 
-test('applyPrMergeToManifest is idempotent for an already recorded source entry', () => {
+test('applyPrMergeToManifest never touches pre-existing truth_check_history, including a legacy fabricated entry', () => {
+  // UTV2-1613: this manifest carries a legacy entry of exactly the shape
+  // record-merge used to fabricate. A re-run must not deduplicate it, must
+  // not add a second one, and must not delete it either -- historical entries
+  // are corrected by governed PRs (see ops:truth-history-audit), never by a
+  // tool silently rewriting history on an ordinary call.
   const existing = manifest({
     status: 'merged',
     commit_sha: MERGE_SHA,
@@ -110,6 +110,17 @@ test('applyPrMergeToManifest is idempotent for an already recorded source entry'
   assert.strictEqual(result.manifest.truth_check_history.length, 1);
   assert.strictEqual(result.historyAppended, false);
   assert.strictEqual(result.manifest.heartbeat_at, '2026-05-19T14:00:00.000Z');
+});
+
+test('applyPrMergeToManifest starting from empty history stays empty -- it never fabricates one', () => {
+  const result = applyPrMergeToManifest({
+    manifest: manifest({ truth_check_history: [] }),
+    pr: mergedPr(),
+    now: '2026-05-19T15:00:00.000Z',
+  });
+
+  assert.deepStrictEqual(result.manifest.truth_check_history, []);
+  assert.strictEqual(result.historyAppended, false);
 });
 
 test('applyPrMergeToManifest fails clearly for unmerged PRs', () => {

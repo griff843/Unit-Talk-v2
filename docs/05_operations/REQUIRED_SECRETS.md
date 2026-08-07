@@ -66,11 +66,11 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
     },
     {
       "name": "SUPABASE_ACCESS_TOKEN",
-      "required": true,
+      "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/supabase-pr-db-branch.yml"],
-      "purpose": "Supabase management API token used by the preview-branch workflow to create, attach, and tear down per-PR Supabase branches and to apply migrations on isolated branches."
+      "used_by": [],
+      "purpose": "Supabase management API token. UNUSED BY CI since UTV2-1629 deleted supabase-pr-db-branch.yml — no workflow references it. Retained only for operator-run local scripts (scripts/generate-types.mjs, scripts/utv2-356-migration-audit.ts, scripts/disk-growth-alert.ts) which read it from local.env. Because it is org-wide management API (create/delete projects, read any project's credentials), it must not be reintroduced into any pull-request-reachable job."
     },
     {
       "name": "SUPABASE_URL",
@@ -416,15 +416,17 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
 
 ### 3.3 `SUPABASE_ACCESS_TOKEN`
 
-- **Required:** Conditionally required — only when a PR modifies files under `supabase/migrations/**`. The preview workflow's `plan` job detects migration changes and skips the `validate` job when no migrations are touched.
-- **Scope:** Repo-level secret. Scoped to the Supabase management API (create/delete preview branches, fetch branch credentials, apply migrations via CLI).
-- **Used by:** `.github/workflows/supabase-pr-db-branch.yml` (`validate` and `teardown` jobs).
+- **Required:** No longer required in CI. UTV2-1629 deleted `supabase-pr-db-branch.yml`, the only workflow that used it; no workflow references the name today.
+- **Scope:** Repo-level secret. Scoped to the Supabase **management API** — this is the broadest credential in the inventory: it can create, pause and delete projects across the organisation and read any project's database credentials. It is not a database credential and must never be treated as one.
+- **Used by:** no workflow. Operator-run local scripts only (`scripts/generate-types.mjs`, `scripts/utv2-356-migration-audit.ts`, `scripts/utv2-phase9-schema-reconciliation.ts`, `scripts/disk-growth-alert.ts`), which read it from `local.env` or the host environment.
+- **Standing rule:** do not reintroduce this secret into any pull-request-reachable job. `scripts/ci/workflow-production-credential-guard.ts` tracks it in `PRODUCTION_DB_SECRET_NAMES` and will fail the guard test if a PR-reachable job references it without an explicit exemption.
 - **Companion variables (not secrets):**
-  - `vars.SUPABASE_PROJECT_REF` — repo variable, must be set to `zfzdnfwdarxucxtaojxm`. Not a secret; tracked outside this inventory.
+  - `vars.SUPABASE_PROJECT_REF` — repo variable, set to `zfzdnfwdarxucxtaojxm`. Not a secret; tracked outside this inventory.
 - **Local vs CI:**
-  - **CI:** required for PRs that touch migrations. Missing token causes an explicit `::error::` from the workflow's validation step.
-  - **Local:** not used by ci-doctor itself. Developers running migrations locally use separate env-loaded credentials from `local.env`, not this CI secret.
-- **Fail-closed implications when missing:** any migration PR fails the `Supabase PR DB Branch / validate` job with a clear error. This is intentional: migrations must not merge without preview-branch validation. No silent degradation.
+  - **CI:** unused.
+  - **Local:** developers regenerating types or auditing migration state supply it from `local.env`.
+- **Fail-closed implications when missing:** none in CI. Locally, `pnpm supabase:types` and the migration-audit scripts exit with an explicit error naming the variable.
+- **Deletion:** deleting the repository secret is safe from CI's point of view, but would not remove the operator's local need for the token. Left in place deliberately.
 - **Related churn history:**
   - Commit `1212856` — quoted env parsing (fixed by `sed -E 's/^([A-Z][A-Z0-9_]*)="(.*)"$/\1=\2/'`). `ci-doctor` check `CV3` enforces.
   - Commit `36d9f75` — pooled DB URL for migration validation. `ci-doctor` check `CV4` enforces.

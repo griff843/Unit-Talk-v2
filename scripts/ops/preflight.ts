@@ -18,7 +18,6 @@ import {
   EVIDENCE_BUNDLE_SCHEMA_PATH,
   LANE_MANIFEST_SCHEMA_PATH,
   PREFLIGHT_BASELINE_CACHE_PATH,
-  PREFLIGHT_DIR,
   ROOT,
   TRUTH_CHECK_RESULT_SCHEMA_PATH,
   branchExists,
@@ -43,6 +42,11 @@ import {
   writeJsonFile,
   writePreflightBaselineCache,
 } from './shared.js';
+import {
+  DEFAULT_HARD_DEADLINE_MS,
+  DEFAULT_VERIFY_SEMAPHORE_DIR,
+  acquireVerifySlot,
+} from './verify-semaphore.js';
 
 type PreflightVerdict = PreflightResult['verdict'];
 type LinearIssueRecord = {
@@ -154,87 +158,25 @@ const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
 // UTV2-1516: throttle concurrent `pnpm type-check && pnpm test` runs during
 // full verify so WSL2 hosts with limited RAM don't get pushed into swap by
 // several lanes running a full baseline at once.
-const FULL_VERIFY_THROTTLE_ENV = 'UNIT_TALK_FULL_VERIFY_CONCURRENCY';
-const FULL_VERIFY_THROTTLE_DEFAULT = 1;
-export const FULL_VERIFY_THROTTLE_STALE_MS = 6 * 60 * 60 * 1000;
-const FULL_VERIFY_THROTTLE_WAIT_MS = 5_000;
-export const FULL_VERIFY_THROTTLE_DIR = path.join(PREFLIGHT_DIR, 'full-verify-semaphore');
+// `pnpm test` emits far more than spawnSync's 1 MiB default maxBuffer, which
+// aborts the child with ENOBUFS and reports PB2 as a baseline FAILURE even
+// though the suite itself was green. That turns a passing tree into a preflight
+// INFRA/FAIL verdict and blocks lane start for a reason that has nothing to do
+// with the code under test (UTV2-1594). Declared here, above the module-level
+// `main()` invocation, because `runCommand` is reached synchronously from that
+// call and a const declared further down the file is still in its temporal
+// dead zone at that point.
+const RUN_COMMAND_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
-export function configuredFullVerifyConcurrency(): number {
-  const raw = Number.parseInt(process.env[FULL_VERIFY_THROTTLE_ENV] ?? '', 10);
-  return Number.isFinite(raw) && raw > 0 ? raw : FULL_VERIFY_THROTTLE_DEFAULT;
-}
-
-function sleepSync(ms: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-}
-
-function readThrottleOwner(slotPath: string): { pid?: number; acquired_at?: string } | null {
-  const ownerPath = path.join(slotPath, 'owner.json');
-  if (!fs.existsSync(ownerPath)) {
-    return null;
-  }
-  try {
-    return JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { pid?: number; acquired_at?: string };
-  } catch {
-    return null;
-  }
-}
-
-function releaseStaleThrottleSlot(slotPath: string, staleMs: number): void {
-  const owner = readThrottleOwner(slotPath);
-  const parsed = owner?.acquired_at ? Date.parse(owner.acquired_at) : NaN;
-  const acquiredAt = Number.isFinite(parsed)
-    ? parsed
-    : fs.existsSync(slotPath)
-      ? fs.statSync(slotPath).mtimeMs
-      : NaN;
-  // An epoch-zero (or otherwise falsy-but-valid) timestamp must still count as
-  // known age -- only a genuinely unparseable/missing timestamp skips reclaim.
-  if (!Number.isFinite(acquiredAt) || Date.now() - acquiredAt <= staleMs) {
-    return;
-  }
-  fs.rmSync(slotPath, { recursive: true, force: true });
-}
-
-export function acquireFullVerifyThrottle(
-  dir: string = FULL_VERIFY_THROTTLE_DIR,
-  maxConcurrent: number = configuredFullVerifyConcurrency(),
-  staleMs: number = FULL_VERIFY_THROTTLE_STALE_MS,
-): { slot: number; slotPath: string; maxConcurrent: number } {
-  fs.mkdirSync(dir, { recursive: true });
-
-  for (;;) {
-    for (let slot = 0; slot < maxConcurrent; slot += 1) {
-      const slotPath = path.join(dir, `slot-${slot}`);
-      releaseStaleThrottleSlot(slotPath, staleMs);
-      try {
-        fs.mkdirSync(slotPath);
-        fs.writeFileSync(
-          path.join(slotPath, 'owner.json'),
-          `${JSON.stringify({
-            pid: process.pid,
-            acquired_at: new Date().toISOString(),
-            cwd: ROOT,
-            command: 'pnpm type-check && pnpm test',
-          }, null, 2)}\n`,
-          'utf8',
-        );
-        return { slot, slotPath, maxConcurrent };
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code !== 'EEXIST') {
-          throw error;
-        }
-      }
-    }
-    sleepSync(FULL_VERIFY_THROTTLE_WAIT_MS);
-  }
-}
-
-export function releaseFullVerifyThrottle(throttle: { slotPath: string }): void {
-  fs.rmSync(throttle.slotPath, { recursive: true, force: true });
-}
+// Slot ownership, liveness, reclaim and the operator view all live in
+// scripts/ops/verify-semaphore.ts (UTV2-1594). Preflight is a consumer of that
+// module, not a second implementation of it: the original inline version could
+// only reclaim on a 6-hour wall clock, which let a dead owner block every other
+// lane for hours while a genuinely slow verify was equally at risk of being
+// cleared. Re-exported here so existing importers keep one import site.
+export const FULL_VERIFY_THROTTLE_DIR = DEFAULT_VERIFY_SEMAPHORE_DIR;
+export const FULL_VERIFY_THROTTLE_STALE_MS = DEFAULT_HARD_DEADLINE_MS;
+export { configuredVerifyConcurrency as configuredFullVerifyConcurrency } from './verify-semaphore.js';
 
 async function main(): Promise<number> {
   const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
@@ -453,6 +395,8 @@ async function main(): Promise<number> {
   }
 
   const baseline = await runBaselineChecks(
+    issueId,
+    branch,
     tier,
     fast,
     docsOnlyFastPath,
@@ -1347,6 +1291,8 @@ async function runT1Checks(
 }
 
 async function runBaselineChecks(
+  issueId: string,
+  branch: string,
   tier: LaneTier,
   fast: boolean,
   docsOnlyFastPath: boolean,
@@ -1376,8 +1322,22 @@ async function runBaselineChecks(
     return { cacheHit, updatedCache };
   }
 
-  const throttle = acquireFullVerifyThrottle();
-  const throttleDetail = `full-verify throttle slot ${throttle.slot + 1}/${throttle.maxConcurrent}`;
+  const slot = acquireVerifySlot({
+    issueId,
+    branch,
+    reason: 'preflight PB1/PB2 full baseline',
+    // A queued preflight prints who it is behind instead of looking hung, and
+    // announces any corpse it reclaims so the reclaim is never silent.
+    onWait: (progress) => process.stderr.write(`[preflight] ${progress.message}\n`),
+    onReap: (record) =>
+      process.stderr.write(
+        `[preflight] reclaimed full-verify slot ${record.slot} (${record.state}): ${record.reason}\n`,
+      ),
+  });
+  const throttleDetail =
+    `full-verify slot ${slot.slot + 1}/${slot.max_concurrent}` +
+    (slot.waited_ms >= 1_000 ? ` after waiting ${Math.round(slot.waited_ms / 1000)}s` : '') +
+    (slot.reaped.length > 0 ? `; reclaimed ${slot.reaped.length} dead slot(s)` : '');
   let testRun: ReturnType<typeof runCommand> = {
     ok: false,
     stdout: '',
@@ -1394,9 +1354,13 @@ async function runBaselineChecks(
       };
     }
 
+    // The heartbeat runs on a worker thread, so it keeps beating through both
+    // blocking spawnSync calls above and below and the slot never looks stale
+    // to a contender while this verify is genuinely running.
+    slot.heartbeat();
     testRun = runCommand('pnpm', ['test']);
   } finally {
-    releaseFullVerifyThrottle(throttle);
+    slot.release();
   }
   addCheck(
     'PB2',
@@ -1804,11 +1768,13 @@ function runCommand(command: string, args: string[]): {
         cwd: ROOT,
         encoding: 'utf8',
         stdio: 'pipe',
+        maxBuffer: RUN_COMMAND_MAX_BUFFER_BYTES,
       })
     : spawnSync(command, args, {
         cwd: ROOT,
         encoding: 'utf8',
         stdio: 'pipe',
+        maxBuffer: RUN_COMMAND_MAX_BUFFER_BYTES,
       });
   if (child.error) {
     return {

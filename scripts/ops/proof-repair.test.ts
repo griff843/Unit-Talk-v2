@@ -104,6 +104,101 @@ test('apply: happy path adds verifier + runtime_proof and preserves hand-authore
   assert.strictEqual(written.sha_binding.merge_sha, MERGE_SHA);
 });
 
+// ── UTV2-1642 regression: a pre-existing rich verifier object must survive ────
+//
+// Confirmed live on UTV2-1399's PR #1348: `evidence.json` already carried a rich
+// `verifier` object (method / verifier_scope / independence_note describing the
+// lane's real read-only production verification methodology) before the repair
+// ran. `mergeRuntimeProofIntoEvidence` used to replace the whole object with a
+// bare `{ identity }`, discarding that narrative. This reproduces the exact
+// shape of that bundle and asserts every pre-existing field survives
+// byte-for-byte except `identity`, which is the only field the tool is meant to
+// add/update.
+
+function richVerifier(): Record<string, unknown> {
+  return {
+    identity:
+      'read-only measurement against production Supabase zfzdnfwdarxucxtaojxm via Supabase MCP execute_sql, 2026-07-31 11:40:28+00 onward',
+    method:
+      'Every count in verification.md is quoted alongside the exact SQL that produced it. All statements are SELECT; no DDL was applied and no row was created, updated or deleted.',
+    verifier_scope:
+      "This identity verifies the classifier's behaviour against production data and the read-only counts. It does NOT verify the migration's DDL execution.",
+    independence_note:
+      'The central claim is verified by measurement in the opposite direction rather than by narrative.',
+  };
+}
+
+test('apply: preserves a pre-existing rich verifier object byte-for-byte except the identity field (UTV2-1642)', () => {
+  const dir = makeTmpDir();
+  const evidencePath = path.join(dir, 'evidence.json');
+  const before = richVerifier();
+  fs.writeFileSync(
+    evidencePath,
+    JSON.stringify(boundEvidence({ verifier: { ...before } }), null, 2),
+  );
+
+  const result = applyProofRepair({
+    issueId: 'UTV2-9999',
+    mergeSha: MERGE_SHA,
+    runtimeProof: realRuntimeProof(),
+    verifierIdentity: 'claude/utv2-9999-proof-repair; runtime_proof harvested from CI',
+    manifestCreatedBy: 'claude',
+    evidenceAbsolutePath: evidencePath,
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'repaired');
+
+  const written = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+  // The ONLY field that changed is identity.
+  assert.strictEqual(
+    written.verifier.identity,
+    'claude/utv2-9999-proof-repair; runtime_proof harvested from CI',
+  );
+  // Every other pre-existing narrative field survives byte-for-byte.
+  assert.strictEqual(written.verifier.method, before.method);
+  assert.strictEqual(written.verifier.verifier_scope, before.verifier_scope);
+  assert.strictEqual(written.verifier.independence_note, before.independence_note);
+  // No keys were dropped and none were added beyond what already existed.
+  assert.deepStrictEqual(
+    Object.keys(written.verifier).sort(),
+    Object.keys(before).sort(),
+  );
+});
+
+test('mergeRuntimeProofIntoEvidence: preserves a rich pre-existing verifier object (pure function, no fs)', () => {
+  const before = richVerifier();
+  const existing = boundEvidence({ verifier: { ...before } });
+  const merged = mergeRuntimeProofIntoEvidence(existing, {
+    issueId: 'UTV2-9999',
+    mergeSha: MERGE_SHA,
+    runtimeProof: realRuntimeProof(),
+    verifierIdentity: 'claude/utv2-9999-proof-repair',
+  });
+  assert.strictEqual(merged.ok, true);
+  if (merged.ok) {
+    const verifier = merged.next.verifier as Record<string, unknown>;
+    assert.strictEqual(verifier.identity, 'claude/utv2-9999-proof-repair');
+    assert.strictEqual(verifier.method, before.method);
+    assert.strictEqual(verifier.verifier_scope, before.verifier_scope);
+    assert.strictEqual(verifier.independence_note, before.independence_note);
+  }
+});
+
+test('mergeRuntimeProofIntoEvidence: no prior verifier object degrades to the bare-object shape (unchanged behavior)', () => {
+  const existing = boundEvidence(); // no verifier key at all
+  const merged = mergeRuntimeProofIntoEvidence(existing, {
+    issueId: 'UTV2-9999',
+    mergeSha: MERGE_SHA,
+    runtimeProof: realRuntimeProof(),
+    verifierIdentity: 'claude/utv2-9999-proof-repair',
+  });
+  assert.strictEqual(merged.ok, true);
+  if (merged.ok) {
+    assert.deepStrictEqual(merged.next.verifier, { identity: 'claude/utv2-9999-proof-repair' });
+  }
+});
+
 // ── missing runtime evidence fails closed with a precise remediation message ──
 //
 // Note: applyProofRepair() takes an already-validated RuntimeProofFile object -- the

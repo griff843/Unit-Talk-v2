@@ -2,7 +2,7 @@
 // Run with: pnpm scoring:coverage
 // Reports score provenance mix, market-backed share, CLV coverage, auto-grade coverage.
 import { loadEnvironment } from '@unit-talk/config'
-import { createClient } from '@supabase/supabase-js'
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
   formatClvPayloadPathCounts,
   getActiveClvPayloadPaths,
@@ -14,7 +14,7 @@ const url = env.SUPABASE_URL ?? ''
 const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 if (!url || !key) { console.error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
 
-const db = createClient(url, key, { auth: { persistSession: false } })
+const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
 
 const args = process.argv.slice(2)
 const jsonMode = args.includes('--json')

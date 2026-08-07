@@ -1,0 +1,458 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1613",
+  "title": "lane-close --repair-merged must never synthesize an unmeasured passing truth record",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-31T12:40:00Z",
+  "sha_binding": {
+    "verified_source_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
+    "verified_source_note": "All receipts below were executed on this branch after rebasing onto origin/main at b5ebdc23. The rebase was clean; package.json's test:ops entry was extended as a union with this lane's two new suites, dropping nothing.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": "1a533cbf0057ab2543813f25f16660c9e2189308",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-31T21:53:48.712Z"
+  },
+  "verifier": {
+    "identity": "github-actions/CI — run 30661777017, job 91259566906 (staging-db-proof, producer) and job 91260945152 (verify, independent receipt verifier)"
+  },
+  "scope": {
+    "runtime_change": false,
+    "deploy_workflow_change": false,
+    "database_change": false,
+    "production_mutation_by_lane": false,
+    "implementation_paths": [
+      "package.json",
+      "scripts/ops/lane-close-repair-packet.test.ts",
+      "scripts/ops/lane-close-repair-packet.ts",
+      "scripts/ops/lane-close.test.ts",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-manifest.test.ts",
+      "scripts/ops/lane-manifest.ts",
+      "scripts/ops/reconcile.test.ts",
+      "scripts/ops/reconcile.ts",
+      "scripts/ops/truth-history-audit.test.ts",
+      "scripts/ops/truth-history-audit.ts"
+    ],
+    "control_plane_paths": [
+      ".ops/sync/UTV2-1613.yml",
+      "docs/06_status/lanes/UTV2-1590.json",
+      "docs/06_status/lanes/UTV2-1613.json"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1613/evidence.json",
+      "docs/06_status/proof/UTV2-1613/verification.md"
+    ],
+    "does_not_claim": [
+      "No production deployment, restart, or service change was performed.",
+      "No database row was written, updated, or deleted.",
+      "No secret was created or changed.",
+      "No existing fabricated truth_check_history entry was deleted or rewritten.",
+      "No readiness or production-GREEN claim is made."
+    ]
+  },
+  "defect": {
+    "summary": "ops:lane-close --repair-merged synthesized a truth_check_history entry with verdict 'pass', failures [] and runner 'ops:lane-close --repair-merged' before the canonical truth-check ran, unconditionally, including when the close was about to be refused.",
+    "fabricated_record_removed": {
+      "verdict": "pass",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair"
+    },
+    "canonical_runner_union": [
+      "ops:lane-close",
+      "ops:reconcile",
+      "manual"
+    ]
+  },
+  "static_proof": {
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "note": "eslint clean, no errors"
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "note": "tsc -b tsconfig.json clean"
+    },
+    "canonical_suites": {
+      "command": "npx tsx --test scripts/ops/lane-close.test.ts scripts/ops/lane-close-repair-packet.test.ts scripts/ops/reconcile.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/truth-history-audit.test.ts",
+      "status": "PASS",
+      "totals": {
+        "tests": 195,
+        "pass": 195,
+        "fail": 0,
+        "skipped": 0
+      },
+      "per_suite": {
+        "scripts/ops/lane-close.test.ts": 148,
+        "scripts/ops/lane-close-repair-packet.test.ts": 19,
+        "scripts/ops/reconcile.test.ts": 15,
+        "scripts/ops/lane-manifest.test.ts": 9,
+        "scripts/ops/truth-history-audit.test.ts": 7
+      }
+    },
+    "full_unit_suite": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "totals": {
+        "tests": 4081,
+        "pass": 4081,
+        "fail": 0
+      }
+    }
+  },
+  "second_fabrication_site": {
+    "location": "scripts/ops/lane-manifest.ts applyPrMergeToManifest (record-merge command)",
+    "reported_by": "PM, while manually repairing a sibling lane's post-merge closeout",
+    "defect": "Unconditionally wrote truth_check_history entry {verdict:'pass', failures:[], runner:'manual', source:'github_pr_merge_commit'} from nothing but 'PR is merged'. No truth-check ever ran in this function. runner:'manual' IS a canonical value, so a runner-union check alone could not catch it.",
+    "fix": "record-merge now binds only status/commit_sha/pr_url/heartbeat_at; truth_check_history passes through completely untouched.",
+    "status": "FIXED"
+  },
+  "self_review_findings": [
+    {
+      "id": "SR1",
+      "severity": "high",
+      "summary": "selectInferredMergedPr's title-or-branch OR made the title check vacuous since a conforming branch already embeds the issue ID; fixed to require a genuine title match.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR2",
+      "severity": "high",
+      "summary": "The identical gap in reconcile.ts's resolveMergedPrForLane branch-inference fallback; fixed the same way.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR3",
+      "severity": "medium",
+      "summary": "The inferred-PR repair path had no origin/main reachability check, unlike the sibling explicit --pr path; added as defense in depth.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR4",
+      "severity": "high",
+      "summary": "reconcile.ts's ghost_merged rule was eligible for reopened manifests, which signal a genuine detected regression; an unattended scheduled job could have silently overwritten that signal. Ghost eligibility now excludes reopened.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR5",
+      "severity": "medium",
+      "summary": "applyRepairPacket's GitHub-authority-drift check was dead code in the real CLI (fetchMergeAuthority never supplied); wired a real gh-backed implementation.",
+      "status": "FIXED"
+    },
+    {
+      "id": "SR6",
+      "severity": "medium",
+      "summary": "A failing repaired close persisted stale pre-run truth_check_history, discarding the just-measured failure entry. Extracted as manifestForFailedRepairClose and unit-tested.",
+      "status": "FIXED"
+    }
+  ],
+  "acceptance_criteria": {
+    "1_repair_without_execution_never_emits_pass": {
+      "status": "PASS",
+      "evidence": "unexecutedTruthCheckReceipt yields verdict null and truthHistoryEntryForMeasuredReceipt returns null; repairMergedLaneManifest appends nothing.",
+      "tests": [
+        "AC1: an unexecuted receipt records no verdict and yields no history entry",
+        "UTV2-1564: a second --repair-merged call against an already-correctly-repaired manifest does not grow truth_check_history"
+      ]
+    },
+    "2_invalid_proof_bundle_cannot_receive_pass": {
+      "status": "PASS",
+      "tests": [
+        "AC2/AC7: UTV2-1592 regression fixture — an invalid proof bundle cannot receive a pass"
+      ]
+    },
+    "3_failure_records_actual_failures": {
+      "status": "PASS",
+      "tests": [
+        "AC3: a measured FAILURE records the real failures and never a pass",
+        "AC3: an infra_error truth-check records a failure, never a pass"
+      ]
+    },
+    "4_pass_only_after_canonical_evaluation": {
+      "status": "PASS",
+      "tests": [
+        "AC4: a genuine pass is recorded only when the run executed AND exited 0"
+      ]
+    },
+    "5_runner_validates_against_canonical_union": {
+      "status": "PASS",
+      "tests": [
+        "AC5: the exact runner the old repair path wrote is rejected by the canonical union",
+        "AC5: every canonical runner is accepted, and nothing else is",
+        "a packet with a non-canonical runner fails schema validation"
+      ],
+      "enforcement_points": [
+        "assertCanonicalRunner() at receipt construction",
+        "assertCanonicalRunner() on the manifest's latest entry in finalizeLaneCloseManifest",
+        "validateRepairPacket() on truth_check.runner"
+      ]
+    },
+    "6_packet_hashes_prevent_stale_application": {
+      "status": "PASS",
+      "packet_fields": [
+        "command",
+        "generated_at",
+        "input_manifest_hash",
+        "candidate_manifest_hash",
+        "merge_binding.pr_url",
+        "merge_binding.pr_number",
+        "merge_binding.head_ref",
+        "merge_binding.merge_sha",
+        "merge_binding.selected_by",
+        "truth_check.check_ids",
+        "truth_check.exit_code"
+      ],
+      "tests": [
+        "AC6: a packet records the command, timestamp, both hashes, and the selected authority",
+        "AC6: applying against a manifest that moved since generation fails closed",
+        "AC6: a packet whose proposed_manifest was edited after generation fails closed",
+        "AC6: a packet whose GitHub merge authority moved fails closed",
+        "AC6: an unresolvable PR is treated as changed authority, not as agreement",
+        "AC6: a packet applies when every hash and the live authority still agree"
+      ]
+    },
+    "7_utv2_1592_is_a_regression_fixture": {
+      "status": "PASS",
+      "tests": [
+        "AC2/AC7: UTV2-1592 regression fixture — an invalid proof bundle cannot receive a pass"
+      ]
+    },
+    "8_historical_certification_cannot_inherit_a_fabricated_pass": {
+      "status": "PASS",
+      "tests": [
+        "AC8: a historical-certification packet cannot inherit a pass from a prior run",
+        "a packet that hand-claims a pass without executing is refused at apply time"
+      ]
+    },
+    "9_full_lane_close_truth_check_repair_rollback_schema_tests_pass": {
+      "status": "PASS",
+      "evidence": "181 targeted, 4075 total, 0 failures"
+    }
+  },
+  "idempotent_closeout_regressions": {
+    "normal_close_releases_the_lease": {
+      "status": "PASS",
+      "test": "UTV2-1613 R1: a normal successful close releases the dispatch lease"
+    },
+    "second_invocation_is_idempotent": {
+      "status": "PASS",
+      "test": "UTV2-1613 R2: a second close invocation is a clean no-op that leaves nothing behind"
+    },
+    "failed_truth_check_releases_no_authority_and_does_not_mark_done": {
+      "status": "PASS",
+      "test": "UTV2-1613 R3: a failed truth-check releases no authority and does not mark the lane done"
+    },
+    "reclose_does_not_raise_spurious_truth_check_drift": {
+      "status": "PASS",
+      "test": "UTV2-1613 R4: re-closing an already-done lane does not raise spurious truth_check_drift",
+      "root_cause": "truth-check-lib's finalizeWithManifest refuses to append history to a done manifest (UTV2-1224), so the fresh in-run pass always carries a checked_at that cannot equal the persisted one; the old timestamp-equality test reported that as concurrent drift on every re-close."
+    },
+    "orphaned_pid_lock_is_reaped_rather_than_compounding": {
+      "status": "PASS",
+      "tests": [
+        "UTV2-1613 R5: an orphaned-pid merge lock is reaped rather than compounding",
+        "UTV2-1613 R5: reaping never takes another lane's orphaned lock",
+        "UTV2-1613 R5: an expired (not orphaned) lock still requires an explicit reclaim",
+        "UTV2-1613: a run that gives up releases the merge lock it acquired for itself",
+        "UTV2-1613: a pre-existing lock this run did not acquire is left untouched"
+      ]
+    }
+  },
+  "fabricated_history_inventory": {
+    "command": "pnpm ops:truth-history-audit",
+    "read_only": true,
+    "deleted_entries": 0,
+    "scanned_manifests": 647,
+    "affected_manifests": 188,
+    "fabricated_pass_count": 181,
+    "by_runner": {
+      "ops:lane-close --repair-merged": 181,
+      "manual-reconciliation": 21,
+      "<runner field absent>": 19,
+      "post-merge-lane-close": 13,
+      "manual-backfill": 10,
+      "manual-close": 6,
+      "operator": 4,
+      "pm": 1
+    },
+    "note": "The 181 fabricated passes are the known UTV2-1613 population. The remaining 74 entries under other non-canonical runners are a second, previously unreported population, recorded here for triage; correcting them is out of this lane's scope. Every correction must be a governed PR, never a silent tool rewrite."
+  },
+  "ghost_lanes": {
+    "mechanism": "ops:reconcile ghost_merged rule (scheduled via .github/workflows/reconcile-stale-lanes.yml, every 6h on main)",
+    "detected": [
+      {
+        "issue_id": "UTV2-1553",
+        "manifest_status_before": "started",
+        "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1322",
+        "merge_sha": "965872d378caa3e88ef4987f8bbb0bab0214856e",
+        "reconciled_in_this_pr": false,
+        "reason": "Its own file_scope_lock includes docs/06_status/lanes/UTV2-1553.json, and file-scope-guard resolves base-branch manifests from the base copy, so a PR carrying the fix is evaluated against the ghost's stale lock-holding content. Applied and verified locally, then reverted; the scheduled reconciler applies it on main."
+      },
+      {
+        "issue_id": "UTV2-1590",
+        "manifest_status_before": "in_review",
+        "manifest_status_after": "merged",
+        "pr": "https://github.com/griff843/Unit-Talk-v2/pull/1309",
+        "merge_sha": "67f26057b7e35eff928a1b7c5e71084da5a67e1a",
+        "reconciled_in_this_pr": true,
+        "marked_done": false
+      }
+    ],
+    "invariant": "The reconciler transitions a ghost to merged only. done is a governance verdict that only a passing ops:truth-check may grant."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "medium",
+      "summary": "A lane manifest can be written with file_scope_lock: [], which validateManifest rejects, so readManifest throws and every ops tool that loads manifests through it refuses the lane outright. Observed live on UTV2-1590; it is why ops:lane-close --repair-merged could not repair either ghost."
+    },
+    {
+      "id": "F2",
+      "severity": "medium",
+      "summary": "Bootstrap deadlock: a ghost lane's stale file_scope_lock blocks the very PR that would reconcile it, because file-scope-guard resolves an existing manifest from the base branch copy. The automatic release therefore has to run on main (scheduled reconciler), not through a lane PR."
+    },
+    {
+      "id": "F3",
+      "severity": "low",
+      "summary": "A second non-canonical truth_check_history runner population exists beyond the UTV2-1613 one: 55 entries under manual-reconciliation / post-merge-lane-close / manual-backfill / manual-close / operator / pm, plus 19 entries with no runner field. Not corrected here."
+    }
+  ],
+  "governance": {
+    "direct_main_push": false,
+    "admin_merge": false,
+    "branch_protection_changed": false,
+    "production_writes": false,
+    "unmeasured_claims": false
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required verify context against its own GITHUB_* values",
+    "source_run": {
+      "github_run_id": "30661777017",
+      "github_run_attempt": "1",
+      "github_job": "staging-db-proof",
+      "github_sha_evaluated": "33fa464cf270c8612f79deb3e2410143a5590d7a",
+      "workflow_ref": "griff843/Unit-Talk-v2/.github/workflows/ci.yml@refs/pull/1339/merge",
+      "note": "This run evaluated PR #1339's own head (bda21ecac6c5ae4f17683cddf25bd90bf0ca0c84) merged against main's tip at CI time (github_sha_evaluated). That PR squash-merged as 1a533cbf0057ab2543813f25f16660c9e2189308, the merge_sha this evidence bundle is bound to."
+    },
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "relation_to_this_lane": "This lane (UTV2-1613) changes no database path -- scripts/ops/lane-close.ts, lane-close-repair-packet.ts, lane-manifest.ts, reconcile.ts, truth-history-audit.ts are pure ops-script/manifest logic. The runtime evidence below is not evidence FOR the truth-record fix; it is the live-DB measurement the T1 gate requires unconditionally, produced by CI on this lane's own PR head and omitted from the original evidence bundle.",
+    "queries": [
+      {
+        "table": "submissions/settlements (repository bundle)",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1",
+        "duration_ms": 17421.369446
+      },
+      {
+        "table": "distribution_outbox/pick_lifecycle",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2",
+        "duration_ms": 17182.176384
+      },
+      {
+        "table": "distribution_outbox/distribution_receipts/pick_lifecycle/audit",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3",
+        "duration_ms": 18300.002112
+      },
+      {
+        "table": "settlement_records/pick_lifecycle/audit",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4",
+        "duration_ms": 17842.899105
+      },
+      {
+        "table": "participants",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "ok 5",
+        "duration_ms": 133.171345
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: re-settling a settled pick creates correction -- no true duplicate base rows",
+        "result": "ok 6",
+        "duration_ms": 18786.617431
+      },
+      {
+        "table": "settlement_records",
+        "description": "UTV2-996: correction chain is additive -- original settlement row is not mutated",
+        "result": "ok 7",
+        "duration_ms": 17467.451012
+      }
+    ],
+    "queries_note": "The seven live cases pnpm test:db executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential, on PR #1339's own head. Transcribed verbatim from the ci-db-proof-receipt/v2 artifact (utv2-1630-db-proof-receipt-30661777017-1, downloaded via gh api repos/griff843/Unit-Talk-v2/actions/artifacts/8805580141/zip) captured_output field, whose output_sha256 (af5109cec68d5e9ab021be1d48def97cac6c426fa6a44391f67313c23ca435bf) the independent verify job re-derived. Total wall time for the seven cases was 107705.64291 ms per the TAP footer (# duration_ms).",
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 0,
+        "status": "reset (0 row(s) deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 0,
+        "status": "reset (0 row(s) deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 0,
+        "status": "reset (0 row(s) deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "synthetic row(s) upserted"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "synthetic row(s) upserted"
+      }
+    ],
+    "row_counts_note": "From the [seed-staging] lines in the same staging-db-proof job (91259566906), run immediately before pnpm test:db in the same job.",
+    "row_counts_captured_at": "2026-07-31T20:09:53Z",
+    "receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "github_run_id": "30661777017",
+      "github_job": "staging-db-proof",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "output_sha256": "af5109cec68d5e9ab021be1d48def97cac6c426fa6a44391f67313c23ca435bf",
+      "receipt_sha256": "2c68d9579c3d1bf15a193249c6264447891a9d23af56873a0aec777ae51f5bc0",
+      "verify_job_verdict": "PASS",
+      "verify_job_reason": "DB proof verified: run 30661777017 attempt 1 @ 33fa464cf270c8612f79deb3e2410143a5590d7a, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "verify_job_id": "91260945152"
+    },
+    "harvest_note": "Read back on 2026-07-31 from the retained artifacts of run 30661777017 -- the staging-db-proof job log (91259566906) and the ci-db-proof-receipt/v2 artifact. Nothing was re-run: a re-run would be a different measurement wearing this merge SHA's name. No pnpm test:db was executed on this host -- there are no staging credentials available here, and ci:assert-staging correctly refuses outside CI."
+  }
+}

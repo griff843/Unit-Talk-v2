@@ -105,3 +105,94 @@ test('checkConcurrencyLimits allows a distinct valid target when the active targ
 
   assert.deepStrictEqual(violations, [], `Expected no violations for a distinct valid target, got: ${JSON.stringify(violations)}`);
 });
+
+// ── UTV2-1619 capability 13: capacity is a matrix, not one flat set ──────────
+// Regression fixture for the measured defect: lanes waiting on a human held
+// executor slots identically to lanes being actively worked, so work nobody was
+// doing denied admission to work somebody would have.
+
+/** POLICY with targeted overrides, so each assertion isolates one cap. */
+function capPolicy(overrides: Partial<ConcurrencyConfig>): ConcurrencyConfig {
+  return { ...POLICY, ...overrides } as ConcurrencyConfig;
+}
+
+test('CAP-1: in_review consumes a lane slot but NOT an executor slot', () => {
+  const board = [
+    { issue_id: 'UTV2-9001', status: 'in_review', executor: 'claude', lane_type: 'governance' },
+    { issue_id: 'UTV2-9002', status: 'in_review', executor: 'claude', lane_type: 'governance' },
+    { issue_id: 'UTV2-9003', status: 'in_review', executor: 'claude', lane_type: 'governance' },
+    { issue_id: 'UTV2-9004', status: 'in_review', executor: 'claude', lane_type: 'governance' },
+  ] as never[];
+  const config = capPolicy({ total: 10, executors: { claude: 4, codex: 6 }, type_caps: { governance: 99 } });
+  const violations = checkConcurrencyLimits(board, 'governance', 'claude', config, {});
+  assert.equal(
+    violations.some((v) => v.code === 'claude_cap_exceeded'),
+    false,
+    'four lanes awaiting review must not exhaust a 4-lane executor cap',
+  );
+});
+
+test('CAP-2: in_progress does consume an executor slot', () => {
+  const board = [
+    { issue_id: 'UTV2-9001', status: 'in_progress', executor: 'claude', lane_type: 'governance' },
+    { issue_id: 'UTV2-9002', status: 'in_progress', executor: 'claude', lane_type: 'governance' },
+  ] as never[];
+  const config = capPolicy({ total: 10, executors: { claude: 2, codex: 6 }, type_caps: { governance: 99 } });
+  const violations = checkConcurrencyLimits(board, 'governance', 'claude', config, {});
+  assert.equal(violations.some((v) => v.code === 'claude_cap_exceeded'), true);
+});
+
+test('CAP-3: parked releases executor capacity but still occupies a lane slot', () => {
+  const parked = [
+    { issue_id: 'UTV2-9001', status: 'parked', executor: 'claude', lane_type: 'governance' },
+    { issue_id: 'UTV2-9002', status: 'parked', executor: 'claude', lane_type: 'governance' },
+  ] as never[];
+  const execConfig = capPolicy({ total: 99, executors: { claude: 1, codex: 6 }, type_caps: { governance: 99 } });
+  assert.equal(
+    checkConcurrencyLimits(parked, 'governance', 'claude', execConfig, {})
+      .some((v) => v.code === 'claude_cap_exceeded'),
+    false,
+    'parked must not hold executor capacity',
+  );
+  const totalConfig = capPolicy({ total: 2, executors: { claude: 99, codex: 99 }, type_caps: { governance: 99 } });
+  assert.equal(
+    checkConcurrencyLimits(parked, 'governance', 'claude', totalConfig, {})
+      .some((v) => v.code === 'total_cap_exceeded'),
+    true,
+    'parked must still occupy a lane slot, or park becomes a way to defeat the caps',
+  );
+});
+
+test('CAP-4: every terminal state releases all three capacity kinds', () => {
+  for (const status of ['done', 'merged', 'failed', 'superseded', 'cancelled']) {
+    const board = [
+      { issue_id: 'UTV2-9001', status, executor: 'claude', lane_type: 'governance' },
+      { issue_id: 'UTV2-9002', status, executor: 'claude', lane_type: 'governance' },
+    ] as never[];
+    const config = capPolicy({ total: 1, executors: { claude: 1, codex: 1 }, type_caps: { governance: 1 } });
+    assert.deepEqual(
+      checkConcurrencyLimits(board, 'governance', 'claude', config, {}).map((v) => v.code),
+      [],
+      `terminal state "${status}" must release total, executor and type capacity`,
+    );
+  }
+});
+
+test('CAP-5: blocked releases executor capacity but holds its lane and type slot', () => {
+  const board = [
+    { issue_id: 'UTV2-9001', status: 'blocked', executor: 'claude', lane_type: 'governance' },
+  ] as never[];
+  assert.equal(
+    checkConcurrencyLimits(board, 'governance', 'claude',
+      capPolicy({ total: 99, executors: { claude: 1, codex: 9 }, type_caps: { governance: 99 } }), {})
+      .some((v) => v.code === 'claude_cap_exceeded'),
+    false,
+  );
+  assert.equal(
+    checkConcurrencyLimits(board, 'governance', 'claude',
+      capPolicy({ total: 99, executors: { claude: 9, codex: 9 }, type_caps: { governance: 1 } }), {})
+      .some((v) => v.code === 'governance_type_cap_exceeded'),
+    true,
+    'a blocked lane still occupies its type slot -- it can still be changing that surface',
+  );
+});

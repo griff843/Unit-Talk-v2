@@ -13,7 +13,7 @@
  * Issue: UTV2-201
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -95,7 +95,7 @@ async function main() {
 
   console.log(`Backtest scoring weights since ${since}`);
 
-  const client = createClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
+  const client = createPrivilegedClient(requireEnv('SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'));
 
   // Fetch settled picks with promotion history
   const { data: picks, error: picksErr } = await client

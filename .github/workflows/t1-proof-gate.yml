@@ -38,6 +38,11 @@ jobs:
     # Only run for T1 PRs
     if: contains(github.event.pull_request.labels.*.name, 'tier:T1')
     runs-on: ubuntu-latest
+    # UTV2-1630: disabled by trigger, but still manually dispatchable — and its
+    # C2 step runs `pnpm ci:db-smoke`, which writes. A dormant path holding
+    # production credentials is one `workflow_dispatch` away from being a live
+    # one, so it binds staging-ci like every other writable job.
+    environment: staging-ci
 
     steps:
       - name: Checkout
@@ -73,9 +78,11 @@ jobs:
           NOTION_TOKEN=
           SLACK_BOT_TOKEN=
           SLACK_SIGNING_SECRET=
-          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_DB_ACCESS_MODE=writable-isolated
+          SUPABASE_PROJECT_REF=${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          SUPABASE_URL=${{ secrets.CI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.CI_SUPABASE_SECRET_KEY }}
           DISCORD_BOT_TOKEN=
           DISCORD_GUILD_ID=
           DISCORD_ANNOUNCEMENT_CHANNEL_ID=

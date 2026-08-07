@@ -59,7 +59,7 @@ export interface DeferredMergeRecord {
 export type CommandRunner = (
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeoutMs?: number },
 ) => Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'>;
 
 export type MergeWrapperResult =
@@ -88,7 +88,8 @@ export type MergeWrapperResult =
         | 'merge_wrapper_release_failed'
         | 'merge_wrapper_invalid_input'
         | 'merge_wrapper_stash_failed'
-        | 'merge_wrapper_stash_pop_conflict';
+        | 'merge_wrapper_stash_pop_conflict'
+        | 'merge_wrapper_authorization_failed';
       issue_id?: string;
       operation?: MergeWrapperOperation;
       command?: string[];
@@ -115,6 +116,40 @@ export const DEFERRED_MERGE_DIR = path.join(ROOT, '.ops', 'deferred-merges');
 // silently discarding lane-state data.
 export const MAIN_SYNC_STASH_PATHS = ['.ops/sync', 'docs/06_status/lanes'];
 export const MAIN_SYNC_STASH_MESSAGE = 'ops-merge-wrapper:main-sync:autostash';
+
+// UTV2-1592: mandatory pre-merge authorization gate. `pr-merge` must never
+// invoke the actual `gh pr merge` command without first re-evaluating
+// required checks and the pm-verdict/v1 approval against the PR's CURRENT
+// live head SHA -- a prior lane's incident showed that stale/branch-snapshot
+// state can go missing between "the decision was made" and "the merge
+// command actually runs".
+//
+// scripts/ops/pre-merge-authorization.ts does the real (async, live-GitHub)
+// evaluation. runMergeWrapper's own public contract is synchronous --
+// scripts/ops/ops-merge-wrapper.ts consumes its result synchronously and is
+// outside this lane's file scope -- so the gate is invoked here through the
+// SAME synchronous CommandRunner abstraction already used for `gh`/`git`
+// calls, as a `pnpm exec tsx` subprocess, rather than as an in-process async
+// call. This keeps runMergeWrapper's signature unchanged while still doing a
+// real, non-reimplemented evaluation for every real invocation.
+export const PRE_MERGE_AUTHORIZATION_OWNER = 'griff843';
+export const PRE_MERGE_AUTHORIZATION_REPO = 'Unit-Talk-v2';
+const PRE_MERGE_AUTHORIZATION_SCRIPT = path.join('scripts', 'ops', 'pre-merge-authorization.ts');
+
+// Bounded timeout for the authorization subprocess (UTV2-1592 amendment).
+// The subprocess only does a handful of live GitHub REST round-trips
+// (required checks, paginated commit statuses/check-runs, paginated PR
+// comments, head SHA) -- 30s is generous headroom above that without
+// letting a wedged/hanging subprocess block a merge indefinitely. spawnSync's
+// own `timeout` option sends SIGTERM and sets `.error` (ETIMEDOUT) when
+// exceeded, which runPreMergeAuthorizationCheck below already treats as a
+// fail-closed "could not execute" result.
+const PRE_MERGE_AUTHORIZATION_TIMEOUT_MS = 30_000;
+
+export interface PreMergeAuthorizationCheckResult {
+  authorized: boolean;
+  reason?: string;
+}
 
 export interface MainSyncStashState {
   attempted: boolean;
@@ -198,6 +233,144 @@ function popMainSyncStash(runner: CommandRunner, cwd: string): StashPopOutcome {
   }
 
   return { ok: true, conflict: false, stdout, stderr };
+}
+
+/**
+ * Runs the pre-merge authorization gate for a `pr-merge` operation via the
+ * same synchronous CommandRunner used for `gh`/`git` calls (see the
+ * PRE_MERGE_AUTHORIZATION_* constants above for why). Fails closed: any
+ * transport failure or unparseable/malformed receipt is treated as NOT
+ * authorized, never as "skip the check".
+ */
+export function runPreMergeAuthorizationCheck(
+  pr: string,
+  runner: CommandRunner,
+  cwd: string,
+): PreMergeAuthorizationCheckResult {
+  const run = runner(
+    'pnpm',
+    [
+      'exec',
+      'tsx',
+      PRE_MERGE_AUTHORIZATION_SCRIPT,
+      '--owner',
+      PRE_MERGE_AUTHORIZATION_OWNER,
+      '--repo',
+      PRE_MERGE_AUTHORIZATION_REPO,
+      '--pr',
+      pr,
+    ],
+    { cwd, timeoutMs: PRE_MERGE_AUTHORIZATION_TIMEOUT_MS },
+  );
+
+  // Fail closed on any transport-level failure: a thrown error, a signal
+  // (including the bounded timeout above firing), or a subprocess spawn
+  // failure all surface as `run.error`.
+  if (run.error) {
+    return {
+      authorized: false,
+      reason: `pre-merge authorization check failed to execute: ${run.error.message}`,
+    };
+  }
+
+  const stdout = bufferToText(run.stdout);
+  const stderr = bufferToText(run.stderr);
+
+  let receipt: { authorized?: unknown; reason?: unknown } | null = null;
+  if (stdout) {
+    try {
+      receipt = JSON.parse(stdout) as { authorized?: unknown; reason?: unknown };
+    } catch {
+      receipt = null;
+    }
+  }
+
+  if (!receipt || typeof receipt.authorized !== 'boolean') {
+    return {
+      authorized: false,
+      reason:
+        `pre-merge authorization check produced no valid receipt (exit ${run.status ?? 'unknown'}): ` +
+        (stderr || stdout || 'no output'),
+    };
+  }
+
+  // Fail closed even on an affirmative receipt: pre-merge-authorization.ts's
+  // own CLI entry point sets `process.exitCode = receipt.authorized ? 0 : 1`,
+  // so those two facts (exit code, receipt.authorized) must always agree. A
+  // non-zero exit alongside `authorized: true` can only mean the process
+  // crashed, was killed, or was tampered with after printing the receipt --
+  // never treat that as "skip the exit-code check because the payload looks
+  // fine".
+  if (run.status !== 0) {
+    return {
+      authorized: false,
+      reason:
+        `pre-merge authorization subprocess exited with non-zero status ${run.status ?? 'unknown'} ` +
+        `(receipt reported authorized:${String(receipt.authorized)}); refusing to trust a receipt from a ` +
+        `subprocess that did not exit successfully: ${stderr || stdout || 'no output'}`,
+    };
+  }
+
+  return {
+    authorized: receipt.authorized,
+    reason: typeof receipt.reason === 'string' ? receipt.reason : undefined,
+  };
+}
+
+export interface RunAuthorizedPrMergeInput {
+  pr: string;
+  merge_method?: MergeMethod;
+  auto?: boolean;
+}
+
+export interface RunAuthorizedPrMergeResult {
+  authorized: boolean;
+  reason?: string;
+  command: MergeCommand;
+  run?: Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'>;
+}
+
+/**
+ * The SOLE path allowed to execute a `pr-merge` command anywhere in this
+ * codebase (UTV2-1592 amendment). `runMergeWrapper`'s direct `pr-merge`
+ * operation below and merge-train's per-candidate merge step
+ * (ops-merge-wrapper.ts's runMergeTrainEntry) both call this function
+ * instead of building and running a `gh pr merge` command themselves --
+ * that unification is what makes it structurally impossible for either
+ * caller to bypass re-authorization. It re-evaluates required checks and
+ * the PM verdict against the PR's live head SHA (via
+ * runPreMergeAuthorizationCheck) immediately before running the merge
+ * command, and never invokes the merge command when authorization is
+ * denied.
+ */
+export function runAuthorizedPrMerge(
+  input: RunAuthorizedPrMergeInput,
+  runner: CommandRunner,
+  cwd: string,
+): RunAuthorizedPrMergeResult {
+  const pr = requirePr(input.pr);
+  const command = buildMergeCommand({
+    operation: 'pr-merge',
+    issue_id: '',
+    branch: '',
+    pr,
+    merge_method: input.merge_method,
+    auto: input.auto,
+  });
+
+  const authorization = runPreMergeAuthorizationCheck(pr, runner, cwd);
+  if (!authorization.authorized) {
+    return {
+      authorized: false,
+      reason:
+        authorization.reason ??
+        'pre-merge authorization check rejected this merge; see the authorization receipt for details.',
+      command,
+    };
+  }
+
+  const run = runner(command.command, command.args, { cwd });
+  return { authorized: true, command, run };
 }
 
 export function buildMergeCommand(input: MergeWrapperInput): MergeCommand {
@@ -336,7 +509,42 @@ export function runMergeWrapper(
     mainSyncStash = { attempted: true, stashed: stashPush.stashed, popped: false };
   }
 
-  const run = runner(command.command, command.args, { cwd });
+  // UTV2-1592: pr-merge must never invoke the actual merge command without
+  // first re-authorizing against the PR's live head SHA. This runs AFTER the
+  // lock is held (so the window between authorization and the merge command
+  // itself is minimized) but BEFORE the merge command itself is invoked.
+  // Routed through the single runAuthorizedPrMerge primitive -- shared with
+  // merge-train's per-candidate merge step in ops-merge-wrapper.ts -- so this
+  // is the only place in the codebase a `pr-merge` gh command can execute.
+  let run: ReturnType<CommandRunner>;
+  if (input.operation === 'pr-merge') {
+    const authorizedMerge = runAuthorizedPrMerge(
+      { pr: requirePr(input.pr), merge_method: input.merge_method, auto: input.auto },
+      runner,
+      cwd,
+    );
+    if (!authorizedMerge.authorized || !authorizedMerge.run) {
+      const release = releaseMergeLock(
+        { issue_id: issueId, branch: input.branch },
+        { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+      );
+      return {
+        ok: false,
+        code: 'merge_wrapper_authorization_failed',
+        issue_id: issueId,
+        operation: input.operation,
+        command: commandVector,
+        lock,
+        release,
+        message:
+          authorizedMerge.reason ??
+          'pre-merge authorization check rejected this merge; see the authorization receipt for details.',
+      };
+    }
+    run = authorizedMerge.run;
+  } else {
+    run = runner(command.command, command.args, { cwd });
+  }
   const stdout = bufferToText(run.stdout);
   const stderr = bufferToText(run.stderr);
 
@@ -503,11 +711,12 @@ function requirePr(pr: string | null | undefined): string {
 function defaultRunner(
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeoutMs?: number },
 ): Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'> {
   return spawnSync(command, args, {
     cwd: options.cwd,
     stdio: 'pipe',
+    ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
   });
 }
 

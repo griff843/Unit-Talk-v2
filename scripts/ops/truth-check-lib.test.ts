@@ -10,9 +10,11 @@ import {
   evaluateCloseoutTruthGate,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateScopeDiff,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
+  fetchGitHubPullRequestComments,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
@@ -24,6 +26,7 @@ import {
   type GitHubCheckRun,
 } from './truth-check-lib.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
+import { getRepoRoot } from './shared.js';
 import type { CheckResult, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
@@ -413,6 +416,47 @@ test('G4 paginates beyond 100 commit statuses before evaluating required context
   assert.strictEqual(result.evidence?.[0]?.candidate_id, 101);
   assert.strictEqual(result.evidence?.[0]?.source, 'status');
   assert.ok(requestedUrls.some((url) => url.includes('/statuses?per_page=100&page=2')));
+});
+
+test('UTV2-1592 amendment: fetchGitHubPullRequestComments paginates beyond 100 comments before returning', async () => {
+  // Reproduces the same class of gap G4's pagination tests above guard
+  // against, but for PR/issue comments: a PM verdict posted after the 100th
+  // comment used to be silently dropped because this fetch only ever
+  // requested page 1.
+  const requestedUrls: string[] = [];
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({
+    body: `unrelated comment #${index + 1}`,
+    user: { login: 'someone', type: 'User' },
+    html_url: `https://github.com/griff843/Unit-Talk-v2/pull/1592#issuecomment-${index + 1}`,
+    created_at: '2026-07-24T16:00:00Z',
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requestedUrls.push(url);
+    if (url.endsWith('page=1')) return firstPage as T;
+    if (url.endsWith('page=2')) {
+      return [
+        {
+          body: 'PM_VERDICT: APPROVED\nschema: pm-verdict/v1\nIssue: UTV2-1592\nPR: 1592\nHead SHA: deadbeef',
+          user: { login: 'griff843', type: 'User' },
+          html_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1592#issuecomment-101',
+          created_at: '2026-07-24T16:30:00Z',
+        },
+      ] as T;
+    }
+    return [] as T;
+  };
+
+  const comments = await fetchGitHubPullRequestComments(
+    'griff843',
+    'Unit-Talk-v2',
+    1592,
+    'test-token',
+    fetchPage,
+  );
+
+  assert.strictEqual(comments.length, 101);
+  assert.match(comments[100]?.body ?? '', /PM_VERDICT: APPROVED/);
+  assert.ok(requestedUrls.some((url) => url.includes('/issues/1592/comments?per_page=100&page=2')));
 });
 
 test('branch-protection required checks preserve app identity and suppress legacy duplicates', () => {
@@ -1327,4 +1371,75 @@ test('integration: R1/R2/R3 fail against a pre-repair bundle and pass against th
   const postClassification = classifyRuntimeProofGap(postRepairChecks);
   assert.strictEqual(postClassification.isRuntimeProofGap, false);
   assert.strictEqual(hasRuntimeReferences(postRepairBundle.bundle.runtime_proof), true);
+});
+
+// ── UTV2-1640: S1 must honour `/**` scope patterns ──────────────────────────
+// Regression cover for a defect where S1 matched scope with an exact Set
+// lookup, so a `dir/**` entry could never match a real file. The pre-merge
+// file-scope guard passed the same diff, so the two gates disagreed about what
+// a scope lock means. Matching now delegates to the guard's own helper.
+
+const UTV2_1640_SCOPE = [
+  'docs/06_status/proof/UTV2-1640/evidence.json',
+  'docs/06_status/proof/UTV2-1640/verification.md',
+  'packages/db/src/database.types.ts',
+  'supabase/migrations/**',
+  'db/migrations-rollback/**',
+];
+
+test('S1: supabase/migrations/** matches the UTV2-1640 migration', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: db/migrations-rollback/** matches the down script and the exemption registry', () => {
+  const result = evaluateScopeDiff(
+    [
+      'db/migrations-rollback/20260801220000_utv2_1640_system_runs_autovacuum_tuning.down.sql',
+      'db/migrations-rollback/irreversible-exemption-registry.json',
+    ],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: an unrelated path outside every scope entry still fails', () => {
+  const result = evaluateScopeDiff(
+    ['apps/api/src/submission-service.ts'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /apps\/api\/src\/submission-service\.ts/);
+});
+
+test('S1: a glob does not match a sibling directory sharing a prefix', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations-archive/legacy.sql'],
+    ['supabase/migrations/**'],
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+});
+
+test('S1: exact (non-glob) scope entries still match, and expected_proof_paths are honoured', () => {
+  const result = evaluateScopeDiff(
+    ['packages/db/src/database.types.ts', 'docs/06_status/proof/UTV2-1640/evidence.json'],
+    UTV2_1640_SCOPE,
+    ['docs/06_status/proof/UTV2-1640/evidence.json'],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: the historical UTV2-1640 scope lock is unchanged by this repair', () => {
+  const repoRoot = getRepoRoot();
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'docs/06_status/lanes/UTV2-1640.json'), 'utf8'),
+  ) as { file_scope_lock: string[] };
+  assert.deepStrictEqual(manifest.file_scope_lock, UTV2_1640_SCOPE);
 });

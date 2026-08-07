@@ -1,0 +1,278 @@
+name: Ops — P0 manual containment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "contain-utv2-1610" to disable the two blind-pick producers'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Shares deploy.yml's production-deploy mutex. Containment rewrites
+# .env.production and recreates the api service, so it must never interleave
+# with a deploy that rewrites the same file from repository secrets.
+#
+# cancel-in-progress: false keeps an IN-PROGRESS run from being cancelled
+# midway between backup and restart. It does NOT stop a *pending* run from
+# being cancelled: GitHub allows only one pending run per group, so a later
+# dispatch evicts an earlier queued one.
+#
+# OPERATOR PRECONDITION — before dispatching this workflow during an incident,
+# open the Actions tab and check that no Deploy run is in progress or waiting on
+# environment approval. A waiting deploy holds this group and will keep
+# containment queued rather than running; a second deploy dispatch would then
+# cancel the queued containment outright, with no error annotation. Cancel the
+# blocking deploy first.
+#
+# This mutex covers deploy.yml only. ops-env-patch.yml and
+# ops-fix-ingestor-api-key.yml also mutate .env.production and are NOT yet on
+# it — tracked as a follow-up, outside this lane's file scope.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  contain:
+    name: Disable blind-pick producers and restart API only
+    if: ${{ github.event.inputs.confirm == 'contain-utv2-1610' }}
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate required deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          test -n "$DEPLOY_SSH_KEY" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf 'ERROR: Required deployment secrets are missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+          echo 'Required deployment secrets are present; values remain redacted.'
+
+      - name: Install deployment SSH key
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Contain producers and capture redacted evidence
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          DEPLOY_PATH_B64="$(printf '%s' "$DEPLOY_PATH" | base64 -w 0)"
+          TRANSCRIPT="$RUNNER_TEMP/containment-transcript.log"
+
+          # The remote script is delivered on ssh stdin. Every remote command that
+          # could otherwise consume that stream is explicitly redirected from
+          # /dev/null (docker compose exec keeps stdin attached by default; -T only
+          # disables the TTY). The completion sentinel below is the fail-closed
+          # backstop: if any future command still steals stdin, the remote shell
+          # reaches EOF early and exits 0 having done nothing, and the sentinel
+          # check turns that silent success into a hard failure.
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "DEPLOY_PATH_B64='$DEPLOY_PATH_B64' bash -s" <<'REMOTE_SCRIPT' | tee "$TRANSCRIPT"
+          set -euo pipefail
+
+          DEPLOY_PATH="$(printf '%s' "$DEPLOY_PATH_B64" | base64 -d)"
+          cd "$DEPLOY_PATH"
+          ENV_FILE=".env.production"
+
+          if [ ! -f "$ENV_FILE" ]; then
+            echo 'ERROR: .env.production is missing; containment stopped.'
+            exit 1
+          fi
+          # Every `docker compose` evaluation needs UNIT_TALK_IMAGE_TAG, not just the
+          # restart: deploy/production/docker-compose.yml declares
+          # ${UNIT_TALK_IMAGE_TAG:?required} for EVERY service, so compose fails to
+          # interpolate without it. The first production run exported it only on the
+          # `up` line, so its own pre/post `exec` and `ps` checks failed and it could
+          # not verify the containment it had just applied. Exported once, here,
+          # before the first compose call.
+          if [ ! -f .unit-talk-release ]; then
+            echo 'ERROR: .unit-talk-release is missing; containment stopped.'
+            exit 1
+          fi
+          UNIT_TALK_IMAGE_TAG="$(tr -d '\r\n' < .unit-talk-release)"
+          export UNIT_TALK_IMAGE_TAG
+          if [ -z "$UNIT_TALK_IMAGE_TAG" ]; then
+            echo 'ERROR: .unit-talk-release is empty; containment stopped.'
+            exit 1
+          fi
+
+          echo '=== PRE-STATE (REDACTED) ==='
+          SYNDICATE_PRE="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null </dev/null || true)"
+          BOARD_PRE="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null </dev/null || true)"
+          printf 'SYNDICATE_MACHINE_ENABLED=%s\n' "${SYNDICATE_PRE:-<unset>}"
+          printf 'BOARD_PICK_WRITER_ENABLED=%s\n' "${BOARD_PRE:-<unset>}"
+          echo '.unit-talk-release:'
+          cat .unit-talk-release
+          echo 'Running container summary:'
+          docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}' </dev/null
+
+
+          TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP_FILE=".env.production.utv2-1612.${TIMESTAMP}.bak"
+          cp -p -- "$ENV_FILE" "$BACKUP_FILE"
+          printf 'Backup created: %s\n' "$BACKUP_FILE"
+
+          # Armed for the whole mutate -> validate -> restart window. Before the
+          # restart a failure restores .env.production from the backup, so the
+          # host can never be left half-mutated. After the restart the contained
+          # file is intentionally kept and the manual rollback command is printed.
+          RESTART_DONE=false
+          on_failure() {
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              return 0
+            fi
+            echo '=== FAILURE ROLLBACK RECEIPT ==='
+            printf 'exit_status=%s\n' "$rc"
+            printf 'backup_file=%s\n' "$BACKUP_FILE"
+            if [ "$RESTART_DONE" = 'false' ]; then
+              if cp -p -- "$BACKUP_FILE" "$ENV_FILE"; then
+                echo 'env_restored=true'
+                echo 'restart_performed=false'
+              else
+                echo 'env_restored=false'
+                echo 'ACTION REQUIRED: restore .env.production from the backup above by hand.'
+              fi
+            elif [ "$RESTART_DONE" = 'attempted' ]; then
+              echo 'env_restored=false'
+              echo 'restart_performed=false'
+              echo 'ACTION REQUIRED: the restart command itself failed. .env.production is'
+              echo 'contained but the running container still holds the previous values.'
+              printf 'rollback_command=cp -- %q .env.production\n' "$BACKUP_FILE"
+            else
+              echo 'env_restored=false'
+              echo 'restart_performed=true'
+              printf 'rollback_command=cp -- %q .env.production && UNIT_TALK_IMAGE_TAG="$(tr -d '"'"'\\r\\n'"'"' < .unit-talk-release)" docker compose up -d --no-deps --force-recreate api </dev/null\n' "$BACKUP_FILE"
+            fi
+          }
+          trap on_failure EXIT
+
+          # A file with no trailing newline would otherwise have the appended line
+          # concatenated onto the preceding variable.
+          if [ -s "$ENV_FILE" ] && [ -n "$(tail -c 1 "$ENV_FILE")" ]; then
+            printf '\n' >> "$ENV_FILE"
+          fi
+
+          if grep -q '^SYNDICATE_MACHINE_ENABLED=' "$ENV_FILE"; then
+            sed -i 's/^SYNDICATE_MACHINE_ENABLED=.*/SYNDICATE_MACHINE_ENABLED=false/' "$ENV_FILE"
+          else
+            printf '%s\n' 'SYNDICATE_MACHINE_ENABLED=false' >> "$ENV_FILE"
+          fi
+          if grep -q '^BOARD_PICK_WRITER_ENABLED=' "$ENV_FILE"; then
+            sed -i 's/^BOARD_PICK_WRITER_ENABLED=.*/BOARD_PICK_WRITER_ENABLED=false/' "$ENV_FILE"
+          else
+            printf '%s\n' 'BOARD_PICK_WRITER_ENABLED=false' >> "$ENV_FILE"
+          fi
+
+          SYNDICATE_COUNT="$(grep -c '^SYNDICATE_MACHINE_ENABLED=' "$ENV_FILE" || true)"
+          BOARD_COUNT="$(grep -c '^BOARD_PICK_WRITER_ENABLED=' "$ENV_FILE" || true)"
+          if [ "$SYNDICATE_COUNT" -ne 1 ]; then
+            printf 'ERROR: SYNDICATE_MACHINE_ENABLED occurs %s times; expected exactly once. API was not restarted.\n' "$SYNDICATE_COUNT"
+            exit 1
+          fi
+          if [ "$BOARD_COUNT" -ne 1 ]; then
+            printf 'ERROR: BOARD_PICK_WRITER_ENABLED occurs %s times; expected exactly once. API was not restarted.\n' "$BOARD_COUNT"
+            exit 1
+          fi
+          grep -qx 'SYNDICATE_MACHINE_ENABLED=false' "$ENV_FILE" || {
+            echo 'ERROR: SYNDICATE_MACHINE_ENABLED did not normalize to false. API was not restarted.'
+            exit 1
+          }
+          grep -qx 'BOARD_PICK_WRITER_ENABLED=false' "$ENV_FILE" || {
+            echo 'ERROR: BOARD_PICK_WRITER_ENABLED did not normalize to false. API was not restarted.'
+            exit 1
+          }
+
+          # 'attempted' until compose returns 0, so a failed restart is reported
+          # as such instead of claiming the API was recreated.
+          RESTART_DONE=attempted
+          docker compose up -d --no-deps --force-recreate api </dev/null
+          RESTART_DONE=true
+
+          HEALTH_OK=false
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 10 http://localhost:4000/health >/dev/null </dev/null; then
+              HEALTH_OK=true
+              break
+            fi
+            sleep 5
+          done
+
+          echo '=== POST-STATE (REDACTED) ==='
+          SYNDICATE_POST="$(docker compose exec -T api printenv SYNDICATE_MACHINE_ENABLED 2>/dev/null </dev/null || true)"
+          BOARD_POST="$(docker compose exec -T api printenv BOARD_PICK_WRITER_ENABLED 2>/dev/null </dev/null || true)"
+          printf 'SYNDICATE_MACHINE_ENABLED=%s\n' "${SYNDICATE_POST:-<unset>}"
+          printf 'BOARD_PICK_WRITER_ENABLED=%s\n' "${BOARD_POST:-<unset>}"
+          docker compose ps api </dev/null
+          # Health is checked first: if the API never came up, printenv returns
+          # nothing and a flag-mismatch error would misdescribe the failure.
+          if [ "$HEALTH_OK" != 'true' ]; then
+            echo 'ERROR: API health probe did not pass after the API-only restart.'
+            exit 1
+          fi
+          if [ "$SYNDICATE_POST" != 'false' ] || [ "$BOARD_POST" != 'false' ]; then
+            echo 'ERROR: API post-state does not contain both containment flags set to false.'
+            exit 1
+          fi
+          echo 'API_HEALTH=passed'
+
+          echo '=== REDACTED CONTAINMENT EVIDENCE ==='
+          echo 'issue=UTV2-1612'
+          echo 'confirmation_binding=exact operator string required by this workflow'
+          echo 'service=api'
+          echo 'SYNDICATE_MACHINE_ENABLED=false'
+          echo 'BOARD_PICK_WRITER_ENABLED=false'
+          echo 'image=reused unchanged from .unit-talk-release (value shown in pre-state above)'
+          echo 'restart=docker compose up -d --no-deps --force-recreate api'
+          echo 'health=passed'
+          echo 'deployment_secrets=[REDACTED]'
+
+          echo '=== CONTAINMENT IS NOT DURABLE — FOLLOW-UP REQUIRED ==='
+          echo 'deploy.yml rewrites .env.production wholesale on every deploy.'
+          echo 'It restores SYNDICATE_MACHINE_ENABLED from the repository secret and'
+          echo 'hard-fails unless that secret is exactly "true", and it does not carry'
+          echo 'BOARD_PICK_WRITER_ENABLED at all, so a deploy would erase that line.'
+          echo 'Any subsequent deploy therefore reverts this containment.'
+          echo 'Set the SYNDICATE_MACHINE_ENABLED repository secret to false and land the'
+          echo 'durable parked-deploy contract before the next deploy is run.'
+
+          echo '=== ROLLBACK RECEIPT ==='
+          printf 'backup_file=%s\n' "$BACKUP_FILE"
+          printf 'rollback_working_directory=%s\n' '[REDACTED deployment path]'
+          printf 'rollback_command=cp -- %q .env.production && UNIT_TALK_IMAGE_TAG="$(tr -d '"'"'\\r\\n'"'"' < .unit-talk-release)" docker compose up -d --no-deps --force-recreate api </dev/null\n' "$BACKUP_FILE"
+
+          trap - EXIT
+          echo 'CONTAINMENT_COMPLETE=UTV2-1612'
+          REMOTE_SCRIPT
+
+          if ! grep -qx 'CONTAINMENT_COMPLETE=UTV2-1612' "$TRANSCRIPT"; then
+            echo 'ERROR: the remote containment script did not run to completion.'
+            echo 'The completion sentinel is absent, so the remote shell exited early'
+            echo '(most likely a command consumed the script on stdin). Treat this run'
+            echo 'as NO CONTAINMENT PERFORMED and inspect the transcript above.'
+            exit 1
+          fi
+          echo 'Completion sentinel verified: the remote containment script ran to the end.'
