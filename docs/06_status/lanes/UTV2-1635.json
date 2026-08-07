@@ -24,10 +24,10 @@
     "docs/06_status/proof/UTV2-1635/verification.md",
     "docs/06_status/proof/UTV2-1635/diff-summary.md"
   ],
-  "status": "reopened",
+  "status": "superseded",
   "started_at": "2026-07-31T12:39:06.080Z",
   "heartbeat_at": "2026-07-31T21:30:29.572Z",
-  "closed_at": null,
+  "closed_at": "2026-08-07T00:45:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1635-resolve-c1-proof-bundles.result.json",
   "created_by": "claude",
@@ -49,6 +49,11 @@
         "post-merge closeout gaps: L2/P3/C4/P13/P14 truth-check failures require a follow-up commit on a new branch"
       ],
       "detected_by": "claude"
+    },
+    {
+      "at": "2026-08-07T00:45:00.000Z",
+      "reason": "PM 2026-08-07: main is authoritative for UTV2-1635. The lane truth-closed on main as `done` (closed_at 2026-07-31T21:34:04.245Z, bound to PR #1337). PR #1344 is a superseded alternative implementation and will not merge.",
+      "by": "pm"
     }
   ],
   "execution_location": {
