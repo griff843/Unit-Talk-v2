@@ -1,0 +1,31 @@
+{
+  "schema": "ci-db-proof-receipt/v2",
+  "repository": "griff843/Unit-Talk-v2",
+  "workflow": "CI",
+  "workflow_ref": "griff843/Unit-Talk-v2/.github/workflows/ci.yml@refs/pull/1343/merge",
+  "github_run_id": "30680085299",
+  "github_run_attempt": "1",
+  "github_job": "staging-db-proof",
+  "github_sha": "b36840e452333cb605e1d0c61f3aec547e50be3d",
+  "github_ref_name": "1343/merge",
+  "command": "pnpm test:db",
+  "started_at": "2026-08-01T02:29:16.332Z",
+  "finished_at": "2026-08-01T02:30:01.971Z",
+  "exit_code": 0,
+  "observed_project_ref": "xskgrzbteyqdufktjrjx",
+  "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+  "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+  "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+  "tap": {
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0
+  },
+  "captured_output": "\n> @unit-talk/v2@0.1.0 test:db /home/runner/work/Unit-Talk-v2/Unit-Talk-v2\n> pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts\n\n\n> @unit-talk/v2@0.1.0 ci:assert-staging /home/runner/work/Unit-Talk-v2/Unit-Talk-v2\n> tsx scripts/ci/assert-staging-target.ts\n\n[assert-staging] host=xskgrzbteyqdufktjrjx.supabase.co ref=xskgrzbteyqdufktjrjx expected=xskgrzbteyqdufktjrjx\n[assert-staging] OK: target is the approved staging project xskgrzbteyqdufktjrjx\nTAP version 13\n# Subtest: database repository bundle persists a submission and settlement when Supabase is configured\nok 1 - database repository bundle persists a submission and settlement when Supabase is configured\n  ---\n  duration_ms: 7328.863987\n  type: 'test'\n  ...\n# Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\nok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row\n  ---\n  duration_ms: 6962.76841\n  type: 'test'\n  ...\n# Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\nok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes\n  ---\n  duration_ms: 7208.004726\n  type: 'test'\n  ...\n# Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\nok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row\n  ---\n  duration_ms: 6925.363968\n  type: 'test'\n  ...\n# Subtest: UTV2-883: no duplicate participants for the same external_id and sport\nok 5 - UTV2-883: no duplicate participants for the same external_id and sport\n  ---\n  duration_ms: 63.675111\n  type: 'test'\n  ...\n# Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows\nok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows\n  ---\n  duration_ms: 7461.497321\n  type: 'test'\n  ...\n# Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated\nok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated\n  ---\n  duration_ms: 7949.873377\n  type: 'test'\n  ...\n1..7\n# tests 7\n# suites 0\n# pass 7\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 44580.023432\n",
+  "output_sha256": "8155284a0f5d5fb1907c7f898f82a48de5de532f58139ea6f6b4dd8aaf567780",
+  "repo_migration_head": "20260731000000_utv2_1399_fixture_excluding_reporting_views.sql",
+  "fixture_run_id": "utv2-1630-30680085299-1",
+  "cleanup_result": null,
+  "receipt_sha256": "e94648d8fac077a48602b8f1e2f25463097f688f87d60d92f8f6823658fc2d1a"
+}

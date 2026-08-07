@@ -51,6 +51,166 @@ function workflowEvent(name: string, eventName: string): WorkflowDocument {
   return objectField(objectField(readWorkflowYaml(name), 'on'), eventName);
 }
 
+interface MockCheckRun {
+  id: number;
+  name: string;
+  head_sha: string;
+  external_id: string;
+  app: { slug: string };
+  status: string;
+  conclusion: string | null;
+  output?: { title?: string; summary?: string };
+}
+
+interface MockComment {
+  body: string;
+  created_at: string;
+  user: { login: string; type: string };
+}
+
+async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: MockCheckRun[] = []) {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const gate = objectField(objectField(workflow, 'jobs'), 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+  const evalStep = steps.find(
+    (step) => typeof step.with === 'object' && step.with && typeof (step.with as Record<string, unknown>).script === 'string',
+  );
+  assert.ok(evalStep, 'merge-gate.yml must have an executable github-script step');
+
+  const script = stringField(objectField(evalStep, 'with'), 'script');
+
+  type AsyncScript = (...args: unknown[]) => Promise<void>;
+  type AsyncFunctionConstructor = new (...args: string[]) => AsyncScript;
+  const AsyncFunction = Object.getPrototypeOf(async () => undefined).constructor as AsyncFunctionConstructor;
+  const evaluate = new AsyncFunction('github', 'context', 'core', 'require', script);
+  const verdictModule = await import('./merge-gate-verdict.cjs');
+
+  const prNumber = 1585;
+  const headSha = '1585158515851585158515851585158515851585';
+  const baseSha = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const pr = {
+    number: prNumber,
+    head: { sha: headSha, ref: 'codex/utv2-1585-canonical-check' },
+    base: { sha: baseSha },
+    title: 'feat(ops): UTV2-1585 canonical check identity',
+  };
+  const labels = [`tier:${tier}`];
+  const comments: MockComment[] = [];
+  const reviews: Array<{ state: string }> = [];
+  const postedGateComments: string[] = [];
+  const checks = initialChecks.map((check) => ({ ...check, app: { ...check.app } }));
+  let createCount = 0;
+  let nextCheckId = Math.max(0, ...checks.map((check) => check.id)) + 1;
+
+  const listForRef = async (params: Record<string, unknown>) => {
+    assert.strictEqual(params.ref, headSha);
+    assert.strictEqual(params.check_name, 'Merge Gate');
+    assert.strictEqual(params.filter, 'all');
+    assert.strictEqual(params.per_page, 100);
+    return { data: { check_runs: checks } };
+  };
+
+  const github = {
+    paginate: async (
+      endpoint: (params: Record<string, unknown>) => Promise<{ data: { check_runs: MockCheckRun[] } }>,
+      params: Record<string, unknown>,
+    ) => (await endpoint(params)).data.check_runs,
+    rest: {
+      checks: {
+        listForRef,
+        create: async (params: Record<string, unknown>) => {
+          createCount += 1;
+          const check: MockCheckRun = {
+            id: nextCheckId++,
+            name: String(params.name),
+            head_sha: String(params.head_sha),
+            external_id: String(params.external_id),
+            app: { slug: 'github-actions' },
+            status: String(params.status),
+            conclusion: null,
+          };
+          checks.push(check);
+          return { data: check };
+        },
+        update: async (params: Record<string, unknown>) => {
+          const check = checks.find((candidate) => candidate.id === params.check_run_id);
+          assert.ok(check, `check ${String(params.check_run_id)} must exist before update`);
+          if (typeof params.status === 'string') check.status = params.status;
+          if (typeof params.conclusion === 'string') check.conclusion = params.conclusion;
+          if (typeof params.external_id === 'string') check.external_id = params.external_id;
+          if (params.status === 'in_progress') check.conclusion = null;
+          if (params.output && typeof params.output === 'object') {
+            check.output = params.output as MockCheckRun['output'];
+          }
+          return { data: check };
+        },
+      },
+      issues: {
+        get: async () => ({ data: { labels: labels.map((name) => ({ name })) } }),
+        addLabels: async (params: Record<string, unknown>) => {
+          for (const label of params.labels as string[]) {
+            if (!labels.includes(label)) labels.push(label);
+          }
+          return { data: labels.map((name) => ({ name })) };
+        },
+        listComments: async () => ({ data: comments }),
+        createComment: async (params: Record<string, unknown>) => {
+          postedGateComments.push(String(params.body));
+          return { data: { id: postedGateComments.length } };
+        },
+      },
+      pulls: {
+        get: async () => ({ data: pr }),
+        listReviews: async () => ({ data: reviews }),
+      },
+      repos: {
+        getContent: async () => ({
+          data: {
+            content: Buffer.from(JSON.stringify({ issue_id: 'UTV2-1585', tier })).toString('base64'),
+            encoding: 'base64',
+          },
+        }),
+      },
+    },
+  };
+
+  async function run(eventName: 'pull_request' | 'pull_request_review' | 'issue_comment') {
+    const payload =
+      eventName === 'issue_comment'
+        ? { issue: { number: prNumber }, comment: { body: 'PM_VERDICT:' } }
+        : { pull_request: pr };
+    let evaluatorFailure: string | null = null;
+    const core = {
+      setFailed: (message: string) => {
+        evaluatorFailure = message;
+      },
+    };
+    const requireModule = (specifier: unknown) => {
+      assert.strictEqual(specifier, './scripts/ops/merge-gate-verdict.cjs');
+      return verdictModule;
+    };
+
+    await evaluate(github, { eventName, payload, repo: { owner: 'unit-talk', repo: 'v2' } }, core, requireModule);
+    assert.strictEqual(
+      evaluatorFailure,
+      null,
+      'policy denial must fail the canonical check without failing the Merge Gate Evaluator job',
+    );
+  }
+
+  return {
+    checks,
+    comments,
+    reviews,
+    labels,
+    postedGateComments,
+    prNumber,
+    headSha,
+    run,
+    createCount: () => createCount,
+  };
+}
+
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
   const { lintMigrationContent } = await import('../lint-migrations.mjs');
 
@@ -318,6 +478,154 @@ test('UTV2-1551: merge gate is structurally wired for PM verdict comments and ev
   );
 });
 
+test('UTV2-1585: only the custom exact-head check owns the required Merge Gate identity', () => {
+  const workflow = readWorkflowYaml('merge-gate.yml');
+  const pullRequestReview = workflowEvent('merge-gate.yml', 'pull_request_review');
+  const gate = objectField(objectField(workflow, 'jobs'), 'gate');
+  const concurrency = objectField(gate, 'concurrency');
+
+  assert.strictEqual(
+    gate.name,
+    'Merge Gate Evaluator',
+    'the native Actions job check must not collide with the required custom Merge Gate check',
+  );
+  assert.deepStrictEqual(stringArrayField(pullRequestReview, 'types'), ['submitted', 'edited', 'dismissed']);
+  assert.match(
+    stringField(concurrency, 'group'),
+    /inputs\.pull_number/,
+    'workflow_dispatch must serialize on the same per-PR concurrency identity as webhook events',
+  );
+  assert.strictEqual(
+    concurrency['cancel-in-progress'],
+    false,
+    'canonical check evaluations must queue instead of cancelling a run that already marked the check in_progress',
+  );
+});
+
+test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
+  const harness = await createMergeGateHarness('T1');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.createCount(), 1);
+  assert.strictEqual(harness.checks.length, 1);
+  const canonicalId = harness.checks[0].id;
+  assert.strictEqual(harness.checks[0].external_id, `merge-gate:${harness.prNumber}:${harness.headSha}`);
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.createCount(), 1, 'a pre-verdict review event must not create a second check');
+  assert.strictEqual(harness.checks.length, 1);
+  assert.strictEqual(harness.checks[0].id, canonicalId);
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.labels.push('t1-approved');
+  harness.comments.push({
+    body: [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: UTV2-1585',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-07-24T15:30:00Z',
+    user: { login: 'griff843', type: 'User' },
+  });
+
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.createCount(), 1, 'the exact-head verdict event must reuse the existing check');
+  assert.strictEqual(harness.checks.length, 1);
+  assert.strictEqual(harness.checks[0].id, canonicalId);
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+});
+
+test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical check', async () => {
+  const harness = await createMergeGateHarness('T2');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.reviews.push({ state: 'APPROVED' });
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+
+  harness.reviews.splice(0, harness.reviews.length, { state: 'DISMISSED' });
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+  assert.strictEqual(harness.createCount(), 1);
+  assert.strictEqual(harness.checks.length, 1);
+});
+
+test('UTV2-1585: same-identity duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
+  const headSha = '1585158515851585158515851585158515851585';
+  const harnessPrNumber = 1585;
+  const harness = await createMergeGateHarness('T3', [
+    {
+      id: 4,
+      name: 'Merge Gate',
+      head_sha: headSha,
+      external_id: `merge-gate:${harnessPrNumber}:${headSha}`,
+      app: { slug: 'github-actions' },
+      status: 'completed',
+      conclusion: 'failure',
+    },
+    {
+      id: 9,
+      name: 'Merge Gate',
+      head_sha: headSha,
+      external_id: `merge-gate:${harnessPrNumber}:${headSha}`,
+      app: { slug: 'github-actions' },
+      status: 'completed',
+      conclusion: 'failure',
+    },
+  ]);
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.createCount(), 0, 'an existing exact-head check must be reused');
+  assert.strictEqual(harness.checks.find((check) => check.id === 9)?.conclusion, 'success');
+  assert.strictEqual(harness.checks.find((check) => check.id === 4)?.conclusion, 'neutral');
+  assert.ok(
+    harness.checks.every((check) => check.conclusion !== 'failure'),
+    'no older same-name failure may remain capable of blocking the unchanged head',
+  );
+});
+
+// UTV2-1585 (adversarial review finding): true pre-fix duplicates -- the ones
+// actually left on already-polluted heads like PR #1304's, created by the
+// former create-on-every-event behavior -- never had a canonical (or any
+// matching) external_id set. Matching on external_id alone would let those
+// survive untouched forever. Adoption must work by name + exact head SHA +
+// app alone, regardless of external_id.
+test('UTV2-1585: pre-fix legacy duplicates without a canonical external_id are adopted and neutralized, not left blocking', async () => {
+  const headSha = '1585158515851585158515851585158515851585';
+  const harnessPrNumber = 1585;
+  // Mirrors the real state observed on PR #1304's head after the former
+  // create-on-every-event behavior: six same-head "Merge Gate" checks, none
+  // carrying the canonical external_id format, four of them failure.
+  const harness = await createMergeGateHarness('T3', [
+    { id: 100, name: 'Merge Gate', head_sha: headSha, external_id: '3dd4c479-23c0-58a9-94de-3da9c130d6a9', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 101, name: 'Merge Gate', head_sha: headSha, external_id: 'ea2023ef-0e17-54d1-a5ec-18c7a0431972', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 102, name: 'Merge Gate', head_sha: headSha, external_id: '066178b1-5a03-5e40-a62d-aae8aa550458', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 103, name: 'Merge Gate', head_sha: headSha, external_id: 'ee820f51-4b9a-58ba-b049-ba1e6ee02988', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
+    { id: 104, name: 'Merge Gate', head_sha: headSha, external_id: 'af7bb44a-f42d-58a9-b23f-66a41ffb4dd8', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
+    { id: 105, name: 'Merge Gate', head_sha: headSha, external_id: '', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' },
+  ]);
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.createCount(), 0, 'a same-head legacy check must be adopted, not duplicated with a 7th check');
+  assert.strictEqual(harness.checks.length, 6, 'no new check-run is created when six legacy same-head checks already exist');
+  const canonical = harness.checks.find((check) => check.id === 105);
+  assert.strictEqual(canonical?.external_id, `merge-gate:${harnessPrNumber}:${headSha}`, 'the adopted legacy check (highest id among non-canonical matches) must be bound to the canonical external_id going forward');
+  for (const legacyId of [100, 101, 102, 103, 104]) {
+    assert.strictEqual(harness.checks.find((check) => check.id === legacyId)?.conclusion, 'neutral', `legacy check ${legacyId} must be neutralized, not left as failure`);
+  }
+  assert.ok(
+    harness.checks.every((check) => check.conclusion !== 'failure'),
+    'no pre-fix legacy failure may remain capable of blocking an already-polluted head once this evaluator runs',
+  );
+});
+
 test('P1 fix (UTV2-1551 follow-up): tier-label-check.yml never references SYNC_BOT_TOKEN anywhere', () => {
   // tier-label-check.yml runs on `pull_request`, which means GitHub Actions
   // executes it using the PR's OWN copy of this workflow file -- not
@@ -525,6 +833,91 @@ test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-contr
     "${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}",
     'Checkout must pin ref to the PR base SHA on pull_request so a PR can never make the privileged job execute its own modified check-name-resolution script',
   );
+});
+
+test('UTV2-1573: executor-result-validator.yml paginates check-runs instead of a single unpaginated call', () => {
+  const workflow = readWorkflow('executor-result-validator.yml');
+
+  assert.match(
+    workflow,
+    /await github\.paginate\(github\.rest\.checks\.listForRef,\s*\{\s*\n\s*owner, repo, ref: headSha, per_page: 100/,
+    'executor-result-validator.yml must fetch check-runs via github.paginate with per_page: 100, not a single-page checks.listForRef call',
+  );
+  assert.doesNotMatch(
+    workflow,
+    /const \{ data: checkRuns \} = await github\.rest\.checks\.listForRef/,
+    'executor-result-validator.yml must not still contain the old unpaginated checks.listForRef call',
+  );
+  assert.match(
+    workflow,
+    /require\('\.\/scripts\/ops\/executor-result-check-selection\.cjs'\)/,
+    'executor-result-validator.yml must select the verify check-run via the tested module, not inline .find() logic',
+  );
+  assert.doesNotMatch(
+    workflow,
+    /checkRuns\.check_runs\.find/,
+    'executor-result-validator.yml must not still contain the old inline check-run selection',
+  );
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun finds a valid run past the first page boundaries', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  const noise = (count: number, offset = 0) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: offset + i,
+      name: 'some-other-check',
+      app: { slug: 'github-actions' },
+      status: 'completed',
+      conclusion: 'success',
+    }));
+
+  const verifyRun = { id: 9999, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+
+  // Past the API's 30-per-page default.
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([...noise(30), verifyRun]), verifyRun);
+  // Past a naive 100-item cap -- the fix must not silently stop paginating at 100.
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([...noise(150), verifyRun]), verifyRun);
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun ignores a same-named check from a different app', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  const foreignVerify = { id: 5, name: 'verify', app: { slug: 'some-third-party-app' }, status: 'completed', conclusion: 'success' };
+  const realVerify = { id: 3, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([foreignVerify, realVerify]), realVerify);
+  assert.strictEqual(selectLatestVerifyCheckRun([foreignVerify]), null);
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun picks the newest of duplicate github-actions verify runs', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  const stale = { id: 100, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' };
+  const rerun = { id: 200, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+
+  // Newest (highest id) governs regardless of insertion order.
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([rerun, stale]), rerun);
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([stale, rerun]), rerun);
+});
+
+test('UTV2-1573: selectLatestVerifyCheckRun fails closed -- missing, incomplete, or failed latest run is never silently bypassed', async () => {
+  const { selectLatestVerifyCheckRun } = await import('./executor-result-check-selection.cjs');
+
+  // Missing entirely.
+  assert.strictEqual(selectLatestVerifyCheckRun([]), null);
+  assert.strictEqual(selectLatestVerifyCheckRun([{ id: 1, name: 'lint', app: { slug: 'github-actions' } }]), null);
+
+  // The newest matching run is incomplete -- callers must see THIS run (and
+  // report "not completed"), not an older completed one.
+  const olderSuccess = { id: 1, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'success' };
+  const newerInProgress = { id: 2, name: 'verify', app: { slug: 'github-actions' }, status: 'in_progress', conclusion: null };
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([olderSuccess, newerInProgress]), newerInProgress);
+
+  // The newest matching run failed -- callers must see THIS run (and report
+  // the failure), not fall back to an older success.
+  const newerFailed = { id: 3, name: 'verify', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' };
+  assert.deepStrictEqual(selectLatestVerifyCheckRun([olderSuccess, newerFailed]), newerFailed);
 });
 
 test('codex return review extracts issue IDs without sed delimiter traps', () => {
@@ -793,5 +1186,453 @@ test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes con
     bootstrapLike,
     undefined,
     'merge-gate.yml must not carry a PR-head bootstrap-recovery step for merge-gate-verdict.cjs; main always has the trusted file post-UTV2-1554',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1632 — the DB Health Tripwire had never executed a single check.
+//
+// The defect had two independent halves, and a fix that closed only one would
+// have looked identical from the outside:
+//
+//   1. `run: tsx scripts/ops/db-health-tripwire.ts` invoked a workspace binary
+//      by bare name, so the step exited 127 before Node started.
+//   2. `import postgres from 'postgres'` named a package with no manifest entry
+//      and no lockfile entry, so fixing (1) alone would have exited 1 on
+//      MODULE_NOT_FOUND — still zero checks executed.
+//
+// Both halves shared one root property: nothing distinguished "the monitor is
+// broken" from "the monitor found something". The tests below hold the three
+// guarantees that replace that ambiguity — the invocation is linted repo-wide,
+// execution is proved from a receipt rather than from an exit code, and the
+// check logic is shown to compare a measured value against a threshold.
+// ---------------------------------------------------------------------------
+
+import {
+  collectWorkspaceBinaries,
+  leadingCommandWords,
+  runGuard as runBareBinaryGuard,
+  scanDocument as scanWorkflowDocument,
+} from '../ci/workflow-bare-binary-guard.js';
+import {
+  RECEIPT_SCHEMA,
+  countChecks,
+  deriveOutcome,
+  evaluateAutovacuumRow,
+  evaluateSizeRow,
+  evaluateStatementTimeoutRate,
+  evaluateToastRow,
+  gateReceipt,
+  notRunCheck,
+  resolveThresholds,
+  type CheckOutcome,
+  type SizeRow,
+  type TripwireReceipt,
+  type VacuumRow,
+} from './db-health-checks.js';
+
+const MB = 1024 * 1024;
+
+function sizeRow(relname: string, megabytes: number): SizeRow {
+  const bytes = Math.round(megabytes * MB);
+  return {
+    relname,
+    table_size: `${megabytes} MB`,
+    total_size: `${megabytes} MB`,
+    total_bytes: String(bytes),
+  };
+}
+
+// --- The invocation lint -----------------------------------------------------
+
+test('UTV2-1632: no workflow invokes a workspace binary by bare name', () => {
+  const violations = runBareBinaryGuard();
+  assert.deepStrictEqual(
+    violations,
+    [],
+    `bare workspace-binary invocation(s) found — these exit 127 on the runner:\n${violations
+      .map((v) => `  ${v.file} → ${v.job} → ${v.step}: ${v.command}`)
+      .join('\n')}`,
+  );
+});
+
+test('UTV2-1632: the bare-binary guard catches the exact shape that shipped', () => {
+  const binaries = collectWorkspaceBinaries();
+  assert.ok(binaries.has('tsx'), 'tsx is a workspace devDependency and must be in the candidate set');
+  assert.ok(binaries.has('tsc'), 'typescript provides tsc under a different name');
+  assert.ok(
+    !binaries.has('supabase') && !binaries.has('psql') && !binaries.has('gh'),
+    'binaries installed by a setup action or by apt must never be flagged',
+  );
+
+  const offending = `
+name: regression
+jobs:
+  j:
+    steps:
+      - name: Run DB health checks
+        run: tsx scripts/ops/db-health-tripwire.ts
+`;
+  const found = scanWorkflowDocument('regression.yml', offending, binaries);
+  assert.strictEqual(found.length, 1, 'the pre-UTV2-1632 invocation must be reported');
+  assert.strictEqual(found[0]?.binary, 'tsx');
+
+  const fixed = offending.replace('run: tsx', 'run: pnpm exec tsx');
+  assert.deepStrictEqual(
+    scanWorkflowDocument('regression.yml', fixed, binaries),
+    [],
+    'the pnpm exec form must be accepted',
+  );
+});
+
+test('UTV2-1632: the guard reads through shell noise without inventing findings', () => {
+  // A command substitution introduces a new command; the assignment in front of
+  // it is not the command. Getting this wrong reports every `X=$(pnpm exec …)`
+  // in the repository as a violation, which would make the guard useless.
+  assert.deepStrictEqual(leadingCommandWords('NAME=$(pnpm exec tsx a.ts)'), ['pnpm']);
+  assert.deepStrictEqual(leadingCommandWords('OUT=$(tsx a.ts)'), ['tsx']);
+  assert.deepStrictEqual(leadingCommandWords('CI=true pnpm install'), ['pnpm']);
+  assert.deepStrictEqual(leadingCommandWords('pnpm exec tsx \\\n  a.ts'), ['pnpm']);
+  assert.deepStrictEqual(leadingCommandWords('# comment only'), []);
+  assert.deepStrictEqual(leadingCommandWords('sudo apt-get install -y postgresql-client'), [
+    'apt-get',
+  ]);
+});
+
+// --- The workflow contract ---------------------------------------------------
+
+test('UTV2-1632: the tripwire workflow runs through pnpm exec and proves execution', () => {
+  const wf = readWorkflowYaml('db-health-tripwire.yml');
+  const job = objectField(objectField(wf, 'jobs'), 'db-health-check');
+  const steps = job['steps'] as Array<Record<string, unknown>>;
+  assert.ok(Array.isArray(steps), 'db-health-check must declare steps');
+
+  const byName = (fragment: string): Record<string, unknown> => {
+    const step = steps.find((s) => String(s['name'] ?? '').includes(fragment));
+    assert.ok(step, `expected a step named like "${fragment}"`);
+    return step as Record<string, unknown>;
+  };
+
+  const run = byName('Run DB health checks');
+  assert.match(String(run['run']), /pnpm exec tsx scripts\/ops\/db-health-tripwire\.ts/);
+  assert.match(String(run['run']), /--receipt/, 'the run must name where the receipt is written');
+
+  // Fail-closed: the execution gate must run even when the producer failed, so
+  // a receipt that was never written turns the job red instead of being skipped.
+  const gate = byName('Prove the checks executed');
+  assert.match(String(gate['run']), /--assert-executed/);
+  assert.strictEqual(gate['if'], 'always()', 'the execution gate must not be skippable');
+
+  // The three outcomes must be reported by three different steps, so the name
+  // of the failing step says which one happened.
+  const verdict = byName('Report DB health verdict');
+  assert.match(String(verdict['run']), /--assert-healthy/);
+  assert.ok(
+    steps.indexOf(run) < steps.indexOf(gate) && steps.indexOf(gate) < steps.indexOf(verdict),
+    'harness → execution proof → health verdict must run in that order',
+  );
+
+  assert.strictEqual(
+    objectField(wf, 'permissions')['contents'],
+    'read',
+    'a read-only monitor must hold read-only workflow permissions',
+  );
+
+  const text = readWorkflow('db-health-tripwire.yml');
+  assert.doesNotMatch(text, /echo[^\n]*secrets\./i, 'no step may echo a secret');
+  assert.doesNotMatch(
+    text,
+    /\b(INSERT|UPDATE|DELETE|TRUNCATE|DROP|ALTER)\b/i,
+    'the tripwire workflow must contain no mutating SQL verb',
+  );
+});
+
+// --- Threshold resolution ----------------------------------------------------
+
+test('UTV2-1632: thresholds record where their value came from', () => {
+  const defaults = resolveThresholds({});
+  assert.strictEqual(defaults['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.value, 500);
+  assert.strictEqual(defaults['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.source, 'default');
+
+  const fromEnv = resolveThresholds({ SYSTEM_RUNS_SIZE_THRESHOLD_MB: '750' });
+  assert.strictEqual(fromEnv['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.value, 750);
+  assert.strictEqual(fromEnv['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.source, 'env');
+
+  const overridden = resolveThresholds({
+    SYSTEM_RUNS_SIZE_THRESHOLD_MB: '750',
+    TRIPWIRE_THRESHOLD_OVERRIDES: '{"SYSTEM_RUNS_SIZE_THRESHOLD_MB":"1"}',
+  });
+  assert.strictEqual(overridden['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.value, 1);
+  assert.strictEqual(overridden['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.source, 'dispatch_override');
+});
+
+test('UTV2-1632: a threshold override may not reach anything but a threshold', () => {
+  // A dispatch input that could name an arbitrary key would be a way to steer
+  // the job's environment from the outside. Unknown keys fail closed, and so
+  // does a value that silently would have fallen back to the default.
+  assert.throws(
+    () => resolveThresholds({ TRIPWIRE_THRESHOLD_OVERRIDES: '{"SUPABASE_DB_URL":"postgres://x"}' }),
+    /unknown threshold key/i,
+  );
+  assert.throws(
+    () => resolveThresholds({ TRIPWIRE_THRESHOLD_OVERRIDES: 'not json' }),
+    /not valid JSON/i,
+  );
+  assert.throws(
+    () => resolveThresholds({ TRIPWIRE_THRESHOLD_OVERRIDES: '{"AUTOVACUUM_STALENESS_HOURS":"nope"}' }),
+    /not a finite number/i,
+  );
+});
+
+// --- The check logic actually compares a value to a threshold ---------------
+
+test('UTV2-1632: table_size evaluates the measured value against the threshold', () => {
+  const thresholds = resolveThresholds({ SYSTEM_RUNS_SIZE_THRESHOLD_MB: '500' });
+
+  const healthy = evaluateSizeRow(sizeRow('system_runs', 120), thresholds);
+  assert.strictEqual(healthy.status, 'pass');
+  assert.strictEqual(healthy.measured.value, 120);
+  assert.strictEqual(healthy.threshold.value, 500);
+
+  const over = evaluateSizeRow(sizeRow('system_runs', 600), thresholds);
+  assert.strictEqual(over.status, 'tripped');
+  assert.strictEqual(over.severity, 'warn');
+
+  const wayOver = evaluateSizeRow(sizeRow('system_runs', 1200), thresholds);
+  assert.strictEqual(wayOver.severity, 'critical', 'more than 2x the threshold is critical');
+
+  // The boundary is strictly greater-than, so a table exactly at the threshold
+  // does not alert.
+  assert.strictEqual(evaluateSizeRow(sizeRow('system_runs', 500), thresholds).status, 'pass');
+});
+
+test('UTV2-1632: lowering the threshold trips a table that otherwise passes', () => {
+  // This is the unit-level twin of the live negative demonstration: the same
+  // measured value produces a different verdict when only the threshold moves,
+  // which is only possible if the comparison is actually performed.
+  const row = sizeRow('system_runs', 120);
+  assert.strictEqual(evaluateSizeRow(row, resolveThresholds({})).status, 'pass');
+
+  const demo = resolveThresholds({
+    TRIPWIRE_THRESHOLD_OVERRIDES: '{"SYSTEM_RUNS_SIZE_THRESHOLD_MB":"1"}',
+  });
+  const tripped = evaluateSizeRow(row, demo);
+  assert.strictEqual(tripped.status, 'tripped');
+  assert.strictEqual(tripped.threshold.source, 'dispatch_override');
+  assert.strictEqual(tripped.measured.value, 120);
+});
+
+test('UTV2-1632: autovacuum, TOAST and timeout-rate checks each evaluate', () => {
+  const thresholds = resolveThresholds({});
+  const now = new Date('2026-07-31T00:00:00.000Z');
+  const fresh = new Date('2026-07-30T23:00:00.000Z');
+  const stale = new Date('2026-07-01T00:00:00.000Z');
+
+  const base: VacuumRow = {
+    relname: 'system_runs',
+    last_vacuum: fresh,
+    last_autovacuum: fresh,
+    last_analyze: fresh,
+    last_autoanalyze: fresh,
+    n_dead_tup: '10',
+    n_live_tup: '1000',
+    dead_tup_pct: '0.99',
+  };
+  assert.strictEqual(evaluateAutovacuumRow(base, thresholds, now).status, 'pass');
+  assert.strictEqual(
+    evaluateAutovacuumRow({ ...base, last_analyze: stale }, thresholds, now).status,
+    'tripped',
+  );
+  assert.strictEqual(
+    evaluateAutovacuumRow({ ...base, last_vacuum: null }, thresholds, now).severity,
+    'critical',
+    'a table that has never been vacuumed is the 2026-06-22 write-path signature',
+  );
+  assert.strictEqual(
+    evaluateAutovacuumRow({ ...base, n_dead_tup: '900', dead_tup_pct: '47.37' }, thresholds, now)
+      .status,
+    'tripped',
+  );
+
+  const toastBase = {
+    relname: 'raw_payloads',
+    heap_size: '10 MB',
+    toast_plus_index_size: '20 MB',
+    total_size: '30 MB',
+  };
+  assert.strictEqual(evaluateToastRow({ ...toastBase, toast_pct: '66.7' }, thresholds).status, 'pass');
+  assert.strictEqual(
+    evaluateToastRow({ ...toastBase, toast_pct: '95.0' }, thresholds).status,
+    'tripped',
+  );
+  assert.strictEqual(
+    evaluateToastRow({ ...toastBase, toast_pct: null }, thresholds).status,
+    'not_run',
+    'an uncomputable ratio is not a pass',
+  );
+
+  const t = (minutes: number): Date => new Date(now.getTime() + minutes * 60_000);
+  assert.strictEqual(
+    evaluateStatementTimeoutRate([t(0), t(10), t(20)], 3, thresholds).status,
+    'pass',
+    '3 in one hour is at the threshold, not over it',
+  );
+  assert.strictEqual(
+    evaluateStatementTimeoutRate([t(0), t(10), t(20), t(30)], 4, thresholds).status,
+    'tripped',
+  );
+  assert.strictEqual(
+    evaluateStatementTimeoutRate([t(0), t(90), t(180), t(270)], 4, thresholds).status,
+    'pass',
+    'four events spread over four hours never exceed the hourly rate',
+  );
+});
+
+// --- Execution proof ---------------------------------------------------------
+
+test('UTV2-1632: a verdict may rest on an observation that has no number', () => {
+  // Caught by the first live production run: `provider_offer_history` has never
+  // been analysed, so `hours since last_analyze` has no value — yet the check
+  // correctly tripped. Requiring a numeric measurement rejected a genuine
+  // finding, so the gate asks whether the check OBSERVED anything, which is the
+  // property that actually distinguishes evaluation from non-evaluation.
+  const thresholds = resolveThresholds({});
+  const now = new Date('2026-07-31T00:00:00.000Z');
+  const neverAnalyzed: VacuumRow = {
+    relname: 'provider_offer_history',
+    last_vacuum: null,
+    last_autovacuum: null,
+    last_analyze: null,
+    last_autoanalyze: null,
+    n_dead_tup: '0',
+    n_live_tup: '0',
+    dead_tup_pct: null,
+  };
+  const outcome = evaluateAutovacuumRow(neverAnalyzed, thresholds, now);
+  assert.strictEqual(outcome.status, 'tripped');
+  assert.strictEqual(outcome.measured.value, null, 'a never-analysed table has no elapsed hours');
+  assert.strictEqual(outcome.measured.observed, true, 'the row was read, so it was observed');
+  assert.match(outcome.detail, /last_analyze=never run/);
+
+  // Not-run rows are the opposite: nothing was read at all.
+  assert.strictEqual(notRunCheck('table_size', 'x', 'unreachable').measured.observed, false);
+});
+
+test('UTV2-1632: a run that evaluated nothing is a harness error, never a pass', () => {
+  assert.strictEqual(deriveOutcome([]), 'harness_error');
+  assert.strictEqual(
+    deriveOutcome([notRunCheck('table_size', 'system_runs', 'unreachable')]),
+    'harness_error',
+    'checks that could not run must not add up to a healthy verdict',
+  );
+
+  const thresholds = resolveThresholds({});
+  const passed = evaluateSizeRow(sizeRow('system_runs', 10), thresholds);
+  const tripped = evaluateSizeRow(sizeRow('raw_payloads', 9000), thresholds);
+  assert.strictEqual(deriveOutcome([passed]), 'checks_passed');
+  assert.strictEqual(deriveOutcome([passed, tripped]), 'checks_tripped');
+});
+
+test('UTV2-1632: the receipt gate is hostile to the receipt it is handed', () => {
+  const thresholds = resolveThresholds({});
+  const checks: CheckOutcome[] = [
+    evaluateSizeRow(sizeRow('system_runs', 10), thresholds),
+    notRunCheck('statement_timeout_rate', null, 'log endpoint unreachable'),
+  ];
+  const receipt: TripwireReceipt = {
+    schema: RECEIPT_SCHEMA,
+    issue: 'UTV2-1632',
+    generated_at: new Date().toISOString(),
+    outcome: 'checks_passed',
+    harness_error: null,
+    run: {
+      workflow: 'DB Health Tripwire',
+      run_id: '123',
+      run_attempt: '1',
+      job: 'db-health-check',
+      sha: 'abc',
+      ref: 'refs/heads/main',
+      event: 'schedule',
+    },
+    target: { kind: 'canonical-production', project_ref: 'zfzdnfwdarxucxtaojxm', host: 'db' },
+    read_only: { mechanism: 'SET TRANSACTION READ ONLY', observed_transaction_read_only: 'on' },
+    thresholds,
+    threshold_override_active: false,
+    counts: countChecks(checks),
+    checks,
+    linear_alert: 'not_applicable',
+  };
+
+  assert.strictEqual(gateReceipt(receipt, {}).verdict, 'PASS');
+
+  // The defect this whole lane exists to prevent.
+  const evaluatedNothing = {
+    ...receipt,
+    outcome: 'checks_passed' as const,
+    checks: [notRunCheck('table_size', 'system_runs', 'unreachable')],
+    counts: countChecks([notRunCheck('table_size', 'system_runs', 'unreachable')]),
+  };
+  const nothing = gateReceipt(evaluatedNothing, {});
+  assert.strictEqual(nothing.verdict, 'FAIL');
+  assert.ok(nothing.reasons.some((r) => /zero executed checks/.test(r)));
+
+  // A verdict must rest on data the check actually read.
+  const unobserved = gateReceipt(
+    {
+      ...receipt,
+      checks: [
+        {
+          ...checks[0],
+          measured: { ...checks[0].measured, observed: false },
+        },
+      ],
+      counts: countChecks([checks[0]]),
+    },
+    {},
+  );
+  assert.strictEqual(unobserved.verdict, 'FAIL');
+  assert.ok(unobserved.reasons.some((r) => /without observing anything/.test(r)));
+
+  // Counts are recomputed, never trusted.
+  const liedCounts = gateReceipt({ ...receipt, counts: { ...receipt.counts, executed: 99 } }, {});
+  assert.strictEqual(liedCounts.verdict, 'FAIL');
+  assert.ok(liedCounts.reasons.some((r) => /do not match counts recomputed/.test(r)));
+
+  // Read-only must be observed, not asserted.
+  const unprovenReadOnly = gateReceipt(
+    { ...receipt, read_only: { mechanism: 'trust me', observed_transaction_read_only: null } },
+    {},
+  );
+  assert.strictEqual(unprovenReadOnly.verdict, 'FAIL');
+  assert.ok(unprovenReadOnly.reasons.some((r) => /transaction_read_only=on/.test(r)));
+
+  // A receipt from another run proves nothing about this one, so a receipt
+  // committed to the repository cannot satisfy the gate.
+  const wrongRun = gateReceipt(receipt, { GITHUB_RUN_ID: '999', GITHUB_RUN_ATTEMPT: '1' });
+  assert.strictEqual(wrongRun.verdict, 'FAIL');
+  assert.ok(wrongRun.reasons.some((r) => /proves nothing about this one/.test(r)));
+
+  // A harness error never passes the execution gate.
+  const broken = gateReceipt(
+    { ...receipt, outcome: 'harness_error', harness_error: 'MODULE_NOT_FOUND: postgres' },
+    {},
+  );
+  assert.strictEqual(broken.verdict, 'FAIL');
+
+  assert.strictEqual(gateReceipt(null, {}).verdict, 'FAIL');
+  assert.strictEqual(gateReceipt({ schema: 'nope' }, {}).verdict, 'FAIL');
+});
+
+test('UTV2-1632: the postgres driver the tripwire imports is a declared dependency', () => {
+  // The original script imported `postgres`, which appeared in no package.json
+  // and no lockfile. A workflow-only fix would have left the import unresolvable
+  // and the checker still dark.
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'),
+  ) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  const declared = { ...manifest.dependencies, ...manifest.devDependencies };
+  assert.ok(
+    typeof declared['postgres'] === 'string',
+    'scripts/ops/db-health-tripwire.ts imports `postgres`; it must be a declared dependency',
   );
 });

@@ -18,6 +18,9 @@ import {
   parseArgs,
   relativeToRoot,
   requireIssueId,
+  TERMINAL_STATUSES,
+  SUCCESS_TERMINAL_STATUSES,
+  type LaneManifestStatus,
 } from './shared.js';
 
 export type LeaseExecutor = 'claude' | 'codex-cli' | 'codex-cloud';
@@ -630,6 +633,64 @@ export function validateActiveLeaseForLane(
     );
   }
   return errors;
+}
+
+/**
+ * Detect resources still held by lanes that have already ended
+ * (UTV2-1619 capability 13).
+ *
+ * WHY THIS EXISTS. Release was tied to a side effect rather than to the lane's
+ * recorded lifecycle transition, so a terminal lane kept its lease until the TTL
+ * happened to expire. Measured 2026-08-05: UTV2-1634 truth-closed at
+ * 2026-08-04T20:03:44Z and its lease was still `active` seventeen hours later,
+ * holding the exact files the next lane needed. The lane's `done` state played
+ * no part in the release; only the clock would have.
+ *
+ * This reports rather than mutates. Detection is not deletion -- a held resource
+ * can be the only extant record of real work (capability 8), so the disposition
+ * is stated per lease and the release itself stays an explicit, recorded act.
+ */
+export interface OrphanedLeaseFinding {
+  issue_id: string;
+  branch: string;
+  lease_status: string;
+  lane_status: string;
+  /** Files the ended lane is still holding. Empty is itself worth reporting. */
+  held_scope: string[];
+  /** True when the lane asserts completion; false for failed/superseded/cancelled. */
+  lane_completed: boolean;
+  reason: string;
+}
+
+/**
+ * @param laneStatusByIssue lifecycle state per issue id, from the lane
+ *   manifests. An issue absent from this map is skipped rather than assumed
+ *   terminal -- an unknown lane state must never justify reclaiming a lease.
+ */
+export function findLeasesHeldByTerminalLanes(
+  laneStatusByIssue: ReadonlyMap<string, LaneManifestStatus>,
+  registryDir = LEASE_REGISTRY_DIR,
+): OrphanedLeaseFinding[] {
+  const findings: OrphanedLeaseFinding[] = [];
+  for (const lease of readAllLeases(registryDir)) {
+    if (lease.status !== 'active') continue;
+    const laneStatus = laneStatusByIssue.get(lease.issue_id.toUpperCase());
+    if (laneStatus === undefined) continue;
+    if (!TERMINAL_STATUSES.has(laneStatus)) continue;
+    findings.push({
+      issue_id: lease.issue_id,
+      branch: lease.branch,
+      lease_status: lease.status,
+      lane_status: laneStatus,
+      held_scope: [...(lease.file_scope_lock ?? [])],
+      lane_completed: SUCCESS_TERMINAL_STATUSES.has(laneStatus),
+      reason:
+        `Lane ${lease.issue_id} reached terminal state "${laneStatus}" but its lease is still ` +
+        'active. Reaching a terminal state must release the lease; a lease outliving its lane ' +
+        'blocks unrelated lanes until an unrelated TTL expires.',
+    });
+  }
+  return findings;
 }
 
 export function buildLeaseStaleReport(

@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1626",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/.worktrees/utv2-1626",
+  "branch": "claude/utv2-1626-readiness-refresher",
+  "base_branch": "main",
+  "commit_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1326",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/readiness-refresh.yml",
+    ".github/workflows/readiness-regression-gate.yml",
+    ".ops/sync/UTV2-1626.yml",
+    "docs/06_status/lanes/UTV2-1626.json",
+    "docs/06_status/proof/UTV2-1626/**",
+    "docs/06_status/readiness/readiness-score.json",
+    "package.json",
+    "scripts/ci/direct-main-push-guard.test.ts",
+    "scripts/ci/direct-main-push-guard.ts",
+    "scripts/ci/readiness-ledger-gate.test.ts",
+    "scripts/ci/readiness-ledger-gate.ts",
+    "scripts/ci/readiness-refresh-workflow.test.ts",
+    "scripts/ci/readiness-refresh-workflow.ts",
+    "scripts/ops/readiness-refresh.test.ts",
+    "scripts/ops/readiness-refresh.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1626/evidence.json",
+    "docs/06_status/proof/UTV2-1626/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-30T17:59:00.000Z",
+  "heartbeat_at": "2026-07-31T04:47:01.342Z",
+  "closed_at": "2026-07-31T04:47:01.342Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1626-readiness-refresher.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-31T00:03:14.587Z",
+      "verdict": "pass",
+      "merge_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1326",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-31T04:46:48.872Z",
+      "verdict": "pass",
+      "merge_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-31T04:46:58.790Z",
+      "verdict": "pass",
+      "merge_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/.worktrees/utv2-1626",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "notes": [
+    "The readiness ledger committed on this branch is a real measurement taken from this worktree against canonical production zfzdnfwdarxucxtaojxm, read-only, at 2026-07-30T23:40:39.763Z. It is not a hand-authored score.",
+    "This lane changes the Readiness Regression Gate itself. That gate is expected to be RED on this pull request, classified READINESS_RED with observer_failure=false — production is genuinely failing, which is the gate reporting correctly. It is not a required context."
+  ]
+}

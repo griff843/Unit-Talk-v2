@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1592",
+  "sha_binding": {
+    "verified_source_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+    "verified_source_note": "Implementation authority: PR #1311, squash-merged to protected main as 5f4abb09113f33ec9ca5ba88ab639041c521c00e. Pre-merge implementation commits were 92d16d56 (merge-train bypass, comment pagination, auth exit-code + bounded timeout) and c26646b9 (wired pre-merge-authorization.test.ts into test:ops; declared proof paths). This bundle is rebound from the pre-merge head to the authoritative merge SHA; all static and runtime evidence below is the original truthful record, unmodified.",
+    "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+    "evidence_commit_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+    "current_pr_head_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e",
+    "sha_type": "merge_sha"
+  },
+  "verifier": {
+    "identity": "claude-sonnet-5",
+    "role": "orchestrator"
+  },
+  "tier": "T1",
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "note": "pnpm verify:parallel (lint + type-check in parallel, then build + full test suite) green on c26646b9, including the newly-wired scripts/ops/pre-merge-authorization.test.ts (pnpm test:ops totals 1242/1242 pass); pnpm test:db (live Supabase) run separately, also green"
+    },
+    "type_check": {
+      "status": "PASS"
+    },
+    "lint": {
+      "status": "PASS"
+    },
+    "build": {
+      "status": "PASS"
+    },
+    "test": {
+      "status": "PASS",
+      "note": "Full pnpm test suite green (1242/1242 via pnpm test:ops). Touched-file totals: scripts/ops/merge-wrapper.test.ts (21 tests, +8 new), scripts/ops/ops-merge-wrapper.test.ts (37 tests, +2 new), scripts/ops/truth-check-lib.test.ts (64 tests, +1 new), scripts/ops/pre-merge-authorization.test.ts (9 tests, now wired into test:ops for the first time). scripts/ops/merge-gate-verdict.test.ts (unchanged, 19 tests) independently already covers the two verdict-ordering required tests (later CHANGES_REQUIRED beats earlier APPROVED, and the reverse)."
+    },
+    "test_run_logs": [
+      {
+        "path": "scripts/ops/pre-merge-authorization.test.ts",
+        "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e"
+      },
+      {
+        "path": "scripts/ops/merge-wrapper.test.ts",
+        "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e"
+      },
+      {
+        "path": "scripts/ops/ops-merge-wrapper.test.ts",
+        "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e"
+      },
+      {
+        "path": "scripts/ops/truth-check-lib.test.ts",
+        "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e"
+      },
+      {
+        "path": "scripts/ops/merge-gate-verdict.test.ts",
+        "merge_sha": "5f4abb09113f33ec9ca5ba88ab639041c521c00e"
+      }
+    ],
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS",
+      "changed_files": 14,
+      "rules_matched": "none \u2014 no R-level artifacts required for this diff"
+    },
+    "pr_review_packet": {
+      "status": "PASS",
+      "note": "scripts/ops/pr-review-packet.ts --issue UTV2-1592 --pr 1311 --json run locally on c26646b9: verdict PASS, all 6 checks PASS (scope, test_wiring, dropped_tests, sync_metadata, r_level, proof). risk_packet status is HIGH only because of in-flight CI noise (Merge Gate/File scope lock awaiting PM's fresh verdict + scope-override comment on this head, and CI still settling post-push) -- not a structural finding."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "PASS",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "duration_ms": 100737,
+    "queries": [
+      "database repository bundle persists a submission and settlement against live Supabase",
+      "atomic enqueue rollback verification (no lifecycle event or outbox row on invalid enqueue)",
+      "atomic delivery confirmation rollback (outbox status, receipt, lifecycle, audit)",
+      "atomic settlement rollback (no settlement, lifecycle event, or audit row on invalid settlement)",
+      "no-duplicate-participants check for the same external_id and sport",
+      "re-settlement correction chain integrity (no true duplicate base rows; original row not mutated)"
+    ],
+    "row_counts": [
+      {
+        "table": "submissions",
+        "note": "database-smoke.test.ts: submission + settlement persisted round-trip"
+      },
+      {
+        "table": "outbox",
+        "note": "atomic enqueue/delivery-confirmation rollback tests"
+      },
+      {
+        "table": "participants",
+        "note": "no-duplicate-participants test"
+      },
+      {
+        "table": "settlement_records",
+        "note": "correction-chain additive-write tests"
+      }
+    ],
+    "receipts": [
+      {
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "duration_ms": 100737,
+        "tests_run": 7,
+        "tests_pass": 7,
+        "note": "Live Supabase; this lane is ops/governance tooling (no DB schema/query changes) \u2014 pnpm test:db verifies broader live-DB suite integrity is undisturbed by the merge-train/pagination/exit-code/test-wiring amendment."
+      }
+    ]
+  }
+}

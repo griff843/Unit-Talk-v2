@@ -2,7 +2,7 @@
 import { loadEnvironment } from '@unit-talk/config'
 import { resolveTargetRegistry } from '@unit-talk/contracts'
 import { evaluateQueueHealth, evaluateSlo } from '@unit-talk/observability'
-import { createClient } from '@supabase/supabase-js'
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import fs from 'node:fs'
 
 const args = process.argv.slice(2)
@@ -14,7 +14,7 @@ const url = env.SUPABASE_URL ?? ''
 const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 if (!url || !key) { console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
 
-const db = createClient(url, key, { auth: { persistSession: false } })
+const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
 const workerTargets = (env.UNIT_TALK_DISTRIBUTION_TARGETS?.trim() || 'discord:canary')
   .split(',')
   .map((target) => target.trim())

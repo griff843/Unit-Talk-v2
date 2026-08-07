@@ -88,6 +88,15 @@ const KNOWN_AUTOMATION_IDENTITIES: Record<
       messagePattern: /^chore\(lanes\): close .+ — lane closed/,
       changedPathGlobs: ['docs/06_status/lanes/*.json', 'docs/06_status/proof/**', '.ops/sync/*.yml'],
     },
+    {
+      // readiness-refresh.yml's scheduled ledger commit (UTV2-1626). The ledger
+      // has to land on main to be the pull-request gate's input, and it is
+      // machine-generated every 6h, so routing it through a pull request would
+      // mean either a bot-authored PR every 6h or an artifact that goes stale
+      // again. The scope is exactly one generated file.
+      messagePattern: /^ops\(readiness\): refresh ledger/,
+      changedPathGlobs: ['docs/06_status/readiness/readiness-score.json'],
+    },
   ],
 };
 

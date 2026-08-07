@@ -2,17 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
+  type HarvestCiDbProofOptions,
+  harvestCiDbProofForMergeSha,
+} from './ci-db-proof-harvest.js';
+import {
   ROOT,
   emitJson,
   ensureDir,
   getFlag,
   git,
+  mergeVerifierIdentity,
   parseArgs,
   readManifest,
   relativeToRoot,
   requireIssueId,
   type LaneManifest,
 } from './shared.js';
+import type { ModelRoutingBlock } from './model-routing.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
@@ -43,7 +49,20 @@ export interface ProofGenerateResult {
   generated_paths: string[];
   updated_paths: string[];
   unchanged_paths: string[];
+  /**
+   * UTV2-1631: retained for consumers, but now always empty. It used to name
+   * the proof artifacts this script had just overwritten wholesale with an
+   * empty `result: not_run` template -- i.e. it reported *destroyed measured
+   * evidence* as if it were routine maintenance. Existing proof artifacts are
+   * never replaced any more (see `generateProofArtifacts`), so nothing can be
+   * "stale-replaced"; SHA-rebound files are reported in `rebound_paths` and
+   * untouched ones in `preserved_paths`.
+   */
   stale_paths_replaced: string[];
+  /** Existing artifacts that were found on disk and NOT regenerated (UTV2-1631). */
+  preserved_paths: string[];
+  /** Preserved artifacts whose merge-SHA-bearing fields were rebound in place (UTV2-1631). */
+  rebound_paths: string[];
 }
 
 /** UTV2-1392: SHA rebind result for evidence.json / verification.md (T1/T2 proof bundle files). */
@@ -52,9 +71,112 @@ export interface ShaRebindOutcome {
   status: 'updated' | 'unchanged' | 'missing';
 }
 
+export type ModelRoutingRebindErrorCode =
+  | 'binding_conflict'
+  | 'incomplete_required_sidecar'
+  | 'legacy_binding_conflict'
+  | 'malformed_required_sidecar'
+  | 'missing_pr_url'
+  | 'missing_required_sidecar'
+  | 'sidecar_identity_mismatch'
+  | 'sidecar_manifest_routing_mismatch';
+
+/**
+ * Fields a required model-routing sidecar must carry as non-empty strings
+ * before it is eligible to receive an authoritative closeout_binding. A
+ * truncated or tampered sidecar that retains a matching `issue_id` but drops
+ * these -- e.g. `{"issue_id":"UTV2-1586"}` -- would otherwise pass identity
+ * validation and get bound despite providing no evidence of which model
+ * actually executed the lane (independent review finding).
+ */
+const REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS = ['model', 'reasoning_effort'] as const;
+
+/**
+ * Canonical manifest-side routing fields, keyed by their MATCHING sidecar
+ * field name (which is not always the same key -- the manifest's
+ * ModelRoutingBlock.profile corresponds to the sidecar's model_profile).
+ * `always` fields must agree whenever a manifest model_routing block is
+ * supplied at all (execution identity: which model, at what effort).
+ * `whenBothPresent` fields are administrative metadata that must still
+ * agree if both sides happen to carry them, but their absence on either
+ * side is not itself a failure (PM directive, UTV2-1589).
+ */
+const ALWAYS_MATCHED_ROUTING_FIELDS: ReadonlyArray<{
+  sidecarField: string;
+  manifestField: keyof ModelRoutingBlock;
+}> = [
+  { sidecarField: 'model', manifestField: 'model' },
+  { sidecarField: 'reasoning_effort', manifestField: 'reasoning_effort' },
+];
+const OPTIONALLY_MATCHED_ROUTING_FIELDS: ReadonlyArray<{
+  sidecarField: string;
+  manifestField: keyof ModelRoutingBlock;
+}> = [
+  { sidecarField: 'model_profile', manifestField: 'profile' },
+  { sidecarField: 'policy_version', manifestField: 'policy_version' },
+];
+
+export class ModelRoutingRebindError extends Error {
+  constructor(
+    public readonly code: ModelRoutingRebindErrorCode,
+    public readonly proofPath: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ModelRoutingRebindError';
+  }
+}
+
+/**
+ * UTV2-1631. Raised when an existing, hand-authored proof artifact cannot be
+ * safely rebound to the authoritative merge SHA. The contract is: fail loudly
+ * and leave the file byte-identical on disk. Overwriting on uncertainty is
+ * exactly the defect this class exists to make impossible -- two independent
+ * agents lost a full measured T1 bundle to a silent template replacement and
+ * had to restore it by hand.
+ */
+export type ProofPreservationErrorCode =
+  | 'unbindable_proof_artifact'
+  | 'malformed_evidence_json';
+
+export class ProofPreservationError extends Error {
+  constructor(
+    public readonly code: ProofPreservationErrorCode,
+    public readonly proofPath: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'ProofPreservationError';
+  }
+}
+
 export interface ProofGenerateOptions {
   root?: string;
   write?: boolean;
+  /**
+   * Explicit opt-in required to bind model-routing.json at all; the default
+   * is to leave it untouched (only evidence.json/verification.md are bound).
+   * Any caller of this function or the ops:proof-generate CLI resolves
+   * manifest.pr_url from disk with no independent GitHub validation unless
+   * it explicitly supplies --pr/--pr-url itself -- and even then, that
+   * value is not verified against the real PR/merge state the way
+   * ops:lane-close --repair-merged's fetchMergedPrInfo/validateTrustedPostMergeRepair
+   * do. Writing model-routing.json's IMMUTABLE closeout_binding from an
+   * unvalidated PR/SHA (whether from an untrusted CLI invocation, e.g. an
+   * operator following proof-repair.ts's printed remediation command, or
+   * any other caller) risks baking in a stale or incorrect identity that
+   * the later, properly-validated repair path can then never correct,
+   * since createRepairRollbackTransaction's snapshot is taken after this
+   * already ran (independent review findings, UTV2-1589). The trusted
+   * repair path (scripts/ops/lane-close.ts's rebindRepairedLaneProof) is
+   * the sole caller with real validated authority, and it does not go
+   * through this function at all -- it calls rebindModelRoutingJsonSha
+   * directly. There is currently no legitimate caller that needs to set
+   * this to true; it exists only so a future genuinely-trusted caller has
+   * an explicit, auditable way to opt in rather than model-routing binding
+   * being the silent default for anyone who calls this function or CLI.
+   */
+  bindModelRouting?: boolean;
 }
 
 export interface ProofManifestOverrides {
@@ -234,19 +356,109 @@ const COMMIT_SHA_ROW_LINE_PATTERN = /^\|\s*Commit SHA\(s\)\s*\|/;
 const MERGE_SHA_BINDING_HEADING = '## Merge SHA Binding';
 
 /**
+ * A line that *labels* a merge SHA, in any of the shapes proof authors and this
+ * generator actually use:
+ *   `MERGE_SHA: <sha>`                  (canonical `# PROOF:` bundle format)
+ *   `Merge SHA: <sha>`                  (generated template + most hand-authored bundles)
+ *   `- Merge SHA: \`<sha>\``            (bulleted)
+ *   `**Merge SHA:** <sha>`              (bolded)
+ * The capture group is the label prefix; only the SHA *token* inside the value
+ * is substituted, never the whole line, so trailing commentary such as
+ * "(merge SHA, PR #1324)" survives byte-identically.
+ */
+const MERGE_SHA_LABEL_PATTERN = /^(\s*(?:[-*]\s+)?(?:\*\*)?(?:MERGE_SHA|Merge SHA|MERGE SHA)(?:\*\*)?:\s*)(.*)$/;
+const FULL_SHA_TOKEN_PATTERN = /\b[0-9a-f]{40}\b/;
+const PLACEHOLDER_VALUE_PATTERN = /^`?(?:N\/A|TBD|pending|stale|<merge[_ -]?sha>)`?$/i;
+
+/**
+ * Substitutes the SHA token inside a labelled merge-SHA value, preserving any
+ * backticks and any surrounding prose. Returns null when the value carries no
+ * bindable token at all (so the caller can treat the line as a non-anchor
+ * rather than clobbering it).
+ */
+function substituteMergeShaValue(value: string, mergeSha: string): string | null {
+  if (FULL_SHA_TOKEN_PATTERN.test(value)) {
+    return value.replace(FULL_SHA_TOKEN_PATTERN, mergeSha);
+  }
+  const trimmed = value.trim();
+  if (PLACEHOLDER_VALUE_PATTERN.test(trimmed)) {
+    const backticked = trimmed.startsWith('`');
+    return value.replace(trimmed, backticked ? `\`${mergeSha}\`` : mergeSha);
+  }
+  return null;
+}
+
+/**
+ * True when the `## Merge SHA Binding` section body is a placeholder this
+ * script owns (blank lines, a parenthetical "filled post-merge" note, or
+ * previously generated `Merge SHA:` / `PR:` lines) rather than authored
+ * content. Only a placeholder body may be replaced; anything else is
+ * token-substituted in place so prose and measurements survive (UTV2-1631).
+ */
+function isReplaceableMergeShaBindingBody(bodyLines: string[]): boolean {
+  return bodyLines.every((line) => {
+    const trimmed = line.trim();
+    if (trimmed === '') return true;
+    if (trimmed.startsWith('(') && trimmed.endsWith(')')) return true;
+    if (MERGE_SHA_LABEL_PATTERN.test(line)) return true;
+    if (/^PR:\s*/.test(trimmed)) return true;
+    return false;
+  });
+}
+
+/**
  * Line-based rewrite (not regex substitution across the whole file) so a greedy `$`-anchored
  * pattern can't accidentally swallow adjacent blank lines — the exact bug this replaced.
+ *
+ * UTV2-1631 widened this from two anchors (the `| Commit SHA(s) |` row and the
+ * `## Merge SHA Binding` placeholder section) to every labelled merge-SHA line,
+ * because the canonical `# PROOF:` bundle format binds via a bare `MERGE_SHA:`
+ * line and carried neither of the two old anchors. A bundle in the repo's own
+ * required proof format was therefore considered "unbindable" by this function
+ * and got destroyed by the template overwrite in `generateProofArtifacts`
+ * instead.
  */
-function rewriteVerificationMdLines(content: string, mergeSha: string, prUrl: string | null): string {
+export function rebindMergeShaAnchorsInMarkdown(
+  content: string,
+  mergeSha: string,
+  prUrl: string | null,
+): string {
   const hasTrailingNewline = content.endsWith('\n');
   const lines = content.split('\n');
 
-  const rowIndex = lines.findIndex((line) => COMMIT_SHA_ROW_LINE_PATTERN.test(line));
+  // A fenced block in a proof document is quoted evidence — a captured command
+  // output, a diff, a TAP block. Rebinding a SHA inside one would rewrite the
+  // measurement itself, which is the same class of harm as replacing the file
+  // (UTV2-1631). Anchors are only honoured outside fences.
+  const insideFence: boolean[] = [];
+  let fenced = false;
+  for (const line of lines) {
+    if (/^\s*(```|~~~)/.test(line)) {
+      insideFence.push(true);
+      fenced = !fenced;
+      continue;
+    }
+    insideFence.push(fenced);
+  }
+
+  const rowIndex = lines.findIndex((line, i) => !insideFence[i] && COMMIT_SHA_ROW_LINE_PATTERN.test(line));
   if (rowIndex !== -1) {
     lines[rowIndex] = `| Commit SHA(s) | \`${mergeSha}\` (merge SHA) |`;
   }
 
-  const headingIndex = lines.findIndex((line) => line.trim() === MERGE_SHA_BINDING_HEADING);
+  // Token substitution runs BEFORE the section splice below, because the splice
+  // changes line indices and would invalidate `insideFence`.
+  for (let i = 0; i < lines.length; i += 1) {
+    if (insideFence[i]) continue;
+    const match = MERGE_SHA_LABEL_PATTERN.exec(lines[i]);
+    if (!match) continue;
+    const substituted = substituteMergeShaValue(match[2], mergeSha);
+    if (substituted !== null) {
+      lines[i] = `${match[1]}${substituted}`;
+    }
+  }
+
+  const headingIndex = lines.findIndex((line, i) => !insideFence[i] && line.trim() === MERGE_SHA_BINDING_HEADING);
   if (headingIndex !== -1) {
     let sectionEnd = lines.length;
     for (let i = headingIndex + 1; i < lines.length; i += 1) {
@@ -255,17 +467,14 @@ function rewriteVerificationMdLines(content: string, mergeSha: string, prUrl: st
         break;
       }
     }
-    lines.splice(headingIndex + 1, sectionEnd - (headingIndex + 1), '', `Merge SHA: \`${mergeSha}\``, `PR: ${prUrl ?? 'N/A'}`);
+    const bodyLines = lines.slice(headingIndex + 1, sectionEnd);
+    if (isReplaceableMergeShaBindingBody(bodyLines)) {
+      lines.splice(headingIndex + 1, sectionEnd - (headingIndex + 1), '', `Merge SHA: \`${mergeSha}\``, `PR: ${prUrl ?? 'N/A'}`);
+    }
   }
 
   const joined = lines.join('\n');
   return hasTrailingNewline && !joined.endsWith('\n') ? `${joined}\n` : joined;
-}
-
-function hasVerificationShaBindingMarkers(content: string): boolean {
-  return content
-    .split('\n')
-    .some((line) => COMMIT_SHA_ROW_LINE_PATTERN.test(line) || line.trim() === MERGE_SHA_BINDING_HEADING);
 }
 
 /**
@@ -286,33 +495,69 @@ export function rebindEvidenceJsonSha(
   }
 
   const previousContent = fs.readFileSync(absolutePath, 'utf8');
-  let parsed: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    parsed = JSON.parse(previousContent) as Record<string, unknown>;
+    parsed = JSON.parse(previousContent);
   } catch {
-    // Not valid JSON (or not an evidence bundle) — leave untouched rather than corrupt it.
+    // UTV2-1631: this used to return 'unchanged' and say nothing. An evidence
+    // bundle that cannot be parsed is not a bundle that needs no work — it is a
+    // bundle whose SHA binding silently never happened, which then reads as a
+    // clean closeout. Leave the bytes untouched, but fail loudly.
+    throw new ProofPreservationError(
+      'malformed_evidence_json',
+      relPath,
+      `Evidence bundle is not valid JSON and cannot be SHA-rebound; left untouched: ${relPath}`,
+    );
+  }
+  if (!isJsonObject(parsed)) {
+    throw new ProofPreservationError(
+      'malformed_evidence_json',
+      relPath,
+      `Evidence bundle must be a JSON object to be SHA-rebound; left untouched: ${relPath}`,
+    );
+  }
+
+  const shaBinding = isJsonObject(parsed['sha_binding']) ? parsed['sha_binding'] : undefined;
+  const hasLegacyTopLevelMergeSha = typeof parsed['merge_sha'] === 'string';
+  if (!shaBinding && !hasLegacyTopLevelMergeSha) {
+    // No merge-SHA-bearing field exists to rebind. Nothing is destroyed by
+    // doing nothing, so this is not an error — just a no-op.
     return { path: relPath, status: 'unchanged' };
   }
 
-  const shaBinding = (parsed['sha_binding'] as Record<string, unknown> | undefined) ?? undefined;
-  if (!shaBinding || typeof shaBinding !== 'object') {
-    return { path: relPath, status: 'unchanged' };
-  }
-
-  const wasPreMerge = shaBinding['sha_type'] !== 'merge_sha' || shaBinding['verified_source_sha'] !== mergeSha;
-  if (!wasPreMerge) {
+  // UTV2-1631: `sha_binding.merge_sha` and the legacy top-level `merge_sha` are
+  // merge-SHA-bearing fields too. Rebinding only `verified_source_sha` left the
+  // bundle asserting two different merge identities in the same file, which
+  // both P3 and C4 still pass because they only require the authoritative SHA
+  // to appear *somewhere*.
+  const shaBindingAlreadyBound =
+    !shaBinding ||
+    (shaBinding['sha_type'] === 'merge_sha' &&
+      shaBinding['verified_source_sha'] === mergeSha &&
+      (!('merge_sha' in shaBinding) || shaBinding['merge_sha'] === mergeSha));
+  const topLevelAlreadyBound = !hasLegacyTopLevelMergeSha || parsed['merge_sha'] === mergeSha;
+  if (shaBindingAlreadyBound && topLevelAlreadyBound) {
     // Already bound to this exact merge SHA — leave bound_at alone so re-running
     // ops:proof-generate doesn't perturb an already-correct file (idempotent).
     return { path: relPath, status: 'unchanged' };
   }
 
-  const nextShaBinding = {
-    ...shaBinding,
-    verified_source_sha: mergeSha,
-    sha_type: 'merge_sha',
-    bound_at: generatedAt,
-  };
-  const nextParsed = { ...parsed, sha_binding: nextShaBinding };
+  const nextParsed: Record<string, unknown> = { ...parsed };
+  if (shaBinding) {
+    const nextShaBinding: Record<string, unknown> = {
+      ...shaBinding,
+      verified_source_sha: mergeSha,
+      sha_type: 'merge_sha',
+      bound_at: generatedAt,
+    };
+    if ('merge_sha' in shaBinding) {
+      nextShaBinding['merge_sha'] = mergeSha;
+    }
+    nextParsed['sha_binding'] = nextShaBinding;
+  }
+  if (hasLegacyTopLevelMergeSha) {
+    nextParsed['merge_sha'] = mergeSha;
+  }
   if (PRE_MERGE_STATUSES.has(String(parsed['status']))) {
     nextParsed['status'] = 'merged';
   }
@@ -340,12 +585,246 @@ export function rebindVerificationMdSha(
   }
 
   const previousContent = fs.readFileSync(absolutePath, 'utf8');
-  const nextContent = rewriteVerificationMdLines(previousContent, mergeSha, prUrl);
+  const nextContent = rebindMergeShaAnchorsInMarkdown(previousContent, mergeSha, prUrl);
 
   if (nextContent === previousContent) {
     return { path: relPath, status: 'unchanged' };
   }
 
+  if (options.write ?? true) {
+    fs.writeFileSync(absolutePath, nextContent, 'utf8');
+  }
+  return { path: relPath, status: 'updated' };
+}
+
+/**
+ * Appends authoritative post-merge identity to an immutable Codex model-routing
+ * sidecar. Existing execution provenance is preserved; an existing binding may
+ * only be replayed for the exact same PR and merge SHA.
+ */
+export function rebindModelRoutingJsonSha(
+  absolutePath: string,
+  mergeSha: string,
+  generatedAt: string,
+  prUrl: string | null,
+  options: {
+    required?: boolean;
+    write?: boolean;
+    relPath?: string;
+    expectedIssueId?: string;
+    manifestModelRouting?: ModelRoutingBlock | null;
+  } = {},
+): ShaRebindOutcome {
+  const relPath = options.relPath ?? absolutePath;
+  const required = options.required ?? false;
+  if (!fs.existsSync(absolutePath)) {
+    if (required) {
+      throw new ModelRoutingRebindError(
+        'missing_required_sidecar',
+        relPath,
+        `Required model-routing sidecar is missing: ${relPath}`,
+      );
+    }
+    return { path: relPath, status: 'missing' };
+  }
+
+  const normalizedPrUrl = normalizePrUrl(prUrl);
+  if (!normalizedPrUrl) {
+    throw new ModelRoutingRebindError(
+      'missing_pr_url',
+      relPath,
+      `Cannot bind model-routing sidecar without an authoritative PR URL: ${relPath}`,
+    );
+  }
+
+  const previousContent = fs.readFileSync(absolutePath, 'utf8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(previousContent);
+  } catch {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Required model-routing sidecar is not valid JSON: ${relPath}`,
+    );
+  }
+  if (!isJsonObject(parsed)) {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Required model-routing sidecar must be a JSON object: ${relPath}`,
+    );
+  }
+
+  if (options.expectedIssueId !== undefined) {
+    const sidecarIssueId = parsed['issue_id'];
+    if (
+      typeof sidecarIssueId !== 'string' ||
+      sidecarIssueId.trim().toUpperCase() !== options.expectedIssueId.trim().toUpperCase()
+    ) {
+      throw new ModelRoutingRebindError(
+        'sidecar_identity_mismatch',
+        relPath,
+        `Model-routing sidecar issue_id ${JSON.stringify(sidecarIssueId)} does not match ` +
+          `expected lane ${options.expectedIssueId}: ${relPath}`,
+      );
+    }
+  }
+
+  if (required) {
+    const missingOrEmpty = REQUIRED_MODEL_ROUTING_PROVENANCE_FIELDS.filter(
+      (field) => typeof parsed[field] !== 'string' || parsed[field].trim() === '',
+    );
+    if (missingOrEmpty.length > 0) {
+      throw new ModelRoutingRebindError(
+        'incomplete_required_sidecar',
+        relPath,
+        `Required model-routing sidecar is missing execution-provenance fields (${missingOrEmpty.join(', ')}): ${relPath}`,
+      );
+    }
+  }
+
+  if (required && options.manifestModelRouting) {
+    const manifestRouting = options.manifestModelRouting;
+
+    for (const { sidecarField, manifestField } of ALWAYS_MATCHED_ROUTING_FIELDS) {
+      const manifestValue = manifestRouting[manifestField];
+      if (typeof manifestValue !== 'string' || manifestValue.trim() === '') {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Manifest model_routing.${manifestField} is missing or empty; cannot validate sidecar routing field "${sidecarField}": ${relPath}`,
+        );
+      }
+      const sidecarValue = parsed[sidecarField];
+      if (sidecarValue !== manifestValue) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar ${sidecarField} ${JSON.stringify(sidecarValue)} does not match manifest ` +
+            `model_routing.${manifestField} ${JSON.stringify(manifestValue)}: ${relPath}`,
+        );
+      }
+    }
+
+    for (const { sidecarField, manifestField } of OPTIONALLY_MATCHED_ROUTING_FIELDS) {
+      const sidecarValue = parsed[sidecarField];
+      const manifestValue = manifestRouting[manifestField];
+      const sidecarPresent = typeof sidecarValue === 'string' && sidecarValue.trim() !== '';
+      const manifestPresent = typeof manifestValue === 'string' && manifestValue.trim() !== '';
+      if (sidecarPresent && manifestPresent && sidecarValue !== manifestValue) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar ${sidecarField} ${JSON.stringify(sidecarValue)} does not match manifest ` +
+            `model_routing.${manifestField} ${JSON.stringify(manifestValue)}: ${relPath}`,
+        );
+      }
+    }
+
+    // Manual-override provenance must agree too: a sidecar recording
+    // override_used: false (or a mismatched authorizer) while the manifest's
+    // model_routing.selected_by is 'manual-override' would let the bound
+    // routing evidence misrepresent who actually authorized the execution --
+    // model/reasoning_effort/profile/policy_version agreement alone does not
+    // catch this (independent review finding). Every real sidecar in the
+    // repo carries override_used, so its absence is itself a failure here,
+    // matching the always-required model/reasoning_effort fields above.
+    const sidecarOverrideUsed = parsed['override_used'];
+    if (typeof sidecarOverrideUsed !== 'boolean') {
+      throw new ModelRoutingRebindError(
+        'sidecar_manifest_routing_mismatch',
+        relPath,
+        `Sidecar override_used must be a boolean to validate against manifest model_routing.selected_by: ${relPath}`,
+      );
+    }
+    const manifestOverrideUsed = manifestRouting.selected_by === 'manual-override';
+    if (sidecarOverrideUsed !== manifestOverrideUsed) {
+      throw new ModelRoutingRebindError(
+        'sidecar_manifest_routing_mismatch',
+        relPath,
+        `Sidecar override_used ${sidecarOverrideUsed} does not match manifest ` +
+          `model_routing.selected_by ${JSON.stringify(manifestRouting.selected_by)}: ${relPath}`,
+      );
+    }
+    if (manifestOverrideUsed) {
+      const manifestAuthorizedBy = manifestRouting.override?.authorized_by;
+      if (typeof manifestAuthorizedBy !== 'string' || manifestAuthorizedBy.trim() === '') {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Manifest model_routing.selected_by is manual-override but override.authorized_by is missing or empty: ${relPath}`,
+        );
+      }
+      const sidecarAuthorizedBy = parsed['override_authorized_by'];
+      if (sidecarAuthorizedBy !== manifestAuthorizedBy) {
+        throw new ModelRoutingRebindError(
+          'sidecar_manifest_routing_mismatch',
+          relPath,
+          `Sidecar override_authorized_by ${JSON.stringify(sidecarAuthorizedBy)} does not match ` +
+            `manifest model_routing.override.authorized_by ${JSON.stringify(manifestAuthorizedBy)}: ${relPath}`,
+        );
+      }
+    }
+  }
+
+  // Some historical sidecars (pre-dating closeout_binding) carry a legacy
+  // top-level merge_sha field. The object spread below preserves it
+  // untouched, so if it disagrees with the authoritative SHA being bound
+  // here, the file would end up asserting two different merge identities --
+  // and P3/C4 would both still pass, since they only require the
+  // authoritative SHA to appear somewhere in the file, not that the file is
+  // internally consistent (independent review finding).
+  const legacyMergeSha = parsed['merge_sha'];
+  if (typeof legacyMergeSha === 'string' && legacyMergeSha.trim() !== '' && legacyMergeSha !== mergeSha) {
+    throw new ModelRoutingRebindError(
+      'legacy_binding_conflict',
+      relPath,
+      `Sidecar legacy top-level merge_sha ${JSON.stringify(legacyMergeSha)} conflicts with the ` +
+        `authoritative merge SHA ${JSON.stringify(mergeSha)}: ${relPath}`,
+    );
+  }
+
+  const existingBinding = parsed['closeout_binding'];
+  if (existingBinding !== undefined) {
+    if (
+      !isJsonObject(existingBinding) ||
+      existingBinding['sha_type'] !== 'merge_sha' ||
+      typeof existingBinding['merge_sha'] !== 'string' ||
+      typeof existingBinding['pr_url'] !== 'string' ||
+      typeof existingBinding['bound_at'] !== 'string' ||
+      !isIsoTimestamp(existingBinding['bound_at'])
+    ) {
+      throw new ModelRoutingRebindError(
+        'malformed_required_sidecar',
+        relPath,
+        `Existing model-routing closeout binding is malformed: ${relPath}`,
+      );
+    }
+
+    const boundMergeSha = existingBinding['merge_sha'];
+    const boundPrUrl = normalizePrUrl(existingBinding['pr_url']);
+    if (boundMergeSha !== mergeSha || boundPrUrl !== normalizedPrUrl) {
+      throw new ModelRoutingRebindError(
+        'binding_conflict',
+        relPath,
+        `Existing model-routing closeout binding conflicts with PR ${normalizedPrUrl} at ${mergeSha}: ${relPath}`,
+      );
+    }
+
+    return { path: relPath, status: 'unchanged' };
+  }
+
+  const nextParsed = {
+    ...parsed,
+    closeout_binding: {
+      sha_type: 'merge_sha',
+      merge_sha: mergeSha,
+      pr_url: normalizedPrUrl,
+      bound_at: generatedAt,
+    },
+  };
+  const nextContent = `${JSON.stringify(nextParsed, null, 2)}\n`;
   if (options.write ?? true) {
     fs.writeFileSync(absolutePath, nextContent, 'utf8');
   }
@@ -379,6 +858,52 @@ export function rebindMergeSha(
   ];
 }
 
+/**
+ * UTV2-1631: decides what to do with an EXISTING standard proof artifact.
+ *
+ * Before this, the answer was always "overwrite it with a freshly generated
+ * `result: not_run` template", guarded only by a two-marker exemption for
+ * verification.md. A real measured T1 bundle (7 queries, 8 row counts, a CI
+ * verifier identity, ~20KB of assertions) written in the repo's own required
+ * `# PROOF:` format matched neither marker, so `post-merge-lane-close.yml`
+ * silently replaced it with an 850-byte stub and reported the loss as
+ * `stale_paths_replaced`. The lane still read as closed.
+ *
+ * The rule now: an artifact that exists is authored evidence. It is never
+ * regenerated. Only its merge-SHA-bearing fields are rebound, in place. If it
+ * carries no bindable merge-SHA anchor and does not already name the
+ * authoritative SHA, this throws and the file is left byte-identical —
+ * uncertainty must never resolve to overwriting.
+ */
+function planExistingProofArtifact(
+  previousContent: string,
+  relPath: string,
+  mergeSha: string | null,
+  prUrl: string | null,
+): { nextContent: string | null } {
+  if (!mergeSha) {
+    // Pre-merge run: there is no authoritative SHA to bind, so there is
+    // nothing this script can legitimately do to an authored artifact.
+    return { nextContent: null };
+  }
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(previousContent, mergeSha, prUrl);
+  if (rebound !== previousContent) {
+    return { nextContent: rebound };
+  }
+  if (previousContent.includes(mergeSha)) {
+    // Already names the authoritative merge SHA — nothing to do.
+    return { nextContent: null };
+  }
+  throw new ProofPreservationError(
+    'unbindable_proof_artifact',
+    relPath,
+    `Refusing to overwrite authored proof at ${relPath}: it carries no merge-SHA anchor to rebind ` +
+      `to ${mergeSha}, and does not already name it. The file is untouched. Add a "MERGE_SHA: ${mergeSha}" ` +
+      `line (or a "Merge SHA:" line / "| Commit SHA(s) |" row) and re-run, or bind it by hand.`,
+  );
+}
+
 export function generateProofArtifacts(
   input: ProofGenerateInput,
   options: ProofGenerateOptions = {},
@@ -393,44 +918,101 @@ export function generateProofArtifacts(
   const generatedPaths: string[] = [];
   const updatedPaths: string[] = [];
   const unchangedPaths: string[] = [];
-  const stalePathsReplaced: string[] = [];
+  const preservedPaths: string[] = [];
+  const reboundPaths: string[] = [];
   const pushUnique = (paths: string[], proofPath: string): void => {
     if (!paths.includes(proofPath)) {
       paths.push(proofPath);
     }
   };
-  const requiredShas = [input.gitTruth.head_sha, input.gitTruth.merge_sha].filter(isPresent);
+  const modelRoutingPaths = input.manifest.expected_proof_paths.filter(
+    (proofPath) => path.posix.basename(proofPath) === 'model-routing.json',
+  );
 
+  // Validate every required routing sidecar before mutating any proof artifact
+  // so conflicts and malformed historical authority fail as one atomic
+  // operation. A manifest declaring more than one model-routing.json (not
+  // used by any lane today, but not disallowed by the schema either) must
+  // have every one bound -- the truth gate evaluates every expected proof
+  // artifact, so leaving a second match unbound would permanently block
+  // closeout even though this function reported success.
+  if (input.gitTruth.merge_sha && options.bindModelRouting) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      rebindModelRoutingJsonSha(
+        safeRepoPath(root, modelRoutingPath),
+        input.gitTruth.merge_sha,
+        input.generatedAt,
+        input.manifest.pr_url,
+        {
+          required: true,
+          write: false,
+          relPath: modelRoutingPath,
+          expectedIssueId: input.manifest.issue_id,
+          manifestModelRouting: input.manifest.model_routing,
+        },
+      );
+    }
+  }
+
+  // Plan every standard artifact BEFORE writing any of them, so an unbindable
+  // authored artifact aborts the whole run with zero mutation rather than
+  // leaving half the bundle rewritten — the same validate-then-write ordering
+  // the model-routing sidecars above use.
+  type StandardPlan = {
+    proofPath: string;
+    absolutePath: string;
+    nextContent: string | null;
+    exists: boolean;
+  };
+  const standardPlans: StandardPlan[] = [];
   for (const proofFile of STANDARD_PROOF_FILES) {
     const proofPath = paths[proofFile];
     const absolutePath = safeRepoPath(root, proofPath);
-    const nextContent = contentByFile[proofFile];
     const exists = fs.existsSync(absolutePath);
-    const previousContent = exists ? fs.readFileSync(absolutePath, 'utf8') : null;
-    const stale = previousContent !== null &&
-      requiredShas.some((sha) => !previousContent.includes(sha));
-
-    if (proofFile === 'verification.md' && previousContent !== null && hasVerificationShaBindingMarkers(previousContent)) {
-      continue;
-    }
-
-    if (previousContent === nextContent) {
-      pushUnique(unchangedPaths, proofPath);
-      continue;
-    }
-
-    if (shouldWrite) {
-      ensureDir(path.dirname(absolutePath));
-      fs.writeFileSync(absolutePath, nextContent, 'utf8');
-    }
 
     if (!exists) {
-      pushUnique(generatedPaths, proofPath);
+      // Templates are correct behaviour only when no bundle exists yet.
+      standardPlans.push({ proofPath, absolutePath, nextContent: contentByFile[proofFile], exists });
+      continue;
+    }
+
+    const previousContent = fs.readFileSync(absolutePath, 'utf8');
+    const { nextContent } = planExistingProofArtifact(
+      previousContent,
+      proofPath,
+      input.gitTruth.merge_sha,
+      input.manifest.pr_url,
+    );
+    standardPlans.push({ proofPath, absolutePath, nextContent, exists });
+  }
+
+  // evidence.json is validated (write:false) before anything is written too, so
+  // a malformed bundle fails the run without a partially-rebound proof dir.
+  rebindMergeSha(
+    root,
+    input.manifest.issue_id,
+    input.gitTruth.merge_sha,
+    input.generatedAt,
+    input.manifest.pr_url,
+    { write: false },
+  );
+
+  for (const plan of standardPlans) {
+    if (plan.nextContent === null) {
+      pushUnique(preservedPaths, plan.proofPath);
+      pushUnique(unchangedPaths, plan.proofPath);
+      continue;
+    }
+    if (shouldWrite) {
+      ensureDir(path.dirname(plan.absolutePath));
+      fs.writeFileSync(plan.absolutePath, plan.nextContent, 'utf8');
+    }
+    if (plan.exists) {
+      pushUnique(preservedPaths, plan.proofPath);
+      pushUnique(reboundPaths, plan.proofPath);
+      pushUnique(updatedPaths, plan.proofPath);
     } else {
-      pushUnique(updatedPaths, proofPath);
-      if (stale) {
-        pushUnique(stalePathsReplaced, proofPath);
-      }
+      pushUnique(generatedPaths, plan.proofPath);
     }
   }
 
@@ -445,12 +1027,45 @@ export function generateProofArtifacts(
   for (const outcome of rebindOutcomes) {
     if (outcome.status === 'updated') {
       pushUnique(updatedPaths, outcome.path);
-      pushUnique(stalePathsReplaced, outcome.path);
+      pushUnique(preservedPaths, outcome.path);
+      pushUnique(reboundPaths, outcome.path);
     } else if (outcome.status === 'unchanged') {
       pushUnique(unchangedPaths, outcome.path);
+      pushUnique(preservedPaths, outcome.path);
     }
     // 'missing' outcomes are intentionally not reported — evidence.json/verification.md
     // are optional per lane_type (e.g. T3 lanes have neither); absence is not an error.
+  }
+
+  if (input.gitTruth.merge_sha && options.bindModelRouting) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      const outcome = rebindModelRoutingJsonSha(
+        safeRepoPath(root, modelRoutingPath),
+        input.gitTruth.merge_sha,
+        input.generatedAt,
+        input.manifest.pr_url,
+        {
+          required: true,
+          write: shouldWrite,
+          relPath: modelRoutingPath,
+          expectedIssueId: input.manifest.issue_id,
+          manifestModelRouting: input.manifest.model_routing,
+        },
+      );
+      // A model-routing sidecar is bound by APPENDING an immutable
+      // closeout_binding; existing provenance is preserved. That is a rebind,
+      // not a replacement, so it belongs in rebound_paths — reporting it as
+      // `stale_paths_replaced` was part of the same conflation this lane
+      // removes (UTV2-1631).
+      if (outcome.status === 'updated') {
+        pushUnique(updatedPaths, outcome.path);
+        pushUnique(preservedPaths, outcome.path);
+        pushUnique(reboundPaths, outcome.path);
+      } else if (outcome.status === 'unchanged') {
+        pushUnique(unchangedPaths, outcome.path);
+        pushUnique(preservedPaths, outcome.path);
+      }
+    }
   }
 
   return {
@@ -461,9 +1076,127 @@ export function generateProofArtifacts(
     merge_sha: input.gitTruth.merge_sha,
     generated_paths: generatedPaths,
     updated_paths: updatedPaths,
-    unchanged_paths: unchangedPaths,
-    stale_paths_replaced: stalePathsReplaced,
+    // A path that was written cannot also be "unchanged". verification.md is
+    // planned here AND re-checked by rebindMergeSha, so without this filter it
+    // reported as both (visible in the reproduction of this defect).
+    unchanged_paths: unchangedPaths.filter((proofPath) => !updatedPaths.includes(proofPath)),
+    stale_paths_replaced: [],
+    // A file this run created from a template was not "preserved" — the rebind
+    // pass sees it on disk afterwards, so filter it back out.
+    preserved_paths: preservedPaths.filter((proofPath) => !generatedPaths.includes(proofPath)),
+    rebound_paths: reboundPaths.filter((proofPath) => !generatedPaths.includes(proofPath)),
   };
+}
+
+// ── UTV2-1641: automatic CI-DB-proof harvest into evidence.json ──────────────
+
+export interface AutoHarvestCiDbProofResult {
+  attempted: boolean;
+  applied: boolean;
+  code: string;
+  reason?: string;
+  evidence_path?: string;
+}
+
+/**
+ * UTV2-1641: when a merge SHA is available and `evidence.json` exists but does
+ * not yet carry a populated `runtime_proof` (both `queries` and `row_counts`
+ * non-empty), attempts to harvest CI's own genuine "Writable DB proof (staging
+ * only)" evidence for that merge SHA and merge it in.
+ *
+ * This is deliberately best-effort and additive, mirroring
+ * `scripts/ops/proof-repair.ts`'s idempotency contract:
+ *   - If `evidence.json` doesn't exist at all (T2/T3 lanes, or a T1 lane before
+ *     any proof has been authored), this is a no-op -- nothing to harvest into.
+ *   - If `runtime_proof` is already populated, this is a no-op (never
+ *     overwrites a previously-harvested or hand-authored measurement).
+ *   - If no genuine CI receipt/log evidence can be found or verified for this
+ *     merge SHA, this returns a specific failure code and writes NOTHING --
+ *     `truth-check`'s R1/R2 are left to fail on their own honest terms, which
+ *     is the correct outcome for a lane whose CI truly never ran a live DB
+ *     proof (e.g. T2/T3, or a CI run that predates this job's existence).
+ *   - `verifier` is merged via `mergeVerifierIdentity` (UTV2-1642's fix), never
+ *     replaced -- any pre-existing rich verifier narrative survives.
+ *
+ * The caller (`main`, and therefore `post-merge-lane-close.yml`'s
+ * `pnpm ops:proof-generate ... --merge-sha ...` invocation) treats a failure
+ * here as non-fatal: proof-generate's own artifacts were already written
+ * successfully by the time this runs, and a harvest miss is not a reason to
+ * fail the whole command -- it just means R1/R2 stay failed, same as today,
+ * for a genuinely different reason (CI recorded no live DB proof) rather than
+ * an operator having simply not gotten to it yet.
+ */
+export function autoHarvestCiDbProofIntoEvidence(
+  root: string,
+  issueId: string,
+  mergeSha: string | null,
+  manifestCreatedBy: string | null | undefined,
+  options: HarvestCiDbProofOptions & { write?: boolean } = {},
+): AutoHarvestCiDbProofResult {
+  if (!mergeSha) {
+    return { attempted: false, applied: false, code: 'no_merge_sha' };
+  }
+
+  const evidenceRelPath = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase(), 'evidence.json');
+  const evidenceAbsolutePath = safeRepoPath(root, evidenceRelPath);
+  if (!fs.existsSync(evidenceAbsolutePath)) {
+    return { attempted: false, applied: false, code: 'no_evidence_bundle', evidence_path: evidenceRelPath };
+  }
+
+  let existing: Record<string, unknown>;
+  try {
+    existing = JSON.parse(fs.readFileSync(evidenceAbsolutePath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return { attempted: false, applied: false, code: 'evidence_unparseable', evidence_path: evidenceRelPath };
+  }
+
+  const existingRuntimeProof = existing['runtime_proof'];
+  const existingVerifier = existing['verifier'];
+  const hasNonEmptyArray = (value: unknown, key: string): boolean =>
+    !!value &&
+    typeof value === 'object' &&
+    Array.isArray((value as Record<string, unknown>)[key]) &&
+    ((value as Record<string, unknown>)[key] as unknown[]).length > 0;
+  const alreadyPopulated =
+    hasNonEmptyArray(existingRuntimeProof, 'queries') && hasNonEmptyArray(existingRuntimeProof, 'row_counts');
+  if (alreadyPopulated) {
+    return { attempted: false, applied: false, code: 'already_populated', evidence_path: evidenceRelPath };
+  }
+
+  const harvested = harvestCiDbProofForMergeSha(mergeSha, { root, ...options });
+  if (!harvested.ok) {
+    return { attempted: true, applied: false, code: harvested.code, reason: harvested.reason, evidence_path: evidenceRelPath };
+  }
+
+  const priorIdentity =
+    existingVerifier && typeof existingVerifier === 'object' && typeof (existingVerifier as Record<string, unknown>)['identity'] === 'string'
+      ? ((existingVerifier as Record<string, unknown>)['identity'] as string)
+      : null;
+  const harvestNote =
+    `runtime_proof auto-harvested by ops:proof-generate from CI job "${harvested.runInfo.job}" ` +
+    `(run ${harvested.runInfo.run_id}, job ${harvested.runInfo.job_id})`;
+  const identityCandidate = priorIdentity && priorIdentity.trim() ? `${priorIdentity}; ${harvestNote}` : harvestNote;
+
+  if (manifestCreatedBy && identityCandidate === manifestCreatedBy) {
+    return {
+      attempted: true,
+      applied: false,
+      code: 'verifier_identity_matches_creator',
+      reason: `harvested verifier identity would equal manifest.created_by (${manifestCreatedBy})`,
+      evidence_path: evidenceRelPath,
+    };
+  }
+
+  const next: Record<string, unknown> = {
+    ...existing,
+    verifier: mergeVerifierIdentity(existingVerifier, identityCandidate),
+    runtime_proof: harvested.runtimeProof,
+  };
+  if (options.write ?? true) {
+    fs.writeFileSync(evidenceAbsolutePath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  }
+
+  return { attempted: true, applied: true, code: 'harvested', evidence_path: evidenceRelPath };
 }
 
 function firstGitStdout(commands: string[][], runGit: GitRunner, cwd: string): string | null {
@@ -487,11 +1220,28 @@ function fenced(content: string): string {
   return ['```', content, '```'].join('\n');
 }
 
-function isPresent(value: string | null): value is string {
-  return value !== null && value.trim() !== '';
+function isIsoTimestamp(value: string): boolean {
+  return Number.isFinite(Date.parse(value)) && /^\d{4}-\d{2}-\d{2}T/.test(value);
 }
 
-function safeRepoPath(root: string, repoRelativePath: string): string {
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizePrUrl(value: string | null): string | null {
+  const normalized = value?.trim().replace(/\/+$/, '') ?? '';
+  return normalized || null;
+}
+
+/**
+ * Resolves a repo-relative proof path and refuses to return one that escapes
+ * `root` (e.g. a manifest.expected_proof_paths entry containing `../../`).
+ * Exported so callers outside this module -- e.g. lane-close.ts's trusted
+ * `--repair-merged` path, which resolves the same manifest-declared
+ * model-routing.json paths -- get the identical guard rather than a bare
+ * path.resolve() with no escape check (UTV2-1589 independent review).
+ */
+export function safeRepoPath(root: string, repoRelativePath: string): string {
   const resolvedRoot = path.resolve(root);
   const absolutePath = path.resolve(resolvedRoot, repoRelativePath);
   if (!absolutePath.startsWith(resolvedRoot + path.sep)) {
@@ -517,10 +1267,78 @@ function main(argv = process.argv.slice(2)): number {
     }),
     runtimeResult: (getFlag(flags, 'runtime-result') as ProofGenerateInput['runtimeResult']) ?? 'not_run',
   };
-  const result = generateProofArtifacts(input, { root: ROOT, write: !bools.has('dry-run') });
+
+  let result: ProofGenerateResult;
+  try {
+    result = generateProofArtifacts(input, {
+      root: ROOT,
+      write: !bools.has('dry-run'),
+      bindModelRouting: bools.has('bind-model-routing'),
+    });
+  } catch (error) {
+    if (error instanceof ProofPreservationError) {
+      // UTV2-1631: an authored proof artifact could not be safely rebound. No
+      // proof artifact was mutated (planning runs before any write). Exit
+      // non-zero so the caller — including post-merge-lane-close.yml — sees a
+      // failure instead of a silently scaffolded bundle.
+      const failure = {
+        ok: false as const,
+        code: error.code,
+        issue_id: issueId,
+        proof_path: error.proofPath,
+        message: error.message,
+      };
+      if (bools.has('json')) {
+        emitJson(failure);
+      } else {
+        process.stderr.write(`${failure.code}: ${failure.message}\n`);
+      }
+      return 1;
+    }
+    if (error instanceof ModelRoutingRebindError) {
+      // A required model-routing sidecar was missing, malformed, or already bound
+      // to conflicting historical authority. No proof artifact was mutated (the
+      // routing-sidecar validation runs before any write). Fail with a structured,
+      // parseable result rather than an uncaught crash, per UTV2-1589.
+      const failure = {
+        ok: false as const,
+        code: error.code,
+        issue_id: issueId,
+        proof_path: error.proofPath,
+        message: error.message,
+      };
+      if (bools.has('json')) {
+        emitJson(failure);
+      } else {
+        process.stderr.write(`${failure.code}: ${failure.message}\n`);
+      }
+      return 1;
+    }
+    throw error;
+  }
+
+  // UTV2-1641: best-effort auto-harvest of CI's own genuine DB-proof evidence.
+  // Never fatal -- proof-generate's own artifacts (above) already succeeded by
+  // this point, and a harvest miss just means R1/R2 stay honestly failed for a
+  // lane whose CI never produced a live DB proof (T2/T3, or no such CI run).
+  let harvestResult: AutoHarvestCiDbProofResult | null = null;
+  if (!bools.has('no-harvest-ci-db-proof')) {
+    try {
+      harvestResult = autoHarvestCiDbProofIntoEvidence(ROOT, issueId, input.gitTruth.merge_sha, manifest.created_by, {
+        write: !bools.has('dry-run'),
+      });
+    } catch (error) {
+      harvestResult = {
+        attempted: true,
+        applied: false,
+        code: 'harvest_threw',
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 
   if (bools.has('json')) {
-    emitJson(result);
+    emitJson({ ...result, ci_db_proof_harvest: harvestResult });
   } else {
     process.stdout.write(`Generated proof artifacts for ${result.issue_id}\n`);
     for (const generatedPath of result.generated_paths) {
@@ -531,6 +1349,21 @@ function main(argv = process.argv.slice(2)): number {
     }
     for (const unchangedPath of result.unchanged_paths) {
       process.stdout.write(`unchanged: ${relativeToRoot(path.resolve(ROOT, unchangedPath))}\n`);
+    }
+    for (const preservedPath of result.preserved_paths) {
+      const action = result.rebound_paths.includes(preservedPath) ? 'sha-rebound in place' : 'left byte-identical';
+      process.stdout.write(`preserved: ${relativeToRoot(path.resolve(ROOT, preservedPath))} (${action})\n`);
+    }
+    if (harvestResult) {
+      if (harvestResult.applied) {
+        process.stdout.write(`ci_db_proof_harvest: applied (${harvestResult.evidence_path})\n`);
+      } else if (harvestResult.attempted) {
+        process.stdout.write(
+          `ci_db_proof_harvest: not applied -- ${harvestResult.code}${harvestResult.reason ? `: ${harvestResult.reason}` : ''}\n`,
+        );
+      } else {
+        process.stdout.write(`ci_db_proof_harvest: skipped (${harvestResult.code})\n`);
+      }
     }
   }
 

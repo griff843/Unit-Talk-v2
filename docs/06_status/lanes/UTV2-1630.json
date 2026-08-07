@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1630",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1630-isolated-proof-execution",
+  "branch": "claude/utv2-1630-isolated-proof-execution",
+  "base_branch": "main",
+  "commit_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1321",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/live-schema-parity.yml",
+    ".github/workflows/proof-gate.yml",
+    ".github/workflows/proof-regression.yml",
+    ".github/workflows/shadow-parity-required.yml",
+    ".github/workflows/staging-db-proof.yml",
+    ".github/workflows/t1-proof-gate.yml",
+    ".ops/sync/UTV2-1553.yml",
+    ".ops/sync/UTV2-1630.yml",
+    "docs/06_status/lanes/UTV2-1553.json",
+    "docs/06_status/lanes/UTV2-1585.json",
+    "docs/06_status/lanes/UTV2-1612.json",
+    "docs/06_status/lanes/UTV2-1630.json",
+    "docs/06_status/proof/UTV2-1553/**",
+    "docs/06_status/proof/UTV2-1630/**",
+    "package.json",
+    "scripts/ci/assert-staging-target.ts",
+    "scripts/ci/assert-unmodified-vs-base.test.ts",
+    "scripts/ci/assert-unmodified-vs-base.ts",
+    "scripts/ci/isolated-proof-attestation.test.ts",
+    "scripts/ci/isolated-proof-attestation.ts",
+    "scripts/ci/required-db-smoke.ts",
+    "scripts/ci/seed-staging-fixtures.ts",
+    "scripts/ci/staging-path-enforcement.test.ts",
+    "scripts/ci/staging-reference-fixtures.json",
+    "scripts/ci/verify-db-proof-receipt.test.ts",
+    "scripts/ci/verify-db-proof-receipt.ts",
+    "scripts/ci/workflow-production-credential-guard.test.ts",
+    "scripts/ci/workflow-production-credential-guard.ts",
+    "scripts/ops/proof-auditor-gate.test.ts",
+    "scripts/ops/proof-auditor-gate.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1630/evidence.json",
+    "docs/06_status/proof/UTV2-1630/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-30T12:50:45.177Z",
+  "heartbeat_at": "2026-07-31T04:42:52.513Z",
+  "closed_at": "2026-07-31T04:42:52.513Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1630-isolated-proof-execution.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-30T21:31:04.863Z",
+      "verdict": "pass",
+      "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1321"
+    },
+    {
+      "checked_at": "2026-07-30T21:32:48.135Z",
+      "verdict": "fail",
+      "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "failures": [
+        "P3",
+        "C4",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-31T04:42:39.405Z",
+      "verdict": "pass",
+      "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-31T04:42:50.374Z",
+      "verdict": "pass",
+      "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1630-isolated-proof-execution",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "scope_transfers": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "from_issue": "UTV2-1627",
+      "from_state": "Phase A frozen at b446cbb2",
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T18:00:00Z",
+      "authority": "PM directive 2026-07-30",
+      "reason": "ci.yml on main writes production SUPABASE_* into local.env and runs verify:live-db-verdict -> test:live-db -> pnpm test:db, bypassing the guard that lived only inside ci:db-smoke. Observed writing 7 picks and 4 submissions to production from PR #1321 on 2026-07-30. UTV2-1627 Phase A changed the same file but is frozen and unmerged, and referenced CI_SUPABASE_ANON_KEY / CI_SUPABASE_SERVICE_ROLE_KEY, which were never provisioned.",
+      "supersedes": "the ci.yml hunk in UTV2-1627 Phase A (b446cbb2)",
+      "follow_up": "UTV2-1627 must rebase onto the landed ci.yml protection, not restore its own copy."
+    },
+    {
+      "path": ".github/workflows/proof-gate.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T18:40:00Z",
+      "authority": "PM directive 2026-07-30 (absorb the live ci.yml bypass)",
+      "reason": "Its runtime-verifier job wrote production SUPABASE_* into local.env and ran pnpm ci:db-smoke. With the staging guard in place that call refuses, so C2 would be permanently red and T1 proof unobtainable. Migrated to the staging-ci environment in-lane rather than shipping a known breakage."
+    },
+    {
+      "path": ".github/workflows/proof-regression.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:20:00Z",
+      "authority": "PM directive 2026-07-30 (production-safe CI recovery)",
+      "reason": "PR-triggered job that handed the PRODUCTION service-role key to proof scripts selected by a grep over the changed-file list — i.e. to arbitrary writable code, on every PR touching settlement/submission/promotion/distribution source. Same defect class as the ci.yml bypass; found by the workflow credential scanner added in this lane. Migrated to staging-ci and gated on ci:assert-staging."
+    },
+    {
+      "path": ".github/workflows/t1-proof-gate.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:20:00Z",
+      "authority": "PM directive 2026-07-30 (production-safe CI recovery)",
+      "reason": "Disabled by trigger (workflow_dispatch only) but still manually dispatchable, and its C2 step runs pnpm ci:db-smoke with production credentials. A dormant production-write path is one dispatch away from a live one. Migrated to staging-ci."
+    },
+    {
+      "path": "docs/06_status/lanes/UTV2-1553.json",
+      "from_issue": "UTV2-1553",
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:20:00Z",
+      "authority": "PM directive 2026-07-30 (stacked-PR path)",
+      "reason": "Circular dependency: UTV2-1630 removes production credentials from CI, but could not merge until the UTV2-1553 ghost-lock release landed; and UTV2-1553's PR #1322, branched from main, ran main's production-writing ci.yml on every push (192 picks + 171 submissions written 2026-07-30 19:00-20:14:57Z). Resolved by rebasing #1322 onto this branch so it inherits the staging-only workflows, then squashing the repair in here under a UTV2-1630-only commit message. The full UTV2-1553 record is preserved in PR #1322, Linear and this manifest.",
+      "covers": [
+        ".ops/sync/UTV2-1553.yml",
+        "docs/06_status/lanes/UTV2-1553.json",
+        "docs/06_status/lanes/UTV2-1585.json",
+        "docs/06_status/lanes/UTV2-1612.json",
+        "docs/06_status/proof/UTV2-1553/**"
+      ],
+      "follow_up": "UTV2-1553 closes against this merge SHA; PR #1322 is the authoritative repair record."
+    },
+    {
+      "path": ".github/workflows/shadow-parity-required.yml + .github/workflows/live-schema-parity.yml",
+      "from_issue": null,
+      "to_issue": "UTV2-1630",
+      "at": "2026-07-30T21:45:00Z",
+      "authority": "adversarial exact-head review, PM directive 2026-07-30 (close every P0/P1)",
+      "reason": "Both are pull_request-triggered, check out the PR head, and run scripts from that checkout with a production service-role key / production superuser Postgres URL. In both cases the scripts they execute are themselves inside the workflow's trigger path filter, so a PR that edits one runs its own version against production. The path filter decides whether the job runs; the checkout decides what runs. Closed with scripts/ci/assert-unmodified-vs-base.ts rather than by removing the credential, because these two legitimately need to READ production."
+    }
+  ]
+}

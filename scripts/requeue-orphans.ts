@@ -1,5 +1,5 @@
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
   createDatabaseRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
@@ -10,7 +10,7 @@ const ORPHAN_PREFIXES = ['d77a35b3', '3b5d9e84', '306deff8', 'd00954ec', '4701f7
 
 async function main() {
   const env = loadEnvironment();
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   // Step 1: resolve full UUIDs and confirm still orphaned
   const { data: picks, error } = await db

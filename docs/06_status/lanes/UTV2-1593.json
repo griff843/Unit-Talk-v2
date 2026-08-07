@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1593",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1593-stale-proof-fixture-assertion",
+  "branch": "claude/utv2-1593-stale-proof-fixture-assertion",
+  "base_branch": "main",
+  "commit_sha": "9788f5fd80bec407c5471b8bb9219a3d7a2976b2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1310",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1593/.gitkeep",
+    "docs/06_status/proof/UTV2-1593/verification.md",
+    "scripts/ops/proof-generate.test.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/proof-generate.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-07-27T02:37:56.370Z",
+  "heartbeat_at": "2026-07-27T04:08:12.470Z",
+  "closed_at": "2026-07-27T04:08:12.470Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-27T04:08:09.587Z",
+      "verdict": "pass",
+      "merge_sha": "9788f5fd80bec407c5471b8bb9219a3d7a2976b2",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1310",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "pr_url",
+        "files_changed",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-27T04:08:09.595Z",
+      "verdict": "pass",
+      "merge_sha": "9788f5fd80bec407c5471b8bb9219a3d7a2976b2",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1593-stale-proof-fixture-assertion",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

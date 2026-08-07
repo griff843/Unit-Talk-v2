@@ -1,21 +1,24 @@
 schema_version: 1
-issue_id: UTV2-1086
+issue_id: UTV2-1633
 lane_type: migration
 owner: claude
-acquired_at: 2026-05-24T16:20:00.000Z
+acquired_at: 2026-08-01T04:08:51.890Z
 scope:
-  - supabase/migrations/20260524001_utv2_1086_snapshot_cutover.sql
-  - db/migrations-rollback/20260524001_utv2_1086_snapshot_cutover.down.sql
-  - packages/db/src/repositories.ts
-  - packages/db/src/runtime-repositories.ts
-  - apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts
-  - apps/ingestor/package.json
-  - scripts/ops/pr-review-packet.ts
-  - docs/06_status/lanes/UTV2-1086.json
-  - docs/06_status/lanes/UTV2-1157-codex.json
-  - docs/06_status/proof/UTV2-1086/evidence.json
-  - docs/06_status/proof/UTV2-1086/verification-log.md
-  - docs/06_status/proof/UTV2-1086/verification.md
-  - .ops/sync/UTV2-1086.yml
+  - supabase/migrations/20260801000000_utv2_1633_reporting_reader_role.sql
+  - db/migrations-rollback/20260801000000_utv2_1633_reporting_reader_role.down.sql
+  - scripts/ci/utv2-1633-reporting-reader-role-guard.test.ts
+  - docs/06_status/lanes/UTV2-1633.json
+  - docs/06_status/proof/UTV2-1633/evidence.json
+  - docs/06_status/proof/UTV2-1633/verification.md
+  - .ops/sync/UTV2-1633.yml
   - .lane/migration-lock.yml
 release_after: merge
+note: >-
+  Re-claimed from UTV2-1399 (acquired 2026-07-31T20:52:38.113Z, release_after:
+  merge). UTV2-1399 merged (PR #1343, squash SHA fdc193582f94ad7538fa594b475847eb81a3647f)
+  and its lane manifest reads status: done on origin/main, but the lock file
+  itself was never released back -- scripts/lane-contract.ts only checks file
+  existence, not that the lock matches the current lane, so the stale lock
+  neither blocked nor protected anything. Re-claimed for UTV2-1633, the next
+  migration-slot lane, per the sequencing note in
+  docs/06_status/proof/UTV2-1399/verification.md.

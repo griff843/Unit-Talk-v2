@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1628",
+  "tier": "T1",
+  "title": "One enforced boundary for every privileged database client",
+  "generated_at": "2026-07-30T23:50:00.000Z",
+  "implementation_sha": "a35030ebb3130e5c61b697fa421b13bbb2c1b7f5",
+  "sha_binding": {
+    "verified_source_sha": "69b1c37091e5d8984baa48e745ac1272123fa020",
+    "base_sha": "fd0b3a114a403065238e562f1ea5b82033f78cdf",
+    "pre_fix_baseline_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+    "current_pr_head_sha": "4d4fdd78603d026902fd4f8fb892314e4be727a5",
+    "merge_sha": "69b1c37091e5d8984baa48e745ac1272123fa020",
+    "sha_type": "merge_sha",
+    "verified_source_note": "Every static measurement below was taken on the implementation commit whose original hash was a35030ebb3130e5c61b697fa421b13bbb2c1b7f5, with the pre-fix comparison taken on a real detached worktree at a55de402. PR #1324 squash-merged to main as 69b1c37091e5d8984baa48e745ac1272123fa020 at 2026-07-31T00:50:03Z, from head 4d4fdd78603d026902fd4f8fb892314e4be727a5, and merge_sha above is that commit.",
+    "rebase_note": "implementation_sha names the ORIGINAL implementation commit — the tree every static measurement in this bundle was taken on, and the one the first CI receipt was produced from. Branch protection requires the head to be current with main, and several lanes landed while this PR was open, so the branch was rebased repeatedly and that commit's hash was rewritten each time; naming a rewritten hash here would be a moving target that is stale the moment main advances again. base_sha is likewise a real ancestor rather than the final base. Two of the rebases hit the same package.json conflict and were resolved the same way — `test:ops` is the union of the lanes' test lists and the `ci:*` scripts sit side by side — and two changed this lane's own content, recorded as live_regression_caught and deferral_closed. The authoritative binding is the merge SHA, which post-merge-lane-close.yml writes.",
+    "bound_at": "2026-07-31T00:53:51.470Z"
+  },
+  "verifier": {
+    "identity": "github-actions/CI — run 30591605559, job staging-db-proof (producer) and job 91035195309 `verify` (independent receipt verifier)",
+    "method": "scripts/ci/verify-db-proof-receipt.ts re-checked the receipt against its own GITHUB_* values inside the required `verify` context and printed `Verdict: PASS`.",
+    "note": "The implementing agent is not the verifier of the writable-DB claim by design: proof text cannot show which database a run reached, so the verifier is the CI job that holds the credential and the separate job that re-derives the receipt's binding."
+  },
+  "static_proof": {
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PARTIAL",
+      "stages_passed": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "verify_static_exit_code": 0,
+      "test_totals": {
+        "suites": 96,
+        "tests": 3998,
+        "pass": 3998,
+        "fail": 0,
+        "skipped": 0,
+        "totals_note": "`suites` counts the 96 `tsx --test` process runs that make up `pnpm test`; the per-process `# tests` lines sum to 3998 with zero failures, zero skips and zero cancellations. It was 3929 at implementation time and 3980 after the first rebase; the 69 additional tests belong to the two lanes that landed while this PR was open and entered `test:ops` when their lists were unioned with this lane's."
+      },
+      "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
+      "stop_reason": "No staging credential exists on this workstation, so ci:assert-staging cannot resolve the approved staging project and refuses. That refusal is UTV2-1630's shipped control working as intended, not a gap here.",
+      "authoritative_full_run": "the required CI `verify` context on this head"
+    },
+    "ci_verify_context": {
+      "run_id": "30591605559",
+      "job_id": "91035195309",
+      "head_sha": "e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b",
+      "conclusion": "success",
+      "steps": [
+        "Assert the DB proof producer succeeded = success",
+        "Privileged DB client boundary = success",
+        "Audit production dependencies = success",
+        "Verify (static) = success",
+        "Command Center tests = success",
+        "Download staging DB proof receipt (this run) = success",
+        "Verify staging DB proof receipt = success"
+      ],
+      "db_client_boundary_output": "[db-client-boundary] 5 direct driver construction site(s) across 5 file(s) / OK: every site is classified and none is reachable from `pnpm test`",
+      "head_note": "e8bc33fe is the pre-rebase head. The rebase onto 328ac4b3 changed one file, package.json, and rewrote the commit hashes; the required `verify` context runs again on the rebased head and produces its own receipt, which is the authoritative one for the merge. This block records the run whose logs the numbers above were read from."
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required `verify` context against its own GITHUB_* values",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP.",
+    "queries": [
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "no duplicate participants for the same external_id and sport",
+        "result": "ok 5"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "ok 6"
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "correction chain is additive — original settlement row is not mutated",
+        "result": "ok 7"
+      }
+    ],
+    "queries_note": "The seven live cases `pnpm test:db` executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential. Read from the ci-db-proof-receipt/v2 captured_output, whose sha256 the verifier re-derived; not transcribed from a local run.",
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "operation": "reset",
+        "rows": 1
+      },
+      {
+        "table": "distribution_outbox",
+        "operation": "reset",
+        "rows": 11
+      },
+      {
+        "table": "system_runs",
+        "operation": "reset",
+        "rows": 1
+      },
+      {
+        "table": "sports",
+        "operation": "upsert",
+        "rows": 9
+      },
+      {
+        "table": "cappers",
+        "operation": "upsert",
+        "rows": 1
+      },
+      {
+        "table": "market_families",
+        "operation": "upsert",
+        "rows": 6
+      },
+      {
+        "table": "selection_types",
+        "operation": "upsert",
+        "rows": 3
+      },
+      {
+        "table": "market_types",
+        "operation": "upsert",
+        "rows": 133
+      }
+    ],
+    "row_counts_note": "Observed on staging xskgrzbteyqdufktjrjx by scripts/ci/seed-staging-fixtures.ts in CI run 30591605559, job staging-db-proof. `reset` rows are the deletions the seeder reported for the mutable tables; `upsert` rows are the reference data it re-seeded. settlement_records, picks and submissions are retained by design and were not reset.",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "github_run_id": "30591605559",
+      "github_run_attempt": "1",
+      "github_sha": "293cb776ab79947bbb1c7bd413ba188029d71c74",
+      "commands": [
+        "pnpm test:db",
+        "pnpm test:t1-proof:live"
+      ],
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "exit_code": 0,
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "job_tap_total": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0
+      },
+      "repo_migration_head": "20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "fixture_run_id": "utv2-1630-30591605559-1",
+      "output_sha256": "01617270fdb452bc0f64b2e28f8bafcbd773a869448b5e883de2943b02109000",
+      "receipt_sha256": "ff0e2ac924ad372cffc1942d3b12d43e486649e802dcfdee565321be8fa6079c",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30591605559 attempt 1 @ 293cb776ab79947bbb1c7bd413ba188029d71c74, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "pr": 1324,
+      "head_sha_at_proof": "e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1324/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was e8bc33fe3c7b2ce925ccb037828a6ab0f23fb63b, before the rebase onto 328ac4b3. That rebase changed package.json only. Every head gets its own receipt: the one the required `verify` context verifies on the final head is what actually gates the merge, and this block is the run whose captured_output the queries and row counts above were read from.",
+      "result": "success"
+    }
+  },
+  "boundary_proof": {
+    "guard": "scripts/ci/privileged-db-client-guard.ts (pnpm ci:db-client-boundary)",
+    "method": "AST construction-site inventory plus static import-graph reachability from the real `pnpm test` entrypoints; no string search, no credential, no connection",
+    "both_directions": {
+      "pre_fix": {
+        "sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+        "ok": false,
+        "sites": 93,
+        "files": 87,
+        "findings": 94,
+        "findings_by_kind": {
+          "raw-in-migrated": 84,
+          "reachable-from-test": 8,
+          "unasserted-site": 1,
+          "boundary-not-reachable": 1
+        },
+        "reachable_from_pnpm_test": 8,
+        "reachable_files": [
+          "apps/command-center/src/lib/data/client.ts",
+          "packages/db/src/client.ts",
+          "scripts/backup-alert-check.ts",
+          "scripts/db-role-validator.ts",
+          "scripts/ingestor-alert-check.ts",
+          "scripts/ops/fix-settlement-utv2-665.ts",
+          "scripts/ops/ingestor-health-check.ts",
+          "scripts/prune-provider-offers.ts"
+        ]
+      },
+      "fixed": {
+        "ref": "this branch head",
+        "ok": true,
+        "sites": 4,
+        "files": 4,
+        "findings": 0,
+        "reachable_from_pnpm_test": 0
+      },
+      "note": "Same guard, same inventory, two real trees. The pre-fix tree is a detached git worktree at a55de402, not a synthetic fixture. Re-measured after the second rebase: the pre-fix count is 94 rather than the 92 first observed, because two entries were added to the inventory during this PR and neither is migrated in the pre-fix tree."
+    },
+    "negative_control": {
+      "description": "A two-line file constructing a client directly was added under scripts/, the guard run, the file removed, the guard run again.",
+      "with_new_unclassified_constructor": {
+        "sites": 5,
+        "files": 5,
+        "findings": 1,
+        "finding_kind": "unclassified",
+        "exit_code": 1
+      },
+      "after_removal": {
+        "sites": 4,
+        "files": 4,
+        "findings": 0,
+        "exit_code": 0
+      }
+    },
+    "residual_direct_sites": [
+      "packages/db/src/privileged-client-boundary.ts (is the boundary)",
+      "scripts/ops/db-health-tripwire.ts (postgres driver; connection string passed through assertPostgresConnectionAllowed)",
+      "apps/command-center/src/components/ApiHealthMonitoring.tsx (anon key, browser bundle)",
+      "apps/command-center/src/components/PipelineLiveRefresh.tsx (anon key, browser bundle)"
+    ],
+    "enforcement_points": [
+      ".github/workflows/ci.yml — step `Privileged DB client boundary` inside the required `verify` job",
+      "package.json — first stage of `verify:static`, so the local route cannot skip it either"
+    ],
+    "live_regression_caught": {
+      "when": "between the first CI run on this PR and the merge",
+      "trigger": "another lane landed scripts/ops/readiness-refresh.ts on main; rebasing onto it brought the file and its test into this tree",
+      "guard_result": {
+        "sites": 6,
+        "files": 6,
+        "findings": 2,
+        "finding_kinds": [
+          "unclassified",
+          "reachable-from-test"
+        ],
+        "file": "scripts/ops/readiness-refresh.ts",
+        "construction_site": "createClient() at line 1000 from '@supabase/supabase-js'",
+        "exit_code": 1
+      },
+      "resolution": "Migrated to createPrivilegedClient with purpose 'readiness-refresh production read' and given a writable-privileged/migrated inventory entry. The file's own production-only precondition is unchanged. Guard returns 5 sites / 0 findings / exit 0.",
+      "note": "Both rules fired independently on the same file — the inventory rule because it was new, the reachability rule because its test had entered `pnpm test` in the same merge. The control was exercised by a real regression rather than only by its own fixtures."
+    },
+    "inventory": {
+      "path": "scripts/ci/privileged-db-client-inventory.json",
+      "regenerate_with": "pnpm ci:db-client-inventory",
+      "entries": 89,
+      "by_classification_and_disposition": {
+        "writable-privileged/migrated": 40,
+        "dead/migrated": 45,
+        "writable-privileged/asserted-in-place": 1,
+        "read-only/unprivileged-direct": 2,
+        "behind-the-boundary/is-boundary": 1
+      },
+      "note": "89 rather than the 88 measured at implementation time: scripts/ops/readiness-refresh.ts was added after the first rebase (see live_regression_caught), and there is no longer a deferred-cross-lane row (see deferral_closed)."
+    },
+    "deferral_closed": {
+      "file": "scripts/shadow-scoring-runner.ts",
+      "was": "deferred-cross-lane, on the stated condition that rule 3 would fail the build the moment the file became reachable from `pnpm test`",
+      "trigger": "the lane that owned the file landed on main and added scripts/shadow-scoring-runner.test.ts to `test:ops`, putting the module inside pnpm test's import graph",
+      "states_observed": [
+        {
+          "state": "after the second rebase, before migrating",
+          "sites": 5,
+          "findings": 1,
+          "kind": "reachable-from-test"
+        },
+        {
+          "state": "after migrating to the boundary, before re-classifying",
+          "sites": 4,
+          "findings": 1,
+          "kind": "no-site-for-direct-entry"
+        },
+        {
+          "state": "after re-classifying as migrated",
+          "sites": 4,
+          "findings": 0,
+          "kind": null
+        }
+      ],
+      "note": "Three states, three verdicts, none of them a judgement call. The classification could not outlive the condition it was granted under, and the guard refused a stale label even after the underlying problem was fixed."
+    }
+  },
+  "r_level": {
+    "checker": "scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "verdict": "PASS",
+    "rules_matched": [
+      "lifecycle-fsm",
+      "operator-ui"
+    ],
+    "advisory_missing": [
+      "r4-fault-report (PM-gated, advisory)"
+    ]
+  },
+  "known_limitations": [
+    "Shadow Parity Check does not run on this PR: its pull_request path filter covers apps/api/src/**lifecycle|promotion|settlement, submission-service.ts, candidate-pick-scanner.ts and packages/domain/src/**, none of which this diff touches. That workflow pins scripts/shadow-scoring-runner.ts against the merge base, so a PR that did trigger it and also edited that file would be refused by design — the migration here was safe only because the filter does not select this diff, and a future edit to that file under a triggering diff will need the pin acknowledged rather than worked around.",
+    "Two Command Center browser components stay direct. They are anon-key only and the guard re-checks that premise every run, but nothing stops a new browser component being added under the same exemption through a reviewed inventory entry.",
+    "The boundary governs construction, not the environment. A process that is neither under node:test nor flagged staging-only may still reach production with a service-role key — that is production runtime and it must.",
+    "The inventory's `referenced` field, and therefore its `dead` bucket, is a heuristic over imports, npm scripts, workflows and doc mentions. Nothing enforces on it; all 45 dead entries were migrated regardless.",
+    "File scope lock is red on this PR and is not a required context: the guard reads file_scope_lock from the lane manifest as first committed on the branch, and this lane's manifest is created in a later commit than the implementation it covers.",
+    "Readiness Regression Gate and Live Schema Parity are red and pre-existing — a stale readiness score and 80 pre-existing migration/live-schema drift items respectively. Neither is a required context and this diff touches neither."
+  ],
+  "explicitly_not": [
+    "no production database mutation",
+    "no production credential in any checkout or PR-triggered workflow",
+    "no deployment or service restart",
+    "no direct-main or admin bypass",
+    "no branch-protection change",
+    "no writable DB claim asserted from proof text"
+  ]
+}

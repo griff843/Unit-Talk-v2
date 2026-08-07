@@ -1,68 +1,48 @@
 name: Readiness Regression Gate
 
+# UTV2-1626 — the gate now says WHICH kind of failure it found.
+#
+# It used to inline a bash script that exited 1 for two very different things: a
+# ledger older than 48h, and a RED verdict. Both printed a red X, so a real
+# regression and a forgotten artifact were indistinguishable — and since the
+# ledger was never refreshed, every lane learned to ignore the check entirely.
+#
+# scripts/ci/readiness-ledger-gate.ts separates them:
+#   LEDGER_MISSING / LEDGER_INVALID / LEDGER_STALE / DIMENSION_STALE /
+#   OBSERVER_DEGRADED  → the ledger cannot be trusted (observer failure)
+#   READINESS_RED      → production is measurably failing (product condition)
+#
+# This job reads only the committed ledger. It holds no credential and touches no
+# production system.
+
 on:
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   readiness-regression-gate:
     name: Readiness Regression Gate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          fetch-depth: 0
+          version: 10.29.3
 
-      - name: Check readiness-score.json
-        shell: bash
-        run: |
-          SCORE_FILE="docs/06_status/readiness/readiness-score.json"
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
-          if [ ! -f "$SCORE_FILE" ]; then
-            echo "::error::$SCORE_FILE not found — readiness ledger missing"
-            exit 1
-          fi
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-          VERDICT=$(jq -r '.verdict' "$SCORE_FILE")
-          GENERATED_AT=$(jq -r '.generated_at' "$SCORE_FILE")
-          MAIN_SHA=$(jq -r '.main_sha' "$SCORE_FILE")
-
-          echo "Verdict:      $VERDICT"
-          echo "Generated at: $GENERATED_AT"
-          echo "Ledger SHA:   $MAIN_SHA"
-
-          # Staleness check
-          GENERATED_EPOCH=$(date -d "$GENERATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${GENERATED_AT%.*}" +%s 2>/dev/null || echo 0)
-          NOW_EPOCH=$(date +%s)
-          AGE_HOURS=$(( (NOW_EPOCH - GENERATED_EPOCH) / 3600 ))
-
-          echo "Ledger age: ${AGE_HOURS}h"
-
-          FAIL=0
-
-          if [ "$AGE_HOURS" -gt 48 ]; then
-            echo "::error::Readiness ledger is ${AGE_HOURS}h stale (>48h threshold). Update readiness-score.json before merging."
-            FAIL=1
-          elif [ "$AGE_HOURS" -gt 24 ]; then
-            echo "::warning::Readiness ledger is ${AGE_HOURS}h stale (>24h). Consider refreshing readiness-score.json."
-          fi
-
-          # Verdict check
-          if [ "$VERDICT" = "RED" ]; then
-            echo "::error::Readiness verdict is RED — production has blocking failures. Resolve before merging."
-            BLOCKERS=$(jq -r '.blockers[]?' "$SCORE_FILE" | tr '\n' ', ')
-            echo "::error::Blocking dimensions: $BLOCKERS"
-            FAIL=1
-          elif [ "$VERDICT" = "YELLOW" ]; then
-            BLOCKERS=$(jq -r '.blockers[]?' "$SCORE_FILE" | tr '\n' ', ')
-            echo "::warning::Readiness verdict is YELLOW (blockers: $BLOCKERS). GREEN required for full production clearance."
-          elif [ "$VERDICT" = "GREEN" ]; then
-            echo "Readiness verdict: GREEN — no blocking failures."
-          else
-            echo "::error::Unknown verdict '$VERDICT' in readiness-score.json"
-            FAIL=1
-          fi
-
-          if [ "$FAIL" = "1" ]; then
-            exit 1
-          fi
+      - name: Evaluate the readiness ledger
+        run: pnpm ci:readiness-gate

@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import {
   evaluateIngestorOutageHealth,
@@ -110,7 +110,7 @@ export async function readLatestProviderOfferUpdatedAt(environment: Pick<
     return null;
   }
 
-  const db = createClient(environment.SUPABASE_URL, environment.SUPABASE_SERVICE_ROLE_KEY, {
+  const db = createPrivilegedClient(environment.SUPABASE_URL, environment.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
@@ -135,7 +135,7 @@ export async function readLatestIngestorRunStartedAt(environment: Pick<
     return null;
   }
 
-  const db = createClient(environment.SUPABASE_URL, environment.SUPABASE_SERVICE_ROLE_KEY, {
+  const db = createPrivilegedClient(environment.SUPABASE_URL, environment.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 

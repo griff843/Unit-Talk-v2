@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1635",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/.worktrees/wt-proofclass",
+  "branch": "claude/utv2-1635-bind-merge-sha",
+  "base_branch": "main",
+  "commit_sha": "7279ee3977c1945bd6b13c8edc2a1fe57b70c09c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1337",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/**",
+    "docs/06_status/lanes/**",
+    "docs/06_status/proof/UNPROVEN_BUT_SHIPPED.json",
+    "docs/06_status/proof/UNPROVEN_BUT_SHIPPED.md",
+    "docs/06_status/proof/UTV2-1423/RECOVERED.md",
+    "docs/06_status/proof/UTV2-1423/recovered/**",
+    "docs/06_status/proof/UTV2-1631/proof-scaffold-audit.md",
+    "docs/06_status/proof/UTV2-1635/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1635/verification.md",
+    "docs/06_status/proof/UTV2-1635/diff-summary.md"
+  ],
+  "status": "done",
+  "started_at": "2026-07-31T12:39:06.080Z",
+  "heartbeat_at": "2026-07-31T21:34:04.245Z",
+  "closed_at": "2026-07-31T21:34:04.245Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-31T20:06:36.422Z",
+      "verdict": "pass",
+      "merge_sha": "7279ee3977c1945bd6b13c8edc2a1fe57b70c09c",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1337"
+    },
+    {
+      "checked_at": "2026-07-31T21:34:01.414Z",
+      "verdict": "pass",
+      "merge_sha": "7279ee3977c1945bd6b13c8edc2a1fe57b70c09c",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-07-31T20:16:46.834Z",
+      "reasons": [
+        "post-merge closeout gaps: L2/P3/C4/P13/P14 truth-check failures require a follow-up commit on a new branch"
+      ],
+      "detected_by": "claude"
+    }
+  ],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/.worktrees/wt-proofclass",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

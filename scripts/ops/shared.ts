@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
@@ -10,6 +10,29 @@ export type LaneManifestStatus =
   | 'in_review'
   | 'merged'
   | 'done'
+  /**
+   * UTV2-1619 capability 13. Truthful terminal states, added because the enum
+   * previously offered only `merged` and `done` as non-consuming terminals --
+   * so a lane that failed, was parked, or was superseded could only release its
+   * resources by having a completion written over it, which fabricates an
+   * outcome that never happened.
+   *
+   * `failed`     - the lane ended without completing. Releases resources,
+   *                asserts NO completion, and is refused as success by the
+   *                done-gate.
+   * `parked`     - deliberately set aside, retaining identity, scope lock and
+   *                history. Releases executor attention but keeps the lane.
+   * `superseded` - the work was overtaken by other work that shipped.
+   * `cancelled`  - the work was withdrawn and will not be done.
+   *
+   * `superseded` and `cancelled` are deliberately distinct from `done`:
+   * collapsing them destroys the difference between work that shipped and work
+   * that was abandoned because something else did.
+   */
+  | 'failed'
+  | 'parked'
+  | 'superseded'
+  | 'cancelled'
   | 'blocked'
   | 'reopened';
 export type CanonicalLaneType =
@@ -287,11 +310,90 @@ const ISSUE_PATTERN = /^(?:UTV2|UNI)-\d+$/;
 const VERIFICATION_TARGET_PATTERN = /^UTV2-\d+$/;
 const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN = 'dispatch-auto';
+/**
+ * UTV2-1619 capability 13: capacity is a MATRIX, not one flat set.
+ *
+ * Before this, `ACTIVE_LOCK_STATUSES` answered every capacity question --
+ * total, executor, and type caps were all computed from the same membership.
+ * That conflates two different things: whether a lane occupies a slot, and
+ * whether it occupies an executor's attention. A lane sitting in `in_review`
+ * waiting on a human consumed executor capacity identically to one being
+ * actively worked, so lanes nobody was working denied admission to lanes
+ * somebody would have.
+ *
+ * The sets below are deliberately declared separately rather than derived from
+ * each other, so that changing one cap's semantics cannot silently change
+ * another's.
+ */
+
+/** Occupies a lane slot: counts against the total cap. */
+export const TOTAL_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
+  'started',
+  'in_progress',
+  'in_review',
+  'blocked',
+  'parked',
+  'reopened',
+]);
+
+/**
+ * Occupies an executor's attention: counts against per-executor caps.
+ *
+ * Excludes `in_review`, `blocked` and `parked` -- in all three the lane is
+ * waiting on something outside the executor (a human verdict, a dependency, a
+ * deliberate pause), so no executor is working it and holding an executor slot
+ * misrepresents the board.
+ */
+export const EXECUTOR_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
+  'started',
+  'in_progress',
+  'reopened',
+]);
+
+/**
+ * Occupies a lane-type slot (governance, hygiene, ...): counts against type
+ * caps. Type caps exist to bound concurrent change to a shared surface, which a
+ * lane still does while awaiting review -- so this tracks slot occupancy, not
+ * executor attention.
+ */
+export const TYPE_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
+  'started',
+  'in_progress',
+  'in_review',
+  'blocked',
+  'parked',
+  'reopened',
+]);
+
+/**
+ * Terminal states: the lane has ended. Reaching one of these MUST release every
+ * resource the lane holds -- capacity, lease, locks, worktree, branch. Only
+ * `done` and `merged` assert success; the others explicitly do not.
+ */
+export const TERMINAL_STATUSES = new Set<LaneManifestStatus>([
+  'merged',
+  'done',
+  'failed',
+  'superseded',
+  'cancelled',
+]);
+
+/** Terminal states that assert the work completed. `failed` is never here. */
+export const SUCCESS_TERMINAL_STATUSES = new Set<LaneManifestStatus>(['merged', 'done']);
+
+/**
+ * Retained for existing callers (reconcile, orchestration-reconciler, and the
+ * file-scope guard's mirror). Semantically identical to the total-capacity set
+ * minus `parked`: a parked lane keeps its scope lock, but callers of this
+ * historical name expect "actively holding" membership. Kept as its own literal
+ * rather than derived, so a future change to either set is visible in review.
+ */
 export const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
   'started',
   'in_progress',
   'in_review',
   'blocked',
+  'parked',
   'reopened',
 ]);
 const MANIFEST_STATUSES = new Set<LaneManifestStatus>([
@@ -300,6 +402,10 @@ const MANIFEST_STATUSES = new Set<LaneManifestStatus>([
   'in_review',
   'merged',
   'done',
+  'failed',
+  'parked',
+  'superseded',
+  'cancelled',
   'blocked',
   'reopened',
 ]);
@@ -310,14 +416,31 @@ const LEGACY_LANE_TYPE_TO_EXECUTOR: Partial<Record<LegacyLaneType, LaneExecutor>
   'codex-cloud': 'codex-cloud',
 };
 const CODEX_EXECUTORS = new Set<LaneExecutor>(['codex-cli', 'codex-cloud']);
+/**
+ * UTV2-1619 capability 13: every non-terminal state may reach a truthful
+ * terminal. `failed`, `superseded` and `cancelled` are reachable from anywhere
+ * work can be in flight, because a lane can be abandoned at any point -- and if
+ * the only reachable terminals were `merged`/`done`, recording an honest
+ * outcome would remain impossible, which is the defect this closes.
+ *
+ * `failed`, `superseded` and `cancelled` accept `reopened` so a mistaken
+ * terminal can be corrected, but never transition directly into `done`: a
+ * failed lane that is later completed must be reopened and re-closed through
+ * the normal gate, leaving both facts in the history.
+ */
+const NON_SUCCESS_TERMINALS: LaneManifestStatus[] = ['failed', 'superseded', 'cancelled'];
 const TRANSITIONS: Record<LaneManifestStatus, LaneManifestStatus[]> = {
-  started: ['in_progress', 'blocked', 'reopened', 'started'],
-  in_progress: ['in_review', 'blocked', 'reopened', 'in_progress'],
-  in_review: ['merged', 'blocked', 'reopened', 'in_review'],
-  merged: ['done', 'reopened', 'merged'],
+  started: ['in_progress', 'blocked', 'parked', 'reopened', 'started', ...NON_SUCCESS_TERMINALS],
+  in_progress: ['in_review', 'blocked', 'parked', 'reopened', 'in_progress', ...NON_SUCCESS_TERMINALS],
+  in_review: ['merged', 'blocked', 'parked', 'reopened', 'in_review', ...NON_SUCCESS_TERMINALS],
+  merged: ['done', 'reopened', 'merged', ...NON_SUCCESS_TERMINALS],
   done: ['done', 'reopened'],
-  blocked: ['started', 'in_progress', 'blocked', 'reopened'],
-  reopened: ['in_progress', 'blocked', 'reopened'],
+  blocked: ['started', 'in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
+  parked: ['started', 'in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
+  failed: ['reopened', 'failed'],
+  superseded: ['reopened', 'superseded'],
+  cancelled: ['reopened', 'cancelled'],
+  reopened: ['in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
 };
 
 export function getRepoRoot(): string {
@@ -745,6 +868,292 @@ export function readAllManifests(): LaneManifest[] {
   return readAllManifestPaths().map((filePath) => parseJsonFile<LaneManifest>(filePath));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634: authoritative active-lane discovery.
+//
+// readAllManifests() above enumerates docs/06_status/lanes/*.json from the LOCAL
+// working tree only. A lane's manifest is created on its own branch at
+// ops:lane-start and does not reach `main` until the lane merges -- so for the
+// entire time a lane is active, which is precisely when concurrency control
+// matters, its manifest is invisible to every other worktree.
+//
+// That makes every gate built on it fail OPEN: an empty board and a full board
+// are indistinguishable, so the ABSENCE of a violation gets read as PROOF of no
+// violation. Measured 2026-07-31: six lanes active, two visible.
+//
+// The fix is to resolve the active set from authoritative remote state -- open
+// PRs and their head-ref manifests -- and to treat "could not enumerate" as
+// fail-CLOSED rather than as an empty board.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Thrown when the active-lane set cannot be established. Callers admitting new
+ * work MUST refuse on this rather than proceeding: an unknown board is not an
+ * empty board.
+ */
+export class ActiveLaneDiscoveryError extends Error {
+  readonly code = 'active_lane_discovery_failed';
+  constructor(message: string, readonly cause?: unknown) {
+    super(message);
+    this.name = 'ActiveLaneDiscoveryError';
+  }
+}
+
+export interface OpenPullRequestRef {
+  number: number;
+  headRefName: string;
+  url?: string;
+}
+
+/** How a resolved manifest was located -- recorded in the admission receipt. */
+export type LaneManifestSource = 'local_worktree' | 'open_pr_head';
+
+export interface ResolvedActiveLane {
+  manifest: LaneManifest;
+  source: LaneManifestSource;
+  /** PR number when the manifest came from an open PR head. */
+  prNumber?: number;
+}
+
+export interface ActiveLaneDiscovery {
+  /** Active manifests only (ACTIVE_LOCK_STATUSES), deduped by issue_id. */
+  lanes: ResolvedActiveLane[];
+  /** Convenience projection for callers that just want the manifests. */
+  manifests: LaneManifest[];
+  /** Open PRs whose branch carried no parseable issue id -- diagnostic only. */
+  skippedPullRequests: Array<{ number: number; headRefName: string; reason: string }>;
+}
+
+export interface ActiveLaneDiscoveryDeps {
+  listOpenPullRequests?: () => OpenPullRequestRef[];
+  readManifestAtRef?: (issueId: string, ref: string) => LaneManifest | null;
+  readLocalManifests?: () => LaneManifest[];
+}
+
+/**
+ * Extracts the canonical issue id from a lane branch name
+ * (`claude/utv2-1634-slug` -> `UTV2-1634`). Returns null for branches that are
+ * not lane branches, which are skipped rather than treated as failures.
+ */
+export function issueIdFromBranchName(branch: string): string | null {
+  const match = /^(?:[a-z][a-z0-9-]*)\/(utv2|uni)-(\d+)(?:-|$)/i.exec(branch);
+  return match ? `${match[1]!.toUpperCase()}-${match[2]}` : null;
+}
+
+/**
+ * Hard cap on the open-PR listing. If the API returns exactly this many rows we
+ * cannot prove the list is complete, so discovery fails closed rather than
+ * silently treating a truncated page as the whole board.
+ */
+export const OPEN_PR_LISTING_LIMIT = 500;
+
+function defaultListOpenPullRequests(): OpenPullRequestRef[] {
+  // --paginate walks every page; --slurp merges them into one array. The limit
+  // below is a truncation *detector*, not a page size.
+  const stdout = execFileSync(
+    'gh',
+    [
+      'api',
+      '--paginate',
+      '--slurp',
+      `repos/{owner}/{repo}/pulls?state=open&per_page=100`,
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
+  );
+
+  const pages = JSON.parse(stdout) as Array<Array<{ number?: number; head?: { ref?: string }; html_url?: string }>>;
+  if (!Array.isArray(pages)) {
+    throw new Error('gh api --paginate --slurp did not return an array of pages');
+  }
+
+  const refs: OpenPullRequestRef[] = [];
+  for (const page of pages) {
+    if (!Array.isArray(page)) {
+      throw new Error('gh api --paginate --slurp returned a non-array page');
+    }
+    for (const entry of page) {
+      if (typeof entry?.number !== 'number' || typeof entry?.head?.ref !== 'string') {
+        throw new Error(`open pull request entry is malformed: ${JSON.stringify(entry)}`);
+      }
+      refs.push({ number: entry.number, headRefName: entry.head.ref, url: entry.html_url });
+    }
+  }
+
+  if (refs.length >= OPEN_PR_LISTING_LIMIT) {
+    throw new Error(
+      `open pull request listing returned ${refs.length} rows, at or beyond the ${OPEN_PR_LISTING_LIMIT} ` +
+        'safety cap -- completeness cannot be proven, refusing to treat it as the whole board.',
+    );
+  }
+
+  return refs;
+}
+
+/**
+ * True only for a gh/GitHub failure that positively proves the file is absent
+ * at that ref. Everything else -- auth loss, rate limiting, network failure,
+ * 5xx, an unrecognised message -- is an UNKNOWN, not an absence.
+ */
+export function isConfirmedManifestNotFound(stderr: string, status: number | null): boolean {
+  // gh exits 1 for both "404 Not Found" and "401 Bad credentials", so the exit
+  // code alone can never be the discriminator. Require the explicit 404 marker
+  // AND the absence of any other error signature.
+  const text = stderr.toLowerCase();
+  if (status !== 1) return false;
+  if (/\b(401|403|429|5\d{2})\b/.test(text)) return false;
+  if (/bad credentials|rate limit|abuse detection|could not resolve host|timeout|timed out|connection reset|network/.test(text)) {
+    return false;
+  }
+  return /http 404|404 not found|not found \(http 404\)/.test(text);
+}
+
+function defaultReadManifestAtRef(issueId: string, ref: string): LaneManifest | null {
+  let stdout: string;
+  try {
+    stdout = execFileSync(
+      'gh',
+      [
+        'api',
+        `repos/{owner}/{repo}/contents/docs/06_status/lanes/${issueId}.json?ref=${encodeURIComponent(ref)}`,
+        '--jq',
+        '.content',
+      ],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    ).trim();
+  } catch (error) {
+    const err = error as { status?: number | null; stderr?: Buffer | string };
+    const stderr = typeof err.stderr === 'string' ? err.stderr : (err.stderr?.toString() ?? '');
+    // A CONFIRMED 404 means this PR simply has no manifest for that id at that
+    // head -- a normal, non-lane PR. That is genuinely absent data about ONE
+    // PR, and skipping it is correct.
+    if (isConfirmedManifestNotFound(stderr, err.status ?? null)) {
+      return null;
+    }
+    // Everything else -- auth, rate limit, network, 5xx -- is UNKNOWN. Treating
+    // an unknown as an absence is precisely the fail-open this lane exists to
+    // remove: it would silently drop an active lane from the board.
+    throw new ActiveLaneDiscoveryError(
+      `Could not read the lane manifest for ${issueId} at ref "${ref}", and the failure is not a confirmed 404. ` +
+        `Refusing to treat an unreadable manifest as an absent one. Underlying error: ${stderr.trim() || 'unknown'}`,
+      error,
+    );
+  }
+
+  if (!stdout) {
+    throw new ActiveLaneDiscoveryError(
+      `The contents API returned an empty body for ${issueId} at ref "${ref}" without a 404. ` +
+        'Refusing to infer absence from an empty response.',
+    );
+  }
+
+  let decoded: string;
+  try {
+    decoded = Buffer.from(stdout, 'base64').toString('utf8');
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      `Base64 decoding failed for ${issueId}'s manifest at ref "${ref}".`,
+      error,
+    );
+  }
+
+  try {
+    return JSON.parse(decoded) as LaneManifest;
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      `The lane manifest for ${issueId} at ref "${ref}" is not valid JSON. ` +
+        'A malformed manifest is an unknown lane state, not an absent one.',
+      error,
+    );
+  }
+}
+
+/**
+ * Resolves the set of currently-active lanes from authoritative state: every
+ * open PR's manifest at its own head ref, unioned with the local working tree.
+ *
+ * Precedence: an open-PR-head manifest WINS over a local copy of the same
+ * issue_id. The PR head is where an active lane's manifest actually lives and
+ * is kept current; a local copy on `main` is either a stale merged snapshot or
+ * this worktree's own in-progress file.
+ *
+ * Fail-closed: if the open-PR enumeration itself throws, this throws
+ * ActiveLaneDiscoveryError. Callers must refuse to admit work rather than
+ * proceeding against an unknown board.
+ */
+export function resolveActiveLaneManifests(
+  deps: ActiveLaneDiscoveryDeps = {},
+): ActiveLaneDiscovery {
+  const listOpenPullRequests = deps.listOpenPullRequests ?? defaultListOpenPullRequests;
+  const readManifestAtRef = deps.readManifestAtRef ?? defaultReadManifestAtRef;
+  const readLocalManifests = deps.readLocalManifests ?? readAllManifests;
+
+  let openPullRequests: OpenPullRequestRef[];
+  try {
+    openPullRequests = listOpenPullRequests();
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      'Could not enumerate open pull requests, so the active-lane set is unknown. ' +
+        'Refusing to treat an unknown board as an empty one.',
+      error,
+    );
+  }
+
+  const byIssueId = new Map<string, ResolvedActiveLane>();
+  const skippedPullRequests: ActiveLaneDiscovery['skippedPullRequests'] = [];
+
+  // Local first, so open-PR-head manifests overwrite them below.
+  for (const manifest of readLocalManifests()) {
+    if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) continue;
+    byIssueId.set(manifest.issue_id, { manifest, source: 'local_worktree' });
+  }
+
+  for (const pullRequest of openPullRequests) {
+    const issueId = issueIdFromBranchName(pullRequest.headRefName ?? '');
+    if (!issueId) {
+      skippedPullRequests.push({
+        number: pullRequest.number,
+        headRefName: pullRequest.headRefName ?? '',
+        reason: 'branch name carries no UTV2-/UNI- issue id',
+      });
+      continue;
+    }
+
+    // Any throw here is an UNKNOWN lane state. Normalise it to
+    // ActiveLaneDiscoveryError so every caller sees one fail-closed type,
+    // whether the failure came from the default gh path or an injected dep.
+    let manifest: LaneManifest | null;
+    try {
+      manifest = readManifestAtRef(issueId, pullRequest.headRefName);
+    } catch (error) {
+      if (error instanceof ActiveLaneDiscoveryError) throw error;
+      throw new ActiveLaneDiscoveryError(
+        `Could not resolve the lane manifest for ${issueId} on PR #${pullRequest.number}. ` +
+          'Refusing to admit work against an incompletely-known board.',
+        error,
+      );
+    }
+    if (!manifest) continue;
+
+    if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) {
+      // A merged/done lane still holding an open PR must NOT keep its locks.
+      byIssueId.delete(manifest.issue_id);
+      continue;
+    }
+
+    byIssueId.set(manifest.issue_id, {
+      manifest,
+      source: 'open_pr_head',
+      prNumber: pullRequest.number,
+    });
+  }
+
+  const lanes = [...byIssueId.values()].sort((left, right) =>
+    left.manifest.issue_id.localeCompare(right.manifest.issue_id),
+  );
+
+  return { lanes, manifests: lanes.map((entry) => entry.manifest), skippedPullRequests };
+}
+
 export function validateManifestSchemaDependencies(): void {
   if (!fs.existsSync(LANE_MANIFEST_SCHEMA_PATH)) {
     throw new Error(
@@ -1044,11 +1453,22 @@ export function pathsOverlap(a: string, b: string): boolean {
   return na === nb || na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`);
 }
 
+/**
+ * Finds an active lane whose file_scope_lock overlaps the requested files.
+ *
+ * UTV2-1634: `candidateManifests` lets the caller pass the authoritative
+ * active-lane set (see resolveActiveLaneManifests) instead of this function
+ * re-reading the local working tree. Omitting it preserves the historical
+ * local-only behaviour for callers outside the admission path -- but note that
+ * the local-only set under-reports active lanes, so admission gates must pass
+ * the resolved set explicitly.
+ */
 export function activeManifestOverlap(
   issueId: string,
   requestedFiles: string[],
+  candidateManifests?: LaneManifest[],
 ): { issue_id: string; overlapping_files: string[] } | null {
-  for (const manifest of readAllManifests()) {
+  for (const manifest of candidateManifests ?? readAllManifests()) {
     if (manifest.issue_id === issueId) {
       continue;
     }
@@ -1247,4 +1667,38 @@ export function removeFileIfExists(filePath: string): void {
   } catch {
     // fail closed callers may continue; deletion failure is non-fatal by spec
   }
+}
+
+/**
+ * Merges a verifier `identity` into an already-existing `verifier` object
+ * without discarding whatever else is already on it (`method`,
+ * `verifier_scope`, `independence_note`, or any other hand-authored
+ * narrative field).
+ *
+ * UTV2-1642: both `scripts/ops/proof-repair.ts`'s `mergeRuntimeProofIntoEvidence`
+ * and `scripts/ops/proof-generate.ts`'s CI-DB-proof auto-harvest path (UTV2-1641)
+ * need to stamp a verifier identity onto `evidence.json` when they add
+ * `runtime_proof`. The proof-repair version used to do `verifier: { identity }` --
+ * a bare object literal that REPLACED the whole `verifier` value. Confirmed live on
+ * UTV2-1399's PR #1348: a pre-existing rich verifier object (method/verifier_scope/
+ * independence_note describing the lane's real verification methodology) was
+ * silently discarded and had to be restored by hand. Centralizing the merge here
+ * means both callers get the same non-destructive behavior and neither can
+ * regress independently.
+ *
+ * If no prior verifier object exists (or the existing value is not an object --
+ * e.g. `null`, a string, an array), there is nothing to preserve and this
+ * degrades to the previous bare-object behavior, which the issue explicitly
+ * allows ("If no prior verifier object exists, the current bare-object behavior
+ * is fine").
+ */
+export function mergeVerifierIdentity(
+  existingVerifier: unknown,
+  identity: string,
+): Record<string, unknown> {
+  const base =
+    existingVerifier && typeof existingVerifier === 'object' && !Array.isArray(existingVerifier)
+      ? (existingVerifier as Record<string, unknown>)
+      : {};
+  return { ...base, identity };
 }

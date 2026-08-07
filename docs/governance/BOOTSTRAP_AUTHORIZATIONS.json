@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "_doc": "Governance bootstrap authorizations (UTV2-1619 capabilities 18 and 19). Each entry is a BOOTSTRAP GOVERNANCE IDENTITY: it admits exactly one named governance lane past the concurrency caps, and supplies the tier that Merge Gate needs when no lane manifest exists yet. It is NOT a lane manifest and must never be treated as one -- it records that governance self-repair was authorized, without pretending normal lane admission occurred. This is not a cap increase: a raised cap admits any lane that asks, an authorization admits only the issue it names. Entries are read from origin/main by scripts/ops/bootstrap-authorization.ts and are never read from a working tree, so a branch cannot grant itself admission. A bootstrap identity is accepted only when no real lane manifest exists; it can never override one. At most one entry may be unexpired at a time; a second active entry refuses every lane rather than being resolved by precedence. Remove an entry through a governance PR once its milestone completes, and verify its absence -- a lapsed-but-present entry reads identically to an active one.",
+  "authorizations": [
+    {
+      "issue_id": "UTV2-1619",
+      "lane_type": "governance",
+      "tier": "T2",
+      "authorized_by": "griff843",
+      "authorized_at": "2026-08-05",
+      "expires_at": "2026-09-05",
+      "milestone": "UTV2-1619 Milestone 1: lane lifecycle capacity semantics, truth-gated completion transitions, close eligibility preflight, closeout artifact verification",
+      "reason": "Capability 13 (lane lifecycle capacity semantics) is the admission dependency for this milestone and lives inside the issue the caps refuse to admit. Measured 2026-08-05: total 15/10, claude 11/4, governance 8/3. A PM-directed read-only investigation of the three multi-identity Merge Gate PRs recovered no capacity -- all are genuinely blocked on CHANGES_REQUIRED verdicts and a missing t1-approved label, not on stale duplicate check identities. Scope is governance work only, no production writes, no feature work. Remove this entry when Milestone 1 completes."
+    }
+  ]
+}

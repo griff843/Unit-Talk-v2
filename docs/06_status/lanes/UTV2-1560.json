@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1560-hetzner-supabase-502-diagnosis",
   "branch": "claude/utv2-1560-hetzner-supabase-502-diagnosis",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1256",
   "files_changed": [
     ".github/workflows/ops-network-diagnose.yml",
@@ -28,14 +28,46 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1560/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-07-19T04:38:00.000Z",
-  "heartbeat_at": "2026-07-19T04:38:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-23T11:34:49.735Z",
+  "closed_at": "2026-07-23T11:34:49.735Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1560-hetzner-supabase-502-diagnosis.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-07-23T11:30:12.198Z",
+      "verdict": "pass",
+      "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1256",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-07-23T11:31:45.529Z",
+      "verdict": "fail",
+      "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+      "failures": [
+        "L3"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-23T11:34:45.268Z",
+      "verdict": "pass",
+      "merge_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

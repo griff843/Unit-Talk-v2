@@ -1,61 +1,194 @@
-name: Readiness Ledger Staleness Alert
+name: Readiness Ledger Refresh
+
+# UTV2-1626 — measure production readiness and PUBLISH the measurement.
+#
+# What this workflow replaced: a job of the same name that only checked how old
+# `readiness-score.json` was and opened an issue about it. It never ran a
+# generator, so 26 consecutive green runs left the ledger 13 days stale while the
+# pull-request gate kept failing every lane for a production condition nobody
+# could confirm was still true.
+#
+# Three rules make that irreproducible here:
+#   1. The generator runs, with a production READ credential, or the job fails.
+#   2. The result is committed and pushed, and the pushed copy is read back from
+#      origin/main — a result computed and discarded is not a refresh.
+#   3. Success requires proof the observation is NEW: `--mode persistence` refuses
+#      an unchanged file, an unadvanced timestamp, or a dimension carried forward
+#      from a previous run.
+#
+# What this job does NOT do: fail because production is RED. A measured RED is a
+# successful refresh — the product condition belongs to the pull-request gate and
+# to the operational lane that owns the outage. This job goes red only when the
+# OBSERVER is broken (could not read, could not publish, could not prove).
+#
+# Read-only against production: the generator's only database surface is the
+# read-only wrapper in scripts/ops/readiness-refresh.ts. Not pull-request
+# triggered — see scripts/ci/workflow-production-credential-guard.ts.
 
 on:
   schedule:
-    - cron: '0 */12 * * *'
+    # Every 6h keeps the ledger inside its own 24h SLA even if two runs are lost.
+    - cron: '0 */6 * * *'
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
+concurrency:
+  group: readiness-refresh
+  cancel-in-progress: false
+
+env:
+  LEDGER_PATH: docs/06_status/readiness/readiness-score.json
+  ALERT_TITLE: 'Readiness ledger: observer failure or stale artifact'
+
 jobs:
-  readiness-staleness-alert:
-    name: Readiness ledger staleness alert
+  refresh:
+    name: Measure and publish readiness
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # SYNC_BOT_TOKEN can push through branch protection; the default token
+          # cannot. Without a usable token the push step fails, which is the
+          # intended outcome — a refresh that cannot publish is not a refresh.
+          token: ${{ secrets.SYNC_BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Check readiness-score.json staleness and alert
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Snapshot the pre-run ledger
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          SCORE_FILE="docs/06_status/readiness/readiness-score.json"
-          ALERT_TITLE="Readiness ledger is stale — refresh docs/06_status/readiness/readiness-score.json"
-
-          if [ ! -f "$SCORE_FILE" ]; then
-            echo "::error::$SCORE_FILE not found — readiness ledger missing"
-            exit 1
+          # Both the run's start time and the previous bytes are inputs to the
+          # persistence assertion: the first proves every dimension was observed
+          # inside this run, the second proves the file actually changed.
+          echo "RUN_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          if [ -f "$LEDGER_PATH" ]; then
+            cp "$LEDGER_PATH" /tmp/readiness-previous.json
+            echo "Previous ledger generated_at: $(jq -r '.generated_at' "$LEDGER_PATH")"
+          else
+            echo "No previous ledger present."
           fi
 
-          GENERATED_AT=$(jq -r '.generated_at' "$SCORE_FILE")
-          GENERATED_EPOCH=$(date -d "$GENERATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${GENERATED_AT%.*}" +%s 2>/dev/null || echo 0)
-          NOW_EPOCH=$(date +%s)
-          AGE_HOURS=$(( (NOW_EPOCH - GENERATED_EPOCH) / 3600 ))
-          echo "Ledger age: ${AGE_HOURS}h (generated_at=$GENERATED_AT)"
+      - name: Measure production readiness (read-only)
+        env:
+          # Production READ credentials. This job is schedule/dispatch only and is
+          # never reachable from a pull request.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: pnpm ops:readiness-refresh
 
-          # Warn well before the 48h hard gate (readiness-regression-gate.yml) bites on the next PR.
-          WARN_THRESHOLD_HOURS=36
+      - name: Commit and push the refreshed ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$LEDGER_PATH"
+          if git diff --cached --quiet; then
+            # Not swallowed: the persistence assertion below fails on an
+            # unchanged ledger. Exiting 0 here keeps that the reported reason.
+            echo "::warning::Generator produced a byte-identical ledger; the persistence assertion will fail."
+            exit 0
+          fi
+          git commit -m "ops(readiness): refresh ledger [skip ci]"
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; rebasing on origin/main and retrying."
+            git fetch origin main
+            git rebase origin/main
+          done
+          echo "::error title=readiness refresh could not publish::git push failed three times; the measurement exists only in this workspace."
+          exit 1
 
-          EXISTING_ISSUE=$(gh issue list --search "in:title \"$ALERT_TITLE\"" --state open --json number --jq '.[0].number' || true)
+      - name: Prove the measurement is durable and current
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Read the ledger back from origin/main rather than trusting the
+          # workspace copy: "the generator wrote a file" and "the refresh was
+          # published" are different claims, and only the second one matters.
+          git fetch origin main
+          git show "origin/main:${LEDGER_PATH}" > /tmp/readiness-published.json
+          PREVIOUS_ARG=()
+          if [ -f /tmp/readiness-previous.json ]; then
+            PREVIOUS_ARG=(--previous /tmp/readiness-previous.json)
+          fi
+          pnpm ci:readiness-gate -- \
+            --mode persistence \
+            --file /tmp/readiness-published.json \
+            "${PREVIOUS_ARG[@]}" \
+            --run-started-at "$RUN_STARTED_AT"
 
-          if [ "$AGE_HOURS" -ge "$WARN_THRESHOLD_HOURS" ]; then
-            BODY=$(printf 'The readiness ledger (`%s`) is %sh stale (warn threshold: %sh; hard merge-gate threshold: 48h in `readiness-regression-gate.yml`).\n\nLast refreshed: `%s`\n\nRefresh the ledger with current live evidence before the 48h threshold blocks the next PR. See UTV2-1476 for the refresh process and dimension format.' "$SCORE_FILE" "$AGE_HOURS" "$WARN_THRESHOLD_HOURS" "$GENERATED_AT")
-            if [ -n "$EXISTING_ISSUE" ]; then
-              echo "Updating existing staleness issue #$EXISTING_ISSUE"
-              gh issue comment "$EXISTING_ISSUE" --body "$BODY"
+      - name: Classify the published ledger
+        id: classify
+        shell: bash
+        run: |
+          set -uo pipefail
+          pnpm ci:readiness-gate -- --file /tmp/readiness-published.json --json > /tmp/readiness-gate.txt || true
+          # The npm runner adds its own lines around the JSON; keep the object.
+          sed -n '/^{/,/^}/p' /tmp/readiness-gate.txt > /tmp/readiness-gate.json || true
+          if ! jq -e . /tmp/readiness-gate.json > /dev/null 2>&1; then
+            echo '{"code":"UNPARSED","observer_failure":true,"summary":"the gate produced no parseable classification"}' > /tmp/readiness-gate.json
+          fi
+          CODE=$(jq -r '.code' /tmp/readiness-gate.json)
+          OBSERVER=$(jq -r '.observer_failure' /tmp/readiness-gate.json)
+          SUMMARY=$(jq -r '.summary' /tmp/readiness-gate.json)
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "observer_failure=$OBSERVER" >> "$GITHUB_OUTPUT"
+          {
+            echo "summary<<READINESS_EOF"
+            echo "$SUMMARY"
+            echo "READINESS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Published ledger classified as ${CODE}: ${SUMMARY}"
+
+      - name: Alert on observer failure, clear when healthy
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CODE: ${{ steps.classify.outputs.code }}
+          OBSERVER_FAILURE: ${{ steps.classify.outputs.observer_failure }}
+          SUMMARY: ${{ steps.classify.outputs.summary }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          EXISTING=$(gh issue list --search "in:title \"$ALERT_TITLE\"" --state open --json number --jq '.[0].number' || true)
+          # A job that failed before classification is itself an observer failure:
+          # the refresher could not read, could not publish, or could not prove.
+          if [ "$JOB_STATUS" != "success" ] || [ "${OBSERVER_FAILURE:-true}" != "false" ]; then
+            BODY=$(printf 'The scheduled readiness refresh could not produce trustworthy production truth.\n\n- job status: `%s`\n- classification: `%s`\n- detail: %s\n\nRun: %s/%s/actions/runs/%s\n\nThis is an OBSERVER failure, not by itself a statement that production is broken. Until it clears, treat the verdict in `%s` as unproven rather than as evidence either way.' \
+              "${JOB_STATUS}" "${CODE:-UNKNOWN}" "${SUMMARY:-no summary}" "${GITHUB_SERVER_URL}" "${GITHUB_REPOSITORY}" "${GITHUB_RUN_ID}" "$LEDGER_PATH")
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "$BODY"
             else
-              echo "Opening new staleness issue"
               gh issue create --title "$ALERT_TITLE" --body "$BODY"
             fi
-          else
-            echo "Ledger is fresh (${AGE_HOURS}h < ${WARN_THRESHOLD_HOURS}h threshold)."
-            if [ -n "$EXISTING_ISSUE" ]; then
-              echo "Closing resolved staleness issue #$EXISTING_ISSUE"
-              gh issue close "$EXISTING_ISSUE" --comment "Ledger refreshed (generated_at=$GENERATED_AT, ${AGE_HOURS}h old) — closing stale alert."
-            fi
+            exit 0
           fi
+          if [ -n "$EXISTING" ]; then
+            gh issue close "$EXISTING" --comment "Readiness refresh healthy again: classification ${CODE}. ${SUMMARY}"
+          fi
+          echo "Observer healthy (${CODE})."

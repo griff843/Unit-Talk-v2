@@ -7,7 +7,7 @@
  * Run: npx tsx scripts/prune-provider-offers.ts
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 import { pathToFileURL } from 'node:url';
 
@@ -111,7 +111,7 @@ function parsePositiveInt(value: string | undefined) {
 }
 
 function createDatabaseClient() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  return createPrivilegedClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     db: { schema: 'public' },
     global: { fetch: (url, opts) => fetch(url, { ...opts, signal: AbortSignal.timeout(30_000) }) },
   });

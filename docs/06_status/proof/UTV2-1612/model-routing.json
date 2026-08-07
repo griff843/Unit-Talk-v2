@@ -1,0 +1,16 @@
+{
+  "issue_id": "UTV2-1612",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.145.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "generated_at": "2026-07-28T05:20:00.000Z",
+  "review_provider": "claude-opus-5",
+  "review_note": "Cross-provider independence preserved: Codex Sol high implemented the workflow and its contract suite; Claude Opus 5 performed the exact-head adversarial review against a9c96afd and returned APPROVE-WITH-CHANGES with one P0 (stdin theft fail-open), two P1s and a set of P2s. Remediation commit 6c45d45b closed all of them."
+}

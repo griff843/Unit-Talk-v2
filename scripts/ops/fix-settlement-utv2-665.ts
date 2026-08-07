@@ -1,4 +1,5 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 import type { SettlementRecord } from '@unit-talk/db';
 import { pathToFileURL } from 'node:url';
@@ -220,7 +221,7 @@ export async function runUtv2SettlementCorrection(): Promise<SettlementCorrectio
     throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
   }
 
-  const client = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+  const client = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
   return appendUtv2SettlementCorrections(new SupabaseSettlementCorrectionRepository(client));
 }
 

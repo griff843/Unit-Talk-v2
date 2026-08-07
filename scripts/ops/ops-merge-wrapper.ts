@@ -44,6 +44,7 @@ import {
   type CommandRunner,
   buildMergeCommand,
   bufferToText,
+  runAuthorizedPrMerge,
   runMergeWrapper,
 } from './merge-wrapper.js';
 import {
@@ -67,7 +68,7 @@ export type ExtendedMergeWrapperOperation =
   | 'git-rebase-main';
 
 export type { MergeWrapperInput, MergeWrapperResult, CommandRunner };
-export { buildMergeCommand, runMergeWrapper };
+export { buildMergeCommand, runAuthorizedPrMerge, runMergeWrapper };
 
 /** All raw shell forms that must NOT be called directly */
 export const BLOCKED_RAW_COMMANDS: readonly string[] = [
@@ -228,6 +229,7 @@ export type MergeTrainEntryStatus =
   | 'update_branch_failed'
   | 'ci_failed'
   | 'ci_timeout'
+  | 'merge_authorization_denied'
   | 'merge_failed'
   | 'skipped_after_failure'
   | 'unexpected_error';
@@ -499,9 +501,13 @@ export const defaultRepostExecutorResult: RepostExecutorResultFn = (input, optio
 function defaultCommandRunner(
   command: string,
   args: string[],
-  options: { cwd: string },
+  options: { cwd: string; timeoutMs?: number },
 ): ReturnType<CommandRunner> {
-  return spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' });
+  return spawnSync(command, args, {
+    cwd: options.cwd,
+    stdio: 'pipe',
+    ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
+  });
 }
 
 interface MergeTrainEntryDeps {
@@ -595,14 +601,26 @@ async function runMergeTrainEntry(
     };
   }
 
-  const mergeCommand = buildMergeCommand({
-    operation: 'pr-merge',
-    issue_id: candidate.issue_id,
-    branch: candidate.branch,
-    pr: candidate.pr,
-    merge_method: input.merge_method ?? 'squash',
-  });
-  const mergeRun = deps.runner(mergeCommand.command, mergeCommand.args, { cwd });
+  // UTV2-1592 amendment: merge-train's per-candidate merge step must never
+  // bypass the pre-merge authorization gate. Routed through the same
+  // runAuthorizedPrMerge primitive runMergeWrapper's direct `pr-merge`
+  // operation uses (merge-wrapper.ts) -- this is the ONLY place in this
+  // file allowed to actually invoke a `gh pr merge` command.
+  const authorizedMerge = runAuthorizedPrMerge(
+    { pr: candidate.pr, merge_method: input.merge_method ?? 'squash' },
+    deps.runner,
+    cwd,
+  );
+  if (!authorizedMerge.authorized) {
+    return {
+      ...base,
+      status: 'merge_authorization_denied',
+      detail: `pre-merge authorization denied (${repostDetail}): ${authorizedMerge.reason ?? 'no reason given'}`,
+      merge_sha: null,
+      duration_ms: deps.clock() - start,
+    };
+  }
+  const mergeRun = authorizedMerge.run as ReturnType<CommandRunner>;
   if (mergeRun.error || mergeRun.status !== 0) {
     return {
       ...base,

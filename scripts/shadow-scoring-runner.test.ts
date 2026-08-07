@@ -197,3 +197,33 @@ test('parseCliOptions parses --batch-size', async () => {
   const opts = parseCliOptions(['--batch-size', '50']);
   assert.equal(opts.batchSize, 50);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1629 — the --dry-run path must not load PR-authored application code
+// ---------------------------------------------------------------------------
+
+test('the runner has no STATIC import of apps/, so --dry-run loads no PR-authored app code', async () => {
+  // shadow-parity-required.yml runs this file against PRODUCTION and pins it
+  // against the merge base. A static `import ... from '../apps/...'` is
+  // evaluated before --dry-run is parsed and drags in most of apps/api and
+  // packages/domain — the very paths that trigger the workflow — so the pin
+  // would name one file while the import graph supplied hundreds.
+  //
+  // Type-only positions are fine: `typeof import(...)` is erased at runtime.
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const dir = resolve(fileURLToPath(import.meta.url), '..');
+  const source = readFileSync(resolve(dir, 'shadow-scoring-runner.ts'), 'utf8');
+
+  const staticAppImports = source
+    .split(/\r?\n/)
+    .filter((line) => /^\s*import\s[^(]*from\s+['"][^'"]*\.\.\/apps\//u.test(line));
+
+  assert.deepEqual(
+    staticAppImports,
+    [],
+    'Static import from apps/ found. Load it with `await import(...)` inside the ' +
+      'non-dry-run branch instead — the dry-run path runs with a production credential.',
+  );
+});

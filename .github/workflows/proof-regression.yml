@@ -28,6 +28,12 @@ jobs:
   proof-regression:
     name: Proof regression
     runs-on: ubuntu-latest
+    # UTV2-1630: this job hands a Supabase service-role key to proof scripts
+    # selected by a `grep` over the changed-file list — i.e. to arbitrary
+    # writable code paths, on every pull request touching app source. It
+    # previously received PRODUCTION credentials. Binding staging-ci is what
+    # releases CI_SUPABASE_* and denies this job any production credential.
+    environment: staging-ci
 
     steps:
       - name: Checkout
@@ -101,24 +107,31 @@ jobs:
         if: steps.affected.outputs.scripts != ''
         id: secrets
         env:
-          HAS_SUPABASE: ${{ secrets.SUPABASE_URL != '' }}
+          HAS_SUPABASE: ${{ secrets.CI_SUPABASE_URL != '' }}
         run: |
           if [ "$HAS_SUPABASE" = "true" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=proof-regression::Supabase secrets not configured — skipping live proof runs. Proof scripts require SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY."
+            echo "::notice title=proof-regression::staging-ci credentials not configured — skipping live proof runs. Proof scripts require CI_SUPABASE_URL + CI_SUPABASE_SECRET_KEY from the staging-ci environment."
             echo "available=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Run affected proof scripts
         if: steps.affected.outputs.scripts != '' && steps.secrets.outputs.available == 'true'
         run: |
+          set -euo pipefail
+          # UTV2-1630: refuse before any script constructs a client. The scripts
+          # below are writable; the guard is what makes "CI never writes to
+          # production" true rather than declared.
+          pnpm ci:assert-staging
           for script in ${{ steps.affected.outputs.scripts }}; do
             echo "Running $script..."
             npx tsx "$script"
           done
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          UNIT_TALK_DB_ACCESS_MODE: writable-isolated
+          SUPABASE_PROJECT_REF: ${{ secrets.CI_SUPABASE_PROJECT_REF }}
+          SUPABASE_URL: ${{ secrets.CI_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.CI_SUPABASE_SECRET_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}

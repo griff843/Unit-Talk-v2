@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1590",
+  "title": "Closeout reconciliation: Ready-to-Close, historical checks, and terminal cleanup replay",
+  "tier": "T1",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-07-26T13:09:09Z",
+  "sha_binding": {
+    "verified_source_sha": "59a2fff654b88a029fc4dafdf19e3023bf88d209",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-07-26T13:09:09Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "codex/utv2-1590-closeout-reconciliation",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/post-merge-lane-close.yml",
+      "scripts/ops/lane-close.test.ts",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/truth-check-lib.test.ts",
+      "scripts/ops/truth-check-lib.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1590/evidence.json",
+      "docs/06_status/proof/UTV2-1590/model-routing.json"
+    ],
+    "runtime_change": false,
+    "workflow_change": true,
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "PASS",
+      "exit_code": 0,
+      "detail": "Environment, alignment, automation coverage, lint, type-check, build, aggregate tests, command verification, live database smoke, and the T1 live-proof suite passed."
+    },
+    "focused_tests": {
+      "command": "npx tsx --test scripts/ops/truth-check-lib.test.ts scripts/ops/lane-close.test.ts",
+      "status": "PASS",
+      "tests": 191,
+      "pass": 191,
+      "fail": 0,
+      "skipped": 0,
+      "detail": "Covers exact and app-bound required-check identity, latest-result symmetry, check-run and status pagination, the PR #1305 expected historical failure, canonical L3 states, workflow event gating, trusted PR validation, and idempotent terminal cleanup without terminal-truth rewrites."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "root_test": {
+      "command": "pnpm test",
+      "status": "PASS"
+    },
+    "manifest_validation": {
+      "command": "npx tsx scripts/ops/lane-manifest.ts validate UTV2-1590 --json",
+      "status": "PASS",
+      "code": "manifest_valid"
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "classification": "Governance and workflow tooling change. Runtime proof combines the mandatory live Supabase T1 gate with a read-only live GitHub evaluation of the historical required-check incident.",
+    "production_mutation_by_lane": false,
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PASS",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "target_supabase_project": "zfzdnfwdarxucxtaojxm"
+    },
+    "historical_required_check": {
+      "command": "fetchCommitChecks against PR #1305 head 9425e96f91cc7c525cb1a71336b6806e5dac059d",
+      "status": "PASS",
+      "expected_gate_result": "FAILURE",
+      "actual_gate_result": "FAILURE",
+      "required_context": "Executor Result Validation",
+      "required_app_id": 15368,
+      "selected_run_id": 89533838816,
+      "selected_run_conclusion": "failure",
+      "selected_run_completed_at": "2026-07-24T16:27:48Z",
+      "selection_reason": "latest result with exact required context and app identity",
+      "non_satisfying_run": {
+        "run_id": 89531830423,
+        "name": "Executor Result Validator",
+        "conclusion": "success",
+        "reason": "Different check name; it cannot satisfy Executor Result Validation."
+      }
+    },
+    "queries": [
+      {
+        "surface": "GitHub check-runs API",
+        "description": "Fetched every check-run page for the historical PR #1305 head and selected the latest exact app-bound required context."
+      },
+      {
+        "surface": "GitHub commit-status API",
+        "description": "Fetched every commit-status page for the same head so legacy status contexts participate without overriding app-bound checks."
+      },
+      {
+        "surface": "Supabase database smoke",
+        "description": "Exercised live repository submission, lifecycle, outbox, audit, settlement, correction, and participant invariants through the existing T1 smoke suite."
+      }
+    ],
+    "row_counts": [
+      {
+        "scope": "database-smoke.test.ts",
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "note": "The live suite asserts rollback row counts and cleans up its own unique fixtures."
+      },
+      {
+        "scope": "PR #1305 exact required-check identity",
+        "matched_canonical_runs": 1,
+        "selected_failing_runs": 1,
+        "non_satisfying_similarly_named_runs": 1
+      }
+    ]
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "L3 accepts exactly Ready to Close, In PM Review, and Done.",
+      "status": "PASS",
+      "evidence": "The permitted-state set contains those three values; focused tests accept each and reject execution, proof, blocked, backlog, cancelled, stale, empty, and unknown states."
+    },
+    {
+      "criterion": "Historical G4 truth uses exact branch-protection identity, full pagination, and the latest canonical result.",
+      "status": "PASS",
+      "evidence": "Required-check identities retain app_id; check-run and commit-status endpoints paginate to exhaustion; selection sorts exact candidates by timestamp with deterministic tie breaks."
+    },
+    {
+      "criterion": "PR #1305 remains a genuine expected failure rather than receiving a special-case pass.",
+      "status": "PASS",
+      "evidence": "Both the captured fixture and read-only live GitHub evaluation select failed run 89533838816 for Executor Result Validation/app 15368; the differently named earlier success is excluded."
+    },
+    {
+      "criterion": "Newer failure beats older success and newer success beats older failure.",
+      "status": "PASS",
+      "evidence": "Focused symmetric tests cover both orderings independently of API result order."
+    },
+    {
+      "criterion": "The existing Merge-Gate-only admin exception is preserved without broadening.",
+      "status": "PASS",
+      "evidence": "Head fallback still permits bypass only when every missing context matches Merge Gate or Merge Gate CI; any non-governance failure remains failing with structured evidence."
+    },
+    {
+      "criterion": "Ordinary push handling of done lanes remains a no-op; only explicit trusted workflow dispatch can request terminal cleanup.",
+      "status": "PASS",
+      "evidence": "The workflow status gate requires workflow_dispatch plus non-empty explicit PR for a done lane; push and dispatch-without-PR both remain non-closeable."
+    },
+    {
+      "criterion": "Trusted done-lane cleanup is validated, idempotent, and does not rewrite terminal authority.",
+      "status": "PASS",
+      "evidence": "The UTV2-1589/PR #1308 fixture validates the supplied PR, removes residual sync state, releases supported coordination state, and performs safe worktree cleanup twice while preserving the manifest byte-for-byte, including PR URL, merge SHA, closed_at, proof bindings, and truth history."
+    },
+    {
+      "criterion": "UTV2-1586 can proceed through the canonical Ready to Close state after this fix.",
+      "status": "PASS",
+      "evidence": "L3 now recognizes Ready to Close, and the existing UTV2-1586 trusted repair success fixture continues to reach done with terminal cleanup."
+    }
+  ],
+  "known_limitations": [
+    "The hosted post-merge runner can remove only worktrees visible on that machine. An original machine-local worktree path is safely classified as already absent and remains subject to orchestration reconciliation.",
+    "UTV2-1585 is intentionally not closed by this lane; its genuine historical required-check failure remains dependent on UTV2-1591's separate certification design."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true
+  }
+}

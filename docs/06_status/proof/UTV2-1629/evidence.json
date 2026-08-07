@@ -1,0 +1,349 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1629",
+  "tier": "T1",
+  "title": "Residual production credentials in PR-reachable CI are closed, pinned, and given named exits",
+  "generated_at": "2026-07-30T22:15:00.000Z",
+  "implementation_sha": "a6b2e063b3aa4214ff2686d5d870df8366b97a3d",
+  "sha_binding": {
+    "verified_source_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
+    "current_pr_head_sha": null,
+    "merge_sha": "ae5828c8f2a25801101e77e3a9343cba7e503267",
+    "verified_source_note": "Bound to the squash merge commit ae5828c8f2a25801101e77e3a9343cba7e503267 on main. The measurements in this bundle were taken against implementation commit a6b2e063b3aa4214ff2686d5d870df8366b97a3d, an ancestor of the merged tree; the merge added only two main-syncs and this SHA rebinding, no change to the measured behaviour. The post-sync test:ops count is recorded separately below.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-31T00:15:08.348Z",
+    "implementation_sha": "a6b2e063b3aa4214ff2686d5d870df8366b97a3d"
+  },
+  "verifier": {
+    "identity": "github-actions/CI — run 30592473722, job 91037566710 `Writable DB proof (staging only)` (producer) and job 91038153515 `verify` (independent receipt verifier)",
+    "method": "scripts/ci/verify-db-proof-receipt.ts re-checked the receipt against its own GITHUB_* values inside the required `verify` context and printed `Verdict: PASS` / `Reason: DB proof verified: run 30592473722 attempt 1 @ 8643d77409b10a3a643864f567a9234cd9120263, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0`.",
+    "note": "The implementing agent is not the verifier of the writable-DB claim by design: proof text cannot show which database a run reached, so the verifier is the CI job that holds the credential and the separate job that re-derives the receipt's binding.",
+    "verifier_scope": "This identity verifies the live-DB execution evidence under runtime_proof. It does not verify this lane's central claim — that no PR-reachable job holds a production credential — which is a static measurement recorded under import_closure_measurement and exposures_closed. What the CI receipt does contribute to that claim is the negative fact it makes checkable: the only job in the PR-triggered workflow set that reached a database reached the staging project, and its receipt says so under a hash the verifier re-derived.",
+    "harvest_note": "The queries, row counts and receipt fields below were read back on 2026-07-31 from the retained artifacts of that same run — the job logs for jobs 91037566710 and 91038153515, and receipt artifact 8778913219. Nothing was re-run: a re-run would be a different measurement wearing this merge SHA's name."
+  },
+  "runtime_proof": {
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required `verify` context against its own GITHUB_* values",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP. The receipt records the host the process actually resolved, and the verifier job re-derives its binding independently.",
+    "queries": [
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1",
+        "duration_ms": 8862.480722
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2",
+        "duration_ms": 8731.73694
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3",
+        "duration_ms": 8914.679752
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4",
+        "duration_ms": 8647.307734
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "ok 5",
+        "duration_ms": 110.748613
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "ok 6",
+        "duration_ms": 9792.367876
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: correction chain is additive — original settlement row is not mutated",
+        "result": "ok 7",
+        "duration_ms": 10210.38267
+      }
+    ],
+    "queries_note": "The seven live cases `pnpm test:db` executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential, on the head that squash-merged to ae5828c8. Transcribed from the ci-db-proof-receipt/v2 captured_output of run 30592473722 (artifact 8778913219), whose output_sha256 the verifier re-derived in the `verify` context; not from any local run.",
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "operation": "reset",
+        "rows": 0
+      },
+      {
+        "table": "distribution_outbox",
+        "operation": "reset",
+        "rows": 0
+      },
+      {
+        "table": "system_runs",
+        "operation": "reset",
+        "rows": 0
+      },
+      {
+        "table": "sports",
+        "operation": "upsert",
+        "rows": 9
+      },
+      {
+        "table": "cappers",
+        "operation": "upsert",
+        "rows": 1
+      },
+      {
+        "table": "market_families",
+        "operation": "upsert",
+        "rows": 6
+      },
+      {
+        "table": "selection_types",
+        "operation": "upsert",
+        "rows": 3
+      },
+      {
+        "table": "market_types",
+        "operation": "upsert",
+        "rows": 133
+      }
+    ],
+    "row_counts_note": "Observed on staging xskgrzbteyqdufktjrjx by scripts/ci/seed-staging-fixtures.ts in run 30592473722, job 91037566710, immediately before the writable suites ran; read from that job's log. `reset` rows are the deletions the seeder reported for the mutable tables, `upsert` rows the reference data it re-seeded. The three zeros are the measurement, not a gap: the seeder deletes every row in those tables and reported 0/0/0 here, where the run 13 minutes earlier reported 2/12/1. Why they were already empty is not established by this evidence and is not claimed. settlement_records, picks and submissions are retained by design and were not reset.",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "github_run_id": "30592473722",
+      "github_run_attempt": "1",
+      "github_sha": "8643d77409b10a3a643864f567a9234cd9120263",
+      "github_ref_name": "1325/merge",
+      "producer_job_id": "91037566710",
+      "verifier_job_id": "91038153515",
+      "receipt_command": "pnpm test:db",
+      "started_at": "2026-07-31T00:05:09.213Z",
+      "finished_at": "2026-07-31T00:06:06.119Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "job_tap_total": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0,
+        "blocks": 16
+      },
+      "repo_migration_head": "20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "fixture_run_id": "utv2-1630-30592473722-1",
+      "output_sha256": "c6a91ccba9a801d348afbbb05cec335df1e44c893553ef01d587b8da3e5ff73f",
+      "receipt_sha256": "1a4791cc47acd3b83810d0539cbce3e66d83995672c6a9751ebab946ba32be2c",
+      "artifact_id": "8778913219",
+      "artifact_name": "utv2-1630-db-proof-receipt-30592473722-1",
+      "artifact_name_note": "The artifact name and fixture_run_id are prefixed `utv2-1630` because that string is a literal in ci.yml, written by the lane that built this workflow. It is not a claim about which issue this run belongs to; github_run_id and workflow_ref (refs/pull/1325/merge) are.",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30592473722 attempt 1 @ 8643d77409b10a3a643864f567a9234cd9120263, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "pr": 1325,
+      "head_sha_at_proof": "41918fcf1014492dab06e9954c243080278cbff0",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1325/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was 41918fcf1014492dab06e9954c243080278cbff0, which squash-merged to main as ae5828c8f2a25801101e77e3a9343cba7e503267.",
+      "job_tap_note": "test_db_tap is the receipt's own tap block for `pnpm test:db`. job_tap_total sums all 16 TAP blocks printed by job 91037566710, i.e. test:db plus the pnpm test:t1-proof:live suites, read from that job's log.",
+      "result": "success"
+    }
+  },
+  "static_proof": {
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PARTIAL",
+      "stages_passed": [
+        "env:check",
+        "ops:sync-check",
+        "lint",
+        "type-check",
+        "build",
+        "test"
+      ],
+      "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
+      "stop_reason": "Refused by UTV2-1630's staging guard: this workstation holds no staging credential, so the resolved target is not xskgrzbteyqdufktjrjx. Expected and documented behaviour, not a failure of this lane.",
+      "authoritative_full_run": "the required CI `verify` context, green on this head"
+    }
+  },
+  "import_closure_measurement": {
+    "method": "static walk of `import` / `export ... from` edges from scripts/shadow-scoring-runner.ts, resolving relative specifiers and @unit-talk/* workspace packages to their src entry points; run over origin/main's tree and this branch's tree",
+    "why_static": "the defect is module-evaluation-time: static imports run before the CLI is parsed, so the static graph is exactly the code that executes before any --dry-run guard can apply",
+    "before_origin_main": {
+      "total_project_files": 220,
+      "apps_api_src": 65,
+      "packages_domain_src": 120,
+      "packages_config_src": 3,
+      "packages_db_src": 15,
+      "files_inside_this_workflows_own_trigger_paths": 129
+    },
+    "after_this_branch": {
+      "total_project_files": 4,
+      "apps_api_src": 0,
+      "packages_domain_src": 0,
+      "packages_config_src": 3,
+      "packages_db_src": 0,
+      "files_inside_this_workflows_own_trigger_paths": 0
+    },
+    "trigger_paths_compared_against": [
+      "apps/api/src/**/*lifecycle*",
+      "apps/api/src/**/*promotion*",
+      "apps/api/src/**/*settlement*",
+      "apps/api/src/submission-service.ts",
+      "apps/api/src/candidate-pick-scanner.ts",
+      "packages/domain/src/**"
+    ],
+    "conclusion": "A pull request editing packages/domain both fired shadow-parity-required.yml and supplied the code that job ran against production with the service-role key. The merge-base pin named scripts/shadow-scoring-runner.ts alone; the import graph supplied 129 further files inside the same trigger filter."
+  },
+  "exposures_closed": [
+    {
+      "workflow": "shadow-parity-required.yml",
+      "credential": "SUPABASE_SERVICE_ROLE_KEY (production)",
+      "defect": "static import of apps/api/src/server.js evaluated the PR's own apps/api and packages/domain code at module load, before --dry-run was parsed",
+      "fix": "apps/api imports made dynamic and confined to the non-dry-run path, which no PR-triggered job takes; the resulting 4-file closure pinned to the merge base in full",
+      "pin_extended_from": [
+        "scripts/shadow-scoring-runner.ts",
+        "scripts/ci/assert-unmodified-vs-base.ts"
+      ],
+      "pin_extended_to": [
+        "scripts/shadow-scoring-runner.ts",
+        "scripts/ci/assert-unmodified-vs-base.ts",
+        "packages/config/src",
+        "package.json",
+        "pnpm-lock.yaml"
+      ],
+      "pin_rationale": "@unit-talk/config resolves to .ts source and is what reads the credential; package.json and pnpm-lock.yaml because `pnpm install` runs PR-supplied dependency and lifecycle scripts before any pinned file executes. None are in the workflow's trigger paths, so pinning them costs the check nothing."
+    },
+    {
+      "workflow": "live-schema-parity.yml",
+      "credential": "SUPABASE_DB_POOLER_URL / SUPABASE_DB_URL (production superuser Postgres)",
+      "defect": "exported into $GITHUB_ENV, which is job-wide: supabase start, supabase db reset, pg_isready, supabase stop and upload-artifact all inherited a live production connection string",
+      "fix": "the composite action now also publishes the value as a step output and honours out-env: '' to suppress the job-wide export; only the two steps that read the live catalog name it in their own env: block",
+      "hardening_note": "the output is written with a randomly generated heredoc delimiter so a value containing a newline cannot forge a second output key"
+    },
+    {
+      "workflow": "supabase-pr-db-branch.yml",
+      "credential": "SUPABASE_ACCESS_TOKEN (organisation-wide Supabase management API)",
+      "defect": "dormant workflow holding the broadest credential in the inventory; its teardown job was not behind the branching gate and ran on every closed migration PR",
+      "fix": "workflow deleted; scripts/ops/ci-proof.ts repointed at live-schema-parity.yml so its schema-validation control is backed by a workflow that exists",
+      "replacement_is_stronger": "live-schema-parity.yml replays EVERY repo migration against a fresh Supabase local stack and diffs against live, versus the preview branch's pending-only push, and holds no management token"
+    }
+  ],
+  "exemption_schema_change": {
+    "type": "CredentialExemption",
+    "new_required_fields": [
+      "executesPullRequestCode",
+      "pinnedBy",
+      "privilegeReduction"
+    ],
+    "rationale": "'it only reads' is a property of the code a job runs, and on a pull_request event that code comes from the PR head. Recording it per exemption forces the distinction to be stated rather than assumed: false is a claim that the credentialed steps run nothing from the checkout; true obliges pinnedBy to name the job's whole runtime closure. privilegeReduction gives each standing privilege a named exit instead of letting it become permanent by being documented.",
+    "exemptions_remaining": 3,
+    "exemptions_removed": 2,
+    "removed": [
+      "supabase-pr-db-branch.yml::validate",
+      "supabase-pr-db-branch.yml::teardown"
+    ]
+  },
+  "test_results": {
+    "workflow_production_credential_guard": {
+      "command": "pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts",
+      "tests": 27,
+      "pass": 27,
+      "fail": 0,
+      "skipped": 0,
+      "anti_vacuity": "the final test runs the scanner against the real workflow directory, so a scanner matching nothing fails rather than reporting clean"
+    },
+    "test_ops": {
+      "command": "pnpm test:ops",
+      "tests": 1414,
+      "pass": 1414,
+      "fail": 0,
+      "skipped": 0,
+      "suites": 6,
+      "change": "scripts/shadow-scoring-runner.test.ts added to the script",
+      "after_main_sync": {
+        "tests": 1465,
+        "pass": 1465,
+        "fail": 0,
+        "note": "The branch was synced with main twice (branch protection requires an up-to-date branch). The second sync conflicted on package.json because both sides extended test:ops. Resolved as a union \u2014 this lane's scripts/shadow-scoring-runner.test.ts plus the three suites main added (scripts/ops/readiness-refresh.test.ts, scripts/ci/readiness-ledger-gate.test.ts, scripts/ci/readiness-refresh-workflow.test.ts) \u2014 not by taking a side. All four verified present in the merged script."
+      }
+    },
+    "shadow_scoring_runner": {
+      "command": "pnpm exec tsx --test scripts/shadow-scoring-runner.test.ts",
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "skipped": 0,
+      "before": "reported 9 of 12 tests and exited non-zero \u2014 importing the module fired main(), which threw on absent credentials and called process.exit(1) mid-suite; the file was omitted from every pnpm test:* script so nothing noticed",
+      "fix": "main() runs only when the file is the process entrypoint, compared by resolved real path so a rename, copy, symlink or compiled-.js invocation cannot fail it open"
+    }
+  },
+  "privilege_reduction_blocked_on": {
+    "claim": "the shadow-parity service-role key cannot be downgraded to an anon key without silently voiding the check",
+    "measured_against": "production zfzdnfwdarxucxtaojxm, 2026-07-30, catalog reads only",
+    "public_tables": 121,
+    "rls_enabled": 121,
+    "rls_on_with_zero_policies": 118,
+    "pick_candidates_policies": 0,
+    "market_universe_policies": 0,
+    "provider_offers_policies": 0,
+    "consequence": "RLS-on with no policy denies every role lacking BYPASSRLS, so an anon key returns count=0 for exactly the tables queryDailyCounts reads. countTable swallows the permission error and returns 0, and the workflow classifies candidatesScanned=0 as a WARNING \u2014 surfacing as 'PASSED (with warnings)'. The check would go silently vacuous rather than fail.",
+    "real_reduction_requires": "a dedicated Postgres role with pg_read_all_data over a direct connection (replacing the PostgREST client), or a PostgREST JWT minted for such a role. Both need CREATE ROLE on production \u2014 an orchestrator action, out of scope for this lane.",
+    "explicitly_rejected": "adding anon SELECT policies to production, which would expose pick data publicly"
+  },
+  "orphaned_repository_secrets_recorded": {
+    "constant": "ORPHANED_REPOSITORY_SECRETS in scripts/ci/workflow-production-credential-guard.ts",
+    "names": [
+      "CI_SUPABASE_ANON_KEY",
+      "CI_SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "status": "referenced by no workflow; both point at the staging project, so this is hygiene rather than exposure",
+    "action_taken": "recorded in code so the repo refuses to start using them again silently",
+    "action_NOT_taken": "no secret was deleted \u2014 secret deletion is an orchestrator-owned action explicitly out of scope for this lane"
+  },
+  "lane_authority_allowlist_gap": {
+    "failure": "outside_allowed_paths: docs/ops/SUPABASE_PREVIEW_BRANCH_VALIDATION.md is outside allowed paths for lane governance",
+    "diagnosis": "docs/ops/** has existed since the ci-doctor bundle (5f155770) and is read by ci-doctor checks CV1-CV6, but no lane manifest ever allowed it. Same DEBT-025 class as the six gaps .lane/lanes/governance.yml already documents. No override exists: a File Scope Lock override cannot resolve Lane Authority, they are separate controls.",
+    "fix": "added docs/ops/** to .lane/lanes/governance.yml with the same annotation convention as the prior six entries",
+    "verified": "pnpm lane:check --lane governance --base origin/main --head HEAD -> PASS lane=governance files=18",
+    "note": "Lane authority is not one of the four required contexts; this was fixed rather than waived because the change is one precedented allowlist line and the path is correct for the diff."
+  },
+  "known_limitations": [
+    "Live Schema Parity may be red: pre-existing drift between repo migrations and live schema, tracked under UTV2-1274. This lane touches no migration and the check is not a required context.",
+    "Readiness Regression Gate may be red and is pre-existing: readiness-score.json reflects production runtime state this diff does not touch. Not a required context. Left red deliberately rather than writing a readiness score this lane has not measured.",
+    "File scope lock may be red. Not a required context.",
+    "A missing 'Supabase PR DB Branch' check is this lane's deletion of that workflow taking effect. It is not in the required set.",
+    "The three retained exemptions still hold production read credentials. Each now records its pin and its privilegeReduction, but the reductions themselves require CREATE ROLE on production and are not performed here.",
+    "ci-doctor checks CV1-CV6 degrade to 'skip' with the preview workflow absent. This is the designed behaviour of runPreviewChecks, not a regression."
+  ],
+  "explicitly_not": [
+    "no production database write",
+    "no role creation",
+    "no schema mutation",
+    "no GitHub secret, environment, or Supabase preview branch deleted",
+    "no deployment or service restart",
+    "no direct-main push, no admin merge, no branch-protection change",
+    "no writable DB claim and no pnpm test:db claim"
+  ],
+  "required_contexts": [
+    "verify",
+    "Executor Result Validation",
+    "Merge Gate",
+    "P0 Protocol"
+  ]
+}
