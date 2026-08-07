@@ -1,12 +1,46 @@
 # UTV2-1567 — Diff Summary
 
-MERGE_SHA: pending
+MERGE_SHA: 116f3f3ff1b49ecf7b5a819bf42a651bc31c59d9
 
-Rebindable anchor, added for CEP-E5 (UTV2-1649). `post-merge-lane-close.yml`
-rewrites this line with the real merge commit after the PR lands; without the
-anchor line the binder refuses the artifact rather than overwriting authored
-proof, and `ops:lane-close` fails after merge — which CEP caught here, before
-the merge, on this lane's own head.
+The merge commit of PR #1286, bound in a separate post-merge commit.
+
+**Correcting the claim that stood here.** The anchor was added pre-merge for
+CEP-E5 (UTV2-1649), with a note asserting that `post-merge-lane-close.yml`
+"rewrites this line with the real merge commit after the PR lands." **That was
+wrong, and this lane proved it wrong on itself.** The automated rebind
+(`rebindRepairedLaneProof`) writes only `evidence.json` and `verification.md`;
+`scripts/ops/proof-generate.ts` (~line 158) states that leaving
+`diff-summary.md` untouched is "the safest thing," because regenerating it
+would overwrite authored content.
+
+So closeout failed after merge on exactly this file:
+
+```text
+[FAIL] P3  proof files missing merge SHA reference: docs/06_status/proof/UTV2-1567/diff-summary.md
+[FAIL] C4  proof artifacts missing required SHA binding (116f3f3ff1b49ecf7b5a819bf42a651bc31c59d9)
+```
+
+`P3` requires the literal merge SHA in **every** path listed in the manifest's
+`expected_proof_paths` (`truth-check-lib.ts` ~line 675), and this lane lists
+`diff-summary.md`. The gap between the two sets has always been closed by hand —
+e.g. `chore(proof): UTV2-1209 bind merge SHA 2a7e535c to proof bundle and lane
+manifest`, and the same for UTV2-1225 and UTV2-1221. It was never automated and
+never written down. UTV2-1503 closed cleanly only because its manifest happened
+to declare `evidence.json` instead of `diff-summary.md`; its own
+`diff-summary.md` still reads `MERGE_SHA: pending` on `main` today, inside a
+lane carrying a `pass` receipt.
+
+**The defect, stated generally: the validator population is not the binder
+population.** Truth-check validates every artifact in `expected_proof_paths`;
+the binder owns a fixed subset. Any artifact in the difference must be bound by
+a human or the lane cannot close — silently, and only after merge. Recorded as
+durable follow-up under UTV2-1673 (PM decision 2026-08-07): every proof artifact
+truth-check requires must be owned by the automated binding mechanism.
+
+This commit is that manual binding, performed once, under explicit PM
+authorization, and scoped to this one line plus this explanation. It is not a
+repair loop: the expected SHA is already fixed at `pr.mergeSha` of the merged
+PR #1286, so no later commit can move it.
 
 Issue: UTV2-1567
 Tier: T2
