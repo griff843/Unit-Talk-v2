@@ -1,0 +1,11 @@
+version: 1
+approval:
+  allow_multiple_issues: true
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1641
+    - UTV2-1642
+  findings: []
+  controls: []
+  proofs: []

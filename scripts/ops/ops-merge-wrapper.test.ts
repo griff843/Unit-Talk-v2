@@ -74,6 +74,37 @@ function failRunner(calls: string[][]): CommandRunner {
   };
 }
 
+// UTV2-1592: `pr-merge` now runs a mandatory pre-merge authorization check
+// (a `pnpm exec tsx scripts/ops/pre-merge-authorization.ts` subprocess call,
+// via the same injectable CommandRunner) immediately before the actual merge
+// command. Tests below that exercise the merge command's own success/failure
+// path (not the authorization gate itself, which is covered in
+// scripts/ops/pre-merge-authorization.test.ts and
+// scripts/ops/merge-wrapper.test.ts) wrap their runner with this helper so
+// the authorization subprocess call always answers "authorized", and every
+// other command is delegated to the wrapped runner unchanged.
+function withAuthorizedPreMerge(runner: CommandRunner): CommandRunner {
+  return (command, args, options) => {
+    if (command === 'pnpm' && args[0] === 'exec' && args[1] === 'tsx' && args[2] === 'scripts/ops/pre-merge-authorization.ts') {
+      return {
+        status: 0,
+        stdout: Buffer.from(
+          JSON.stringify({
+            prNumber: 766,
+            headSha: 'deadbeef',
+            requiredChecks: [],
+            pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: true },
+            authorized: true,
+          }),
+        ),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    return runner(command, args, options);
+  };
+}
+
 const STASH_PUSH_ARGS = [
   'stash',
   'push',
@@ -419,7 +450,7 @@ test('pr-merge releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'pr-merge', pr: '766', merge_method: 'squash' },
-      { lockPath, deferredDir, runner: failRunner(calls) },
+      { lockPath, deferredDir, runner: withAuthorizedPreMerge(failRunner(calls)) },
     );
     const lock = readMergeLock(lockPath);
 
@@ -449,7 +480,7 @@ test('deferred auto-merge records deferred state and releases the lock', () => {
       {
         lockPath,
         deferredDir,
-        runner: okRunner(calls),
+        runner: withAuthorizedPreMerge(okRunner(calls)),
         now: new Date('2026-05-18T18:00:00.000Z'),
       },
     );
@@ -650,11 +681,39 @@ function buildFakeRunner(
     updateBranchFailFor?: Set<string>;
     mergeFailFor?: Set<string>;
     throwFor?: { pr: string; step: 'update-branch' };
+    authorizationDeniedFor?: Set<string>;
   } = {},
 ): { runner: CommandRunner; calls: string[][] } {
   const calls: string[][] = [];
   const runner: CommandRunner = (command, args) => {
     calls.push([command, ...args]);
+
+    // UTV2-1592 amendment: merge-train's merge step now routes through
+    // runAuthorizedPrMerge, which re-invokes the pre-merge-authorization
+    // subprocess via this same injected runner before every `gh pr merge`.
+    // Answer it with an authorized:true receipt by default so every
+    // pre-existing merge-train fixture keeps exercising exactly the
+    // update-branch/CI-wait/repost/merge behavior it already covers, unless
+    // a test explicitly asks for a denial via `authorizationDeniedFor`.
+    if (command === 'pnpm' && args[0] === 'exec' && args[1] === 'tsx' && String(args[2]).includes('pre-merge-authorization')) {
+      const prFlagIndex = args.indexOf('--pr');
+      const pr = prFlagIndex >= 0 ? (args[prFlagIndex + 1] ?? '') : '';
+      const authorized = !(outcomes.authorizationDeniedFor?.has(pr) ?? false);
+      const receipt = {
+        prNumber: Number(pr) || null,
+        headSha: 'fakehead0000',
+        requiredChecks: [],
+        pmVerdict: { commentUrl: null, parsedHeadSha: null, valid: authorized },
+        authorized,
+        ...(authorized ? {} : { reason: `simulated pre-merge authorization denial for PR ${pr}` }),
+      };
+      return {
+        status: authorized ? 0 : 1,
+        stdout: Buffer.from(JSON.stringify(receipt)),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
 
     if (command === 'gh' && args[0] === 'api' && String(args[1]).includes('update-branch')) {
       const pr = String(args[1]).match(/pulls\/(\d+)\/update-branch/)?.[1] ?? '';
@@ -824,6 +883,73 @@ test('merge-train: happy path drains all candidates and releases the lock', asyn
     const mergeCalls = calls.filter((call) => call[0] === 'gh' && call[1] === 'pr' && call[2] === 'merge').length;
     assert.strictEqual(updateBranchCalls, 3);
     assert.strictEqual(mergeCalls, 3);
+
+    const lock = readMergeLock(lockPath);
+    assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+  });
+});
+
+test('UTV2-1592: merge-train runs pre-merge authorization before every candidate\'s merge, not just the first', async () => {
+  await withTempOpsAsync(async ({ lockPath }) => {
+    const { runner, calls } = buildFakeRunner();
+    const result = await runMergeTrain(
+      { candidates: CANDIDATES, ttl_minutes: 5 },
+      { runner, waitForChecks: instantWaitForChecks, lockPath },
+    );
+
+    assert.strictEqual(result.ok, true);
+    if (result.ok) {
+      assert.ok(result.entries.every((entry) => entry.status === 'merged'));
+    }
+
+    const isAuthCall = (call: string[]): boolean =>
+      call[0] === 'pnpm' && call[1] === 'exec' && call[2] === 'tsx' && String(call[3]).includes('pre-merge-authorization');
+    const isMergeCall = (call: string[]): boolean => call[0] === 'gh' && call[1] === 'pr' && call[2] === 'merge';
+
+    const authCalls = calls.filter(isAuthCall);
+    assert.strictEqual(authCalls.length, 3, 'expected one authorization call per candidate, not a single reused check');
+
+    // Every authorization call must be for the same PR as, and must
+    // immediately precede, that candidate's own merge call -- proving each
+    // candidate is independently re-authorized rather than one check being
+    // reused across the whole batch.
+    const mergeIndices = calls.map((call, index) => (isMergeCall(call) ? index : -1)).filter((i) => i >= 0);
+    assert.strictEqual(mergeIndices.length, 3);
+    for (const mergeIndex of mergeIndices) {
+      const precedingCall = calls[mergeIndex - 1] as string[];
+      assert.ok(isAuthCall(precedingCall), `expected an authorization call immediately before merge call at index ${mergeIndex}`);
+      const prFlagIndex = precedingCall.indexOf('--pr');
+      const authorizedPr = precedingCall[prFlagIndex + 1];
+      const mergedPr = calls[mergeIndex]?.[3];
+      assert.strictEqual(authorizedPr, mergedPr, 'authorization call must be for the same PR it immediately gates');
+    }
+  });
+});
+
+test('UTV2-1592: merge-train authorization denial for a candidate prevents its merge runner from being called and stops the drain', async () => {
+  await withTempOpsAsync(async ({ lockPath }) => {
+    const { runner, calls } = buildFakeRunner({ authorizationDeniedFor: new Set(['2001']) });
+    const result = await runMergeTrain(
+      { candidates: CANDIDATES, ttl_minutes: 5 },
+      { runner, waitForChecks: instantWaitForChecks, lockPath },
+    );
+
+    assert.strictEqual(result.ok, false);
+    if (!result.ok) {
+      assert.strictEqual(result.entries?.[0]?.status, 'merge_authorization_denied');
+      assert.match(result.entries?.[0]?.detail ?? '', /pre-merge authorization denied/);
+      assert.match(result.entries?.[0]?.detail ?? '', /simulated pre-merge authorization denial for PR 2001/);
+      assert.strictEqual(result.entries?.[1]?.status, 'skipped_after_failure');
+      assert.strictEqual(result.entries?.[2]?.status, 'skipped_after_failure');
+    }
+
+    // The merge runner (`gh pr merge`) must never have been invoked for the
+    // denied candidate -- denial happens strictly before the merge command
+    // itself runs.
+    const mergeCallsForDeniedPr = calls.filter(
+      (call) => call[0] === 'gh' && call[1] === 'pr' && call[2] === 'merge' && call[3] === '2001',
+    );
+    assert.strictEqual(mergeCallsForDeniedPr.length, 0);
 
     const lock = readMergeLock(lockPath);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');

@@ -1,9 +1,51 @@
+# UTV2-1632 — this monitor had never executed a single check.
+#
+# The run step invoked `tsx` by bare binary name. `tsx` is a workspace
+# devDependency and is not on the runner's PATH, so the step exited 127 before
+# Node started. Every scheduled run since the workflow was added was red for
+# that reason, and a red monitor is indistinguishable from a monitor reporting a
+# real finding — which is why it went unnoticed.
+#
+# Three things changed, and each addresses a distinct way this failed silently:
+#
+#   1. The script is invoked through `pnpm exec`, like every other workflow in
+#      this repository. `scripts/ci/workflow-bare-binary-guard.ts` now fails the
+#      build if any workflow reintroduces a bare workspace-binary invocation.
+#   2. The run emits a machine-readable receipt naming every check, its measured
+#      value, its threshold and its verdict. A separate step fails the job
+#      closed if the receipt is missing or reports zero executed checks, so
+#      "the step exited 0" is never accepted as evidence that anything ran.
+#   3. The three outcomes are reported by three different steps, so the job's
+#      failing step name says which one occurred:
+#        - "Run DB health checks"    red => harness error (could not run)
+#        - "Prove the checks executed" red => the run produced no usable proof
+#        - "Report DB health verdict"  red => the checks ran and one tripped
+#
+# The job holds production credentials and uses them read-only: every catalog
+# query runs inside a `SET TRANSACTION READ ONLY` transaction and the receipt
+# records what Postgres reported for `transaction_read_only`. It is out of scope
+# for scripts/ci/workflow-production-credential-guard.ts by design — that guard
+# covers pull-request-triggered jobs, and monitoring production is exactly what
+# schedule/workflow_dispatch jobs exist for.
 name: DB Health Tripwire
 
 on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+    inputs:
+      threshold_overrides:
+        description: >-
+          Diagnostic only. JSON object of threshold overrides for this run, e.g.
+          {"SYSTEM_RUNS_SIZE_THRESHOLD_MB":"1"}. Used to demonstrate that the
+          check logic evaluates rather than merely starts. Unknown keys fail the
+          run closed, and any override suppresses the Linear alert so a
+          demonstration can never be mistaken for a production finding.
+        required: false
+        default: ''
+
+permissions:
+  contents: read
 
 env:
   SYSTEM_RUNS_SIZE_THRESHOLD_MB: '500'
@@ -14,6 +56,7 @@ env:
   AUTOVACUUM_STALENESS_HOURS: '24'
   STATEMENT_TIMEOUT_RATE_THRESHOLD: '3'
   TOAST_BLOAT_RATIO_THRESHOLD: '0.8'
+  TRIPWIRE_RECEIPT_PATH: artifacts/db-health-tripwire-receipt.json
 
 jobs:
   db-health-check:
@@ -44,11 +87,15 @@ jobs:
           direct-url: ${{ secrets.SUPABASE_DB_URL }}
           out-env: SUPABASE_DB_URL
 
+      # Red here means the harness could not run: bad configuration, an
+      # unreachable database, a refused connection target. It does NOT mean the
+      # database is unhealthy.
       - name: Run DB health checks
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_TOKEN }}
+          TRIPWIRE_THRESHOLD_OVERRIDES: ${{ inputs.threshold_overrides }}
           SYSTEM_RUNS_SIZE_THRESHOLD_MB: ${{ env.SYSTEM_RUNS_SIZE_THRESHOLD_MB }}
           RAW_PAYLOADS_SIZE_THRESHOLD_MB: ${{ env.RAW_PAYLOADS_SIZE_THRESHOLD_MB }}
           ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB: ${{ env.ODDS_SNAPSHOTS_SIZE_THRESHOLD_MB }}
@@ -57,4 +104,27 @@ jobs:
           AUTOVACUUM_STALENESS_HOURS: ${{ env.AUTOVACUUM_STALENESS_HOURS }}
           STATEMENT_TIMEOUT_RATE_THRESHOLD: ${{ env.STATEMENT_TIMEOUT_RATE_THRESHOLD }}
           TOAST_BLOAT_RATIO_THRESHOLD: ${{ env.TOAST_BLOAT_RATIO_THRESHOLD }}
-        run: tsx scripts/ops/db-health-tripwire.ts
+        run: pnpm exec tsx scripts/ops/db-health-tripwire.ts --receipt "$TRIPWIRE_RECEIPT_PATH"
+
+      # Runs even when the step above failed, so a receipt that was never
+      # written fails the job rather than being skipped into a green run.
+      - name: Upload tripwire receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-health-tripwire-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.TRIPWIRE_RECEIPT_PATH }}
+          if-no-files-found: ignore
+          retention-days: 30
+
+      # Red here means the run produced no usable proof of execution: no
+      # receipt, a receipt from a different run, or a receipt reporting zero
+      # executed checks. Exit code 0 from the step above is not accepted as
+      # evidence that the check logic ran.
+      - name: Prove the checks executed
+        if: always()
+        run: pnpm exec tsx scripts/ops/db-health-tripwire.ts --assert-executed "$TRIPWIRE_RECEIPT_PATH"
+
+      # Red here is the only outcome that means the DATABASE is unhealthy.
+      - name: Report DB health verdict
+        run: pnpm exec tsx scripts/ops/db-health-tripwire.ts --assert-healthy "$TRIPWIRE_RECEIPT_PATH"

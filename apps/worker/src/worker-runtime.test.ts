@@ -1283,7 +1283,14 @@ function makeProductionWorkerEnvironment(
     LINEAR_TEAM_NAME: 'unit-talk-v2',
     NOTION_WORKSPACE_NAME: 'unit-talk-v2',
     SLACK_WORKSPACE_NAME: 'unit-talk-v2',
-    SUPABASE_URL: 'https://example.supabase.co',
+    // UTV2-1628: this fixture is not inert. `createWorkerRuntimeDependencies`
+    // reaches `createProductionCertificationRuntime`, which really does build a
+    // service-role Supabase client from these values — the only place in
+    // `pnpm test` that does. `https://example.supabase.co` looked harmless but
+    // named a remote host, and the privileged-client boundary refuses any
+    // remote target it cannot positively identify as staging. Loopback states
+    // what the test actually needs: a client object, and no network.
+    SUPABASE_URL: 'http://127.0.0.1:1',
     SUPABASE_ANON_KEY: 'anon-key',
     SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
     UNIT_TALK_WORKER_ID: 'worker-prod',

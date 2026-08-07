@@ -1,0 +1,12 @@
+version: 1
+approval:
+  required: true
+  approved_by: pending
+entities:
+  issues:
+    - id: UTV2-1613
+      title: "lane-close --repair-merged must never synthesize an unmeasured passing truth record"
+      tier: T1
+      lane_type: governance
+      executor: claude
+      branch: claude/utv2-1613-lane-close-measured-truth

@@ -45,6 +45,10 @@ on:
         description: "Issue ID to manually close (e.g. UTV2-961)"
         required: true
         type: string
+      pr:
+        description: "Original implementation PR URL or number (trusted missing-binding repair only)"
+        required: false
+        type: string
 
 concurrency:
   group: merge-closeout-mutex
@@ -70,13 +74,16 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DISPATCH_ISSUE_ID: ${{ inputs.issue_id }}
+          DISPATCH_PR: ${{ inputs.pr }}
         run: |
           # workflow_dispatch: use the provided issue_id directly.
           if [ -n "$DISPATCH_ISSUE_ID" ]; then
             issue_id=$(echo "$DISPATCH_ISSUE_ID" | tr '[:lower:]' '[:upper:]')
             echo "::notice title=post-merge-lane-close::Manual replay for $issue_id"
             echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
-            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            echo "pr_input=$DISPATCH_PR" >> "$GITHUB_OUTPUT"
+            dispatch_pr_number=$(echo "$DISPATCH_PR" | grep -oE '[0-9]+$' || true)
+            echo "pr_number=$dispatch_pr_number" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -112,6 +119,7 @@ jobs:
           fi
 
           echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
+          echo "pr_input=" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -142,13 +150,20 @@ jobs:
         id: status
         env:
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          EVENT_NAME: ${{ github.event_name }}
+          EXPLICIT_PR: ${{ steps.extract.outputs.pr_input }}
         run: |
           status=$(jq -r '.status' "$MANIFEST_PATH")
           echo "::notice title=post-merge-lane-close::Manifest status: $status"
 
           if [ "$status" = "done" ]; then
-            echo "::notice title=post-merge-lane-close::Lane already done. Skipping."
-            echo "closeable=false" >> "$GITHUB_OUTPUT"
+            if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$EXPLICIT_PR" ]; then
+              echo "::notice title=post-merge-lane-close::Trusted terminal cleanup replay requested with explicit PR."
+              echo "closeable=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::notice title=post-merge-lane-close::Lane already done. Push handling remains a no-op; manual cleanup replay requires an explicit PR."
+              echo "closeable=false" >> "$GITHUB_OUTPUT"
+            fi
           elif [ "$status" = "in_review" ] || [ "$status" = "merged" ] || [ "$status" = "started" ] || [ "$status" = "in_progress" ] || [ "$status" = "reopened" ]; then
             echo "closeable=true" >> "$GITHUB_OUTPUT"
           else
@@ -179,11 +194,33 @@ jobs:
         # (e.g. re-closing an already-merged ghost lane), github.sha resolves
         # to whatever commit is checked out at dispatch time -- today's main
         # HEAD -- not the historical merge SHA of the target issue's actual
-        # PR. Resolve the real merge SHA from the manifest's own pr_url via
-        # the GitHub API instead, so proof binds to the right commit either
-        # way. Falls back to github.sha if the PR lookup fails for any reason
-        # (e.g. missing/malformed pr_url) so a push-triggered close is never
-        # blocked by this step.
+        # PR. This step resolves the real merge SHA from the manifest's own
+        # pr_url via the GitHub API. Falls back to github.sha if the PR lookup
+        # fails for any reason (e.g. missing/malformed pr_url) so a
+        # push-triggered close is never blocked by this step.
+        #
+        # HONEST PARTIAL -- READ BEFORE TRUSTING THIS STEP (PM decision
+        # 2026-08-04, tracked as UTV2-1673). This step's workflow_dispatch
+        # branch is currently UNREACHABLE in effect. Its only consumer is the
+        # "Bind proof artifacts to merge SHA" step below, which UTV2-1589
+        # restricted to `github.event_name == 'push'` for a documented
+        # safety reason (see that step's comment: an early bind on a replay
+        # trusts manifest.pr_url from disk, without the GitHub-backed
+        # validation `ops:lane-close --repair-merged` performs immediately
+        # afterward, and can permanently deadlock model-routing.json's
+        # immutable closeout_binding). On `push`, this step returns
+        # github.sha -- i.e. behavior is unchanged from before UTV2-1567.
+        #
+        # Both are preserved deliberately: this lane does NOT deliver
+        # correct workflow_dispatch replay binding, and must not be read as
+        # having done so. Widening the gate to
+        # `push' || 'workflow_dispatch'` is the WRONG fix and is explicitly
+        # out of scope here. UTV2-1673 owns the real fix: make replay
+        # binding safe (PR identity validation + merge-SHA ownership and
+        # reachability + separate authorization for immutable artifacts),
+        # then allow it. Until UTV2-1673 lands, correct replay binding comes
+        # from `ops:lane-close --repair-merged`, which resolves the SHA from
+        # GitHub's authoritative pr.mergeSha on every trigger.
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         id: resolve_sha
         env:
@@ -209,19 +246,75 @@ jobs:
           fi
 
       - name: Bind proof artifacts to merge SHA
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
+        # the script below. ops:proof-generate never binds model-routing.json
+        # by default (bindModelRouting defaults to false -- see
+        # ProofGenerateOptions in scripts/ops/proof-generate.ts), so this
+        # call was never at risk of that regardless; the notes below explain
+        # why it would have been unsafe if it ever opted in.
+        # `github.sha` on a `workflow_dispatch` run is whatever ref the
+        # dispatch targeted (main's tip at dispatch time), NOT the historical
+        # lane's actual merge SHA -- unlike evidence.json/verification.md's
+        # unconditional last-write-wins rebind, model-routing.json's
+        # closeout_binding is intentionally immutable-once-bound
+        # (conflict-checked), so binding it here to a wrong SHA would
+        # permanently deadlock the very repair this workflow exists to run:
+        # the correct SHA that `ops:lane-close --repair-merged` resolves next
+        # would then conflict with this step's already-written wrong one. The
+        # `github.event_name == 'push'` condition alone is not sufficient: a
+        # governed manifest-only repair PR (produced by
+        # buildRepairRequiredViaPrPacket for any lane whose pr_url is already
+        # set -- this is a precondition any such lane can be in, not a claim
+        # about which exact path any specific lane's own recovery takes) is
+        # merged via an ordinary `push`, and that repair commit's own
+        # `github.sha` is NOT the lane's original implementation merge SHA
+        # either -- but the manifest checked out by THIS push already
+        # carries the correct historical commit_sha (the repair PR's whole
+        # point). The script below additionally skips regenerating proof at
+        # all when the checked-out manifest already has a commit_sha that
+        # disagrees with this push's SHA, which covers exactly that case.
+        #
+        # There is a further, independent reason model-routing.json must
+        # never be bound here even if a future flag ever opted back in: even
+        # on a genuine first-time closeout (github.sha correct, commit_sha
+        # not yet set), this call resolves `manifest.pr_url` from disk with
+        # no `--pr`/`--pr-url` override -- i.e. without the GitHub-backed
+        # validation `ops:lane-close --repair-merged` performs next. If
+        # `pr_url` were ever stale (e.g. after a PR rename/reopen), binding
+        # model-routing.json's IMMUTABLE closeout_binding here would bake in
+        # that unvalidated identity before `createRepairRollbackTransaction`
+        # ever takes its "clean" snapshot -- so a later mismatch's rollback
+        # would just restore the already-wrong state, permanently blocking
+        # every future replay. `ops:lane-close --repair-merged` (the next
+        # step) always runs regardless of trigger and already binds
+        # model-routing.json itself via `rebindRepairedLaneProof()`, using
+        # its own validated PR/SHA resolution -- so model-routing.json is
+        # never bound here at all; only evidence.json/verification.md (which
+        # are never immutable, and are unconditionally corrected again by
+        # that same next step) are.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Regenerate proof files with the verified merge SHA so the inline
-          # "Merge SHA:" field is correct, not just appended at the end.
-          # --merge-sha overrides manifest.commit_sha; idempotent if SHA already present.
-          pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
-            && echo "::notice title=post-merge-lane-close::Proof artifacts regenerated with merge SHA for $ISSUE_ID." \
-            || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
+          existing_commit_sha=$(jq -r '.commit_sha // empty' "$MANIFEST_PATH")
+          if [ -n "$existing_commit_sha" ] && [ "$existing_commit_sha" != "$MERGE_SHA" ]; then
+            echo "::notice title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) already differs from this push's SHA ($MERGE_SHA) -- this push is a manifest/proof repair commit, not $ISSUE_ID's own implementation merge. Skipping early proof-generate bind; ops:lane-close --repair-merged will bind evidence/verification/model-routing using the authoritative SHA and PR it resolves itself."
+          else
+            # Regenerate proof files with the verified merge SHA so the inline
+            # "Merge SHA:" field is correct, not just appended at the end.
+            # --merge-sha overrides manifest.commit_sha; idempotent if SHA already present.
+            # model-routing.json is never bound here: ops:proof-generate only
+            # binds it when explicitly passed --bind-model-routing, which
+            # this invocation deliberately never does -- it is bound only by
+            # the validated ops:lane-close --repair-merged step below.
+            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
+              && echo "::notice title=post-merge-lane-close::Proof artifacts (evidence/verification only) regenerated with merge SHA for $ISSUE_ID." \
+              || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
+          fi
 
       - name: Run lane closeout (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
@@ -232,6 +325,7 @@ jobs:
         continue-on-error: true
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          EXPLICIT_PR: ${{ steps.extract.outputs.pr_input }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -240,7 +334,20 @@ jobs:
           # Repair stale merged-lane state from the authoritative PR merge SHA,
           # then run the normal lane-close truth gate. This keeps post-merge
           # automation on the same closeout path operators use manually.
-          close_output=$(pnpm ops:lane-close "$ISSUE_ID" --repair-merged --explain 2>&1) || exit_code=$?
+          #
+          # --post-merge-trusted (UTV2-1576) is the explicit capability flag that,
+          # together with this job's GITHUB_ACTIONS/GITHUB_REPOSITORY/GITHUB_REF/
+          # GITHUB_WORKFLOW_REF context, is the ONLY combination that satisfies
+          # isTrustedPostMergeAutomation() in scripts/ops/lane-close.ts and lets
+          # --repair-merged persist tracked-file changes from a checkout on `main`.
+          # Passing the flag alone (e.g. from a local shell or another workflow)
+          # does nothing without this exact context, and this exact context
+          # without the flag still fails closed to the governed-PR repair path.
+          close_args=("$ISSUE_ID" --repair-merged --explain --post-merge-trusted)
+          if [ -n "$EXPLICIT_PR" ]; then
+            close_args+=(--pr "$EXPLICIT_PR")
+          fi
+          close_output=$(pnpm ops:lane-close "${close_args[@]}" 2>&1) || exit_code=$?
           exit_code=${exit_code:-0}
 
           echo "$close_output"
@@ -344,6 +451,30 @@ jobs:
           echo "::error title=post-merge-lane-close::Lane closeout failed (exit ${{ steps.lane_close.outputs.exit_code }}) — lane NOT closed."
           exit "${{ steps.lane_close.outputs.exit_code }}"
 
+      - name: Fail closed on unexpected tracked changes (UTV2-1576)
+        # Defense-in-depth for the trusted post-merge capability: the closeout
+        # path is only ever supposed to touch this one issue's manifest, its
+        # own proof directory, and its own per-issue sync file. If anything
+        # else in the tracked working tree is dirty when we reach this point,
+        # something upstream (proof-generate, truth-check, a future change to
+        # this workflow) is writing outside its authorized scope -- abort
+        # before staging or committing anything rather than silently carry it.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.lane_close.outputs.exit_code == '0'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+        run: |
+          set -euo pipefail
+          allowed_pattern="^(${MANIFEST_PATH}|docs/06_status/proof/${ISSUE_ID}/.*|\.ops/sync/${ISSUE_ID}\.yml)$"
+          unexpected=$(git status --porcelain=v1 | awk '{ $1=""; sub(/^ /, ""); print }' | grep -vE "$allowed_pattern" || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error title=post-merge-lane-close::Closeout produced tracked changes outside the authorized scope for $ISSUE_ID:"
+            echo "$unexpected"
+            echo "::error title=post-merge-lane-close::Refusing to commit. This is a fail-closed scope guard, not a lane-close failure -- investigate before re-running."
+            exit 1
+          fi
+          echo "::notice title=post-merge-lane-close::Scope guard OK -- only $ISSUE_ID's own manifest/proof/sync paths are dirty."
+
       - name: Commit and push manifest change
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.lane_close.outputs.exit_code == '0'
         env:
@@ -357,8 +488,10 @@ jobs:
 
           # Remove per-issue sync file now that the lane is closed.
           per_issue_sync=".ops/sync/${ISSUE_ID}.yml"
-          if [ -f "$per_issue_sync" ]; then
-            git rm --force "$per_issue_sync"
+          if git ls-files -- "$per_issue_sync" | grep -q .; then
+            # lane-close removes the working-tree file before this step. Stage
+            # the tracked deletion from the index even though -f is now false.
+            git add -A -- "$per_issue_sync"
             echo "::notice title=post-merge-lane-close::Removed per-issue sync file $per_issue_sync"
           fi
 

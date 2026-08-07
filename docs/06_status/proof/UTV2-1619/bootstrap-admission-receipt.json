@@ -1,0 +1,162 @@
+{
+  "schema_version": 1,
+  "kind": "bootstrap_admission_receipt",
+  "issue_id": "UTV2-1619",
+  "lane_type": "governance",
+  "tier": "T2",
+  "branch": "claude/utv2-1619-close-eligibility-preflight",
+  "admitted_at": "2026-08-06T20:48:24.711Z",
+  "authorization": {
+    "issue_id": "UTV2-1619",
+    "lane_type": "governance",
+    "tier": "T2",
+    "authorized_by": "griff843",
+    "authorized_at": "2026-08-05",
+    "expires_at": "2026-09-05",
+    "milestone": "UTV2-1619 Milestone 1: lane lifecycle capacity semantics, truth-gated completion transitions, close eligibility preflight, closeout artifact verification",
+    "reason": "Capability 13 (lane lifecycle capacity semantics) is the admission dependency for this milestone and lives inside the issue the caps refuse to admit. Measured 2026-08-05: total 15/10, claude 11/4, governance 8/3. A PM-directed read-only investigation of the three multi-identity Merge Gate PRs recovered no capacity -- all are genuinely blocked on CHANGES_REQUIRED verdicts and a missing t1-approved label, not on stale duplicate check identities. Scope is governance work only, no production writes, no feature work. Remove this entry when Milestone 1 completes."
+  },
+  "authorization_source": {
+    "path": "docs/governance/BOOTSTRAP_AUTHORIZATIONS.json",
+    "ref": "origin/main",
+    "sha": "773b582d0306c67c118731652cfed18c5a6ea102"
+  },
+  "suppressed_violations": [
+    {
+      "code": "total_cap_exceeded",
+      "message": "Total active lanes (15) is at the hard cap of 10. Close a lane before starting a new one."
+    },
+    {
+      "code": "claude_cap_exceeded",
+      "message": "Claude active lanes (8) is at the cap of 4. Close a Claude lane before starting another."
+    },
+    {
+      "code": "governance_type_cap_exceeded",
+      "message": "Governance active lanes (8) is at the cap of 3. Close a Governance lane before starting another."
+    }
+  ],
+  "remaining_violations": [],
+  "board_at_admission": [
+    {
+      "issue_id": "UTV2-1398",
+      "lane_type": "modeling",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1236
+    },
+    {
+      "issue_id": "UTV2-1451",
+      "lane_type": "governance",
+      "executor": "claude",
+      "status": "in_review",
+      "source": "open_pr_head",
+      "pr_number": 1289
+    },
+    {
+      "issue_id": "UTV2-1503",
+      "lane_type": "governance",
+      "executor": "claude",
+      "status": "in_review",
+      "source": "open_pr_head",
+      "pr_number": 1290
+    },
+    {
+      "issue_id": "UTV2-1540",
+      "lane_type": "migration",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1378
+    },
+    {
+      "issue_id": "UTV2-1545",
+      "lane_type": "verification",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1384
+    },
+    {
+      "issue_id": "UTV2-1561",
+      "lane_type": "hygiene",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1272
+    },
+    {
+      "issue_id": "UTV2-1567",
+      "lane_type": "governance",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1286
+    },
+    {
+      "issue_id": "UTV2-1570",
+      "lane_type": "governance",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1293
+    },
+    {
+      "issue_id": "UTV2-1577",
+      "lane_type": "hygiene",
+      "executor": "claude",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1302
+    },
+    {
+      "issue_id": "UTV2-1578",
+      "lane_type": "hygiene",
+      "executor": "codex-cli",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1303
+    },
+    {
+      "issue_id": "UTV2-1584",
+      "lane_type": "governance",
+      "executor": "codex-cli",
+      "status": "in_review",
+      "source": "open_pr_head",
+      "pr_number": 1304
+    },
+    {
+      "issue_id": "UTV2-1614",
+      "lane_type": "governance",
+      "executor": "claude",
+      "status": "in_review",
+      "source": "open_pr_head",
+      "pr_number": 1315
+    },
+    {
+      "issue_id": "UTV2-1627",
+      "lane_type": "governance",
+      "executor": "codex-cli",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1320
+    },
+    {
+      "issue_id": "UTV2-1635",
+      "lane_type": "governance",
+      "executor": "claude",
+      "status": "reopened",
+      "source": "open_pr_head",
+      "pr_number": 1344
+    },
+    {
+      "issue_id": "UTV2-1651",
+      "lane_type": "hygiene",
+      "executor": "codex-cli",
+      "status": "started",
+      "source": "open_pr_head",
+      "pr_number": 1385
+    }
+  ],
+  "note": "This lane was admitted under a bootstrap governance identity, not under the concurrency caps. It does not assert that normal lane admission occurred. Only capacity violations were suppressed; every structural rule was applied unchanged."
+}

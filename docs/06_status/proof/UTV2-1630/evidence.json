@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1630",
+  "tier": "T1",
+  "title": "Every writable CI and T1 database path runs only against the staging project",
+  "generated_at": "2026-07-30T21:00:00.000Z",
+  "implementation_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+  "sha_binding": {
+    "verified_source_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+    "current_pr_head_sha": null,
+    "merge_sha": "a55de4025f966ce458546a16b5d91faa7b5e034b",
+    "verified_source_note": "Bound to the merge commit on main. The runtime proof below was produced by CI on the exact head that became this merge SHA (squash of 01775e25); it was not re-run afterwards against a different tree."
+  },
+  "verifier": {
+    "identity": "github-actions/CI — run 30583207418, job 91008556141 `Writable DB proof (staging only)` (producer) and job 91008917481 `verify` (independent receipt verifier)",
+    "method": "scripts/ci/verify-db-proof-receipt.ts re-checked the receipt against its own GITHUB_* values inside the required `verify` context and printed `Verdict: PASS` / `Reason: DB proof verified: run 30583207418 attempt 1 @ d75643c1ae782aa54cef1c6a22373c7a72a493ff, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0`.",
+    "note": "The implementing agent is not the verifier of the writable-DB claim by design: proof text cannot show which database a run reached, so the verifier is the CI job that holds the credential and the separate job that re-derives the receipt's binding.",
+    "harvest_note": "The queries, row counts and receipt fields below were read back on 2026-07-31 from the retained artifacts of that same run — the job logs for jobs 91008556141 and 91008917481, and receipt artifact 8775492252 (utv2-1630-db-proof-receipt-30583207418-1). Nothing was re-run: a re-run would be a different measurement wearing this merge SHA's name."
+  },
+  "static_proof": {
+    "verify": {
+      "command": "pnpm verify",
+      "status": "PARTIAL",
+      "stages_passed": [
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test"
+      ],
+      "test_totals": {
+        "suites": 96,
+        "tests": 3991,
+        "pass": 3991,
+        "fail": 0
+      },
+      "stopped_at": "test:live-db -> test:db -> ci:assert-staging",
+      "stop_reason": "Refused by this lane's own guard: no staging credential on this workstation, so the resolved target (host=127.0.0.1) is not xskgrzbteyqdufktjrjx. Before this change the same command reached production and wrote to it, so the refusal is the deliverable.",
+      "authoritative_full_run": "the required CI `verify` context, green on this head"
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "ci-db-proof-receipt/v2",
+    "produced_by": "ci.yml job staging-db-proof (the only job in that workflow holding a database credential)",
+    "verified_by": "scripts/ci/verify-db-proof-receipt.ts, executed inside the required `verify` context against its own GITHUB_* values",
+    "target_project_ref": "xskgrzbteyqdufktjrjx",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": false,
+    "note": "Not asserted from proof text. Text cannot show which database a run targeted; a production run and an isolated run print identical TAP.",
+    "queries": [
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1",
+        "duration_ms": 2190.867477
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2",
+        "duration_ms": 1773.909485
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3",
+        "duration_ms": 1851.644918
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4",
+        "duration_ms": 1847.643243
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "ok 5",
+        "duration_ms": 68.695053
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "ok 6",
+        "duration_ms": 2336.201593
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: correction chain is additive — original settlement row is not mutated",
+        "result": "ok 7",
+        "duration_ms": 2273.394128
+      }
+    ],
+    "queries_note": "The seven live cases `pnpm test:db` executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential. Transcribed from the ci-db-proof-receipt/v2 captured_output of run 30583207418 (artifact 8775492252), whose output_sha256 the verifier re-derived in the `verify` context; not from any local run.",
+    "row_counts": [
+      {
+        "table": "sports",
+        "operation": "upsert",
+        "rows": 9
+      },
+      {
+        "table": "cappers",
+        "operation": "upsert",
+        "rows": 1
+      },
+      {
+        "table": "market_families",
+        "operation": "upsert",
+        "rows": 6
+      },
+      {
+        "table": "selection_types",
+        "operation": "upsert",
+        "rows": 3
+      },
+      {
+        "table": "market_types",
+        "operation": "upsert",
+        "rows": 133
+      }
+    ],
+    "row_counts_note": "Observed on staging xskgrzbteyqdufktjrjx by scripts/ci/seed-staging-fixtures.ts in run 30583207418, job 91008556141, immediately before the writable suites ran; read from that job's log. At this point in the lane the seeder only upserted reference data and printed `done (idempotent — re-running is a no-op)` — it reported no reset/delete counts, so none are claimed here. The staging picks/submissions totals observed after the run are recorded separately under isolation_proof.staging_received_the_writes.",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "github_run_id": "30583207418",
+      "github_run_attempt": "1",
+      "github_sha": "d75643c1ae782aa54cef1c6a22373c7a72a493ff",
+      "github_ref_name": "1321/merge",
+      "producer_job_id": "91008556141",
+      "verifier_job_id": "91008917481",
+      "commands": [
+        "pnpm test:db",
+        "pnpm test:t1-proof:live"
+      ],
+      "receipt_command": "pnpm test:db",
+      "started_at": "2026-07-30T21:25:20.987Z",
+      "finished_at": "2026-07-30T21:25:35.091Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "job_tap_total": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0,
+        "blocks": 16
+      },
+      "repo_migration_head": "20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "fixture_run_id": "utv2-1630-30583207418-1",
+      "output_sha256": "6e7ae30dd481bab37f6ac33369969bc6a2c39156f047b6208125cd1c1805230b",
+      "receipt_sha256": "2d019ef031a2475f2a7cc26c03f162bfa7cb647c011cf3e136525e21e00e329a",
+      "artifact_id": "8775492252",
+      "artifact_name": "utv2-1630-db-proof-receipt-30583207418-1",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30583207418 attempt 1 @ d75643c1ae782aa54cef1c6a22373c7a72a493ff, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "target_project_ref": "xskgrzbteyqdufktjrjx",
+      "verified_in": "the required `verify` context via scripts/ci/verify-db-proof-receipt.ts",
+      "pr": 1321,
+      "head_sha_at_proof": "01775e2576849f4acfaee5fdc71d472e15a55155",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1321/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was 01775e2576849f4acfaee5fdc71d472e15a55155, which squash-merged to main as a55de4025f966ce458546a16b5d91faa7b5e034b.",
+      "job_tap_note": "test_db_tap is the receipt's own tap block for `pnpm test:db`. job_tap_total sums all 16 TAP blocks printed by job 91008556141, i.e. test:db plus the pnpm test:t1-proof:live suites, read from that job's log.",
+      "result": "success"
+    }
+  },
+  "isolation_proof": {
+    "definitive_run": "the full writable set \u2014 pnpm test:db plus pnpm test:t1-proof:live (15 suites) \u2014 executed in CI. This is the exact command set that previously wrote to production.",
+    "production_unchanged": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "picks": {
+        "before": 107858,
+        "after": 107858
+      },
+      "submissions": {
+        "before": 107428,
+        "after": 107428
+      },
+      "newest_row_before": "2026-07-30T20:14:57.722Z",
+      "newest_row_after": "2026-07-30T20:14:57.722Z",
+      "note": "Baseline taken before the first push on the stacked path and re-read after the full T1 live proof ran. Zero new production rows across every CI run of this lane."
+    },
+    "staging_received_the_writes": {
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "picks": 141,
+      "submissions": 55,
+      "newest_row": "2026-07-30T21:22:20.378Z",
+      "reference_data_seeded": {
+        "sports": 9,
+        "cappers": 1,
+        "market_families": 6,
+        "selection_types": 3,
+        "market_types": 133
+      }
+    }
+  },
+  "workflow_scanner": {
+    "tool": "scripts/ci/workflow-production-credential-guard.ts",
+    "against_origin_main": [
+      {
+        "workflow": "ci.yml",
+        "job": "verify",
+        "secrets": [
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "SUPABASE_URL"
+        ]
+      },
+      {
+        "workflow": "proof-gate.yml",
+        "job": "t1-proof",
+        "secrets": [
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "SUPABASE_URL"
+        ]
+      },
+      {
+        "workflow": "proof-regression.yml",
+        "job": "proof-regression",
+        "secrets": [
+          "SUPABASE_ANON_KEY",
+          "SUPABASE_SERVICE_ROLE_KEY",
+          "SUPABASE_URL"
+        ]
+      }
+    ],
+    "against_this_branch": [],
+    "note": "Verified in both directions: the scanner reports the shipped defect on main and nothing here, so it is not passing vacuously."
+  },
+  "workflows_migrated": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/proof-gate.yml",
+    ".github/workflows/proof-regression.yml",
+    ".github/workflows/t1-proof-gate.yml"
+  ],
+  "read_only_production_consumers_retained": [
+    "live-schema-parity.yml (schema read; migrations applied to an ephemeral local stack)",
+    "shadow-parity-required.yml (--dry-run; asserts zero writes and exits non-zero otherwise)",
+    "supabase-pr-db-branch.yml (management token creating an isolated preview branch)"
+  ],
+  "known_limitations": [
+    "Live Schema Parity is red on this PR and is pre-existing: 80 drift items between repo migrations and live schema, tracked under UTV2-1274. This lane touches no migration and the check is not a required context.",
+    "Readiness Regression Gate is red and pre-existing: readiness-score.json is 351h stale with a RED verdict on deploy_sha_alignment, ingestor_health, worker_outbox_health and dead_letter_count \u2014 production runtime state this diff does not touch. Not a required context. Left red deliberately: making it green would mean writing a readiness score this lane has not measured.",
+    "Production picks is ~93% test fixtures (100,247 of 107,858 rows carry a fixture marker, accumulated since 2026-04-21). This lane stops the source and deletes nothing; cleanup is deferred until it is on main."
+  ],
+  "explicitly_not": [
+    "no production database mutation",
+    "no production credential in any checkout or PR-triggered workflow",
+    "no deployment or service restart",
+    "no direct-main or admin bypass",
+    "no branch-protection change",
+    "no writable DB claim asserted from proof text"
+  ],
+  "adversarial_review": {
+    "brief": "refute the central claim",
+    "refuted_narrow_claim": false,
+    "url_guard": "23 hostile hostname forms fuzzed, zero false approvals",
+    "self_inflicted_defects_found": 3,
+    "all_p0_p1_closed": true,
+    "claim_as_ratified": "No CI job can accidentally reach production, and no pull request can reach production without visibly rewriting a workflow file owned by CODEOWNERS.",
+    "top_follow_up": "enable require_code_owner_reviews on .github/** \u2014 a branch-protection change this lane is forbidden from making"
+  }
+}

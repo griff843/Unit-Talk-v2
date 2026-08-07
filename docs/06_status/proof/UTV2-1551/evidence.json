@@ -5,11 +5,11 @@
   "tier": "T1",
   "lane_type": "governance",
   "status": "PRE_MERGE_VERIFIED",
-  "source_sha": "set-by-ci",
-  "reviewed_head_sha": "set-by-ci",
-  "evidence_commit_sha": "set-by-ci",
-  "current_head_sha": null,
-  "merge_sha": null,
+  "source_sha": "86132abd6edd815d8e0bb542f1fd1f3f3f25756b",
+  "reviewed_head_sha": "023c3dc47f107a90c24f592d4add3b4c71ad3265",
+  "evidence_commit_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+  "current_head_sha": "023c3dc47f107a90c24f592d4add3b4c71ad3265",
+  "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
   "sha_binding": {
     "verified_source_sha": "86132abd6edd815d8e0bb542f1fd1f3f3f25756b",
     "verified_source_note": "Fresh continuation lane opened directly from current main. Carries forward root cause #1 (bot-token cascade fix, previously implemented and PM-reviewed on PR #1247) re-applied cleanly, and adds root cause #2 (merge-gate.yml opened trigger) as new work in this same commit -- the prior PR deferred root cause #2 only because merge-gate.yml was held in a concurrent lane's file-scope lock, and is now stuck at its T1 bounce cap and CONFLICTING against current main, which is why this is a new PR rather than a rebase.",
@@ -17,12 +17,14 @@
     "bound_at": "2026-07-19T23:29:00.000Z",
     "ci_sentinels": {
       "verify": "pass",
-      "merge_gate": "pending",
-      "executor_result_validation": "pending",
-      "p0_protocol": "pending"
+      "merge_gate": "pass",
+      "executor_result_validation": "pass",
+      "p0_protocol": "pass"
     },
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "evidence_commit_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+    "current_pr_head_sha": "023c3dc47f107a90c24f592d4add3b4c71ad3265",
+    "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+    "merge_sha_note": "PR #1264 merged to main as 09f08701848f21cb7949b912134868bb3a5d88b5 on 2026-07-20. This repair binds the evidence bundle to that authoritative merge SHA so P3/C4 (proof SHA reference) pass; it does not change the reviewed implementation."
   },
   "verifier": {
     "identity": "claude/utv2-1551-continuation",
@@ -55,7 +57,49 @@
     "tests": 7,
     "pass": 7,
     "fail": 0,
-    "note": "This lane changes only CI workflow trigger/authentication configuration; no production code path or migration touched. Live smoke run (against real Supabase, apps/api/src/database-smoke.test.ts) executed regardless per T1 policy."
+    "note": "This lane changes only CI workflow trigger/authentication configuration; no production code path or migration touched. Live smoke run (against real Supabase, apps/api/src/database-smoke.test.ts) executed regardless per T1 policy.",
+    "queries": [
+      {
+        "table": "submissions",
+        "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 tests that create a pick (all except the read-only UTV2-883 participants test)"
+      },
+      {
+        "table": "picks",
+        "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by the two UTV2-920 rejection tests to assert zero rows were written for the target to_state after a rejected atomic operation"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "INSERT via one successful enqueueDistributionAtomic call (UTV2-920 invalid-delivery test setup); UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt (UTV2-920 invalid-enqueue test) is rejected and asserted via findByIdempotencyKey returning null"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call — no receipt row is created anywhere in this test run"
+      },
+      {
+        "table": "audit_log",
+        "description": "SELECT COUNT(*) used by the UTV2-920 rejection tests to assert zero audit rows were written for the rejected action (distribution.sent, settlement); real audit inserts happen inside the atomic RPCs on the successful paths (test 1, test 6, test 7)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call (UTV2-920 invalid settlement) is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record (corrects_id null) and that a correction chain is additive, not mutating"
+      },
+      {
+        "table": "participants",
+        "description": "SELECT via repositories.participants.listByType('player') — read-only invariant check (UTV2-883), no writes"
+      }
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 6 },
+      { "table": "submissions", "count": 6 },
+      { "table": "settlement_records", "count": 5 },
+      { "table": "distribution_outbox", "count": 1 },
+      { "table": "distribution_receipts", "count": 0 },
+      { "table": "participants", "count": 0 }
+    ]
   },
   "scope": {
     "implementation_paths": [

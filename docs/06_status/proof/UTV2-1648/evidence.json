@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1648",
+  "tier": "T1",
+  "title": "Replace long-lived GHCR_PAT with ephemeral GITHUB_TOKEN for remote Docker registry auth in deploy.yml",
+  "generated_at": "2026-08-01T15:55:00.000Z",
+  "status": "pr_open",
+  "sha_binding": {
+    "verified_source_sha": "1981cfacf59a501ffdb77423fa7a7c5c4af7aae5",
+    "merge_sha": null,
+    "base_sha": "871754a6e38b1579b6a6d93d3aad23c4810effa8",
+    "sha_type": "pending_merge",
+    "verified_source_note": "1981cfac is this branch's single implementation commit, on top of 871754a6 (the just-merged UTV2-1641 lane-close repair). The authoritative binding is the PR's squash-merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`.",
+    "bound_at": "2026-08-01T15:55:00.000Z",
+    "ci_sentinels": {
+      "status": "pending_pr_checks",
+      "note": "This evidence snapshot was authored before this commit's PR-triggered CI ran, so no genuine pass/fail sentinel exists yet for verify / Executor Result Validation / Merge Gate / P0 Protocol on this exact SHA -- fabricating pass here would be exactly the self-certification this field exists to prevent. Real sentinels are bound post-merge by ops:proof-generate --merge-sha."
+    }
+  },
+  "verifier": {
+    "identity": "claude (implementing agent) -- static/structural verification only; no live production deploy exercised this exact code path yet as of this snapshot",
+    "method": "Every claim below is either a direct pnpm command result (type-check/lint/full test suite) or a node:test assertion against the actual deploy.yml source text (auditParkedModeDeployWorkflow), including 5 new adversarial drift tests that mutate the fixed source back toward each specific piece of the retired GHCR_PAT pattern and assert the audit catches it.",
+    "verifier_scope": "Verifies the workflow-YAML wiring is structurally correct (no GHCR_PAT reference, github.token/github.actor used, packages:read scoping, preflight step present and correctly ordered, fail-closed on missing image). Does NOT constitute a live proof that github.token successfully authenticates to GHCR from the remote Hetzner host -- that is proven by the actual re-dispatched parked deploy this PR unblocks, immediately after merge.",
+    "independence_note": "The drift tests are the closest available self-check for a CI/CD-config-only change with no separate human reviewer: each mutates the corrected source to reintroduce one specific piece of the retired pattern (GHCR_PAT secret, hardcoded username, write permission, missing/non-fail-closed preflight) and asserts the static audit flags it."
+  },
+  "static_proof": {
+    "type_check": { "command": "pnpm type-check", "status": "PASS" },
+    "lint": { "command": "pnpm lint", "status": "PASS" },
+    "yaml_validity": {
+      "command": "python3 -c \"import yaml; yaml.safe_load(open('.github/workflows/deploy.yml'))\"",
+      "status": "PASS"
+    },
+    "unit_tests": {
+      "command": "npx tsx --test scripts/ci/deploy-parked-mode.test.ts",
+      "tests": 15,
+      "pass": 15,
+      "fail": 0,
+      "skipped": 0,
+      "note": "10 pre-existing (unchanged) + 5 new tests added by this lane."
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "tests": 4386,
+      "pass": 4386,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "runtime_proof": {
+    "status": "not_run_locally",
+    "reason": "This lane touches only .github/workflows/deploy.yml (CI/CD config) and its own test file -- no application runtime or database code path. No live Supabase connection is made by this lane's tests. R1/R2 for this lane's own closeout are expected to be populated post-merge by ops:proof-generate --merge-sha's auto-harvest mechanism against this PR's own CI staging-db-proof job, subject to the known UTV2-1647 harvest-lookup gap already tracked separately."
+  },
+  "live_incident_this_fixes": {
+    "what_happened": "Parked-mode deploy dispatched 2026-08-01 after UTV2-1646 merged; canary job failed at 'Authenticate GHCR on remote' with 'Error response from daemon: Get \"https://ghcr.io/v2/\": denied: denied' -- the GHCR_PAT secret is invalid or lacks registry permission.",
+    "blast_radius": "None. The failure occurred before any docker compose pull/up; .env.production had already been written correctly with parked-mode values (confirmed SYNDICATE_MACHINE_MODE: parked in the job env log). promote/smoke correctly never ran as a consequence of canary's failure.",
+    "pm_decision": "Do not regenerate/replace the PAT -- remove the standing-credential dependency entirely by reusing the ephemeral GITHUB_TOKEN the build job already proves works for this exact registry/these exact images."
+  },
+  "preflight_design_note": {
+    "why_all_four_services_in_canary": "canary only ever starts the api container (docker compose up -d --no-deps api), but the preflight checks all four services' image tags on the remote host before touching even that one container -- catching a partially-failed build/push or a registry auth problem as early as possible, rather than discovering it mid-promote after canary already looked healthy.",
+    "why_promote_has_its_own_preflight_too": "promote runs on a fresh GitHub-hosted runner with its own SSH session and its own docker login -- it cannot assume canary's authentication state carried over, so it repeats the same preflight independently."
+  },
+  "boundaries": {
+    "production_writes": "none -- this lane edits workflow YAML and a test file only",
+    "production_credentials": "none referenced, read, or written by this lane's diff or tests; the retired GHCR_PAT secret itself is deleted in a separate step (UTV2-1601 session) only after a live deploy proves the new auth path works",
+    "database_access": "none",
+    "deploy_execution": "none -- this lane does not itself trigger workflow_dispatch on deploy.yml; the actual re-dispatched parked deploy is the next step after this PR merges"
+  },
+  "not_closed": [
+    "This lane's own R1/R2 runtime_proof is left to the post-merge auto-harvest mechanism, same as any T1 lane (subject to the tracked UTV2-1647 gap).",
+    "The corrected deploy.yml has not yet been exercised by a real workflow_dispatch run against the Hetzner host as of this evidence snapshot -- that is the immediate next step after merge."
+  ]
+}

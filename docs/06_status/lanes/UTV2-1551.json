@@ -26,7 +26,9 @@
     ".github/workflows/merge-gate.yml",
     ".github/workflows/tier-label-apply.yml",
     ".github/workflows/tier-label-check.yml",
+    ".ops/sync/UTV2-1551.yml",
     "docs/05_operations/REQUIRED_SECRETS.md",
+    "docs/06_status/lanes/UTV2-1551.json",
     "docs/06_status/proof/UTV2-1551/.gitkeep",
     "docs/06_status/proof/UTV2-1551/diff-summary.md",
     "docs/06_status/proof/UTV2-1551/evidence.json",
@@ -36,10 +38,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1551/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-19T23:16:17.312Z",
-  "heartbeat_at": "2026-07-20T19:42:36.831Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-21T01:55:15.229Z",
+  "closed_at": "2026-07-21T01:55:15.229Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -65,6 +67,30 @@
         "preflight_token",
         "truth_check_history"
       ]
+    },
+    {
+      "checked_at": "2026-07-21T01:54:05.547Z",
+      "verdict": "fail",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-21T01:54:30.026Z",
+      "verdict": "pass",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-07-21T01:55:12.259Z",
+      "verdict": "pass",
+      "merge_sha": "09f08701848f21cb7949b912134868bb3a5d88b5",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],

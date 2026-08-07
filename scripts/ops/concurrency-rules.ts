@@ -1,5 +1,7 @@
 import {
-  ACTIVE_LOCK_STATUSES,
+  EXECUTOR_CAPACITY_STATUSES,
+  TOTAL_CAPACITY_STATUSES,
+  TYPE_CAPACITY_STATUSES,
   DELIVERY_UI_APP_ROOTS,
   deriveDeliveryUiApp,
   requireVerificationTarget,
@@ -78,7 +80,15 @@ export function checkConcurrencyLimits(
   config: ConcurrencyConfig | EffectiveConcurrencyConfig,
   incoming: IncomingLaneScope = {},
 ): ConcurrencyViolation[] {
-  const active = activeManifests.filter((m) => ACTIVE_LOCK_STATUSES.has(m.status));
+  // UTV2-1619 capability 13: each cap counts the population it is actually
+  // about. `active` remains the slot-occupancy population used by the total
+  // cap, type caps, and every structural rule below (singleton, forbidden
+  // combination, per-target); executor caps count only lanes an executor is
+  // actually working. Previously all three read the same set, so a lane parked
+  // or waiting on a human verdict consumed an executor slot nobody was using.
+  const active = activeManifests.filter((m) => TOTAL_CAPACITY_STATUSES.has(m.status));
+  const executorActive = activeManifests.filter((m) => EXECUTOR_CAPACITY_STATUSES.has(m.status));
+  const typeActive = activeManifests.filter((m) => TYPE_CAPACITY_STATUSES.has(m.status));
   const violations: ConcurrencyViolation[] = [];
 
   // Total cap
@@ -90,8 +100,8 @@ export function checkConcurrencyLimits(
   }
 
   // Executor caps
-  const claudeActive = active.filter((m) => m.executor === 'claude').length;
-  const codexActive = active.filter(
+  const claudeActive = executorActive.filter((m) => m.executor === 'claude').length;
+  const codexActive = executorActive.filter(
     (m) => m.executor === 'codex-cli' || m.executor === 'codex-cloud',
   ).length;
 
@@ -144,7 +154,7 @@ export function checkConcurrencyLimits(
   const typeCaps = config.type_caps;
   if (typeCaps) {
     if (incomingLaneType === 'hygiene') {
-      const hygieneActive = active.filter((m) => String(m.lane_type ?? '') === 'hygiene').length;
+      const hygieneActive = typeActive.filter((m) => String(m.lane_type ?? '') === 'hygiene').length;
       if (hygieneActive >= typeCaps.hygiene) {
         violations.push({
           code: 'hygiene_type_cap_exceeded',
@@ -154,7 +164,7 @@ export function checkConcurrencyLimits(
     }
 
     if (incomingLaneType === 'governance') {
-      const governanceActive = active.filter((m) => String(m.lane_type ?? '') === 'governance').length;
+      const governanceActive = typeActive.filter((m) => String(m.lane_type ?? '') === 'governance').length;
       if (governanceActive >= typeCaps.governance) {
         violations.push({
           code: 'governance_type_cap_exceeded',

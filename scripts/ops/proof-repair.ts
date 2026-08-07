@@ -53,6 +53,7 @@ import {
   ROOT,
   emitJson,
   getFlag,
+  mergeVerifierIdentity,
   parseArgs,
   relativeToRoot,
   requireIssueId,
@@ -280,9 +281,23 @@ export function mergeRuntimeProofIntoEvidence(
 
   // Additive-only merge: every existing key survives untouched. Only `verifier` and
   // `runtime_proof` are set, and sha_binding is never touched here (see module header).
+  //
+  // UTV2-1642: `verifier` is MERGED (via shared.ts's mergeVerifierIdentity), not
+  // replaced. This used to be a bare `{ identity: verifierIdentity }` object literal,
+  // which silently discarded any pre-existing `method` / `verifier_scope` /
+  // `independence_note` narrative the moment runtime_proof was added -- confirmed live
+  // on UTV2-1399's PR #1348, where the rich object had to be restored by hand. If no
+  // prior `verifier` object exists, mergeVerifierIdentity degrades to the same bare
+  // object this always produced, so the "no prior object" case is unchanged.
+  //
+  // `runtime_proof` itself is still a full replacement, not a merge -- and that is
+  // intentional, not the same defect. It is a single measurement (a `pnpm test:db`
+  // run), not accumulating narrative: a newly supplied RuntimeProofFile IS the
+  // authoritative full record of what actually ran, and there is nothing legitimate
+  // to preserve from a previous partial/stale value.
   const next: Record<string, unknown> = {
     ...existing,
-    verifier: { identity: verifierIdentity },
+    verifier: mergeVerifierIdentity(existingVerifier, verifierIdentity),
     runtime_proof: input.runtimeProof,
   };
 

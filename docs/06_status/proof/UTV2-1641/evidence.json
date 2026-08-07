@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1641",
+  "tier": "T1",
+  "title": "Auto-harvest CI DB-proof evidence into runtime_proof; fix proof-repair verifier-object clobbering",
+  "generated_at": "2026-08-01T04:24:14.000Z",
+  "status": "pr_open",
+  "sha_binding": {
+    "verified_source_sha": "855dbc0c2302114caac11db2bbb4d3c14dbc1e3b",
+    "merge_sha": null,
+    "base_sha": "b626a2c62b05be315ced902a61540dcbc23eda95",
+    "sha_type": "pending_merge",
+    "verified_source_note": "22a1d70d is this branch's real implementation commit after a second rebase onto origin/main. The first rebase (18f2d258, now superseded) was conflict-free; a second rebase was required when origin/main advanced again mid-lane (UTV2-1633 db-role migration + a ghost-lane reconcile), which produced a genuine package.json conflict on the test:ops script entry -- resolved by unioning both additions (this lane's ci-db-proof-harvest.test.ts and UTV2-1633's reporting-reader-role-guard test), never dropping either. Re-confirmed via `git merge-base HEAD origin/main` equalling `git rev-parse origin/main` post-rebase, and pnpm type-check + the four modified/added test files (151/151) re-run green on the new head. The authoritative binding is the PR's squash-merge SHA, written post-merge by post-merge-lane-close.yml via `ops:proof-generate --merge-sha`, which this lane's own auto-harvest addition also runs against.",
+    "bound_at": "2026-08-01T04:24:14.000Z"
+  },
+  "verifier": {
+    "identity": "claude (implementing agent) for static claims; independent verification for the harvest/row_counts cross-check is UTV2-1399's own separately-authored evidence.json (PR #1348), not this agent",
+    "method": "Every mechanical claim below (queries.length, row_counts values, verifier-preservation diffs) is asserted directly in committed node:test files against real fixture bytes captured from a genuine, already-merged CI run -- not narrated. The row_counts cross-validation specifically compares this lane's mechanically-derived output against a DIFFERENT lane's (UTV2-1399's) independently hand-authored evidence.json, which is the closest available independent verification for a governance-tooling change with no separate human reviewer in this session.",
+    "verifier_scope": "This identity verifies that the harvest/merge logic behaves correctly against real captured data and that the verifier-preservation fix is real. It does NOT constitute a live runtime_proof for THIS lane's own T1 gate -- that is whatever CI's real staging-db-proof job for this PR's own head produces, read back by this lane's own new auto-harvest mechanism against its own merge SHA, same as any other lane.",
+    "independence_note": "The central claims are checked both directions where meaningful: buildRuntimeProofRowCounts(realJobLog) is asserted to equal EXACTLY the row_counts UTV2-1399's own repair recorded by hand from the same real run (scripts/ops/proof-generate.test.ts / scripts/ops/ci-db-proof-harvest.test.ts), and mergeVerifierIdentity is asserted to reproduce the pre-fix bare-object behavior when invoked on the OLD code path's exact fixture shape, then the NEW preserving behavior on the same fixture with the fix applied."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "note": "ci:db-client-boundary + ops:sync-check + ops:system-alignment-check + ops:automation-coverage-check + env:check + lint + type-check + build + test + smart-form verify + verify:commands, all green, exit 0."
+    },
+    "unit_tests": {
+      "command": "npx tsx --test scripts/ops/ci-db-proof-harvest.test.ts scripts/ops/proof-generate.test.ts scripts/ops/proof-repair.test.ts scripts/ops/shared.test.ts",
+      "tests": 151,
+      "pass": 151,
+      "fail": 0,
+      "skipped": 0
+    },
+    "full_ops_suite": {
+      "command": "pnpm test:ops",
+      "tests": 1846,
+      "pass": 1846,
+      "fail": 0,
+      "skipped": 0,
+      "suites": 18
+    }
+  },
+  "runtime_proof": {
+    "status": "not_run_locally",
+    "reason": "This lane touches no application database path -- its subject is the CI-DB-proof-evidence tooling itself, exercised entirely through injected GhExecutor/ZipExtractor fakes against real captured fixture bytes (docs/06_status/proof/UTV2-1641/... none; fixtures live at scripts/ops/__fixtures__/utv2-1641-ci-db-proof/, sourced from UTV2-1399's real merged run). No live Supabase connection is made by this lane's own tests.",
+    "self_application_note": "R1/R2 for THIS lane's own closeout are populated by the mechanism this lane adds: post-merge-lane-close.yml's existing `pnpm ops:proof-generate UTV2-1641 --merge-sha <sha>` call now also runs autoHarvestCiDbProofIntoEvidence against this PR's own real staging-db-proof CI job. If that job is genuinely green, this section is expected to be auto-populated by the harvest on first closeout attempt; if not, R1/R2 fail honestly and that -- not this note -- is authoritative. This field is intentionally NOT hand-filled with a fabricated queries/row_counts array for this lane's own evidence.",
+    "mechanical_derivation_demonstrated_on_real_data": {
+      "source": "UTV2-1399 PR #1343, CI run 30680085299, job 91315210076 (Writable DB proof (staging only))",
+      "fixtures": [
+        "scripts/ops/__fixtures__/utv2-1641-ci-db-proof/real-utv2-1399-receipt.json",
+        "scripts/ops/__fixtures__/utv2-1641-ci-db-proof/real-utv2-1399-job-log.txt"
+      ],
+      "queries_derived": 7,
+      "row_counts_derived": 8,
+      "row_counts_cross_validation": "byte-identical to UTV2-1399's own hand-authored evidence.json repair (PR #1348) for the same run",
+      "test": "scripts/ops/proof-generate.test.ts: 'BEFORE/AFTER (UTV2-1641): a genuine CI receipt harvests real runtime_proof into evidence.json and preserves the pre-existing rich verifier (UTV2-1642)'"
+    }
+  },
+  "before_after_demonstration": {
+    "before": {
+      "state": "evidence.json runtime_proof = {status: 'not_run', reason: '...'}; no queries/row_counts arrays present",
+      "r1_r2_verdict": "FAIL (runtime_proof.queries / row_counts absent)"
+    },
+    "after": {
+      "state": "autoHarvestCiDbProofIntoEvidence() called with a real CI receipt + job log (via injected fakes carrying real fixture bytes)",
+      "result_code": "harvested",
+      "queries_length": 7,
+      "row_counts_length": 8,
+      "r1_r2_verdict": "PASS (both arrays real and non-empty)"
+    },
+    "no_evidence_case": {
+      "state": "same evidence.json, but the injected gh executor reports no PR associated with the merge SHA (simulating a lane whose CI never ran a live DB proof)",
+      "result_code": "no_pr_for_merge_sha",
+      "evidence_json_bytes_before": "identical to evidence_json_bytes_after (asserted directly, byte-for-byte)",
+      "r1_r2_verdict": "FAIL, honestly -- exactly as it should for a lane with no real evidence"
+    }
+  },
+  "verifier_preservation_demonstration": {
+    "issue": "UTV2-1642",
+    "before_fix": {
+      "operation": "mergeRuntimeProofIntoEvidence(existingWithRichVerifier, {verifierIdentity: 'claude/x'})",
+      "result_verifier": {
+        "identity": "claude/x"
+      },
+      "narrative_fields_lost": [
+        "method",
+        "verifier_scope",
+        "independence_note"
+      ]
+    },
+    "after_fix": {
+      "operation": "same call, via mergeVerifierIdentity(existingVerifier, 'claude/x')",
+      "result_verifier_identity": "claude/x",
+      "narrative_fields_preserved": [
+        "method",
+        "verifier_scope",
+        "independence_note"
+      ],
+      "assertion": "Object.keys(after.verifier).sort() === Object.keys(before.verifier).sort() -- no keys dropped, none added beyond what already existed"
+    },
+    "confirmed_live_incident": "UTV2-1399 PR #1348: pre-repair verifier object had method/verifier_scope/independence_note; proof-repair.ts apply replaced it with a bare {identity}; restored by hand and documented in that bundle's runtime_proof_verifier_note as a warning for future users. This lane is that fix."
+  },
+  "audit_of_sibling_merge_patterns": {
+    "file": "scripts/ops/proof-repair.ts",
+    "function_audited": "mergeRuntimeProofIntoEvidence (the only merge function in this file)",
+    "fields_it_sets": [
+      "verifier",
+      "runtime_proof"
+    ],
+    "verifier": "was unconditional replace -- FIXED (now merges via mergeVerifierIdentity)",
+    "runtime_proof": "is still a full replacement, and that is correct, not the same defect: a supplied RuntimeProofFile is a whole new real measurement (a specific pnpm test:db run) superseding whatever was there before, not accumulating narrative the way verifier's method/verifier_scope/independence_note fields are. There is nothing legitimate to preserve from a stale prior runtime_proof once a new real one is supplied.",
+    "sibling_functions_found": "none -- mergeRuntimeProofIntoEvidence is the only merge function in proof-repair.ts",
+    "shared_helper": "mergeVerifierIdentity extracted to scripts/ops/shared.ts so both proof-repair.ts's manual-apply path and proof-generate.ts's new automatic-harvest path (UTV2-1641) use the identical non-destructive merge, rather than each having its own copy that could independently regress."
+  },
+  "boundaries": {
+    "production_writes": "none",
+    "production_credentials": "none in any checkout, test, or PR-triggered workflow",
+    "database_access": "none from this lane's own diff or tests -- all GitHub-API and DB-proof-receipt IO is exercised via injected GhExecutor/ZipExtractor fakes against real captured fixture bytes",
+    "other_lane_proof_modified": "none -- UTV2-1399's evidence.json/PR #1348 are referenced read-only as fixture provenance and cross-validation data, never modified"
+  },
+  "not_closed": [
+    "This lane's OWN R1/R2 runtime_proof is not hand-filled here -- it is left to the mechanism this lane adds (autoHarvestCiDbProofIntoEvidence, invoked automatically by post-merge-lane-close.yml's existing ops:proof-generate --merge-sha call) to populate honestly from this PR's own real CI run, exactly like any other T1 lane going forward.",
+    "PR merge and final closeout (ops:lane-finalize, ops:lane-close) not yet complete as of this evidence snapshot."
+  ]
+}

@@ -24,9 +24,9 @@ import {
 import { linearQuery } from './linear-client.js';
 import {
   FULL_VERIFY_THROTTLE_DIR,
-  FULL_VERIFY_THROTTLE_STALE_MS,
   configuredFullVerifyConcurrency,
 } from './preflight.js';
+import { readSemaphoreStatus } from './verify-semaphore.js';
 
 export interface LaneManifest {
   schema_version: number;
@@ -436,39 +436,24 @@ function activeForbiddenCombinations(
   return forbiddenCombinations.filter(([left, right]) => activeTypes.includes(left) && activeTypes.includes(right));
 }
 
-function readThrottleOwner(slotPath: string): { acquired_at?: string } | null {
-  const ownerPath = path.join(slotPath, 'owner.json');
-  if (!fs.existsSync(ownerPath)) {
-    return null;
-  }
-  try {
-    return JSON.parse(fs.readFileSync(ownerPath, 'utf8')) as { acquired_at?: string };
-  } catch {
-    return null;
-  }
-}
-
-function fullVerifySlotIsActive(slotPath: string): boolean {
-  const owner = readThrottleOwner(slotPath);
-  const acquiredAt = owner?.acquired_at
-    ? Date.parse(owner.acquired_at)
-    : fs.statSync(slotPath).mtimeMs;
-  return Boolean(acquiredAt) && Date.now() - acquiredAt <= FULL_VERIFY_THROTTLE_STALE_MS;
-}
-
+/**
+ * UTV2-1594: a slot only counts against saturation when its owner is actually
+ * alive. The previous wall-clock check reported a slot held by a dead process
+ * as "active" for six hours, so the forecast told operators the throttle was
+ * saturated when in fact nothing was running. `readSemaphoreStatus` classifies
+ * each slot by provable liveness and hands back the same reasons the operator
+ * command prints.
+ */
 function readFullVerifyThrottleState(): LaneSaturationForecast['full_verify_throttle'] {
-  const maxConcurrent = configuredFullVerifyConcurrency();
-  const active = fs.existsSync(FULL_VERIFY_THROTTLE_DIR)
-    ? fs
-        .readdirSync(FULL_VERIFY_THROTTLE_DIR, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory() && /^slot-\d+$/.test(entry.name))
-        .filter((entry) => fullVerifySlotIsActive(path.join(FULL_VERIFY_THROTTLE_DIR, entry.name)))
-        .length
-    : 0;
+  const status = readSemaphoreStatus({
+    dir: FULL_VERIFY_THROTTLE_DIR,
+    maxConcurrent: configuredFullVerifyConcurrency(),
+  });
+  const active = status.slots.filter((slot) => slot.occupied && !slot.classification.reapable).length;
   return {
-    max_concurrent: maxConcurrent,
+    max_concurrent: status.max_concurrent,
     active,
-    available_slots: Math.max(0, maxConcurrent - active),
+    available_slots: Math.max(0, status.max_concurrent - active),
     lock_dir: normalizePath(path.relative(ROOT, FULL_VERIFY_THROTTLE_DIR)),
   };
 }

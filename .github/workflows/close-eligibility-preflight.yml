@@ -1,0 +1,111 @@
+name: Close Eligibility Preflight
+
+# UTV2-1619: a lane must not merge if it could not then truthfully close.
+#
+# Five lanes merged green and were only afterwards discovered incapable of
+# producing a truth receipt, each needing a repair PR: UTV2-1661, UTV2-1634,
+# UTV2-1649, and the UTV2-1619 capability-17 lane itself. Every one of those
+# defects existed in the packet BEFORE the merge and was knowable from the PR
+# head alone. The code that rejected them post-merge is ordinary library code
+# that could have run pre-merge and did not. This runs it pre-merge.
+#
+# The decision is made by evaluateCloseEligibilityPreflight() in
+# scripts/ops/truth-check-lib.ts -- the same module the close gate uses, calling
+# the same evaluateT2ProofEvidence() for P11-P14. It is deliberately not a
+# second implementation of those rules: two copies would drift, which is the
+# duplicated-authority class this program keeps rediscovering.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel superseded runs for the same PR only. Cancelling across PRs is what
+  # leaves `cancelled` check-runs stranded under required context names.
+  group: close-eligibility-preflight-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: Close eligibility preflight
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Evaluate close eligibility
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the lane from the branch name. A PR with no resolvable issue
+          # id is not a lane PR and is skipped -- this gate governs lane merges,
+          # not every change to the repository.
+          issue_id="$(printf '%s' "$HEAD_REF" | grep -oiE '(utv2|uni)-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+          if [ -z "$issue_id" ]; then
+            echo "::notice title=Close eligibility::branch \"$HEAD_REF\" resolves to no lane issue id; not a lane PR, skipping."
+            exit 0
+          fi
+
+          manifest="docs/06_status/lanes/${issue_id}.json"
+          if [ ! -f "$manifest" ]; then
+            echo "::notice title=Close eligibility::no lane manifest at $manifest on this head; nothing to preflight."
+            exit 0
+          fi
+
+          echo "Preflighting $issue_id against $manifest"
+          ISSUE_ID="$issue_id" MANIFEST_PATH="$manifest" pnpm exec tsx --eval '
+            import fs from "node:fs";
+            import path from "node:path";
+            import { evaluateCloseEligibilityPreflight } from "./scripts/ops/truth-check-lib.ts";
+
+            const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"));
+            const proofDir = path.join("docs", "06_status", "proof", process.env.ISSUE_ID);
+
+            // Read every artifact the lane declares, plus anything present in its
+            // proof directory. Declared-but-absent is itself a finding, so missing
+            // files are simply not collected rather than failing the read.
+            const declared = manifest.expected_proof_paths ?? [];
+            const onDisk = fs.existsSync(proofDir)
+              ? fs.readdirSync(proofDir).map((f) => path.join(proofDir, f))
+              : [];
+            const paths = [...new Set([...declared, ...onDisk])];
+            const artifacts = paths
+              .filter((p) => fs.existsSync(p) && fs.statSync(p).isFile())
+              .map((p) => ({ path: p, content: fs.readFileSync(p, "utf8") }));
+
+            const result = evaluateCloseEligibilityPreflight({ manifest, proof_artifacts: artifacts });
+
+            const icon = { pass: "PASS", fail: "FAIL", not_knowable_pre_merge: "N/A " };
+            for (const f of result.findings) {
+              const src = f.regression_source ? `  [regression: ${f.regression_source}]` : "";
+              console.log(`[${icon[f.status]}] ${f.id.padEnd(14)} ${f.detail}${src}`);
+            }
+
+            if (result.eligible) {
+              console.log("\nClose eligibility: PASS — this lane can truthfully close after merge.");
+              process.exit(0);
+            }
+
+            console.log("\nClose eligibility: BLOCKED. Fix these BEFORE merging; each one would");
+            console.log("otherwise require a repair PR after the merge:\n");
+            for (const f of result.blocking) {
+              console.log(`  - ${f.id} (${f.category}): ${f.detail}`);
+            }
+            process.exit(1);
+          '

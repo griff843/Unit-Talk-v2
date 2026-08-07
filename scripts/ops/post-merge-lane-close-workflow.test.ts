@@ -8,7 +8,23 @@ function readWorkflow(): string {
   return fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'post-merge-lane-close.yml'), 'utf8');
 }
 
-test('UTV2-1567: post-merge-lane-close.yml resolves the merge SHA via the manifest PR, not github.sha, for workflow_dispatch', () => {
+/*
+ * HONEST PARTIAL (PM decision 2026-08-04, tracked as UTV2-1673).
+ *
+ * These assertions prove the `resolve_sha` step EXISTS and is shaped
+ * correctly. They do NOT prove workflow_dispatch replays actually bind to the
+ * right merge SHA -- because they don't. `resolve_sha`'s only consumer is the
+ * "Bind proof artifacts to merge SHA" step, which UTV2-1589 restricted to
+ * `github.event_name == 'push'` for a documented safety reason. On `push`,
+ * `resolve_sha` returns `github.sha`, so behavior is unchanged.
+ *
+ * Read a green run of this file as "the step is present and correct", never
+ * as "replay binding works". The third test below exists precisely so this
+ * suite cannot be made to pass by widening the UTV2-1589 gate -- which is the
+ * wrong fix. UTV2-1673 owns the right one.
+ */
+
+test('UTV2-1567: post-merge-lane-close.yml has a resolve_sha step shaped to read the merge SHA from the manifest PR (see honest-partial note above)', () => {
   const workflow = readWorkflow();
 
   const resolveStep = workflow.match(/- name: Resolve merge SHA[\s\S]*?(?=\n {6}- name:)/);
@@ -51,5 +67,47 @@ test('UTV2-1567: "Bind proof artifacts to merge SHA" step consumes the resolved 
     body,
     /MERGE_SHA:\s*\$\{\{\s*github\.sha\s*\}\}/,
     'MERGE_SHA must not be set directly from github.sha in this step',
+  );
+});
+
+test("UTV2-1589's push-only restriction on the bind step survives UTV2-1567 (UTV2-1673 owns lifting it safely)", () => {
+  const workflow = readWorkflow();
+
+  const bindStep = workflow.match(/- name: Bind proof artifacts to merge SHA[\s\S]*?(?=\n {6}- name:)/);
+  assert.ok(bindStep, 'post-merge-lane-close.yml must have a "Bind proof artifacts to merge SHA" step');
+  const ifLine = bindStep[0].split('\n').find((line) => line.trim().startsWith('if:'));
+  assert.ok(ifLine, 'the bind step must carry an explicit `if:` guard');
+
+  // This is a fail-closed guard, not a style check. Wiring resolve_sha into
+  // the bind step (the test above) makes it *look* like widening this
+  // condition to include workflow_dispatch would finish UTV2-1567. It would
+  // not -- it would reintroduce exactly the hazard UTV2-1589 closed: an early
+  // bind that trusts manifest.pr_url from disk, with no GitHub-backed
+  // validation, can write model-routing.json's IMMUTABLE closeout_binding
+  // from a stale/renamed/reopened PR identity and permanently deadlock every
+  // future replay of the very repair this workflow exists to perform.
+  //
+  // Widening the gate requires UTV2-1673's three validations first (PR
+  // identity, merge-SHA ownership + reachability, and separate authorization
+  // for immutable artifacts). If you are here because this test failed, the
+  // question to answer is "did UTV2-1673 land?", not "how do I loosen this?".
+  assert.match(
+    ifLine,
+    /github\.event_name == 'push'/,
+    "the bind step must remain restricted to the push trigger until UTV2-1673 makes workflow_dispatch replay binding safe -- see UTV2-1589's in-file rationale",
+  );
+
+  // The assertion above is necessary but NOT sufficient on its own: it still
+  // matches inside a widened `(github.event_name == 'push' ||
+  // github.event_name == 'workflow_dispatch')`, which is the exact mistake
+  // this test exists to catch. Verified by negative control -- with only the
+  // match above, widening the gate left the suite green. Any mention of
+  // workflow_dispatch in this guard means the restriction has been lifted.
+  assert.doesNotMatch(
+    ifLine,
+    /workflow_dispatch/,
+    'the bind step guard must not admit workflow_dispatch -- widening it (including via an ' +
+      "`|| github.event_name == 'workflow_dispatch'` disjunction) reintroduces the unvalidated " +
+      'replay binding UTV2-1589 closed. UTV2-1673 must land first.',
   );
 });

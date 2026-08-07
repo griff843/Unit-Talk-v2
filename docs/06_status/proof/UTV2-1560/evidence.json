@@ -11,9 +11,9 @@
   "current_head_sha": null,
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "06b60eda192d363c65c9167c8f33e0705ca68b86",
-    "sha_type": "implementation_sha",
-    "bound_at": "2026-07-19T04:40:00Z",
+    "verified_source_sha": "e2e3fa143049227da1d7d1c0b57075dcdbf64db6",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-07-23T11:30:12.207Z",
     "ci_sentinels": {
       "verify": "pass_locally_pending_ci",
       "merge_gate": "pending",
@@ -42,11 +42,26 @@
     "workflow_safety_review": {
       "note": "Self-review of ops-network-diagnose.yml against the issue's explicit guardrails (do not mutate queues/delivery targets/env/containers; never print secret values):",
       "checks": [
-        { "check": "Only SSH commands executed are read-only: getent, dig, curl, openssl s_client, docker network ls/inspect, docker logs, ip route/link, sudo iptables -L / ufw status (best-effort, read-only flags only)", "result": "PASS" },
-        { "check": "No docker restart/stop/rm/exec-with-write, no sed/tee/> against .env.production or any config file, no queue/DB write commands", "result": "PASS" },
-        { "check": "Secret values (SUPABASE_SERVICE_ROLE_KEY, DB passwords) are never echoed -- only hostnames/ports are parsed out of SUPABASE_URL/DATABASE_URL-style values via sed/cut, and the DB test is a bare TCP connect (/dev/tcp) with no credentials sent", "result": "PASS" },
-        { "check": "UNIT_TALK_DISCORD_TARGET_MAP is never read or written by this workflow", "result": "PASS" },
-        { "check": "Workflow trigger is workflow_dispatch only -- no automatic/scheduled execution, no trigger on push/PR events", "result": "PASS" }
+        {
+          "check": "Only SSH commands executed are read-only: getent, dig, curl, openssl s_client, docker network ls/inspect, docker logs, ip route/link, sudo iptables -L / ufw status (best-effort, read-only flags only)",
+          "result": "PASS"
+        },
+        {
+          "check": "No docker restart/stop/rm/exec-with-write, no sed/tee/> against .env.production or any config file, no queue/DB write commands",
+          "result": "PASS"
+        },
+        {
+          "check": "Secret values (SUPABASE_SERVICE_ROLE_KEY, DB passwords) are never echoed -- only hostnames/ports are parsed out of SUPABASE_URL/DATABASE_URL-style values via sed/cut, and the DB test is a bare TCP connect (/dev/tcp) with no credentials sent",
+          "result": "PASS"
+        },
+        {
+          "check": "UNIT_TALK_DISCORD_TARGET_MAP is never read or written by this workflow",
+          "result": "PASS"
+        },
+        {
+          "check": "Workflow trigger is workflow_dispatch only -- no automatic/scheduled execution, no trigger on push/PR events",
+          "result": "PASS"
+        }
       ]
     },
     "codex_review_fixes": [
@@ -68,22 +83,64 @@
     "fail": 0,
     "note": "Live smoke run per T1 policy; this lane changes only a new GitHub Actions workflow file and its own proof bundle, no production code path or migration.",
     "queries": [
-      { "table": "submissions", "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick" },
-      { "table": "picks", "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path" },
-      { "table": "pick_lifecycle", "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation" },
-      { "table": "distribution_outbox", "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null" },
-      { "table": "distribution_receipts", "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call" },
-      { "table": "settlement_records", "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row" },
-      { "table": "audit_log", "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction" },
-      { "table": "participants", "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant" }
+      {
+        "table": "submissions",
+        "description": "INSERT via processSubmission — one row per synthetic pick, in the 6 of 7 database-smoke tests that create a pick"
+      },
+      {
+        "table": "picks",
+        "description": "INSERT via processSubmission (same 6 tests); UPDATE lifecycle_state via transitionPickLifecycle (queued, posted) and via the settlement RPC path"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "INSERT on each successful transitionPickLifecycle call and on each successful settlement transition; SELECT COUNT(*) used by three tests to assert zero rows were written for a specific to_state after a rejected atomic operation"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "INSERT via one successful enqueueDistributionAtomic call; UPDATE status to 'processing' via claimNextAtomic; a separate enqueue attempt is rejected and asserted via findByIdempotencyKey returning null"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "SELECT COUNT(*) used to assert zero rows were written after a rejected confirmDeliveryAtomic call"
+      },
+      {
+        "table": "settlement_records",
+        "description": "INSERT via recordPickSettlement/settlePickAtomic on successful calls; one settlePickAtomic call is rejected and asserted via SELECT COUNT(*) returning zero; SELECT used to assert exactly one base record and that a correction does not mutate the original row"
+      },
+      {
+        "table": "audit_log",
+        "description": "SELECT COUNT(*) used by three tests to assert zero audit rows for a rejected atomic operation, and by one test to assert at least two audit rows exist for a successful settlement plus its correction"
+      },
+      {
+        "table": "participants",
+        "description": "read-only SELECT (listByType('player')) scanning the full live table for the duplicate (external_id, sport, participant_type) invariant"
+      }
     ],
     "row_counts": [
-      { "table": "picks", "count": 6 },
-      { "table": "submissions", "count": 6 },
-      { "table": "settlement_records", "count": 5 },
-      { "table": "distribution_outbox", "count": 1 },
-      { "table": "distribution_receipts", "count": 0 },
-      { "table": "participants", "count": 0 }
+      {
+        "table": "picks",
+        "count": 6
+      },
+      {
+        "table": "submissions",
+        "count": 6
+      },
+      {
+        "table": "settlement_records",
+        "count": 5
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 1
+      },
+      {
+        "table": "distribution_receipts",
+        "count": 0
+      },
+      {
+        "table": "participants",
+        "count": 0
+      }
     ]
   },
   "scope": {

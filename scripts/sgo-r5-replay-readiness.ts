@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 
 type Client = SupabaseClient<Record<string, never>>;
@@ -100,7 +101,7 @@ const PAGE_SIZE = 1000;
 async function main() {
   const options = parseCliOptions(process.argv.slice(2));
   const env = loadEnvironment();
-  const client = createClient<Record<string, never>>(
+  const client = createPrivilegedClient<Record<string, never>>(
     env.SUPABASE_URL ?? '',
     env.SUPABASE_SERVICE_ROLE_KEY ?? '',
     {

@@ -12,10 +12,10 @@ function shaMatches(a: string | null | undefined, b: string | null | undefined):
   return shorter.length >= 7 && /^[0-9a-f]+$/i.test(shorter) && longer.toLowerCase().startsWith(shorter.toLowerCase());
 }
 
-// UTV2-1475: This workspace's PM-review state is named "In PM Review", not the
-// generic "In Review" this check used to reference (a state that does not exist
-// in this workspace). L3 accepts that state plus the terminal "Done" state only.
-const L3_PERMITTED_LINEAR_STATES = new Set(['In PM Review', 'Done']);
+// UTV2-1590: WORKFLOW_SPEC defines Ready to Close as a canonical closeout
+// state. L3 accepts exactly the three closeout states below and fails closed
+// for every execution, backlog, blocked, cancelled, or unknown state.
+const L3_PERMITTED_LINEAR_STATES = new Set(['Ready to Close', 'In PM Review', 'Done']);
 
 export function isLinearStatePermittedForL3(stateName: string | null | undefined): boolean {
   return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
@@ -40,6 +40,11 @@ import {
   validateTruthResultSchemaDependencies,
   writeManifest,
 } from './shared.js';
+// UTV2-1640: S1 previously tested scope membership with an exact Set lookup, so a
+// `dir/**` entry in file_scope_lock could never match a real file path. The
+// pre-merge guard already implements the correct `/**`-and-prefix semantics, so
+// reuse that single definition here rather than adding a third independent one.
+import { matchesLockPattern } from '../ci/file-scope-guard.js';
 
 interface RunTruthCheckOptions {
   issueId: string;
@@ -89,6 +94,51 @@ export interface CommitCheckResult {
   passed: boolean;
   missing: string[];
   bypassed?: string[];
+  evidence?: RequiredCheckEvidence[];
+}
+
+export interface RequiredCheckIdentity {
+  context: string;
+  app_id: number | null;
+}
+
+export interface RequiredCheckEvidence {
+  context: string;
+  required_app_id: number | null;
+  matched: boolean;
+  source: 'status' | 'check_run' | null;
+  candidate_id: number | null;
+  candidate_name: string | null;
+  candidate_app_id: number | null;
+  state: string | null;
+  conclusion: string | null;
+  timestamp: string | null;
+  passed: boolean;
+  details_url: string | null;
+  selection_reason: string;
+}
+
+export interface GitHubCommitStatus {
+  id?: number;
+  context?: string;
+  state?: string;
+  created_at?: string;
+  updated_at?: string;
+  target_url?: string | null;
+}
+
+export interface GitHubCheckRun {
+  id?: number;
+  name?: string;
+  status?: string;
+  conclusion?: string | null;
+  created_at?: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+  details_url?: string | null;
+  app?: {
+    id?: number | null;
+  } | null;
 }
 
 export interface CloseoutProofArtifact {
@@ -207,6 +257,348 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   }
 
   return checks;
+}
+
+/**
+ * UTV2-1640: S1 scope-diff evaluation, extracted so it is directly testable.
+ *
+ * Previously this matched with an exact `Set` lookup, so a `dir/**` entry in
+ * `file_scope_lock` could never match a real file path — every lane declaring a
+ * directory glob failed S1 once `files_changed` was populated, while the
+ * pre-merge file-scope guard passed the identical diff. The two gates disagreed
+ * about what a scope lock means.
+ *
+ * Matching now delegates to `matchesLockPattern`, the same helper the pre-merge
+ * guard uses, so there is one definition of scope semantics rather than two.
+ */
+/**
+ * Close-eligibility preflight (UTV2-1619).
+ *
+ * WHY THIS EXISTS. Five lanes merged green and were then discovered incapable of
+ * producing a truth receipt, each requiring a repair PR after the fact:
+ *
+ *   UTV2-1661  manifest missing `model_routing` -> truth-check exits infra_error
+ *              at M2, masking every later failure; proof MERGE_SHA unreachable
+ *              from main; proof missing pnpm test / pnpm verify / r-level-check.
+ *   UTV2-1634  same shape.
+ *   UTV2-1649  model-routing sidecar missing `override_used` -> the fatal
+ *              sidecar_manifest_routing_mismatch; diff-summary carried no
+ *              merge-SHA anchor so proof-generate refused to rebind it; proof
+ *              missing pnpm verify and r-level-check.
+ *   UTV2-1619  proof missing pnpm verify and r-level-check (capability 17 lane).
+ *
+ * Every one of those defects was present in the packet BEFORE the merge and was
+ * knowable from the PR head alone. The code that rejected them post-merge is
+ * ordinary library code that could have run pre-merge and did not.
+ *
+ * DESIGN: this is a decision module shared by the merge and close paths, not a
+ * second implementation. It calls `evaluateT2ProofEvidence` -- the very function
+ * the close gate uses for P11-P14 -- so the two can never disagree about what a
+ * conformant proof packet is. Re-deriving those rules here would recreate the
+ * duplicated-authority drift class this program keeps finding.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO: pre-merge there is no merge SHA, so merge
+ * reachability (G3), CI results on the merge commit, and the receipt itself are
+ * genuinely unknowable. Those are reported as `not_knowable_pre_merge` rather
+ * than passed or failed. Reporting an unknowable check as `pass` would make the
+ * preflight assert something it cannot see, which is the failure mode the whole
+ * issue exists to eliminate.
+ */
+export type CloseEligibilityCategory = 'evidence' | 'manifest' | 'close' | 'lifecycle';
+
+export type CloseEligibilityStatus = 'pass' | 'fail' | 'not_knowable_pre_merge';
+
+export interface CloseEligibilityFinding {
+  id: string;
+  category: CloseEligibilityCategory;
+  status: CloseEligibilityStatus;
+  detail: string;
+  /** The historical lane whose failure this check exists to prevent, when applicable. */
+  regression_source?: string;
+}
+
+export interface CloseEligibilityPreflightInput {
+  manifest: Pick<
+    LaneManifest,
+    'issue_id' | 'tier' | 'schema_version' | 'created_by' | 'expected_proof_paths' | 'pr_url'
+  > & { model_routing?: unknown };
+  /** Proof artifacts as they exist at the PR head. */
+  proof_artifacts: CloseoutProofArtifact[];
+}
+
+export interface CloseEligibilityPreflightResult {
+  /** False when any check FAILED. `not_knowable_pre_merge` never blocks. */
+  eligible: boolean;
+  findings: CloseEligibilityFinding[];
+  blocking: CloseEligibilityFinding[];
+}
+
+/** Executors whose manifests require a model_routing block at schema_version 2. */
+function requiresModelRouting(manifest: { schema_version?: unknown; created_by?: unknown }): boolean {
+  return Number(manifest.schema_version) >= 2 && String(manifest.created_by ?? '') !== 'claude';
+}
+
+/**
+ * Can `ops:proof-generate` bind this artifact to a merge SHA later?
+ *
+ * UTV2-1649: `diff-summary.md` carried no anchor, so proof-generate refused with
+ * `unbindable_proof_artifact` rather than silently overwriting authored proof.
+ * The refusal was correct; the packet was not bindable and nothing said so
+ * before the merge.
+ */
+export function hasBindableShaAnchor(content: string): boolean {
+  return content
+    .split(/\r?\n/)
+    .some(
+      (line) =>
+        /^\s*MERGE_SHA:/i.test(line) ||
+        /^\s*Merge SHA:/i.test(line) ||
+        /\|\s*Commit SHA\(s\)\s*\|/i.test(line),
+    );
+}
+
+/**
+ * Is a model-routing sidecar structurally conformant?
+ *
+ * UTV2-1649: `override_used` was absent. `proof-generate` requires it to be a
+ * boolean so a sidecar cannot misrepresent who authorized an execution, and 22
+ * of the 23 sidecars on main already carried it -- the rule was near-universally
+ * satisfied and still unenforced at the boundary.
+ */
+export function evaluateModelRoutingSidecar(content: string): { ok: boolean; detail: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return { ok: false, detail: 'model-routing sidecar is not valid JSON' };
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { ok: false, detail: 'model-routing sidecar is not a JSON object' };
+  }
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.override_used !== 'boolean') {
+    return {
+      ok: false,
+      detail:
+        'model-routing sidecar must carry a boolean override_used; without it proof-generate ' +
+        'fails closed with sidecar_manifest_routing_mismatch after the merge',
+    };
+  }
+  for (const field of ['issue_id', 'model', 'reasoning_effort'] as const) {
+    if (typeof record[field] !== 'string' || String(record[field]).trim() === '') {
+      return { ok: false, detail: `model-routing sidecar is missing required field "${field}"` };
+    }
+  }
+  return { ok: true, detail: 'model-routing sidecar carries override_used and execution provenance' };
+}
+
+export function evaluateCloseEligibilityPreflight(
+  input: CloseEligibilityPreflightInput,
+): CloseEligibilityPreflightResult {
+  const findings: CloseEligibilityFinding[] = [];
+  const add = (
+    id: string,
+    category: CloseEligibilityCategory,
+    status: CloseEligibilityStatus,
+    detail: string,
+    regression_source?: string,
+  ): void => {
+    findings.push({ id, category, status, detail, ...(regression_source ? { regression_source } : {}) });
+  };
+
+  const artifacts = input.proof_artifacts ?? [];
+  const byPath = new Map(artifacts.map((a) => [a.path, a]));
+  const combined = artifacts.map((a) => a.content).join('\n');
+
+  // ── 1. Evidence readiness ────────────────────────────────────────────────
+  const expected = input.manifest.expected_proof_paths ?? [];
+  const missing = expected.filter((p) => !byPath.has(p));
+  add(
+    'CEP-E1',
+    'evidence',
+    missing.length === 0 && expected.length > 0 ? 'pass' : 'fail',
+    expected.length === 0
+      ? 'manifest declares no expected_proof_paths'
+      : missing.length === 0
+        ? 'every declared proof artifact is present at the PR head'
+        : `declared proof artifacts missing at the PR head: ${missing.join(', ')}`,
+  );
+
+  // Emptiness is only meaningful for artifacts the manifest actually DECLARES.
+  // Scanning every file under the proof directory also catches structural
+  // placeholders -- a `.gitkeep` exists precisely to be empty, and failing a
+  // lane for it reports a defect where there is none. CEP-E1 above already
+  // scopes to `expected_proof_paths`; this check is scoped the same way so the
+  // two agree on what a proof artifact is.
+  //
+  // This does not weaken the gate: a declared artifact that is empty still
+  // fails, which is the case that actually matters. It narrows the input set to
+  // the declared one rather than relaxing the rule applied to it.
+  const expectedSet = new Set(expected);
+  const empty = artifacts
+    .filter((a) => expectedSet.has(a.path) && a.content.trim() === '')
+    .map((a) => a.path);
+  add(
+    'CEP-E2',
+    'evidence',
+    empty.length === 0 ? 'pass' : 'fail',
+    empty.length === 0
+      ? 'no declared proof artifact is empty'
+      : `empty proof artifacts: ${empty.join(', ')}`,
+  );
+
+  // Required sections, checked on the verification document specifically.
+  const verification = artifacts.find((a) => /verification\.md$/i.test(a.path));
+  if (verification) {
+    const required = ['# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:'];
+    const absent = required.filter((token) => !verification.content.includes(token));
+    add(
+      'CEP-E3',
+      'evidence',
+      absent.length === 0 ? 'pass' : 'fail',
+      absent.length === 0
+        ? 'verification document carries every required section'
+        : `verification document missing required sections: ${absent.join(', ')}`,
+      'UTV2-1661',
+    );
+  } else {
+    add('CEP-E3', 'evidence', 'fail', 'no verification document found among proof artifacts', 'UTV2-1661');
+  }
+
+  // Required command references -- REUSES the close gate's own P11-P14 rules.
+  for (const check of evaluateT2ProofEvidence({
+    proofPaths: artifacts.map((a) => a.path),
+    proofContents: combined,
+  })) {
+    add(
+      `CEP-E4/${check.id}`,
+      'evidence',
+      check.status === 'pass' ? 'pass' : 'fail',
+      check.detail,
+      check.id === 'P13' || check.id === 'P14' ? 'UTV2-1619' : 'UTV2-1661',
+    );
+  }
+
+  // SHA binding possible.
+  const unbindable = artifacts
+    .filter((a) => /\.(md)$/i.test(a.path))
+    .filter((a) => !hasBindableShaAnchor(a.content))
+    .map((a) => a.path);
+  add(
+    'CEP-E5',
+    'evidence',
+    unbindable.length === 0 ? 'pass' : 'fail',
+    unbindable.length === 0
+      ? 'every markdown proof artifact carries a rebindable merge-SHA anchor'
+      : `proof artifacts cannot be SHA-bound after merge (no MERGE_SHA anchor): ${unbindable.join(', ')}`,
+    'UTV2-1649',
+  );
+
+  const sidecar = artifacts.find((a) => /model-routing\.json$/i.test(a.path));
+  if (sidecar) {
+    const verdict = evaluateModelRoutingSidecar(sidecar.content);
+    add('CEP-E6', 'evidence', verdict.ok ? 'pass' : 'fail', verdict.detail, 'UTV2-1649');
+  }
+
+  // ── 2. Manifest readiness ────────────────────────────────────────────────
+  const tierOk = /^T[123]$/.test(String(input.manifest.tier ?? ''));
+  add(
+    'CEP-M1',
+    'manifest',
+    tierOk ? 'pass' : 'fail',
+    tierOk ? `tier resolves to ${input.manifest.tier}` : `tier "${input.manifest.tier}" is not resolvable`,
+  );
+
+  const needsRouting = requiresModelRouting(input.manifest);
+  const hasRouting = typeof input.manifest.model_routing === 'object' && input.manifest.model_routing !== null;
+  add(
+    'CEP-M2',
+    'manifest',
+    !needsRouting || hasRouting ? 'pass' : 'fail',
+    !needsRouting
+      ? 'model_routing not required for this executor/schema combination'
+      : hasRouting
+        ? 'manifest carries the required model_routing block'
+        : 'manifest is missing model_routing, which makes ops:truth-check exit infra_error at M2 ' +
+          'and mask every later check',
+    'UTV2-1661',
+  );
+
+  let prOk = false;
+  try {
+    prOk = Boolean(input.manifest.pr_url) && Boolean(parsePullRequestUrl(String(input.manifest.pr_url)));
+  } catch {
+    prOk = false;
+  }
+  add(
+    'CEP-M3',
+    'manifest',
+    prOk ? 'pass' : 'fail',
+    prOk ? 'manifest.pr_url is present and parseable' : 'manifest.pr_url is missing or unparseable',
+  );
+
+  // ── 3. Close readiness ───────────────────────────────────────────────────
+  const evidenceBlocking = findings.filter((f) => f.category === 'evidence' && f.status === 'fail');
+  const manifestBlocking = findings.filter((f) => f.category === 'manifest' && f.status === 'fail');
+  add(
+    'CEP-C1',
+    'close',
+    evidenceBlocking.length === 0 && manifestBlocking.length === 0 ? 'pass' : 'fail',
+    evidenceBlocking.length === 0 && manifestBlocking.length === 0
+      ? 'no pre-merge-knowable condition would prevent ops:lane-close from producing a receipt'
+      : `ops:lane-close would fail after merge on: ${[...evidenceBlocking, ...manifestBlocking].map((f) => f.id).join(', ')}`,
+  );
+
+  add(
+    'CEP-C2',
+    'close',
+    'not_knowable_pre_merge',
+    'merge-SHA reachability, CI results on the merge commit, and the receipt itself cannot be ' +
+      'evaluated before the merge exists; they remain the close gate\'s responsibility',
+  );
+
+  // ── 4. Lifecycle readiness ───────────────────────────────────────────────
+  add(
+    'CEP-L1',
+    'lifecycle',
+    'pass',
+    'lane completion and issue completion are separate decisions: ops:lane-close completes a lane ' +
+      'and completes an issue only under the five-condition gate, which requires an explicit ' +
+      'completion intent that a lane closing cannot supply for itself',
+  );
+
+  add(
+    'CEP-L2',
+    'lifecycle',
+    'not_knowable_pre_merge',
+    'whether an automatic Done path exists OUTSIDE this repository cannot be determined from lane ' +
+      'data; external mutation authorities are inventoried and governed separately',
+  );
+
+  const blocking = findings.filter((f) => f.status === 'fail');
+  return { eligible: blocking.length === 0, findings, blocking };
+}
+
+export function evaluateScopeDiff(
+  filesChanged: string[],
+  fileScopeLock: string[],
+  expectedProofPaths: string[],
+): { status: 'pass' | 'fail'; detail: string } {
+  if (filesChanged.length === 0 || fileScopeLock.length === 0) {
+    return { status: 'pass', detail: 'scope-diff check not applicable (empty files_changed or scope)' };
+  }
+
+  const allowedPatterns = [...fileScopeLock, ...expectedProofPaths];
+  const outOfScope = filesChanged.filter(
+    (f) =>
+      !allowedPatterns.some((pattern) => matchesLockPattern(f, pattern)) &&
+      !f.includes('deleted-file') &&
+      !f.startsWith('docs/06_status/proof/'),
+  );
+
+  return outOfScope.length > 0
+    ? { status: 'fail', detail: `files_changed outside file_scope_lock: ${outOfScope.join(', ')}` }
+    : { status: 'pass', detail: 'all files_changed are within file_scope_lock or proof paths' };
 }
 
 export function evaluateT2ProofEvidence(input: {
@@ -457,7 +849,7 @@ export async function runTruthCheck(
 
     const stateName = linearIssue.state?.name ?? '';
     if (!isLinearStatePermittedForL3(stateName)) {
-      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not In PM Review or Done`);
+      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not Ready to Close, In PM Review, or Done`);
     } else {
       addCheck('L3', 'pass', `Linear state ${stateName} is permitted`);
     }
@@ -545,21 +937,32 @@ export async function runTruthCheck(
         mergeSha &&
         pullRequest.merge_commit_sha === mergeSha,
       ),
-      fetchChecks: (sha) => fetchCommitChecks(prRef.owner, prRef.repo, sha, githubToken),
+      fetchChecks: (sha) => fetchCommitChecks({
+        owner: prRef.owner,
+        repo: prRef.repo,
+        sha,
+        token: githubToken,
+        requiredChecks,
+      }),
     });
+    const evidence = JSON.stringify(requiredCheckResult.evidence ?? []);
     if (requiredCheckResult.passed) {
       const detail = requiredCheckResult.checkedSha === 'head-admin-merge'
-        ? `admin-merged PR accepted: non-governance required checks are green on PR head SHA; bypassed stuck checks: ${(requiredCheckResult.bypassed ?? []).join(', ')}`
+        ? `admin-merged PR accepted: non-governance required checks are green on PR head SHA; bypassed stuck checks: ${(requiredCheckResult.bypassed ?? []).join(', ')}; evidence=${evidence}`
         : requiredCheckResult.checkedSha === 'head'
-          ? 'required GitHub checks are green on PR head SHA'
-          : 'required GitHub checks are green on merge SHA';
+          ? `required GitHub checks are green on PR head SHA; evidence=${evidence}`
+          : `required GitHub checks are green on merge SHA; evidence=${evidence}`;
       addCheck(
         'G4',
         'pass',
         detail,
       );
     } else {
-      addCheck('G4', 'fail', `required checks missing or failing: ${requiredCheckResult.missing.join(', ')}`);
+      addCheck(
+        'G4',
+        'fail',
+        `required checks missing or failing on ${requiredCheckResult.checkedSha} SHA: ${requiredCheckResult.missing.join(', ')}; evidence=${evidence}`,
+      );
     }
 
     if (tier === 'T1') {
@@ -712,25 +1115,12 @@ export async function runTruthCheck(
       }
     }
 
-    if (manifest.files_changed.length > 0 && manifest.file_scope_lock.length > 0) {
-      const allowedPaths = new Set([
-        ...manifest.file_scope_lock,
-        ...manifest.expected_proof_paths,
-      ]);
-      const outOfScope = manifest.files_changed.filter(
-        (f) =>
-          !allowedPaths.has(f) &&
-          !f.includes('deleted-file') &&
-          !f.startsWith('docs/06_status/proof/'),
-      );
-      if (outOfScope.length > 0) {
-        addCheck('S1', 'fail', `files_changed outside file_scope_lock: ${outOfScope.join(', ')}`);
-      } else {
-        addCheck('S1', 'pass', 'all files_changed are within file_scope_lock or proof paths');
-      }
-    } else {
-      addCheck('S1', 'pass', 'scope-diff check not applicable (empty files_changed or scope)');
-    }
+    const scopeDiff = evaluateScopeDiff(
+      manifest.files_changed,
+      manifest.file_scope_lock,
+      manifest.expected_proof_paths,
+    );
+    addCheck('S1', scopeDiff.status, scopeDiff.detail);
 
     const finalizedFilesForPostMergeTouchCheck = manifest.files_changed.filter(
       (filePath) =>
@@ -1156,7 +1546,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
   return payload.data.issue;
 }
 
-function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
+export function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; number: number } {
   const url = new URL(prUrl);
   const match = url.pathname.match(/^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/);
   if (!match) {
@@ -1170,7 +1560,7 @@ function parsePullRequestUrl(prUrl: string): { owner: string; repo: string; numb
   };
 }
 
-async function fetchGitHubPullRequest(
+export async function fetchGitHubPullRequest(
   owner: string,
   repo: string,
   number: number,
@@ -1195,16 +1585,25 @@ interface GitHubIssueComment {
   created_at?: string;
 }
 
-async function fetchGitHubPullRequestComments(
+export async function fetchGitHubPullRequestComments(
   owner: string,
   repo: string,
   number: number,
   token: string,
+  fetchPage: JsonPageFetcher = fetchJson,
 ): Promise<GitHubIssueComment[]> {
-  return fetchJson<GitHubIssueComment[]>(
-    `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+  // UTV2-1592 amendment: a PR/issue with more than 100 comments used to
+  // silently drop everything past page 1 -- including, potentially, the
+  // latest pm-verdict/v1 comment. Paginate the same way fetchCommitChecks
+  // already does for statuses/check-runs (fetchAllPages below), rather than
+  // reimplementing pagination a third time.
+  return fetchAllPages<GitHubIssueComment[]>(
+    (page) =>
+      `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100&page=${page}`,
+    (payload) => payload,
+    fetchPage,
     { headers: githubHeaders(token) },
-  );
+  ) as Promise<GitHubIssueComment[]>;
 }
 
 const PM_VERDICT_CODEOWNERS = new Set(['griff843']);
@@ -1274,19 +1673,50 @@ function isBranchProtectionReadBlocked(error: unknown): boolean {
   return /\b(403 Forbidden|404 Not Found)\b/.test(message);
 }
 
-async function fetchRequiredChecks(
+export function normalizeRequiredChecks(input: {
+  contexts?: string[];
+  checks?: Array<{ context?: string; app_id?: number | null }>;
+}): RequiredCheckIdentity[] {
+  const normalized: RequiredCheckIdentity[] = [];
+  const seen = new Set<string>();
+  const checks = input.checks ?? [];
+
+  for (const check of checks) {
+    const context = check.context?.trim();
+    if (!context) continue;
+    const appId = check.app_id === -1 ? null : check.app_id ?? null;
+    const key = `${context}\0${appId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ context, app_id: appId });
+  }
+
+  const checkContexts = new Set(normalized.map((check) => check.context));
+  for (const rawContext of input.contexts ?? []) {
+    const context = rawContext.trim();
+    if (!context || checkContexts.has(context)) continue;
+    const key = `${context}\0`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ context, app_id: null });
+  }
+
+  return normalized;
+}
+
+export async function fetchRequiredChecks(
   owner: string,
   repo: string,
   token: string,
-): Promise<string[]> {
+): Promise<RequiredCheckIdentity[]> {
   let response: {
     contexts?: string[];
-    checks?: Array<{ context?: string }>;
+    checks?: Array<{ context?: string; app_id?: number | null }>;
   };
   try {
     response = await fetchJson<{
       contexts?: string[];
-      checks?: Array<{ context?: string }>;
+      checks?: Array<{ context?: string; app_id?: number | null }>;
     }>(`https://api.github.com/repos/${owner}/${repo}/branches/main/protection/required_status_checks`, {
       headers: githubHeaders(token),
     });
@@ -1299,63 +1729,178 @@ async function fetchRequiredChecks(
     if (fallbackChecks.length === 0) {
       throw error;
     }
-    return fallbackChecks;
+    return fallbackChecks.map((context) => ({ context, app_id: null }));
   }
 
-  const contexts = response.contexts ?? [];
-  const checks = (response.checks ?? [])
-    .map((entry) => entry.context?.trim())
-    .filter((entry): entry is string => Boolean(entry));
-  return [...new Set([...contexts, ...checks])];
+  return normalizeRequiredChecks(response);
 }
 
-async function fetchCommitChecks(
-  owner: string,
-  repo: string,
-  sha: string,
-  token: string,
-): Promise<CommitCheckResult> {
-  const [statusPayload, checksPayload] = await Promise.all([
-    fetchJson<{
-      statuses?: Array<{ context?: string; state?: string }>;
-    }>(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/status`, {
-      headers: githubHeaders(token),
-    }),
-    fetchJson<{
-      check_runs?: Array<{ name?: string; conclusion?: string | null; status?: string }>;
-    }>(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=100`, {
-      headers: {
-        ...githubHeaders(token),
-        Accept: 'application/vnd.github+json',
-      },
-    }),
-  ]);
+type JsonPageFetcher = <T>(url: string, init: RequestInit) => Promise<T>;
+type RequiredCheckInput = string | RequiredCheckIdentity;
 
-  const requiredChecks = await fetchRequiredChecks(owner, repo, token);
-  if (requiredChecks.length === 0) {
-    return { passed: true, missing: [] };
-  }
+function normalizeRequiredCheckInput(check: RequiredCheckInput): RequiredCheckIdentity {
+  return typeof check === 'string'
+    ? { context: check, app_id: null }
+    : check;
+}
 
-  const statusMap = new Map<string, boolean>();
-  for (const status of statusPayload.statuses ?? []) {
-    if (status.context) {
-      statusMap.set(status.context, status.state === 'success');
-    }
-  }
-  for (const checkRun of checksPayload.check_runs ?? []) {
-    if (checkRun.name) {
-      const isPassed = checkRun.status === 'completed' && checkRun.conclusion === 'success';
-      if (isPassed || !statusMap.has(checkRun.name)) {
-        statusMap.set(checkRun.name, isPassed);
+function parseCandidateTime(value: string | null): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function evaluateRequiredCheckResults(input: {
+  requiredChecks: RequiredCheckInput[];
+  statuses: GitHubCommitStatus[];
+  checkRuns: GitHubCheckRun[];
+}): CommitCheckResult {
+  const evidence = input.requiredChecks.map((rawCheck): RequiredCheckEvidence => {
+    const required = normalizeRequiredCheckInput(rawCheck);
+    const candidates: Array<RequiredCheckEvidence & { sort_time: number }> = [];
+
+    if (required.app_id === null) {
+      for (const status of input.statuses) {
+        if (status.context !== required.context) continue;
+        const timestamp = status.updated_at ?? status.created_at ?? null;
+        candidates.push({
+          context: required.context,
+          required_app_id: null,
+          matched: true,
+          source: 'status',
+          candidate_id: status.id ?? null,
+          candidate_name: status.context ?? null,
+          candidate_app_id: null,
+          state: status.state ?? null,
+          conclusion: null,
+          timestamp,
+          passed: status.state === 'success',
+          details_url: status.target_url ?? null,
+          selection_reason: 'latest result with exact required context identity',
+          sort_time: parseCandidateTime(timestamp),
+        });
       }
     }
-  }
 
-  const missing = requiredChecks.filter((check) => statusMap.get(check) !== true);
+    for (const checkRun of input.checkRuns) {
+      if (checkRun.name !== required.context) continue;
+      const appId = checkRun.app?.id ?? null;
+      if (required.app_id !== null && appId !== required.app_id) continue;
+      const timestamp = checkRun.completed_at ?? checkRun.started_at ?? checkRun.created_at ?? null;
+      candidates.push({
+        context: required.context,
+        required_app_id: required.app_id,
+        matched: true,
+        source: 'check_run',
+        candidate_id: checkRun.id ?? null,
+        candidate_name: checkRun.name ?? null,
+        candidate_app_id: appId,
+        state: checkRun.status ?? null,
+        conclusion: checkRun.conclusion ?? null,
+        timestamp,
+        passed: checkRun.status === 'completed' && checkRun.conclusion === 'success',
+        details_url: checkRun.details_url ?? null,
+        selection_reason: required.app_id === null
+          ? 'latest result with exact required context identity'
+          : 'latest result with exact required context and app identity',
+        sort_time: parseCandidateTime(timestamp),
+      });
+    }
+
+    candidates.sort((a, b) =>
+      b.sort_time - a.sort_time ||
+      (b.candidate_id ?? 0) - (a.candidate_id ?? 0) ||
+      (b.source === 'check_run' ? 1 : 0) - (a.source === 'check_run' ? 1 : 0),
+    );
+    const selected = candidates[0];
+    if (!selected) {
+      return {
+        context: required.context,
+        required_app_id: required.app_id,
+        matched: false,
+        source: null,
+        candidate_id: null,
+        candidate_name: null,
+        candidate_app_id: null,
+        state: null,
+        conclusion: null,
+        timestamp: null,
+        passed: false,
+        details_url: null,
+        selection_reason: required.app_id === null
+          ? 'no result matched the exact required context identity'
+          : 'no result matched the exact required context and app identity',
+      };
+    }
+
+    const { sort_time: _sortTime, ...result } = selected;
+    return result;
+  });
+
+  const missing = [...new Set(evidence.filter((entry) => !entry.passed).map((entry) => entry.context))];
   return {
     passed: missing.length === 0,
     missing,
+    evidence,
   };
+}
+
+async function fetchAllPages<T>(
+  buildUrl: (page: number) => string,
+  readItems: (payload: T) => unknown[],
+  fetchPage: JsonPageFetcher,
+  init: RequestInit,
+): Promise<unknown[]> {
+  const items: unknown[] = [];
+  for (let page = 1; ; page += 1) {
+    const payload = await fetchPage<T>(buildUrl(page), init);
+    const pageItems = readItems(payload);
+    items.push(...pageItems);
+    if (pageItems.length < 100) break;
+  }
+  return items;
+}
+
+export async function fetchCommitChecks(input: {
+  owner: string;
+  repo: string;
+  sha: string;
+  token: string;
+  requiredChecks: RequiredCheckInput[];
+  fetchPage?: JsonPageFetcher;
+}): Promise<CommitCheckResult> {
+  if (input.requiredChecks.length === 0) {
+    return { passed: true, missing: [], evidence: [] };
+  }
+
+  const fetchPage = input.fetchPage ?? fetchJson;
+  const [statuses, checkRuns] = await Promise.all([
+    fetchAllPages<GitHubCommitStatus[]>(
+      (page) =>
+        `https://api.github.com/repos/${input.owner}/${input.repo}/commits/${input.sha}/statuses?per_page=100&page=${page}`,
+      (payload) => payload,
+      fetchPage,
+      { headers: githubHeaders(input.token) },
+    ),
+    fetchAllPages<{ check_runs?: GitHubCheckRun[] }>(
+      (page) =>
+        `https://api.github.com/repos/${input.owner}/${input.repo}/commits/${input.sha}/check-runs?filter=all&per_page=100&page=${page}`,
+      (payload) => payload.check_runs ?? [],
+      fetchPage,
+      {
+        headers: {
+          ...githubHeaders(input.token),
+          Accept: 'application/vnd.github+json',
+        },
+      },
+    ),
+  ]);
+
+  return evaluateRequiredCheckResults({
+    requiredChecks: input.requiredChecks,
+    statuses: statuses as GitHubCommitStatus[],
+    checkRuns: checkRuns as GitHubCheckRun[],
+  });
 }
 
 export interface G3ReachabilityResult {
@@ -1426,13 +1971,17 @@ function safeRead(filePath: string): string {
 export async function evaluateRequiredChecksWithHeadFallback(input: {
   mergeSha: string | null;
   headSha?: string | null;
-  requiredChecks: string[];
+  requiredChecks: RequiredCheckInput[];
   allowAdminMergeGateBypass?: boolean;
   fetchChecks: (sha: string) => Promise<CommitCheckResult>;
 }): Promise<CommitCheckResult & { checkedSha: 'merge' | 'head' | 'head-admin-merge' | 'none' }> {
   const mergeChecks = input.mergeSha
     ? await input.fetchChecks(input.mergeSha)
-    : { passed: false, missing: input.requiredChecks };
+    : {
+        passed: false,
+        missing: input.requiredChecks.map((check) => normalizeRequiredCheckInput(check).context),
+        evidence: [],
+      };
   if (mergeChecks.passed) {
     return { ...mergeChecks, checkedSha: 'merge' };
   }
@@ -1448,9 +1997,11 @@ export async function evaluateRequiredChecksWithHeadFallback(input: {
         passed: true,
         missing: [],
         bypassed: headChecks.missing,
+        evidence: headChecks.evidence,
         checkedSha: 'head-admin-merge',
       };
     }
+    return { ...headChecks, checkedSha: 'head' };
   }
 
   return { ...mergeChecks, checkedSha: input.mergeSha ? 'merge' : 'none' };
@@ -1659,7 +2210,7 @@ async function fetchJson<T>(url: string, init: RequestInit): Promise<T> {
   throw new Error(`Request failed for ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
-function githubHeaders(token: string): HeadersInit {
+export function githubHeaders(token: string): HeadersInit {
   return {
     Authorization: `Bearer ${token}`,
     Accept: 'application/vnd.github+json',

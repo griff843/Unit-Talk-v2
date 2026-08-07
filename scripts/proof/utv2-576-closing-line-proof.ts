@@ -7,7 +7,7 @@
  * Run:  source local.env && npx tsx scripts/proof/utv2-576-closing-line-proof.ts
  */
 import { loadEnvironment } from '@unit-talk/config';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
   DatabaseProviderOfferRepository,
   DatabaseEventRepository,
@@ -17,7 +17,7 @@ import {
 import { runClosingLineRecovery } from '../../apps/api/src/closing-line-recovery-service.js';
 import { runMarketUniverseMaterializer } from '../../apps/api/src/market-universe-materializer.js';
 
-async function auditClosingCoverage(db: ReturnType<typeof createClient>) {
+async function auditClosingCoverage(db: ReturnType<typeof createPrivilegedClient>) {
   const { data: mu } = await db
     .from('market_universe')
     .select('closing_line')
@@ -43,7 +43,7 @@ async function main() {
   const env = loadEnvironment();
   const conn = createServiceRoleDatabaseConnectionConfig(env);
 
-  const db = createClient(conn.url, conn.key);
+  const db = createPrivilegedClient(conn.url, conn.key);
   const providerOffers = new DatabaseProviderOfferRepository(conn);
   const events = new DatabaseEventRepository(conn);
   const marketUniverse = new DatabaseMarketUniverseRepository(conn);
