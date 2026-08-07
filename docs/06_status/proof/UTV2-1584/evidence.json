@@ -8,13 +8,13 @@
   "generated_at": "2026-07-24T13:48:54Z",
   "head_sha": "5cbe30fcc8535eb2caa8f1c7e94520438ee02789",
   "sha_binding": {
-    "verified_source_sha": "5cbe30fcc8535eb2caa8f1c7e94520438ee02789",
+    "verified_source_sha": "d2abd5310469a30d4ff5ab91a5e82b53bfa1eec2",
     "verified_source_note": "Final substantive implementation commit (PM CHANGES_REQUIRED correction: PR base-ref binding, fixing head 33e9dba5d0c44289f471e2dbb3caaa471cbfb0f2); subsequent commits are limited to proof and lane metadata.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-24T13:48:54Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-07T22:56:04.575Z",
     "evidence_commit_sha": null,
     "current_pr_head_sha": null,
-    "merge_sha": null,
+    "merge_sha": "d2abd5310469a30d4ff5ab91a5e82b53bfa1eec2",
     "ci_sentinels": {
       "verify": "pass_locally_pending_ci",
       "merge_gate": "pending"

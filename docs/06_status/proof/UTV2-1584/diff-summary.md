@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1584 — Safe existing-branch lane re-admission
 
-MERGE_SHA: pending
+MERGE_SHA: a75a291057a13a5e26279edd8dbac65f8bd91e17
 
 Rebindable anchor. Note this file is deliberately **not** listed in the lane
 manifest's `expected_proof_paths`, so truth-check's P3/C4 do not validate its

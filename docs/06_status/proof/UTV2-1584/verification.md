@@ -5,9 +5,9 @@
 | Issue | UTV2-1584 |
 | Tier | T1 |
 | Branch | codex/utv2-1584-existing-branch-readmission |
-| Commit SHA(s) | `5cbe30fcc8535eb2caa8f1c7e94520438ee02789` (implementation source SHA) |
+| Commit SHA(s) | `d2abd5310469a30d4ff5ab91a5e82b53bfa1eec2` (merge SHA) |
 
-MERGE_SHA: 5cbe30fcc8535eb2caa8f1c7e94520438ee02789
+MERGE_SHA: d2abd5310469a30d4ff5ab91a5e82b53bfa1eec2
 
 ## Verification
 
