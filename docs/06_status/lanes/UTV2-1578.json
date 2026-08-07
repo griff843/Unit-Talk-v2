@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1578/evidence.json",
     "docs/06_status/proof/UTV2-1578/model-routing.json"
   ],
-  "status": "started",
+  "status": "parked",
   "started_at": "2026-07-23T17:55:35.234Z",
-  "heartbeat_at": "2026-07-23T17:55:35.234Z",
+  "heartbeat_at": "2026-08-07T10:23:40.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1578-autonomy-control-plane-kernel.json",
