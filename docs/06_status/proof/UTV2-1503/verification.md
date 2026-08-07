@@ -1,6 +1,6 @@
 # PROOF: UTV2-1503
 
-MERGE_SHA: 5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b
+MERGE_SHA: 7680d292d1d9fc03952a94c084e3c133aac304e0
 
 (This is the substantive audit-content commit on the fresh continuation
 branch, an ancestor of this branch's actual head -- a file cannot bind

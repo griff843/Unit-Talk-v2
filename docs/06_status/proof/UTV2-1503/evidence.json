@@ -9,10 +9,10 @@
   "generated_at": "2026-07-21T22:00:00Z",
   "status": "PASS",
   "sha_binding": {
-    "verified_source_sha": "5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b",
+    "verified_source_sha": "7680d292d1d9fc03952a94c084e3c133aac304e0",
     "verified_source_note": "Substantive audit-content commit on this branch (claude/utv2-1503-continuation), cut from main at c3cb22683c0f218f7a6acdf3e4335a673932e91c. Carries forward, byte-for-byte, the audit doc already reviewed and PM-approved at a prior PR's final head for this issue. Ancestry independently re-verified with `git merge-base --is-ancestor 5aa66f6c6d4aac16288f450b9cfcf4be094c1c9b <current head>` (passes) immediately before this proof revision, not assumed from the prior lane's records. This SHA is native to this branch's own history -- it is not a pointer carried over from any other PR's branch.",
-    "sha_type": "branch_head",
-    "bound_at": "2026-07-21T22:00:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-07T15:23:52.257Z",
     "ci_sentinels": {
       "pnpm_verify": "pass",
       "pnpm_test_db": "pass",
