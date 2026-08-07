@@ -11,9 +11,7 @@ import {
   validatePreflightSchemaDependencies,
 } from './shared.js';
 import {
-  acquireFullVerifyThrottle,
   branchContainsExactIssue,
-  releaseFullVerifyThrottle,
   FULL_VERIFY_THROTTLE_DIR,
   FULL_VERIFY_THROTTLE_STALE_MS,
   configuredFullVerifyConcurrency,
