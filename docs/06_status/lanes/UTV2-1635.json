@@ -49,11 +49,6 @@
         "post-merge closeout gaps: L2/P3/C4/P13/P14 truth-check failures require a follow-up commit on a new branch"
       ],
       "detected_by": "claude"
-    },
-    {
-      "at": "2026-08-07T10:17:59.000Z",
-      "reason": "PM 2026-08-07: main is authoritative for UTV2-1635. The lane truth-closed on main as `done` (closed_at 2026-07-31T21:34:04.245Z, bound to PR #1337). PR #1344 is a superseded alternative implementation and will not merge.",
-      "by": "pm"
     }
   ],
   "execution_location": {
