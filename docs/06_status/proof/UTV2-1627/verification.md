@@ -1,3 +1,21 @@
+# PROOF: UTV2-1627
+
+MERGE_SHA: PENDING — bind after merge through `pnpm ops:proof-generate`
+
+ASSERTIONS:
+
+- Writable CI and proof execution is restricted to the approved staging target.
+- Production service-role credentials are not supplied to PR-authored shadow-parity code.
+- Worker live-proof setup invokes the canonical UTV2-1628 target boundary before repository construction.
+- The duplicate database identity authority and obsolete mutation probe remain removed.
+
+EVIDENCE:
+
+- Focused isolation and governance suite: 119 tests passed, 0 failed.
+- DB-writer inventory: 49 credentialed tests classified, 0 validation errors.
+- `pnpm verify`: passed locally at source commit `7427c75b7f3cff6ec74a2ac4b6dd5cd326638efe`.
+- Exact-head CI staging DB proof and verify passed before the sanctioned update-branch refresh; the refreshed head must independently pass CI before merge.
+
 # UTV2-1627 — Verification
 
 **Source head:** `d46463d6cc16c63fb099f2b99b92322b31a58071`
