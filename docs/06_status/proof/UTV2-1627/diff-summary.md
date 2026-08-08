@@ -1,6 +1,6 @@
 # UTV2-1627 Diff Summary
 
-MERGE_SHA: PENDING — bind after merge through `pnpm ops:proof-generate`
+MERGE_SHA: 72b4747fab755038a15fad133912777749313fc0
 
 - Adds a fail-closed database identity guard keyed to the actual Supabase URL, database URL, declared project ref, and explicit access mode.
 - Routes writable CI and proof workflows through isolated `CI_SUPABASE_*` credentials.
