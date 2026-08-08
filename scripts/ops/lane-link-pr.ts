@@ -1,13 +1,29 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import {
+  type LaneManifest,
+  type PreflightToken,
+  ROOT,
+  activeManifestOverlap,
+  currentHeadSha,
   emitJson,
   getFlag,
+  git,
   isCodexLane,
+  issueToManifestPath,
   parseArgs,
+  preflightTokenPathForBranch,
   readManifest,
   relativeToRoot,
   requireIssueId,
+  resolveActiveLaneManifests,
+  validateManifest,
   validateBranchName,
+  validatePreflightTokenPathValue,
+  writeJsonFile,
   writeManifest,
 } from './shared.js';
 
@@ -23,7 +39,148 @@ type LaneLinkResult = {
   pr_url?: string;
   status?: string;
   heartbeat_at?: string;
+  preflight_recovered?: boolean;
 };
+
+type PullRequestBinding = {
+  url: string;
+  headRefName: string;
+  headRefOid: string;
+  baseRefName: string;
+  state: string;
+};
+
+type RecoveryDeps = {
+  cwd?: string;
+  currentBranch?: () => string;
+  currentHead?: () => string;
+  isClean?: () => boolean;
+  dependenciesReady?: () => boolean;
+  readPullRequest?: (prUrl: string) => PullRequestBinding;
+  activeManifests?: () => LaneManifest[];
+  now?: () => Date;
+  randomUUID?: () => string;
+  writeToken?: (tokenPath: string, token: PreflightToken) => void;
+};
+
+function readPullRequestBinding(prUrl: string): PullRequestBinding {
+  const result = spawnSync(
+    'gh',
+    ['pr', 'view', prUrl, '--json', 'url,headRefName,headRefOid,baseRefName,state'],
+    { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
+  );
+  if (result.status !== 0) {
+    throw new Error(`Unable to validate PR binding: ${(result.stderr || result.stdout || '').trim()}`);
+  }
+  return JSON.parse(result.stdout) as PullRequestBinding;
+}
+
+/**
+ * Reconstruct a missing active-lane token only after independently proving the
+ * lane still owns its branch, worktree, PR head, dependencies, and scope lock.
+ * This is recovery of ephemeral state, not a waiver of preflight validation.
+ */
+export function recoverMissingPreflightToken(
+  manifest: LaneManifest,
+  branch: string,
+  prUrl: string,
+  deps: RecoveryDeps = {},
+): void {
+  const cwd = path.resolve(deps.cwd ?? process.cwd());
+  const expectedCwd = path.resolve(manifest.execution_location?.cwd ?? manifest.worktree_path);
+  if (cwd !== expectedCwd) {
+    throw new Error(`Lane recovery cwd ${cwd} does not match owned worktree ${expectedCwd}`);
+  }
+  if (manifest.branch !== branch || !isCodexLane(manifest)) {
+    throw new Error('Lane recovery requires the manifest-owned Codex branch');
+  }
+  if (!['started', 'in_progress', 'reopened'].includes(manifest.status)) {
+    throw new Error(`Lane recovery is not allowed from status ${manifest.status}`);
+  }
+  if (manifest.blocked_by.length > 0) {
+    throw new Error(`Lane recovery is blocked by unresolved dependencies: ${manifest.blocked_by.join(', ')}`);
+  }
+
+  const expectedTokenPath = preflightTokenPathForBranch(branch);
+  const expectedTokenRelative = relativeToRoot(expectedTokenPath);
+  const declaredToken = validatePreflightTokenPathValue(manifest.preflight_token);
+  if (declaredToken !== expectedTokenRelative) {
+    throw new Error(
+      `Lane recovery token path ${declaredToken} does not match canonical path ${expectedTokenRelative}`,
+    );
+  }
+  if (fs.existsSync(expectedTokenPath)) {
+    throw new Error(`Lane recovery requires a missing token: ${expectedTokenRelative}`);
+  }
+
+  const currentBranch = deps.currentBranch ?? (() => {
+    const result = git(['branch', '--show-current'], cwd);
+    if (!result.ok || !result.stdout) throw new Error('Unable to determine current branch');
+    return result.stdout;
+  });
+  if (currentBranch() !== branch) {
+    throw new Error(`Current branch does not match lane branch ${branch}`);
+  }
+
+  const headSha = (deps.currentHead ?? (() => currentHeadSha(cwd)))();
+  const clean = deps.isClean ?? (() => {
+    const result = git(['status', '--porcelain=v1', '--untracked-files=no'], cwd);
+    if (!result.ok) throw new Error(`Unable to inspect working tree: ${result.stderr}`);
+    return result.stdout.length === 0;
+  });
+  if (!clean()) throw new Error('Lane recovery requires a clean working tree');
+
+  const dependenciesReady = deps.dependenciesReady ?? (() =>
+    fs.existsSync(path.join(cwd, 'pnpm-lock.yaml')) && fs.existsSync(path.join(cwd, 'node_modules'))
+  );
+  if (!dependenciesReady()) {
+    throw new Error('Lane recovery requires pnpm-lock.yaml and node_modules in the owned worktree');
+  }
+
+  const pullRequest = (deps.readPullRequest ?? readPullRequestBinding)(prUrl);
+  if (
+    pullRequest.url !== prUrl ||
+    pullRequest.state !== 'OPEN' ||
+    pullRequest.baseRefName !== manifest.base_branch ||
+    pullRequest.headRefName !== branch ||
+    pullRequest.headRefOid !== headSha
+  ) {
+    throw new Error('PR binding does not match the open lane branch, base, and current HEAD');
+  }
+
+  const activeManifests = (deps.activeManifests ?? (() =>
+    resolveActiveLaneManifests().lanes.map((lane) => lane.manifest)
+  ))();
+  const overlap = activeManifestOverlap(manifest.issue_id, manifest.file_scope_lock, activeManifests);
+  if (overlap) {
+    throw new Error(
+      `Lane recovery scope overlaps active ${overlap.issue_id}: ${overlap.overlapping_files.join(', ')}`,
+    );
+  }
+
+  const now = (deps.now ?? (() => new Date()))();
+  const expiresAt = new Date(now.getTime() + (manifest.tier === 'T1' ? 15 : 30) * 60_000);
+  const token: PreflightToken = {
+    schema_version: 1,
+    branch,
+    head_sha: headSha,
+    tier: manifest.tier,
+    issue_id: manifest.issue_id,
+    generated_at: now.toISOString(),
+    expires_at: expiresAt.toISOString(),
+    checks: { git: 'pass', env: 'pass', deps: 'pass' },
+    status: 'pass',
+    waivers: [],
+    baseline_cache_hit: false,
+    preflight_run_id: (deps.randomUUID ?? crypto.randomUUID)(),
+    required_docs_checked: [
+      'docs/05_operations/EXECUTION_TRUTH_MODEL.md',
+      'docs/05_operations/LANE_MANIFEST_SPEC.md',
+      'docs/05_operations/TRUTH_CHECK_SPEC.md',
+    ],
+  };
+  (deps.writeToken ?? writeJsonFile)(expectedTokenPath, token);
+}
 
 export function main(argv = process.argv.slice(2)): number {
   const { positionals, flags } = parseArgs(argv);
@@ -52,7 +209,25 @@ export function main(argv = process.argv.slice(2)): number {
       return 1;
     }
 
-    const manifest = readManifest(issueId);
+    let preflightRecovered = false;
+    let manifest = readManifest(issueId);
+    const manifestErrors = validateManifest(manifest, issueToManifestPath(issueId));
+    const missingTokenErrors = manifestErrors.filter((entry) =>
+      entry.includes('preflight_token file does not exist:')
+    );
+    if (missingTokenErrors.length > 0) {
+      const nonMissingTokenErrors = manifestErrors.filter(
+        (entry) => !entry.includes('preflight_token file does not exist:'),
+      );
+      if (nonMissingTokenErrors.length > 0) {
+        throw new Error(`Manifest validation failed: ${nonMissingTokenErrors.join('; ')}`);
+      }
+      recoverMissingPreflightToken(manifest, branch, prUrl);
+      manifest = readManifest(issueId);
+      preflightRecovered = true;
+    } else if (manifestErrors.length > 0) {
+      throw new Error(`Manifest validation failed: ${manifestErrors.join('; ')}`);
+    }
     const manifestPath = relativeToRoot(`docs/06_status/lanes/${issueId}.json`);
 
     if (manifest.branch !== branch) {
@@ -175,6 +350,7 @@ export function main(argv = process.argv.slice(2)): number {
       pr_url: manifest.pr_url,
       status: manifest.status,
       heartbeat_at: manifest.heartbeat_at,
+      preflight_recovered: preflightRecovered,
     } satisfies LaneLinkResult);
     return 0;
   } catch (error) {

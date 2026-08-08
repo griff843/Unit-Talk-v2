@@ -122,8 +122,7 @@ async function countTable(
   if (filter) q = filter(q) as typeof q;
   const { count, error } = await q;
   if (error) {
-    console.warn(`[shadow-scoring-runner] count(${table}) error:`, error.message);
-    return 0;
+    throw new Error(`[shadow-scoring-runner] count(${table}) failed: ${error.message}`);
   }
   return count ?? 0;
 }
@@ -204,6 +203,14 @@ export function assertGuardrails(guardrails: Guardrails): void {
   }
 }
 
+export function assertParityReadiness(dailyCounts: DailyCounts): void {
+  if (dailyCounts.candidatesScanned <= 0) {
+    throw new Error(
+      '[shadow-scoring-runner] PARITY NOT ESTABLISHED: candidatesScanned must be greater than 0',
+    );
+  }
+}
+
 async function writeProof(outDir: string, proof: ProofOutput): Promise<void> {
   const absDir = resolve(outDir);
   await mkdir(absDir, { recursive: true });
@@ -216,8 +223,15 @@ async function writeProof(outDir: string, proof: ProofOutput): Promise<void> {
 export async function run(options: CliOptions): Promise<ProofOutput> {
   const environment = loadEnvironment();
 
-  if (!environment.SUPABASE_URL || !environment.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+  // UTV2-1627: production parity must use a dedicated database role whose
+  // grants are mechanically read-only. An anon key commonly cannot see these
+  // protected tables, while a service-role key can write; neither proves safe
+  // parity. There is deliberately no fallback between credential classes.
+  const readKey = process.env['SHADOW_PARITY_READ_ONLY_KEY'];
+  if (!environment.SUPABASE_URL || !readKey) {
+    throw new Error(
+      'SUPABASE_URL and SHADOW_PARITY_READ_ONLY_KEY are required',
+    );
   }
 
   // UTV2-1628: the driver comes from the one boundary that may construct it.
@@ -228,7 +242,7 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
   // classification.
   const client = createPrivilegedClient(
     environment.SUPABASE_URL,
-    environment.SUPABASE_SERVICE_ROLE_KEY,
+    readKey,
     {
       auth: {
         persistSession: false,
@@ -287,6 +301,7 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
   }
 
   dailyCounts.candidatesScoredThisRun = candidatesScoredThisRun;
+  assertParityReadiness(dailyCounts);
   assertGuardrails(guardrails);
 
   const proof: ProofOutput = {

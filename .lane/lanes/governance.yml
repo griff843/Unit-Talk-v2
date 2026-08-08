@@ -100,6 +100,12 @@ allowed_path_globs:
   - packages/invariants/**
   - db/migrations-rollback/**
   - apps/api/src/t1-proof-*.test.ts
+  # UTV2-1627: T1 proof fixtures live under apps/worker/ as well as apps/api/,
+  # and the credential-isolation work must repair the worker proof's identity
+  # assertion. Mirrors the apps/api entry above — narrowly scoped to t1-proof
+  # test fixtures only, NOT all of apps/worker/**, which stays forbidden to
+  # every lane type. PM-approved Tier C authority, 2026-07-29.
+  - apps/worker/src/t1-proof-*.test.ts
   - apps/api/src/authority-enforcement.ts
 forbidden_path_globs:
   - supabase/migrations/**

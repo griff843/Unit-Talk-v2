@@ -1,0 +1,348 @@
+{
+  "schema_version": 1,
+  "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+  "credentialed_tests": [
+    {
+      "path": "apps/api/src/database-smoke.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:db"]
+    },
+    {
+      "path": "apps/api/src/e2e-lifecycle.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/e2e-lifecycle.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/http-integration.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/http-integration.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/server.test.ts",
+      "owner": "api",
+      "execution": ["manual: pnpm exec tsx --test apps/api/src/server.test.ts"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-atomicity.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-awaiting-approval-review.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-awaiting-approval.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-execution-intent.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-lifecycle-invariants.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-risk-score.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-runtime-truth-spine.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-runtime-truth-spine.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-scoring-integrity.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-scoring-integrity.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1087-freshness-gate.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-1087-freshness-gate.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1107-picks-fsm-trigger.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1116-artifact-sha-immutability.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1136-settlement-records-immutability.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1251-evidence-settlement.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-1251-evidence-settlement.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1258-pagination.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-1258-pagination.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1321-settlement-listrecent.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-1321-settlement-listrecent.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1327-promotion-enrichment.test.ts",
+      "owner": "api",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1380-kelly-sizing-promotion-metadata.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-1380-kelly-sizing-promotion-metadata.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-539-backfill.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-539-backfill.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-725.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-725.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-750-clv.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-750-clv.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-753-settlement-pnl.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-753-settlement-pnl.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-754-provenance-clv.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-754-provenance-clv.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-757-find-by-provenance.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-757-find-by-provenance.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-795-lifecycle.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-795-lifecycle.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-845.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-845.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-846.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-846.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-982-outbox-cleanup.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-982-outbox-cleanup.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-985-edge-provenance.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-985-edge-provenance.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-986-kelly-readiness.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-986-kelly-readiness.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-987-uniqueness-signal.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-987-uniqueness-signal.test.ts"
+      ]
+    },
+    {
+      "path": "apps/api/src/t1-proof-utv2-988-band-persistence.test.ts",
+      "owner": "api",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/api/src/t1-proof-utv2-988-band-persistence.test.ts"
+      ]
+    },
+    {
+      "path": "apps/command-center/src/lib/data/client.test.ts",
+      "owner": "command-center",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/command-center/src/lib/data/client.test.ts"
+      ]
+    },
+    {
+      "path": "apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts",
+      "owner": "ingestor",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/ingestor/src/t1-proof-utv2-1085-odds-snapshot.test.ts",
+      "owner": "ingestor",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/ingestor/src/t1-proof-utv2-1085-odds-snapshot.test.ts"
+      ]
+    },
+    {
+      "path": "apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts",
+      "owner": "ingestor",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts"
+      ]
+    },
+    {
+      "path": "apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts",
+      "owner": "ingestor",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/ingestor/src/t1-proof-utv2-1315-markclosinglines-partition-pruning.test.ts",
+      "owner": "ingestor",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/ingestor/src/t1-proof-utv2-1315-markclosinglines-partition-pruning.test.ts"
+      ]
+    },
+    {
+      "path": "apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts",
+      "owner": "ingestor",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts"
+      ]
+    },
+    {
+      "path": "apps/worker/src/t1-proof-automated-recovery.test.ts",
+      "owner": "worker",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/worker/src/t1-proof-automated-recovery.test.ts"
+      ]
+    },
+    {
+      "path": "apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts",
+      "owner": "worker",
+      "execution": ["pnpm test:t1-proof:live"]
+    },
+    {
+      "path": "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
+      "owner": "worker",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts"
+      ]
+    },
+    {
+      "path": "apps/worker/src/worker-runtime.test.ts",
+      "owner": "worker",
+      "execution": [
+        "manual: pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts"
+      ]
+    }
+  ],
+  "production_read_only_entrypoints": [],
+  "workflows": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "mode": "writable-isolated",
+      "packageScripts": ["verify:live-db-verdict"]
+    },
+    {
+      "path": ".github/workflows/proof-coverage-guard.yml",
+      "mode": "control-only",
+      "packageScripts": []
+    },
+    {
+      "path": ".github/workflows/proof-gate.yml",
+      "mode": "writable-isolated",
+      "packageScripts": ["ci:db-smoke"]
+    },
+    {
+      "path": ".github/workflows/proof-regression.yml",
+      "mode": "writable-isolated",
+      "packageScripts": []
+    },
+    {
+      "path": ".github/workflows/shadow-parity-required.yml",
+      "mode": "control-only",
+      "packageScripts": []
+    },
+    {
+      "path": ".github/workflows/t1-proof-gate.yml",
+      "mode": "writable-isolated",
+      "packageScripts": ["ci:db-smoke"]
+    }
+  ]
+}

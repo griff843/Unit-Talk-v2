@@ -12,8 +12,11 @@ name: Readiness Regression Gate
 #   OBSERVER_DEGRADED  → the ledger cannot be trusted (observer failure)
 #   READINESS_RED      → production is measurably failing (product condition)
 #
-# This job reads only the committed ledger. It holds no credential and touches no
-# production system.
+# Pull requests compare the committed base and head ledgers. Existing repository
+# debt is reported as a neutral custom check; only a PR-caused classification
+# regression fails. Absolute readiness remains enforced by the scheduled and
+# operational refresh workflows, which continue to call gate mode directly.
+# This job holds no credential and touches no production system.
 
 on:
   pull_request:
@@ -21,14 +24,17 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   readiness-regression-gate:
-    name: Readiness Regression Gate
+    name: Readiness Regression Evaluation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -44,5 +50,66 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Evaluate the readiness ledger
-        run: pnpm ci:readiness-gate
+      - name: Compare base and head readiness
+        id: readiness
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LEDGER_PATH: docs/06_status/readiness/readiness-score.json
+        run: |
+          git show "${BASE_SHA}:${LEDGER_PATH}" > /tmp/readiness-base.json
+          set +e
+          pnpm ci:readiness-gate -- \
+            --mode regression \
+            --base /tmp/readiness-base.json \
+            --file "${LEDGER_PATH}" \
+            --json > /tmp/readiness-regression-output.txt 2>&1
+          COMMAND_EXIT=$?
+          set -e
+          sed -n '/^{/,/^}/p' /tmp/readiness-regression-output.txt > /tmp/readiness-regression.json
+          jq -e . /tmp/readiness-regression.json > /dev/null
+          echo "command_exit=${COMMAND_EXIT}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish readiness authority result
+        id: publish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('/tmp/readiness-regression.json', 'utf8'));
+            const conclusion = result.conclusion;
+            if (!['success', 'neutral', 'failure'].includes(conclusion)) {
+              core.setFailed(`Invalid readiness conclusion: ${conclusion}`);
+              return;
+            }
+
+            const details = [
+              `Base: ${result.base.code} — ${result.base.summary}`,
+              `Head: ${result.head.code} — ${result.head.summary}`,
+              '',
+              ...result.head.details,
+            ].join('\n');
+
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Readiness Regression Gate',
+              head_sha: context.payload.pull_request.head.sha,
+              status: 'completed',
+              conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: conclusion === 'neutral'
+                  ? 'Inherited repository readiness debt'
+                  : conclusion === 'failure'
+                    ? 'PR-caused readiness regression'
+                    : 'No readiness regression',
+                summary: result.summary,
+                text: details,
+              },
+            });
+
+            if (conclusion === 'failure') {
+              core.setFailed(result.summary);
+            } else if (conclusion === 'neutral') {
+              core.notice(result.summary);
+            }

@@ -805,6 +805,13 @@ test('UTV2-1550: executor-result-validator.yml never exposes the required check 
     (s) => typeof s.run === 'string' && (s.run as string).includes('executor-result-validate.ts resolve-check-name'),
   );
   assert.ok(resolveStep, 'executor-result-validator.yml must resolve its check name via the tested script, not a duplicated literal');
+
+  const raw = fs.readFileSync(path.join(ROOT, '.github/workflows/executor-result-validator.yml'), 'utf8');
+  assert.match(
+    raw,
+    /conclusion: passed \? 'success' : isRequired \? 'failure' : 'neutral'/,
+    'non-required executor preflight failures must be neutral while required validation stays fail-closed',
+  );
 });
 
 test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-controlled code to resolve the check name', () => {
