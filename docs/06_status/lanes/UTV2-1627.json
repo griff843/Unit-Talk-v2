@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1627-ci-production-isolation",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1320",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/ci.yml",
@@ -35,9 +35,9 @@
     "docs/06_status/proof/UTV2-1627/evidence.json",
     "docs/06_status/proof/UTV2-1627/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-07-29T15:56:18.207Z",
-  "heartbeat_at": "2026-07-29T15:56:18.207Z",
+  "heartbeat_at": "2026-08-08T14:16:01.378Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1627-ci-production-isolation.json",
