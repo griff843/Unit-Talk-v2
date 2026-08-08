@@ -20,6 +20,8 @@ authoritative implementation SHA: b6c395f0565ad66ee4c799a10049ed8c5e0594b4
 CI run: https://github.com/griff843/Unit-Talk-v2/actions/runs/31265618087
 Writable DB proof (staging only): PASS
 pnpm verify: PASS
+pnpm type-check: PASS (executed by pnpm verify)
+pnpm test: PASS (executed by pnpm verify)
 focused shadow/workflow tests: 102 pass / 0 fail
 mutation testing: NOT_RUN; no mutation result is claimed by this proof
 shadow parity live observation: BLOCKED until a mechanically read-only production role is provisioned; no empty result is accepted as PASS
