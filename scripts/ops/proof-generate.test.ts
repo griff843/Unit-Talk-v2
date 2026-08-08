@@ -10,6 +10,7 @@ import {
   buildRuntimeVerification,
   applyProofManifestOverrides,
   autoHarvestCiDbProofIntoEvidence,
+  autoPopulateStaticProofFromVerifyRun,
   collectProofGitTruth,
   detectCurrentProofContext,
   generateProofArtifacts,
@@ -1923,15 +1924,38 @@ const HARVEST_REAL_RECEIPT_RAW = fs.readFileSync(path.join(HARVEST_FIXTURES_DIR,
 const HARVEST_REAL_JOB_LOG = fs.readFileSync(path.join(HARVEST_FIXTURES_DIR, 'real-utv2-1399-job-log.txt'), 'utf8');
 const HARVEST_REAL_TEST_SOURCE = fs.readFileSync(path.join(ROOT, 'apps/api/src/database-smoke.test.ts'), 'utf8');
 const HARVEST_MERGE_SHA = 'fdc193582f94ad7538fa594b475847eb81a3647f';
-const HARVEST_HEAD_SHA = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
+/**
+ * PR #1343's true head. UTV2-1683: this was previously set to the receipt's
+ * `github_sha` (b36840e4), which is actually GitHub's merge-ref commit for a
+ * `pull_request` run, not the head. See ci-db-proof-harvest.test.ts.
+ */
+const HARVEST_HEAD_SHA = '4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772';
+const HARVEST_MERGE_REF_SHA = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
+const HARVEST_MERGE_REF_BASE_SHA = 'f4c529b51267d86c2dfbd38bdcfab527bd31668c';
 const HARVEST_RUN_ID = 30680085299;
 const HARVEST_JOB_ID = 91315210076;
 
 function harvestHappyPathExecutor(): GhExecutor {
   return (args: string[]) => {
     const key = args.join(' ');
+    if (key.includes(`head_sha=${HARVEST_MERGE_SHA}`)) {
+      // Fixture is a pull_request run: the merge commit has no run of its own.
+      return Buffer.from(JSON.stringify({ workflow_runs: [] }));
+    }
+    if (key.includes(`commits/${HARVEST_MERGE_REF_SHA}`) && !key.includes('/pulls')) {
+      // A2 ancestry proof: merge ref's second parent is the PR head.
+      return Buffer.from(
+        JSON.stringify({
+          sha: HARVEST_MERGE_REF_SHA,
+          parents: [{ sha: HARVEST_MERGE_REF_BASE_SHA }, { sha: HARVEST_HEAD_SHA }],
+        }),
+      );
+    }
     if (key.includes(`commits/${HARVEST_MERGE_SHA}/pulls`)) {
       return Buffer.from(JSON.stringify([{ number: 1343, head: { sha: HARVEST_HEAD_SHA } }]));
+    }
+    if (key.includes(`actions/workflows/ci.yml/runs?head_sha=${HARVEST_HEAD_SHA}`)) {
+      return Buffer.from(JSON.stringify({ workflow_runs: [{ id: HARVEST_RUN_ID, name: 'CI', conclusion: 'success' }] }));
     }
     if (key.includes(`actions/runs?head_sha=${HARVEST_HEAD_SHA}`)) {
       return Buffer.from(JSON.stringify({ workflow_runs: [{ id: HARVEST_RUN_ID, name: 'CI', conclusion: 'success' }] }));
@@ -2113,6 +2137,158 @@ test('autoHarvestCiDbProofIntoEvidence: --dry-run-equivalent (write:false) compu
     assert.strictEqual(result.applied, true);
     const after = fs.readFileSync(evidencePath, 'utf8');
     assert.strictEqual(after, before, 'write:false must not persist anything to disk');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── autoPopulateStaticProofFromVerifyRun (UTV2-1683 B) ───────────────────────
+
+const STATIC_MERGE_SHA = '20505c8e7f0ee3ddd89f599c99d0b8af55836fde';
+const STATIC_RUN_ID = 31276897581;
+const STATIC_VERIFY_JOB_ID = 93152450883;
+
+/** CI on the merge SHA's own push, with a successful `verify` job. */
+function verifyRunExecutor(conclusion: string | null = 'success'): GhExecutor {
+  return (args: string[]) => {
+    const key = args.join(' ');
+    if (key.includes(`head_sha=${STATIC_MERGE_SHA}`)) {
+      return Buffer.from(
+        JSON.stringify({
+          workflow_runs: [
+            {
+              id: STATIC_RUN_ID,
+              name: 'CI',
+              conclusion: 'success',
+              html_url: `https://github.com/griff843/Unit-Talk-v2/actions/runs/${STATIC_RUN_ID}`,
+            },
+          ],
+        }),
+      );
+    }
+    if (key.includes(`actions/runs/${STATIC_RUN_ID}/jobs`)) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [
+            { id: 93151835178, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success' },
+            {
+              id: STATIC_VERIFY_JOB_ID,
+              name: 'verify',
+              run_attempt: 1,
+              conclusion,
+              html_url: `https://github.com/griff843/Unit-Talk-v2/actions/runs/${STATIC_RUN_ID}/job/${STATIC_VERIFY_JOB_ID}`,
+            },
+          ],
+        }),
+      );
+    }
+    throw Object.assign(new Error(`verifyRunExecutor: unexpected call "${key}"`), { stderr: 'unexpected' });
+  };
+}
+
+test('autoPopulateStaticProofFromVerifyRun: populates static_proof from the merge SHA verify run, bound to that SHA', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1683-static-ok-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9101', { schema_version: 1 });
+    const result = autoPopulateStaticProofFromVerifyRun(root, 'UTV2-9101', STATIC_MERGE_SHA, {
+      ghExecutor: verifyRunExecutor(),
+    });
+    assert.strictEqual(result.applied, true, result.reason);
+    assert.strictEqual(result.code, 'static_proof_populated');
+
+    const written = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.strictEqual(written.static_proof.conclusion, 'success');
+    assert.strictEqual(written.static_proof.merge_sha, STATIC_MERGE_SHA);
+    assert.strictEqual(written.static_proof.run_id, STATIC_RUN_ID);
+    assert.match(written.static_proof.run_url, /actions\/runs\/31276897581/);
+    // P8 reads test_run_logs[].merge_sha — it must carry the merge SHA.
+    assert.strictEqual(written.static_proof.test_run_logs[0].merge_sha, STATIC_MERGE_SHA);
+    assert.ok(written.static_proof.test_run_logs[0].path.length > 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoPopulateStaticProofFromVerifyRun: a verify job that did NOT succeed fails closed and writes nothing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1683-static-red-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9102', { schema_version: 1 });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+    const result = autoPopulateStaticProofFromVerifyRun(root, 'UTV2-9102', STATIC_MERGE_SHA, {
+      ghExecutor: verifyRunExecutor('failure'),
+    });
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'verify_job_not_successful');
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), before, 'a red gate must never be recorded as static proof');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoPopulateStaticProofFromVerifyRun: no verify job for the merge SHA fails closed and writes nothing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1683-static-nojob-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9103', { schema_version: 1 });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+    const ghExecutor: GhExecutor = (args: string[]) => {
+      const key = args.join(' ');
+      if (key.includes(`head_sha=${STATIC_MERGE_SHA}`)) {
+        return Buffer.from(JSON.stringify({ workflow_runs: [{ id: STATIC_RUN_ID, name: 'CI', conclusion: 'success' }] }));
+      }
+      return Buffer.from(JSON.stringify({ jobs: [{ id: 1, name: 'Housekeeping', conclusion: 'success' }] }));
+    };
+    const result = autoPopulateStaticProofFromVerifyRun(root, 'UTV2-9103', STATIC_MERGE_SHA, { ghExecutor });
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'no_verify_job');
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoPopulateStaticProofFromVerifyRun: an already-populated static_proof is never overwritten', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1683-static-already-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9104', {
+      schema_version: 1,
+      static_proof: { command: 'hand authored', conclusion: 'success' },
+    });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+    const result = autoPopulateStaticProofFromVerifyRun(root, 'UTV2-9104', STATIC_MERGE_SHA, {
+      ghExecutor: verifyRunExecutor(),
+    });
+    assert.strictEqual(result.applied, false);
+    assert.strictEqual(result.code, 'already_populated');
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoPopulateStaticProofFromVerifyRun: no evidence.json -> no-op (T2/T3 lanes never gain a bundle)', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1683-static-noevidence-'));
+  try {
+    const result = autoPopulateStaticProofFromVerifyRun(root, 'UTV2-9105', STATIC_MERGE_SHA, {
+      ghExecutor: verifyRunExecutor(),
+    });
+    assert.strictEqual(result.attempted, false);
+    assert.strictEqual(result.code, 'no_evidence_bundle');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('autoPopulateStaticProofFromVerifyRun: write:false persists nothing', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1683-static-dryrun-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9106', { schema_version: 1 });
+    const before = fs.readFileSync(evidencePath, 'utf8');
+    const result = autoPopulateStaticProofFromVerifyRun(root, 'UTV2-9106', STATIC_MERGE_SHA, {
+      ghExecutor: verifyRunExecutor(),
+      write: false,
+    });
+    assert.strictEqual(result.applied, true);
+    assert.strictEqual(fs.readFileSync(evidencePath, 'utf8'), before, 'write:false must not persist anything to disk');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

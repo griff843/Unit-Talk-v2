@@ -3,6 +3,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   type HarvestCiDbProofOptions,
+  type HarvestIoOptions,
+  findWorkflowJobForHeadSha,
   harvestCiDbProofForMergeSha,
 } from './ci-db-proof-harvest.js';
 import {
@@ -1088,6 +1090,124 @@ export function generateProofArtifacts(
   };
 }
 
+// ── UTV2-1683: mechanical static_proof from the merge SHA's verify run ───────
+
+/** The `ci.yml` job whose success IS the repository's static verification. */
+export const VERIFY_JOB_NAME = 'verify';
+
+export interface AutoStaticProofResult {
+  attempted: boolean;
+  applied: boolean;
+  code: string;
+  reason?: string;
+  evidence_path?: string;
+}
+
+/**
+ * UTV2-1683 (B): populates `evidence.json`'s `static_proof` from the `verify`
+ * job that CI actually ran for this merge SHA.
+ *
+ * Truth-check P7 requires BOTH `static_proof` and `runtime_proof` to be
+ * populated, but nothing in `scripts/` has ever written `static_proof` -- the
+ * UTV2-1641 harvest writes only `runtime_proof` and `verifier`. So P7 stayed
+ * red even for a lane whose CI was fully green, and the only way to satisfy it
+ * was to hand-author the section, which is exactly the narrative proof the
+ * truth model exists to eliminate.
+ *
+ * The binding is deliberately the same one A1 uses for runtime proof: the
+ * `verify` job on the merge SHA's own push-to-main run, so `static_proof` and
+ * `runtime_proof` describe the same tree. `test_run_logs` carries `merge_sha`
+ * because that is what P8 checks.
+ *
+ * Fails closed and writes NOTHING when the evidence does not exist:
+ *   - no `evidence.json`         -> nothing to populate (T2/T3 lanes)
+ *   - `static_proof` already set -> never overwritten
+ *   - no `verify` job for this SHA, or it did not succeed -> honest failure,
+ *     leaving P7 to fail on its own terms rather than asserting a green gate
+ *     that never ran.
+ */
+export function autoPopulateStaticProofFromVerifyRun(
+  root: string,
+  issueId: string,
+  mergeSha: string | null,
+  options: HarvestIoOptions & { write?: boolean } = {},
+): AutoStaticProofResult {
+  if (!mergeSha) {
+    return { attempted: false, applied: false, code: 'no_merge_sha' };
+  }
+
+  const evidenceRelPath = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase(), 'evidence.json');
+  const evidenceAbsolutePath = safeRepoPath(root, evidenceRelPath);
+  if (!fs.existsSync(evidenceAbsolutePath)) {
+    return { attempted: false, applied: false, code: 'no_evidence_bundle', evidence_path: evidenceRelPath };
+  }
+
+  let existing: Record<string, unknown>;
+  try {
+    existing = JSON.parse(fs.readFileSync(evidenceAbsolutePath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return { attempted: false, applied: false, code: 'evidence_unparseable', evidence_path: evidenceRelPath };
+  }
+
+  const existingStaticProof = existing['static_proof'];
+  const alreadyPopulated =
+    !!existingStaticProof &&
+    typeof existingStaticProof === 'object' &&
+    Object.keys(existingStaticProof as Record<string, unknown>).length > 0;
+  if (alreadyPopulated) {
+    return { attempted: false, applied: false, code: 'already_populated', evidence_path: evidenceRelPath };
+  }
+
+  const located = findWorkflowJobForHeadSha(mergeSha, VERIFY_JOB_NAME, {
+    ...options,
+    missingJobCode: 'no_db_proof_job',
+  });
+  if (!located.ok) {
+    return {
+      attempted: true,
+      applied: false,
+      code: located.code === 'no_db_proof_job' ? 'no_verify_job' : located.code,
+      reason: located.reason,
+      evidence_path: evidenceRelPath,
+    };
+  }
+  if (located.job.conclusion !== 'success') {
+    return {
+      attempted: true,
+      applied: false,
+      code: 'verify_job_not_successful',
+      reason:
+        `the "${VERIFY_JOB_NAME}" job for merge SHA ${mergeSha} concluded ` +
+        `"${located.job.conclusion ?? 'null'}", not "success" -- refusing to record a static proof for a gate that did not pass`,
+      evidence_path: evidenceRelPath,
+    };
+  }
+
+  const runUrl = located.run.html_url ?? `https://github.com/${options.repository ?? 'griff843/Unit-Talk-v2'}/actions/runs/${located.run.id}`;
+  const jobUrl = located.job.html_url ?? `${runUrl}/job/${located.job.id}`;
+  const staticProof = {
+    command: 'pnpm verify',
+    conclusion: located.job.conclusion,
+    workflow: 'CI',
+    job: VERIFY_JOB_NAME,
+    run_id: located.run.id,
+    job_id: located.job.id,
+    run_url: runUrl,
+    merge_sha: mergeSha,
+    test_run_logs: [{ path: jobUrl, merge_sha: mergeSha }],
+    note:
+      `Harvested automatically by ops:proof-generate (UTV2-1683) from the "${VERIFY_JOB_NAME}" job ` +
+      `(run ${located.run.id}, job ${located.job.id}) of the CI run triggered by merge commit ${mergeSha} itself. ` +
+      'Not re-run locally -- the recorded conclusion is GitHub\'s, not this host\'s.',
+  };
+
+  const next: Record<string, unknown> = { ...existing, static_proof: staticProof };
+  if (options.write ?? true) {
+    fs.writeFileSync(evidenceAbsolutePath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  }
+  return { attempted: true, applied: true, code: 'static_proof_populated', evidence_path: evidenceRelPath };
+}
+
 // ── UTV2-1641: automatic CI-DB-proof harvest into evidence.json ──────────────
 
 export interface AutoHarvestCiDbProofResult {
@@ -1337,8 +1457,27 @@ function main(argv = process.argv.slice(2)): number {
     }
   }
 
+  // UTV2-1683: same best-effort, never-fatal contract as the DB-proof harvest
+  // above. A miss leaves P7 honestly failed for a lane whose CI has no
+  // successful verify run on the merge SHA, rather than asserting one.
+  let staticProofResult: AutoStaticProofResult | null = null;
+  if (!bools.has('no-static-proof')) {
+    try {
+      staticProofResult = autoPopulateStaticProofFromVerifyRun(ROOT, issueId, input.gitTruth.merge_sha, {
+        write: !bools.has('dry-run'),
+      });
+    } catch (error) {
+      staticProofResult = {
+        attempted: true,
+        applied: false,
+        code: 'static_proof_threw',
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
   if (bools.has('json')) {
-    emitJson({ ...result, ci_db_proof_harvest: harvestResult });
+    emitJson({ ...result, ci_db_proof_harvest: harvestResult, static_proof: staticProofResult });
   } else {
     process.stdout.write(`Generated proof artifacts for ${result.issue_id}\n`);
     for (const generatedPath of result.generated_paths) {
@@ -1363,6 +1502,17 @@ function main(argv = process.argv.slice(2)): number {
         );
       } else {
         process.stdout.write(`ci_db_proof_harvest: skipped (${harvestResult.code})\n`);
+      }
+    }
+    if (staticProofResult) {
+      if (staticProofResult.applied) {
+        process.stdout.write(`static_proof: applied (${staticProofResult.evidence_path})\n`);
+      } else if (staticProofResult.attempted) {
+        process.stdout.write(
+          `static_proof: not applied -- ${staticProofResult.code}${staticProofResult.reason ? `: ${staticProofResult.reason}` : ''}\n`,
+        );
+      } else {
+        process.stdout.write(`static_proof: skipped (${staticProofResult.code})\n`);
       }
     }
   }
