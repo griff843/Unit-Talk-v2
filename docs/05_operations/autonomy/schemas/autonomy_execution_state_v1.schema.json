@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/autonomy/autonomy_execution_state_v1.schema.json",
+  "title": "Autonomy Kernel Execution State V1",
+  "description": "The kernel's OWN persisted self-state: mode, cycle bookkeeping, halt status, counters. This is a DIFFERENT artifact from the pre-existing `ops:execution-state` command output (docs/05_operations/schemas/execution-state-v1.md), which reports lane-concurrency state across all active lanes system-wide. Naming collision is intentional to flag, not to imply the two are interchangeable -- see COMPATIBILITY_MAP.md. This file's canonical path (owned by AUT-2, not this lane) must NOT be docs/06_status/lanes/*.json or anything resembling the lane manifest path, to avoid truth-hierarchy ambiguity with LANE_MANIFEST_SPEC.md.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "mode",
+    "cycle_state",
+    "halted",
+    "last_cycle_started_at",
+    "last_cycle_completed_at",
+    "last_heartbeat_at",
+    "heartbeat_ttl_seconds",
+    "owner_pid",
+    "consecutive_infra_failures",
+    "consecutive_rollback_triggers",
+    "cost_counters",
+    "active_dispatch_ids",
+    "mode_history"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "mode": {
+      "enum": ["halted", "shadow", "t3_live", "t2t3_live"],
+      "description": "Current Mode per STATE_MACHINE.md 2. This is the single field the kill switch's in-band layer sets to halted -- see KILL_SWITCH_CONTRACT.md."
+    },
+    "halted": {
+      "type": "boolean",
+      "description": "Redundant-but-explicit boolean mirror of mode === 'halted', required so the kill switch check (schemas/dispatch_packet_v1.schema.json kill_switch_check) can be a trivial field read rather than a string comparison against a growing enum. mode and halted must never disagree; a writer that would produce disagreement must refuse the write (fail closed) rather than persist an inconsistent state."
+    },
+    "halted_reason": {
+      "type": ["string", "null"],
+      "description": "Required non-null when halted is true. One of: 'owner_kill_switch' | 'auto_halt_consecutive_failures' | 'auto_halt_cost_ceiling' | 'auto_halt_audit_integrity' | 'initial_state' (never promoted yet)."
+    },
+    "cycle_state": {
+      "enum": ["idle", "waking", "gating", "selecting", "dispatching", "shadow_evaluating", "reporting", "cooling_down"],
+      "description": "Current Cycle state per STATE_MACHINE.md 3. On a fresh process start after a crash, this field's persisted value is NEVER trusted as 'resume from here' -- CRASH_RESTART_SEMANTICS.md 2 requires reconciliation from rank-1/2/3 truth first, after which this field is reset to idle or waking regardless of what it said before the crash."
+    },
+    "current_cycle_id": {
+      "type": ["string", "null"],
+      "description": "Set when cycle_state leaves idle, null when idle. Used as the cycle_id component of every idempotency_key emitted during that cycle."
+    },
+    "last_cycle_started_at": { "type": ["string", "null"], "format": "date-time" },
+    "last_cycle_completed_at": { "type": ["string", "null"], "format": "date-time" },
+    "last_heartbeat_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Updated frequently during an in-progress cycle (at minimum on every cycle-state transition), not just once per cycle. This is the ONLY liveness signal -- see CRASH_RESTART_SEMANTICS.md 1 for why this field, and never a recorded OS PID, is what determines whether a prior invocation is presumed dead."
+    },
+    "heartbeat_ttl_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "TTL applied to last_heartbeat_at for liveness determination. Default per LIMITS.md 5 is 900 (15 minutes) -- generous relative to the expected per-cycle duration cap, so normal cycle jitter never produces a false 'presumed dead'."
+    },
+    "owner_pid": {
+      "type": ["integer", "null"],
+      "description": "Informational only -- OS PID of the process that last wrote this record, if known. MUST NOT be used as a liveness signal by any reader (that is exactly the merge-mutex.ts orphaned_pid mistake this system exists to not repeat). Present for human debugging only."
+    },
+    "consecutive_infra_failures": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Consecutive cycles ending in an infra-error class outcome (mirrors ops:truth-check exit code 3 semantics: env/API/manifest unreachable, not a truth failure). Reset to 0 on any cycle that completes gating successfully. Auto-halts the kernel at the LIMITS.md 4 threshold."
+    },
+    "consecutive_rollback_triggers": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Consecutive PROMOTION_ROLLBACK_STANDARDS.md 2 rollback-trigger events. Reset to 0 on any cycle with zero triggers. Distinct counter from consecutive_infra_failures -- a rollback trigger is a mode-safety signal, an infra failure is an environment-health signal."
+    },
+    "cost_counters": {
+      "type": "object",
+      "required": ["window_started_at", "window_tokens_used", "window_dispatch_count"],
+      "properties": {
+        "window_started_at": { "type": "string", "format": "date-time" },
+        "window_tokens_used": { "type": "integer", "minimum": 0 },
+        "window_dispatch_count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false,
+      "description": "Rolling 24h window per LIMITS.md 6. Reset (window_started_at advanced, counters zeroed) once the window fully elapses -- never reset early by a restart, since restart must reconcile from truth, not from a convenient zero."
+    },
+    "active_dispatch_ids": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "idempotency_key values for dispatch packets whose action was started but not yet confirmed complete as of last_heartbeat_at. On restart, every entry here is reconciled (never assumed succeeded or failed) per CRASH_RESTART_SEMANTICS.md 3 before the kernel proceeds to a new cycle."
+    },
+    "mode_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at", "from", "to", "trigger", "actor"],
+        "properties": {
+          "at": { "type": "string", "format": "date-time" },
+          "from": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+          "to": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+          "trigger": { "type": "string" },
+          "actor": { "enum": ["owner", "kernel_auto_rollback", "kernel_auto_halt"] }
+        },
+        "additionalProperties": false
+      },
+      "description": "Append-only. Never rewritten or truncated. This is the mechanical source for PROGRAM_COMPLETION_DEFINITION.md's promotion/rollback history checks."
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/autonomy/audit_event_v1.schema.json",
+  "title": "Autonomy Kernel Audit Event V1",
+  "description": "One append-only log entry. The audit log is the kernel's own rank-appropriate truth source (analogous in spirit to the lane manifest's truth_check_history[], but scoped to the kernel's own actions, not a single lane's). Never edited or deleted -- corrections are new events, never mutations of history (THREAT_MODEL.md #12).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "sequence",
+    "ts",
+    "event_type",
+    "phase",
+    "actor",
+    "mode",
+    "severity",
+    "detail"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "event_id": {
+      "type": "string",
+      "minLength": 8,
+      "description": "UUID or ULID, unique per event."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Monotonically increasing, gapless within one audit log file. A reader detecting a gap treats it as an integrity failure (THREAT_MODEL.md #12), not a tolerable skip."
+    },
+    "prev_event_hash": {
+      "type": ["string", "null"],
+      "description": "Optional hash chain: sha256 of the previous event's canonical JSON serialization, or null for the first event in the log. When present, a mismatch on verification is an integrity failure and triggers the CRITICAL notification path (NOTIFICATION_TAXONOMY.md). Optional at schema level because AUT-2 may ship the append-only guarantee before the hash-chain hardening; both are acceptable schema-valid states, but a kernel claiming PROGRAM_COMPLETION_DEFINITION.md certification must have the hash chain populated."
+    },
+    "ts": { "type": "string", "format": "date-time" },
+    "event_type": {
+      "enum": [
+        "cycle_started",
+        "cycle_completed",
+        "kill_switch_checked",
+        "kill_switch_engaged",
+        "kill_switch_confirmed_halted",
+        "gate_result",
+        "candidate_selected",
+        "candidate_refused_sensitive_path",
+        "candidate_refused_t1_excluded",
+        "candidate_refused_concurrency",
+        "dispatch_intent",
+        "dispatch_outcome",
+        "shadow_decision",
+        "merge_intent",
+        "merge_outcome",
+        "mode_promoted",
+        "mode_rolled_back",
+        "auto_halt_triggered",
+        "crash_recovery_reconciled",
+        "notification_emitted",
+        "audit_integrity_failure"
+      ],
+      "description": "Closed vocabulary. New event types require a schema version note (append-only additions are fine as a minor doc update; this list is not expected to be exhaustive forever, but is not free-text)."
+    },
+    "phase": {
+      "enum": ["intent", "outcome", "info"],
+      "description": "Every mutating action MUST emit an 'intent' event immediately before attempting the action and an 'outcome' event immediately after, as two separate log entries with the same idempotency_key in detail. This is what makes a crash mid-action forensically visible: an intent with no matching outcome is the exact signal CRASH_RESTART_SEMANTICS.md 3 reconciles against. Non-mutating events (gate_result, kill_switch_checked, etc.) use 'info'."
+    },
+    "actor": {
+      "enum": ["kernel", "owner", "claude", "codex"],
+      "description": "Who caused this event. 'owner' for owner-initiated mode changes and kill-switch engagement; 'kernel' for autonomous kernel actions including auto-rollback/auto-halt; 'claude'/'codex' only for events reporting an executor's own dispatch outcome."
+    },
+    "mode": {
+      "enum": ["halted", "shadow", "t3_live", "t2t3_live"],
+      "description": "Kernel Mode at the moment of this event, always recorded even for owner-initiated events, so the log alone (without cross-referencing execution-state) answers 'what was the system allowed to do when this happened.'"
+    },
+    "severity": {
+      "enum": ["debug", "info", "medium", "high", "critical"],
+      "description": "Maps directly to NOTIFICATION_TAXONOMY.md's severity column. Not every event at a given severity necessarily triggers a notification (the taxonomy also gates on event_type); this field records the event's own severity, the taxonomy decides notify/suppress."
+    },
+    "issue_id": {
+      "type": ["string", "null"],
+      "pattern": "^UTV2-[0-9]+$"
+    },
+    "idempotency_key": {
+      "type": ["string", "null"],
+      "description": "Required (non-null) whenever phase is 'intent' or 'outcome'. Matches dispatch_packet_v1.schema.json's idempotency_key for dispatch/merge events."
+    },
+    "detail": {
+      "type": "object",
+      "description": "Event-type-specific payload. Free-form object but must be JSON-serializable and must not contain secrets, tokens, or credential values under any key -- a CI grep guard (AUT-2/AUT-4 scope) rejects any audit event containing a recognizable secret pattern before it is written."
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "phase": { "const": "intent" } } },
+      "then": { "required": ["idempotency_key"] }
+    },
+    {
+      "if": { "properties": { "phase": { "const": "outcome" } } },
+      "then": { "required": ["idempotency_key"] }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "audit_integrity_failure" } } },
+      "then": { "properties": { "severity": { "const": "critical" } } }
+    },
+    {
+      "if": { "properties": { "event_type": { "const": "auto_halt_triggered" } } },
+      "then": { "properties": { "severity": { "const": "critical" } } }
+    }
+  ]
+}
