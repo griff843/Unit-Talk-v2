@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   assertRefreshAdvanced,
   evaluateLedger,
+  evaluateReadinessRegression,
   parseLedger,
   type GateCode,
 } from './readiness-ledger-gate.js';
@@ -158,6 +159,72 @@ test('a ledger that is not usable is refused rather than partially trusted', () 
 test('the hard-stale threshold comes from the ledger itself, so the contract travels with the artifact', () => {
   const strict = ledger({ generated_at: hoursAgo(10), freshness: { max_age_hours: 4, hard_stale_hours: 6 } });
   assert.equal(codeOf(strict), 'LEDGER_STALE');
+});
+
+test('PR readiness is neutral when head inherits the same failing classification from base', () => {
+  const inherited = evaluateLedger(
+    ledger({ verdict: 'RED', dimensions: [dimension({ status: 'fail' })] }),
+    NOW,
+  );
+  const result = evaluateReadinessRegression(inherited, inherited);
+  assert.equal(result.conclusion, 'neutral');
+  assert.equal(result.passed, true);
+  assert.match(result.summary, /inherits repository readiness debt/);
+});
+
+test('PR readiness fails when a passing base becomes failing on head', () => {
+  const base = evaluateLedger(ledger(), NOW);
+  const head = evaluateLedger(
+    ledger({ verdict: 'RED', dimensions: [dimension({ status: 'fail' })] }),
+    NOW,
+  );
+  const result = evaluateReadinessRegression(base, head);
+  assert.equal(result.conclusion, 'failure');
+  assert.equal(result.passed, false);
+  assert.match(result.summary, /GREEN to READINESS_RED/);
+});
+
+test('PR readiness fails closed when head changes to a different failing classification', () => {
+  const base = evaluateLedger(
+    ledger({ verdict: 'RED', dimensions: [dimension({ status: 'fail' })] }),
+    NOW,
+  );
+  const head = evaluateLedger(
+    ledger({ verdict: 'UNKNOWN', dimensions: [dimension({ status: 'unknown' })] }),
+    NOW,
+  );
+  const result = evaluateReadinessRegression(base, head);
+  assert.equal(result.conclusion, 'failure');
+  assert.equal(result.passed, false);
+});
+
+test('PR readiness fails when head adds a blocking failure under the same RED classification', () => {
+  const base = evaluateLedger(
+    ledger({ verdict: 'RED', dimensions: [dimension({ id: 'ingestor', status: 'fail' })] }),
+    NOW,
+  );
+  const head = evaluateLedger(
+    ledger({
+      verdict: 'RED',
+      dimensions: [
+        dimension({ id: 'ingestor', status: 'fail' }),
+        dimension({ id: 'worker', status: 'fail' }),
+      ],
+    }),
+    NOW,
+  );
+  const result = evaluateReadinessRegression(base, head);
+  assert.equal(result.conclusion, 'failure');
+  assert.equal(result.passed, false);
+});
+
+test('PR readiness succeeds when head readiness passes', () => {
+  const result = evaluateReadinessRegression(
+    evaluateLedger(ledger(), NOW),
+    evaluateLedger(ledger({ verdict: 'YELLOW' }), NOW),
+  );
+  assert.equal(result.conclusion, 'success');
+  assert.equal(result.passed, true);
 });
 
 // ── Persistence: a scheduled run cannot conclude success without a new observation
