@@ -39,6 +39,10 @@ test('classifyMarketFamily: game_total_ou (canonical normalized) → game-line',
   assert.equal(classifyMarketFamily('game_total_ou'), 'game-line');
 });
 
+test('classifyMarketFamily: nba-spread (UTV2-1398 live gap) → game-line', () => {
+  assert.equal(classifyMarketFamily('nba-spread'), 'game-line');
+});
+
 test('classifyMarketFamily: points-all-game-ou → player-prop', () => {
   assert.equal(classifyMarketFamily('points-all-game-ou'), 'player-prop');
 });

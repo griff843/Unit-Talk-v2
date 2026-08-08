@@ -86,6 +86,7 @@ export function classifyMarketFamily(marketKey: string): MarketFamily {
     key === 'spread' ||
     key === 'game_spread' ||
     key === 'game-spread' ||
+    key === 'nba-spread' ||
     key.includes('game_total') ||
     key.includes('game-total') ||
     key === 'total'
