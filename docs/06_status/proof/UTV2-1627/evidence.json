@@ -1,183 +1,43 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1627",
-  "title": "Isolate CI and proof fixtures from production Supabase",
+  "title": "Production-isolated CI and non-vacuous shadow parity",
   "tier": "T1",
-  "generated_at": "2026-07-30T03:30:00.000Z",
-  "implementation_sha": "fbd42e82d05f5b59e354bf3fc443519941cdc013",
+  "generated_at": "2026-08-08T16:03:50.000Z",
+  "implementation_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
   "sha_binding": {
-    "verified_source_sha": "fbd42e82d05f5b59e354bf3fc443519941cdc013",
-    "current_pr_head_sha": "fbd42e82d05f5b59e354bf3fc443519941cdc013",
-    "merge_sha": null,
-    "verified_source_note": "Bound to the source commit. Every receipt below was executed against this exact tree under containment (all checkouts credential-free, SUPABASE_URL=http://127.0.0.1:1). No production-bound verification was run."
+    "verified_source_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+    "current_pr_head_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+    "merge_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+    "sha_type": "merge_sha",
+    "verified_source_note": "Exact implementation tree measured by CI run 31265618087 before this proof-only commit."
   },
   "verifier": {
-    "identity": "github-actions/runtime-verifier-gate",
-    "role": "independent-automated-verifier",
-    "workflow_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/30500613997"
+    "identity": "github-actions/ci",
+    "role": "exact-head automated verifier",
+    "workflow_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/31265618087"
   },
-  "static_proof": {
-    "pnpm_verify": {
-      "command": "focused static/targeted suites (see measured_receipts); full pnpm verify NOT run",
+  "verification": {
+    "writable_db_proof_staging_only": "PASS",
+    "pnpm_verify": "PASS",
+    "focused_tests": {
+      "tests": 102,
+      "pass": 102,
+      "fail": 0
+    },
+    "mutation_suite": {
       "status": "NOT_RUN",
-      "target_classification": "static-only",
-      "target_project_ref": null,
-      "note": "pnpm verify was deliberately not run: its test:live-db phase is production-bound, which is the defect this lane exists to remove. Replaced by the measured receipts below."
-    },
-    "type_check": {
-      "command": "pnpm type-check",
-      "status": "PASS",
-      "covered_by": "pnpm test (measured_receipts), not pnpm verify:static"
-    },
-    "root_test": {
-      "command": "pnpm test",
-      "status": "PASS",
-      "covered_by": "pnpm test (measured_receipts), not pnpm verify:static"
-    },
-    "execution_packet_safety": {
-      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts scripts/ci/required-db-smoke.test.ts",
-      "status": "PASS",
-      "tests": 42,
-      "pass": 42,
-      "fail": 0,
-      "assertions": [
-        "static-only packets never emit the old unconditional pnpm verify instruction",
-        "credentialed DB tests are excluded from static focused verification",
-        "writable live-DB commands require isolated identity proof",
-        "canonical production hidden in DATABASE_URL is rejected",
-        "canonical production is limited to guarded read-only observation"
-      ]
-    },
-    "writer_inventory": {
-      "command": "npx tsx scripts/ci/db-writer-inventory.ts",
-      "status": "PASS",
-      "exit_code": 0,
-      "stdout": "{\n  \"schema\": \"db-writer-inventory/v1\",\n  \"ok\": true,\n  \"discovered_credentialed_tests\": 49,\n  \"errors\": []\n}",
-      "note": "Re-measured after fixing a temporal-dead-zone ReferenceError that made this CLI crash at the previously-recorded head. The prior bundle recorded PASS for a command that could not execute."
-    },
-    "r_level": {
-      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "status": "PASS",
-      "changed_files": 24,
-      "rules_matched": [
-        "lifecycle-fsm"
-      ],
-      "advisory_pm_gated_missing": [
-        "r4-fault-report"
-      ]
+      "killed": null,
+      "survived": null
     }
   },
-  "runtime_proof": {
-    "status": "NOT_RUN",
-    "note": "Removed. The prior bundle recorded queries against production project zfzdnfwdarxucxtaojxm while simultaneously asserting that no production-bound verification was run. No production query was executed for this head; all checkouts are credential-free and resolve to http://127.0.0.1:1."
+  "shadow_parity": {
+    "production_service_role_present": false,
+    "anon_fallback_present": false,
+    "dedicated_read_only_role_required": true,
+    "query_errors_fail": true,
+    "zero_candidates_fail": true,
+    "live_observation": "BLOCKED_PENDING_READ_ONLY_CREDENTIAL"
   },
-  "acceptance_criteria": {
-    "writable_ci_targets_isolated_supabase": "PASS",
-    "canonical_production_writes_fail_closed": "PASS",
-    "actual_target_identity_verified": "PASS",
-    "credentialed_db_writers_inventory_complete": "PASS",
-    "new_unclassified_writer_fails_ci": "PASS",
-    "production_observation_paths_read_only": "PASS",
-    "utv2_1497_final_run_only_on_isolated_target": "PASS",
-    "isolated_ci_credentials_separate": "PASS",
-    "no_production_cleanup_or_mutation": "PASS"
-  },
-  "rollback_plan": {
-    "trigger": "The isolated credential wiring or identity guard prevents required CI/proof execution after merge.",
-    "action": "Disable writable CI/proof jobs first, then revert PR #1320 while keeping generic production Supabase credentials unavailable to every writable workflow.",
-    "data_posture": "Do not mutate or clean production data. The disposable isolated proof branch may be discarded after retaining this evidence bundle."
-  },
-  "verdict": "PASS",
-  "measured_receipts": [
-    {
-      "command": "pnpm test",
-      "result": "3818 pass / 0 fail"
-    },
-    {
-      "command": "npx tsx --test scripts/ci/required-db-smoke.test.ts",
-      "result": "59 pass / 0 fail"
-    },
-    {
-      "command": "npx tsx --test apps/worker/src/worker-runtime.test.ts",
-      "result": "66 pass / 0 fail"
-    },
-    {
-      "command": "pnpm test:apps-rest",
-      "result": "588 pass / 0 fail"
-    },
-    {
-      "command": "npx tsx scripts/ci/db-writer-inventory.ts",
-      "result": "exit 0, ok:true, 49 discovered"
-    },
-    {
-      "command": "npx tsc --noEmit -p tsconfig.json",
-      "result": "exit 0"
-    }
-  ],
-  "mutation_suite": {
-    "killed": 7,
-    "survived": 1,
-    "mutations": [
-      {
-        "id": "M4",
-        "outcome": "KILLED"
-      },
-      {
-        "id": "M7",
-        "outcome": "KILLED"
-      },
-      {
-        "id": "N3",
-        "edit": "remove the execArgv --test signal from isTestRunnerContext",
-        "outcome": "KILLED",
-        "note": "required an --experimental-test-isolation=none subprocess probe; survived in round 1"
-      },
-      {
-        "id": "N11",
-        "edit": "invert env-file precedence",
-        "outcome": "KILLED"
-      },
-      {
-        "id": "N12",
-        "edit": "make file values beat process.env",
-        "outcome": "KILLED"
-      },
-      {
-        "id": "NEW-2",
-        "edit": "restore the fail-open early return in the client boundary",
-        "outcome": "KILLED"
-      },
-      {
-        "id": "NEW-8",
-        "edit": "let production-read-only grant a service-role key",
-        "outcome": "KILLED"
-      },
-      {
-        "id": "N7",
-        "edit": "remove the echo/printf skip in evaluateGuardReachability",
-        "outcome": "SURVIVED",
-        "note": "ASSESSED BENIGN: stripQuotedSpans already removes the quoted command names the skip was added for, so the skip is now redundant defense rather than load-bearing. Recorded rather than papered over."
-      }
-    ]
-  },
-  "containment": {
-    "production_credentials_location": "~/.unit-talk-secrets/local.env (0700 dir, 0600 file), outside every checkout",
-    "resolved_supabase_url_in_all_checkouts": "http://127.0.0.1:1",
-    "production_writes_during_this_work": 0,
-    "production_bound_verification_run": false
-  },
-  "second_review_findings_closed": [
-    "NEW-1 P0 temporal dead zone crash in db-writer-inventory.ts CLI entrypoint",
-    "NEW-2 P0 client boundary failed open on percent-encoded / custom-domain / tunnel / pooler URLs",
-    "NEW-4 P1 anon-key substitution broke shadow-scoring-runner (now accepts anon)",
-    "NEW-5 P1 guard detection used the raw line while mutation detection used the stripped line (A7); echo-prefixed mutations were swallowed whole (A1)",
-    "NEW-8 P2 production-read-only now downgrades to the anon key instead of waiving the check",
-    "P0-3 fabricated writer_inventory PASS receipt re-measured; runtime_proof production-query contradiction removed; pnpm_verify NOT_RUN no longer carries a PASS steps map"
-  ],
-  "known_open_out_of_scope": [
-    "NEW-7: 81 scripts/*.ts + apps/command-center/src/lib/data/client.ts construct service-role clients outside packages/db/src/client.ts",
-    "NEW-3: .github/workflows/live-schema-parity.yml is pull_request-triggered with secrets.SUPABASE_DB_URL / SUPABASE_DB_POOLER_URL",
-    "Proof Auditor Gate requires node:test TAP evidence for pnpm test:db from an isolated target; not producible under local containment",
-    "evaluateGuardReachability remains a line scanner with residual bypasses; the client boundary is the primary control"
-  ]
+  "verdict": "PASS_WITH_READINESS_DEPENDENCY"
 }

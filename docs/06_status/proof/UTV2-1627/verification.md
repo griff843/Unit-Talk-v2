@@ -1,91 +1,52 @@
 # PROOF: UTV2-1627
 
-MERGE_SHA: 72b4747fab755038a15fad133912777749313fc0
+MERGE_SHA: b6c395f0565ad66ee4c799a10049ed8c5e0594b4
+
+Authoritative implementation SHA: `b6c395f0565ad66ee4c799a10049ed8c5e0594b4`
 
 ASSERTIONS:
 
-- [x] Writable CI and proof execution is restricted to the approved staging target.
-- [x] Production service-role credentials are not supplied to PR-authored shadow-parity code.
-- [x] Worker live-proof setup invokes the canonical UTV2-1628 target boundary before repository construction.
-- [x] The duplicate database identity authority and obsolete mutation probe remain removed.
+- [x] Writable CI and proof execution uses the approved staging target, not production.
+- [x] Pull-request shadow parity receives neither production service-role nor anon credentials.
+- [x] Shadow parity requires a dedicated mechanically read-only credential.
+- [x] Database query failures cannot be converted into zero-count evidence.
+- [x] `candidatesScanned=0` fails parity instead of producing a successful comparison.
+- [x] Lifecycle token recovery preserves lane ownership, PR binding, dependencies, and singleton scope checks.
 
 EVIDENCE:
 
 ```text
-focused isolation/governance: tests=119 pass=119 fail=0
-db-writer-inventory: credentialed_tests=49 errors=0
-local source verification: 7427c75b7f3cff6ec74a2ac4b6dd5cd326638efe pnpm verify PASS
-CI pre-merge head: 72b4747fab755038a15fad133912777749313fc0 staging DB proof PASS; verify PASS
+authoritative implementation SHA: b6c395f0565ad66ee4c799a10049ed8c5e0594b4
+CI run: https://github.com/griff843/Unit-Talk-v2/actions/runs/31265618087
+Writable DB proof (staging only): PASS
+pnpm verify: PASS
+focused shadow/workflow tests: 102 pass / 0 fail
+mutation testing: NOT_RUN; no mutation result is claimed by this proof
+shadow parity live observation: BLOCKED until a mechanically read-only production role is provisioned; no empty result is accepted as PASS
+scripts/ci/r-level-check.ts: PASS in exact-head CI
 ```
 
-The `MERGE_SHA` field carries the current pre-merge commit anchor. After merge,
-the sanctioned `pnpm ops:proof-generate --merge-sha <sha>` path replaces it
-with the authoritative merge SHA while preserving the measured evidence.
+## Verification scope
 
-# UTV2-1627 — Verification
+The focused total is the non-overlapping sum of these measured runs:
 
-**Source head:** `d46463d6cc16c63fb099f2b99b92322b31a58071`
-**Tier:** T1 · **Lane type:** governance
+- `pnpm exec tsx --test scripts/shadow-scoring-runner.test.ts scripts/ops/workflow-hardening.test.ts`: 75 pass / 0 fail.
+- `pnpm exec tsx --test scripts/ci/workflow-production-credential-guard.test.ts`: 27 pass / 0 fail.
 
-## What this lane fixes
+No earlier test total or mutation campaign is authoritative for this head. This
+document intentionally contains no prior proof history.
 
-CI and proof fixtures could write to the production Supabase project. On
-2026-07-29 this was not hypothetical: 310 test-fixture `picks` rows (plus
-audit_log, submissions, outbox rows) were written to production
-`zfzdnfwdarxucxtaojxm` by lane test runs.
+## Shadow parity disposition
 
-## Findings closed
+Production service-role access remains removed. Anonymous access is not treated
+as parity evidence because protected-table query failures or RLS-hidden rows can
+produce an empty population. The runner now throws on every count-query error
+and on zero candidates. The workflow remains blocking until the dedicated
+read-only secrets are provisioned and a non-empty observation completes.
 
-| ID | Fix |
-|---|---|
-| P0-1 | `ci.yml` guard ran inside `if [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]` — never exported, permanently dead. Now unconditional. |
-| P0-1b | Guard read `process.env` only; credentials live in `local.env`. Now resolves the same config the clients use. |
-| P0-2 | Inventory gate asserted string presence. Now asserts guard reachability and ordering. |
-| P0-3 | Proof cited a command referencing two test files deleted at `374580a2`; manifest locked the same dead paths. Both corrected. |
-| P1-4 | Guard was invoked by 1 of 49 credentialed tests. Now enforced at `createDatabaseConnectionConfig`, which every service-role client passes through. |
-| P1-5 | Production service-role key removed from `pull_request`-triggered `proof-regression.yml` and `shadow-parity-required.yml`; anon key instead, so RLS enforces read-only. |
-| P1-9 | Custom-domain, proxy/tunnel, and malformed-project-ref bypasses now fail closed. |
-| — | `supabase db push` (DDL) ran before any identity check. Isolation now asserted in a preceding step. |
+## SHA binding
 
-## Verification performed
-
-**No production-bound verification was run.** `pnpm verify` was deliberately
-not executed: its `test:live-db` phase is production-bound, which is the defect
-this lane removes. Containment during all work: production credentials relocated
-to `~/.unit-talk-secrets/` (0700/0600), every checkout credential-free,
-`SUPABASE_URL` resolving to `http://127.0.0.1:1`, **0 production writes**.
-
-| Command | Result |
-|---|---|
-| `npx tsx --test scripts/ci/required-db-smoke.test.ts` | 38 pass / 0 fail (was 30) |
-| `npx tsx --test packages/db/src/*.test.ts` | 244 pass / 0 fail |
-| `pnpm test:ops` | 1298 pass / 0 fail |
-| `pnpm test:apps-api-core` | 422 pass / 0 fail |
-| `npx tsc --noEmit -p tsconfig.json` | exit 0 |
-| `npx eslint <changed files>` | clean |
-
-### Mutation suite — 6/6 killed, 0 survived
-
-| Mutation | Outcome |
-|---|---|
-| M4 delete missing-URL throw | KILLED (previously survived) |
-| M7 case-sensitive production detection | KILLED (previously survived) |
-| Drop malformed declared-ref validation | KILLED |
-| Restore "no URL ref means isolated" bypass | KILLED |
-| Remove boundary assertion from `createDatabaseConnectionConfig` | KILLED |
-| Make test-runner detection always false | KILLED |
-
-## Notes
-
-The new reachability gate immediately flagged `proof-gate.yml` and
-`t1-proof-gate.yml`. Both were investigated and confirmed **false positives**:
-their `pnpm ci:db-smoke` sits in a legitimate if/else whose condition is
-genuinely computed, and `ci:db-smoke` is itself the guarded entrypoint. The rule
-was tightened to the property that actually matters — a guard inside a
-conditional fails only when a mutation can still run unconditionally — and
-quoted spans and `echo` lines are stripped so an auditor argument
-(`--require-executed-command "pnpm test:db"`) or a summary table is not mistaken
-for execution.
-
-Implemented directly by Claude after three Codex rounds produced no source
-changes.
+The `MERGE_SHA` anchor above names the exact implementation tree measured by CI
+run `31265618087`. The proof-only commit that carries this document does not
+alter that measured implementation tree. Post-merge rebinding, if applicable,
+must use `pnpm ops:proof-generate`; incidental SHA text is not an anchor.
