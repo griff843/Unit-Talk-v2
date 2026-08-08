@@ -40,13 +40,18 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1550/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-07-17T03:18:14.806Z",
-  "heartbeat_at": "2026-07-17T21:40:10.449Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-07-22T14:25:00.000Z",
+  "closed_at": "2026-07-22T14:25:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
+  "override": {
+    "reason": "PM-directed one-time governed terminal closure (chat-directed 2026-07-22, following #1291/UTV2-1571's file-scope-guard fix which stopped this merged-but-nonterminal lane from blocking other lanes' file scope). ops:lane-close --override is not implemented in scripts/ops/lane-close.ts -- no CLI writer exists for this transition. This governed PR is therefore the ratified one-time writer of this exact state, reviewed and approved through the standard PR process rather than a direct main edit or an unimplemented CLI flag. Waives G4 only (CI-green-on-merge-commit is structurally unsatisfiable for this historical merge -- see docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md for why the original merge commit's required-check identity was already stale by design). L3 (Linear state) is not waived by this override -- it is resolved for real via the Linear UTV2-1550 -> Done transition coordinated immediately after this PR merges, not asserted here.",
+    "by": "griff843 (PM)",
+    "at": "2026-07-22T14:25:00.000Z"
+  },
   "truth_check_history": [
     {
       "checked_at": "2026-07-17T21:34:20.849Z",
@@ -162,6 +167,16 @@
         "G4"
       ],
       "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-07-22T14:25:00.000Z",
+      "verdict": "pass",
+      "merge_sha": "1d555828eed109bfe3d33f8e9cc5caa1aa202db8",
+      "failures": [],
+      "runner": "manual",
+      "source": "pm_directed_terminal_override",
+      "waived_checks": ["G4"],
+      "note": "Manual terminal closure per PM chat directive 2026-07-22, ratified through this governed PR (no ops:lane-close --override CLI writer exists). G4 (CI-green-on-merge-commit for this historical merge) is explicitly waived, not silently passed -- structurally unsatisfiable per docs/06_status/INCIDENTS/INC-2026-07-17-utv2-1550-stale-required-check-identity.md. L3 (Linear state) is not waived here; it is resolved for real by transitioning Linear UTV2-1550 to Done immediately after this PR merges. This entry is appended, not a replacement of the prior automated history above -- the L3/G4-only automated fail entry from 2026-07-17T21:40:10.449Z remains the last mechanical evaluation on record."
     }
   ],
   "reopen_history": [],
