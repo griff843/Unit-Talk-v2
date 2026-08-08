@@ -11,10 +11,10 @@
   "current_head_sha": "c6e9bd8f31bcd8a1edf7578a972aae038a61ebb4",
   "merge_sha": null,
   "sha_binding": {
-    "verified_source_sha": "c6e9bd8f31bcd8a1edf7578a972aae038a61ebb4",
+    "verified_source_sha": "0266b164f4793d2c7cddb3a17b656fc739cd17e1",
     "verified_source_note": "Design-only lane (spec-first, matching this repo's existing precedent for this class of change). No code, workflow, or hook file is modified. This is a CLEAN CONTINUATION branch cut from current main: PR #1289 exhausted the T1 CHANGES_REQUIRED bounce limit (4 authorized verdicts; merge-gate-verdict.cjs trips at >= 3), which the protected-base Merge Gate rejects regardless of any later APPROVED verdict. The objective was not failed -- only that execution attempt was -- so the reviewed design content is carried forward byte-for-byte and the mechanical findings are fixed here. NO SHA from the predecessor branch is inherited: every lineage field was cleared and rebound to this branch's own ancestry, verified with git merge-base --is-ancestor (literal output in verification.md). Binding is populated in the trailing evidence-rebind commit, since a commit cannot embed its own hash.",
-    "sha_type": "implementation_sha",
-    "bound_at": "2026-07-21T21:55:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-08T00:40:15.342Z",
     "ci_sentinels": {
       "verify": "pass",
       "test_db": "pass"

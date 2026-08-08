@@ -1,6 +1,6 @@
 # PROOF: UTV2-1451
 
-MERGE_SHA: c6e9bd8f31bcd8a1edf7578a972aae038a61ebb4
+MERGE_SHA: 0266b164f4793d2c7cddb3a17b656fc739cd17e1
 
 Clean continuation branch. The binding is populated in the trailing
 evidence-rebind commit, since a commit cannot embed its own hash -- this

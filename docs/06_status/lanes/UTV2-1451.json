@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1451-close-self-authorization-loopholes",
   "branch": "claude/utv2-1451-continuation",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "0266b164f4793d2c7cddb3a17b656fc739cd17e1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1395",
   "files_changed": [
     ".ops/sync/UTV2-1451.yml",
@@ -24,14 +24,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1451/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-07-21T14:25:00.000Z",
-  "heartbeat_at": "2026-07-21T14:25:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-08T00:40:20.183Z",
+  "closed_at": "2026-08-08T00:40:20.183Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1451-close-self-authorization-loopholes.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-08T00:40:15.346Z",
+      "verdict": "pass",
+      "merge_sha": "0266b164f4793d2c7cddb3a17b656fc739cd17e1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
