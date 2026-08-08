@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1612-p0-containment-workflow",
   "branch": "codex/utv2-1612-p0-containment-workflow",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2822b709c74c43dc24a50dc6df35597e1a0463fe",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1313",
   "files_changed": [
     ".github/workflows/ops-p0-containment.yml",
