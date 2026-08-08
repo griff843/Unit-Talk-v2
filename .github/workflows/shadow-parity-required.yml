@@ -4,11 +4,10 @@ name: Shadow Parity Check
 # lifecycle, settlement, or promotion code paths, then classifies guardrail
 # violations as CRITICAL and non-zero counts as WARNINGs.
 #
-# The runner requires live Supabase credentials (SUPABASE_URL +
-# SUPABASE_SERVICE_ROLE_KEY). When those secrets are absent the step is
-# advisory — it posts a comment explaining the requirement but does NOT
-# block the merge. Configure the secrets in repo Settings > Secrets for
-# full enforcement.
+# The runner requires a dedicated mechanically read-only production role.
+# Service-role and anon credentials are both rejected: service role is unsafe,
+# while anon visibility can yield a vacuous empty comparison. Missing safe
+# credentials block this check.
 #
 # Source analysis: scripts/shadow-scoring-runner.ts
 #   - CLI flags: --dry-run (flag), --batch-size N, --out-dir path, --statuses csv
@@ -17,7 +16,7 @@ name: Shadow Parity Check
 #     All must be 0. Any non-zero value is a CRITICAL guardrail violation.
 #   - The runner throws (exit 1) when guardrails are violated.
 #   - --dry-run skips scoring writes; counts DB state only (safe for CI).
-#   - Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#   - Requires: SHADOW_PARITY_SUPABASE_URL, SHADOW_PARITY_READ_ONLY_KEY
 #
 # Issue: UTV2-821
 
@@ -48,10 +47,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      # UTV2-1630: this job runs a script from the PR's own checkout with the
-      # PRODUCTION service-role key. Its safety rests on that script staying
-      # --dry-run, but the pull request supplies the script. The path filter
-      # decides whether this job runs; the checkout decides what runs.
+      # UTV2-1630: this job runs a script from the PR's own checkout against
+      # production data. The credential is mechanically read-only, but the
+      # pull request still supplies the script. The path filter decides whether
+      # this job runs; the checkout decides what runs.
       #
       # A change to the runner must therefore land through a pull request that
       # carries no production credential, and be rebased in — it cannot execute
@@ -107,14 +106,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check for live DB credentials
+      - name: Check for mechanically read-only parity credentials
         id: db_check
+        env:
+          SHADOW_PARITY_SUPABASE_URL: ${{ secrets.SHADOW_PARITY_SUPABASE_URL }}
+          SHADOW_PARITY_READ_ONLY_KEY: ${{ secrets.SHADOW_PARITY_READ_ONLY_KEY }}
         run: |
-          echo "has_db=false" >> "$GITHUB_OUTPUT"
-          echo "No safe production read-only credential is provisioned."
+          if [ -n "$SHADOW_PARITY_SUPABASE_URL" ] && [ -n "$SHADOW_PARITY_READ_ONLY_KEY" ]; then
+            echo "has_db=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_db=false" >> "$GITHUB_OUTPUT"
+            echo "No mechanically read-only production parity credential is provisioned."
+          fi
 
-      # Advisory comment when secrets are absent — non-blocking.
-      - name: Post advisory comment (no DB credentials)
+      # Explain the blocking readiness dependency when safe credentials are absent.
+      - name: Post blocking comment (no read-only DB credentials)
         if: steps.db_check.outputs.has_db == 'false'
         uses: actions/github-script@v7
         with:
@@ -177,6 +183,9 @@ jobs:
       - name: Run shadow scorer (dry-run)
         id: shadow_run
         if: steps.db_check.outputs.has_db == 'true'
+        env:
+          SUPABASE_URL: ${{ secrets.SHADOW_PARITY_SUPABASE_URL }}
+          SHADOW_PARITY_READ_ONLY_KEY: ${{ secrets.SHADOW_PARITY_READ_ONLY_KEY }}
         run: |
           mkdir -p artifacts
           # Runner prints ProofOutput JSON to stdout; stderr has progress logs.
@@ -238,15 +247,15 @@ jobs:
             fi
           done
 
-          echo "critical_count=$CRITICAL" >> "$GITHUB_OUTPUT"
-
-          # Warnings: expose as warning if candidatesScanned=0
-          # which may indicate the shadow pipeline is not running.
+          # Zero observations cannot establish parity. Treat this as critical,
+          # not as a warning or a successful empty comparison.
           CANDIDATES=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('dailyCounts',{}).get('candidatesScanned',0))" < "$REPORT")
           WARNINGS=0
           if [ "$CANDIDATES" -eq 0 ] 2>/dev/null; then
-            WARNINGS=$((WARNINGS + 1))
+            CRITICAL=$((CRITICAL + 1))
+            VIOLATIONS="$VIOLATIONS candidatesScanned=0"
           fi
+          echo "critical_count=$CRITICAL" >> "$GITHUB_OUTPUT"
           echo "warning_count=$WARNINGS" >> "$GITHUB_OUTPUT"
 
           if [ -n "$VIOLATIONS" ]; then
