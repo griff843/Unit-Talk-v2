@@ -17,11 +17,13 @@
     "docs/06_status/proof/UTV2-1545/diff-summary.md",
     "docs/06_status/proof/UTV2-1545/verification.md"
   ],
-  "status": "started",
+  "status": "blocked",
   "started_at": "2026-08-03T14:00:29.019Z",
-  "heartbeat_at": "2026-08-03T14:00:29.019Z",
+  "heartbeat_at": "2026-08-08T22:05:16.064Z",
   "closed_at": null,
-  "blocked_by": [],
+  "blocked_by": [
+    "Hard Linear dependency: blockedBy UTV2-1610 (P0 blind-pick provenance and containment), unresolved and In Claude since 2026-07-29. Root-causing the awaiting_approval drift cannot conclude until 1610 proves the producer. PR #1384 is titled 'draft, do not merge' and is a draft. Manifest asserted started, i.e. active executor work that is not occurring."
+  ],
   "preflight_token": ".out/ops/preflight/claude/utv2-1545-awaiting-approval-drift-rootcause.json",
   "created_by": "claude",
   "truth_check_history": [],
