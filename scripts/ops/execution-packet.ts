@@ -2,10 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  assertIsolatedWritableDatabaseTarget,
-  assertProductionReadOnlyDatabaseTarget,
-  databaseIdentityInputFromEnv,
-} from '../../packages/db/src/production-identity-guard.js';
+  CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
+  extractProjectRefFromUrl,
+} from '@unit-talk/db/target-identity';
+import { assertStagingTarget } from '../ci/assert-staging-target.js';
 import { validateExecutionCwd } from './lane-execution.js';
 import {
   ROOT,
@@ -125,48 +125,53 @@ function buildVerificationPlan(
   manifest: LaneManifest,
   env: NodeJS.ProcessEnv,
 ): VerificationPlan {
-  const identityInput = databaseIdentityInputFromEnv(env);
   const fileScopeLock = manifest.file_scope_lock ?? [];
+  const staging = assertStagingTarget(env);
 
-  try {
-    assertIsolatedWritableDatabaseTarget(identityInput);
+  if (staging.ok) {
     return {
       mode: 'writable-isolated',
       static_command: 'pnpm verify:static',
       focused_test_command: buildFocusedTestCommand(fileScopeLock, true),
       live_db_status: 'authorized-isolated',
       writable_live_db_command:
-        'pnpm exec tsx packages/db/src/production-identity-guard.ts --assert-isolated-writable && pnpm test:live-db',
+        'pnpm ci:assert-staging && pnpm test:live-db',
       production_read_only_guard_command: null,
       reason:
         'The configured target passed the non-production identity guard and is authorized for writable live-DB verification.',
     };
-  } catch (isolatedError) {
-    try {
-      assertProductionReadOnlyDatabaseTarget(identityInput);
-      return {
+  }
+
+  const production = extractProjectRefFromUrl(env['SUPABASE_URL']);
+  const productionReadOnly =
+    env['UNIT_TALK_DB_ACCESS_MODE'] === 'production-read-only' &&
+    production.projectRef === CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF &&
+    Boolean(env['SUPABASE_ANON_KEY']) &&
+    !env['SUPABASE_SERVICE_ROLE_KEY'];
+
+  if (productionReadOnly) {
+    return {
         mode: 'production-read-only',
         static_command: 'pnpm verify:static',
         focused_test_command: buildFocusedTestCommand(fileScopeLock, false),
         live_db_status: 'read-only-only',
         writable_live_db_command: null,
         production_read_only_guard_command:
-          'pnpm exec tsx packages/db/src/production-identity-guard.ts --assert-production-read-only',
+          'test -n "$SUPABASE_ANON_KEY" && test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"',
         reason:
           'The configured target is canonical production and is authorized only for mechanically classified read-only observation.',
-      };
-    } catch {
-      return {
+    };
+  }
+
+  return {
         mode: 'static-only',
         static_command: 'pnpm verify:static',
         focused_test_command: buildFocusedTestCommand(fileScopeLock, false),
         live_db_status: 'blocked-deferred',
         writable_live_db_command: null,
         production_read_only_guard_command: null,
-        reason: `Writable live-DB proof is blocked/deferred: ${errorMessage(isolatedError)}`,
-      };
-    }
-  }
+    reason: `Writable live-DB proof is blocked/deferred: ${staging.reason}`,
+  };
 }
 
 function buildFocusedTestCommand(
@@ -248,10 +253,6 @@ function buildCloseoutInstructions(
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 export function printExecutionPacket(manifest: LaneManifest): void {

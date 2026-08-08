@@ -264,7 +264,7 @@ test('packet defaults to static-only and never restores the unsafe universal ver
 });
 
 test('packet authorizes writable live-DB verification only after isolated identity proof', () => {
-  const isolatedRef = 'wgfgqfxnnwjmrbubqhcj';
+  const isolatedRef = 'xskgrzbteyqdufktjrjx';
   const packet = generateExecutionPacket(
     createTestManifest({
       tier: 'T1',
@@ -283,7 +283,7 @@ test('packet authorizes writable live-DB verification only after isolated identi
   assert.equal(packet.verification_plan?.live_db_status, 'authorized-isolated');
   assert.match(
     packet.verification_plan?.writable_live_db_command ?? '',
-    /--assert-isolated-writable && pnpm test:live-db/,
+    /ci:assert-staging && pnpm test:live-db/,
   );
   assert.match(
     packet.verification_plan?.focused_test_command ?? '',
@@ -310,7 +310,7 @@ test('packet rejects canonical production hidden behind writable variable names'
   assert.equal(packet.verification_plan?.writable_live_db_command, null);
   assert.match(
     packet.verification_plan?.reason ?? '',
-    /Refusing writable DB execution against canonical production/,
+    /target identity could not be resolved|CANONICAL PRODUCTION/,
   );
 });
 
@@ -320,6 +320,7 @@ test('packet permits canonical production only as guarded read-only observation'
     UNIT_TALK_DB_ACCESS_MODE: 'production-read-only',
     SUPABASE_PROJECT_REF: productionRef,
     SUPABASE_URL: `https://${productionRef}.supabase.co`,
+    SUPABASE_ANON_KEY: 'anon-fixture',
   });
 
   assert.equal(packet.verification_plan?.mode, 'production-read-only');
@@ -327,7 +328,7 @@ test('packet permits canonical production only as guarded read-only observation'
   assert.equal(packet.verification_plan?.writable_live_db_command, null);
   assert.match(
     packet.verification_plan?.production_read_only_guard_command ?? '',
-    /--assert-production-read-only/,
+    /SUPABASE_ANON_KEY/,
   );
   assert.equal(
     packet.closeout_instructions.some((entry) =>

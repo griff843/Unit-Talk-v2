@@ -312,62 +312,7 @@
       ]
     }
   ],
-  "production_read_only_entrypoints": [
-    {
-      "path": "scripts/ops/settlement-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected settlement proof"
-      ]
-    },
-    {
-      "path": "scripts/ops/submission-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected submission proof"
-      ]
-    },
-    {
-      "path": "scripts/ops/promotion-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected promotion proof"
-      ]
-    },
-    {
-      "path": "scripts/ops/scoring-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected scoring proof"
-      ]
-    },
-    {
-      "path": "scripts/ops/discord-delivery-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected delivery proof"
-      ]
-    },
-    {
-      "path": "scripts/ops/analytics-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected recap proof"
-      ]
-    },
-    {
-      "path": "scripts/ops/monetization-proof.ts",
-      "owner": "ops",
-      "execution": [
-        ".github/workflows/proof-regression.yml -> affected member proof"
-      ]
-    },
-    {
-      "path": "scripts/shadow-scoring-runner.ts",
-      "owner": "intelligence",
-      "execution": [".github/workflows/shadow-parity-required.yml -> --dry-run"]
-    }
-  ],
+  "production_read_only_entrypoints": [],
   "workflows": [
     {
       "path": ".github/workflows/ci.yml",
@@ -386,18 +331,13 @@
     },
     {
       "path": ".github/workflows/proof-regression.yml",
-      "mode": "production-read-only",
+      "mode": "writable-isolated",
       "packageScripts": []
     },
     {
       "path": ".github/workflows/shadow-parity-required.yml",
-      "mode": "production-read-only",
+      "mode": "control-only",
       "packageScripts": []
-    },
-    {
-      "path": ".github/workflows/supabase-pr-db-branch.yml",
-      "mode": "writable-isolated",
-      "packageScripts": ["test:db"]
     },
     {
       "path": ".github/workflows/t1-proof-gate.yml",

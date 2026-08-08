@@ -62,8 +62,8 @@ const PRODUCTION_SECRET_REFERENCES = [
 
 const ISOLATED_SECRET_REFERENCES = [
   'secrets.CI_SUPABASE_URL',
-  'secrets.CI_SUPABASE_ANON_KEY',
-  'secrets.CI_SUPABASE_SERVICE_ROLE_KEY',
+  'secrets.CI_SUPABASE_PUBLISHABLE_KEY',
+  'secrets.CI_SUPABASE_SECRET_KEY',
 ];
 
 export function loadDatabaseWriterInventory(
@@ -173,10 +173,7 @@ export function validateDatabaseWriterInventory(
           `writable-isolated workflow is missing the access-mode guard: ${workflow.path}`,
         );
       }
-      if (
-        !workflow.path.endsWith('supabase-pr-db-branch.yml') &&
-        !ISOLATED_SECRET_REFERENCES.every((secret) => source.includes(secret))
-      ) {
+      if (!ISOLATED_SECRET_REFERENCES.every((secret) => source.includes(secret))) {
         errors.push(
           `writable-isolated workflow is missing CI_SUPABASE credential wiring: ${workflow.path}`,
         );
@@ -201,9 +198,12 @@ export function validateDatabaseWriterInventory(
           `production-read-only workflow is missing the access-mode guard: ${workflow.path}`,
         );
       }
-      if (!source.includes('--assert-production-read-only')) {
+      if (
+        !source.includes('secrets.SUPABASE_ANON_KEY') ||
+        source.includes('secrets.SUPABASE_SERVICE_ROLE_KEY')
+      ) {
         errors.push(
-          `production-read-only workflow does not invoke the identity guard: ${workflow.path}`,
+          `production-read-only workflow must use anon credentials without a service-role credential: ${workflow.path}`,
         );
       }
     }
@@ -227,9 +227,9 @@ function validateRequiredGuardPaths(root: string, errors: string[]): void {
   );
   if (
     smokeSource &&
-    !smokeSource.includes('assertIsolatedWritableDatabaseTarget')
+    !smokeSource.includes('isApprovedStagingTarget')
   ) {
-    errors.push('ci:db-smoke no longer invokes the production identity guard');
+    errors.push('ci:db-smoke no longer asserts the exact approved staging target');
   }
 
   const canarySource = readRequiredFile(
@@ -239,11 +239,10 @@ function validateRequiredGuardPaths(root: string, errors: string[]): void {
   );
   if (
     canarySource &&
-    (!canarySource.includes('production-identity-guard.ts') ||
-      !canarySource.includes('--assert-isolated-writable'))
+    !canarySource.includes('assertTargetAllowed')
   ) {
     errors.push(
-      'UTV2-1497 canary no longer invokes the production identity guard',
+      'UTV2-1497 canary no longer invokes the canonical privileged-client boundary',
     );
   }
 }
@@ -256,7 +255,7 @@ function discoverPullRequestDatabaseWorkflows(root: string): string[] {
       const source = fs.readFileSync(filePath, 'utf8');
       return (
         /^\s*pull_request:/mu.test(source) &&
-        (/secrets\.(?:CI_)?SUPABASE_(?:URL|ANON_KEY|SERVICE_ROLE_KEY)/u.test(
+        (/secrets\.(?:CI_)?SUPABASE_(?:URL|ANON_KEY|SERVICE_ROLE_KEY|PUBLISHABLE_KEY|SECRET_KEY)/u.test(
           source,
         ) ||
           source.includes('supabase branches'))
@@ -412,7 +411,8 @@ export const MUTATING_COMMAND_PATTERNS: readonly RegExp[] = [
   /pnpm\s+(?:run\s+)?test:t1-proof:live\b/u,
 ];
 
-const GUARD_INVOCATION = /--assert-isolated-writable|pnpm\s+(?:run\s+)?ci:db-smoke\b/u;
+const GUARD_INVOCATION =
+  /pnpm\s+(?:run\s+)?(?:ci:assert-staging|ci:db-smoke)\b/u;
 
 export function evaluateGuardReachability(source: string): {
   ok: boolean;

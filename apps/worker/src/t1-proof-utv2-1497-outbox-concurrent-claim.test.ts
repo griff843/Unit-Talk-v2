@@ -11,16 +11,15 @@
  * alter claim logic in this lane.
  *
  * The suite is writable and must run only against a classified isolated
- * Supabase target. The production identity guard runs before repositories are
- * created, so a misleading variable name cannot route fixtures to production.
+ * Supabase target. The canonical privileged-client boundary is asserted before
+ * repositories are created, so a misleading variable name cannot route
+ * fixtures to production.
  *
  * Run: UNIT_TALK_APP_ENV=local npx tsx --test apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts
  */
 import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   type CanonicalPick,
@@ -29,6 +28,7 @@ import {
 import {
   createDatabaseRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
+  assertTargetAllowed,
   type RepositoryBundle,
 } from '@unit-talk/db';
 
@@ -51,33 +51,11 @@ const TARGET = `utv2-1497-canary-${RUN_ID}`;
 
 before(() => {
   if (skipReason) return;
-  const guardPath = fileURLToPath(
-    new URL(
-      '../../../packages/db/src/production-identity-guard.ts',
-      import.meta.url,
-    ),
-  );
-  // UTV2-1627: the guard resolves identity from the repo's env files
-  // (local.env > .env > .env.example) merged over process.env, because
-  // credentials are never exported into the shell. Pin cwd to the repo root so
-  // that resolution cannot depend on where the test runner was invoked from.
-  const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
-  const guard = spawnSync(
-    process.execPath,
-    ['--import', 'tsx', guardPath, '--assert-isolated-writable'],
-    {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      env: process.env,
-    },
-  );
-  assert.equal(
-    guard.status,
-    0,
-    `production identity guard rejected the live proof target: ${guard.stderr || guard.stdout}`,
-  );
-
   const env = loadEnvironment();
+  assertTargetAllowed(
+    { url: env.SUPABASE_URL, key: env.SUPABASE_SERVICE_ROLE_KEY },
+    'UTV2-1497 concurrent-claim proof',
+  );
   const connection = createServiceRoleDatabaseConnectionConfig(env);
   repositories = createDatabaseRepositoryBundle(connection);
 });

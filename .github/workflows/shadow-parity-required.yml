@@ -110,17 +110,8 @@ jobs:
       - name: Check for live DB credentials
         id: db_check
         run: |
-          # UTV2-1627: gate on the anon key, which is what this job now receives.
-          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
-            echo "has_db=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_db=false" >> "$GITHUB_OUTPUT"
-            echo "Live DB credentials not configured — shadow runner will be advisory only."
-          fi
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          # UTV2-1627: anon key only — see the runner step below.
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          echo "has_db=false" >> "$GITHUB_OUTPUT"
+          echo "No safe production read-only credential is provisioned."
 
       # Advisory comment when secrets are absent — non-blocking.
       - name: Post advisory comment (no DB credentials)
@@ -141,12 +132,13 @@ jobs:
               marker,
               '## Shadow Parity Check — Advisory (no live DB)',
               '',
-              'The shadow parity runner requires live Supabase credentials',
-              '(database URL + service role key) to execute.',
+              'The shadow parity runner requires a mechanically read-only',
+              'production credential. Service-role credentials are forbidden',
+              'and the anon role cannot read the protected parity tables.',
               '',
               'These secrets are not configured for this repository. The check',
-              'is **non-blocking** in this state, but you must run the shadow',
-              'runner locally before merging:',
+              'is **blocking** in this state. Provision a dedicated read-only',
+              'role before this proof can execute:',
               '',
               '```bash',
               'npx tsx scripts/shadow-scoring-runner.ts --dry-run',
@@ -173,6 +165,12 @@ jobs:
               });
             }
 
+      - name: Fail closed without a safe production read-only credential
+        if: steps.db_check.outputs.has_db == 'false'
+        run: |
+          echo "::error title=Shadow Parity unavailable::No mechanically read-only production credential is provisioned."
+          exit 1
+
       # Run the shadow scorer in --dry-run mode when DB credentials exist.
       # --dry-run skips scoring writes and only queries counts — safe for CI.
       # Pipe stdout (the JSON ProofOutput) to the artifact file.
@@ -181,7 +179,6 @@ jobs:
         if: steps.db_check.outputs.has_db == 'true'
         run: |
           mkdir -p artifacts
-          pnpm exec tsx packages/db/src/production-identity-guard.ts --assert-production-read-only
           # Runner prints ProofOutput JSON to stdout; stderr has progress logs.
           # Capture stdout only; let stderr flow to the Actions log.
           if npx tsx scripts/shadow-scoring-runner.ts --dry-run 2>/dev/null > artifacts/shadow-report.json; then
@@ -192,17 +189,6 @@ jobs:
             # Re-run to capture stderr for diagnosis (stdout may be partial JSON)
             npx tsx scripts/shadow-scoring-runner.ts --dry-run > artifacts/shadow-report.json 2>&1 || true
           fi
-        env:
-          UNIT_TALK_DB_ACCESS_MODE: production-read-only
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          # UTV2-1627: the service-role key is NOT provided. This job is
-          # `pull_request`-triggered and the shadow runner is observation-only
-          # (it asserts picksCreated/distributionEnqueued remain 0). Supplying a
-          # service-role key gave it unrestricted RLS-bypassing write capability
-          # that nothing structural prevented it from using. The anon key makes
-          # the read-only constraint enforceable by Postgres.
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          NODE_ENV: production
 
       # Parse the ProofOutput JSON and classify divergences.
       # CRITICAL: any guardrail field > 0 (picksCreated, shadowModeFalseSet,

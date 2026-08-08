@@ -14,14 +14,14 @@ workflow that is not classified fails the required `verify` graph.
 | Credential                                   | Target                                           | Permitted purpose                                                                              | Pull-request write access                                   |
 | -------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `CI_SUPABASE_URL`                            | Dedicated non-production Supabase project/branch | Writable DB smoke and T1 proof fixtures                                                        | Yes, only with `UNIT_TALK_DB_ACCESS_MODE=writable-isolated` |
-| `CI_SUPABASE_ANON_KEY`                       | Same identity as `CI_SUPABASE_URL`               | Client initialization for isolated tests                                                       | Yes                                                         |
-| `CI_SUPABASE_SERVICE_ROLE_KEY`               | Same identity as `CI_SUPABASE_URL`               | Repository/RPC writes inside the isolated target                                               | Yes                                                         |
+| `CI_SUPABASE_PUBLISHABLE_KEY`                | Same identity as `CI_SUPABASE_URL`               | Client initialization for isolated tests                                                       | Yes                                                         |
+| `CI_SUPABASE_SECRET_KEY`                     | Same identity as `CI_SUPABASE_URL`               | Repository/RPC writes inside the isolated target                                               | Yes                                                         |
 | `CI_SUPABASE_PROJECT_REF`                    | Same identity as `CI_SUPABASE_URL`               | Non-secret identity fingerprint checked before mutation                                        | Yes                                                         |
 | `SUPABASE_URL`                               | Canonical production project                     | Production runtime and explicitly classified observations                                      | No writable PR job                                          |
 | `SUPABASE_ANON_KEY`                          | Canonical production project                     | Production client/runtime access                                                               | No writable PR job                                          |
-| `SUPABASE_SERVICE_ROLE_KEY`                  | Canonical production project                     | Production API/worker runtime; source-audited read-only PR observations only                   | No writable PR job                                          |
+| `SUPABASE_SERVICE_ROLE_KEY`                  | Canonical production project                     | Production API/worker runtime                                                                  | Never supplied to PR proof jobs                              |
 | `SUPABASE_DB_URL` / `SUPABASE_DB_POOLER_URL` | Canonical production Postgres                    | Approved production operations, schema observations, and deploy-time DB work                   | No ordinary PR job                                          |
-| `SUPABASE_ACCESS_TOKEN`                      | Supabase management plane                        | Create/inspect/delete isolated preview branches in the dedicated migration-validation workflow | Never passed to test or proof processes                     |
+| `SUPABASE_ACCESS_TOKEN`                      | Supabase management plane                        | Approved production operations outside ordinary PR proof workflows                             | Never passed to test or proof processes                     |
 
 `CI_SUPABASE_*` credentials must resolve to one non-production project ref.
 Supplying production values under any of those names still fails because the
@@ -33,12 +33,11 @@ spawned.
 
 | Workflow                                       | Mode                                             | Workflow → command → DB reachability                                                                                         |
 | ---------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `.github/workflows/ci.yml`                     | `writable-isolated`                              | `verify` → `pnpm verify:live-db-verdict` → `pnpm test:live-db` → repository/service-role clients → isolated canonical tables |
+| `.github/workflows/ci.yml`                     | `writable-isolated`                              | `staging-db-proof` → `pnpm ci:db-smoke` / T1 suites → signed receipt; credential-free `verify` validates the receipt          |
 | `.github/workflows/proof-gate.yml`             | `writable-isolated`                              | `t1-proof` → `pnpm ci:db-smoke` → `pnpm test:db` → repository/service-role clients → isolated canonical tables               |
 | `.github/workflows/t1-proof-gate.yml`          | `writable-isolated`, manual-only legacy workflow | `workflow_dispatch` → `pnpm ci:db-smoke` → `pnpm test:db` → isolated canonical tables                                        |
-| `.github/workflows/supabase-pr-db-branch.yml`  | `writable-isolated`                              | migration PR → isolated preview branch credentials → identity guard → `pnpm test:db`                                         |
-| `.github/workflows/proof-regression.yml`       | `production-read-only`                           | affected proof selection → identity guard → allowlisted `scripts/ops/*-proof.ts` queries                                     |
-| `.github/workflows/shadow-parity-required.yml` | `production-read-only`                           | identity guard → `scripts/shadow-scoring-runner.ts --dry-run` queries                                                        |
+| `.github/workflows/proof-regression.yml`       | `writable-isolated`                              | affected writable proof scripts → `pnpm ci:assert-staging` → staging-only execution                                         |
+| `.github/workflows/shadow-parity-required.yml` | `control-only`, fail-closed                      | no production credential; blocks until a mechanically read-only production role is provisioned                              |
 | `.github/workflows/proof-coverage-guard.yml`   | `control-only`                                   | static writer inventory and proof-path classification; receives no DB credential                                             |
 
 Production-read-only entrypoints are enumerated exactly in
@@ -62,7 +61,7 @@ The recurring writable graph is:
 3. `pnpm test:live-db` → both suites above.
 4. `pnpm verify` → static verification, then `pnpm test:live-db`.
 
-The UTV2-1497 concurrent-claim canary additionally invokes the identity guard
+The UTV2-1497 concurrent-claim canary additionally invokes the canonical privileged-client boundary
 inside its own `before` hook. Its picks and outbox rows may persist only in the
 isolated target; production cleanup-by-delete is not a safety mechanism.
 
