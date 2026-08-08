@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/autonomy/candidate-decision-v1.schema.json",
+  "title": "Autonomy candidate decision v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "decision_id",
+    "candidate_id",
+    "evaluated_at",
+    "mode",
+    "action",
+    "dispatchable",
+    "packet_eligible",
+    "blocking_findings",
+    "advisories",
+    "reason_codes",
+    "input_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "decision_id": { "type": "string", "pattern": "^decision_[a-f0-9]{64}$" },
+    "candidate_id": { "type": "string", "pattern": "^UTV2-[0-9]+$" },
+    "evaluated_at": { "type": "string", "format": "date-time" },
+    "mode": { "enum": ["halted", "shadow", "t3_live", "t2t3_live"] },
+    "action": { "enum": ["queue", "dispatch", "blocked", "escalation"] },
+    "dispatchable": { "type": "boolean" },
+    "packet_eligible": { "type": "boolean" },
+    "blocking_findings": { "$ref": "#/$defs/findings" },
+    "advisories": { "$ref": "#/$defs/findings" },
+    "reason_codes": { "type": "array", "items": { "type": "string" } },
+    "input_hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "$defs": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["category", "code", "severity", "source", "detail"],
+        "properties": {
+          "category": { "type": "string" },
+          "code": { "type": "string" },
+          "severity": { "enum": ["blocker", "escalation", "advisory"] },
+          "source": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    }
+  }
+}
