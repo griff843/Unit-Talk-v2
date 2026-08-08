@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1627",
+  "title": "Production-isolated CI and non-vacuous shadow parity",
+  "tier": "T1",
+  "generated_at": "2026-08-08T16:03:50.000Z",
+  "implementation_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+  "sha_binding": {
+    "verified_source_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+    "current_pr_head_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+    "merge_sha": "b6c395f0565ad66ee4c799a10049ed8c5e0594b4",
+    "sha_type": "merge_sha",
+    "verified_source_note": "Exact implementation tree measured by CI run 31265618087 before this proof-only commit."
+  },
+  "verifier": {
+    "identity": "github-actions/ci",
+    "role": "exact-head automated verifier",
+    "workflow_run": "https://github.com/griff843/Unit-Talk-v2/actions/runs/31265618087"
+  },
+  "verification": {
+    "writable_db_proof_staging_only": "PASS",
+    "pnpm_verify": "PASS",
+    "focused_tests": {
+      "tests": 102,
+      "pass": 102,
+      "fail": 0
+    },
+    "mutation_suite": {
+      "status": "NOT_RUN",
+      "killed": null,
+      "survived": null
+    }
+  },
+  "shadow_parity": {
+    "production_service_role_present": false,
+    "anon_fallback_present": false,
+    "dedicated_read_only_role_required": true,
+    "query_errors_fail": true,
+    "zero_candidates_fail": true,
+    "live_observation": "BLOCKED_PENDING_READ_ONLY_CREDENTIAL"
+  },
+  "verdict": "PASS_WITH_READINESS_DEPENDENCY"
+}

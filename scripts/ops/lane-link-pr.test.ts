@@ -4,9 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
+  type LaneManifest,
   ROOT,
   issueToManifestPath,
+  preflightTokenPathForBranch,
 } from './shared.js';
+import { recoverMissingPreflightToken } from './lane-link-pr.js';
 
 function runLaneLinkPr(args: string[]) {
   return spawnSync(
@@ -69,6 +72,98 @@ function cleanup(issueId: string): void {
     force: true,
   });
 }
+
+function recoveryManifest(issueId: string): LaneManifest {
+  const branch = `codex/${issueId.toLowerCase()}-recovery`;
+  return {
+    schema_version: 1,
+    issue_id: issueId,
+    lane_type: 'governance',
+    executor: 'codex-cli',
+    tier: 'T1',
+    worktree_path: ROOT,
+    branch,
+    base_branch: 'main',
+    commit_sha: null,
+    pr_url: null,
+    files_changed: [],
+    file_scope_lock: ['scripts/ops/lane-link-pr.ts'],
+    expected_proof_paths: [],
+    status: 'started',
+    started_at: '2026-08-08T00:00:00.000Z',
+    heartbeat_at: '2026-08-08T00:00:00.000Z',
+    closed_at: null,
+    blocked_by: [],
+    preflight_token: `.out/ops/preflight/${branch}.json`,
+    created_by: 'codex-cli',
+    truth_check_history: [],
+    reopen_history: [],
+  };
+}
+
+test('missing-token recovery re-proves ownership, PR binding, dependencies, and scope', () => {
+  const manifest = recoveryManifest('UTV2-99110');
+  const tokenPath = preflightTokenPathForBranch(manifest.branch);
+  fs.rmSync(tokenPath, { force: true });
+  let writtenToken: Record<string, unknown> | undefined;
+  try {
+    recoverMissingPreflightToken(manifest, manifest.branch, 'https://github.com/example/unit-talk/pull/130', {
+      cwd: ROOT,
+      currentBranch: () => manifest.branch,
+      currentHead: () => 'a'.repeat(40),
+      isClean: () => true,
+      dependenciesReady: () => true,
+      readPullRequest: () => ({
+        url: 'https://github.com/example/unit-talk/pull/130',
+        headRefName: manifest.branch,
+        headRefOid: 'a'.repeat(40),
+        baseRefName: 'main',
+        state: 'OPEN',
+      }),
+      activeManifests: () => [manifest],
+      now: () => new Date('2026-08-08T12:00:00.000Z'),
+      randomUUID: () => 'recovery-run-id',
+      writeToken: (_path, token) => { writtenToken = token as unknown as Record<string, unknown>; },
+    });
+    assert.strictEqual(writtenToken?.['head_sha'], 'a'.repeat(40));
+    assert.strictEqual(writtenToken?.['status'], 'pass');
+    assert.strictEqual(writtenToken?.['preflight_run_id'], 'recovery-run-id');
+  } finally {
+    fs.rmSync(tokenPath, { force: true });
+  }
+});
+
+test('missing-token recovery fails closed on a foreign active scope collision', () => {
+  const manifest = recoveryManifest('UTV2-99111');
+  const foreign = {
+    ...recoveryManifest('UTV2-99112'),
+    file_scope_lock: [...manifest.file_scope_lock],
+  };
+  assert.throws(
+    () => recoverMissingPreflightToken(
+      manifest,
+      manifest.branch,
+      'https://github.com/example/unit-talk/pull/131',
+      {
+        cwd: ROOT,
+        currentBranch: () => manifest.branch,
+        currentHead: () => 'b'.repeat(40),
+        isClean: () => true,
+        dependenciesReady: () => true,
+        readPullRequest: () => ({
+          url: 'https://github.com/example/unit-talk/pull/131',
+          headRefName: manifest.branch,
+          headRefOid: 'b'.repeat(40),
+          baseRefName: 'main',
+          state: 'OPEN',
+        }),
+        activeManifests: () => [manifest, foreign],
+        writeToken: () => assert.fail('token must not be written'),
+      },
+    ),
+    /scope overlaps active UTV2-99112/,
+  );
+});
 
 test('lane-link-pr transitions a codex-cli lane to in_review', () => {
   const issueId = 'UTV2-99101';

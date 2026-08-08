@@ -139,6 +139,11 @@ test('an empty workflow fails every mechanism rule — the validator cannot pass
 test('the readiness regression gate holds no production credential and runs the shared evaluator', () => {
   const raw = readFileSync(path.join(ROOT, '.github/workflows/readiness-regression-gate.yml'), 'utf8');
   assert.match(raw, /pnpm ci:readiness-gate/);
+  assert.match(raw, /--mode regression/);
+  assert.match(raw, /name: Readiness Regression Evaluation/);
+  assert.match(raw, /name: 'Readiness Regression Gate'/);
+  assert.match(raw, /conclusion,/);
+  assert.match(raw, /core\.setFailed\(result\.summary\)/);
   for (const secret of ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_DB_URL']) {
     assert.equal(raw.includes(secret), false, `the pull-request gate must not reference ${secret}`);
   }

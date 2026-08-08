@@ -388,7 +388,10 @@ jobs:
               owner, repo,
               check_run_id: check.id,
               status: 'completed',
-              conclusion: passed ? 'success' : 'failure',
+              // A pull_request run is preliminary by design. Its findings stay
+              // visible but cannot enter the aggregate PR rollup as a failure;
+              // only the required exact-head validator is authoritative.
+              conclusion: passed ? 'success' : isRequired ? 'failure' : 'neutral',
               completed_at: new Date().toISOString(),
               output: {
                 title: passed

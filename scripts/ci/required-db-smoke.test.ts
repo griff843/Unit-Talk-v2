@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  evaluateGuardReachability,
+  validateDatabaseWriterInventory,
+} from './db-writer-inventory.js';
+import {
   detectDbSmokeSkipped,
   evaluateDbSmokeResult,
   hasSupabaseSmokeCredentials,
@@ -118,4 +122,41 @@ test('evaluateDbSmokeResult passes required smoke when credentials exist and tes
       reason: 'DB smoke passed',
     },
   );
+});
+
+test('repository database-writer inventory is complete and internally consistent', () => {
+  const result = validateDatabaseWriterInventory();
+  assert.equal(result.ok, true, result.errors.join('\n'));
+  assert.ok(result.discoveredCredentialedTests.length > 0);
+});
+
+test('ci:assert-staging is recognized only when it precedes writable execution', () => {
+  const result = evaluateGuardReachability([
+    'run: |',
+    '  pnpm ci:assert-staging',
+    '  pnpm test:db',
+  ].join('\n'));
+  assert.equal(result.ok, true, result.reason);
+});
+
+test('a staging assertion after writable execution fails closed', () => {
+  const result = evaluateGuardReachability([
+    'run: |',
+    '  pnpm test:db',
+    '  pnpm ci:assert-staging',
+  ].join('\n'));
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /after a mutating command/);
+});
+
+test('a staging assertion hidden inside a conditional does not authorize an unconditional write', () => {
+  const result = evaluateGuardReachability([
+    'run: |',
+    '  if [ -n "$NEVER_SET" ]; then',
+    '    pnpm ci:assert-staging',
+    '  fi',
+    '  pnpm test:db',
+  ].join('\n'));
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /nested inside a shell conditional/);
 });
