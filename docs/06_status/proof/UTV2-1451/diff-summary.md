@@ -1,5 +1,14 @@
 # UTV2-1451 — Outcome Contract / Design (spec-first, per existing precedent for this class of change)
 
+MERGE_SHA: pending
+
+*Mechanical header only, added for CEP-E5 (every markdown proof artifact must
+carry a rebindable merge-SHA anchor). This file is not listed in the lane
+manifest's `expected_proof_paths`, so truth-check's P3/C4 do not validate its
+SHA. **The design content below this line is carried forward byte-for-byte from
+the reviewed head and is unmodified** — no design intent is changed by adding
+this anchor.*
+
 Generated: 2026-07-21
 Revision: corrected Loophole 1's PreToolUse notice mechanism per PM review on UTV2-1570 (2026-07-21)
 Issue: UTV2-1451 (Close Tier C / singleton / risk-class self-authorization loopholes, G-07)

@@ -180,6 +180,34 @@ ancestors of its own head is precisely the defect that bounced PR #1289.
 Predecessor history remains fully readable on PR #1289, which is left open and
 un-hidden per PM direction.
 
+## Standalone type-check and unit suites (this revision)
+
+Added for the close-eligibility repair. `CEP-E4/P12` requires the verification
+log to reference `pnpm type-check` and `pnpm test` in their own right. Both were
+**executed standalone against this branch**, not asserted from a `pnpm verify`
+run.
+
+```text
+$ pnpm type-check
+```
+
+Result: PASS, exit code 0 (`pnpm exec tsc -b tsconfig.json`, full
+project-references build, no diagnostics emitted).
+
+```text
+$ pnpm test
+
+# tests 4579
+# pass 4579
+# fail 0
+```
+
+Exit code 0, aggregated across all suites; zero `not ok` lines.
+
+Note this is a design-only lane: it changes no code, so these suites are
+unaffected by its content. They are recorded because the close gate requires
+them evidenced, not because this lane could plausibly move them.
+
 ## Tier
 
 T1 — governance-critical, self-authorization-loophole closure design. No runtime/domain/DB code
