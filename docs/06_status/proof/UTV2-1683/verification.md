@@ -1,5 +1,5 @@
 # PROOF: UTV2-1683
-MERGE_SHA: c3e3c0c450ea31e4b5bc0dc478e2407152ce9f96
+MERGE_SHA: ccfe9d89a26f52e2aaa79d8214a56b9c3a3e6920
 
 ASSERTIONS:
 - [x] `locateCiDbProofRun` prefers the merge SHA's own push-triggered CI run, so harvested runtime proof binds to the implementation merge SHA rather than a PR head or a repair commit.
