@@ -28,12 +28,30 @@
   ],
   "status": "merged",
   "started_at": "2026-08-01T17:35:24.665Z",
-  "heartbeat_at": "2026-08-01T21:58:05.983Z",
+  "heartbeat_at": "2026-08-02T07:12:44.784Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1659-executable-wiring-canonical-files.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-02T07:12:24.699Z",
+      "verdict": "fail",
+      "merge_sha": "64ac40ab0593f67fe848fa61d8a006f09d6e6a8e",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-02T07:12:44.784Z",
+      "verdict": "pass",
+      "merge_sha": "64ac40ab0593f67fe848fa61d8a006f09d6e6a8e",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

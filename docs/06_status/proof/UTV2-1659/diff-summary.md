@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1659-executable-wiring-canonical-files
 PR URL: N/A
 Head SHA: b44b97b786e1eb078632d6dff86186d3ab4e4603
-Merge SHA: N/A
+Merge SHA: 64ac40ab0593f67fe848fa61d8a006f09d6e6a8e
 Diff base: 147462572b46d80b18c38d3960053ccc272ba087
 Diff target: b44b97b786e1eb078632d6dff86186d3ab4e4603
 
@@ -43,4 +43,4 @@ M	scripts/ops/executable-wiring.ts
 
 ## SHA Binding
 Head SHA: b44b97b786e1eb078632d6dff86186d3ab4e4603
-Merge SHA: N/A
+Merge SHA: 64ac40ab0593f67fe848fa61d8a006f09d6e6a8e

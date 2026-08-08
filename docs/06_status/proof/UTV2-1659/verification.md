@@ -1,6 +1,6 @@
 # PROOF: UTV2-1659 — canonical Git-tracked executable-wiring scan
 
-MERGE_SHA: 6019d32254264be6c2fa33cc59bc724c51d96d20
+MERGE_SHA: 64ac40ab0593f67fe848fa61d8a006f09d6e6a8e
 
 ASSERTIONS:
 - [x] Nested `.claude/worktrees/**` files produce zero findings.
