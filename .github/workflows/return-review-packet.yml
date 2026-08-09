@@ -68,8 +68,11 @@ jobs:
         run: |
           git show "origin/main:scripts/ops/bootstrap-authorization.ts" > .out/trusted-bootstrap-authorization.ts
           ISSUE="$(printf '%s' "$ACTION_BRANCH" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')"
+          INTENT=()
+          case "$ACTION_BRANCH" in bootstrap/*) INTENT+=(--bootstrap-intent) ;; esac
           pnpm exec tsx .out/trusted-bootstrap-authorization.ts \
-            --resolve-action "$ISSUE" --tier "${ACTION_TIER#tier:}" \
+            --resolve-action "$ISSUE" --branch "$ACTION_BRANCH" --tier "${ACTION_TIER#tier:}" \
+            "${INTENT[@]}" \
             --changed-files-file .out/return-review-files.txt \
             --head HEAD --output-json .out/bootstrap-action.json
 

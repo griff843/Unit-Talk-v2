@@ -175,9 +175,13 @@ jobs:
           ACTION_TIER: ${{ contains(github.event.pull_request.labels.*.name, 'tier:T1') && 'T1' || contains(github.event.pull_request.labels.*.name, 'tier:T2') && 'T2' || contains(github.event.pull_request.labels.*.name, 'tier:T3') && 'T3' || '' }}
         run: |
           ISSUE="$(printf '%s' "$ACTION_ISSUE" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')"
+          INTENT=()
+          case "$ACTION_ISSUE" in bootstrap/*) INTENT+=(--bootstrap-intent) ;; esac
           pnpm exec tsx .out/trusted-bootstrap-authorization.ts \
             --resolve-action "$ISSUE" \
+            --branch "$ACTION_ISSUE" \
             --tier "$ACTION_TIER" \
+            "${INTENT[@]}" \
             --changed-files-file .out/file-scope-changed-files.txt \
             --head HEAD \
             --output-json .out/bootstrap-action.json

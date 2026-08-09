@@ -186,6 +186,7 @@ export interface BootstrapActionDecision {
   kind: 'bootstrap_governance_action';
   issue_id?: string;
   allowed_scope?: string[];
+  authority_source?: { ref?: string; sha?: string; path?: string };
   code?: string;
   message?: string;
 }
@@ -346,7 +347,15 @@ function loadBootstrapAction(root: string, filePath: string | null): BootstrapAc
   try {
     const parsed = JSON.parse(fs.readFileSync(path.resolve(root, filePath), 'utf8')) as BootstrapActionDecision;
     if (parsed?.kind !== 'bootstrap_governance_action' || typeof parsed.recognized !== 'boolean' ||
-        typeof parsed.valid !== 'boolean') return null;
+        typeof parsed.valid !== 'boolean') throw new Error('malformed decision');
+    if (parsed.recognized && parsed.valid) {
+      const originMainSha = execSync('git rev-parse origin/main', { cwd: root, encoding: 'utf8' }).trim();
+      if (parsed.authority_source?.ref !== 'origin/main' || parsed.authority_source.sha !== originMainSha ||
+          parsed.authority_source.path !== 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json' ||
+          !Array.isArray(parsed.allowed_scope) || parsed.allowed_scope.length === 0) {
+        throw new Error('untrusted bootstrap decision provenance');
+      }
+    }
     return parsed;
   } catch {
     return {

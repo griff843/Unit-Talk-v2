@@ -1101,6 +1101,15 @@ async function main(): Promise<void> {
   if (bootstrapActionFile) {
     try {
       bootstrapAction = JSON.parse(fs.readFileSync(path.resolve(ROOT, bootstrapActionFile), 'utf8')) as BootstrapActionDecision;
+      if (bootstrapAction.recognized && bootstrapAction.valid) {
+        const originMainSha = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: ROOT, encoding: 'utf8' }).trim();
+        if (bootstrapAction.authority_source?.ref !== 'origin/main' ||
+            bootstrapAction.authority_source.sha !== originMainSha ||
+            bootstrapAction.authority_source.path !== 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json' ||
+            !Array.isArray(bootstrapAction.allowed_scope) || bootstrapAction.allowed_scope.length === 0) {
+          throw new Error('untrusted bootstrap decision provenance');
+        }
+      }
     } catch {
       bootstrapAction = {
         recognized: true, valid: false, kind: 'bootstrap_governance_action',

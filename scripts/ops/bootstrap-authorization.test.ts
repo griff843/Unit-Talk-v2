@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
   buildBootstrapAdmissionReceipt,
@@ -9,7 +12,8 @@ import {
   resolveBootstrapGovernanceAction,
   type BootstrapAuthorization,
 } from './bootstrap-authorization.js';
-import { evaluateBranchDiscipline } from './branch-discipline-guard.js';
+import { evaluateBranchDiscipline, main as branchDisciplineMain } from './branch-discipline-guard.js';
+import { evaluateFileScopeGuard } from '../ci/file-scope-guard.js';
 
 const NOW = new Date('2026-08-05T00:00:00Z');
 
@@ -315,6 +319,7 @@ test('BGA-1: origin/main-authorized bootstrap action resolves with provenance an
   const result = resolveBootstrapGovernanceAction({
     issueId: 'UTV2-1619', laneType: 'governance', tier: 'T2',
     changedFiles: ['scripts/ops/bootstrap-authorization.ts'],
+    bootstrapIntent: true,
     baseAuthorizationsRaw: file(grant()), baseSourceSha: 'a'.repeat(40), now: NOW,
   });
   assert.equal(result.valid, true);
@@ -326,6 +331,7 @@ test('BGA-2: proposed PR-head grant cannot self-authorize without base authority
   const result = resolveBootstrapGovernanceAction({
     issueId: 'UTV2-1686', laneType: 'governance', tier: 'T1',
     changedFiles: ['docs/governance/BOOTSTRAP_AUTHORIZATIONS.json'],
+    bootstrapIntent: true,
     baseAuthorizationsRaw: null, baseSourceSha: 'a'.repeat(40),
     proposedAuthorizationsRaw: file(grant({ issue_id: 'UTV2-1686', tier: 'T1' })), now: NOW,
   });
@@ -337,6 +343,7 @@ test('BGA-3: malformed base grant fails closed', () => {
   const result = resolveBootstrapGovernanceAction({
     issueId: 'UTV2-1619', laneType: 'governance', tier: 'T2',
     changedFiles: ['scripts/ops/bootstrap-authorization.ts'],
+    bootstrapIntent: true,
     baseAuthorizationsRaw: '{bad', baseSourceSha: 'a'.repeat(40), now: NOW,
   });
   assert.equal(result.valid, false);
@@ -347,6 +354,7 @@ test('BGA-4: multiple active base grants fail closed', () => {
   const result = resolveBootstrapGovernanceAction({
     issueId: 'UTV2-1619', laneType: 'governance', tier: 'T2',
     changedFiles: ['scripts/ops/bootstrap-authorization.ts'],
+    bootstrapIntent: true,
     baseAuthorizationsRaw: file(grant(), grant({ issue_id: 'UTV2-1686' })),
     baseSourceSha: 'a'.repeat(40), now: NOW,
   });
@@ -358,6 +366,7 @@ test('BGA-5: malformed and accumulating proposed grants are payload failures, ne
   const malformed = resolveBootstrapGovernanceAction({
     issueId: 'UTV2-1619', laneType: 'governance', tier: 'T2',
     changedFiles: ['docs/governance/BOOTSTRAP_AUTHORIZATIONS.json'],
+    bootstrapIntent: true,
     baseAuthorizationsRaw: file(grant()), baseSourceSha: 'a'.repeat(40),
     proposedAuthorizationsRaw: '{bad', now: NOW,
   });
@@ -367,11 +376,113 @@ test('BGA-5: malformed and accumulating proposed grants are payload failures, ne
   const multiple = resolveBootstrapGovernanceAction({
     issueId: 'UTV2-1619', laneType: 'governance', tier: 'T2',
     changedFiles: ['docs/governance/BOOTSTRAP_AUTHORIZATIONS.json'],
+    bootstrapIntent: true,
     baseAuthorizationsRaw: file(grant()), baseSourceSha: 'a'.repeat(40),
     proposedAuthorizationsRaw: file(grant(), grant({ issue_id: 'UTV2-1686' })), now: NOW,
   });
   assert.equal(multiple.valid, false);
   assert.equal(multiple.valid === false && multiple.code, 'multiple_proposed_active_authorizations');
+});
+
+test('BGA-6: normal lane for the granted issue passes as a normal lane', () => {
+  const result = resolveBootstrapGovernanceAction({
+    issueId: 'UTV2-1619', laneType: 'governance', tier: 'T2',
+    changedFiles: ['scripts/ops/bootstrap-authorization.ts'],
+    bootstrapIntent: true, normalLaneIdentified: true,
+    baseAuthorizationsRaw: file(grant()), baseSourceSha: 'a'.repeat(40), now: NOW,
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.recognized, false);
+  assert.equal(result.valid === false && result.code, 'normal_lane_identified');
+  const guard = evaluateFileScopeGuard({
+    prBranch: 'bootstrap/utv2-1619-support',
+    changedFiles: ['scripts/ops/bootstrap-authorization.ts'],
+    manifests: [{
+      issue_id: 'UTV2-1619', branch: 'bootstrap/utv2-1619-support', status: 'started',
+      file_scope_lock: ['scripts/ops/bootstrap-authorization.ts'],
+    }],
+    bootstrapAction: result,
+  });
+  assert.equal(guard.verdict, 'PASS');
+  assert.equal(guard.own_manifest_issue, 'UTV2-1619');
+});
+
+test('BGA-7: malformed and multiple grants do not break unrelated normal PRs', () => {
+  for (const baseAuthorizationsRaw of ['{bad', file(grant(), grant({ issue_id: 'UTV2-1686' }))]) {
+    const result = resolveBootstrapGovernanceAction({
+      issueId: 'UTV2-1701', laneType: 'governance', tier: 'T2',
+      changedFiles: ['apps/api/src/server.ts'], bootstrapIntent: false,
+      baseAuthorizationsRaw, baseSourceSha: 'a'.repeat(40), now: NOW,
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.recognized, false);
+    assert.equal(result.valid === false && result.code, 'bootstrap_intent_absent');
+    const guard = evaluateFileScopeGuard({
+      prBranch: 'codex/utv2-1701-normal', changedFiles: ['apps/api/src/server.ts'],
+      manifests: [{
+        issue_id: 'UTV2-1701', branch: 'codex/utv2-1701-normal', status: 'started',
+        file_scope_lock: ['apps/api/src/server.ts'],
+      }],
+      bootstrapAction: result,
+    });
+    assert.equal(guard.verdict, 'PASS');
+  }
+});
+
+test('BGA-8: every bootstrap consumer executes the resolver extracted from origin/main', () => {
+  for (const workflow of [
+    '.github/workflows/file-scope-lock-check.yml',
+    '.github/workflows/return-review-packet.yml',
+    '.github/workflows/branch-discipline-guard.yml',
+  ]) {
+    const source = fs.readFileSync(workflow, 'utf8');
+    assert.match(
+      source,
+      /git show "origin\/main:scripts\/ops\/bootstrap-authorization\.ts" > \.out\/trusted-bootstrap-authorization\.ts/,
+      `${workflow} must materialize the resolver from origin/main`,
+    );
+    assert.match(
+      source,
+      /pnpm exec tsx \.out\/trusted-bootstrap-authorization\.ts/,
+      `${workflow} must execute the trusted resolver copy`,
+    );
+    assert.doesNotMatch(
+      source,
+      /pnpm exec tsx scripts\/ops\/bootstrap-authorization\.ts/,
+      `${workflow} must not execute the PR-head resolver`,
+    );
+  }
+});
+
+test('BGA-9: fabricated bootstrap decision file fails closed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1619-fabricated-'));
+  const decision = path.join(dir, 'decision.json');
+  fs.writeFileSync(decision, JSON.stringify({
+    recognized: true, valid: true, kind: 'bootstrap_governance_action', issue_id: 'UTV2-1619',
+    allowed_scope: ['scripts/ops/bootstrap-authorization.ts'],
+  }));
+  const exitCode = branchDisciplineMain([
+    '--title', 'UTV2-1619 bootstrap', '--branch', 'bootstrap/utv2-1619-test',
+    '--commits', 'UTV2-1619', '--bootstrap-action-file', decision, '--json',
+  ]);
+  assert.equal(exitCode, 1);
+});
+
+test('BGA-10: bootstrap decision with authority SHA mismatch fails closed', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1619-sha-'));
+  const decision = path.join(dir, 'decision.json');
+  fs.writeFileSync(decision, JSON.stringify({
+    recognized: true, valid: true, kind: 'bootstrap_governance_action', issue_id: 'UTV2-1619',
+    allowed_scope: ['scripts/ops/bootstrap-authorization.ts'],
+    authority_source: {
+      ref: 'origin/main', sha: '0'.repeat(40), path: 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
+    },
+  }));
+  const exitCode = branchDisciplineMain([
+    '--title', 'UTV2-1619 bootstrap', '--branch', 'bootstrap/utv2-1619-test',
+    '--commits', 'UTV2-1619', '--bootstrap-action-file', decision, '--json',
+  ]);
+  assert.equal(exitCode, 1);
 });
 
 test('BGA-6: branch discipline separates action identity from recovery references', () => {

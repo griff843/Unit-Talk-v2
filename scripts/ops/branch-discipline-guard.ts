@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import { emitJson, getFlag, parseArgs } from './shared.js';
 
@@ -26,6 +27,8 @@ export interface BootstrapActionDecision {
   issue_id?: string;
   code?: string;
   message?: string;
+  allowed_scope?: string[];
+  authority_source?: { ref?: string; sha?: string; path?: string };
 }
 
 const ISSUE_PATTERN = /\b(?:UTV2|UNI)-\d+\b/gi;
@@ -232,6 +235,15 @@ export function main(argv = process.argv.slice(2)): number {
   if (bootstrapActionFile) {
     try {
       bootstrapAction = JSON.parse(fs.readFileSync(bootstrapActionFile, 'utf8')) as BootstrapActionDecision;
+      if (bootstrapAction.recognized && bootstrapAction.valid) {
+        const originMainSha = execFileSync('git', ['rev-parse', 'origin/main'], { encoding: 'utf8' }).trim();
+        if (bootstrapAction.authority_source?.ref !== 'origin/main' ||
+            bootstrapAction.authority_source.sha !== originMainSha ||
+            bootstrapAction.authority_source.path !== 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json' ||
+            !Array.isArray(bootstrapAction.allowed_scope) || bootstrapAction.allowed_scope.length === 0) {
+          throw new Error('untrusted bootstrap decision provenance');
+        }
+      }
     } catch {
       bootstrapAction = {
         recognized: true,

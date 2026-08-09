@@ -75,6 +75,8 @@ export const BOOTSTRAP_GOVERNANCE_ACTION_ALLOWED_FILES: ReadonlySet<string> = ne
 
 export type BootstrapGovernanceActionRefusalCode =
   | BootstrapAuthorizationRefusalCode
+  | 'bootstrap_intent_absent'
+  | 'normal_lane_identified'
   | 'missing_source_sha'
   | 'issue_identity_mismatch'
   | 'tier_mismatch'
@@ -302,12 +304,32 @@ export function resolveBootstrapGovernanceAction(input: {
   laneType: string;
   tier: string;
   changedFiles: string[];
+  bootstrapIntent?: boolean;
+  normalLaneIdentified?: boolean;
   baseAuthorizationsRaw: string | null;
   baseSourceSha: string | null;
   proposedAuthorizationsRaw?: string | null;
   now?: Date;
 }): BootstrapGovernanceActionResult {
   const now = input.now ?? new Date();
+  if (input.normalLaneIdentified) {
+    return {
+      recognized: false,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'normal_lane_identified',
+      message: 'A manifest-backed execution lane already identifies this action.',
+    };
+  }
+  if (!input.bootstrapIntent) {
+    return {
+      recognized: false,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'bootstrap_intent_absent',
+      message: 'The action did not explicitly claim bootstrap governance identity.',
+    };
+  }
   const authority = evaluateBootstrapAuthorization({
     issueId: input.issueId,
     laneType: input.laneType,
@@ -541,9 +563,29 @@ export function resolveBootstrapGovernanceActionFromRepository(input: {
   issueId: string;
   tier: string;
   changedFiles: string[];
+  branch?: string;
+  bootstrapIntent?: boolean;
+  normalLaneIdentified?: boolean;
   headRef?: string;
   now?: Date;
 }): BootstrapGovernanceActionResult {
+  let normalLaneIdentified = input.normalLaneIdentified ?? false;
+  if (!normalLaneIdentified) {
+    try {
+      const rawManifest = execFileSync(
+        'git',
+        ['show', `${input.headRef ?? 'HEAD'}:docs/06_status/lanes/${input.issueId.toUpperCase()}.json`],
+        { cwd: input.cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+      const manifest = JSON.parse(rawManifest) as { issue_id?: unknown; branch?: unknown };
+      normalLaneIdentified =
+        manifest.issue_id === input.issueId.toUpperCase() &&
+        typeof manifest.branch === 'string' &&
+        (input.branch === undefined || manifest.branch === input.branch);
+    } catch {
+      normalLaneIdentified = false;
+    }
+  }
   let proposedAuthorizationsRaw: string | null | undefined;
   if (input.changedFiles.includes(BOOTSTRAP_AUTHORIZATIONS_PATH)) {
     try {
@@ -561,6 +603,8 @@ export function resolveBootstrapGovernanceActionFromRepository(input: {
     laneType: 'governance',
     tier: input.tier,
     changedFiles: input.changedFiles,
+    bootstrapIntent: input.bootstrapIntent,
+    normalLaneIdentified,
     baseAuthorizationsRaw: readAuthorizationsFromMain(input.cwd),
     baseSourceSha: resolveAuthorizationSourceSha(input.cwd),
     proposedAuthorizationsRaw,
@@ -575,13 +619,16 @@ function main(argv = process.argv.slice(2)): number {
   const changedFilesFile = cliFlag(argv, '--changed-files-file');
   const output = cliFlag(argv, '--output-json');
   const headRef = cliFlag(argv, '--head') ?? 'HEAD';
+  const branch = cliFlag(argv, '--branch') ?? undefined;
+  const bootstrapIntent = argv.includes('--bootstrap-intent');
+  const normalLaneIdentified = argv.includes('--normal-lane-identified');
   if (!changedFilesFile || !output) {
     process.stderr.write('Bootstrap action resolution requires --changed-files-file and --output-json.\n');
     return 2;
   }
   const changedFiles = fs.readFileSync(changedFilesFile, 'utf8').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const result = resolveBootstrapGovernanceActionFromRepository({
-    cwd: process.cwd(), issueId, tier, changedFiles, headRef,
+    cwd: process.cwd(), issueId, tier, changedFiles, branch, headRef, bootstrapIntent, normalLaneIdentified,
   });
   fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
