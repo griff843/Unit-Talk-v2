@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url';
+import fs from 'node:fs';
 import { emitJson, getFlag, parseArgs } from './shared.js';
 
 export type BranchDisciplineResult = {
@@ -9,12 +10,23 @@ export type BranchDisciplineResult = {
     | 'no_issue_reference'
     | 'missing_branch_issue_reference'
     | 'branch_issue_mismatch'
+    | 'bootstrap_action'
+    | 'invalid_bootstrap_action'
     | 'exempt_branch';
   issue_ids: string[];
   branch_issue_ids: string[];
   errors: string[];
   warning: string | null;
 };
+
+export interface BootstrapActionDecision {
+  recognized: boolean;
+  valid: boolean;
+  kind: 'bootstrap_governance_action';
+  issue_id?: string;
+  code?: string;
+  message?: string;
+}
 
 const ISSUE_PATTERN = /\b(?:UTV2|UNI)-\d+\b/gi;
 const EXEMPT_BRANCH_PREFIXES = ['dependabot/', 'renovate/', 'github-actions/'] as const;
@@ -101,6 +113,7 @@ export function evaluateBranchDiscipline(input: {
   body?: string;
   branch?: string;
   commits?: string;
+  bootstrapAction?: BootstrapActionDecision | null;
 }): BranchDisciplineResult {
   const branch = input.branch ?? '';
   if (EXEMPT_BRANCH_PREFIXES.some((prefix) => branch.startsWith(prefix))) {
@@ -109,6 +122,41 @@ export function evaluateBranchDiscipline(input: {
       code: 'exempt_branch',
       issue_ids: [],
       branch_issue_ids: [],
+      errors: [],
+      warning: null,
+    };
+  }
+
+  if (input.bootstrapAction?.recognized) {
+    if (!input.bootstrapAction.valid || !input.bootstrapAction.issue_id) {
+      return {
+        ok: false,
+        code: 'invalid_bootstrap_action',
+        issue_ids: extractIssueIds([input.title ?? '', input.body ?? '', branch, input.commits ?? ''].join('\n')),
+        branch_issue_ids: extractIssueIds(branch),
+        errors: [input.bootstrapAction.message ?? 'Bootstrap governance action is invalid.'],
+        warning: null,
+      };
+    }
+    const actionIssue = input.bootstrapAction.issue_id.toUpperCase();
+    const branchIssueIds = extractIssueIds(branch);
+    const bindingIds = extractIssueIds([input.title ?? '', branch, input.commits ?? ''].join('\n'));
+    if (branchIssueIds.length !== 1 || branchIssueIds[0] !== actionIssue ||
+        bindingIds.length !== 1 || bindingIds[0] !== actionIssue) {
+      return {
+        ok: false,
+        code: 'invalid_bootstrap_action',
+        issue_ids: extractIssueIds([input.title ?? '', input.body ?? '', branch, input.commits ?? ''].join('\n')),
+        branch_issue_ids: branchIssueIds,
+        errors: [`Bootstrap action branch, title, and commits must bind only ${actionIssue}.`],
+        warning: null,
+      };
+    }
+    return {
+      ok: true,
+      code: 'bootstrap_action',
+      issue_ids: extractIssueIds([input.title ?? '', input.body ?? '', branch, input.commits ?? ''].join('\n')),
+      branch_issue_ids: branchIssueIds,
       errors: [],
       warning: null,
     };
@@ -179,11 +227,26 @@ export function evaluateBranchDiscipline(input: {
 
 export function main(argv = process.argv.slice(2)): number {
   const { flags, bools } = parseArgs(argv);
+  const bootstrapActionFile = getFlag(flags, 'bootstrap-action-file');
+  let bootstrapAction: BootstrapActionDecision | null = null;
+  if (bootstrapActionFile) {
+    try {
+      bootstrapAction = JSON.parse(fs.readFileSync(bootstrapActionFile, 'utf8')) as BootstrapActionDecision;
+    } catch {
+      bootstrapAction = {
+        recognized: true,
+        valid: false,
+        kind: 'bootstrap_governance_action',
+        message: 'Bootstrap action decision file is missing or malformed.',
+      };
+    }
+  }
   const result = evaluateBranchDiscipline({
     title: getFlag(flags, 'title') ?? '',
     body: getFlag(flags, 'body') ?? '',
     branch: getFlag(flags, 'branch') ?? '',
     commits: getFlag(flags, 'commits') ?? '',
+    bootstrapAction,
   });
   if (bools.has('json')) {
     emitJson(result);

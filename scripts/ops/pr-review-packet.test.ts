@@ -417,3 +417,23 @@ test('generatePRReviewPacket preserves packet shape for prompt consumers', async
   ]);
   assert.strictEqual(packet.merge_order_notes, 'No open lanes share overlapping files.');
 });
+
+test('generatePRReviewPacket emits bootstrap action packet without manifest or proof artifacts', async () => {
+  const input = createInput();
+  delete input.prebuilt?.manifest;
+  input.issue_id = 'UTV2-1619';
+  input.bootstrap_action = {
+    recognized: true, valid: true, kind: 'bootstrap_governance_action',
+    issue_id: 'UTV2-1619', tier: 'T2',
+    allowed_scope: ['scripts/ops/pr-review-packet.ts', 'scripts/ops/pr-review-packet.test.ts', 'package.json'],
+    authority_source: { ref: 'origin/main', sha: 'a'.repeat(40), path: 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json' },
+  };
+  const packet = await generatePRReviewPacket(input);
+  assert.equal(packet.verdict, 'PASS');
+  assert.equal(packet.action_kind, 'bootstrap_governance_action');
+  assert.equal(packet.expected_executor, null);
+  assert.deepEqual(packet.proof_artifact_checklist, []);
+  assert.deepEqual(packet.proof_requirement, { required: false, present: true, missing: [] });
+  assert.match(packet.sync_metadata.reason, /not applicable/);
+  assert.equal(packet.bootstrap_authority_source?.sha, 'a'.repeat(40));
+});

@@ -33,6 +33,8 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 export const BOOTSTRAP_AUTHORIZATIONS_PATH = 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json';
 
@@ -49,6 +51,56 @@ const ALLOWED_LANE_TYPE = 'governance';
 
 /** Tiers a bootstrap identity may declare. */
 const VALID_TIERS = new Set(['T1', 'T2', 'T3']);
+
+export const BOOTSTRAP_GOVERNANCE_ACTION_ALLOWED_FILES: ReadonlySet<string> = new Set([
+  BOOTSTRAP_AUTHORIZATIONS_PATH,
+  '.github/workflows/branch-discipline-guard.yml',
+  '.github/workflows/file-scope-lock-check.yml',
+  '.github/workflows/return-review-packet.yml',
+  'scripts/ci/file-scope-guard.ts',
+  'scripts/ci/file-scope-guard.test.ts',
+  'scripts/ops/bootstrap-authorization.ts',
+  'scripts/ops/bootstrap-authorization.test.ts',
+  'scripts/ops/branch-discipline-guard.ts',
+  'scripts/ops/pr-review-packet.ts',
+  'scripts/ops/pr-review-packet.test.ts',
+  'package.json',
+  '.ops/sync/UTV2-1619.yml',
+  'docs/06_status/lanes/UTV2-1619.json',
+  'docs/06_status/proof/UTV2-1619/bootstrap-admission-receipt.json',
+  'docs/06_status/proof/UTV2-1619/diff-summary.md',
+  'docs/06_status/proof/UTV2-1619/verification.md',
+  'docs/06_status/proof/UTV2-1619/model-routing.json',
+]);
+
+export type BootstrapGovernanceActionRefusalCode =
+  | BootstrapAuthorizationRefusalCode
+  | 'missing_source_sha'
+  | 'issue_identity_mismatch'
+  | 'tier_mismatch'
+  | 'scope_violation'
+  | 'malformed_proposed_authorization'
+  | 'multiple_proposed_active_authorizations';
+
+export type BootstrapGovernanceActionResult =
+  | {
+      recognized: true;
+      valid: true;
+      kind: 'bootstrap_governance_action';
+      issue_id: string;
+      lane_type: 'governance';
+      tier: string;
+      allowed_scope: string[];
+      authority: BootstrapAuthorization;
+      authority_source: { ref: 'origin/main'; sha: string; path: string };
+    }
+  | {
+      recognized: boolean;
+      valid: false;
+      kind: 'bootstrap_governance_action';
+      code: BootstrapGovernanceActionRefusalCode;
+      message: string;
+    };
 
 export interface BootstrapAuthorization {
   issue_id: string;
@@ -91,19 +143,15 @@ export type BootstrapAuthorizationResult =
  * fail-closed: no readable authorization means no authorization.
  */
 export function readAuthorizationsFromMain(cwd: string): string | null {
-  for (const ref of ['origin/main', 'main']) {
-    try {
-      return execFileSync('git', ['show', `${ref}:${BOOTSTRAP_AUTHORIZATIONS_PATH}`], {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      });
-    } catch {
-      // Try the next ref. A repository with neither ref, or without the file on
-      // either, has no authorizations -- which is the safe default.
-    }
+  try {
+    return execFileSync('git', ['show', `origin/main:${BOOTSTRAP_AUTHORIZATIONS_PATH}`], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    return null;
   }
-  return null;
 }
 
 /**
@@ -115,18 +163,15 @@ export function readAuthorizationsFromMain(cwd: string): string | null {
  * removed, and the audit trail cannot be closed.
  */
 export function resolveAuthorizationSourceSha(cwd: string): string | null {
-  for (const ref of ['origin/main', 'main']) {
-    try {
-      return execFileSync('git', ['rev-parse', ref], {
-        cwd,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }).trim();
-    } catch {
-      // fall through
-    }
+  try {
+    return execFileSync('git', ['rev-parse', 'origin/main'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export interface BootstrapAdmissionReceipt {
@@ -200,7 +245,9 @@ export function parseAuthorizations(raw: string): BootstrapAuthorization[] | nul
     return null;
   }
   if (typeof parsed !== 'object' || parsed === null) return null;
-  const list = (parsed as { authorizations?: unknown }).authorizations;
+  const document = parsed as { schema_version?: unknown; authorizations?: unknown };
+  if (document.schema_version !== 1) return null;
+  const list = document.authorizations;
   if (!Array.isArray(list)) return null;
 
   const required: (keyof BootstrapAuthorization)[] = [
@@ -221,6 +268,11 @@ export function parseAuthorizations(raw: string): BootstrapAuthorization[] | nul
       const value = record[field];
       if (typeof value !== 'string' || value.trim() === '') return null;
     }
+    if (!/^UTV2-\d+$/i.test(String(record['issue_id']))) return null;
+    if (Number.isNaN(Date.parse(String(record['authorized_at'])))) return null;
+    // Preserve the established fail-closed expiry classification: an
+    // unparseable expiry is a structurally present grant that is always
+    // expired, never a usable authorization.
     // An unrecognised tier fails the whole file rather than defaulting. A
     // bootstrap identity supplies the tier Merge Gate would otherwise read from
     // a lane manifest, so a wrong or invented tier would silently move a PR
@@ -235,6 +287,122 @@ function isExpired(authorization: BootstrapAuthorization, now: Date): boolean {
   const expiry = new Date(authorization.expires_at);
   if (Number.isNaN(expiry.getTime())) return true; // unparseable expiry fails closed
   return expiry.getTime() <= now.getTime();
+}
+
+function countActive(authorizations: BootstrapAuthorization[], now: Date): number {
+  return authorizations.filter((authorization) => !isExpired(authorization, now)).length;
+}
+
+/**
+ * Resolve a bootstrap PR from base authority only. The proposed/head document
+ * is validated as payload but is never consulted as authority.
+ */
+export function resolveBootstrapGovernanceAction(input: {
+  issueId: string;
+  laneType: string;
+  tier: string;
+  changedFiles: string[];
+  baseAuthorizationsRaw: string | null;
+  baseSourceSha: string | null;
+  proposedAuthorizationsRaw?: string | null;
+  now?: Date;
+}): BootstrapGovernanceActionResult {
+  const now = input.now ?? new Date();
+  const authority = evaluateBootstrapAuthorization({
+    issueId: input.issueId,
+    laneType: input.laneType,
+    authorizationsRaw: input.baseAuthorizationsRaw,
+    now,
+  });
+  if (!authority.authorized) {
+    return {
+      recognized: authority.code !== 'no_authorization_file' && authority.code !== 'no_authorization_for_issue',
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: authority.code,
+      message: authority.message,
+    };
+  }
+  if (!input.baseSourceSha || !/^[0-9a-f]{40}$/i.test(input.baseSourceSha)) {
+    return {
+      recognized: true,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'missing_source_sha',
+      message: 'Bootstrap authority source SHA from origin/main is missing or invalid.',
+    };
+  }
+  if (authority.authorization.issue_id.toUpperCase() !== input.issueId.toUpperCase()) {
+    return {
+      recognized: true,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'issue_identity_mismatch',
+      message: `Bootstrap action ${input.issueId} does not match authority ${authority.authorization.issue_id}.`,
+    };
+  }
+  if (authority.authorization.tier.toUpperCase() !== input.tier.toUpperCase()) {
+    return {
+      recognized: true,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'tier_mismatch',
+      message: `Bootstrap action tier ${input.tier} does not match authority tier ${authority.authorization.tier}.`,
+    };
+  }
+  const outsideScope = input.changedFiles.filter(
+    (filePath) => !BOOTSTRAP_GOVERNANCE_ACTION_ALLOWED_FILES.has(filePath),
+  );
+  if (input.changedFiles.length === 0 || outsideScope.length > 0) {
+    return {
+      recognized: true,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'scope_violation',
+      message: outsideScope.length > 0
+        ? `Bootstrap action changes files outside its fixed scope: ${outsideScope.join(', ')}.`
+        : 'Bootstrap action has an empty or unknown diff.',
+    };
+  }
+  if (input.changedFiles.includes(BOOTSTRAP_AUTHORIZATIONS_PATH)) {
+    const proposed = input.proposedAuthorizationsRaw == null
+      ? null
+      : parseAuthorizations(input.proposedAuthorizationsRaw);
+    if (proposed === null) {
+      return {
+        recognized: true,
+        valid: false,
+        kind: 'bootstrap_governance_action',
+        code: 'malformed_proposed_authorization',
+        message: 'The proposed bootstrap authorization document is malformed.',
+      };
+    }
+    if (countActive(proposed, now) > 1) {
+      return {
+        recognized: true,
+        valid: false,
+        kind: 'bootstrap_governance_action',
+        code: 'multiple_proposed_active_authorizations',
+        message: 'The proposed bootstrap authorization document contains multiple active grants.',
+      };
+    }
+  }
+
+  return {
+    recognized: true,
+    valid: true,
+    kind: 'bootstrap_governance_action',
+    issue_id: authority.authorization.issue_id.toUpperCase(),
+    lane_type: 'governance',
+    tier: authority.authorization.tier.toUpperCase(),
+    allowed_scope: [...BOOTSTRAP_GOVERNANCE_ACTION_ALLOWED_FILES],
+    authority: authority.authorization,
+    authority_source: {
+      ref: 'origin/main',
+      sha: input.baseSourceSha,
+      path: BOOTSTRAP_AUTHORIZATIONS_PATH,
+    },
+  };
 }
 
 /**
@@ -361,4 +529,65 @@ export function partitionViolations<T extends { code: string }>(
     else blocking.push(violation);
   }
   return { suppressible, blocking };
+}
+
+function cliFlag(argv: string[], name: string): string | null {
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] ?? null : null;
+}
+
+export function resolveBootstrapGovernanceActionFromRepository(input: {
+  cwd: string;
+  issueId: string;
+  tier: string;
+  changedFiles: string[];
+  headRef?: string;
+  now?: Date;
+}): BootstrapGovernanceActionResult {
+  let proposedAuthorizationsRaw: string | null | undefined;
+  if (input.changedFiles.includes(BOOTSTRAP_AUTHORIZATIONS_PATH)) {
+    try {
+      proposedAuthorizationsRaw = execFileSync(
+        'git',
+        ['show', `${input.headRef ?? 'HEAD'}:${BOOTSTRAP_AUTHORIZATIONS_PATH}`],
+        { cwd: input.cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+    } catch {
+      proposedAuthorizationsRaw = null;
+    }
+  }
+  return resolveBootstrapGovernanceAction({
+    issueId: input.issueId,
+    laneType: 'governance',
+    tier: input.tier,
+    changedFiles: input.changedFiles,
+    baseAuthorizationsRaw: readAuthorizationsFromMain(input.cwd),
+    baseSourceSha: resolveAuthorizationSourceSha(input.cwd),
+    proposedAuthorizationsRaw,
+    now: input.now,
+  });
+}
+
+function main(argv = process.argv.slice(2)): number {
+  const issueId = cliFlag(argv, '--resolve-action');
+  if (!issueId) return 0;
+  const tier = cliFlag(argv, '--tier') ?? '';
+  const changedFilesFile = cliFlag(argv, '--changed-files-file');
+  const output = cliFlag(argv, '--output-json');
+  const headRef = cliFlag(argv, '--head') ?? 'HEAD';
+  if (!changedFilesFile || !output) {
+    process.stderr.write('Bootstrap action resolution requires --changed-files-file and --output-json.\n');
+    return 2;
+  }
+  const changedFiles = fs.readFileSync(changedFilesFile, 'utf8').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const result = resolveBootstrapGovernanceActionFromRepository({
+    cwd: process.cwd(), issueId, tier, changedFiles, headRef,
+  });
+  fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  return result.valid ? 0 : 1;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = main();
 }

@@ -180,6 +180,16 @@ interface ScopeViolation {
   issue_id: string;
 }
 
+export interface BootstrapActionDecision {
+  recognized: boolean;
+  valid: boolean;
+  kind: 'bootstrap_governance_action';
+  issue_id?: string;
+  allowed_scope?: string[];
+  code?: string;
+  message?: string;
+}
+
 interface GuardResult {
   verdict: GuardVerdict;
   changed_files: string[];
@@ -203,6 +213,7 @@ interface ParsedArgs {
   overrideFile: string | null;
   prNumber: number | null;
   headSha: string | null;
+  bootstrapActionFile: string | null;
 }
 
 function repoRoot(): string {
@@ -243,6 +254,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     ? Number.parseInt(process.env.FILE_SCOPE_PR_NUMBER, 10)
     : null;
   let headSha: string | null = process.env.FILE_SCOPE_HEAD_SHA ?? null;
+  let bootstrapActionFile: string | null = null;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -305,6 +317,11 @@ function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       continue;
     }
+    if (arg === '--bootstrap-action-file' && next) {
+      bootstrapActionFile = next;
+      index += 1;
+      continue;
+    }
 
     throw new Error(`Unknown argument: ${arg}`);
   }
@@ -320,7 +337,26 @@ function parseArgs(argv: string[]): ParsedArgs {
     overrideFile,
     prNumber,
     headSha,
+    bootstrapActionFile,
   };
+}
+
+function loadBootstrapAction(root: string, filePath: string | null): BootstrapActionDecision | null {
+  if (!filePath) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.resolve(root, filePath), 'utf8')) as BootstrapActionDecision;
+    if (parsed?.kind !== 'bootstrap_governance_action' || typeof parsed.recognized !== 'boolean' ||
+        typeof parsed.valid !== 'boolean') return null;
+    return parsed;
+  } catch {
+    return {
+      recognized: true,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'malformed_bootstrap_action_result',
+      message: 'Bootstrap action decision file is missing or malformed.',
+    };
+  }
 }
 
 function readChangedFiles(root: string, args: ParsedArgs): string[] {
@@ -562,6 +598,7 @@ export function evaluateFileScopeGuard(input: {
   externalOverrides?: ExternalScopeOverride[];
   prNumber?: number | null;
   headSha?: string | null;
+  bootstrapAction?: BootstrapActionDecision | null;
 }): GuardResult {
   const errors: string[] = [];
   // Own-manifest resolution (role 1) intentionally uses the WIDER status set
@@ -578,8 +615,14 @@ export function evaluateFileScopeGuard(input: {
     headSha: input.headSha ?? null,
   });
   const ownManifestIssue = ownManifest?.issue_id ?? null;
+  const bootstrapAction = input.bootstrapAction ?? null;
+  const validBootstrapAction = bootstrapAction?.recognized === true && bootstrapAction.valid === true
+    ? bootstrapAction
+    : null;
 
-  if (!ownManifest && branchLooksLikeLane(input.prBranch)) {
+  if (bootstrapAction?.recognized && !bootstrapAction.valid) {
+    errors.push(`Invalid bootstrap governance action: ${bootstrapAction.message ?? bootstrapAction.code ?? 'unknown refusal'}`);
+  } else if (!ownManifest && !validBootstrapAction && branchLooksLikeLane(input.prBranch)) {
     errors.push(`No active lane manifest found for branch "${input.prBranch}".`);
   }
 
@@ -602,6 +645,17 @@ export function evaluateFileScopeGuard(input: {
           file,
           branch: input.prBranch,
           issue_id: ownManifest.issue_id ?? 'unknown',
+        });
+      }
+    }
+  } else if (validBootstrapAction) {
+    const allowedScope = validBootstrapAction.allowed_scope ?? [];
+    for (const file of input.changedFiles) {
+      if (!allowedScope.some((pattern) => matchesLockPattern(file, pattern))) {
+        outsideScope.push({
+          file,
+          branch: input.prBranch,
+          issue_id: validBootstrapAction.issue_id ?? 'unknown-bootstrap-action',
         });
       }
     }
@@ -632,7 +686,7 @@ export function evaluateFileScopeGuard(input: {
     verdict: conflicts.length === 0 && outsideScope.length === 0 && errors.length === 0 ? 'PASS' : 'FAIL',
     changed_files: input.changedFiles,
     pr_branch: input.prBranch,
-    own_manifest_issue: ownManifestIssue,
+    own_manifest_issue: ownManifestIssue ?? validBootstrapAction?.issue_id ?? null,
     conflicts,
     outside_scope: outsideScope,
     errors,
@@ -683,6 +737,7 @@ function main(): void {
     externalOverrides,
     prNumber: args.prNumber,
     headSha: args.headSha,
+    bootstrapAction: loadBootstrapAction(root, args.bootstrapActionFile),
   });
 
   if (args.outputJson) {

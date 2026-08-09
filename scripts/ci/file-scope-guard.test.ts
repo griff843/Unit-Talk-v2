@@ -1033,3 +1033,56 @@ test('resolveApplicableOverride: when two comments match the same head SHA, the 
   assert.equal(result.verdict, 'PASS');
   assert.deepEqual(result.outside_scope, []);
 });
+
+test('bootstrap action uses fixed scope while preserving foreign lock conflicts', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'bootstrap/utv2-1619-support',
+    changedFiles: ['scripts/ops/bootstrap-authorization.ts'],
+    manifests: [{
+      issue_id: 'UTV2-1700', branch: 'codex/utv2-1700-other', status: 'started',
+      file_scope_lock: ['scripts/ops/bootstrap-authorization.ts'],
+    }],
+    bootstrapAction: {
+      recognized: true, valid: true, kind: 'bootstrap_governance_action',
+      issue_id: 'UTV2-1619', allowed_scope: ['scripts/ops/bootstrap-authorization.ts'],
+    },
+  });
+  assert.equal(result.verdict, 'FAIL');
+  assert.equal(result.conflicts.length, 1);
+  assert.deepEqual(result.errors, []);
+});
+
+test('valid bootstrap action passes without a lane manifest', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'bootstrap/utv2-1619-support',
+    changedFiles: ['scripts/ops/bootstrap-authorization.ts'], manifests: [],
+    bootstrapAction: {
+      recognized: true, valid: true, kind: 'bootstrap_governance_action',
+      issue_id: 'UTV2-1619', allowed_scope: ['scripts/ops/bootstrap-authorization.ts'],
+    },
+  });
+  assert.equal(result.verdict, 'PASS');
+  assert.equal(result.own_manifest_issue, 'UTV2-1619');
+});
+
+test('invalid bootstrap claim fails rather than inheriting bootstrap scope', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'bootstrap/utv2-1619-support',
+    changedFiles: ['scripts/ops/bootstrap-authorization.ts'], manifests: [],
+    bootstrapAction: {
+      recognized: true, valid: false, kind: 'bootstrap_governance_action',
+      code: 'malformed_authorization_file', message: 'malformed grant',
+    },
+  });
+  assert.equal(result.verdict, 'FAIL');
+  assert.match(result.errors.join('\n'), /malformed grant/);
+});
+
+test('ordinary lane scope behavior is unchanged when bootstrap action is unrecognized', () => {
+  const result = evaluateFileScopeGuard({
+    prBranch: 'codex/utv2-1701-normal', changedFiles: ['apps/api/src/server.ts'],
+    manifests: [{ issue_id: 'UTV2-1701', branch: 'codex/utv2-1701-normal', status: 'started', file_scope_lock: ['apps/api/src/server.ts'] }],
+    bootstrapAction: { recognized: false, valid: false, kind: 'bootstrap_governance_action', code: 'no_authorization_for_issue' },
+  });
+  assert.equal(result.verdict, 'PASS');
+});

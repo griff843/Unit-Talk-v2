@@ -35,6 +35,18 @@ jobs:
             const fs = require('fs');
             fs.writeFileSync('/tmp/commit-messages.txt', commits.map((commit) => commit.commit && commit.commit.message ? commit.commit.message : '').join('\n---commit---\n'));
 
+      - name: Collect changed files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number, per_page: 100,
+            });
+            fs.mkdirSync('.out', { recursive: true });
+            fs.writeFileSync('.out/branch-discipline-files.txt', files.map(file => file.filename).join('\n') + '\n');
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -49,15 +61,33 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve trusted bootstrap governance action
+        continue-on-error: true
+        env:
+          ACTION_BRANCH: ${{ github.event.pull_request.head.ref }}
+          ACTION_TIER: ${{ contains(github.event.pull_request.labels.*.name, 'tier:T1') && 'T1' || contains(github.event.pull_request.labels.*.name, 'tier:T2') && 'T2' || contains(github.event.pull_request.labels.*.name, 'tier:T3') && 'T3' || '' }}
+        run: |
+          git show "origin/main:scripts/ops/bootstrap-authorization.ts" > .out/trusted-bootstrap-authorization.ts
+          ISSUE="$(printf '%s' "$ACTION_BRANCH" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')"
+          pnpm exec tsx .out/trusted-bootstrap-authorization.ts \
+            --resolve-action "$ISSUE" --tier "$ACTION_TIER" \
+            --changed-files-file .out/branch-discipline-files.txt \
+            --head HEAD --output-json .out/bootstrap-action.json
+
       - name: Enforce branch discipline
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
-          pnpm ops:branch-discipline -- \
-            --title "$PR_TITLE" \
-            --body "$PR_BODY" \
-            --branch "$PR_BRANCH" \
-            --commits "$(cat /tmp/commit-messages.txt)" \
+          ARGS=(
+            --title "$PR_TITLE"
+            --body "$PR_BODY"
+            --branch "$PR_BRANCH"
+            --commits "$(cat /tmp/commit-messages.txt)"
             --json
+          )
+          if [ -f .out/bootstrap-action.json ]; then
+            ARGS+=(--bootstrap-action-file .out/bootstrap-action.json)
+          fi
+          pnpm ops:branch-discipline -- "${ARGS[@]}"

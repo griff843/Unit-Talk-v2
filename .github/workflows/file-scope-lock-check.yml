@@ -154,12 +154,33 @@ jobs:
             cp scripts/ci/file-scope-guard.ts .out/trusted-file-scope-guard.ts
           fi
 
+          if git show "origin/main:scripts/ops/bootstrap-authorization.ts" > .out/trusted-bootstrap-authorization.ts 2>/dev/null; then
+            echo "Using base-branch bootstrap governance resolver"
+          else
+            echo "::error::Base branch has no bootstrap governance resolver"
+            exit 1
+          fi
+
           if grep -q -- '--override-file' .out/trusted-file-scope-guard.ts; then
             echo "supports_override=true" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Trusted guard script predates external scope-override support (UTV2-1521) — running without it. Expected only until UTV2-1521 merges to main."
             echo "supports_override=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Resolve bootstrap governance action
+        continue-on-error: true
+        env:
+          ACTION_ISSUE: ${{ github.event.pull_request.head.ref }}
+          ACTION_TIER: ${{ contains(github.event.pull_request.labels.*.name, 'tier:T1') && 'T1' || contains(github.event.pull_request.labels.*.name, 'tier:T2') && 'T2' || contains(github.event.pull_request.labels.*.name, 'tier:T3') && 'T3' || '' }}
+        run: |
+          ISSUE="$(printf '%s' "$ACTION_ISSUE" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')"
+          pnpm exec tsx .out/trusted-bootstrap-authorization.ts \
+            --resolve-action "$ISSUE" \
+            --tier "$ACTION_TIER" \
+            --changed-files-file .out/file-scope-changed-files.txt \
+            --head HEAD \
+            --output-json .out/bootstrap-action.json
 
       - name: Check file scope locks
         id: file_scope_guard
@@ -179,6 +200,9 @@ jobs:
               --pr-number ${{ github.event.pull_request.number }}
               --head-sha ${{ github.event.pull_request.head.sha }}
             )
+          fi
+          if [ -f .out/bootstrap-action.json ]; then
+            ARGS+=(--bootstrap-action-file .out/bootstrap-action.json)
           fi
           pnpm exec tsx .out/trusted-file-scope-guard.ts "${ARGS[@]}"
 
