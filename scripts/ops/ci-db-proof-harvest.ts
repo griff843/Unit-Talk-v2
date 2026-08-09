@@ -113,6 +113,21 @@ export interface RuntimeProofRowCount {
   status: string;
 }
 
+/**
+ * How the located run's identity relates to the merge SHA being harvested.
+ *
+ *   `merge_sha_run`  the run was triggered by the push of the merge commit
+ *                    itself, so its `GITHUB_SHA` -- and therefore the receipt's
+ *                    `github_sha` -- IS the merge SHA. Strongest binding: the
+ *                    evidence is tied to the exact implementation tree that
+ *                    landed on main, with no indirection to reason about.
+ *   `pr_head_run`    the run was triggered by `pull_request`, so its
+ *                    `GITHUB_SHA` is GitHub's synthetic merge-ref commit
+ *                    ("Merge <head> into <base>"), NOT the PR head. Identity
+ *                    must be proven through that commit's second parent.
+ */
+export type HarvestIdentitySource = 'merge_sha_run' | 'pr_head_run';
+
 export interface HarvestedCiRunInfo {
   workflow: string;
   job: string;
@@ -123,6 +138,8 @@ export interface HarvestedCiRunInfo {
   target_head_sha: string;
   target_merge_sha: string;
   conclusion: string | null;
+  /** Which binding rule `harvestCiDbProofForMergeSha` must apply to this run's receipt. */
+  identity_source: HarvestIdentitySource;
 }
 
 export interface HarvestedRuntimeProof {
@@ -452,13 +469,16 @@ interface GitHubPullRef {
   head?: { sha?: string | null } | null;
 }
 
-interface GitHubWorkflowRun {
+// Exported because `findWorkflowJobForHeadSha` names them in its public
+// signature and the build emits declarations.
+export interface GitHubWorkflowRun {
   id: number;
   name?: string | null;
   conclusion?: string | null;
+  html_url?: string | null;
 }
 
-interface GitHubWorkflowJob {
+export interface GitHubWorkflowJob {
   id: number;
   name?: string | null;
   html_url?: string | null;
@@ -473,45 +493,20 @@ interface GitHubArtifact {
 }
 
 /**
- * Resolves a merge SHA to the CI run/job that actually produced its DB proof.
+ * Finds the newest `ci.yml` run for `headSha` and the named job inside it.
  *
- * GitHub does not re-run checks against a squash-merge commit -- they stay
- * associated with the PR's HEAD commit, which is a different SHA. So this:
- *   1. finds the PR associated with `mergeSha` (`commits/{sha}/pulls`) and reads
- *      its head SHA;
- *   2. lists `ci.yml` workflow runs for that head SHA;
- *   3. lists that run's jobs and finds `"Writable DB proof (staging only)"`.
- *
- * Fails closed with a specific `HarvestFailureCode` at every step -- including,
- * legitimately, when CI genuinely never ran a DB proof for this lane (T2/T3
- * lanes, or a T1 lane whose CI run predates this job's existence).
+ * Shared by the merge-SHA-first lookup, the PR-head fallback, and the
+ * `verify`-job lookup that populates `static_proof`, so all three resolve runs
+ * and jobs by exactly the same rules.
  */
-export function locateCiDbProofRun(mergeSha: string, options: HarvestIoOptions = {}): LocateResult {
+export function findWorkflowJobForHeadSha(
+  headSha: string,
+  jobName: string,
+  options: HarvestIoOptions & { missingJobCode?: HarvestFailureCode } = {},
+): { ok: true; run: GitHubWorkflowRun; job: GitHubWorkflowJob } | HarvestFailure {
   const repository = options.repository ?? TRUSTED_HARVEST_REPOSITORY;
   const executor = options.ghExecutor ?? defaultGhExecutor;
-
-  const prsResult = tryGh(executor, ['api', `repos/${repository}/commits/${mergeSha}/pulls`]);
-  if (!prsResult.ok) {
-    return {
-      ok: false,
-      code: 'gh_api_error',
-      reason: `could not resolve a pull request for merge SHA ${mergeSha}: ${prsResult.reason}`,
-    };
-  }
-  let prs: GitHubPullRef[];
-  try {
-    prs = JSON.parse(prsResult.stdout) as GitHubPullRef[];
-  } catch {
-    return { ok: false, code: 'gh_api_error', reason: 'GitHub commits/{sha}/pulls response was not valid JSON' };
-  }
-  const headSha = prs[0]?.head?.sha ?? null;
-  if (!headSha) {
-    return {
-      ok: false,
-      code: 'no_pr_for_merge_sha',
-      reason: `no pull request (with a head SHA) is associated with merge SHA ${mergeSha}`,
-    };
-  }
+  const missingJobCode = options.missingJobCode ?? 'no_db_proof_job';
 
   // Query the workflow-specific endpoint rather than the repository-wide runs
   // endpoint. A single head SHA can accumulate more than one page of runs from
@@ -528,10 +523,7 @@ export function locateCiDbProofRun(mergeSha: string, options: HarvestIoOptions =
     // GitHub installations or injected executors that do not expose the
     // workflow-specific endpoint. Request the API maximum so this fallback
     // does not recreate the original item-21 truncation bug.
-    runsResult = tryGh(executor, [
-      'api',
-      `repos/${repository}/actions/runs?head_sha=${headSha}&per_page=100`,
-    ]);
+    runsResult = tryGh(executor, ['api', `repos/${repository}/actions/runs?head_sha=${headSha}&per_page=100`]);
   }
   if (!runsResult.ok) {
     return {
@@ -567,13 +559,103 @@ export function locateCiDbProofRun(mergeSha: string, options: HarvestIoOptions =
   } catch {
     return { ok: false, code: 'gh_api_error', reason: 'GitHub actions/runs/{id}/jobs response was not valid JSON' };
   }
-  const job = (jobsResponse.jobs ?? []).find((j) => j.name === DB_SMOKE_JOB_NAME);
+  const job = (jobsResponse.jobs ?? []).find((j) => j.name === jobName);
   if (!job) {
     return {
       ok: false,
-      code: 'no_db_proof_job',
-      reason: `no "${DB_SMOKE_JOB_NAME}" job found in run ${run.id} -- CI never ran a live DB proof for this lane`,
+      code: missingJobCode,
+      reason: `no "${jobName}" job found in run ${run.id} for head SHA ${headSha}`,
     };
+  }
+
+  return { ok: true, run, job };
+}
+
+/**
+ * Resolves a merge SHA to the CI run/job that actually produced its DB proof.
+ *
+ * Two sources can carry that evidence, and they are NOT equally good:
+ *
+ *   1. (UTV2-1683 A1, preferred) `ci.yml` also runs on push to `main`, so the
+ *      merge commit itself usually has its own CI run. That run's `GITHUB_SHA`
+ *      is the merge SHA, so the receipt it produces is bound directly to the
+ *      implementation tree that landed. Nothing has to be inferred.
+ *
+ *   2. (fallback) The PR's own `pull_request` run, found via
+ *      `commits/{sha}/pulls`. This is what this function used to do
+ *      exclusively -- and it could never actually be harvested, because on a
+ *      `pull_request` event `GITHUB_SHA` is GitHub's synthetic merge-ref
+ *      commit, not the PR head that `target_head_sha` records. Every receipt
+ *      therefore failed the identity check. `harvestCiDbProofForMergeSha`
+ *      closes that gap by proving the merge-ref's second parent instead
+ *      (UTV2-1683 A2).
+ *
+ * Source 1 is tried first and only falls through when the merge SHA genuinely
+ * has no such run -- e.g. a proof-only merge commit, which `ci.yml` skips via
+ * `paths-ignore`. A transport failure is NOT a fall-through: an unknown board
+ * must not be silently downgraded to the weaker binding, so `gh_api_error`
+ * propagates immediately.
+ *
+ * Fails closed with a specific `HarvestFailureCode` at every step -- including,
+ * legitimately, when CI genuinely never ran a DB proof for this lane (T2/T3
+ * lanes, or a T1 lane whose CI run predates this job's existence).
+ */
+export function locateCiDbProofRun(mergeSha: string, options: HarvestIoOptions = {}): LocateResult {
+  const repository = options.repository ?? TRUSTED_HARVEST_REPOSITORY;
+  const executor = options.ghExecutor ?? defaultGhExecutor;
+
+  // ── 1. the merge SHA's own push-to-main run ────────────────────────────────
+  const direct = findWorkflowJobForHeadSha(mergeSha, DB_SMOKE_JOB_NAME, options);
+  if (direct.ok) {
+    return {
+      ok: true,
+      runInfo: {
+        workflow: DB_SMOKE_WORKFLOW_NAME,
+        job: DB_SMOKE_JOB_NAME,
+        run_id: direct.run.id,
+        run_attempt: direct.job.run_attempt ?? 1,
+        job_id: direct.job.id,
+        job_url: direct.job.html_url ?? null,
+        target_head_sha: mergeSha,
+        target_merge_sha: mergeSha,
+        conclusion: direct.job.conclusion ?? null,
+        identity_source: 'merge_sha_run',
+      },
+    };
+  }
+  // Only "this SHA genuinely has no such run" may fall through to the weaker
+  // source. Anything else is unknown state and fails closed here.
+  if (direct.code === 'gh_api_error') {
+    return direct;
+  }
+
+  // ── 2. fallback: the PR's own pull_request run ─────────────────────────────
+  const prsResult = tryGh(executor, ['api', `repos/${repository}/commits/${mergeSha}/pulls`]);
+  if (!prsResult.ok) {
+    return {
+      ok: false,
+      code: 'gh_api_error',
+      reason: `could not resolve a pull request for merge SHA ${mergeSha}: ${prsResult.reason}`,
+    };
+  }
+  let prs: GitHubPullRef[];
+  try {
+    prs = JSON.parse(prsResult.stdout) as GitHubPullRef[];
+  } catch {
+    return { ok: false, code: 'gh_api_error', reason: 'GitHub commits/{sha}/pulls response was not valid JSON' };
+  }
+  const headSha = prs[0]?.head?.sha ?? null;
+  if (!headSha) {
+    return {
+      ok: false,
+      code: 'no_pr_for_merge_sha',
+      reason: `no pull request (with a head SHA) is associated with merge SHA ${mergeSha}`,
+    };
+  }
+
+  const viaPullRequest = findWorkflowJobForHeadSha(headSha, DB_SMOKE_JOB_NAME, options);
+  if (!viaPullRequest.ok) {
+    return viaPullRequest;
   }
 
   return {
@@ -581,13 +663,14 @@ export function locateCiDbProofRun(mergeSha: string, options: HarvestIoOptions =
     runInfo: {
       workflow: DB_SMOKE_WORKFLOW_NAME,
       job: DB_SMOKE_JOB_NAME,
-      run_id: run.id,
-      run_attempt: job.run_attempt ?? 1,
-      job_id: job.id,
-      job_url: job.html_url ?? null,
+      run_id: viaPullRequest.run.id,
+      run_attempt: viaPullRequest.job.run_attempt ?? 1,
+      job_id: viaPullRequest.job.id,
+      job_url: viaPullRequest.job.html_url ?? null,
       target_head_sha: headSha,
       target_merge_sha: mergeSha,
-      conclusion: job.conclusion ?? null,
+      conclusion: viaPullRequest.job.conclusion ?? null,
+      identity_source: 'pr_head_run',
     },
   };
 }
@@ -644,13 +727,92 @@ export function downloadCiDbProofReceipt(
   }
 }
 
+/**
+ * UTV2-1683 (A2): proves that `candidateSha` is GitHub's synthetic merge-ref
+ * commit for `headSha`, by asking GitHub for its parents.
+ *
+ * A `pull_request` run checks out `refs/pull/N/merge`, a commit GitHub creates
+ * as `Merge <head> into <base>` with exactly two parents, `[base, head]`. So
+ * the receipt's `github_sha` is a legitimate stand-in for the PR head if and
+ * only if its SECOND parent is that head.
+ *
+ * This keeps the anti-substitution property intact rather than relaxing it. A
+ * receipt lifted from a different PR, a different push, or a hand-built commit
+ * does not have `headSha` as its second parent, so it is still refused. The
+ * check is positive identification, not a looser comparison: anything that
+ * cannot be positively shown to descend from `headSha` in that exact position
+ * is rejected.
+ */
+export function verifyMergeRefDescendsFromHead(
+  candidateSha: string,
+  headSha: string,
+  options: HarvestIoOptions = {},
+): { ok: true } | { ok: false; code: HarvestFailureCode; reason: string } {
+  const repository = options.repository ?? TRUSTED_HARVEST_REPOSITORY;
+  const executor = options.ghExecutor ?? defaultGhExecutor;
+
+  const commitResult = tryGh(executor, ['api', `repos/${repository}/commits/${candidateSha}`]);
+  if (!commitResult.ok) {
+    return {
+      ok: false,
+      code: 'gh_api_error',
+      reason: `could not read commit ${candidateSha} to prove it is the merge ref for ${headSha}: ${commitResult.reason}`,
+    };
+  }
+  let commit: { parents?: Array<{ sha?: string | null }> };
+  try {
+    commit = JSON.parse(commitResult.stdout) as { parents?: Array<{ sha?: string | null }> };
+  } catch {
+    return { ok: false, code: 'gh_api_error', reason: 'GitHub commits/{sha} response was not valid JSON' };
+  }
+
+  const parents = commit.parents ?? [];
+  if (parents.length !== 2) {
+    return {
+      ok: false,
+      code: 'receipt_invalid',
+      reason:
+        `receipt SHA ${candidateSha} has ${parents.length} parent(s), so it is not a pull_request merge ref ` +
+        `(which always has exactly 2) and cannot stand in for head ${headSha}`,
+    };
+  }
+  if (parents[1]?.sha !== headSha) {
+    return {
+      ok: false,
+      code: 'receipt_invalid',
+      reason:
+        `receipt SHA ${candidateSha} is a merge commit, but its second parent is ${parents[1]?.sha ?? 'missing'}, ` +
+        `not the target head ${headSha} -- refusing a receipt that cannot be tied to this implementation SHA`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Raw Actions job logs are ANSI-coloured, and `gh` refuses to emit terminal
+ * escape sequences unless `--allow-escape-sequences` is passed:
+ *
+ *   the response contains terminal escape sequences; pass
+ *   --allow-escape-sequences to output it anyway
+ *
+ * That flag does not exist on older `gh`, so passing it unconditionally would
+ * break those. Try the plain call first and retry with the flag only when the
+ * refusal is the reason, which works on both.
+ */
+const GH_ESCAPE_SEQUENCE_REFUSAL = /escape sequences/i;
+
 export function fetchCiDbProofJobLog(
   runInfo: HarvestedCiRunInfo,
   options: HarvestIoOptions = {},
 ): { ok: true; text: string } | HarvestFailure {
   const repository = options.repository ?? TRUSTED_HARVEST_REPOSITORY;
   const executor = options.ghExecutor ?? defaultGhExecutor;
-  const result = tryGh(executor, ['api', `repos/${repository}/actions/jobs/${runInfo.job_id}/logs`]);
+  const endpoint = `repos/${repository}/actions/jobs/${runInfo.job_id}/logs`;
+
+  let result = tryGh(executor, ['api', endpoint]);
+  if (!result.ok && GH_ESCAPE_SEQUENCE_REFUSAL.test(result.reason)) {
+    result = tryGh(executor, ['api', endpoint, '--allow-escape-sequences']);
+  }
   if (!result.ok) {
     return {
       ok: false,
@@ -693,19 +855,39 @@ export function harvestCiDbProofForMergeSha(mergeSha: string, options: HarvestCi
   // The receipt must actually be the one from the run/job this function just
   // located -- otherwise a stale or substituted artifact could be harvested as
   // if it belonged to this merge SHA.
+  // Run and job identity are absolute in both cases. The SHA comparison
+  // depends on what triggered the run, because `GITHUB_SHA` -- which the
+  // receipt records -- means different things per event (UTV2-1683):
+  //   * merge_sha_run: a push to main, so GITHUB_SHA IS the merge SHA. Exact
+  //     equality, no indirection, no extra API call.
+  //   * pr_head_run:   a pull_request, so GITHUB_SHA is the merge-ref commit.
+  //     Accept it ONLY when GitHub proves its second parent is the PR head.
   if (
     String(verified.receipt.github_run_id) !== String(runInfo.run_id) ||
-    verified.receipt.github_job !== DB_SMOKE_JOB_ID_NAME ||
-    verified.receipt.github_sha !== runInfo.target_head_sha
+    verified.receipt.github_job !== DB_SMOKE_JOB_ID_NAME
   ) {
     return {
       ok: false,
       code: 'receipt_invalid',
       reason:
-        `downloaded receipt identity (run=${verified.receipt.github_run_id}, job=${verified.receipt.github_job}, ` +
-        `sha=${verified.receipt.github_sha}) does not match the located run (run=${runInfo.run_id}, ` +
-        `job=${DB_SMOKE_JOB_ID_NAME}, sha=${runInfo.target_head_sha})`,
+        `downloaded receipt identity (run=${verified.receipt.github_run_id}, job=${verified.receipt.github_job}) ` +
+        `does not match the located run (run=${runInfo.run_id}, job=${DB_SMOKE_JOB_ID_NAME})`,
     };
+  }
+  if (verified.receipt.github_sha !== runInfo.target_head_sha) {
+    if (runInfo.identity_source === 'merge_sha_run') {
+      return {
+        ok: false,
+        code: 'receipt_invalid',
+        reason:
+          `downloaded receipt sha=${verified.receipt.github_sha} does not equal the merge SHA ` +
+          `${runInfo.target_head_sha} its run was triggered by -- a push-triggered receipt must bind exactly`,
+      };
+    }
+    const ancestry = verifyMergeRefDescendsFromHead(verified.receipt.github_sha, runInfo.target_head_sha, options);
+    if (!ancestry.ok) {
+      return { ok: false, code: ancestry.code, reason: ancestry.reason };
+    }
   }
 
   const jobLog = fetchCiDbProofJobLog(runInfo, options);

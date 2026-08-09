@@ -47,6 +47,26 @@ const FIXTURES_DIR = path.join(__dirname, '__fixtures__', 'utv2-1641-ci-db-proof
 const REAL_RECEIPT_RAW = fs.readFileSync(path.join(FIXTURES_DIR, 'real-utv2-1399-receipt.json'), 'utf8');
 const REAL_JOB_LOG = fs.readFileSync(path.join(FIXTURES_DIR, 'real-utv2-1399-job-log.txt'), 'utf8');
 const REAL_TEST_SOURCE = fs.readFileSync(path.join(REPO_ROOT, 'apps/api/src/database-smoke.test.ts'), 'utf8');
+/**
+ * The receipt fixture's `github_sha`. Captured from a `pull_request` run
+ * (`github_ref_name: 1343/merge`), so this is GitHub's synthetic merge-ref
+ * commit, NOT the PR head. Confirmed against the live API:
+ *
+ *   b36840e4 = "Merge 4aaa6c56 into f4c529b5", parents [f4c529b5, 4aaa6c56]
+ *
+ * UTV2-1683: `REAL_RUN_INFO.target_head_sha` used to be set to THIS value,
+ * which is what let the old `receipt.github_sha === target_head_sha` identity
+ * check pass in tests while failing for every real lane. In production
+ * `locateCiDbProofRun` fills `target_head_sha` from the actual PR head
+ * (4aaa6c56), so the two were never equal outside this fixture. The fixture
+ * now models reality and the merge-ref relationship is proven explicitly.
+ */
+const REAL_MERGE_REF_SHA = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
+/** PR #1343's true head commit — the second parent of REAL_MERGE_REF_SHA. */
+const REAL_PR_HEAD_SHA = '4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772';
+/** PR #1343's base at the time the merge ref was built — the FIRST parent. */
+const REAL_MERGE_REF_BASE_SHA = 'f4c529b51267d86c2dfbd38bdcfab527bd31668c';
+
 const REAL_RUN_INFO: HarvestedCiRunInfo = {
   workflow: 'CI',
   job: 'Writable DB proof (staging only)',
@@ -54,9 +74,10 @@ const REAL_RUN_INFO: HarvestedCiRunInfo = {
   run_attempt: 1,
   job_id: 91315210076,
   job_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/30680085299/job/91315210076',
-  target_head_sha: 'b36840e452333cb605e1d0c61f3aec547e50be3d',
+  target_head_sha: REAL_PR_HEAD_SHA,
   target_merge_sha: 'fdc193582f94ad7538fa594b475847eb81a3647f',
   conclusion: 'success',
+  identity_source: 'pr_head_run',
 };
 
 // ── verifyHarvestedReceipt: real receipt passes, tampering fails closed ───────
@@ -247,10 +268,13 @@ function fakeGhExecutor(responses: Record<string, string>): GhExecutor {
   };
 }
 
-test('locateCiDbProofRun: happy path resolves PR -> head SHA -> CI run -> DB proof job', () => {
+test('locateCiDbProofRun: falls back to PR -> head SHA -> CI run -> DB proof job when the merge SHA has no push run', () => {
   const mergeSha = 'fdc193582f94ad7538fa594b475847eb81a3647f';
-  const headSha = 'b36840e452333cb605e1d0c61f3aec547e50be3d';
+  const headSha = REAL_PR_HEAD_SHA;
   const ghExecutor = fakeGhExecutor({
+    // The merge commit itself has no CI run (e.g. a proof-only merge that
+    // ci.yml skipped via paths-ignore), so the lookup falls through.
+    [`actions/workflows/ci.yml/runs?head_sha=${mergeSha}`]: JSON.stringify({ workflow_runs: [] }),
     [`commits/${mergeSha}/pulls`]: JSON.stringify([{ number: 1343, head: { sha: headSha } }]),
     [`actions/workflows/ci.yml/runs?head_sha=${headSha}`]: JSON.stringify({
       workflow_runs: [{ id: 30680085299, name: 'CI', conclusion: 'success' }],
@@ -270,7 +294,91 @@ test('locateCiDbProofRun: happy path resolves PR -> head SHA -> CI run -> DB pro
     assert.strictEqual(result.runInfo.job_id, 91315210076);
     assert.strictEqual(result.runInfo.target_head_sha, headSha);
     assert.strictEqual(result.runInfo.target_merge_sha, mergeSha);
+    assert.strictEqual(result.runInfo.identity_source, 'pr_head_run');
   }
+});
+
+test('locateCiDbProofRun: UTV2-1683 A1 prefers the merge SHA\'s own push run and binds identity to the merge SHA', () => {
+  const mergeSha = '20505c8e7f0ee3ddd89f599c99d0b8af55836fde';
+  const ghExecutor = fakeGhExecutor({
+    [`actions/workflows/ci.yml/runs?head_sha=${mergeSha}`]: JSON.stringify({
+      workflow_runs: [{ id: 31276897581, name: 'CI', conclusion: 'success' }],
+    }),
+    'actions/runs/31276897581/jobs': JSON.stringify({
+      jobs: [
+        { id: 93151835178, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success', html_url: 'https://example.test/job' },
+      ],
+    }),
+  });
+
+  const result = locateCiDbProofRun(mergeSha, { ghExecutor });
+  assert.strictEqual(result.ok, true, !result.ok ? `${result.code}: ${result.reason}` : undefined);
+  if (result.ok) {
+    assert.strictEqual(result.runInfo.run_id, 31276897581);
+    assert.strictEqual(result.runInfo.identity_source, 'merge_sha_run');
+    // The whole point: the target IS the merge SHA, so the receipt binds to
+    // the implementation tree with no indirection.
+    assert.strictEqual(result.runInfo.target_head_sha, mergeSha);
+    assert.strictEqual(result.runInfo.target_merge_sha, mergeSha);
+  }
+});
+
+test('locateCiDbProofRun: UTV2-1683 A1 never resolves the PR when a merge-SHA run exists (no commits/pulls call at all)', () => {
+  const mergeSha = '20505c8e7f0ee3ddd89f599c99d0b8af55836fde';
+  const calls: string[] = [];
+  const ghExecutor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    calls.push(key);
+    if (key.includes(`actions/workflows/ci.yml/runs?head_sha=${mergeSha}`)) {
+      return Buffer.from(JSON.stringify({ workflow_runs: [{ id: 31276897581, name: 'CI', conclusion: 'success' }] }));
+    }
+    if (key.includes('actions/runs/31276897581/jobs')) {
+      return Buffer.from(
+        JSON.stringify({ jobs: [{ id: 93151835178, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success' }] }),
+      );
+    }
+    throw Object.assign(new Error(`unexpected call "${key}"`), { stderr: 'unexpected' });
+  };
+
+  const result = locateCiDbProofRun(mergeSha, { ghExecutor });
+  assert.strictEqual(result.ok, true);
+  assert.ok(
+    !calls.some((call) => call.includes('/pulls')),
+    `the PR fallback must not run when a merge-SHA run exists; calls were ${JSON.stringify(calls)}`,
+  );
+});
+
+test('locateCiDbProofRun: UTV2-1683 a transport failure on the merge-SHA lookup fails closed instead of silently using the weaker PR path', () => {
+  const mergeSha = '20505c8e7f0ee3ddd89f599c99d0b8af55836fde';
+  const headSha = REAL_PR_HEAD_SHA;
+  // A fully working PR fallback IS available. That is the point of the test:
+  // without the fail-closed branch this executor would happily resolve a
+  // pr_head_run result, so the assertion below only holds if a transport
+  // error genuinely stops the downgrade.
+  const ghExecutor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    if (key.includes(`head_sha=${mergeSha}`)) {
+      throw Object.assign(new Error('500'), { stderr: 'server error' });
+    }
+    if (key.includes(`commits/${mergeSha}/pulls`)) {
+      return Buffer.from(JSON.stringify([{ number: 1343, head: { sha: headSha } }]));
+    }
+    if (key.includes(`head_sha=${headSha}`)) {
+      return Buffer.from(JSON.stringify({ workflow_runs: [{ id: 30680085299, name: 'CI', conclusion: 'success' }] }));
+    }
+    if (key.includes('actions/runs/30680085299/jobs')) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [{ id: 91315210076, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success' }],
+        }),
+      );
+    }
+    throw Object.assign(new Error(`unexpected call "${key}"`), { stderr: 'unexpected' });
+  };
+
+  const result = locateCiDbProofRun(mergeSha, { ghExecutor });
+  assert.strictEqual(result.ok, false, 'an unreadable merge-SHA lookup must not fall back to the weaker PR binding');
+  if (!result.ok) assert.strictEqual(result.code, 'gh_api_error');
 });
 
 test('locateCiDbProofRun: UTV2-1646 regression queries ci.yml directly when CI is item 21 of 25 repository-wide runs', () => {
@@ -289,6 +397,10 @@ test('locateCiDbProofRun: UTV2-1646 regression queries ci.yml directly when CI i
   }));
   const ghExecutor: GhExecutor = (args) => {
     const key = args.join(' ');
+    if (key.includes(`head_sha=${mergeSha}`)) {
+      // No push run for the merge commit itself; fall through to the PR path.
+      return Buffer.from(JSON.stringify({ workflow_runs: [] }));
+    }
     if (key.includes(`commits/${mergeSha}/pulls`)) {
       return Buffer.from(JSON.stringify([{ number: 1356, head: { sha: headSha } }]));
     }
@@ -339,6 +451,10 @@ test('locateCiDbProofRun: falls back to a 100-run repository page when the workf
   const dbProofJobId = 67890;
   const ghExecutor: GhExecutor = (args) => {
     const key = args.join(' ');
+    if (key.includes(`head_sha=${mergeSha}`)) {
+      // No push run for the merge commit itself; fall through to the PR path.
+      return Buffer.from(JSON.stringify({ workflow_runs: [] }));
+    }
     if (key.includes(`commits/${mergeSha}/pulls`)) {
       return Buffer.from(JSON.stringify([{ number: 99, head: { sha: headSha } }]));
     }
@@ -369,7 +485,10 @@ test('locateCiDbProofRun: falls back to a 100-run repository page when the workf
 });
 
 test('locateCiDbProofRun: no associated PR fails closed with no_pr_for_merge_sha (never invents a head SHA)', () => {
-  const ghExecutor = fakeGhExecutor({ 'commits/': JSON.stringify([]) });
+  const ghExecutor = fakeGhExecutor({
+    'actions/workflows/ci.yml/runs?head_sha=': JSON.stringify({ workflow_runs: [] }),
+    'commits/': JSON.stringify([]),
+  });
   const result = locateCiDbProofRun('deadbeef', { ghExecutor });
   assert.strictEqual(result.ok, false);
   if (!result.ok) assert.strictEqual(result.code, 'no_pr_for_merge_sha');
@@ -451,6 +570,35 @@ test('fetchCiDbProofJobLog: happy path returns the raw log text', () => {
   if (result.ok) assert.strictEqual(result.text, REAL_JOB_LOG);
 });
 
+test('fetchCiDbProofJobLog: retries with --allow-escape-sequences when gh refuses ANSI output', () => {
+  const calls: string[][] = [];
+  const ghExecutor: GhExecutor = (args) => {
+    calls.push(args);
+    if (!args.includes('--allow-escape-sequences')) {
+      throw Object.assign(new Error('refused'), {
+        stderr: 'the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway',
+      });
+    }
+    return Buffer.from(REAL_JOB_LOG, 'utf8');
+  };
+  const result = fetchCiDbProofJobLog(REAL_RUN_INFO, { ghExecutor });
+  assert.strictEqual(result.ok, true, !result.ok ? result.reason : undefined);
+  if (result.ok) assert.strictEqual(result.text, REAL_JOB_LOG);
+  assert.strictEqual(calls.length, 2, 'plain call first, then the flagged retry');
+  assert.ok(!calls[0].includes('--allow-escape-sequences'), 'older gh must still get the plain call');
+});
+
+test('fetchCiDbProofJobLog: does NOT retry with the flag for an unrelated failure', () => {
+  const calls: string[][] = [];
+  const ghExecutor: GhExecutor = (args) => {
+    calls.push(args);
+    throw Object.assign(new Error('404'), { stderr: 'Not Found' });
+  };
+  const result = fetchCiDbProofJobLog(REAL_RUN_INFO, { ghExecutor });
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(calls.length, 1, 'a 404 must not be retried as if it were an ANSI refusal');
+});
+
 test('fetchCiDbProofJobLog: a gh failure fails closed with job_log_fetch_failed', () => {
   const ghExecutor: GhExecutor = () => {
     throw Object.assign(new Error('boom'), { stderr: '404' });
@@ -467,6 +615,21 @@ function fullHappyPathExecutor(): GhExecutor {
   const headSha = REAL_RUN_INFO.target_head_sha;
   return (args: string[]) => {
     const key = args.join(' ');
+    if (key.includes(`head_sha=${mergeSha}`)) {
+      // This fixture is a pull_request run, so the merge commit has no run of
+      // its own and the PR fallback (plus A2's ancestry proof) is exercised.
+      return Buffer.from(JSON.stringify({ workflow_runs: [] }));
+    }
+    // A2: GitHub's answer proving the receipt's merge-ref SHA descends from
+    // the PR head as its second parent.
+    if (key.includes(`commits/${REAL_MERGE_REF_SHA}`) && !key.includes('/pulls')) {
+      return Buffer.from(
+        JSON.stringify({
+          sha: REAL_MERGE_REF_SHA,
+          parents: [{ sha: REAL_MERGE_REF_BASE_SHA }, { sha: headSha }],
+        }),
+      );
+    }
     if (key.includes(`commits/${mergeSha}/pulls`)) {
       return Buffer.from(JSON.stringify([{ number: 1343, head: { sha: headSha } }]));
     }
@@ -539,4 +702,161 @@ test('harvestCiDbProofForMergeSha: a receipt whose identity does not match the l
     assert.strictEqual(result.code, 'receipt_invalid');
     assert.match(result.reason, /does not match the located run/);
   }
+});
+
+// ── UTV2-1683: SHA-binding regression coverage (PM-specified) ─────────────────
+
+/** Re-seals a mutated receipt so it fails on identity, not on its hash. */
+function reseal(receipt: Record<string, unknown>): string {
+  const { receipt_sha256: _drop, ...withoutHash } = receipt;
+  return JSON.stringify({ ...receipt, receipt_sha256: sha256(JSON.stringify(withoutHash)) });
+}
+
+const MERGE_SHA_RUN_ID = 31276897581;
+const MERGE_SHA_JOB_ID = 93151835178;
+
+/**
+ * A1 world: the merge commit has its own push-triggered CI run, so the receipt
+ * records the merge SHA directly.
+ */
+function mergeShaRunExecutor(mergeSha: string): GhExecutor {
+  return (args: string[]) => {
+    const key = args.join(' ');
+    if (key.includes(`head_sha=${mergeSha}`)) {
+      return Buffer.from(JSON.stringify({ workflow_runs: [{ id: MERGE_SHA_RUN_ID, name: 'CI', conclusion: 'success' }] }));
+    }
+    if (key.includes(`actions/runs/${MERGE_SHA_RUN_ID}/jobs`)) {
+      return Buffer.from(
+        JSON.stringify({
+          jobs: [{ id: MERGE_SHA_JOB_ID, name: 'Writable DB proof (staging only)', run_attempt: 1, conclusion: 'success' }],
+        }),
+      );
+    }
+    if (key.includes(`actions/runs/${MERGE_SHA_RUN_ID}/artifacts`)) {
+      return Buffer.from(
+        JSON.stringify({ artifacts: [{ id: 9027325270, name: `utv2-1630-db-proof-receipt-${MERGE_SHA_RUN_ID}-1`, expired: false }] }),
+      );
+    }
+    if (key.includes('actions/artifacts/9027325270/zip')) return Buffer.from('FAKE_ZIP');
+    if (key.includes(`actions/jobs/${MERGE_SHA_JOB_ID}/logs`)) return Buffer.from(REAL_JOB_LOG, 'utf8');
+    throw Object.assign(new Error(`mergeShaRunExecutor: unexpected call "${key}"`), { stderr: 'unexpected' });
+  };
+}
+
+// (1) Receipt mismatch rejection — an incorrect github_sha must fail.
+test('UTV2-1683 regression 1: a receipt whose github_sha is not the target implementation SHA is REJECTED', () => {
+  const mergeSha = '20505c8e7f0ee3ddd89f599c99d0b8af55836fde';
+  const wrongSha = { ...JSON.parse(REAL_RECEIPT_RAW), github_run_id: String(MERGE_SHA_RUN_ID), github_sha: 'f'.repeat(40) };
+
+  const result = harvestCiDbProofForMergeSha(mergeSha, {
+    ghExecutor: mergeShaRunExecutor(mergeSha),
+    zipExtractor: () => reseal(wrongSha),
+    testSourceText: REAL_TEST_SOURCE,
+  });
+  assert.strictEqual(result.ok, false, 'a receipt bound to an unrelated SHA must never be harvested');
+  if (!result.ok) {
+    assert.strictEqual(result.code, 'receipt_invalid');
+    assert.match(result.reason, /must bind exactly/);
+  }
+});
+
+// (2) Exact merge SHA acceptance — receipt SHA === target merge SHA passes.
+test('UTV2-1683 regression 2: a receipt whose github_sha IS the merge SHA is ACCEPTED and binds runtime_proof to it', () => {
+  const mergeSha = '20505c8e7f0ee3ddd89f599c99d0b8af55836fde';
+  const exact = { ...JSON.parse(REAL_RECEIPT_RAW), github_run_id: String(MERGE_SHA_RUN_ID), github_sha: mergeSha };
+
+  const result = harvestCiDbProofForMergeSha(mergeSha, {
+    ghExecutor: mergeShaRunExecutor(mergeSha),
+    zipExtractor: () => reseal(exact),
+    testSourceText: REAL_TEST_SOURCE,
+  });
+  assert.strictEqual(result.ok, true, !result.ok ? `${result.code}: ${result.reason}` : undefined);
+  if (result.ok) {
+    assert.strictEqual(result.runInfo.identity_source, 'merge_sha_run');
+    assert.strictEqual(result.runInfo.target_merge_sha, mergeSha);
+    assert.strictEqual(result.runInfo.target_head_sha, mergeSha);
+    assert.ok(result.runtimeProof.queries.length > 0, 'runtime_proof.queries must be non-empty');
+    assert.ok(result.runtimeProof.row_counts.length > 0, 'runtime_proof.row_counts must be non-empty');
+  }
+});
+
+// (3) Merge-ref fallback — succeeds ONLY when the second-parent relationship
+//     proves identity.
+test('UTV2-1683 regression 3a: the merge-ref fallback is ACCEPTED when the second parent IS the PR head', () => {
+  const result = harvestCiDbProofForMergeSha(REAL_RUN_INFO.target_merge_sha, {
+    ghExecutor: fullHappyPathExecutor(),
+    zipExtractor: () => REAL_RECEIPT_RAW,
+    testSourceText: REAL_TEST_SOURCE,
+  });
+  assert.strictEqual(result.ok, true, !result.ok ? `${result.code}: ${result.reason}` : undefined);
+  if (result.ok) {
+    assert.strictEqual(result.runInfo.identity_source, 'pr_head_run');
+    // The receipt SHA is the merge ref, which is NOT the head — acceptance
+    // came from proving ancestry, not from a loosened comparison.
+    assert.notStrictEqual(REAL_MERGE_REF_SHA, result.runInfo.target_head_sha);
+  }
+});
+
+test('UTV2-1683 regression 3b: the merge-ref fallback is REJECTED when the second parent is a different head (substitution)', () => {
+  const executor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${REAL_MERGE_REF_SHA}`) && !key.includes('/pulls')) {
+      // Same merge-ref SHA, but it descends from somebody else's head.
+      return Buffer.from(
+        JSON.stringify({ sha: REAL_MERGE_REF_SHA, parents: [{ sha: REAL_MERGE_REF_BASE_SHA }, { sha: '9'.repeat(40) }] }),
+      );
+    }
+    return fullHappyPathExecutor()(args);
+  };
+
+  const result = harvestCiDbProofForMergeSha(REAL_RUN_INFO.target_merge_sha, {
+    ghExecutor: executor,
+    zipExtractor: () => REAL_RECEIPT_RAW,
+    testSourceText: REAL_TEST_SOURCE,
+  });
+  assert.strictEqual(result.ok, false, 'a merge ref belonging to a different head must never be harvested');
+  if (!result.ok) {
+    assert.strictEqual(result.code, 'receipt_invalid');
+    assert.match(result.reason, /second parent is/);
+  }
+});
+
+test('UTV2-1683 regression 3c: the merge-ref fallback is REJECTED when the receipt SHA is not a merge commit at all', () => {
+  const executor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${REAL_MERGE_REF_SHA}`) && !key.includes('/pulls')) {
+      // An ordinary single-parent commit cannot be a pull_request merge ref.
+      return Buffer.from(JSON.stringify({ sha: REAL_MERGE_REF_SHA, parents: [{ sha: REAL_MERGE_REF_BASE_SHA }] }));
+    }
+    return fullHappyPathExecutor()(args);
+  };
+
+  const result = harvestCiDbProofForMergeSha(REAL_RUN_INFO.target_merge_sha, {
+    ghExecutor: executor,
+    zipExtractor: () => REAL_RECEIPT_RAW,
+    testSourceText: REAL_TEST_SOURCE,
+  });
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) {
+    assert.strictEqual(result.code, 'receipt_invalid');
+    assert.match(result.reason, /not a pull_request merge ref/);
+  }
+});
+
+test('UTV2-1683 regression 3d: the merge-ref fallback fails closed when ancestry cannot be read (never assumes identity)', () => {
+  const executor: GhExecutor = (args) => {
+    const key = args.join(' ');
+    if (key.includes(`commits/${REAL_MERGE_REF_SHA}`) && !key.includes('/pulls')) {
+      throw Object.assign(new Error('500'), { stderr: 'server error' });
+    }
+    return fullHappyPathExecutor()(args);
+  };
+
+  const result = harvestCiDbProofForMergeSha(REAL_RUN_INFO.target_merge_sha, {
+    ghExecutor: executor,
+    zipExtractor: () => REAL_RECEIPT_RAW,
+    testSourceText: REAL_TEST_SOURCE,
+  });
+  assert.strictEqual(result.ok, false);
+  if (!result.ok) assert.strictEqual(result.code, 'gh_api_error');
 });
