@@ -238,6 +238,8 @@ jobs:
         env:
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           pr_url=$(jq -r '.pr_url // empty' "$MANIFEST_PATH")
@@ -249,6 +251,13 @@ jobs:
           merge_sha=$(gh pr view "$pr_number" --json mergeCommit -q '.mergeCommit.oid // empty')
           if ! echo "$merge_sha" | grep -qE '^[0-9a-f]{40}$'; then
             echo "::error title=post-merge-lane-close::PR #$pr_number has no validated merge SHA."
+            exit 1
+          fi
+          # On a push, the event identity and the PR's authoritative merge
+          # identity must describe the same merge. Never substitute github.sha
+          # for a missing mergeCommit: absence or divergence is terminal.
+          if [ "$EVENT_NAME" = "push" ] && [ "$merge_sha" != "$PUSH_SHA" ]; then
+            echo "::error title=post-merge-lane-close::Resolved PR merge SHA ($merge_sha) diverges from push SHA ($PUSH_SHA). Refusing cross-merge closeout."
             exit 1
           fi
           echo "::notice title=post-merge-lane-close::Resolved authoritative merge SHA $merge_sha from PR #$pr_number."
@@ -303,7 +312,11 @@ jobs:
         # never bound here at all; only evidence.json/verification.md (which
         # are never immutable, and are unconditionally corrected again by
         # that same next step) are.
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.resolve_sha.outputs.merge_sha != ''
+        # Lifecycle decision (UTV2-1684): proof binding belongs only to a
+        # closeable lane flow (option A). Non-closeable lifecycle states remain
+        # authoritative no-ops and must not acquire proof/persistence side
+        # effects merely because a merged PR identity can be resolved.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.resolve_sha.outputs.merge_sha != ''
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
@@ -328,7 +341,9 @@ jobs:
           fi
 
       - name: Persist proof binding before downstream closeout gates
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.resolve_sha.outputs.merge_sha != ''
+        # Persist only the proof produced by the closeable flow above. This
+        # preserves the status gate as lifecycle authority.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.resolve_sha.outputs.merge_sha != ''
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
         run: |
