@@ -2418,7 +2418,7 @@ test('UTV2-1590 done push remains skipped while explicit workflow dispatch reach
   assert.match(statusStep, /echo "closeable=false" >> "\$GITHUB_OUTPUT"/u);
 });
 
-test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts to merge SHA" step', () => {
+test('UTV2-1684 workflow_dispatch binds proof from resolved merge SHA authority', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
     'utf8',
@@ -2427,16 +2427,11 @@ test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts 
   assert.notStrictEqual(bindStepIndex, -1);
   const bindStepIfLine = workflow.slice(bindStepIndex).match(/^ {8}if: (.+)$/mu);
   assert.ok(bindStepIfLine, 'expected an `if:` condition immediately following the step name');
-  assert.match(
-    bindStepIfLine[1],
-    /&& github\.event_name == 'push'$/u,
-    'this step must be push-only -- on workflow_dispatch, github.sha is not the historical lane\'s ' +
-      'authoritative merge SHA, and binding model-routing.json to it here (before the next step\'s ' +
-      '--repair-merged resolves the real SHA) would permanently deadlock the repair via binding_conflict',
-  );
+  assert.match(bindStepIfLine[1], /steps\.resolve_sha\.outputs\.merge_sha != ''/u);
+  assert.doesNotMatch(bindStepIfLine[1], /github\.event_name/u);
 });
 
-test('UTV2-1589 "Bind proof artifacts to merge SHA" also skips when a governed manifest-only repair PR merges via push', () => {
+test('UTV2-1684 "Bind proof artifacts to merge SHA" fails closed on a mismatched receipt', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
     'utf8',
@@ -2446,18 +2441,12 @@ test('UTV2-1589 "Bind proof artifacts to merge SHA" also skips when a governed m
   const nextStepIndex = workflow.indexOf('\n      - name:', bindStepIndex + 1);
   const stepBody = workflow.slice(bindStepIndex, nextStepIndex === -1 ? undefined : nextStepIndex);
 
-  // A manifest-only repair PR (buildRepairRequiredViaPrPacket's recommended
-  // path for a lane whose pr_url is already set, e.g. UTV2-1586) merges via
-  // an ordinary push whose own github.sha is NOT that lane's original
-  // implementation merge SHA either -- github.event_name == 'push' alone
-  // does not distinguish this from a lane's own first-time closeout push.
-  // The step must additionally compare the checked-out manifest's own
-  // commit_sha against this push's SHA and skip the bind when they disagree.
+  // A pre-existing receipt is accepted only when it agrees with the
+  // authoritative merge SHA resolved from manifest.pr_url.
   assert.match(stepBody, /jq -r '\.commit_sha \/\/ empty' "\$MANIFEST_PATH"/u);
   assert.match(stepBody, /if \[ -n "\$existing_commit_sha" \] && \[ "\$existing_commit_sha" != "\$MERGE_SHA" \]/u);
-  assert.match(stepBody, /Skipping early proof-generate bind/u);
-  // The actual pnpm ops:proof-generate call must live inside the negative
-  // (else) branch of that guard, not run unconditionally alongside it.
+  assert.match(stepBody, /does not match authoritative PR merge SHA/u);
+  assert.match(stepBody, /exit 1/u);
   const guardIndex = stepBody.indexOf('existing_commit_sha" != "$MERGE_SHA"');
   const proofGenerateIndex = stepBody.indexOf('pnpm ops:proof-generate');
   assert.ok(guardIndex !== -1 && proofGenerateIndex > guardIndex);

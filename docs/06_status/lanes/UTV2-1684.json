@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1684",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1684-post-merge-proof-binding",
+  "branch": "codex/utv2-1684-post-merge-proof-binding",
+  "base_branch": "main",
+  "commit_sha": "543271854f8beb548f094885153d060b49a19bce",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1397",
+  "files_changed": [
+    ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/UTV2-1684.yml",
+    "docs/06_status/lanes/UTV2-1684.json",
+    "docs/06_status/proof/UTV2-1684/diff-summary.md",
+    "docs/06_status/proof/UTV2-1684/model-routing.json",
+    "docs/06_status/proof/UTV2-1684/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/UTV2-1684.yml",
+    "docs/06_status/lanes/UTV2-1684.json",
+    "docs/06_status/proof/UTV2-1684/**",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1684/diff-summary.md",
+    "docs/06_status/proof/UTV2-1684/verification.md",
+    "docs/06_status/proof/UTV2-1684/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-09T03:25:42.894Z",
+  "heartbeat_at": "2026-08-09T03:25:42.894Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1684-post-merge-proof-binding.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1684-post-merge-proof-binding",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "notes": "existing-branch readmission; previous_lane_type=hygiene; new_lane_type=hygiene; preserved_head=46d30baa4c2c174243e434219e5eb95264ea9953; open_pr=1397"
+}
