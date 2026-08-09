@@ -34,9 +34,9 @@
     "docs/06_status/proof/UTV2-1570/evidence.json",
     "docs/06_status/proof/UTV2-1570/verification.md"
   ],
-  "status": "started",
+  "status": "parked",
   "started_at": "2026-07-21T21:56:53.581Z",
-  "heartbeat_at": "2026-07-21T21:56:53.581Z",
+  "heartbeat_at": "2026-08-09T05:49:31.989Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1570-implement-tier-c-authorization-gate-singleton-approval.json",
