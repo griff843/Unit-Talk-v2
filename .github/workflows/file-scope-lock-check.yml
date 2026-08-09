@@ -154,13 +154,6 @@ jobs:
             cp scripts/ci/file-scope-guard.ts .out/trusted-file-scope-guard.ts
           fi
 
-          if git show "origin/main:scripts/ops/bootstrap-authorization.ts" > .out/trusted-bootstrap-authorization.ts 2>/dev/null; then
-            echo "Using base-branch bootstrap governance resolver"
-          else
-            echo "::error::Base branch has no bootstrap governance resolver"
-            exit 1
-          fi
-
           if grep -q -- '--override-file' .out/trusted-file-scope-guard.ts; then
             echo "supports_override=true" >> "$GITHUB_OUTPUT"
           else
@@ -168,23 +161,50 @@ jobs:
             echo "supports_override=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Decision transport lives in RUNNER_TEMP, outside the checkout, so the PR
+      # under evaluation cannot place a file where the guard will read one. The
+      # guard refuses any decision path inside the repository root for exactly
+      # this reason. Exit codes: 0 valid | 3 recognized+refused | 4 not
+      # bootstrap. No continue-on-error: an unavailable answer fails closed.
       - name: Resolve bootstrap governance action
-        continue-on-error: true
+        id: bootstrap
         env:
-          ACTION_ISSUE: ${{ github.event.pull_request.head.ref }}
+          ACTION_BRANCH: ${{ github.event.pull_request.head.ref }}
           ACTION_TIER: ${{ contains(github.event.pull_request.labels.*.name, 'tier:T1') && 'T1' || contains(github.event.pull_request.labels.*.name, 'tier:T2') && 'T2' || contains(github.event.pull_request.labels.*.name, 'tier:T3') && 'T3' || '' }}
         run: |
-          ISSUE="$(printf '%s' "$ACTION_ISSUE" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')"
-          INTENT=()
-          case "$ACTION_ISSUE" in bootstrap/*) INTENT+=(--bootstrap-intent) ;; esac
-          pnpm exec tsx .out/trusted-bootstrap-authorization.ts \
+          set -euo pipefail
+          DECISION="$RUNNER_TEMP/bootstrap-action.json"
+          RESOLVER="$RUNNER_TEMP/trusted-bootstrap-authorization.ts"
+          rm -f "$DECISION" "$RESOLVER"
+
+          if ! git show "origin/main:scripts/ops/bootstrap-authorization.ts" > "$RESOLVER"; then
+            echo "::error::Base branch has no bootstrap governance resolver"
+            exit 1
+          fi
+          if ! grep -q -- '--resolve-action' "$RESOLVER"; then
+            echo "::warning::Trusted resolver predates bootstrap action resolution; no bootstrap identity can be granted."
+            echo "state=unsupported" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ISSUE="$(printf '%s' "$ACTION_BRANCH" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+          set +e
+          pnpm exec tsx "$RESOLVER" \
             --resolve-action "$ISSUE" \
-            --branch "$ACTION_ISSUE" \
+            --branch "$ACTION_BRANCH" \
             --tier "$ACTION_TIER" \
-            "${INTENT[@]}" \
             --changed-files-file .out/file-scope-changed-files.txt \
             --head HEAD \
-            --output-json .out/bootstrap-action.json
+            --output-json "$DECISION"
+          CODE=$?
+          set -e
+
+          case "$CODE" in
+            0) echo "state=valid" >> "$GITHUB_OUTPUT" ;;
+            3) echo "::error::Bootstrap governance action refused by the trusted resolver."; exit 1 ;;
+            4) echo "state=normal" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Bootstrap resolver failed with exit $CODE; failing closed."; exit 1 ;;
+          esac
 
       - name: Check file scope locks
         id: file_scope_guard
@@ -205,8 +225,8 @@ jobs:
               --head-sha ${{ github.event.pull_request.head.sha }}
             )
           fi
-          if [ -f .out/bootstrap-action.json ]; then
-            ARGS+=(--bootstrap-action-file .out/bootstrap-action.json)
+          if [ "${{ steps.bootstrap.outputs.state }}" = "valid" ]; then
+            ARGS+=(--bootstrap-action-file "$RUNNER_TEMP/bootstrap-action.json")
           fi
           pnpm exec tsx .out/trusted-file-scope-guard.ts "${ARGS[@]}"
 

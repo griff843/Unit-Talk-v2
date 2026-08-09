@@ -758,6 +758,14 @@ function sameIssueLaneMetadataPaths(issueId: string): string[] {
   return [
     `.ops/sync/${normalizedIssueId}.yml`,
     `docs/06_status/lanes/${normalizedIssueId}.json`,
+    // A lane's own proof directory is its own bookkeeping by construction, and
+    // `ownLaneControlPlanePatterns` in scripts/ci/file-scope-guard.ts has
+    // granted it unconditionally since UTV2-1518. Omitting it here made the two
+    // scope views disagree: the guard passed a lane's proof artifact while this
+    // packet reported the same file as scope bleed. Artifacts a lane writes
+    // after its manifest's first commit -- an admission receipt, a model-routing
+    // sidecar -- are exactly the files that fell in that gap.
+    `docs/06_status/proof/${normalizedIssueId}/**`,
   ];
 }
 
@@ -1096,11 +1104,22 @@ async function main(): Promise<void> {
   if (!inferredIssue) {
     throw new Error('Missing --issue <UTV2-###> and unable to infer issue from branch');
   }
+  // This packet RENDERS a bootstrap action; it never authorizes one. The
+  // authorization decision belongs to the origin/main resolver, and the
+  // workflow gates on that resolver's exit code before this script is invoked
+  // at all -- so nothing here can turn a refusal into an approval. The checks
+  // below can only refuse harder: they reject a decision that did not arrive
+  // through runner-temp transport, and re-verify the authority SHA against
+  // origin/main. See scripts/ops/bootstrap-authorization.ts.
   const bootstrapActionFile = getFlag(flags, 'bootstrap-action-file');
   let bootstrapAction: BootstrapActionDecision | null = null;
   if (bootstrapActionFile) {
     try {
-      bootstrapAction = JSON.parse(fs.readFileSync(path.resolve(ROOT, bootstrapActionFile), 'utf8')) as BootstrapActionDecision;
+      const resolvedDecisionPath = path.resolve(bootstrapActionFile);
+      if (resolvedDecisionPath === ROOT || resolvedDecisionPath.startsWith(ROOT + path.sep)) {
+        throw new Error('bootstrap decision file is inside the checkout');
+      }
+      bootstrapAction = JSON.parse(fs.readFileSync(resolvedDecisionPath, 'utf8')) as BootstrapActionDecision;
       if (bootstrapAction.recognized && bootstrapAction.valid) {
         const originMainSha = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: ROOT, encoding: 'utf8' }).trim();
         if (bootstrapAction.authority_source?.ref !== 'origin/main' ||
@@ -1113,7 +1132,7 @@ async function main(): Promise<void> {
     } catch {
       bootstrapAction = {
         recognized: true, valid: false, kind: 'bootstrap_governance_action',
-        message: 'Bootstrap action decision file is missing or malformed.',
+        message: 'Bootstrap action decision file is missing, malformed, or not from the trusted resolver.',
       };
     }
   }

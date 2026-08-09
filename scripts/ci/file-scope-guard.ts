@@ -342,10 +342,35 @@ function parseArgs(argv: string[]): ParsedArgs {
   };
 }
 
-function loadBootstrapAction(root: string, filePath: string | null): BootstrapActionDecision | null {
+// A decision artifact is only as trustworthy as the place it came from. Every
+// field a fabricated file would need -- the ref name, the authorization path,
+// even `git rev-parse origin/main` -- is public, so no amount of field checking
+// distinguishes a real decision from a forged one. What does distinguish them
+// is *where the file lives*: the trusted resolver writes to the runner's temp
+// directory, which is outside the checkout and therefore not something a PR's
+// own diff can place a file into. A decision path that resolves inside the
+// repository root is refused on that basis alone, before it is even parsed.
+export function assertDecisionPathIsOutsideCheckout(root: string, filePath: string): void {
+  const resolved = path.resolve(filePath);
+  const normalizedRoot = path.resolve(root);
+  if (resolved === normalizedRoot || resolved.startsWith(normalizedRoot + path.sep)) {
+    throw new Error(
+      `bootstrap decision file "${resolved}" is inside the checkout; only runner-temp decisions are trusted`,
+    );
+  }
+}
+
+// Wildcard scopes are refused outright. A genuine decision carries the explicit
+// file list the resolver compiled from origin/main, never a pattern that would
+// match the whole tree -- so "allowed_scope": ["**"] is a forgery signature
+// rather than a wide-but-legitimate grant.
+const FORBIDDEN_SCOPE_PATTERNS = new Set(['**', '*', '**/*', '.', './**', '/']);
+
+export function loadBootstrapAction(root: string, filePath: string | null): BootstrapActionDecision | null {
   if (!filePath) return null;
   try {
-    const parsed = JSON.parse(fs.readFileSync(path.resolve(root, filePath), 'utf8')) as BootstrapActionDecision;
+    assertDecisionPathIsOutsideCheckout(root, filePath);
+    const parsed = JSON.parse(fs.readFileSync(path.resolve(filePath), 'utf8')) as BootstrapActionDecision;
     if (parsed?.kind !== 'bootstrap_governance_action' || typeof parsed.recognized !== 'boolean' ||
         typeof parsed.valid !== 'boolean') throw new Error('malformed decision');
     if (parsed.recognized && parsed.valid) {
@@ -355,6 +380,12 @@ function loadBootstrapAction(root: string, filePath: string | null): BootstrapAc
           !Array.isArray(parsed.allowed_scope) || parsed.allowed_scope.length === 0) {
         throw new Error('untrusted bootstrap decision provenance');
       }
+      for (const pattern of parsed.allowed_scope) {
+        if (typeof pattern !== 'string' || pattern.trim() === '' ||
+            FORBIDDEN_SCOPE_PATTERNS.has(pattern.trim()) || pattern.startsWith('/')) {
+          throw new Error(`bootstrap decision declares an untrusted scope pattern: ${String(pattern)}`);
+        }
+      }
     }
     return parsed;
   } catch {
@@ -363,7 +394,7 @@ function loadBootstrapAction(root: string, filePath: string | null): BootstrapAc
       valid: false,
       kind: 'bootstrap_governance_action',
       code: 'malformed_bootstrap_action_result',
-      message: 'Bootstrap action decision file is missing or malformed.',
+      message: 'Bootstrap action decision file is missing, malformed, or not from the trusted resolver.',
     };
   }
 }

@@ -59,22 +59,46 @@ jobs:
             fs.mkdirSync('.out', { recursive: true });
             fs.writeFileSync('.out/return-review-files.txt', files.map(file => file.filename).join('\n') + '\n');
 
+      # Same trusted resolver, same runner-temp transport, same fail-closed exit
+      # handling as the other two consumers. The packet generator downstream
+      # only renders the decision; it never makes one.
       - name: Resolve trusted bootstrap governance action
+        id: bootstrap
         if: steps.tier.outputs.required == 'true'
-        continue-on-error: true
         env:
           ACTION_BRANCH: ${{ github.event.pull_request.head.ref }}
           ACTION_TIER: ${{ steps.tier.outputs.tier }}
         run: |
-          git show "origin/main:scripts/ops/bootstrap-authorization.ts" > .out/trusted-bootstrap-authorization.ts
-          ISSUE="$(printf '%s' "$ACTION_BRANCH" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')"
-          INTENT=()
-          case "$ACTION_BRANCH" in bootstrap/*) INTENT+=(--bootstrap-intent) ;; esac
-          pnpm exec tsx .out/trusted-bootstrap-authorization.ts \
+          set -euo pipefail
+          DECISION="$RUNNER_TEMP/bootstrap-action.json"
+          RESOLVER="$RUNNER_TEMP/trusted-bootstrap-authorization.ts"
+          rm -f "$DECISION" "$RESOLVER"
+
+          if ! git show "origin/main:scripts/ops/bootstrap-authorization.ts" > "$RESOLVER"; then
+            echo "::error::Base branch has no bootstrap governance resolver"
+            exit 1
+          fi
+          if ! grep -q -- '--resolve-action' "$RESOLVER"; then
+            echo "::warning::Trusted resolver predates bootstrap action resolution; no bootstrap identity can be granted."
+            echo "state=unsupported" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ISSUE="$(printf '%s' "$ACTION_BRANCH" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+          set +e
+          pnpm exec tsx "$RESOLVER" \
             --resolve-action "$ISSUE" --branch "$ACTION_BRANCH" --tier "${ACTION_TIER#tier:}" \
-            "${INTENT[@]}" \
             --changed-files-file .out/return-review-files.txt \
-            --head HEAD --output-json .out/bootstrap-action.json
+            --head HEAD --output-json "$DECISION"
+          CODE=$?
+          set -e
+
+          case "$CODE" in
+            0) echo "state=valid" >> "$GITHUB_OUTPUT" ;;
+            3) echo "::error::Bootstrap governance action refused by the trusted resolver."; exit 1 ;;
+            4) echo "state=normal" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Bootstrap resolver failed with exit $CODE; failing closed."; exit 1 ;;
+          esac
 
       - name: Generate return review packet
         if: steps.tier.outputs.required == 'true'
@@ -95,8 +119,8 @@ jobs:
             --risk-output "artifacts/pr-risk-packet.json"
             --json
           )
-          if [ -f .out/bootstrap-action.json ]; then
-            ARGS+=(--bootstrap-action-file .out/bootstrap-action.json)
+          if [ "${{ steps.bootstrap.outputs.state }}" = "valid" ]; then
+            ARGS+=(--bootstrap-action-file "$RUNNER_TEMP/bootstrap-action.json")
           fi
           pnpm ops:pr-review-packet -- "${ARGS[@]}"
 

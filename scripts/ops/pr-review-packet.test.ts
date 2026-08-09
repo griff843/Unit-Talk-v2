@@ -409,6 +409,11 @@ test('generatePRReviewPacket preserves packet shape for prompt consumers', async
     '.github/workflows/return-review-packet.yml',
     '.ops/sync/UTV2-1057.yml',
     'docs/06_status/lanes/UTV2-1057.json',
+    // A lane's own proof directory, matching the unconditional grant
+    // scripts/ci/file-scope-guard.ts has made since UTV2-1518. Before this the
+    // two scope views disagreed and a lane's own proof artifact could be
+    // reported as scope bleed by the packet while the guard passed it.
+    'docs/06_status/proof/UTV2-1057/**',
     'docs/06_status/proof/UTV2-1057/diff-summary.md',
     'docs/06_status/proof/UTV2-1057/verification.md',
     'package.json',
