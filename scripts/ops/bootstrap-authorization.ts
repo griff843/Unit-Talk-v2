@@ -102,7 +102,6 @@ export const BOOTSTRAP_GOVERNANCE_ACTION_ALLOWED_FILES: ReadonlySet<string> = ne
   'scripts/ci/file-scope-guard.test.ts',
   'scripts/ops/bootstrap-authorization.ts',
   'scripts/ops/bootstrap-authorization.test.ts',
-  'scripts/ops/branch-discipline-guard.ts',
   'scripts/ops/pr-review-packet.ts',
   'scripts/ops/pr-review-packet.test.ts',
   'package.json',

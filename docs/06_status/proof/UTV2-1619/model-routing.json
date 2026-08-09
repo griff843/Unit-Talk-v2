@@ -2,7 +2,7 @@
   "schema_version": 1,
   "issue_id": "UTV2-1619",
   "implementation_sha": "279e53470a838d8f2ab1054a4a6f41109618493b",
-  "profile": "codex-sol-high",
+  "model_profile": "codex-sol-high",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "high",
   "selected_by": "three-brain",

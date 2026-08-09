@@ -18,7 +18,9 @@ MERGE_SHA: <pending — bound post-merge by post-merge-lane-close.yml>
   are exported for direct testing.
 - `scripts/ops/branch-discipline-guard.ts`: reverted to the base-branch copy. It holds no
   bootstrap logic at all; the workflow runs it only when the trusted resolver has already
-  said the PR is not a bootstrap action.
+  said the PR is not a bootstrap action. Its path is correspondingly gone from the
+  resolver's fixed bootstrap scope: the lane no longer touches the file, and a standing
+  permission with nothing behind it is a permission worth removing.
 - `scripts/ops/pr-review-packet.ts`: renders a bootstrap packet but never authorizes one;
   decision loading gained the outside-the-checkout requirement.
   `sameIssueLaneMetadataPaths` now includes the lane's own proof directory, matching the
@@ -36,3 +38,8 @@ MERGE_SHA: <pending — bound post-merge by post-merge-lane-close.yml>
   added coverage for recognition ordering, the active-status set, and intent derivation.
 - `docs/06_status/lanes/UTV2-1619.json`: `file_scope_lock` restored to include the lane's
   own control-plane and proof paths, plus the new test file and `package.json`.
+- `docs/06_status/proof/UTV2-1619/model-routing.json`: the routing field is named
+  `model_profile`, the key `proof-generate.ts` actually matches against the manifest's
+  `model_routing.profile`. Under the previous name the field was simply absent as far as
+  the validator was concerned, and `OPTIONALLY_MATCHED_ROUTING_FIELDS` skipped the
+  comparison rather than failing it — a check that could not fail was not a check.
