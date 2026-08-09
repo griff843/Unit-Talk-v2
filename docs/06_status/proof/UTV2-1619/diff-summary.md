@@ -1,17 +1,38 @@
-# UTV2-1619 diff summary — close eligibility preflight
+# UTV2-1619 diff summary — bootstrap governance identity support
 
-MERGE_SHA: f541fe51b1e781729385b9212ecd9a6d8a135cd1
+MERGE_SHA: <pending — bound post-merge by post-merge-lane-close.yml>
 
-- `truth-check-lib.ts`: added `evaluateCloseEligibilityPreflight` plus
-  `hasBindableShaAnchor` and `evaluateModelRoutingSidecar`. The evidence checks call
-  `evaluateT2ProofEvidence` — the same function the close gate runs for P11–P14 — so the
-  merge and close paths share one decision model rather than two copies.
-- Added `.github/workflows/close-eligibility-preflight.yml`: runs the module on
-  `pull_request`, skips non-lane PRs, PR-scoped concurrency.
-- 13 regression tests reconstructed from the lanes that actually merged un-closeable.
-
-Checks are partitioned: pre-merge-knowable conditions block; merge-SHA reachability, CI on
-the merge commit, and external mutation authorities are reported `not_knowable_pre_merge`
-and never block.
-
-No production, runtime, migration, or delivery path is touched. Not a required context.
+- `scripts/ops/bootstrap-authorization.ts`: recognition now runs in a fixed order —
+  active lane identity, then explicit bootstrap intent, then authority. The first two
+  steps precede any read of the authorization file, which is what keeps a malformed or
+  duplicated grant invisible to PRs that never claimed bootstrap identity. Lane identity
+  is resolved with `readTrustedLaneManifest` (base content, or the first commit that
+  added a branch-introduced manifest) against the same active-status set
+  `file-scope-guard.ts` uses, so the two can no longer disagree. Intent is derived from
+  the `bootstrap/` branch namespace inside the resolver rather than asserted by a caller
+  flag. Branch/title/commit binding moved here from the PR-head guard. Exit codes are now
+  meaningful: `0` valid, `2` usage, `3` recognized-and-refused, `4` not a bootstrap
+  action — and the decision file is always written, so no consumer can read a stale one.
+- `scripts/ci/file-scope-guard.ts`: `loadBootstrapAction` refuses any decision path that
+  resolves inside the repository root, and refuses wildcard `allowed_scope` entries. Both
+  are exported for direct testing.
+- `scripts/ops/branch-discipline-guard.ts`: reverted to the base-branch copy. It holds no
+  bootstrap logic at all; the workflow runs it only when the trusted resolver has already
+  said the PR is not a bootstrap action.
+- `scripts/ops/pr-review-packet.ts`: renders a bootstrap packet but never authorizes one;
+  decision loading gained the outside-the-checkout requirement.
+  `sameIssueLaneMetadataPaths` now includes the lane's own proof directory, matching the
+  unconditional grant `file-scope-guard.ts` has made since UTV2-1518 — the two scope views
+  previously disagreed, and a lane's own admission receipt fell in the gap.
+- Three workflows (`branch-discipline-guard`, `file-scope-lock-check`,
+  `return-review-packet`): resolver and decision both live in `$RUNNER_TEMP`; stale files
+  are removed before resolution; `continue-on-error` is gone; the base resolver is probed
+  for `--resolve-action` support and grants nothing when it is absent; exit codes gate
+  what runs next.
+- `scripts/ops/bootstrap-identity-e2e.test.ts` (new): 19 end-to-end tests over real git
+  fixtures, covering all eight required behaviors plus expiry and scope violations.
+- `scripts/ops/bootstrap-authorization.test.ts`: duplicate `BGA-6/7/8` identifiers
+  resolved; branch-discipline-coupled tests replaced with binding and transport tests;
+  added coverage for recognition ordering, the active-status set, and intent derivation.
+- `docs/06_status/lanes/UTV2-1619.json`: `file_scope_lock` restored to include the lane's
+  own control-plane and proof paths, plus the new test file and `package.json`.
