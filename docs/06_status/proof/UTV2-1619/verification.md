@@ -2,6 +2,12 @@
 
 MERGE_SHA: <pending — bound post-merge by post-merge-lane-close.yml>
 
+VERIFIED_SOURCE_SHA: 2aad12ced3bf7bbb844d4fd7155a86b743fb060d
+
+Every command recorded below was executed against the source tree at
+`2aad12ced3bf7bbb844d4fd7155a86b743fb060d`. Commits after that SHA change only proof
+artifacts and the manifest's `pr_url`; no source, workflow, or test file moves.
+
 ASSERTIONS:
 - [x] Recognition checks for an existing ACTIVE lane identity before anything else; an active manifest-backed lane is never evaluated as a bootstrap action.
 - [x] Bootstrap recognition never follows from an issue ID; it requires the `bootstrap/` branch namespace, which is GitHub-attested rather than read from the PR's files.
@@ -110,10 +116,58 @@ the attack.
 ### Static verification
 
 ```
-pnpm type-check   # clean
-eslint <changed files>   # clean
-YAML parse of all three workflows   # clean
+pnpm type-check                     exit 0
+pnpm lint                           exit 0
+pnpm test                           exit 0   # tests 4665 / pass 4665 / fail 0, 97 suites
+YAML parse of all three workflows   clean
 ```
+
+### R-level compliance
+
+`scripts/ci/r-level-check.ts` executed against this diff:
+
+```
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 18
+Rules matched: (none) — no R-level artifacts required for this diff
+exit 0
+```
+
+No rule in `docs/05_operations/r1-r5-rules.json` matches this diff, so no R-level artifact
+is required. The check was run rather than assumed: a lane touching only governance
+tooling, its tests, and its own proof directory triggers no R-level obligation.
+
+### `pnpm verify`
+
+`pnpm verify` was executed on this branch. It **exits 1**, and the reason is an
+environment refusal rather than a defect in this lane:
+
+```
+$ pnpm verify
+... verify:static, ci:db-client-boundary, ops:sync-check,
+    ops:system-alignment-check, ops:automation-coverage-check,
+    env:check, lint, type-check, build                          all pass
+... test                                    tests 4779 / pass 4779 / fail 0
+... verify:commands                         all pass
+... test:live-db -> test:db -> ci:assert-staging
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL
+  (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.
+  Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+exit 1
+```
+
+Every stage up to and including `verify:commands` passed, with the full suite green at
+4779/4779. The single failing stage is `ci:assert-staging`, the guard that refuses
+writable DB verification against anything but the staging project. That guard is working
+as designed; a local checkout has no `CI_SUPABASE_*` credentials, so `pnpm verify` cannot
+reach green outside the `staging-ci` GitHub environment for any lane.
+
+The authoritative verify signal is therefore the CI `verify` required context, which
+**passed** on `2aad12ced3bf7bbb844d4fd7155a86b743fb060d` (PR #1399) — running in the
+environment the guard requires. This proof does not claim a green local `pnpm verify`,
+because there was not one.
 
 ## Known limitation — phase-1 transition
 
