@@ -7,11 +7,23 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1684-post-merge-proof-binding",
   "branch": "codex/utv2-1684-post-merge-proof-binding",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "543271854f8beb548f094885153d060b49a19bce",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1397",
+  "files_changed": [
+    ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/UTV2-1684.yml",
+    "docs/06_status/lanes/UTV2-1684.json",
+    "docs/06_status/proof/UTV2-1684/diff-summary.md",
+    "docs/06_status/proof/UTV2-1684/model-routing.json",
+    "docs/06_status/proof/UTV2-1684/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/UTV2-1684.yml",
+    "docs/06_status/lanes/UTV2-1684.json",
+    "docs/06_status/proof/UTV2-1684/**",
     "scripts/ops/lane-close.test.ts",
     "scripts/ops/workflow-hardening.test.ts"
   ],
