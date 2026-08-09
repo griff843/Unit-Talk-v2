@@ -12,6 +12,7 @@
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/post-merge-lane-close.yml",
+    "scripts/ops/lane-close.test.ts",
     "scripts/ops/workflow-hardening.test.ts"
   ],
   "expected_proof_paths": [
