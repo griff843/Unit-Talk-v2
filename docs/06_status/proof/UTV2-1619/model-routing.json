@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1619",
+  "implementation_sha": "c925fc9424f084e0c1a755e47bb5fe4e36da7ba8",
+  "profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "selected_by": "three-brain",
+  "policy_version": "1.0.0",
+  "override_used": false
+}
