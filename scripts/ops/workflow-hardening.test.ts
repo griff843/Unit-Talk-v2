@@ -1672,5 +1672,7 @@ test('UTV2-1684: proof binding persists before unrelated closeout failures and r
   assert.ok(persistStart >= 0 && persistStart < closeStart && closeStart < failStart);
   assert.match(workflow, /Refusing mismatched proof binding/);
   assert.match(workflow, /git commit -m "chore\(proof\): bind \$ISSUE_ID/);
-  assert.match(workflow, /git push/);
+  assert.match(workflow, /for attempt in 1 2 3/);
+  assert.match(workflow, /git pull --rebase origin main/);
+  assert.match(workflow, /Proof binding could not be persisted after 3 attempts/);
 });

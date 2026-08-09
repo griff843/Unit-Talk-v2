@@ -255,7 +255,9 @@ jobs:
           echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
 
       - name: Bind proof artifacts to merge SHA
-        # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
+        # UTV2-1684: trigger-independent. The validated merge SHA resolved
+        # from the lane's authoritative PR controls binding on both push and
+        # workflow_dispatch closeouts.
         # the script below. ops:proof-generate never binds model-routing.json
         # by default (bindModelRouting defaults to false -- see
         # ProofGenerateOptions in scripts/ops/proof-generate.ts), so this
@@ -339,7 +341,19 @@ jobs:
             exit 0
           fi
           git commit -m "chore(proof): bind $ISSUE_ID to authoritative merge SHA [skip ci]"
-          git push
+          pushed=false
+          for attempt in 1 2 3; do
+            if git push; then
+              pushed=true
+              break
+            fi
+            echo "::warning title=post-merge-lane-close::Proof-binding push attempt $attempt rejected because main advanced. Rebasing and retrying."
+            git pull --rebase origin main
+          done
+          if [ "$pushed" != "true" ]; then
+            echo "::error title=post-merge-lane-close::Proof binding could not be persisted after 3 attempts."
+            exit 1
+          fi
           echo "::notice title=post-merge-lane-close::Proof binding persisted before truth-check and lane-close gates."
 
       - name: Run lane closeout (hard-gate)
