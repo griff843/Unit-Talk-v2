@@ -172,7 +172,7 @@ jobs:
           fi
 
       - name: Setup pnpm
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 10.29.3
@@ -239,23 +239,20 @@ jobs:
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            pr_url=$(jq -r '.pr_url // empty' "$MANIFEST_PATH")
-            pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$' || true)
-            merge_sha=""
-            if [ -n "$pr_number" ]; then
-              merge_sha=$(gh pr view "$pr_number" --json mergeCommit -q '.mergeCommit.oid // empty' 2>/dev/null || true)
-            fi
-            if [ -n "$merge_sha" ]; then
-              echo "::notice title=post-merge-lane-close::workflow_dispatch replay resolved merge SHA $merge_sha from PR #$pr_number (not github.sha)."
-              echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
-            else
-              echo "::warning title=post-merge-lane-close::Could not resolve merge SHA from manifest.pr_url ($pr_url) — falling back to github.sha, which may be wrong for a workflow_dispatch replay."
-              echo "merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "merge_sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          pr_url=$(jq -r '.pr_url // empty' "$MANIFEST_PATH")
+          pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$' || true)
+          if [ -z "$pr_number" ]; then
+            echo "::error title=post-merge-lane-close::Cannot resolve authoritative merge SHA: manifest.pr_url is missing or invalid ($pr_url)."
+            exit 1
           fi
+          merge_sha=$(gh pr view "$pr_number" --json mergeCommit -q '.mergeCommit.oid // empty')
+          if ! echo "$merge_sha" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error title=post-merge-lane-close::PR #$pr_number has no validated merge SHA."
+            exit 1
+          fi
+          echo "::notice title=post-merge-lane-close::Resolved authoritative merge SHA $merge_sha from PR #$pr_number."
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
 
       - name: Bind proof artifacts to merge SHA
         # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
@@ -304,7 +301,7 @@ jobs:
         # never bound here at all; only evidence.json/verification.md (which
         # are never immutable, and are unconditionally corrected again by
         # that same next step) are.
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.resolve_sha.outputs.merge_sha != ''
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
@@ -314,7 +311,8 @@ jobs:
         run: |
           existing_commit_sha=$(jq -r '.commit_sha // empty' "$MANIFEST_PATH")
           if [ -n "$existing_commit_sha" ] && [ "$existing_commit_sha" != "$MERGE_SHA" ]; then
-            echo "::notice title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) already differs from this push's SHA ($MERGE_SHA) -- this push is a manifest/proof repair commit, not $ISSUE_ID's own implementation merge. Skipping early proof-generate bind; ops:lane-close --repair-merged will bind evidence/verification/model-routing using the authoritative SHA and PR it resolves itself."
+            echo "::error title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) does not match authoritative PR merge SHA ($MERGE_SHA). Refusing mismatched proof binding."
+            exit 1
           else
             # Regenerate proof files with the verified merge SHA so the inline
             # "Merge SHA:" field is correct, not just appended at the end.
@@ -323,10 +321,26 @@ jobs:
             # binds it when explicitly passed --bind-model-routing, which
             # this invocation deliberately never does -- it is bound only by
             # the validated ops:lane-close --repair-merged step below.
-            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
-              && echo "::notice title=post-merge-lane-close::Proof artifacts (evidence/verification only) regenerated with merge SHA for $ISSUE_ID." \
-              || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
+            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json
+            echo "::notice title=post-merge-lane-close::Proof artifacts regenerated with authoritative merge SHA for $ISSUE_ID."
           fi
+
+      - name: Persist proof binding before downstream closeout gates
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.resolve_sha.outputs.merge_sha != ''
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "docs/06_status/proof/$ISSUE_ID/"
+          if git diff --cached --quiet; then
+            echo "::notice title=post-merge-lane-close::Proof binding already persisted."
+            exit 0
+          fi
+          git commit -m "chore(proof): bind $ISSUE_ID to authoritative merge SHA [skip ci]"
+          git push
+          echo "::notice title=post-merge-lane-close::Proof binding persisted before truth-check and lane-close gates."
 
       - name: Run lane closeout (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'

@@ -1643,3 +1643,34 @@ test('UTV2-1632: the postgres driver the tripwire imports is a declared dependen
     'scripts/ops/db-health-tripwire.ts imports `postgres`; it must be a declared dependency',
   );
 });
+
+test('UTV2-1684: post-merge proof binding uses resolved merge authority on every trigger', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const bindStart = workflow.indexOf('- name: Bind proof artifacts to merge SHA');
+  const persistStart = workflow.indexOf('- name: Persist proof binding before downstream closeout gates');
+  const closeStart = workflow.indexOf('- name: Run lane closeout (hard-gate)');
+  assert.ok(bindStart >= 0 && persistStart > bindStart && closeStart > persistStart);
+  const bindBlock = workflow.slice(bindStart, persistStart);
+  const bindCondition = bindBlock.split('\n').find((line) => line.trimStart().startsWith('if:')) ?? '';
+  assert.doesNotMatch(bindCondition, /github\.event_name/);
+  assert.match(bindBlock, /steps\.resolve_sha\.outputs\.merge_sha != ''/);
+  assert.match(workflow, /gh pr view "\$pr_number" --json mergeCommit/);
+  assert.doesNotMatch(workflow, /falling back to github\.sha/);
+});
+
+test('UTV2-1684: proof binding persists before unrelated closeout failures and rejects mismatches', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const persistStart = workflow.indexOf('- name: Persist proof binding before downstream closeout gates');
+  const closeStart = workflow.indexOf('- name: Run lane closeout (hard-gate)');
+  const failStart = workflow.indexOf('- name: Fail on lane closeout failure');
+  assert.ok(persistStart >= 0 && persistStart < closeStart && closeStart < failStart);
+  assert.match(workflow, /Refusing mismatched proof binding/);
+  assert.match(workflow, /git commit -m "chore\(proof\): bind \$ISSUE_ID/);
+  assert.match(workflow, /git push/);
+});
