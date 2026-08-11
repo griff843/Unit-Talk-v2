@@ -1,3 +1,7 @@
+# PROOF: UTV2-1682
+
+MERGE_SHA: pending
+
 # UTV2-1682 Diff Summary
 
 - Issue: `UTV2-1682`

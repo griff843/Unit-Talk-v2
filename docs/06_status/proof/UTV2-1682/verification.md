@@ -1,6 +1,19 @@
-# UTV2-1682 Verification Evidence
+# PROOF: UTV2-1682
+
+MERGE_SHA: pending
 
 Verified implementation SHA: `69019e415342114b1d4528b7c344a2bcaba35eaa`
+
+## ASSERTIONS:
+
+- Parked lifecycle status consumes zero executor, total, and lane-type capacity.
+- Governance visibility and file-scope locks are retained while parked.
+- Capacity arithmetic is invariant across the root and parked manifest locations.
+- Unreadable canonical manifest populations fail closed.
+
+## EVIDENCE:
+
+The measured commands, focused assertions, and live read-only repository result are recorded below.
 
 ## Verification
 
