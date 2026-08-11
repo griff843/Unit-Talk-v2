@@ -3,7 +3,7 @@
 Generated at: 2026-08-11T18:32:47.033Z
 Issue: UTV2-1638
 Tier: T2
-Lane type: hygiene
+Lane type: governance
 Branch: claude/utv2-1638-triage-red-scripts-tests
 PR URL: N/A
 Head SHA: 96964d33ca9d8733327b1848cea35e0ec49046bf
