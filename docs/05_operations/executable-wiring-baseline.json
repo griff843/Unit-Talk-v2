@@ -890,19 +890,19 @@
       },
       {
         "path": "scripts/ops/fix-sync-yml.test.ts",
-        "disposition": "failing-triage",
+        "disposition": "phase-b-wiring",
         "owner": "claude-governance",
         "issue": "UTV2-1638",
         "expiry": "2026-10-31",
-        "note": "RED: asserts scripts/ops/worktree-setup.ps1 is a deprecated stub; it is not. Stale test or reverted deprecation."
+        "note": "TRIAGED (UTV2-1638): was RED asserting worktree-setup.ps1 is a \"Deprecated compatibility stub\". It is not, and no reachable commit shows it ever was -- the assertion described an intention, not the repository. Replaced with assertions on the invariants the script actually enforces (lane isolation, no junctioned node_modules, frozen install). Now green (2/2); wiring deferred only because package.json is held by another lane."
       },
       {
         "path": "scripts/ops/policy-engine.test.ts",
-        "disposition": "failing-triage",
+        "disposition": "phase-b-wiring",
         "owner": "claude-governance",
         "issue": "UTV2-1638",
         "expiry": "2026-10-31",
-        "note": "RED with 12 failures: the merge policy engine has drifted from its test contract. Triage before wiring — this is on the merge path."
+        "note": "TRIAGED (UTV2-1638): was RED with 12 failures from one cause -- loadPolicies() globbed every *.json in the policies dir and demanded an array, but codex-model-routing.json is a schema-versioned config document, not a rule set. Loader now skips schema-versioned config documents by shape and still hard-errors on anything unrecognised. Now green (21/21); wiring deferred only because package.json is held by another lane."
       },
       {
         "path": "scripts/ops/runtime-verifier-gate.test.ts",
@@ -971,7 +971,7 @@
         "owner": "claude-governance",
         "issue": "UTV2-1638",
         "expiry": "2026-10-31",
-        "note": "Documented promotion-target drift check; never invoked by a workflow. Documentation alone is not coverage — Phase B wires it or archives it."
+        "note": "Documented promotion-target drift check; never invoked by a workflow. Documentation alone is not coverage \u2014 Phase B wires it or archives it."
       },
       {
         "path": "scripts/ops/apply-branch-protection.sh",
