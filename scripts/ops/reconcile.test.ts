@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { reconcileManifest } from './reconcile.js';
+import { reconcileManifest, selectReconcilableManifests } from './reconcile.js';
 import type { LaneManifest } from './shared.js';
 
 const STALE_MS = 4 * 60 * 60 * 1000;
@@ -249,4 +249,137 @@ test('UTV2-1613 adversarial review fix: a reopened lane is never eligible for th
 
   assert.strictEqual(resolveCalled, false, 'resolveMergedPr must not even be called for reopened');
   assert.notEqual(entry.verdict, 'ghost_merged');
+});
+
+
+// ── UTV2-1619: reconcile candidate selection ─────────────────────────────────
+//
+// The scheduled reconciler is an unattended writer to `main`. What it may
+// TOUCH matters as much as what it decides once it has: a candidate filter
+// that admits terminal lanes turns a maintenance job into a corruption job.
+// These lock the selection boundary itself, not the verdicts downstream.
+
+function manifestWithStatus(issueId: string, status: LaneManifest['status']): LaneManifest {
+  return { ...manifestWithHeartbeat('2026-05-16T10:00:00.000Z'), issue_id: issueId, status };
+}
+
+// `closed` is not a member of LaneManifestStatus -- it is a legacy on-disk
+// value on 28 manifests written before the enum existed. The cast is the
+// point of the test: reconcile reads real files, and real files carry values
+// the type says are impossible.
+const LEGACY_CLOSED = 'closed' as LaneManifest['status'];
+
+test('UTV2-1619: a merged lane is never a reconcile candidate', () => {
+  const selected = selectReconcilableManifests([manifestWithStatus('UTV2-1001', 'merged')]);
+  assert.deepEqual(selected, [], 'merged is terminal — it must stay merged');
+});
+
+test('UTV2-1619: a done lane is never a reconcile candidate', () => {
+  const selected = selectReconcilableManifests([manifestWithStatus('UTV2-1002', 'done')]);
+  assert.deepEqual(selected, [], 'done is terminal — it must stay done');
+});
+
+test('UTV2-1619: legacy `closed` manifests are never reconciled into blocked', () => {
+  // The regression this lane exists for. Under the old two-value denylist
+  // these fell through as "active", were classified stranded on a ~3-month-old
+  // heartbeat, and would have been rewritten to `blocked` -- a status that
+  // consumes both total and type capacity.
+  const closed = [
+    manifestWithStatus('UTV2-619', LEGACY_CLOSED),
+    manifestWithStatus('UTV2-1017', LEGACY_CLOSED),
+    manifestWithStatus('UTV2-1043', LEGACY_CLOSED),
+  ];
+
+  assert.deepEqual(selectReconcilableManifests(closed), [], 'legacy closed must never be selected');
+
+  // And prove the consequence, not just the filter: were one to reach
+  // reconcileManifest it WOULD be mutated. The filter is the only thing
+  // standing between dead history and a capacity-consuming rewrite.
+  let written: LaneManifest | null = null;
+  const entry = reconcileManifest(closed[0]!, {
+    apply: true,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => null,
+    writeManifest: (manifest) => {
+      written = manifest;
+    },
+  });
+  assert.equal(entry.verdict, 'stranded');
+  assert.equal(written?.status, 'blocked');
+});
+
+test('UTV2-1619: every terminal status is excluded, not just done and merged', () => {
+  const terminal: Array<LaneManifest['status']> = [
+    'merged',
+    'done',
+    'failed',
+    'superseded',
+    'cancelled',
+  ];
+  for (const status of terminal) {
+    assert.deepEqual(
+      selectReconcilableManifests([manifestWithStatus('UTV2-1004', status)]),
+      [],
+      `${status} is terminal and must never be a reconcile candidate`,
+    );
+  }
+});
+
+test('UTV2-1619: an unrecognised status fails closed rather than being swept', () => {
+  const unknown = 'archived_by_some_future_writer' as LaneManifest['status'];
+  assert.deepEqual(
+    selectReconcilableManifests([manifestWithStatus('UTV2-1005', unknown)]),
+    [],
+    'an allowlist must exclude what it does not recognise',
+  );
+});
+
+test('UTV2-1619: genuinely active lanes remain candidates and are left untouched when healthy', () => {
+  const active: Array<LaneManifest['status']> = [
+    'started',
+    'in_progress',
+    'in_review',
+    'blocked',
+    'parked',
+    'reopened',
+  ];
+  for (const status of active) {
+    assert.equal(
+      selectReconcilableManifests([manifestWithStatus('UTV2-1006', status)]).length,
+      1,
+      `${status} is active and must remain visible to reconcile`,
+    );
+  }
+
+  // Selected is not the same as mutated: a healthy active lane with a fresh
+  // heartbeat and no merged PR is `clean` and never written.
+  const healthy = { ...manifestWithHeartbeat('2026-05-17T11:30:00.000Z'), status: 'in_progress' as const };
+  const entry = reconcileManifest(healthy, {
+    apply: true,
+    now: NOW,
+    branchExists: () => true,
+    resolveMergedPr: () => null,
+    writeManifest: () => {
+      throw new Error('a healthy active lane must never be written');
+    },
+  });
+  assert.equal(entry.verdict, 'clean');
+  assert.equal(entry.planned_mutation, null);
+});
+
+test('UTV2-1619: --issue narrows the candidate set to exactly the named lanes', () => {
+  const manifests = [
+    manifestWithStatus('UTV2-1627', 'in_review'),
+    manifestWithStatus('UTV2-1684', 'started'),
+    manifestWithStatus('UTV2-1398', 'started'),
+    manifestWithStatus('UTV2-619', LEGACY_CLOSED),
+  ];
+
+  const selected = selectReconcilableManifests(manifests, new Set(['UTV2-1627', 'UTV2-1684']));
+  assert.deepEqual(
+    selected.map((m) => m.issue_id),
+    ['UTV2-1627', 'UTV2-1684'],
+    'targeted reconciliation must not touch unrelated lanes',
+  );
 });
