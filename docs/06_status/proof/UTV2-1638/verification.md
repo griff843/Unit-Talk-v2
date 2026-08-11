@@ -1,6 +1,6 @@
 # PROOF: UTV2-1638 triage the red scripts/* test baseline
 
-MERGE_SHA: 8cd2c08c1e57a7650050aa0bc6cc405c34e8f8ee
+MERGE_SHA: 867c4d6e421f7d51a881fce103c4a05b6642a644
 
 Issue: UTV2-1638
 Tier: T2

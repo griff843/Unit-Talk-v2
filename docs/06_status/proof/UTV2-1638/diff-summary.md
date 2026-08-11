@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1638-triage-red-scripts-tests
 PR URL: N/A
 Head SHA: 96964d33ca9d8733327b1848cea35e0ec49046bf
-Merge SHA: 8cd2c08c1e57a7650050aa0bc6cc405c34e8f8ee
+Merge SHA: 867c4d6e421f7d51a881fce103c4a05b6642a644
 Diff base: 763289224622ecefd1cc08cd8432bb4ecf1ed6de
 Diff target: 96964d33ca9d8733327b1848cea35e0ec49046bf
 
@@ -37,4 +37,4 @@ M	scripts/ops/policy-engine.ts
 
 ## SHA Binding
 Head SHA: 96964d33ca9d8733327b1848cea35e0ec49046bf
-Merge SHA: 8cd2c08c1e57a7650050aa0bc6cc405c34e8f8ee
+Merge SHA: 867c4d6e421f7d51a881fce103c4a05b6642a644
