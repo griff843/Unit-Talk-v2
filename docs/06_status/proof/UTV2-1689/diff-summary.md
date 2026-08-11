@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1689-l3-lane-readiness-gate
 PR URL: N/A
 Head SHA: 5bc3547ac1a46939e7f707eba2e4062df64f1487
-Merge SHA: N/A
+Merge SHA: 6c859b5598d5d0af9104277e0c297855f47d0bff
 Diff base: 43fe6b98887bc60425c16adfe65b766c39950e84
 Diff target: 5bc3547ac1a46939e7f707eba2e4062df64f1487
 
@@ -35,4 +35,4 @@ M	scripts/ops/truth-check-lib.ts
 
 ## SHA Binding
 Head SHA: 5bc3547ac1a46939e7f707eba2e4062df64f1487
-Merge SHA: N/A
+Merge SHA: 6c859b5598d5d0af9104277e0c297855f47d0bff

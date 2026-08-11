@@ -1,6 +1,6 @@
 # PROOF: UTV2-1689
 
-MERGE_SHA: 86bb64ceabd7ce9d185b44b2c1378291b607b6a8
+MERGE_SHA: 6c859b5598d5d0af9104277e0c297855f47d0bff
 
 > Branch head at authoring time. Rebound to the authoritative merge SHA
 > post-merge by `post-merge-lane-close.yml` via `ops:proof-generate --merge-sha`.
