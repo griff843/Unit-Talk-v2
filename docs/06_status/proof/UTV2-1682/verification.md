@@ -1,5 +1,7 @@
 # UTV2-1682 Verification Evidence
 
+Verified implementation SHA: `69019e415342114b1d4528b7c344a2bcaba35eaa`
+
 ## Verification
 
 | Check | Result | Evidence |
