@@ -61,4 +61,12 @@ This T2 lane changes read-only repository governance tooling and performs no dat
 
 ### R-level compliance
 
-Pending the committed proof-bundle check. The changed implementation paths under `scripts/ops/**` do not match a rule in `docs/05_operations/r1-r5-rules.json`.
+`npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` passed against the committed proof bundle:
+
+```text
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+The changed implementation paths under `scripts/ops/**` do not match a rule in `docs/05_operations/r1-r5-rules.json`.
