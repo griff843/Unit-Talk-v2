@@ -13,6 +13,8 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1402
 Generated at: 2026-08-11T15:01:30Z
 result: pass
 
+## Verification
+
 ASSERTIONS:
 
 - [x] `ops:truth-check` reaches `VERDICT: pass` with zero failures on a lane whose parent issue is in a non-terminal state
@@ -21,6 +23,8 @@ ASSERTIONS:
 - [x] An absent or unrecognized state type fails closed and never widens the gate
 - [x] All 85 pre-existing tests in the changed module still pass unchanged
 - [x] `pnpm type-check`, `pnpm test`, `pnpm lint`, and `r-level-check` all pass
+
+## Runtime Verification
 
 EVIDENCE:
 
