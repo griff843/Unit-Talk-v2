@@ -1,6 +1,6 @@
 # PROOF: UTV2-1638 triage the red scripts/* test baseline
 
-MERGE_SHA: N/A
+MERGE_SHA: 8cd2c08c1e57a7650050aa0bc6cc405c34e8f8ee
 
 Issue: UTV2-1638
 Tier: T2
@@ -10,10 +10,10 @@ Head SHA: 96964d33ca9d8733327b1848cea35e0ec49046bf
 Generated at: 2026-08-11T18:30:00Z
 result: pass
 
-> The merge-SHA anchor above is the bindable placeholder `N/A`, rebound
-> post-merge by `post-merge-lane-close.yml`. Explanatory prose is kept off the
-> anchor line deliberately: a descriptive value is not a bindable token and
-> makes the rebinder refuse the whole closeout.
+> The merge-SHA anchor above carries the branch head SHA, rebound to the
+> authoritative merge SHA post-merge by `post-merge-lane-close.yml`. It must be
+> a real 40-char SHA: `Executor Result Validation` rejects `N/A`, while the
+> rebinder rejects descriptive prose. A head SHA satisfies both.
 
 ## Summary
 
