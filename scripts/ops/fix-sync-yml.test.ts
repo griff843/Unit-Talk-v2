@@ -42,8 +42,29 @@ test('fix-sync-yml leaves legacy sync.yml untouched when a per-issue file exists
   );
 });
 
-test('worktree-setup is marked as deprecated', () => {
+// UTV2-1638 triage: this test previously asserted that worktree-setup.ps1 is a
+// "Deprecated compatibility stub". It is not, and there is no sign it ever was
+// on any commit reachable from main -- the file is a live 61-line script whose
+// last functional change was UTV2-1062. The deprecation was either planned and
+// never carried out, or carried out and reverted; either way the assertion
+// described an intention rather than the repository, so it failed permanently
+// and kept the file out of `pnpm test`.
+//
+// Replaced with assertions on the two invariants the script actually exists to
+// enforce, both of which are real regressions if they are lost:
+//   1. it refuses to run in the main checkout (lane isolation), and
+//   2. it refuses a junctioned/symlinked node_modules and does a real frozen
+//      install, so dependency state is never shared between lanes.
+test('worktree-setup enforces lane isolation and unshared node_modules', () => {
   const script = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'worktree-setup.ps1'), 'utf8');
-  assert.match(script, /Deprecated compatibility stub/i);
-  assert.match(script, /main checkout/i);
+
+  // 1. Never operate on the main checkout.
+  assert.match(script, /Lane setup must run in an isolated lane cwd, not the main checkout/i);
+
+  // 2. node_modules must be real, not a reparse point shared with another tree.
+  assert.match(script, /ReparsePoint/);
+  assert.match(script, /node_modules must not be a junction or symlink in the lane cwd/i);
+
+  // 3. A real, reproducible install -- not a copy or a link.
+  assert.match(script, /pnpm install --frozen-lockfile --dir \$WorktreePath/);
 });
