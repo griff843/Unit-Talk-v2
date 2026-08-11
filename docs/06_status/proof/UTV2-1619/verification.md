@@ -1,6 +1,12 @@
 # PROOF: UTV2-1619 — reconcile candidate filter and scheduled write path
 
-MERGE_SHA: pending
+MERGE_SHA: 5d2d88b6d3b4de00cb1aa39ca701b6501771a147
+
+(Pre-merge placeholder: this branch's base commit on `main`. `ops:proof-generate
+--merge-sha` substitutes the SHA token in the line above with the authoritative merge
+SHA after the merge, per `post-merge-lane-close.yml`. `MERGE_SHA: pending` is accepted
+by the close-eligibility preflight but rejected by the Executor Result Validator, which
+requires a valid git SHA — see "Gate disagreement" below.)
 
 ASSERTIONS:
 - [x] Reconcile candidates are selected from the canonical `ACTIVE_LOCK_STATUSES` allowlist, not a denylist.
@@ -142,6 +148,30 @@ ops-reconcile.yml           YAML OK   token: ${{ secrets.SYNC_BOT_TOKEN || secre
 `scripts/` is not covered by `pnpm type-check` — the root tsconfig declares project
 references for `packages/` and `apps/` only. Evidence for `reconcile.ts` is `pnpm test`
 (runtime, via tsx) plus lint. No static type coverage is claimed for the changed file.
+
+### Gate disagreement found while validating this lane
+
+Two gates evaluate the same `MERGE_SHA:` anchor on the same artifact and disagree:
+
+- `evaluateCloseEligibilityPreflight` (CEP-E5) calls `hasBindableShaAnchor`, which tests
+  only that the line is labelled. `proof-generate` separately accepts `pending` as an
+  explicit placeholder (`PLACEHOLDER_VALUE_PATTERN`), and rebinds it cleanly.
+- `executor-result-validator.yml` requires the value to be a valid git SHA and rejects
+  `pending` outright: `Proof MERGE_SHA is not a valid git SHA: "pending"`.
+
+So a proof bundle can be simultaneously "close-eligible" and "not a valid executor
+result". This is the same duplicated-authority drift class already recorded for this
+issue as capabilities 11, 15 and 19: two implementations of one rule, drifting apart.
+Resolved here by using the branch base SHA — the convention prior milestones used — which
+satisfies both. The underlying disagreement is **not** fixed by this lane and is out of
+its declared scope; it is reported rather than silently worked around.
+
+Observed the same way: `File scope lock` fails structurally on every milestone of a
+multi-milestone issue after the first. `resolveTrustedManifests` prefers the base-branch
+copy of any manifest path that exists on base, and a closed milestone leaves
+`docs/06_status/lanes/UTV2-1619.json` terminal on `main`, so the next milestone's branch
+resolves to "no active lane manifest". PRs #1388, #1389 and #1390 each merged with this
+check red for the same reason; it is advisory, not a required context.
 
 ## Not claimed
 

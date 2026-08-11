@@ -1,6 +1,9 @@
 # UTV2-1619 diff summary — reconcile candidate filter and scheduled write path
 
-MERGE_SHA: pending
+MERGE_SHA: 5d2d88b6d3b4de00cb1aa39ca701b6501771a147
+
+(Pre-merge placeholder: this branch's base commit on `main`, rebound to the
+authoritative merge SHA by `ops:proof-generate --merge-sha` after merge.)
 
 Two defects, one in the reconciler's logic and one in its transport. Either alone
 made the scheduled reconciler useless; together they were self-concealing, because
