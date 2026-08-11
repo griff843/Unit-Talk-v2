@@ -142,24 +142,21 @@ test('CAP-2: in_progress does consume an executor slot', () => {
   assert.equal(violations.some((v) => v.code === 'claude_cap_exceeded'), true);
 });
 
-test('CAP-3: parked releases executor capacity but still occupies a lane slot', () => {
+test('UTV2-1682 CAP-3: parked releases executor, total, and lane-type capacity', () => {
   const parked = [
     { issue_id: 'UTV2-9001', status: 'parked', executor: 'claude', lane_type: 'governance' },
     { issue_id: 'UTV2-9002', status: 'parked', executor: 'claude', lane_type: 'governance' },
   ] as never[];
-  const execConfig = capPolicy({ total: 99, executors: { claude: 1, codex: 6 }, type_caps: { governance: 99 } });
-  assert.equal(
-    checkConcurrencyLimits(parked, 'governance', 'claude', execConfig, {})
-      .some((v) => v.code === 'claude_cap_exceeded'),
-    false,
-    'parked must not hold executor capacity',
-  );
-  const totalConfig = capPolicy({ total: 2, executors: { claude: 99, codex: 99 }, type_caps: { governance: 99 } });
-  assert.equal(
-    checkConcurrencyLimits(parked, 'governance', 'claude', totalConfig, {})
-      .some((v) => v.code === 'total_cap_exceeded'),
-    true,
-    'parked must still occupy a lane slot, or park becomes a way to defeat the caps',
+  const config = capPolicy({
+    total: 1,
+    executors: { claude: 1, codex: 1 },
+    type_caps: { governance: 1 },
+  });
+
+  assert.deepStrictEqual(
+    checkConcurrencyLimits(parked, 'governance', 'claude', config, {}),
+    [],
+    'parked lanes must consume zero executor, total, and governance-type capacity',
   );
 });
 

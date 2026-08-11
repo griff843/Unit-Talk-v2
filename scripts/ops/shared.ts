@@ -21,7 +21,8 @@ export type LaneManifestStatus =
    *                asserts NO completion, and is refused as success by the
    *                done-gate.
    * `parked`     - deliberately set aside, retaining identity, scope lock and
-   *                history. Releases executor attention but keeps the lane.
+   *                history. Releases all capacity while remaining visible to
+   *                governance and file-scope conflict checks.
    * `superseded` - the work was overtaken by other work that shipped.
    * `cancelled`  - the work was withdrawn and will not be done.
    *
@@ -332,7 +333,6 @@ export const TOTAL_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
   'in_progress',
   'in_review',
   'blocked',
-  'parked',
   'reopened',
 ]);
 
@@ -361,7 +361,6 @@ export const TYPE_CAPACITY_STATUSES = new Set<LaneManifestStatus>([
   'in_progress',
   'in_review',
   'blocked',
-  'parked',
   'reopened',
 ]);
 
@@ -383,10 +382,10 @@ export const SUCCESS_TERMINAL_STATUSES = new Set<LaneManifestStatus>(['merged', 
 
 /**
  * Retained for existing callers (reconcile, orchestration-reconciler, and the
- * file-scope guard's mirror). Semantically identical to the total-capacity set
- * minus `parked`: a parked lane keeps its scope lock, but callers of this
- * historical name expect "actively holding" membership. Kept as its own literal
- * rather than derived, so a future change to either set is visible in review.
+ * file-scope guard's mirror). This is deliberately broader than every capacity
+ * set: a parked lane consumes no capacity but keeps its scope lock. Kept as its
+ * own literal rather than derived, so a future change to capacity membership
+ * cannot silently release a conflict constraint.
  */
 export const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
   'started',
@@ -852,30 +851,39 @@ export function manifestExists(issueId: string): boolean {
   return fs.existsSync(issueToManifestPath(issueId));
 }
 
-export function readAllManifestPaths(): string[] {
-  if (!fs.existsSync(MANIFEST_DIR)) {
-    return [];
+export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
+  if (!fs.existsSync(manifestDir)) {
+    throw new Error(`Lane manifest directory does not exist: ${manifestDir}`);
   }
 
-  return fs
-    .readdirSync(MANIFEST_DIR)
-    .filter((entry) => entry.endsWith('.json'))
-    .map((entry) => path.join(MANIFEST_DIR, entry))
-    .sort((left, right) => left.localeCompare(right));
+  const paths: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith('.json')) {
+        paths.push(entryPath);
+      }
+    }
+  };
+
+  visit(manifestDir);
+  return paths.sort((left, right) => left.localeCompare(right));
 }
 
-export function readAllManifests(): LaneManifest[] {
-  return readAllManifestPaths().map((filePath) => parseJsonFile<LaneManifest>(filePath));
+export function readAllManifests(manifestDir = MANIFEST_DIR): LaneManifest[] {
+  return readAllManifestPaths(manifestDir).map((filePath) => parseJsonFile<LaneManifest>(filePath));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // UTV2-1634: authoritative active-lane discovery.
 //
-// readAllManifests() above enumerates docs/06_status/lanes/*.json from the LOCAL
-// working tree only. A lane's manifest is created on its own branch at
-// ops:lane-start and does not reach `main` until the lane merges -- so for the
-// entire time a lane is active, which is precisely when concurrency control
-// matters, its manifest is invisible to every other worktree.
+// readAllManifests() above recursively enumerates the LOCAL working tree. A
+// lane's manifest is created on its own branch at ops:lane-start and does not
+// reach `main` until the lane merges -- so for the entire time a lane is active,
+// which is precisely when concurrency control matters, its manifest is
+// invisible to every other worktree.
 //
 // That makes every gate built on it fail OPEN: an empty board and a full board
 // are indistinguishable, so the ABSENCE of a violation gets read as PROOF of no
@@ -905,12 +913,57 @@ export interface OpenPullRequestRef {
   url?: string;
 }
 
-/** How a resolved manifest was located -- recorded in the admission receipt. */
+/** How a resolved manifest entered the canonical source population. */
 export type LaneManifestSource = 'local_worktree' | 'open_pr_head';
+
+/** Which sanctioned manifest directory held the lane. Never a capacity signal. */
+export type LaneManifestLocation = 'lanes_root' | 'lanes_parked';
+
+export interface LocatedLaneManifest {
+  manifest: LaneManifest;
+  location: LaneManifestLocation;
+}
+
+export const CANONICAL_CAPACITY_SOURCE_POPULATION = 'canonical_active_lane_union' as const;
+
+export interface LaneCapacityClassification {
+  lifecycleStatus: LaneManifestStatus;
+  sourcePopulation: typeof CANONICAL_CAPACITY_SOURCE_POPULATION;
+  classification: 'counted' | 'partially_counted' | 'visible_uncounted';
+  countsAgainst: {
+    executor: boolean;
+    total: boolean;
+    laneType: boolean;
+  };
+}
+
+/**
+ * Capacity is a pure function of lifecycle status. Manifest location is
+ * intentionally absent from this API so relocating a lane can never alter its
+ * arithmetic. Parked lanes remain in the canonical governance population and
+ * lock population, but are explicitly visible-and-uncounted for every cap.
+ */
+export function classifyLaneCapacity(status: LaneManifestStatus): LaneCapacityClassification {
+  const countsAgainst = {
+    executor: EXECUTOR_CAPACITY_STATUSES.has(status),
+    total: TOTAL_CAPACITY_STATUSES.has(status),
+    laneType: TYPE_CAPACITY_STATUSES.has(status),
+  };
+  const count = Object.values(countsAgainst).filter(Boolean).length;
+  return {
+    lifecycleStatus: status,
+    sourcePopulation: CANONICAL_CAPACITY_SOURCE_POPULATION,
+    classification:
+      count === 0 ? 'visible_uncounted' : count === 3 ? 'counted' : 'partially_counted',
+    countsAgainst,
+  };
+}
 
 export interface ResolvedActiveLane {
   manifest: LaneManifest;
   source: LaneManifestSource;
+  manifestLocation: LaneManifestLocation;
+  capacity: LaneCapacityClassification;
   /** PR number when the manifest came from an open PR head. */
   prNumber?: number;
 }
@@ -926,8 +979,9 @@ export interface ActiveLaneDiscovery {
 
 export interface ActiveLaneDiscoveryDeps {
   listOpenPullRequests?: () => OpenPullRequestRef[];
-  readManifestAtRef?: (issueId: string, ref: string) => LaneManifest | null;
+  readManifestAtRef?: (issueId: string, ref: string) => LaneManifest | LocatedLaneManifest | null;
   readLocalManifests?: () => LaneManifest[];
+  readLocalManifestEntries?: () => LocatedLaneManifest[];
 }
 
 /**
@@ -1123,9 +1177,10 @@ export function isConfirmedManifestNotFound(stderr: string, status: number | nul
   return /http 404|404 not found|not found \(http 404\)/.test(text);
 }
 
-function defaultReadManifestAtRef(
+function defaultReadManifestAtPathAtRef(
   issueId: string,
   ref: string,
+  manifestPath: string,
   retry: DiscoveryRetryDeps = {},
 ): LaneManifest | null {
   let stdout: string;
@@ -1136,7 +1191,7 @@ function defaultReadManifestAtRef(
           'gh',
           [
             'api',
-            `repos/{owner}/{repo}/contents/docs/06_status/lanes/${issueId}.json?ref=${encodeURIComponent(ref)}`,
+            `repos/{owner}/{repo}/contents/${manifestPath}?ref=${encodeURIComponent(ref)}`,
             '--jq',
             '.content',
           ],
@@ -1163,7 +1218,7 @@ function defaultReadManifestAtRef(
     // an unknown as an absence is precisely the fail-open this lane exists to
     // remove: it would silently drop an active lane from the board.
     throw new ActiveLaneDiscoveryError(
-      `Could not read the lane manifest for ${issueId} at ref "${ref}", and the failure is not a confirmed 404. ` +
+      `Could not read the lane manifest for ${issueId} at "${manifestPath}" on ref "${ref}", and the failure is not a confirmed 404. ` +
         `Refusing to treat an unreadable manifest as an absent one. Underlying error: ${stderr.trim() || 'unknown'}`,
       error,
     );
@@ -1171,7 +1226,7 @@ function defaultReadManifestAtRef(
 
   if (!stdout) {
     throw new ActiveLaneDiscoveryError(
-      `The contents API returned an empty body for ${issueId} at ref "${ref}" without a 404. ` +
+      `The contents API returned an empty body for ${issueId} at "${manifestPath}" on ref "${ref}" without a 404. ` +
         'Refusing to infer absence from an empty response.',
     );
   }
@@ -1181,7 +1236,7 @@ function defaultReadManifestAtRef(
     decoded = Buffer.from(stdout, 'base64').toString('utf8');
   } catch (error) {
     throw new ActiveLaneDiscoveryError(
-      `Base64 decoding failed for ${issueId}'s manifest at ref "${ref}".`,
+      `Base64 decoding failed for ${issueId}'s manifest at "${manifestPath}" on ref "${ref}".`,
       error,
     );
   }
@@ -1190,11 +1245,59 @@ function defaultReadManifestAtRef(
     return JSON.parse(decoded) as LaneManifest;
   } catch (error) {
     throw new ActiveLaneDiscoveryError(
-      `The lane manifest for ${issueId} at ref "${ref}" is not valid JSON. ` +
+      `The lane manifest for ${issueId} at "${manifestPath}" on ref "${ref}" is not valid JSON. ` +
         'A malformed manifest is an unknown lane state, not an absent one.',
       error,
     );
   }
+}
+
+export interface ManifestAtRefReadDeps {
+  readManifestAtPath?: (
+    issueId: string,
+    ref: string,
+    manifestPath: string,
+  ) => LaneManifest | null;
+}
+
+/**
+ * Reads the sanctioned root location first, then the parked directory only
+ * after a confirmed absence. An unreadable root lookup throws and never falls
+ * through to parked, preserving the unknown-board fail-closed guarantee.
+ */
+export function readManifestAtRef(
+  issueId: string,
+  ref: string,
+  deps: ManifestAtRefReadDeps = {},
+): LocatedLaneManifest | null {
+  const readManifestAtPath = deps.readManifestAtPath ?? defaultReadManifestAtPathAtRef;
+  const candidates: Array<{ path: string; location: LaneManifestLocation }> = [
+    { path: `docs/06_status/lanes/${issueId}.json`, location: 'lanes_root' },
+    { path: `docs/06_status/lanes/parked/${issueId}.json`, location: 'lanes_parked' },
+  ];
+
+  for (const candidate of candidates) {
+    const manifest = readManifestAtPath(issueId, ref, candidate.path);
+    if (manifest) {
+      return { manifest, location: candidate.location };
+    }
+  }
+  return null;
+}
+
+function isLocatedLaneManifest(
+  value: LaneManifest | LocatedLaneManifest,
+): value is LocatedLaneManifest {
+  return 'manifest' in value && 'location' in value;
+}
+
+function localManifestEntries(): LocatedLaneManifest[] {
+  return readAllManifestPaths().map((filePath) => ({
+    manifest: parseJsonFile<LaneManifest>(filePath),
+    location: relativeToRoot(filePath).startsWith('docs/06_status/lanes/parked/')
+      ? 'lanes_parked'
+      : 'lanes_root',
+  }));
 }
 
 /**
@@ -1214,8 +1317,16 @@ export function resolveActiveLaneManifests(
   deps: ActiveLaneDiscoveryDeps = {},
 ): ActiveLaneDiscovery {
   const listOpenPullRequests = deps.listOpenPullRequests ?? defaultListOpenPullRequests;
-  const readManifestAtRef = deps.readManifestAtRef ?? defaultReadManifestAtRef;
-  const readLocalManifests = deps.readLocalManifests ?? readAllManifests;
+  const readManifestAtRefDependency = deps.readManifestAtRef ?? readManifestAtRef;
+  const readLocalManifestEntries = deps.readLocalManifestEntries ?? (
+    deps.readLocalManifests
+      ? () =>
+          deps.readLocalManifests!().map((manifest) => ({
+            manifest,
+            location: 'lanes_root' as const,
+          }))
+      : localManifestEntries
+  );
 
   let openPullRequests: OpenPullRequestRef[];
   try {
@@ -1232,9 +1343,25 @@ export function resolveActiveLaneManifests(
   const skippedPullRequests: ActiveLaneDiscovery['skippedPullRequests'] = [];
 
   // Local first, so open-PR-head manifests overwrite them below.
-  for (const manifest of readLocalManifests()) {
+  let localEntries: LocatedLaneManifest[];
+  try {
+    localEntries = readLocalManifestEntries();
+  } catch (error) {
+    throw new ActiveLaneDiscoveryError(
+      'Could not read the local lane-manifest population, so the active-lane set is unknown. ' +
+        'Refusing to treat an unreadable local board as an empty one.',
+      error,
+    );
+  }
+  for (const entry of localEntries) {
+    const { manifest } = entry;
     if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) continue;
-    byIssueId.set(manifest.issue_id, { manifest, source: 'local_worktree' });
+    byIssueId.set(manifest.issue_id, {
+      manifest,
+      source: 'local_worktree',
+      manifestLocation: entry.location,
+      capacity: classifyLaneCapacity(manifest.status),
+    });
   }
 
   for (const pullRequest of openPullRequests) {
@@ -1251,9 +1378,9 @@ export function resolveActiveLaneManifests(
     // Any throw here is an UNKNOWN lane state. Normalise it to
     // ActiveLaneDiscoveryError so every caller sees one fail-closed type,
     // whether the failure came from the default gh path or an injected dep.
-    let manifest: LaneManifest | null;
+    let lookup: LaneManifest | LocatedLaneManifest | null;
     try {
-      manifest = readManifestAtRef(issueId, pullRequest.headRefName);
+      lookup = readManifestAtRefDependency(issueId, pullRequest.headRefName);
     } catch (error) {
       if (error instanceof ActiveLaneDiscoveryError) throw error;
       throw new ActiveLaneDiscoveryError(
@@ -1262,7 +1389,12 @@ export function resolveActiveLaneManifests(
         error,
       );
     }
-    if (!manifest) continue;
+    if (!lookup) continue;
+
+    const located = isLocatedLaneManifest(lookup)
+      ? lookup
+      : { manifest: lookup, location: 'lanes_root' as const };
+    const { manifest } = located;
 
     if (!ACTIVE_LOCK_STATUSES.has(manifest.status)) {
       // A merged/done lane still holding an open PR must NOT keep its locks.
@@ -1273,6 +1405,8 @@ export function resolveActiveLaneManifests(
     byIssueId.set(manifest.issue_id, {
       manifest,
       source: 'open_pr_head',
+      manifestLocation: located.location,
+      capacity: classifyLaneCapacity(manifest.status),
       prNumber: pullRequest.number,
     });
   }

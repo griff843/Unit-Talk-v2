@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   createManifest,
   defaultProofPaths,
@@ -602,9 +605,15 @@ test('mergeVerifierIdentity treats non-object existing values (string/array) as 
 
 import {
   ActiveLaneDiscoveryError,
+  activeManifestOverlap,
+  classifyLaneCapacity,
   issueIdFromBranchName,
+  readAllManifestPaths,
+  readAllManifests,
+  readManifestAtRef,
   resolveActiveLaneManifests,
   type LaneManifest,
+  type LaneManifestLocation,
   type OpenPullRequestRef,
 } from './shared.js';
 
@@ -634,6 +643,157 @@ function laneManifest(overrides: Partial<LaneManifest> & { issue_id: string }): 
     ...overrides,
   } as LaneManifest;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1682: parked lanes are visible-but-uncounted, independent of location.
+// Their file-scope locks remain an orthogonal conflict constraint.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('UTV2-1682: local manifest discovery recursively includes the parked directory', () => {
+  const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1682-manifests-'));
+  try {
+    const parkedDir = path.join(manifestDir, 'parked');
+    fs.mkdirSync(parkedDir);
+    fs.writeFileSync(
+      path.join(manifestDir, 'UTV2-16820.json'),
+      JSON.stringify(laneManifest({ issue_id: 'UTV2-16820', status: 'in_progress' })),
+    );
+    fs.writeFileSync(
+      path.join(parkedDir, 'UTV2-16821.json'),
+      JSON.stringify(laneManifest({ issue_id: 'UTV2-16821', status: 'parked' })),
+    );
+
+    assert.deepStrictEqual(
+      readAllManifestPaths(manifestDir).map((filePath) => path.relative(manifestDir, filePath)),
+      ['parked/UTV2-16821.json', 'UTV2-16820.json'],
+    );
+    assert.deepStrictEqual(
+      readAllManifests(manifestDir).map((manifest) => manifest.issue_id).sort(),
+      ['UTV2-16820', 'UTV2-16821'],
+    );
+  } finally {
+    fs.rmSync(manifestDir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1682: PR-head lookup falls back from the root path to the parked path', () => {
+  const lookedUpPaths: string[] = [];
+  const parked = laneManifest({ issue_id: 'UTV2-16822', status: 'parked' });
+  const lookup = readManifestAtRef('UTV2-16822', 'codex/utv2-16822-parked', {
+    readManifestAtPath: (_issueId, _ref, manifestPath) => {
+      lookedUpPaths.push(manifestPath);
+      return manifestPath.includes('/parked/') ? parked : null;
+    },
+  });
+
+  assert.deepStrictEqual(lookedUpPaths, [
+    'docs/06_status/lanes/UTV2-16822.json',
+    'docs/06_status/lanes/parked/UTV2-16822.json',
+  ]);
+  assert.strictEqual(lookup?.manifest, parked);
+  assert.strictEqual(lookup?.location, 'lanes_parked');
+});
+
+test('UTV2-1682: unreadable parked fallback cannot degrade into absence', () => {
+  const lookedUpPaths: string[] = [];
+  assert.throws(
+    () =>
+      readManifestAtRef('UTV2-16823', 'codex/utv2-16823-parked', {
+        readManifestAtPath: (_issueId, _ref, manifestPath) => {
+          lookedUpPaths.push(manifestPath);
+          if (!manifestPath.includes('/parked/')) return null;
+          throw new Error('HTTP 500 reading parked population');
+        },
+      }),
+    /HTTP 500 reading parked population/,
+  );
+  assert.strictEqual(lookedUpPaths.length, 2, 'an unknown parked read must throw, never return null');
+});
+
+function discoverParkedAt(location: LaneManifestLocation) {
+  const parked = laneManifest({
+    issue_id: 'UTV2-16824',
+    status: 'parked',
+    file_scope_lock: ['scripts/ops/shared.ts'],
+  });
+  return resolveActiveLaneManifests({
+    listOpenPullRequests: () => [],
+    readLocalManifestEntries: () => [{ manifest: parked, location }],
+  });
+}
+
+test('UTV2-1682: a parked lane is visible-but-uncounted in either manifest location', () => {
+  const root = discoverParkedAt('lanes_root');
+  const relocated = discoverParkedAt('lanes_parked');
+
+  for (const discovery of [root, relocated]) {
+    assert.deepStrictEqual(discovery.manifests.map((manifest) => manifest.issue_id), ['UTV2-16824']);
+    assert.strictEqual(discovery.lanes[0]?.source, 'local_worktree');
+    assert.deepStrictEqual(discovery.lanes[0]?.capacity, {
+      lifecycleStatus: 'parked',
+      sourcePopulation: 'canonical_active_lane_union',
+      classification: 'visible_uncounted',
+      countsAgainst: { executor: false, total: false, laneType: false },
+    });
+  }
+
+  assert.strictEqual(root.lanes[0]?.manifestLocation, 'lanes_root');
+  assert.strictEqual(relocated.lanes[0]?.manifestLocation, 'lanes_parked');
+  assert.deepStrictEqual(
+    root.lanes[0]?.capacity,
+    relocated.lanes[0]?.capacity,
+    'relocation must not alter capacity arithmetic',
+  );
+  assert.deepStrictEqual(classifyLaneCapacity('parked'), root.lanes[0]?.capacity);
+});
+
+test('UTV2-1682: a parked PR-head manifest reports its lifecycle, source population, and location', () => {
+  const parked = laneManifest({ issue_id: 'UTV2-16825', status: 'parked' });
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 16825, headRefName: 'codex/utv2-16825-parked' },
+    ],
+    readManifestAtRef: () => ({ manifest: parked, location: 'lanes_parked' }),
+  });
+
+  assert.strictEqual(discovery.lanes[0]?.source, 'open_pr_head');
+  assert.strictEqual(discovery.lanes[0]?.manifestLocation, 'lanes_parked');
+  assert.strictEqual(discovery.lanes[0]?.capacity.lifecycleStatus, 'parked');
+  assert.strictEqual(
+    discovery.lanes[0]?.capacity.sourcePopulation,
+    'canonical_active_lane_union',
+  );
+  assert.strictEqual(discovery.lanes[0]?.capacity.classification, 'visible_uncounted');
+});
+
+test('UTV2-1682: parking or relocating a manifest never releases its file-scope lock', () => {
+  for (const location of ['lanes_root', 'lanes_parked'] as const) {
+    const discovery = discoverParkedAt(location);
+    assert.deepStrictEqual(
+      activeManifestOverlap('UTV2-99999', ['scripts/ops/shared.ts'], discovery.manifests),
+      { issue_id: 'UTV2-16824', overlapping_files: ['scripts/ops/shared.ts'] },
+    );
+  }
+});
+
+test('UTV2-1682 fail-closed: an unreadable local population is not an empty board', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        listOpenPullRequests: () => [],
+        readLocalManifestEntries: () => {
+          throw new Error('EACCES: parked directory unreadable');
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.strictEqual(error.code, 'active_lane_discovery_failed');
+      assert.match(error.message, /unreadable local board as an empty one/);
+      return true;
+    },
+  );
+});
 
 test('UTV2-1634 issueIdFromBranchName extracts the canonical id from lane branches', () => {
   assert.strictEqual(issueIdFromBranchName('claude/utv2-1634-lane-discovery'), 'UTV2-1634');
