@@ -2,53 +2,54 @@
   "schema_version": 2,
   "issue_id": "UTV2-1619",
   "lane_type": "governance",
-  "executor": "claude",
+  "executor": "codex-cli",
   "tier": "T2",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-close-eligibility-preflight",
-  "branch": "claude/utv2-1619-close-eligibility-preflight",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/bootstrap__utv2-1619-bootstrap-identity-support",
+  "branch": "bootstrap/utv2-1619-bootstrap-identity-support",
   "base_branch": "main",
-  "commit_sha": "f541fe51b1e781729385b9212ecd9a6d8a135cd1",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1390",
-  "files_changed": [
-    ".github/workflows/close-eligibility-preflight.yml",
-    "docs/06_status/proof/UTV2-1619/bootstrap-admission-receipt.json",
-    "docs/06_status/proof/UTV2-1619/diff-summary.md",
-    "docs/06_status/proof/UTV2-1619/verification.md",
-    "scripts/ops/truth-check-lib.test.ts",
-    "scripts/ops/truth-check-lib.ts"
-  ],
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1399",
+  "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/close-eligibility-preflight.yml",
+    ".github/workflows/branch-discipline-guard.yml",
+    ".github/workflows/file-scope-lock-check.yml",
+    ".github/workflows/return-review-packet.yml",
     ".ops/sync/UTV2-1619.yml",
     "docs/06_status/lanes/UTV2-1619.json",
     "docs/06_status/proof/UTV2-1619",
-    "scripts/ops/truth-check-lib.test.ts",
-    "scripts/ops/truth-check-lib.ts"
+    "package.json",
+    "scripts/ci/file-scope-guard.test.ts",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ops/bootstrap-authorization.test.ts",
+    "scripts/ops/bootstrap-authorization.ts",
+    "scripts/ops/bootstrap-identity-e2e.test.ts",
+    "scripts/ops/pr-review-packet.test.ts",
+    "scripts/ops/pr-review-packet.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1619/diff-summary.md",
-    "docs/06_status/proof/UTV2-1619/verification.md"
+    "docs/06_status/proof/UTV2-1619/verification.md",
+    "docs/06_status/proof/UTV2-1619/model-routing.json"
   ],
-  "status": "done",
-  "started_at": "2026-08-06T20:48:24.705Z",
-  "heartbeat_at": "2026-08-07T22:06:53.982Z",
-  "closed_at": "2026-08-07T22:06:53.982Z",
+  "status": "started",
+  "started_at": "2026-08-09T10:57:50.464Z",
+  "heartbeat_at": "2026-08-09T20:58:07.811Z",
+  "closed_at": null,
   "blocked_by": [],
-  "preflight_token": "dispatch-auto",
-  "created_by": "claude",
-  "truth_check_history": [
-    {
-      "checked_at": "2026-08-07T22:06:51.737Z",
-      "verdict": "pass",
-      "merge_sha": "f541fe51b1e781729385b9212ecd9a6d8a135cd1",
-      "failures": [],
-      "runner": "ops:lane-close"
-    }
-  ],
+  "preflight_token": ".out/ops/preflight/bootstrap/utv2-1619-bootstrap-identity-support.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
   "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
   "execution_location": {
     "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-close-eligibility-preflight",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/bootstrap__utv2-1619-bootstrap-identity-support",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true

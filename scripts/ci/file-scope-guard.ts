@@ -180,6 +180,17 @@ interface ScopeViolation {
   issue_id: string;
 }
 
+export interface BootstrapActionDecision {
+  recognized: boolean;
+  valid: boolean;
+  kind: 'bootstrap_governance_action';
+  issue_id?: string;
+  allowed_scope?: string[];
+  authority_source?: { ref?: string; sha?: string; path?: string };
+  code?: string;
+  message?: string;
+}
+
 interface GuardResult {
   verdict: GuardVerdict;
   changed_files: string[];
@@ -203,6 +214,7 @@ interface ParsedArgs {
   overrideFile: string | null;
   prNumber: number | null;
   headSha: string | null;
+  bootstrapActionFile: string | null;
 }
 
 function repoRoot(): string {
@@ -243,6 +255,7 @@ function parseArgs(argv: string[]): ParsedArgs {
     ? Number.parseInt(process.env.FILE_SCOPE_PR_NUMBER, 10)
     : null;
   let headSha: string | null = process.env.FILE_SCOPE_HEAD_SHA ?? null;
+  let bootstrapActionFile: string | null = null;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -305,6 +318,11 @@ function parseArgs(argv: string[]): ParsedArgs {
       index += 1;
       continue;
     }
+    if (arg === '--bootstrap-action-file' && next) {
+      bootstrapActionFile = next;
+      index += 1;
+      continue;
+    }
 
     throw new Error(`Unknown argument: ${arg}`);
   }
@@ -320,7 +338,65 @@ function parseArgs(argv: string[]): ParsedArgs {
     overrideFile,
     prNumber,
     headSha,
+    bootstrapActionFile,
   };
+}
+
+// A decision artifact is only as trustworthy as the place it came from. Every
+// field a fabricated file would need -- the ref name, the authorization path,
+// even `git rev-parse origin/main` -- is public, so no amount of field checking
+// distinguishes a real decision from a forged one. What does distinguish them
+// is *where the file lives*: the trusted resolver writes to the runner's temp
+// directory, which is outside the checkout and therefore not something a PR's
+// own diff can place a file into. A decision path that resolves inside the
+// repository root is refused on that basis alone, before it is even parsed.
+export function assertDecisionPathIsOutsideCheckout(root: string, filePath: string): void {
+  const resolved = path.resolve(filePath);
+  const normalizedRoot = path.resolve(root);
+  if (resolved === normalizedRoot || resolved.startsWith(normalizedRoot + path.sep)) {
+    throw new Error(
+      `bootstrap decision file "${resolved}" is inside the checkout; only runner-temp decisions are trusted`,
+    );
+  }
+}
+
+// Wildcard scopes are refused outright. A genuine decision carries the explicit
+// file list the resolver compiled from origin/main, never a pattern that would
+// match the whole tree -- so "allowed_scope": ["**"] is a forgery signature
+// rather than a wide-but-legitimate grant.
+const FORBIDDEN_SCOPE_PATTERNS = new Set(['**', '*', '**/*', '.', './**', '/']);
+
+export function loadBootstrapAction(root: string, filePath: string | null): BootstrapActionDecision | null {
+  if (!filePath) return null;
+  try {
+    assertDecisionPathIsOutsideCheckout(root, filePath);
+    const parsed = JSON.parse(fs.readFileSync(path.resolve(filePath), 'utf8')) as BootstrapActionDecision;
+    if (parsed?.kind !== 'bootstrap_governance_action' || typeof parsed.recognized !== 'boolean' ||
+        typeof parsed.valid !== 'boolean') throw new Error('malformed decision');
+    if (parsed.recognized && parsed.valid) {
+      const originMainSha = execSync('git rev-parse origin/main', { cwd: root, encoding: 'utf8' }).trim();
+      if (parsed.authority_source?.ref !== 'origin/main' || parsed.authority_source.sha !== originMainSha ||
+          parsed.authority_source.path !== 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json' ||
+          !Array.isArray(parsed.allowed_scope) || parsed.allowed_scope.length === 0) {
+        throw new Error('untrusted bootstrap decision provenance');
+      }
+      for (const pattern of parsed.allowed_scope) {
+        if (typeof pattern !== 'string' || pattern.trim() === '' ||
+            FORBIDDEN_SCOPE_PATTERNS.has(pattern.trim()) || pattern.startsWith('/')) {
+          throw new Error(`bootstrap decision declares an untrusted scope pattern: ${String(pattern)}`);
+        }
+      }
+    }
+    return parsed;
+  } catch {
+    return {
+      recognized: true,
+      valid: false,
+      kind: 'bootstrap_governance_action',
+      code: 'malformed_bootstrap_action_result',
+      message: 'Bootstrap action decision file is missing, malformed, or not from the trusted resolver.',
+    };
+  }
 }
 
 function readChangedFiles(root: string, args: ParsedArgs): string[] {
@@ -562,6 +638,7 @@ export function evaluateFileScopeGuard(input: {
   externalOverrides?: ExternalScopeOverride[];
   prNumber?: number | null;
   headSha?: string | null;
+  bootstrapAction?: BootstrapActionDecision | null;
 }): GuardResult {
   const errors: string[] = [];
   // Own-manifest resolution (role 1) intentionally uses the WIDER status set
@@ -578,8 +655,14 @@ export function evaluateFileScopeGuard(input: {
     headSha: input.headSha ?? null,
   });
   const ownManifestIssue = ownManifest?.issue_id ?? null;
+  const bootstrapAction = input.bootstrapAction ?? null;
+  const validBootstrapAction = bootstrapAction?.recognized === true && bootstrapAction.valid === true
+    ? bootstrapAction
+    : null;
 
-  if (!ownManifest && branchLooksLikeLane(input.prBranch)) {
+  if (bootstrapAction?.recognized && !bootstrapAction.valid) {
+    errors.push(`Invalid bootstrap governance action: ${bootstrapAction.message ?? bootstrapAction.code ?? 'unknown refusal'}`);
+  } else if (!ownManifest && !validBootstrapAction && branchLooksLikeLane(input.prBranch)) {
     errors.push(`No active lane manifest found for branch "${input.prBranch}".`);
   }
 
@@ -602,6 +685,17 @@ export function evaluateFileScopeGuard(input: {
           file,
           branch: input.prBranch,
           issue_id: ownManifest.issue_id ?? 'unknown',
+        });
+      }
+    }
+  } else if (validBootstrapAction) {
+    const allowedScope = validBootstrapAction.allowed_scope ?? [];
+    for (const file of input.changedFiles) {
+      if (!allowedScope.some((pattern) => matchesLockPattern(file, pattern))) {
+        outsideScope.push({
+          file,
+          branch: input.prBranch,
+          issue_id: validBootstrapAction.issue_id ?? 'unknown-bootstrap-action',
         });
       }
     }
@@ -632,7 +726,7 @@ export function evaluateFileScopeGuard(input: {
     verdict: conflicts.length === 0 && outsideScope.length === 0 && errors.length === 0 ? 'PASS' : 'FAIL',
     changed_files: input.changedFiles,
     pr_branch: input.prBranch,
-    own_manifest_issue: ownManifestIssue,
+    own_manifest_issue: ownManifestIssue ?? validBootstrapAction?.issue_id ?? null,
     conflicts,
     outside_scope: outsideScope,
     errors,
@@ -683,6 +777,7 @@ function main(): void {
     externalOverrides,
     prNumber: args.prNumber,
     headSha: args.headSha,
+    bootstrapAction: loadBootstrapAction(root, args.bootstrapActionFile),
   });
 
   if (args.outputJson) {

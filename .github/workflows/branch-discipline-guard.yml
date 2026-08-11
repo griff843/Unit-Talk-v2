@@ -35,6 +35,18 @@ jobs:
             const fs = require('fs');
             fs.writeFileSync('/tmp/commit-messages.txt', commits.map((commit) => commit.commit && commit.commit.message ? commit.commit.message : '').join('\n---commit---\n'));
 
+      - name: Collect changed files
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner, repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number, per_page: 100,
+            });
+            fs.mkdirSync('.out', { recursive: true });
+            fs.writeFileSync('.out/branch-discipline-files.txt', files.map(file => file.filename).join('\n') + '\n');
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -49,7 +61,65 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # A bootstrap action is decided by the origin/main resolver and by nothing
+      # else. This step never continues on error: a resolver that cannot run is
+      # a resolver whose answer we do not have, and proceeding on a missing
+      # answer is the failure mode this whole mechanism exists to prevent.
+      #
+      # Exit codes: 0 valid | 3 recognized+refused | 4 not a bootstrap action.
+      # Anything else fails the job.
+      - name: Resolve trusted bootstrap governance action
+        id: bootstrap
+        env:
+          ACTION_BRANCH: ${{ github.event.pull_request.head.ref }}
+          ACTION_TIER: ${{ contains(github.event.pull_request.labels.*.name, 'tier:T1') && 'T1' || contains(github.event.pull_request.labels.*.name, 'tier:T2') && 'T2' || contains(github.event.pull_request.labels.*.name, 'tier:T3') && 'T3' || '' }}
+          # Read by the base-pinned binding check. Passed through the
+          # environment so a crafted title is never interpolated into the shell.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          DECISION="$RUNNER_TEMP/bootstrap-action.json"
+          RESOLVER="$RUNNER_TEMP/trusted-bootstrap-authorization.ts"
+          rm -f "$DECISION" "$RESOLVER"
+
+          if ! git show "origin/main:scripts/ops/bootstrap-authorization.ts" > "$RESOLVER"; then
+            echo "::error::Base branch has no bootstrap governance resolver"
+            exit 1
+          fi
+          # Phase-1 transition: the resolver reaches main before any consumer can
+          # call it. Until the base copy understands --resolve-action, no
+          # bootstrap action can be granted — which is the fail-closed outcome,
+          # not a fallback to the PR's own copy.
+          if ! grep -q -- '--resolve-action' "$RESOLVER"; then
+            echo "::warning::Trusted resolver predates bootstrap action resolution; no bootstrap identity can be granted."
+            echo "state=unsupported" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          ISSUE="$(printf '%s' "$ACTION_BRANCH" | grep -oEi 'UTV2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)"
+          set +e
+          pnpm exec tsx "$RESOLVER" \
+            --resolve-action "$ISSUE" --branch "$ACTION_BRANCH" --tier "$ACTION_TIER" \
+            --title "$PR_TITLE" --commits-file /tmp/commit-messages.txt \
+            --changed-files-file .out/branch-discipline-files.txt \
+            --head HEAD --output-json "$DECISION"
+          CODE=$?
+          set -e
+
+          case "$CODE" in
+            0) echo "state=valid" >> "$GITHUB_OUTPUT" ;;
+            3) echo "::error::Bootstrap governance action refused by the trusted resolver."; exit 1 ;;
+            4) echo "state=normal" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Bootstrap resolver failed with exit $CODE; failing closed."; exit 1 ;;
+          esac
+
+      # Only reached when the trusted resolver said this is NOT a bootstrap
+      # action. A valid bootstrap action was already fully validated above,
+      # including its branch/title/commit binding, by code read from
+      # origin/main — so the PR-head guard below never participates in a
+      # bootstrap authorization decision.
       - name: Enforce branch discipline
+        if: steps.bootstrap.outputs.state != 'valid'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}

@@ -129,6 +129,19 @@ export interface PRReviewPacket {
   risk_packet: PRRiskPacket;
   checks: ReturnReviewCheck[];
   verdict: 'PASS' | 'FAIL' | 'SKIP';
+  action_kind?: 'bootstrap_governance_action';
+  bootstrap_authority_source?: { ref: 'origin/main'; sha: string; path: string };
+}
+
+interface BootstrapActionDecision {
+  recognized: boolean;
+  valid: boolean;
+  kind: 'bootstrap_governance_action';
+  issue_id?: string;
+  tier?: string;
+  allowed_scope?: string[];
+  authority_source?: { ref: 'origin/main'; sha: string; path: string };
+  message?: string;
 }
 
 interface GitHubLabel {
@@ -173,9 +186,11 @@ export interface PacketInput {
   base_ref?: string;
   head_ref?: string;
   output_path?: string;
+  bootstrap_action?: BootstrapActionDecision | null;
   prebuilt?: {
-    manifest: LaneManifest;
+    manifest?: LaneManifest;
     pull_request: PullRequestSnapshot;
+    bootstrap_action?: BootstrapActionDecision | null;
     present_proof_paths?: string[];
     r_level_compliance?: RLevelCompliance;
     sync_metadata?: SyncMetadataResult;
@@ -224,6 +239,10 @@ const TIER_C_PATTERNS = [
 ];
 
 export async function generatePRReviewPacket(input: PacketInput): Promise<PRReviewPacket> {
+  const bootstrapAction = input.bootstrap_action ?? input.prebuilt?.bootstrap_action ?? null;
+  if (bootstrapAction?.recognized && bootstrapAction.valid) {
+    return generateBootstrapPRReviewPacket(input, bootstrapAction);
+  }
   const manifest = input.prebuilt?.manifest ?? readManifest(input.issue_id);
   const pullRequest = input.prebuilt?.pull_request ?? readPullRequest(input.pr_number, manifest);
   const baseRef = input.base_ref ?? `origin/${manifest.base_branch}`;
@@ -323,6 +342,81 @@ export async function generatePRReviewPacket(input: PacketInput): Promise<PRRevi
     risk_packet: riskPacket,
     checks,
     verdict,
+  };
+}
+
+async function generateBootstrapPRReviewPacket(
+  input: PacketInput,
+  action: BootstrapActionDecision,
+): Promise<PRReviewPacket> {
+  if (!action.issue_id || !action.tier || !action.authority_source || !action.allowed_scope) {
+    throw new Error('Validated bootstrap action is missing identity, tier, scope, or authority provenance.');
+  }
+  const pullRequest = input.prebuilt?.pull_request ?? readPullRequest(input.pr_number);
+  const baseRef = input.base_ref ?? 'origin/main';
+  const headRef = input.head_ref ?? 'HEAD';
+  const changedFiles = normalizePaths(
+    pullRequest.files.map((file) => file.path ?? file.filename ?? '').filter(Boolean),
+  );
+  const tierLabel = pullRequest.labels.map((label) => label.name).find((name) => TIER_LABEL_PATTERN.test(name));
+  const scopeDiff = buildScopeDiff(changedFiles, action.allowed_scope, action.issue_id, []);
+  const diffEntries = input.prebuilt?.diff_entries ?? readGitDiffEntries(baseRef, headRef);
+  const packageTestDrift = buildPackageTestDrift({
+    diffEntries,
+    basePackageJson: input.prebuilt?.base_package_json ?? readPackageJsonAtRef(baseRef),
+    headPackageJson: input.prebuilt?.head_package_json ?? readPackageJsonFromDisk(),
+  });
+  const rLevelCompliance = input.prebuilt?.r_level_compliance ?? readRLevelCompliance(baseRef, headRef);
+  const untrackedArtifactScan = buildUntrackedArtifactScan(input.prebuilt?.untracked_artifacts ?? readUntrackedArtifacts());
+  const ciStatusSummary = summarizeChecks(pullRequest.statusCheckRollup ?? []);
+  const syncMetadata: SyncMetadataResult = {
+    status: 'PASS', path: null, issue_id: action.issue_id,
+    reason: 'not applicable: bootstrap governance action is not a manifest-backed execution lane',
+  };
+  const checks: ReturnReviewCheck[] = [
+    { id: 'bootstrap_authority', status: 'PASS', detail: `authority resolved from origin/main at ${action.authority_source.sha}` },
+    { id: 'tier', status: tierLabel === `tier:${action.tier}` ? 'PASS' : 'FAIL', detail: `label ${tierLabel ?? '<missing>'}; authority tier ${action.tier}` },
+    { id: 'scope', status: scopeDiff.out_of_scope_files.length === 0 ? 'PASS' : 'FAIL', detail: scopeDiff.out_of_scope_files.length === 0 ? 'fixed bootstrap scope satisfied' : `scope bleed: ${scopeDiff.out_of_scope_files.join(', ')}` },
+    { id: 'r_level', status: rLevelCompliance.status === 'PASS' ? 'PASS' : 'FAIL', detail: rLevelCompliance.reason },
+    { id: 'test_wiring', status: packageTestDrift.missing_test_wiring.length === 0 && packageTestDrift.dropped_tests.length === 0 ? 'PASS' : 'FAIL', detail: 'bootstrap behavioral test wiring preserved' },
+  ];
+  const generatedAt = input.prebuilt?.generated_at ?? new Date().toISOString();
+  const failedCiCount = ciStatusSummary.filter((check) => check.status === 'fail').length;
+  const pendingCiCount = ciStatusSummary.filter((check) => check.status === 'pending').length;
+  const blockingReasons = checks.filter((check) => check.status === 'FAIL').map((check) => `${check.id}: ${check.detail}`);
+  const riskPacket: PRRiskPacket = {
+    schema_version: 1, generated_at: generatedAt, issue_id: action.issue_id,
+    pr_number: pullRequest.number,
+    status: blockingReasons.length > 0 ? 'BLOCKED' : failedCiCount > 0 ? 'HIGH' : pendingCiCount > 0 ? 'MEDIUM' : 'LOW',
+    reasons: blockingReasons,
+    signals: {
+      tier: action.tier, tier_label_present: tierLabel !== undefined,
+      scope_bleed_count: scopeDiff.out_of_scope_files.length,
+      tier_c_path_count: changedFiles.filter(isTierCPath).length,
+      missing_proof: false, r_level_status: rLevelCompliance.status,
+      sync_metadata_status: 'PASS', missing_test_wiring_count: packageTestDrift.missing_test_wiring.length,
+      dropped_tests_count: packageTestDrift.dropped_tests.length,
+      untracked_artifact_status: untrackedArtifactScan.status,
+      failed_ci_count: failedCiCount, pending_ci_count: pendingCiCount,
+    },
+  };
+  return {
+    schema_version: 2, generated_at: generatedAt, issue_id: action.issue_id,
+    pr_number: pullRequest.number, pr_url: pullRequest.url,
+    pr_head_sha: pullRequest.headRefOid ?? headRef, title: pullRequest.title,
+    branch: pullRequest.headRefName, expected_executor: null, tier: action.tier,
+    tier_label_present: tierLabel !== undefined, changed_files: changedFiles,
+    file_scope_summary: changedFiles, allowed_file_scope: scopeDiff.allowed_file_scope,
+    out_of_scope_files: scopeDiff.out_of_scope_files, scope_bleed: scopeDiff.out_of_scope_files,
+    tier_c_paths: changedFiles.filter(isTierCPath), package_test_drift: packageTestDrift,
+    untracked_artifact_scan: untrackedArtifactScan, sync_metadata: syncMetadata,
+    r_level_compliance: rLevelCompliance, proof_artifact_checklist: [],
+    proof_requirement: { required: false, present: true, missing: [] },
+    ci_status_summary: ciStatusSummary,
+    merge_order_notes: 'bootstrap governance action; no execution-lane manifest or proof artifacts required',
+    missing_tier_label: tierLabel === undefined, missing_proof: false, risk_packet: riskPacket,
+    checks, verdict: checks.some((check) => check.status === 'FAIL') ? 'FAIL' : 'PASS',
+    action_kind: 'bootstrap_governance_action', bootstrap_authority_source: action.authority_source,
   };
 }
 
@@ -664,6 +758,14 @@ function sameIssueLaneMetadataPaths(issueId: string): string[] {
   return [
     `.ops/sync/${normalizedIssueId}.yml`,
     `docs/06_status/lanes/${normalizedIssueId}.json`,
+    // A lane's own proof directory is its own bookkeeping by construction, and
+    // `ownLaneControlPlanePatterns` in scripts/ci/file-scope-guard.ts has
+    // granted it unconditionally since UTV2-1518. Omitting it here made the two
+    // scope views disagree: the guard passed a lane's proof artifact while this
+    // packet reported the same file as scope bleed. Artifacts a lane writes
+    // after its manifest's first commit -- an admission receipt, a model-routing
+    // sidecar -- are exactly the files that fell in that gap.
+    `docs/06_status/proof/${normalizedIssueId}/**`,
   ];
 }
 
@@ -671,8 +773,8 @@ function isTierCPath(filePath: string): boolean {
   return micromatch.isMatch(filePath, TIER_C_PATTERNS, { dot: true });
 }
 
-function readPullRequest(prNumber: number | undefined, manifest: LaneManifest): PullRequestSnapshot {
-  const selector = prNumber ?? readPrNumberFromManifest(manifest);
+function readPullRequest(prNumber: number | undefined, manifest?: LaneManifest): PullRequestSnapshot {
+  const selector = prNumber ?? (manifest ? readPrNumberFromManifest(manifest) : (() => { throw new Error('Bootstrap review packet requires --pr.'); })());
   const fields = [
     'number',
     'url',
@@ -1002,11 +1104,47 @@ async function main(): Promise<void> {
   if (!inferredIssue) {
     throw new Error('Missing --issue <UTV2-###> and unable to infer issue from branch');
   }
+  // This packet RENDERS a bootstrap action; it never authorizes one. The
+  // authorization decision belongs to the origin/main resolver, and the
+  // workflow gates on that resolver's exit code before this script is invoked
+  // at all -- so nothing here can turn a refusal into an approval. The checks
+  // below can only refuse harder: they reject a decision that did not arrive
+  // through runner-temp transport, and re-verify the authority SHA against
+  // origin/main. See scripts/ops/bootstrap-authorization.ts.
+  const bootstrapActionFile = getFlag(flags, 'bootstrap-action-file');
+  let bootstrapAction: BootstrapActionDecision | null = null;
+  if (bootstrapActionFile) {
+    try {
+      const resolvedDecisionPath = path.resolve(bootstrapActionFile);
+      if (resolvedDecisionPath === ROOT || resolvedDecisionPath.startsWith(ROOT + path.sep)) {
+        throw new Error('bootstrap decision file is inside the checkout');
+      }
+      bootstrapAction = JSON.parse(fs.readFileSync(resolvedDecisionPath, 'utf8')) as BootstrapActionDecision;
+      if (bootstrapAction.recognized && bootstrapAction.valid) {
+        const originMainSha = execFileSync('git', ['rev-parse', 'origin/main'], { cwd: ROOT, encoding: 'utf8' }).trim();
+        if (bootstrapAction.authority_source?.ref !== 'origin/main' ||
+            bootstrapAction.authority_source.sha !== originMainSha ||
+            bootstrapAction.authority_source.path !== 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json' ||
+            !Array.isArray(bootstrapAction.allowed_scope) || bootstrapAction.allowed_scope.length === 0) {
+          throw new Error('untrusted bootstrap decision provenance');
+        }
+      }
+    } catch {
+      bootstrapAction = {
+        recognized: true, valid: false, kind: 'bootstrap_governance_action',
+        message: 'Bootstrap action decision file is missing, malformed, or not from the trusted resolver.',
+      };
+    }
+  }
+  if (bootstrapAction?.recognized && !bootstrapAction.valid) {
+    throw new Error(bootstrapAction.message ?? 'Invalid bootstrap governance action.');
+  }
   const packet = await generatePRReviewPacket({
     issue_id: requireIssueId(inferredIssue),
     pr_number: getFlag(flags, 'pr') ? Number.parseInt(getFlag(flags, 'pr') ?? '', 10) : undefined,
     base_ref: getFlag(flags, 'base') ?? undefined,
     head_ref: getFlag(flags, 'head') ?? undefined,
+    bootstrap_action: bootstrapAction,
   });
   const outputPath = getFlag(flags, 'output');
   if (outputPath) {

@@ -4,8 +4,8 @@
   "issue_id": "UTV2-1619",
   "lane_type": "governance",
   "tier": "T2",
-  "branch": "claude/utv2-1619-close-eligibility-preflight",
-  "admitted_at": "2026-08-06T20:48:24.711Z",
+  "branch": "bootstrap/utv2-1619-bootstrap-identity-support",
+  "admitted_at": "2026-08-09T10:57:50.489Z",
   "authorization": {
     "issue_id": "UTV2-1619",
     "lane_type": "governance",
@@ -19,20 +19,12 @@
   "authorization_source": {
     "path": "docs/governance/BOOTSTRAP_AUTHORIZATIONS.json",
     "ref": "origin/main",
-    "sha": "773b582d0306c67c118731652cfed18c5a6ea102"
+    "sha": "9b3b7b0cc265e0211939f7f702e1992ee39f7762"
   },
   "suppressed_violations": [
     {
-      "code": "total_cap_exceeded",
-      "message": "Total active lanes (15) is at the hard cap of 10. Close a lane before starting a new one."
-    },
-    {
-      "code": "claude_cap_exceeded",
-      "message": "Claude active lanes (8) is at the cap of 4. Close a Claude lane before starting another."
-    },
-    {
       "code": "governance_type_cap_exceeded",
-      "message": "Governance active lanes (8) is at the cap of 3. Close a Governance lane before starting another."
+      "message": "Governance active lanes (3) is at the cap of 3. Close a Governance lane before starting another."
     }
   ],
   "remaining_violations": [],
@@ -46,26 +38,10 @@
       "pr_number": 1236
     },
     {
-      "issue_id": "UTV2-1451",
-      "lane_type": "governance",
-      "executor": "claude",
-      "status": "in_review",
-      "source": "open_pr_head",
-      "pr_number": 1289
-    },
-    {
-      "issue_id": "UTV2-1503",
-      "lane_type": "governance",
-      "executor": "claude",
-      "status": "in_review",
-      "source": "open_pr_head",
-      "pr_number": 1290
-    },
-    {
       "issue_id": "UTV2-1540",
       "lane_type": "migration",
       "executor": "claude",
-      "status": "started",
+      "status": "blocked",
       "source": "open_pr_head",
       "pr_number": 1378
     },
@@ -73,7 +49,7 @@
       "issue_id": "UTV2-1545",
       "lane_type": "verification",
       "executor": "claude",
-      "status": "started",
+      "status": "blocked",
       "source": "open_pr_head",
       "pr_number": 1384
     },
@@ -86,44 +62,12 @@
       "pr_number": 1272
     },
     {
-      "issue_id": "UTV2-1567",
-      "lane_type": "governance",
-      "executor": "claude",
-      "status": "started",
-      "source": "open_pr_head",
-      "pr_number": 1286
-    },
-    {
       "issue_id": "UTV2-1570",
       "lane_type": "governance",
       "executor": "claude",
-      "status": "started",
+      "status": "parked",
       "source": "open_pr_head",
       "pr_number": 1293
-    },
-    {
-      "issue_id": "UTV2-1577",
-      "lane_type": "hygiene",
-      "executor": "claude",
-      "status": "started",
-      "source": "open_pr_head",
-      "pr_number": 1302
-    },
-    {
-      "issue_id": "UTV2-1578",
-      "lane_type": "hygiene",
-      "executor": "codex-cli",
-      "status": "started",
-      "source": "open_pr_head",
-      "pr_number": 1303
-    },
-    {
-      "issue_id": "UTV2-1584",
-      "lane_type": "governance",
-      "executor": "codex-cli",
-      "status": "in_review",
-      "source": "open_pr_head",
-      "pr_number": 1304
     },
     {
       "issue_id": "UTV2-1614",
@@ -137,25 +81,22 @@
       "issue_id": "UTV2-1627",
       "lane_type": "governance",
       "executor": "codex-cli",
-      "status": "started",
-      "source": "open_pr_head",
-      "pr_number": 1320
+      "status": "in_review",
+      "source": "local_worktree"
     },
     {
-      "issue_id": "UTV2-1635",
-      "lane_type": "governance",
+      "issue_id": "UTV2-1683",
+      "lane_type": "hygiene",
       "executor": "claude",
-      "status": "reopened",
-      "source": "open_pr_head",
-      "pr_number": 1344
+      "status": "started",
+      "source": "local_worktree"
     },
     {
-      "issue_id": "UTV2-1651",
+      "issue_id": "UTV2-1684",
       "lane_type": "hygiene",
       "executor": "codex-cli",
       "status": "started",
-      "source": "open_pr_head",
-      "pr_number": 1385
+      "source": "local_worktree"
     }
   ],
   "note": "This lane was admitted under a bootstrap governance identity, not under the concurrency caps. It does not assert that normal lane admission occurred. Only capacity violations were suppressed; every structural rule was applied unchanged."
