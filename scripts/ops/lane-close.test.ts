@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   buildRepairRequiredViaPrPacket,
   completeAlreadyClosedLaneCleanup,
   completeSuccessfulLaneClose,
+  cleanupClosedLaneWorktree,
   createRepairRollbackTransaction,
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
@@ -2348,6 +2350,111 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
     ]);
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('normal merged lane close requests worktree cleanup', async () => {
+  const manifest = createManifest({ status: 'merged' });
+  const calls: string[] = [];
+
+  const completion = await completeSuccessfulLaneClose(
+    manifest.issue_id,
+    manifest,
+    createTruthCheckResult(),
+    {
+      finalizeManifest: () => ({ ...manifest, status: 'done' }),
+      transitionLinear: async () => undefined,
+      releaseLocks: () => ({ warnings: [] }),
+      cleanupWorktree: (closedManifest) => {
+        calls.push(`${closedManifest.issue_id}:${closedManifest.status}`);
+        return 'removed';
+      },
+    },
+  );
+
+  assert.deepStrictEqual(calls, [`${manifest.issue_id}:done`]);
+  assert.strictEqual(completion.worktree_cleanup, 'removed');
+});
+
+test('cleanup failure leaves the lane terminal state intact', async () => {
+  const manifest = createManifest({ status: 'merged' });
+  const terminalManifest = { ...manifest, status: 'done' as const, closed_at: '2026-08-11T12:00:00.000Z' };
+
+  await assert.rejects(
+    completeSuccessfulLaneClose(
+      manifest.issue_id,
+      manifest,
+      createTruthCheckResult(),
+      {
+        finalizeManifest: () => terminalManifest,
+        transitionLinear: async () => undefined,
+        releaseLocks: () => ({ warnings: [] }),
+        cleanupWorktree: () => {
+          throw new Error('simulated worktree cleanup failure');
+        },
+      },
+    ),
+    /simulated worktree cleanup failure/,
+  );
+
+  assert.strictEqual(terminalManifest.status, 'done');
+  assert.strictEqual(terminalManifest.closed_at, '2026-08-11T12:00:00.000Z');
+});
+
+test('cleanup refuses an active lane worktree', () => {
+  const manifest = createManifest({ status: 'merged', worktree_path: os.tmpdir() });
+
+  assert.throws(
+    () => cleanupClosedLaneWorktree(manifest),
+    /Refusing to remove active lane worktree/,
+  );
+});
+
+test('cleanup refuses an unknown worktree', () => {
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-unknown-worktree-'));
+  try {
+    const manifest = createManifest({ status: 'done', worktree_path: target });
+    assert.throws(
+      () => cleanupClosedLaneWorktree(manifest),
+      /Refusing to remove unregistered lane worktree path/,
+    );
+  } finally {
+    fs.rmSync(target, { recursive: true, force: true });
+  }
+});
+
+test('cleanup refuses a dirty registered worktree', () => {
+  const originalCwd = process.cwd();
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-cleanup-repo-'));
+  const target = path.join(os.tmpdir(), `utv2-dirty-worktree-${process.pid}-${Date.now()}`);
+  try {
+    execFileSync('git', ['init', '--initial-branch=main', repoRoot]);
+    execFileSync('git', ['-C', repoRoot, 'config', 'user.email', 'lane-close-test@example.com']);
+    execFileSync('git', ['-C', repoRoot, 'config', 'user.name', 'Lane Close Test']);
+    fs.writeFileSync(path.join(repoRoot, 'tracked.txt'), 'initial\n');
+    execFileSync('git', ['-C', repoRoot, 'add', 'tracked.txt']);
+    execFileSync('git', ['-C', repoRoot, 'commit', '-m', 'test fixture']);
+    execFileSync('git', ['-C', repoRoot, 'worktree', 'add', '-b', 'test-lane', target]);
+    fs.writeFileSync(path.join(target, 'dirty.txt'), 'uncommitted\n');
+    process.chdir(repoRoot);
+
+    const manifest = createManifest({ status: 'done', worktree_path: target });
+    assert.throws(
+      () => cleanupClosedLaneWorktree(manifest),
+      /Refusing to remove dirty lane worktree/,
+    );
+    assert.strictEqual(fs.existsSync(target), true);
+  } finally {
+    process.chdir(originalCwd);
+    if (fs.existsSync(repoRoot)) {
+      try {
+        execFileSync('git', ['-C', repoRoot, 'worktree', 'remove', '--force', target]);
+      } catch {
+        // Best-effort fixture cleanup; the temp directory removal below is authoritative.
+      }
+    }
+    fs.rmSync(repoRoot, { recursive: true, force: true });
+    fs.rmSync(target, { recursive: true, force: true });
   }
 });
 

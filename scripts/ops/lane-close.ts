@@ -1657,9 +1657,8 @@ export async function completeSuccessfulLaneClose(
   // Worktree removal is deliberately last: every earlier fallible local
   // mutation can be restored by RepairRollbackTransaction. Once a clean,
   // non-current worktree is removed there are no later fallible operations.
-  if (options.trustedBindingRepair) {
-    worktreeCleanup = (options.cleanupWorktree ?? cleanupClosedLaneWorktree)(manifest);
-  }
+  // This is part of every successful close, not only trusted repair closeout.
+  worktreeCleanup = (options.cleanupWorktree ?? cleanupClosedLaneWorktree)(manifest);
 
   return {
     manifest,
@@ -1678,6 +1677,12 @@ export async function completeSuccessfulLaneClose(
 export function cleanupClosedLaneWorktree(
   manifest: LaneManifest,
 ): Exclude<LaneWorktreeCleanup, 'not_requested'> {
+  if (manifest.status !== 'done') {
+    throw new Error(
+      `Refusing to remove active lane worktree for ${manifest.issue_id}: status is ${manifest.status}`,
+    );
+  }
+
   const target = path.resolve(manifest.worktree_path);
   if (!fs.existsSync(target)) {
     return 'already_absent';
