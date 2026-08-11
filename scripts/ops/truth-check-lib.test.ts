@@ -1231,7 +1231,9 @@ test('L3: rejects the stale "In Review" state that does not exist in this worksp
   assert.strictEqual(isLinearStatePermittedForL3('In Review'), false);
 });
 
-test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abandoned)', () => {
+test('L3: rejects non-closeout state names when Linear reported no state type', () => {
+  // Name-only callers keep the strict UTV2-1590 behaviour: with no type to
+  // consult, anything outside the canonical closeout allowlist fails closed.
   for (const state of [
     'Backlog',
     'Blocked',
@@ -1251,6 +1253,64 @@ test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abando
 test('L3: rejects empty/unknown state', () => {
   assert.strictEqual(isLinearStatePermittedForL3(''), false);
   assert.strictEqual(isLinearStatePermittedForL3(undefined), false);
+});
+
+// ── UTV2-1689 (UTV2-1619 capability 17): lane readiness vs issue workflow state ──
+//
+// A lane may close while its parent issue remains active. The regression fixture
+// is UTV2-1619 itself: an issue with outstanding capabilities whose merged
+// increment (PR #1400, merge SHA b58a2f35) passed all 37 other checks and was
+// blocked from closing solely because the issue sat in "Blocked Internal".
+
+test('L3: an active issue does not block one of its increments from truth-closing', () => {
+  // The three states PM named explicitly in capability 17.
+  for (const state of ['In Claude', 'In Codex', 'Blocked Internal']) {
+    assert.strictEqual(
+      isLinearStatePermittedForL3(state, 'started'),
+      true,
+      `expected active state ${state} to permit an increment to close`,
+    );
+  }
+});
+
+test('L3: gates on state type, not on a configurable state name', () => {
+  // A workspace-renamed active state must still be admitted -- the whole point
+  // of gating on the Linear-defined type rather than a name allowlist.
+  assert.strictEqual(isLinearStatePermittedForL3('Some Renamed Active State', 'started'), true);
+  assert.strictEqual(isLinearStatePermittedForL3('Done', 'completed'), true);
+});
+
+test('L3: still fails closed for abandoned, superseded, and never-started work', () => {
+  // These are the conditions the gate names. Each must actually FAIL -- a
+  // control is only proven by making it fail on the condition it names.
+  const refused: Array<[string, string]> = [
+    ['Cancelled', 'canceled'],
+    ['Duplicate', 'duplicate'],
+    ['Backlog', 'backlog'],
+    ['Ready for Claude', 'unstarted'],
+    ['Triage', 'triage'],
+  ];
+  for (const [name, type] of refused) {
+    assert.strictEqual(
+      isLinearStatePermittedForL3(name, type),
+      false,
+      `expected ${name} (type ${type}) to fail closed`,
+    );
+  }
+});
+
+test('L3: an absent or unrecognized state type never widens the gate', () => {
+  // Fail-closed direction (invariant 10): a missing type must not be read as
+  // permission, and an unknown future type must not be admitted by default.
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', undefined), false);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', ''), false);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', null), false);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', 'some_future_type'), false);
+});
+
+test('L3: state type matching is case- and whitespace-insensitive', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', ' Started '), true);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', 'STARTED'), true);
 });
 
 // ── classifyRuntimeProofGap (UTV2-1537) ─────────────────────────────────────────

@@ -13,12 +13,47 @@ function shaMatches(a: string | null | undefined, b: string | null | undefined):
 }
 
 // UTV2-1590: WORKFLOW_SPEC defines Ready to Close as a canonical closeout
-// state. L3 accepts exactly the three closeout states below and fails closed
-// for every execution, backlog, blocked, cancelled, or unknown state.
+// state. These three names are the canonical closeout states and are always
+// permitted regardless of the state type reported by Linear.
 const L3_PERMITTED_LINEAR_STATES = new Set(['Ready to Close', 'In PM Review', 'Done']);
 
-export function isLinearStatePermittedForL3(stateName: string | null | undefined): boolean {
-  return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
+// UTV2-1689 (UTV2-1619 capability 17): L3 must gate on the *lane's* readiness,
+// not on the parent issue's workflow state. The original UTV2-1590 rule was a
+// flat name allowlist, which conflated lane completion with issue completion:
+// on a multi-increment issue an honest active state ("In Claude", "In Codex",
+// "Blocked Internal") blocked its own merged increment from truth-closing, and
+// the only escape was to push the issue toward a terminal state -- exactly the
+// conflation capability 17 exists to remove.
+//
+// We gate on Linear's state *type* rather than its name because names are
+// workspace-configurable and drift (a renamed "In Claude" would silently start
+// failing a name allowlist), while the type is a Linear-defined enum.
+//
+//   started   -> work is actively in flight. An increment of it may close.
+//   completed -> the issue is already finished. Closing an increment is fine.
+//
+// Every other type stays fail-closed, preserving UTV2-1590's intent:
+//   backlog / unstarted / triage -> the lane cannot have legitimately merged
+//     against an issue that never started; this signals manifest/issue drift.
+//   canceled / duplicate -> the work was abandoned or superseded; closing a
+//     lane against it would record completion of work nobody wants.
+//   unknown / missing -> fail closed, per invariant 10.
+//
+// This deliberately does NOT make issue-level completion easier. Whether the
+// *issue* may be marked Done remains gated separately by capability 17's five
+// conditions; L3 only decides whether a *lane* may produce a truth receipt.
+const L3_PERMITTED_LINEAR_STATE_TYPES = new Set(['started', 'completed']);
+
+export function isLinearStatePermittedForL3(
+  stateName: string | null | undefined,
+  stateType?: string | null | undefined,
+): boolean {
+  if (L3_PERMITTED_LINEAR_STATES.has(stateName ?? '')) return true;
+  // Only consult the type when Linear actually reported one. An absent type
+  // must not widen the gate -- it falls through to the name allowlist above.
+  const normalizedType = (stateType ?? '').trim().toLowerCase();
+  if (!normalizedType) return false;
+  return L3_PERMITTED_LINEAR_STATE_TYPES.has(normalizedType);
 }
 import { loadEnvironment } from '@unit-talk/config';
 import {
@@ -60,7 +95,7 @@ interface LinearIssueRecord {
   id: string;
   identifier: string;
   title: string;
-  state?: { name: string } | null;
+  state?: { name: string; type?: string | null } | null;
   labels?: { nodes: Array<{ name: string }> } | null;
   attachments?: { nodes: Array<{ title?: string | null; url?: string | null }> } | null;
   project?: { id: string; name: string } | null;
@@ -848,10 +883,16 @@ export async function runTruthCheck(
     }
 
     const stateName = linearIssue.state?.name ?? '';
-    if (!isLinearStatePermittedForL3(stateName)) {
-      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not Ready to Close, In PM Review, or Done`);
+    const stateType = linearIssue.state?.type ?? '';
+    if (!isLinearStatePermittedForL3(stateName, stateType)) {
+      addCheck(
+        'L3',
+        'fail',
+        `Linear state ${stateName || 'Unknown'} (type ${stateType || 'unknown'}) is not an active or closeout state; ` +
+          'a lane may only close against an issue that is in flight or already complete',
+      );
     } else {
-      addCheck('L3', 'pass', `Linear state ${stateName} is permitted`);
+      addCheck('L3', 'pass', `Linear state ${stateName} (type ${stateType || 'unknown'}) is permitted`);
     }
 
     const attachmentUrls = (linearIssue.attachments?.nodes ?? [])
@@ -1525,7 +1566,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
             id
             identifier
             title
-            state { name }
+            state { name type }
             labels(first: 20) { nodes { name } }
             attachments(first: 20) { nodes { title url } }
             project { id name }
