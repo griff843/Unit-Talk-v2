@@ -1,6 +1,6 @@
 # UTV2-1619 diff summary — reconcile candidate filter and scheduled write path
 
-MERGE_SHA: 5d2d88b6d3b4de00cb1aa39ca701b6501771a147
+MERGE_SHA: b58a2f3549df247d2c972bb64baf0ddb6251be43
 
 (Pre-merge placeholder: this branch's base commit on `main`, rebound to the
 authoritative merge SHA by `ops:proof-generate --merge-sha` after merge.)
