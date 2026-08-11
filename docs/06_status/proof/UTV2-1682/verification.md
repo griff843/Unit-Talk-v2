@@ -1,15 +1,15 @@
 # PROOF: UTV2-1682
 
-MERGE_SHA: pending
+MERGE_SHA: N/A
 
 Verified implementation SHA: `69019e415342114b1d4528b7c344a2bcaba35eaa`
 
 ## ASSERTIONS:
 
-- Parked lifecycle status consumes zero executor, total, and lane-type capacity.
-- Governance visibility and file-scope locks are retained while parked.
-- Capacity arithmetic is invariant across the root and parked manifest locations.
-- Unreadable canonical manifest populations fail closed.
+- [x] Parked lifecycle status consumes zero executor, total, and lane-type capacity.
+- [x] Governance visibility and file-scope locks are retained while parked.
+- [x] Capacity arithmetic is invariant across the root and parked manifest locations.
+- [x] Unreadable canonical manifest populations fail closed.
 
 ## EVIDENCE:
 
