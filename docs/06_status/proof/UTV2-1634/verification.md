@@ -1,9 +1,9 @@
 # PROOF: UTV2-1634 bounded retry for transient active-lane discovery failures
 
-MERGE_SHA: 6e80b9b212e02781551db3d56224437fd03a52ce
+MERGE_SHA: 763289224622ecefd1cc08cd8432bb4ecf1ed6de
 
-> Increment 2 of UTV2-1634 (reopened 2026-08-11). Branch head at authoring time;
-> rebound to the authoritative merge SHA post-merge by `post-merge-lane-close.yml`.
+> Increment 2 of UTV2-1634 (reopened 2026-08-11). Bound to the authoritative
+> merge SHA of PR #1403.
 > Increment 1 (authoritative active-lane discovery) merged at `5b0c20b3` and its
 > proof is superseded by this file, not contradicted.
 
