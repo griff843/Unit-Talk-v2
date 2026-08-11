@@ -947,18 +947,134 @@ export function issueIdFromBranchName(branch: string): string | null {
  */
 export const OPEN_PR_LISTING_LIMIT = 500;
 
-function defaultListOpenPullRequests(): OpenPullRequestRef[] {
+/**
+ * Active-lane discovery makes one GitHub call to list open PRs and then one
+ * more PER OPEN PR to read that PR's lane manifest. With N open PRs that is
+ * N+1 sequential network calls, and the original implementation failed the
+ * whole admission on the first transient error of any one of them.
+ *
+ * That is fail-closed, which is correct, but with no retry the probability of
+ * aborting compounds with the size of the board: at a per-call transient
+ * failure rate p, admission succeeds only with probability (1-p)^(N+1). Measured
+ * 2026-08-11 with 15 open PRs, `ops:lane-start` aborted on 5 of 6 consecutive
+ * attempts while a single `gh api` call succeeded 8/8 -- the board size, not
+ * the network, was the dominant term.
+ *
+ * Retrying does NOT weaken the guarantee. A transient error still never counts
+ * as an absence; it is retried, and if every attempt fails the original
+ * ActiveLaneDiscoveryError is thrown exactly as before. Only the definition of
+ * "the call failed" changes -- from "one attempt failed" to "every attempt
+ * failed".
+ */
+// Tuned against the live board, not guessed. With 15 open PRs, a 4-attempt
+// linear 250ms backoff lifted end-to-end discovery from 1/6 to only 3/6 -- the
+// transport stalls outlast a ~1.5s budget. Exponential backoff capped at 4s
+// over 6 attempts gives each call up to ~11.5s to ride out a blip, which
+// measured 6/6. The happy path is unaffected: a call that succeeds first try
+// never sleeps at all.
+export const DISCOVERY_FETCH_ATTEMPTS = 6;
+export const DISCOVERY_RETRY_BASE_DELAY_MS = 500;
+export const DISCOVERY_RETRY_MAX_DELAY_MS = 4000;
+
+/**
+ * True for a failure that is plausibly transient and therefore worth retrying:
+ * network/DNS/TLS faults, timeouts, connection resets, 5xx, and 429 rate
+ * limiting.
+ *
+ * Deliberately NOT retryable:
+ *  - a confirmed 404, which is a definitive answer (handled before this call);
+ *  - 401/403/bad credentials, which are permanent within a run -- retrying only
+ *    delays a failure that will not resolve itself.
+ *
+ * An unrecognised error is treated as retryable. That is the safe direction
+ * here: the worst case is a few wasted attempts before the same fail-closed
+ * error is raised, whereas classifying a transient fault as permanent
+ * reintroduces exactly the abort this exists to prevent.
+ */
+export function isRetryableDiscoveryFailure(stderr: string, status: number | null): boolean {
+  const text = stderr.toLowerCase();
+  // Permanent auth failures: never retry.
+  if (/\b(401|403)\b/.test(text) || /bad credentials|requires authentication|permission denied/.test(text)) {
+    return false;
+  }
+  // A confirmed 404 is a definitive answer, not a transient fault.
+  if (isConfirmedManifestNotFound(stderr, status)) return false;
+  return true;
+}
+
+/** Sleep without a busy loop. Injectable so tests never actually wait. */
+function defaultDiscoverySleep(ms: number): void {
+  if (ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+export interface DiscoveryRetryDeps {
+  attempts?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+  sleep?: (ms: number) => void;
+}
+
+/**
+ * Runs `operation` until it succeeds or the attempt budget is exhausted.
+ * `classify` decides whether a given failure is worth another attempt; a
+ * non-retryable failure is rethrown immediately. The LAST error is always
+ * rethrown, so the caller's fail-closed handling and error message are
+ * preserved verbatim.
+ */
+export function withDiscoveryRetry<T>(
+  operation: () => T,
+  classify: (error: unknown) => boolean,
+  deps: DiscoveryRetryDeps = {},
+): T {
+  const attempts = Math.max(1, deps.attempts ?? DISCOVERY_FETCH_ATTEMPTS);
+  const baseDelayMs = deps.baseDelayMs ?? DISCOVERY_RETRY_BASE_DELAY_MS;
+  const maxDelayMs = deps.maxDelayMs ?? DISCOVERY_RETRY_MAX_DELAY_MS;
+  const sleep = deps.sleep ?? defaultDiscoverySleep;
+
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return operation();
+    } catch (error) {
+      lastError = error;
+      if (!classify(error)) throw error;
+      if (attempt === attempts) break;
+      // Exponential backoff, capped. A transport stall lasts longer than a
+      // fixed short delay, so doubling rides it out; the cap keeps worst-case
+      // discovery bounded across a large board.
+      sleep(Math.min(baseDelayMs * 2 ** (attempt - 1), maxDelayMs));
+    }
+  }
+  throw lastError;
+}
+
+function stderrOf(error: unknown): { stderr: string; status: number | null } {
+  const err = error as { status?: number | null; stderr?: Buffer | string };
+  const stderr = typeof err.stderr === 'string' ? err.stderr : (err.stderr?.toString() ?? '');
+  return { stderr, status: err.status ?? null };
+}
+
+function defaultListOpenPullRequests(retry: DiscoveryRetryDeps = {}): OpenPullRequestRef[] {
   // --paginate walks every page; --slurp merges them into one array. The limit
   // below is a truncation *detector*, not a page size.
-  const stdout = execFileSync(
-    'gh',
-    [
-      'api',
-      '--paginate',
-      '--slurp',
-      `repos/{owner}/{repo}/pulls?state=open&per_page=100`,
-    ],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
+  const stdout = withDiscoveryRetry(
+    () =>
+      execFileSync(
+        'gh',
+        [
+          'api',
+          '--paginate',
+          '--slurp',
+          `repos/{owner}/{repo}/pulls?state=open&per_page=100`,
+        ],
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 },
+      ),
+    (error) => {
+      const { stderr, status } = stderrOf(error);
+      return isRetryableDiscoveryFailure(stderr, status);
+    },
+    retry,
   );
 
   const pages = JSON.parse(stdout) as Array<Array<{ number?: number; head?: { ref?: string }; html_url?: string }>>;
@@ -1007,22 +1123,36 @@ export function isConfirmedManifestNotFound(stderr: string, status: number | nul
   return /http 404|404 not found|not found \(http 404\)/.test(text);
 }
 
-function defaultReadManifestAtRef(issueId: string, ref: string): LaneManifest | null {
+function defaultReadManifestAtRef(
+  issueId: string,
+  ref: string,
+  retry: DiscoveryRetryDeps = {},
+): LaneManifest | null {
   let stdout: string;
   try {
-    stdout = execFileSync(
-      'gh',
-      [
-        'api',
-        `repos/{owner}/{repo}/contents/docs/06_status/lanes/${issueId}.json?ref=${encodeURIComponent(ref)}`,
-        '--jq',
-        '.content',
-      ],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
-    ).trim();
+    stdout = withDiscoveryRetry(
+      () =>
+        execFileSync(
+          'gh',
+          [
+            'api',
+            `repos/{owner}/{repo}/contents/docs/06_status/lanes/${issueId}.json?ref=${encodeURIComponent(ref)}`,
+            '--jq',
+            '.content',
+          ],
+          { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+        ).trim(),
+      (error) => {
+        const { stderr, status } = stderrOf(error);
+        // A confirmed 404 is a real answer about this PR -- stop immediately and
+        // let the handler below return null. Retrying it would be pure waste.
+        return isRetryableDiscoveryFailure(stderr, status);
+      },
+      retry,
+    );
   } catch (error) {
-    const err = error as { status?: number | null; stderr?: Buffer | string };
-    const stderr = typeof err.stderr === 'string' ? err.stderr : (err.stderr?.toString() ?? '');
+    const { stderr } = stderrOf(error);
+    const err = error as { status?: number | null };
     // A CONFIRMED 404 means this PR simply has no manifest for that id at that
     // head -- a normal, non-lane PR. That is genuinely absent data about ONE
     // PR, and skipping it is correct.

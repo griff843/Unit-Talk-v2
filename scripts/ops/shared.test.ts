@@ -859,3 +859,143 @@ test('UTV2-1634: the open-PR listing limit is a truncation detector, not a page 
     'the cap must be well above any plausible real open-PR count so it only trips on genuine truncation risk',
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634 reliability round: bounded retry for transient discovery failures.
+//
+// Active-lane discovery makes N+1 sequential GitHub calls for N open PRs and
+// originally aborted admission on the FIRST transient error of any one of them,
+// so the abort probability compounded with board size. Measured 2026-08-11 with
+// 15 open PRs: `ops:lane-start` aborted on 5 of 6 consecutive attempts while a
+// single `gh api` call succeeded 8/8.
+//
+// Retry must not weaken anything: a transient error still never counts as an
+// absence, and once the attempt budget is exhausted the original error is
+// rethrown so the caller's fail-closed path is unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { isRetryableDiscoveryFailure, withDiscoveryRetry } from './shared.js';
+
+function ghError(stderr: string, status = 1): Error & { stderr: string; status: number } {
+  return Object.assign(new Error(stderr), { stderr, status });
+}
+
+test('UTV2-1634 retry: a transient failure followed by success returns the value', () => {
+  let calls = 0;
+  const slept: number[] = [];
+  const value = withDiscoveryRetry(
+    () => {
+      calls += 1;
+      if (calls < 3) throw ghError('dial tcp 140.82.114.5:443: i/o timeout');
+      return 'manifest-body';
+    },
+    (error) => {
+      const e = error as { stderr: string; status: number };
+      return isRetryableDiscoveryFailure(e.stderr, e.status);
+    },
+    { attempts: 4, baseDelayMs: 10, sleep: (ms) => slept.push(ms) },
+  );
+
+  assert.strictEqual(value, 'manifest-body');
+  assert.strictEqual(calls, 3, 'should have retried until it succeeded');
+  assert.deepStrictEqual(slept, [10, 20], 'exponential backoff between attempts only');
+});
+
+test('UTV2-1634 retry: backoff doubles and is capped', () => {
+  const slept: number[] = [];
+  assert.throws(() =>
+    withDiscoveryRetry(
+      () => {
+        throw ghError('i/o timeout');
+      },
+      () => true,
+      { attempts: 6, baseDelayMs: 500, maxDelayMs: 4000, sleep: (ms) => slept.push(ms) },
+    ),
+  );
+  // 5 sleeps for 6 attempts; doubling 500→8000 but clamped at 4000.
+  assert.deepStrictEqual(slept, [500, 1000, 2000, 4000, 4000]);
+});
+
+test('UTV2-1634 retry: a permanent transient failure still fails closed with the original error', () => {
+  let calls = 0;
+  const original = ghError('dial tcp 140.82.114.5:443: i/o timeout');
+
+  assert.throws(
+    () =>
+      withDiscoveryRetry(
+        () => {
+          calls += 1;
+          throw original;
+        },
+        (error) => {
+          const e = error as { stderr: string; status: number };
+          return isRetryableDiscoveryFailure(e.stderr, e.status);
+        },
+        { attempts: 3, baseDelayMs: 1, sleep: () => {} },
+      ),
+    // The LAST error is rethrown unchanged, so the caller's fail-closed
+    // ActiveLaneDiscoveryError wrapping and message are preserved verbatim.
+    (thrown: unknown) => thrown === original,
+  );
+  assert.strictEqual(calls, 3, 'should have exhausted exactly the attempt budget');
+});
+
+test('UTV2-1634 retry: normal discovery is unchanged — one call, no sleeping', () => {
+  let calls = 0;
+  const slept: number[] = [];
+  const value = withDiscoveryRetry(
+    () => {
+      calls += 1;
+      return 'ok';
+    },
+    () => true,
+    { attempts: 4, baseDelayMs: 10, sleep: (ms) => slept.push(ms) },
+  );
+
+  assert.strictEqual(value, 'ok');
+  assert.strictEqual(calls, 1, 'a succeeding call must not be repeated');
+  assert.deepStrictEqual(slept, [], 'no backoff on the happy path');
+});
+
+test('UTV2-1634 retry: a non-retryable failure is rethrown immediately without retrying', () => {
+  // Permanent auth failures resolve to the same answer every time; burning the
+  // attempt budget on them only delays the inevitable.
+  for (const stderr of ['gh: Bad credentials (HTTP 401)', 'HTTP 403: permission denied']) {
+    let calls = 0;
+    assert.throws(() =>
+      withDiscoveryRetry(
+        () => {
+          calls += 1;
+          throw ghError(stderr);
+        },
+        (error) => {
+          const e = error as { stderr: string; status: number };
+          return isRetryableDiscoveryFailure(e.stderr, e.status);
+        },
+        { attempts: 4, baseDelayMs: 1, sleep: () => {} },
+      ),
+    );
+    assert.strictEqual(calls, 1, `${stderr} must not be retried`);
+  }
+});
+
+test('UTV2-1634 retry: a confirmed 404 is a definitive answer, never retried', () => {
+  // 404 means "this PR has no manifest" -- a real result. It is handled by the
+  // caller as absence-for-this-PR; retrying it would be pure waste and would
+  // multiply latency across every non-lane PR on the board.
+  assert.strictEqual(isRetryableDiscoveryFailure('gh: Not Found (HTTP 404)', 1), false);
+  assert.strictEqual(isRetryableDiscoveryFailure('HTTP 404: Not Found', 1), false);
+});
+
+test('UTV2-1634 retry: transport and server faults are retryable, and unknown errors default to retryable', () => {
+  for (const stderr of [
+    'dial tcp 140.82.114.5:443: i/o timeout',
+    'could not resolve host: api.github.com',
+    'connection reset by peer',
+    'HTTP 502 Bad Gateway',
+    'HTTP 429 too many requests',
+    'something nobody has seen before',
+  ]) {
+    assert.strictEqual(isRetryableDiscoveryFailure(stderr, 1), true, `${stderr} should be retryable`);
+  }
+});
