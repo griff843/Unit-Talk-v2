@@ -1,6 +1,6 @@
 # PROOF: UTV2-1682
 
-MERGE_SHA: pending
+MERGE_SHA: 0af13902456997e1c9b1ce9ff060f3b965a0e059
 
 # UTV2-1682 Diff Summary
 
