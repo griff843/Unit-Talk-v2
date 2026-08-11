@@ -155,12 +155,16 @@ Two gates evaluate the same `MERGE_SHA:` anchor on the same artifact and disagre
 
 - `evaluateCloseEligibilityPreflight` (CEP-E5) calls `hasBindableShaAnchor`, which tests
   only that the line is labelled. `proof-generate` separately accepts `pending` as an
-  explicit placeholder (`PLACEHOLDER_VALUE_PATTERN`), and rebinds it cleanly.
+  explicit provisional value — see its placeholder-value pattern — and rebinds it cleanly.
 - `executor-result-validator.yml` requires the value to be a valid git SHA and rejects
   `pending` outright: `Proof MERGE_SHA is not a valid git SHA: "pending"`.
 
-So a proof bundle can be simultaneously "close-eligible" and "not a valid executor
-result". This is the same duplicated-authority drift class already recorded for this
+A third reader, `proof-auditor-gate.ts`, takes yet another position: it treats a
+merge-SHA that does not match the audited head as an **advisory warning only**,
+because "circular dependency makes exact-SHA embedding impossible at commit time".
+
+So a proof bundle can be simultaneously "close-eligible", "not a valid executor
+result", and "audited clean". This is the same duplicated-authority drift class already recorded for this
 issue as capabilities 11, 15 and 19: two implementations of one rule, drifting apart.
 Resolved here by using the branch base SHA — the convention prior milestones used — which
 satisfies both. The underlying disagreement is **not** fixed by this lane and is out of
