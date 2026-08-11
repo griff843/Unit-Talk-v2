@@ -4,23 +4,36 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   ACTIVE_LOCK_STATUSES,
+  CANONICAL_CAPACITY_SOURCE_POPULATION,
   MANIFEST_DIR,
   ROOT,
+  classifyLaneCapacity,
   defaultProofPaths,
   emitJson,
-  readAllManifests,
+  resolveActiveLaneManifests,
+  type ActiveLaneDiscovery,
+  type ActiveLaneDiscoveryDeps,
+  type LaneCapacityClassification,
   type LaneManifest,
+  type ResolvedActiveLane,
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { MERGE_LOCK_PATH, readMergeLock } from './merge-mutex.js';
 
 export interface ExecutionStateReport {
   generated_at: string;
+  active_lane_discovery: {
+    observed_at: string;
+    source_population: typeof CANONICAL_CAPACITY_SOURCE_POPULATION;
+    classification_rule: string;
+    skipped_pull_requests: ActiveLaneDiscovery['skippedPullRequests'];
+  };
   active_lanes: LaneSummary[];
   blocked_lanes: LaneSummary[];
   dispatch_slots: {
-    claude: { used: number; max: number; available: number };
-    codex: { used: number; max: number; available: number };
+    total: CapacityMetric;
+    claude: CapacityMetric;
+    codex: CapacityMetric;
   };
   merge_risk_summary: {
     hard_fail: number;
@@ -39,11 +52,11 @@ export interface ExecutionStateReport {
 
 export interface DispatchDashboard {
   active_by_executor: {
-    claude: number;
-    codex: number;
-    unknown: number;
+    claude: CapacityMetric;
+    codex: CapacityMetric;
+    unknown: CapacityMetric;
   };
-  active_by_lane_type: Record<string, number>;
+  active_by_lane_type: Record<string, CapacityMetric>;
   stale_heartbeats: Array<{
     issue_id: string;
     heartbeat_at: string;
@@ -87,6 +100,30 @@ export interface LaneSummary {
   recommended_action: string;
   blockers: string[];
   source_url: string;
+  manifest_source: ResolvedActiveLane['source'];
+  manifest_location: ResolvedActiveLane['manifestLocation'];
+  capacity: {
+    observed_at: string;
+    source_population: LaneCapacityClassification['sourcePopulation'];
+    classification_rule: string;
+    classification: LaneCapacityClassification['classification'];
+    lifecycle_status: LaneCapacityClassification['lifecycleStatus'];
+    counts_against: {
+      executor: boolean;
+      total: boolean;
+      lane_type: boolean;
+    };
+  };
+}
+
+export interface CapacityMetric {
+  observed_at: string;
+  source_population: typeof CANONICAL_CAPACITY_SOURCE_POPULATION;
+  classification_rule: string;
+  used: number;
+  max: number | null;
+  available: number | null;
+  over_by: number;
 }
 
 export interface ProofReadiness {
@@ -126,7 +163,7 @@ interface MergeRiskBuilderInput {
   generatedAt?: string;
 }
 
-interface BuildExecutionStateReportOptions {
+export interface BuildExecutionStateReportOptions {
   generatedAt?: string;
   nowMs?: number;
   linearBaseUrl?: string;
@@ -146,6 +183,7 @@ const GITHUB_BASE_URL = 'https://github.com/griff843/Unit-Talk-v2';
 
 // Load from CONCURRENCY_CONFIG.json — single source of truth
 const _cc = (() => { try { return getEffectiveConfig(loadConcurrencyConfig()); } catch { return null; } })();
+export const MAX_TOTAL_LANES = _cc?.total ?? 6;
 export const MAX_CLAUDE_LANES = _cc?.executors.claude ?? 2;
 export const MAX_CODEX_LANES = _cc?.executors.codex ?? 4;
 const SINGLETON_TYPES = _cc?.singleton_types ?? ['runtime', 'migration', 'modeling', 'data-canonical'];
@@ -175,14 +213,15 @@ const SEVERITY_RANK: Record<MergeRiskConditionLike['severity'], number> = {
 };
 
 export function buildExecutionStateReport(
-  manifests: LaneManifest[],
+  discovery: ActiveLaneDiscovery,
   options: BuildExecutionStateReportOptions = {},
 ): ExecutionStateReport {
   const generatedAt = options.generatedAt ?? new Date(options.nowMs ?? Date.now()).toISOString();
   const linearBaseUrl = options.linearBaseUrl ?? LINEAR_BASE_URL;
   const githubBaseUrl = options.githubBaseUrl ?? GITHUB_BASE_URL;
-  const activeManifests = manifests.filter(isActiveLane);
-  const blockedManifests = activeManifests.filter(isBlockedLane);
+  const activeLanes = discovery.lanes.filter((lane) => isActiveLane(lane.manifest));
+  const activeManifests = activeLanes.map((lane) => lane.manifest);
+  const blockedLanes = activeLanes.filter((lane) => isBlockedLane(lane.manifest));
   const artifactExists = options.artifactExists ?? defaultArtifactExists;
   const nowMs = options.nowMs ?? Date.now();
 
@@ -202,9 +241,16 @@ export function buildExecutionStateReport(
 
   return {
     generated_at: generatedAt,
-    active_lanes: activeManifests
-      .map((manifest) => summarizeLane(manifest, {
+    active_lane_discovery: {
+      observed_at: generatedAt,
+      source_population: CANONICAL_CAPACITY_SOURCE_POPULATION,
+      classification_rule: 'ACTIVE_LOCK_STATUSES over local_worktree union open_pr_head, deduped by issue_id with open_pr_head precedence',
+      skipped_pull_requests: discovery.skippedPullRequests,
+    },
+    active_lanes: activeLanes
+      .map((lane) => summarizeLane(lane, {
         nowMs,
+        observedAt: generatedAt,
         linearBaseUrl,
         proofReadiness,
         mergeRiskConditions: mergeRiskReport.conditions,
@@ -215,9 +261,10 @@ export function buildExecutionStateReport(
         checkStateByIssue: options.mergeRiskInput?.checkStateByIssue ?? {},
       }))
       .sort(compareLaneSummary),
-    blocked_lanes: blockedManifests
-      .map((manifest) => summarizeLane(manifest, {
+    blocked_lanes: blockedLanes
+      .map((lane) => summarizeLane(lane, {
         nowMs,
+        observedAt: generatedAt,
         linearBaseUrl,
         proofReadiness,
         mergeRiskConditions: mergeRiskReport.conditions,
@@ -228,15 +275,16 @@ export function buildExecutionStateReport(
         checkStateByIssue: options.mergeRiskInput?.checkStateByIssue ?? {},
       }))
       .sort(compareLaneSummary),
-    dispatch_slots: buildDispatchSlots(activeManifests),
+    dispatch_slots: buildDispatchSlots(activeLanes, generatedAt),
     merge_risk_summary: {
       hard_fail: mergeRiskReport.summary.hard_fail,
       block: mergeRiskReport.summary.block,
       warning: mergeRiskReport.summary.warning,
       top_conditions: topConditionCodes(mergeRiskReport.conditions, 3),
     },
-    dispatch_dashboard: buildDispatchDashboard(activeManifests, {
+    dispatch_dashboard: buildDispatchDashboard(activeLanes, {
       nowMs,
+      observedAt: generatedAt,
       mergeRiskConditions: mergeRiskReport.conditions,
     }),
     proof_readiness: proofReadiness,
@@ -249,38 +297,58 @@ export function buildExecutionStateReport(
 }
 
 function buildDispatchDashboard(
-  manifests: LaneManifest[],
-  options: { nowMs: number; mergeRiskConditions: MergeRiskConditionLike[] },
+  lanes: ResolvedActiveLane[],
+  options: { nowMs: number; observedAt: string; mergeRiskConditions: MergeRiskConditionLike[] },
 ): DispatchDashboard {
+  const executorCapacityLanes = lanes.filter((lane) => lane.capacity.countsAgainst.executor);
+  const totalCapacityLanes = lanes.filter((lane) => lane.capacity.countsAgainst.total);
   const activeByExecutor = {
-    claude: manifests.filter((manifest) => classifyExecutor(manifest) === 'claude').length,
-    codex: manifests.filter((manifest) => classifyExecutor(manifest) === 'codex').length,
-    unknown: manifests.filter((manifest) => classifyExecutor(manifest) === 'unknown').length,
+    claude: buildCapacityMetric({
+      observedAt: options.observedAt,
+      classificationRule: 'capacity.countsAgainst.executor === true; executor classified as claude',
+      used: executorCapacityLanes.filter((lane) => classifyExecutor(lane.manifest) === 'claude').length,
+      max: MAX_CLAUDE_LANES,
+    }),
+    codex: buildCapacityMetric({
+      observedAt: options.observedAt,
+      classificationRule: 'capacity.countsAgainst.executor === true; executor classified as codex',
+      used: executorCapacityLanes.filter((lane) => classifyExecutor(lane.manifest) === 'codex').length,
+      max: MAX_CODEX_LANES,
+    }),
+    unknown: buildCapacityMetric({
+      observedAt: options.observedAt,
+      classificationRule: 'capacity.countsAgainst.executor === true; executor classified as unknown',
+      used: executorCapacityLanes.filter((lane) => classifyExecutor(lane.manifest) === 'unknown').length,
+      max: null,
+    }),
   };
-  const activeByLaneType = buildActiveByLaneType(manifests);
+  const activeByLaneType = buildActiveByLaneType(lanes, options.observedAt);
   const singletonBlockers = SINGLETON_TYPES.flatMap((laneType) => {
-    const activeIssueIds = manifests
-      .filter((manifest) => manifest.lane_type === laneType)
-      .map((manifest) => manifest.issue_id)
+    const activeIssueIds = totalCapacityLanes
+      .filter((lane) => lane.manifest.lane_type === laneType)
+      .map((lane) => lane.manifest.issue_id)
       .sort();
     return activeIssueIds.length > 0 ? [{ lane_type: laneType, active_issue_ids: activeIssueIds }] : [];
   });
   const forbiddenPairBlockers = FORBIDDEN_COMBINATIONS.flatMap((pair) => {
-    const activeIssueIds = manifests
-      .filter((manifest) => pair.includes(manifest.lane_type))
-      .map((manifest) => manifest.issue_id)
+    const activeIssueIds = totalCapacityLanes
+      .filter((lane) => pair.includes(lane.manifest.lane_type))
+      .map((lane) => lane.manifest.issue_id)
       .sort();
     const activeTypes = new Set(
-      manifests
-        .filter((manifest) => activeIssueIds.includes(manifest.issue_id))
-        .map((manifest) => manifest.lane_type),
+      totalCapacityLanes
+        .filter((lane) => activeIssueIds.includes(lane.manifest.issue_id))
+        .map((lane) => lane.manifest.lane_type),
     );
     return activeTypes.has(pair[0]) && activeTypes.has(pair[1])
       ? [{ pair, active_issue_ids: activeIssueIds }]
       : [];
   });
-  const staleHeartbeats = buildStaleHeartbeatSummaries(manifests, options.nowMs);
-  const dispatchSlots = buildDispatchSlots(manifests);
+  const staleHeartbeats = buildStaleHeartbeatSummaries(
+    lanes.map((lane) => lane.manifest),
+    options.nowMs,
+  );
+  const dispatchSlots = buildDispatchSlots(lanes, options.observedAt);
   const mergeMutex = readMergeMutexSummary();
 
   return {
@@ -301,12 +369,40 @@ function buildDispatchDashboard(
   };
 }
 
-function buildActiveByLaneType(manifests: LaneManifest[]): Record<string, number> {
+function buildActiveByLaneType(
+  lanes: ResolvedActiveLane[],
+  observedAt: string,
+): Record<string, CapacityMetric> {
   const counts: Record<string, number> = {};
-  for (const manifest of manifests) {
-    counts[manifest.lane_type] = (counts[manifest.lane_type] ?? 0) + 1;
+  for (const lane of lanes.filter((entry) => entry.capacity.countsAgainst.laneType)) {
+    counts[lane.manifest.lane_type] = (counts[lane.manifest.lane_type] ?? 0) + 1;
   }
-  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+  return Object.fromEntries(
+    Object.entries(counts)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([laneType, used]) => [
+        laneType,
+        buildCapacityMetric({
+          observedAt,
+          classificationRule: `capacity.countsAgainst.laneType === true; manifest.lane_type === ${JSON.stringify(laneType)}`,
+          used,
+          max: laneTypeCapacityLimit(laneType),
+        }),
+      ]),
+  );
+}
+
+function laneTypeCapacityLimit(laneType: string): number | null {
+  if (SINGLETON_TYPES.includes(laneType)) {
+    return 1;
+  }
+  if (laneType === 'governance') {
+    return _cc?.type_caps.governance ?? null;
+  }
+  if (laneType === 'hygiene') {
+    return _cc?.type_caps.hygiene ?? null;
+  }
+  return null;
 }
 
 function buildStaleHeartbeatSummaries(
@@ -386,10 +482,16 @@ function buildRecommendedDashboardActions(input: {
   if (input.mergeRiskConditions.some((condition) => condition.severity === 'hard_fail')) {
     actions.push('resolve hard-fail merge risk before dispatching more lanes');
   }
-  if (input.dispatchSlots.codex.available > 0) {
+  if (input.dispatchSlots.total.available === 0) {
+    actions.push('total lane capacity full; close or park a counting lane before dispatch');
+  } else if (input.dispatchSlots.codex.available != null && input.dispatchSlots.codex.available > 0) {
     actions.push(`codex slots available: ${input.dispatchSlots.codex.available}`);
   }
-  if (input.dispatchSlots.claude.available > 0) {
+  if (
+    input.dispatchSlots.total.available !== 0
+    && input.dispatchSlots.claude.available != null
+    && input.dispatchSlots.claude.available > 0
+  ) {
     actions.push(`claude slots available: ${input.dispatchSlots.claude.available}`);
   }
   if (actions.length === 0) {
@@ -448,9 +550,10 @@ function defaultArtifactExists(artifact: string, manifest: LaneManifest): boolea
 }
 
 function summarizeLane(
-  manifest: LaneManifest,
+  lane: ResolvedActiveLane,
   context: {
     nowMs: number;
+    observedAt: string;
     linearBaseUrl: string;
     proofReadiness: ProofReadiness[];
     mergeRiskConditions: MergeRiskConditionLike[];
@@ -461,6 +564,7 @@ function summarizeLane(
     checkStateByIssue: Record<string, string>;
   },
 ): LaneSummary {
+  const { manifest } = lane;
   const proofReady = context.proofReadiness.find((entry) => entry.issue_id === manifest.issue_id)?.ready ?? false;
   const conflictRisk = conflictRiskForLane(manifest, context.mergeRiskConditions);
   const prState = prStateForLane(manifest, context.openPrBranches, context.mergedPrBranches);
@@ -501,6 +605,20 @@ function summarizeLane(
     }),
     blockers: [...manifest.blocked_by],
     source_url: `${context.linearBaseUrl}/issue/${manifest.issue_id}/`,
+    manifest_source: lane.source,
+    manifest_location: lane.manifestLocation,
+    capacity: {
+      observed_at: context.observedAt,
+      source_population: lane.capacity.sourcePopulation,
+      classification_rule: 'classifyLaneCapacity(manifest.status)',
+      classification: lane.capacity.classification,
+      lifecycle_status: lane.capacity.lifecycleStatus,
+      counts_against: {
+        executor: lane.capacity.countsAgainst.executor,
+        total: lane.capacity.countsAgainst.total,
+        lane_type: lane.capacity.countsAgainst.laneType,
+      },
+    },
   };
 }
 
@@ -520,21 +638,51 @@ function resolveExecutor(manifest: LaneManifest): string {
   return manifest.executor ?? manifest.created_by ?? manifest.lane_type ?? 'unknown';
 }
 
-function buildDispatchSlots(manifests: LaneManifest[]): ExecutionStateReport['dispatch_slots'] {
-  const claudeUsed = manifests.filter((manifest) => classifyExecutor(manifest) === 'claude').length;
-  const codexUsed = manifests.filter((manifest) => classifyExecutor(manifest) === 'codex').length;
+function buildDispatchSlots(
+  lanes: ResolvedActiveLane[],
+  observedAt: string,
+): ExecutionStateReport['dispatch_slots'] {
+  const executorCapacityLanes = lanes.filter((lane) => lane.capacity.countsAgainst.executor);
+  const totalUsed = lanes.filter((lane) => lane.capacity.countsAgainst.total).length;
+  const claudeUsed = executorCapacityLanes.filter((lane) => classifyExecutor(lane.manifest) === 'claude').length;
+  const codexUsed = executorCapacityLanes.filter((lane) => classifyExecutor(lane.manifest) === 'codex').length;
 
   return {
-    claude: {
+    total: buildCapacityMetric({
+      observedAt,
+      classificationRule: 'capacity.countsAgainst.total === true',
+      used: totalUsed,
+      max: MAX_TOTAL_LANES,
+    }),
+    claude: buildCapacityMetric({
+      observedAt,
+      classificationRule: 'capacity.countsAgainst.executor === true; executor classified as claude',
       used: claudeUsed,
       max: MAX_CLAUDE_LANES,
-      available: Math.max(0, MAX_CLAUDE_LANES - claudeUsed),
-    },
-    codex: {
+    }),
+    codex: buildCapacityMetric({
+      observedAt,
+      classificationRule: 'capacity.countsAgainst.executor === true; executor classified as codex',
       used: codexUsed,
       max: MAX_CODEX_LANES,
-      available: Math.max(0, MAX_CODEX_LANES - codexUsed),
-    },
+    }),
+  };
+}
+
+function buildCapacityMetric(input: {
+  observedAt: string;
+  classificationRule: string;
+  used: number;
+  max: number | null;
+}): CapacityMetric {
+  return {
+    observed_at: input.observedAt,
+    source_population: CANONICAL_CAPACITY_SOURCE_POPULATION,
+    classification_rule: input.classificationRule,
+    used: input.used,
+    max: input.max,
+    available: input.max == null ? null : Math.max(0, input.max - input.used),
+    over_by: input.max == null ? 0 : Math.max(0, input.used - input.max),
   };
 }
 
@@ -818,10 +966,15 @@ function detectMergedPrActiveManifests(
 }
 
 function fallbackDetectDispatchSaturation(lanes: LaneManifest[]): MergeRiskConditionLike[] {
-  const claudeLanes = lanes.filter((lane) => classifyExecutor(lane) === 'claude');
-  const codexLanes = lanes.filter((lane) => classifyExecutor(lane) === 'codex');
+  const totalCapacityLanes = lanes.filter((lane) => classifyLaneCapacity(lane.status).countsAgainst.total);
+  const executorCapacityLanes = lanes.filter((lane) => classifyLaneCapacity(lane.status).countsAgainst.executor);
+  const claudeLanes = executorCapacityLanes.filter((lane) => classifyExecutor(lane) === 'claude');
+  const codexLanes = executorCapacityLanes.filter((lane) => classifyExecutor(lane) === 'codex');
   const details: string[] = [];
 
+  if (totalCapacityLanes.length >= MAX_TOTAL_LANES) {
+    details.push(`total active lanes=${totalCapacityLanes.length} (max ${MAX_TOTAL_LANES} - slot full)`);
+  }
   if (codexLanes.length >= MAX_CODEX_LANES) {
     details.push(`codex active lanes=${codexLanes.length} (max ${MAX_CODEX_LANES} - slot full)`);
   }
@@ -836,7 +989,9 @@ function fallbackDetectDispatchSaturation(lanes: LaneManifest[]): MergeRiskCondi
     {
       code: 'DISPATCH_LIMIT_SATURATION',
       severity: 'block',
-      lanes: [...codexLanes, ...claudeLanes].map((lane) => lane.issue_id),
+      lanes: uniqueSorted(
+        [...totalCapacityLanes, ...codexLanes, ...claudeLanes].map((lane) => lane.issue_id),
+      ),
       detail: details.join('; '),
     },
   ];
@@ -981,9 +1136,16 @@ function isObjectLike(value: unknown): value is Record<string, unknown> {
 }
 
 function main(): void {
-  emitJson(buildExecutionStateReport(readAllManifests(), {
+  emitJson(buildCurrentExecutionStateReport({
     mergeRiskInput: readLiveTelemetryInput(),
   }));
+}
+
+export function buildCurrentExecutionStateReport(
+  options: BuildExecutionStateReportOptions = {},
+  discoveryDeps: ActiveLaneDiscoveryDeps = {},
+): ExecutionStateReport {
+  return buildExecutionStateReport(resolveActiveLaneManifests(discoveryDeps), options);
 }
 
 const isDirectRun = process.argv[1] != null
