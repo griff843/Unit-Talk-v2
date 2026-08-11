@@ -5,7 +5,7 @@ Tier: T2
 Lane type: governance
 Branch: claude/utv2-1634-lane-discovery-retry
 Head SHA: 6e80b9b212e02781551db3d56224437fd03a52ce
-Merge SHA: bound post-merge by `post-merge-lane-close.yml`
+MERGE_SHA: 763289224622ecefd1cc08cd8432bb4ecf1ed6de
 Diff base: 0fe1b39910758bc499cac0af8621c7a1ae6c96b9
 
 > Increment 1 (authoritative active-lane discovery, merged `5b0c20b3`) is
@@ -69,4 +69,4 @@ Lane manifest for this increment.
 ## SHA Binding
 
 Head SHA: 6e80b9b212e02781551db3d56224437fd03a52ce
-Merge SHA: bound post-merge via `ops:proof-generate --merge-sha`
+MERGE_SHA: 763289224622ecefd1cc08cd8432bb4ecf1ed6de
