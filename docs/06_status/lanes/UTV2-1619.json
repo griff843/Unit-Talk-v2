@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-reconcile-filter-and-write-path",
   "branch": "claude/utv2-1619-reconcile-filter-and-write-path",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "b58a2f3549df247d2c972bb64baf0ddb6251be43",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1400",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,24 @@
     "docs/06_status/proof/UTV2-1619/diff-summary.md",
     "docs/06_status/proof/UTV2-1619/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-08-10T02:34:52.686Z",
   "heartbeat_at": "2026-08-11T09:15:27.717Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1619-reconcile-filter-and-write-path.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-11T13:51:43.919Z",
+      "verdict": "fail",
+      "merge_sha": "b58a2f3549df247d2c972bb64baf0ddb6251be43",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1400 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
