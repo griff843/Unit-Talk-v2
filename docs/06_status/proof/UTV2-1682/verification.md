@@ -1,8 +1,13 @@
 # PROOF: UTV2-1682
 
-MERGE_SHA: N/A
+MERGE_SHA: 69019e415342114b1d4528b7c344a2bcaba35eaa
 
 Verified implementation SHA: `69019e415342114b1d4528b7c344a2bcaba35eaa`
+
+> Pre-merge, `MERGE_SHA` carries the verified implementation SHA: the
+> Executor Result Validator requires `^[0-9a-f]{7,40}$` in that field, so no
+> pre-merge placeholder (`pending`, `N/A`) can satisfy it. `post-merge-lane-close.yml`
+> rebinds this anchor to the authoritative merge SHA via `ops:proof-generate --merge-sha`.
 
 ## ASSERTIONS:
 
