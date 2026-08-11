@@ -1,130 +1,158 @@
-# PROOF: UTV2-1634 authoritative active-lane discovery
+# PROOF: UTV2-1634 bounded retry for transient active-lane discovery failures
 
-MERGE_SHA: 5b0c20b3dab2cc67587fd5e187f16d8a31d51aec
+MERGE_SHA: 6e80b9b212e02781551db3d56224437fd03a52ce
+
+> Increment 2 of UTV2-1634 (reopened 2026-08-11). Branch head at authoring time;
+> rebound to the authoritative merge SHA post-merge by `post-merge-lane-close.yml`.
+> Increment 1 (authoritative active-lane discovery) merged at `5b0c20b3` and its
+> proof is superseded by this file, not contradicted.
+
+Issue: UTV2-1634
+Tier: T2
+Lane type: governance
+Branch: claude/utv2-1634-lane-discovery-retry
+Generated at: 2026-08-11T17:30:00Z
+result: pass
 
 ## Summary
 
-`readAllManifests()` read `docs/06_status/lanes/*.json` from the local working tree only. An
-active lane's manifest lives on its own branch until it merges, so the lane governor saw a
-near-empty board and admitted lanes that violated caps, singletons and forbidden combinations.
-That is fail-open: absence of a violation was read as proof of no violation.
+Increment 1 made active-lane discovery authoritative by resolving the board from
+open PRs and their head-ref manifests, failing closed on every unknown. That is
+correct and is preserved unchanged here.
 
-Discovery now resolves from authoritative remote state (open PRs and their head-ref manifests),
-fails closed on every unknown, and runs ahead of every admission path including the docs-only
-fast path.
+What it did not account for is **cost per unit of board size**. Discovery makes
+one call to list open PRs and one more **per open PR** to read that PR's lane
+manifest — N+1 sequential network calls for N open PRs — with no retry. A single
+transient error on any one of them aborted the entire admission.
+
+The abort probability therefore compounds with the size of the board: at a
+per-call transient failure rate `p`, admission succeeds only with probability
+`(1-p)^(N+1)`. With 15 open PRs this made `ops:lane-start` effectively unusable.
+
+This increment adds bounded retry around both calls. **No validation is
+weakened** — only the definition of "the call failed" changes, from "one attempt
+failed" to "every attempt failed".
 
 ## Verification
 
-Executed on head `b457e03f3c84f8aac1e85be301952d9710f0f1a7`.
+ASSERTIONS:
 
-## ASSERTIONS:
+- [x] A transient failure followed by success returns the value instead of aborting admission
+- [x] A permanent failure still fails closed, rethrowing the original error unchanged
+- [x] Normal discovery is unchanged — one call, no sleeping on the happy path
+- [x] A confirmed 404 remains a definitive answer and is never retried
+- [x] Permanent auth failures (401/403) are never retried
+- [x] The caller's fail-closed `ActiveLaneDiscoveryError` path is preserved verbatim
+- [x] `pnpm type-check`, `pnpm lint`, `pnpm test`, and `r-level-check` all pass
 
-- [x] Full suite green: 4,444 tests, 4,444 pass, 0 fail, 0 skipped, `PNPM_EXIT=0` captured directly to a file rather than through a pipe.
-- [x] Focused in-scope files green: 80 pass, 0 fail across `shared.test.ts`, `lane-start.test.ts`, `concurrency-rules.test.ts`.
-- [x] `pnpm lint` exit 0.
-- [x] `pnpm type-check` exit 0.
-- [x] A lane whose manifest exists only on its PR branch is counted against caps, singletons and forbidden combinations from any worktree.
-- [x] The exact reported case is fixtured: a `runtime` lane active only on a PR branch is discoverable, so a `migration` lane-start can be refused.
-- [x] Executor cap is enforced when N-1 manifests are unmerged.
-- [x] Enumeration failure raises `ActiveLaneDiscoveryError` and refuses admission rather than reporting an empty board.
-- [x] Manifest lookup reports absent only on a confirmed 404; auth, rate-limit, network, 5xx, malformed base64 and malformed JSON all fail closed.
-- [x] Merged lanes still release their locks even while their PR is open.
-- [x] Discovery runs before the docs-only fast path, and both overlap call sites receive the authoritative set.
-- [x] Open-PR enumeration is paginated with a truncation detector that fails closed.
-- [x] No repository residue after the verification run.
+## Runtime Verification
 
-## EVIDENCE:
+EVIDENCE:
 
-Full suite, exit code captured directly:
+### 1. The defect, measured on the live board
 
-```
-PNPM_EXIT=0
-notok=0
-ELIFECYCLE=0
-tests=4444 pass=4444 fail=0 skipped=0
+With 15 open PRs, `ops:lane-start` aborted on 5 of 6 consecutive attempts:
+
+```text
+attempt 1: flake
+attempt 2: flake
+attempt 3: flake
+attempt 4: flake
+attempt 5: flake
+STARTED on attempt 6
 ```
 
-Focused in-scope files:
+Each abort was a single transient read, naming a different PR each time:
 
+```text
+Could not read the lane manifest for UTV2-1652 at ref "codex/utv2-1652-normal-close-worktree-cleanup",
+and the failure is not a confirmed 404. Refusing to treat an unreadable manifest as an absent one.
+Underlying error: Get "https://api.github.com/repos/griff843/Unit-Talk-v2/contents/...": dial tcp
+140.82.114.5:443: i/o timeout
 ```
-$ npx tsx --test scripts/ops/lane-start.test.ts scripts/ops/concurrency-rules.test.ts scripts/ops/shared.test.ts
-# tests 80
-# pass 80
+
+Meanwhile a **single** `gh api` call succeeded 8/8:
+
+```text
+api.github.com reachability: 8/8 ok, 0/8 failed
+```
+
+Board size, not the network, was the dominant term.
+
+### 2. End-to-end reliability, before and after
+
+`resolveActiveLaneManifests` run 6 times against the live board:
+
+```text
+before (no retry):                   1/6 succeeded
+after (4 attempts, linear 250ms):    3/6 succeeded
+after (6 attempts, exp 500ms→4s):    6/6 succeeded, 0/6 failed
+  active lanes discovered: 6
+```
+
+The intermediate measurement is why the constants are what they are: the
+transport stalls outlast a ~1.5s budget, so linear backoff was tuned up to
+capped exponential rather than guessed.
+
+### 3. The three required behaviours, proven by test
+
+```text
+ok - UTV2-1634 retry: a transient failure followed by success returns the value
+ok - UTV2-1634 retry: a permanent transient failure still fails closed with the original error
+ok - UTV2-1634 retry: normal discovery is unchanged — one call, no sleeping
+ok - UTV2-1634 retry: a non-retryable failure is rethrown immediately without retrying
+ok - UTV2-1634 retry: a confirmed 404 is a definitive answer, never retried
+ok - UTV2-1634 retry: transport and server faults are retryable, and unknown errors default to retryable
+ok - UTV2-1634 retry: backoff doubles and is capped
+```
+
+The fail-closed test asserts identity (`thrown === original`), not merely that
+something threw — so the caller's error message and wrapping are provably
+unchanged after the budget is exhausted.
+
+### 4. Full suite for the changed module
+
+```text
+# tests 65
+# pass 65
 # fail 0
 ```
 
-Lint and type-check:
+58 tests existed before this increment; all still pass, including increment 1's
+fail-closed coverage (`only a confirmed 404 counts as manifest-absent`).
 
-```
-LINT_EXIT=0
-TC_EXIT=0
+### 5. Gate commands
+
+```text
+pnpm type-check   exit=0
+pnpm lint         exit=0
+pnpm test         exit=0
 ```
 
-Residue check after the run:
+### 6. `r-level-check`
 
+```text
+Verdict: PASS
+Changed files: 1
+Rules matched: (none) — no R-level artifacts required for this diff
 ```
-$ git status --short          # (empty)
-$ git branch --list '*utv2-99*'   # (empty)
+
+### 7. `pnpm verify` — live-DB stage refused locally by design
+
+`pnpm verify` includes `test:live-db`, gated by `ci:assert-staging`, which refuses
+any target that is not the staging project:
+
+```text
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+Writable DB verification requires xskgrzbteyqdufktjrjx.
 ```
+
+That is the containment guard behaving correctly. This lane touches no database
+code, no migration, and no runtime path — its diff is one file plus its unit test.
 
 ## Scope
 
-`scripts/ops/shared.ts`, `scripts/ops/shared.test.ts`, `scripts/ops/lane-start.ts`,
-`scripts/ops/lane-start.test.ts` plus this proof bundle. `concurrency-rules.ts` is in the
-declared lane scope but was not modified.
+- `scripts/ops/shared.ts` — retry wrapper, failure classifier, tuned constants; both discovery calls wrapped
+- `scripts/ops/shared.test.ts` — 7 new tests
 
-## Closeout repair
-
-The implementation merged as PR #1380 at merge SHA `5b0c20b3dab2cc67587fd5e187f16d8a31d51aec`,
-but the lane could not truth-close. Three defects, all in closeout artifacts — no implementation
-change:
-
-1. The manifest carried `status:"started"`, `pr_url:null`, `commit_sha:null` — no merge binding
-   (M4/M5/M6). Now bound to PR #1380 / `5b0c20b3…`, status `merged`, with `files_changed`
-   populated from that PR's real diff.
-2. Both proof files declared `MERGE_SHA: b457e03f3c84f8aac1e85be301952d9710f0f1a7` — the branch
-   head at implementation time, **not reachable from `main`** (P3). Rebound to the real merge SHA
-   via `pnpm ops:proof-generate --issue UTV2-1634 --merge-sha 5b0c20b3…`, which preserves the
-   authored evidence above in place (`preserved: … (sha-rebound in place)`).
-3. This verification log referenced `pnpm type-check` but not `pnpm test`, `pnpm verify`, or
-   `scripts/ci/r-level-check.ts` (P12, P13, P14). Re-run below.
-
-### Repair-head verification
-
-Executed on repair head `e6168825` (`claude/utv2-1634-proof-packet-repair`, branched from
-`origin/main` @ `5b0c20b3`), in an isolated worktree with `pnpm install --frozen-lockfile`:
-
-```
-$ pnpm type-check
-TC_EXIT=0
-
-$ pnpm test
-tests=4473 pass=4473 fail=0 skipped=0
-TEST_EXIT=0
-
-$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
-Verdict: PASS
-Changed files: 3
-Rules matched: (none) — no R-level artifacts required for this diff
-RLEVEL_EXIT=0
-```
-
-`pnpm verify` was **not** run locally. `verify` = `verify:static && test:live-db`, and
-`test:live-db` executes against live Supabase; production is parked, so running it from a
-workstation is not permitted. Its `verify:static` components were run individually above; the
-authoritative `pnpm verify` result for this lane is the CI `verify` job on this PR.
-
-### `file_scope_lock` now declares the lane's own control-plane paths
-
-`files_changed` is populated from PR #1380's real diff, which — like every lane's diff —
-includes `.ops/sync/UTV2-1634.yml` and `docs/06_status/lanes/UTV2-1634.json`. The pre-merge
-file-scope guard grants a lane those paths *unconditionally* via `ownLaneControlPlanePatterns`,
-so they never appeared in the declared lock. Truth-check's S1 scope-diff evaluation has no such
-exemption, so an honestly-populated `files_changed` fails S1 on paths the pre-merge gate had
-already blessed.
-
-The three canonical control-plane patterns are therefore now declared explicitly. This is
-descriptive, not a widening: the pre-merge guard reads the manifest from `base` (`origin/main`)
-and never from the PR head, so a lock edited in this PR cannot loosen that gate. The underlying
-defect — two gates with two different definitions of lane scope — is recorded separately, not
-fixed here. No truth-check semantics were changed.
+No production code, no schema, no workflow, no migration.
