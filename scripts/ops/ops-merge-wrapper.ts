@@ -108,12 +108,142 @@ export function buildExtendedCommand(
 }
 
 /**
+ * UTV2-1678 — paths whose loss during a sync is never acceptable.
+ *
+ * A lane's proof bundle and manifest frequently exist ONLY on that lane's
+ * branch: they are created at ops:lane-start and do not reach `main` until the
+ * lane merges. `main` therefore holds no copy to recover from, which is exactly
+ * how UTV2-1584's evidence.json / model-routing.json / verification.md were lost
+ * permanently. Dropping one of these is refused; anything else is reported.
+ */
+export const PROTECTED_SYNC_PATH_PREFIXES: readonly string[] = [
+  'docs/06_status/proof/',
+  'docs/06_status/lanes/',
+];
+
+export interface DroppedPathClassification {
+  /** Paths present before the sync and absent after it. */
+  dropped: string[];
+  /** The subset under a protected prefix — refusal-worthy. */
+  protectedPaths: string[];
+  /** The remainder — warn only. */
+  otherPaths: string[];
+}
+
+/**
+ * Compare the branch-only file set before and after a sync.
+ *
+ * `before` and `after` are the outputs of `git diff --name-only origin/main...<pre-sync-head>`
+ * and `git diff --name-only origin/main..HEAD`. Anything in `before` and not in
+ * `after` was dropped by the sync.
+ *
+ * Pure by construction so the classification can be tested without a git
+ * fixture; the caller owns actually running the two diffs.
+ */
+export function classifyDroppedPaths(
+  before: readonly string[],
+  after: readonly string[],
+): DroppedPathClassification {
+  const afterSet = new Set(after.map((p) => p.trim()).filter(Boolean));
+  const dropped = [
+    ...new Set(
+      before
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .filter((p) => !afterSet.has(p)),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+
+  const protectedPaths = dropped.filter((p) =>
+    PROTECTED_SYNC_PATH_PREFIXES.some((prefix) => p.startsWith(prefix)),
+  );
+  const otherPaths = dropped.filter((p) => !protectedPaths.includes(p));
+  return { dropped, protectedPaths, otherPaths };
+}
+
+/**
+ * UTV2-1678 criterion 5 — the governance artifacts a head-SHA move invalidates.
+ *
+ * Every one of these is head-pinned, so the invalidation is a deterministic
+ * consequence of the SHA changing; it does not require reading GitHub to know
+ * it happened. Fetching the specific comment URLs would add precision, not
+ * correctness, and is deliberately not a prerequisite — silence here is what
+ * turned a routine sync into an invisible governance regression.
+ *
+ * The order is the required re-authorization order, not a list: verify must
+ * complete before a fresh EXECUTOR_RESULT is posted, and the pm-verdict must
+ * come last, or it certifies a head that is already stale.
+ */
+export const HEAD_MOVE_REAUTHORIZATION_ORDER: readonly string[] = [
+  'Re-run `pnpm verify` on the new head and let CI settle.',
+  'Re-post the EXECUTOR_RESULT comment pinned to the NEW head SHA (the previous one is bound to a dead SHA).',
+  'Re-apply the `t1-approved` label if this is a T1 lane — its evidence was bound to the old head.',
+  'Request a fresh pm-verdict/v1 APPROVED comment LAST, so it certifies the head that will actually merge.',
+];
+
+export interface HeadMoveInvalidation {
+  headMoved: boolean;
+  previousHead: string;
+  currentHead: string;
+  invalidatedArtifacts: string[];
+  reauthorizationOrder: readonly string[];
+}
+
+/**
+ * Report which head-pinned governance artifacts a sync just invalidated.
+ * `headMoved: false` (a true fast-forward, or no movement) invalidates nothing.
+ */
+export function buildHeadMoveInvalidation(
+  previousHead: string,
+  currentHead: string,
+): HeadMoveInvalidation {
+  const headMoved = Boolean(previousHead) && Boolean(currentHead) && previousHead !== currentHead;
+  return {
+    headMoved,
+    previousHead,
+    currentHead,
+    invalidatedArtifacts: headMoved
+      ? [
+          'pm-verdict/v1 APPROVED comment (its `Head SHA:` field no longer matches)',
+          't1-approved label (its evidence is bound to the previous head)',
+          'EXECUTOR_RESULT comment (pinned to the previous head SHA)',
+        ]
+      : [],
+    reauthorizationOrder: headMoved ? HEAD_MOVE_REAUTHORIZATION_ORDER : [],
+  };
+}
+
+/**
+ * True when a merge-wrapper failure is specifically git refusing a
+ * non-fast-forwardable pull, as opposed to any other command failure.
+ *
+ * UTV2-1678: exported so the divergence-refusal path can be asserted directly.
+ * A failure that is NOT this must keep its original code — conflating "diverged"
+ * with "everything else" would let an unrelated git error present itself as a
+ * routine divergence and invite the caller to re-run with a rewriting verb.
+ */
+export function isNotFastForwardFailure(result: MergeWrapperResult): boolean {
+  if (result.ok) return false;
+  if (result.code !== 'merge_wrapper_command_failed') return false;
+  const stderr = result.stderr ?? '';
+  return (
+    stderr.includes('not possible to fast-forward') ||
+    stderr.includes('Cannot fast-forward') ||
+    stderr.includes('fatal: Not possible to fast-forward')
+  );
+}
+
+/**
  * Run an extended merge wrapper operation through the merge mutex.
  *
  * For the base operations (pr-merge, pr-update-branch, main-sync),
  * delegates directly to `runMergeWrapper`. For git-merge-main and
  * git-rebase-main, acquires the mutex, runs the git command, and
  * always releases on completion or failure.
+ *
+ * UTV2-1678: `main-sync` never substitutes a different git verb. On a diverged
+ * branch it refuses with `merge_wrapper_diverged_requires_explicit_sync` and
+ * performs no mutation; the caller names `git-merge-main` or `git-rebase-main`.
  */
 export function runExtendedMergeWrapper(
   input: Omit<MergeWrapperInput, 'operation'> & {
@@ -124,15 +254,39 @@ export function runExtendedMergeWrapper(
   if (input.operation === 'main-sync') {
     const ffResult = runMergeWrapper(input as MergeWrapperInput, options);
     if (ffResult.ok) return ffResult;
-    // When the branch has diverged, ff-only fails. Detect that specific condition
-    // and automatically fall back to rebase so callers don't need to retry manually.
-    const isNotFastForward =
-      ffResult.code === 'merge_wrapper_command_failed' &&
-      (ffResult.stderr?.includes('not possible to fast-forward') ||
-        ffResult.stderr?.includes('Cannot fast-forward') ||
-        ffResult.stderr?.includes('fatal: Not possible to fast-forward'));
-    if (!isNotFastForward) return ffResult;
-    return runExtendedMergeWrapper({ ...input, operation: 'git-rebase-main' }, options);
+    // UTV2-1678: this branch used to re-invoke itself as `git-rebase-main`.
+    //
+    // That made `main-sync` change VERB on failure: the caller asked to sync and
+    // silently got a history rewrite, with no prompt, no distinct exit code, and
+    // no field in the result recording the substitution. Because pm-verdict,
+    // `t1-approved` evidence and executor-result are all head-pinned, moving the
+    // head SHA invalidates every one of them -- so the operation most likely to
+    // be run on an APPROVED branch was the one that destroyed its approval. On
+    // UTV2-1584 it also collapsed 87 commits and deleted a proof bundle that
+    // existed on no other ref.
+    //
+    // `git-merge-main` and `git-rebase-main` both remain directly callable.
+    // Nothing is lost; the choice simply becomes the caller's, and is recorded.
+    if (!isNotFastForwardFailure(ffResult)) return ffResult;
+    return {
+      ok: false,
+      code: 'merge_wrapper_diverged_requires_explicit_sync',
+      issue_id: input.issue_id,
+      operation: 'main-sync',
+      command: ffResult.command,
+      lock: ffResult.lock,
+      release: ffResult.release,
+      stdout: ffResult.stdout,
+      stderr: ffResult.stderr,
+      main_sync_stash: ffResult.main_sync_stash,
+      message:
+        `Branch "${input.branch}" has diverged from origin/main, so a fast-forward sync is not possible. ` +
+        'main-sync will not choose a history-rewriting verb on your behalf (UTV2-1678). ' +
+        'Re-run naming the verb explicitly:\n' +
+        `  pnpm ops:merge-wrapper git-merge-main  --issue ${input.issue_id} --branch ${input.branch}   # preserves history and SHAs\n` +
+        `  pnpm ops:merge-wrapper git-rebase-main --issue ${input.issue_id} --branch ${input.branch}   # REWRITES history; moves the head SHA and invalidates pm-verdict, t1-approved evidence and executor-result\n` +
+        'Prefer git-merge-main on any branch carrying governance artifacts or a proof bundle. No git mutation was performed.',
+    };
   }
 
   if (input.operation !== 'git-merge-main' && input.operation !== 'git-rebase-main') {
@@ -163,6 +317,12 @@ export function runExtendedMergeWrapper(
     ((c: string, a: string[], o: { cwd: string }) =>
       spawnSync(c, a, { cwd: o.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>);
 
+  // UTV2-1678: captured lazily, at the moment the sync command is actually
+  // about to run. Probing eagerly would charge a git call to paths that never
+  // sync at all — a held lock, a release failure, or a dry run — and would make
+  // those paths observably different for no benefit.
+  let preSyncHead = '';
+
   const interceptingRunner: CommandRunner = (command, args, runOptions) => {
     const isMainSyncPullCall =
       command === mainSyncPullCommand.command &&
@@ -171,10 +331,102 @@ export function runExtendedMergeWrapper(
     if (!isMainSyncPullCall) {
       return realRunner(command, args, runOptions);
     }
+    const headProbe = realRunner('git', ['rev-parse', 'HEAD'], runOptions);
+    if (headProbe.status === 0) {
+      preSyncHead = String(headProbe.stdout ?? '').trim().split('\n')[0] ?? '';
+    }
     return realRunner(cmd.command, cmd.args, runOptions);
   };
 
-  return runMergeWrapper(bridgedInput, { ...options, runner: interceptingRunner });
+  // UTV2-1678 criteria 3-4: prove the sync destroyed nothing before reporting
+  // success. Applied to every sync verb, not just rebase — a merge with a bad
+  // conflict resolution can drop a file just as permanently.
+  const result = runMergeWrapper(bridgedInput, { ...options, runner: interceptingRunner });
+  // Only a sync that actually ran and succeeded can have dropped anything.
+  if (!result.ok || !preSyncHead) return result;
+
+  const cwd = input.cwd ?? process.cwd();
+  const gitLines = (args: string[]): string[] => {
+    const run = realRunner('git', args, { cwd });
+    if (run.status !== 0) return [];
+    return String(run.stdout ?? '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+  };
+
+  // The pre-sync SHA still resolves after the sync, so both sides of the
+  // comparison can be computed here rather than snapshotted up front.
+  const before = gitLines(['diff', '--name-only', `origin/main...${preSyncHead}`]);
+  const after = gitLines(['diff', '--name-only', 'origin/main..HEAD']);
+  const classification = classifyDroppedPaths(before, after);
+
+  // Criterion 5 applies whether or not anything was dropped: a clean rebase
+  // still moves the head SHA, and that alone invalidates every approval.
+  const postSyncHead = gitLines(['rev-parse', 'HEAD'])[0] ?? '';
+  const headMoveNotice = renderHeadMoveNotice(
+    buildHeadMoveInvalidation(preSyncHead, postSyncHead),
+  );
+
+  if (classification.dropped.length === 0) {
+    return headMoveNotice
+      ? { ...result, stderr: `${result.stderr ?? ''}${headMoveNotice}` }
+      : result;
+  }
+
+  if (classification.protectedPaths.length > 0) {
+    // Restore the pre-sync tree. `--keep` preserves uncommitted work rather
+    // than discarding it, which matters because the autostash pop has already
+    // run by this point.
+    const restore = realRunner('git', ['reset', '--keep', preSyncHead], { cwd });
+    const restored = restore.status === 0;
+    return {
+      ok: false,
+      code: 'merge_wrapper_sync_dropped_protected_paths',
+      issue_id: input.issue_id,
+      operation: input.operation as MergeWrapperOperation,
+      command: [cmd.command, ...cmd.args],
+      lock: result.lock,
+      release: result.release,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      main_sync_stash: result.main_sync_stash,
+      message:
+        `The ${input.operation} sync of "${input.branch}" dropped governance artifacts that exist on no other ref:\n` +
+        classification.protectedPaths.map((p) => `  - ${p}`).join('\n') +
+        '\n' +
+        (restored
+          ? `Working tree restored to the pre-sync head ${preSyncHead} (git reset --keep). No artifact was lost.`
+          : `RESTORE FAILED — the working tree may still be missing these paths. Recover manually with: git reset --keep ${preSyncHead}`) +
+        '\nA lane\'s proof bundle and manifest usually exist only on that lane\'s branch, so a dropped copy is unrecoverable (UTV2-1584).',
+    };
+  }
+
+  // Criterion 4: anything else dropped is reported, not refused.
+  return {
+    ...result,
+    stderr:
+      `${result.stderr ?? ''}\n[ops-merge-wrapper] warning: the ${input.operation} sync dropped ` +
+      `${classification.otherPaths.length} tracked path(s) not under a protected prefix:\n` +
+      classification.otherPaths.map((p) => `  - ${p}`).join('\n') +
+      `\nPre-sync head was ${preSyncHead}; review before continuing.` +
+      headMoveNotice,
+  };
+}
+
+/**
+ * UTV2-1678 criterion 5: render the invalidation report for a head-SHA move.
+ * Returns '' when nothing moved, so it is safe to append unconditionally.
+ */
+export function renderHeadMoveNotice(invalidation: HeadMoveInvalidation): string {
+  if (!invalidation.headMoved) return '';
+  return (
+    `\n[ops-merge-wrapper] the sync moved the head SHA ${invalidation.previousHead} -> ${invalidation.currentHead}, ` +
+    'which invalidates every head-pinned governance artifact on this branch:\n' +
+    invalidation.invalidatedArtifacts.map((a) => `  - ${a}`).join('\n') +
+    '\nRequired re-authorization order:\n' +
+    invalidation.reauthorizationOrder.map((step, i) => `  ${i + 1}. ${step}`).join('\n')
+  );
 }
 
 /**

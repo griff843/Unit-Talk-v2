@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1678",
+  "title": "main-sync must never silently rebase: remove implicit fallback, preserve artifacts, report invalidated approvals",
+  "tier": "T1",
+  "status": "ci_staging_proof_pending",
+  "generated_at": "2026-08-11T23:20:00Z",
+  "sha_binding": {
+    "verified_source_sha": "7a6466837d33ee898b30fbfdb9b4aa7d1e251e3b",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-11T23:20:00Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "claude/utv2-1678-main-sync-no-silent-rebase",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification. The orchestrator both implemented and reviewed this lane, so the T1 merge gate carries the independent-review burden."
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/ops-merge-wrapper.ts",
+      "scripts/ops/ops-merge-wrapper.test.ts",
+      "scripts/ops/merge-wrapper.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1678/evidence.json",
+      "docs/06_status/proof/UTV2-1678/verification.md",
+      "docs/06_status/proof/UTV2-1678/diff-summary.md"
+    ],
+    "runtime_change": false,
+    "workflow_change": false,
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/ops-merge-wrapper.test.ts scripts/ops/merge-wrapper.test.ts",
+      "status": "PASS",
+      "tests": 67,
+      "pass": 67,
+      "fail": 0,
+      "detail": "Includes nine UTV2-1678 regressions: divergence refusal with no rebase invoked, isNotFastForwardFailure discrimination, artifact-drop refusal with restore, non-governance drop warning, protected-prefix coverage, head-move invalidation contents and ordering, and the no-move case."
+    },
+    "verify_full": {
+      "command": "pnpm verify",
+      "status": "PASS_THROUGH_STATIC",
+      "tests": 4775,
+      "pass": 4775,
+      "fail": 0,
+      "detail": "env:check, lint, type-check, build and the full test tree all completed with zero TypeScript errors and zero ESLint problems. Execution reached test:live-db, which refused on a non-staging target."
+    }
+  },
+  "runtime_proof": {
+    "status": "PENDING_CI_STAGING",
+    "classification": "Control-plane merge tooling only. No production runtime, database, deployment, secret, branch-protection, or approval-policy mutation is part of this lane.",
+    "production_mutation_by_lane": false,
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PENDING_CI_STAGING",
+      "local_result": "REFUSED_NON_STAGING_TARGET",
+      "detail": "[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. This is the UTV2-1630 staging-isolation guard operating correctly."
+    },
+    "queries": [],
+    "row_counts": []
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "main-sync on a diverged branch fails with a distinct, actionable code and performs no git mutation.",
+      "status": "PASS",
+      "evidence": "Returns merge_wrapper_diverged_requires_explicit_sync naming both explicit verbs. Test asserts the observed call list contains only stash push, the ff-only pull, and stash pop."
+    },
+    {
+      "criterion": "No code path reaches git-rebase-main without the caller naming it.",
+      "status": "PASS",
+      "evidence": "The fallback re-invocation is deleted. The refusal test asserts no call containing 'rebase' appears, rather than asserting only on the result code."
+    },
+    {
+      "criterion": "A sync dropping a path under docs/06_status/proof/** or docs/06_status/lanes/** is refused and the tree restored.",
+      "status": "PASS",
+      "evidence": "classifyDroppedPaths plus post-sync wiring returns merge_wrapper_sync_dropped_protected_paths; the test asserts git reset --keep <pre-sync-head> was actually invoked."
+    },
+    {
+      "criterion": "A sync that drops any other tracked path reports it.",
+      "status": "PASS",
+      "evidence": "Non-protected drops append a warning naming each path; the test asserts success is preserved and no restore is attempted."
+    },
+    {
+      "criterion": "A sync that moves the head SHA emits the invalidated-artifact list with re-authorization order.",
+      "status": "PASS",
+      "evidence": "buildHeadMoveInvalidation names pm-verdict, t1-approved and EXECUTOR_RESULT; the test asserts verify precedes EXECUTOR_RESULT and pm-verdict is last."
+    },
+    {
+      "criterion": "Unit coverage for ff-only success, diverged refusal, explicit merge success, artifact-drop refusal, and invalidation report contents.",
+      "status": "PASS",
+      "evidence": "67 focused tests covering all five cases plus the no-move and unknown-head cases."
+    },
+    {
+      "criterion": "Merge mutex acquire/release semantics unchanged.",
+      "status": "PASS",
+      "evidence": "No change to lock acquisition or release; the pre-existing lock-held, release-on-failure and dry-run tests pass unmodified in their lock assertions."
+    }
+  ],
+  "known_limitations": [
+    "The mandatory T1 staging DB proof and the full pnpm verify verdict remain pending until the governed PR CI run completes in the staging-ci environment.",
+    "The invalidation report is derived deterministically from the head-SHA change and does not fetch the specific pm-verdict comment URL or label state from GitHub. Fetching would add precision, not correctness; a head move invalidates those artifacts by definition.",
+    "MAIN_SYNC_STASH_PATHS covers .ops/sync and docs/06_status/lanes but not docs/06_status/proof/. That gap is out of scope here and is tracked in UTV2-1690."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PENDING_CI_STAGING",
+    "ready_for_pm_review": true
+  }
+}
