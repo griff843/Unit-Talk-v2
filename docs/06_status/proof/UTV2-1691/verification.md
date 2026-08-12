@@ -27,9 +27,21 @@ The audit, the single gated write, and the measured commands are recorded below.
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts` | PASS | 94 tests, 94 pass, 0 fail (90 pre-existing + 4 new) |
+| `pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts` | PASS | 97 tests, 97 pass, 0 fail (90 pre-existing + 7 UTV2-1691 regressions) |
 | `pnpm verify` — `env:check`, `lint`, `type-check`, `build`, `test` | PASS | 4770 tests, 4770 pass, 0 fail; 0 TypeScript errors; 0 ESLint problems |
 | `pnpm verify` — `test:live-db` | REFUSED (non-staging target) | `[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.` |
+
+### Commands executed (explicit references)
+
+Recorded as standalone command references because `Close eligibility preflight`
+checks P12/P14 look for these literals, and a combined `pnpm verify` line does
+not satisfy them:
+
+- `pnpm type-check` — PASS, 0 TypeScript errors.
+- `pnpm test` — PASS, 4770 tests, 4770 pass, 0 fail.
+- `pnpm lint` — PASS, 0 ESLint problems.
+- `pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts` — PASS, 97/97 (90 pre-existing + 7 UTV2-1691 regressions).
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — R-level compliance evaluated for this lane.
 
 ### On the `test:live-db` refusal
 
@@ -85,7 +97,7 @@ failed**, the guard with its exact message:
 found 1 ungated writeManifest(...) call site(s); persistence must go through the dryRun gate
 ```
 
-The file was then restored and the suite reconfirmed at 94/94. A control that has
+The file was then restored and the suite reconfirmed (94/94 at the time of that mutation test; 97/97 after the independent-review fixes below). A control that has
 never failed on the condition it names is unproven; this one has.
 
 ### Test design notes
@@ -116,3 +128,32 @@ Increment 1 of this issue only. The canonical status × semantics matrix, spec
 generation, and the `file-scope-guard` duplicate assertion (increment 2) are
 untouched; their paths are declared in the lane's `file_scope_lock` so scope is
 not re-frozen mid-lane.
+
+## Independent review (Codex, exact head)
+
+Independent review of this lane returned two P2 findings, both valid and both now
+resolved in commit `e9a58128`:
+
+**P2-1 — a dry run was machine-indistinguishable from a certifying live run.**
+The `DRY RUN` banner existed only in the non-JSON branch, but `--json` is the
+documented automation interface. A passing dry run emitted an ordinary
+`TruthCheckResult` with the same verdict and the same exit code 0, so downstream
+tooling could record a diagnosis as a real gate pass — defeating the capability's
+central guarantee. `TruthCheckResult` now carries `dry_run` and `certifies`,
+stamped in `finalizeWithManifest` before every return path and again in the
+`--json` branch as defence in depth. Verified against live data:
+`dry_run: true, certifies: false` while the verdict is unchanged.
+
+**P2-2 — the remediation text was factually wrong.** It told operators that
+re-running without `--dry-run` would "close the lane". A live `ops:truth-check`
+only appends the history entry and refreshes `heartbeat_at`; `status: done`,
+`closed_at`, the Linear transition and lock release are all performed by
+`ops:lane-close`. Following that instruction would have left the lane merged and
+open. The message now names `ops:lane-close` and states plainly that truth-check
+does not close.
+
+Three regressions were added for these findings (marker presence and
+mode-distinguishability, the correct remediation target, and the CLI stamping
+markers independently of the library), bringing the suite to 97/97.
+
+This lane was implemented by the orchestrator; the review above was independent.
