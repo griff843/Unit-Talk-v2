@@ -1,0 +1,51 @@
+name: Capability Map Check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/05_operations/CAPABILITY_MAP.json'
+      - 'scripts/ci/capability-map-check.ts'
+      - 'scripts/ci/capability-map-check.test.ts'
+      - '.github/workflows/capability-map-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'docs/05_operations/CAPABILITY_MAP.json'
+      - 'scripts/ci/capability-map-check.ts'
+      - 'scripts/ci/capability-map-check.test.ts'
+      - '.github/workflows/capability-map-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate capability map
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run checker regression tests
+        run: pnpm exec tsx --test 'scripts/ci/capability-map-check.test.ts'
+
+      - name: Validate committed capability map
+        run: |
+          if [ ! -f docs/05_operations/CAPABILITY_MAP.json ]; then
+            echo '::notice title=Capability map::The map has not reached this branch yet; checker regression tests passed.'
+            exit 0
+          fi
+          pnpm exec tsx scripts/ci/capability-map-check.ts
