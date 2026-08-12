@@ -21,6 +21,35 @@ Verified implementation SHA: `ee9a8845148b2f885a3b5f9fb33e564a63ec8b0a`
 
 The measured commands and independent review result are recorded below.
 
+The lane's own regression suite, run on this head:
+
+```
+$ pnpm exec tsx --test scripts/ops/pr-block-diagnostic.test.ts
+
+ok 8 - PR block diagnostic reports merge conflicts and never reports passing checks as blockers
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 590.402245
+```
+
+The controls were proven by mutation rather than by a passing run alongside them. Independent review reverted the fix and re-ran the suite:
+
+```
+# isPassingConclusion reverted to the case-sensitive !== chain
+3 of 8 tests FAILED  (pr-block-diagnostic.test.ts:295, :310, :323)
+
+# fix restored; BEHIND/DIRTY blocker pushes removed in isolation
+2 of 8 tests FAILED  (pr-block-diagnostic.test.ts:310, :323), 6 passed
+```
+
+Each regression fails when the control it covers is removed, so none of them is decorative.
+
 ## Verification
 
 Completed successfully:
