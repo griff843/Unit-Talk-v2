@@ -1,5 +1,7 @@
 # Diff summary: UTV2-1693
 
+MERGE_SHA: ac409d4e50b1890ff64a5d2a9ef54b9dd7457722
+
 Governance content only. No runtime, domain, DB, delivery or workflow-authority code.
 
 | File | Change |

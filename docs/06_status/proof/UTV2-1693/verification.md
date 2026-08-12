@@ -1,6 +1,12 @@
 # PROOF: UTV2-1693
 
-MERGE_SHA: pending
+MERGE_SHA: ac409d4e50b1890ff64a5d2a9ef54b9dd7457722
+
+> Pre-merge, this anchor carries the verified implementation SHA; the merge SHA
+> does not yet exist. `runtime-verifier-gate.ts:132-134` hard-fails when no
+> 40-hex SHA is present at all and only warns when it differs from the current
+> head, so a placeholder word here fails the gate outright. `post-merge-lane-close.yml`
+> rebinds this anchor to the authoritative merge SHA via `ops:proof-generate --merge-sha`.
 
 ## ASSERTIONS:
 
