@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "purpose": "Situation -> capability -> authority. When a listed situation occurs, use the mapped capability before improvising. Hand-rolling a check that an existing diagnostic already performs is how capability decays into shelfware.",
+  "authority_levels": {
+    "authoritative": "Its verdict decides the question. Overriding it requires a governance artifact.",
+    "blocking": "It can stop a merge or a transition on its own.",
+    "advisory": "Its objection is a signal worth acting on; its approval is not a gate. CI, Merge Gate and PM policy remain the blocking authority."
+  },
+  "situations": [
+    {
+      "situation": "Deciding whether there is room to start new work",
+      "capability": "pnpm ops:execution-state",
+      "kind": "command",
+      "authority": "authoritative",
+      "notes": "Canonical active-lane union and dispatch slots. Never infer capacity from lane manifests alone, and never from memory."
+    },
+    {
+      "situation": "Before any dispatch cycle",
+      "capability": "lane-governor",
+      "kind": "agent",
+      "authority": "advisory",
+      "notes": "Expected, not optional. Validates concurrency headroom and forbidden combinations before work is added to the board."
+    },
+    {
+      "situation": "A file or path may already be claimed by another lane",
+      "capability": "pnpm ops:lease report",
+      "kind": "command",
+      "authority": "blocking",
+      "notes": "Leases are a separate population from manifests. A manifest-only check returns false all-clears; lane-start will then refuse on lease_conflict."
+    },
+    {
+      "situation": "Lane substrate looks missing or inconsistent",
+      "capability": "pnpm ops:substrate-guard",
+      "kind": "command",
+      "authority": "blocking",
+      "notes": "Transient WSL2 ENOENT is not deletion. Re-probe before tearing anything down."
+    },
+    {
+      "situation": "Choosing what to work on next",
+      "capability": "pnpm ops:lane-maximizer",
+      "kind": "command",
+      "authority": "advisory",
+      "notes": "Candidate generation only. Confirm against ops:execution-state before dispatching."
+    },
+    {
+      "situation": "CI is red and the cause is not obvious from the checks list",
+      "capability": "ci-triage",
+      "kind": "agent",
+      "authority": "advisory",
+      "notes": "Expected, not optional. Reads workflow logs and returns the failing step, root cause and a specific remediation."
+    },
+    {
+      "situation": "Broad repository or workflow health check",
+      "capability": "pnpm ops:health",
+      "kind": "command",
+      "authority": "advisory"
+    },
+    {
+      "situation": "A workflow is misconfigured or not dispatching",
+      "capability": "pnpm ops:ci-doctor",
+      "kind": "command",
+      "authority": "advisory"
+    },
+    {
+      "situation": "A PR will not merge and the reason is unclear",
+      "capability": "pnpm ops:pr-block-diagnostic",
+      "kind": "command",
+      "authority": "advisory",
+      "notes": "mergeStateStatus reflects the whole check rollup, not just the required subset, so a non-required red check makes every PR read BLOCKED."
+    },
+    {
+      "situation": "Before claiming a PR is ready to merge",
+      "capability": "pnpm ops:merge-ready",
+      "kind": "command",
+      "authority": "blocking",
+      "notes": "Run it; do not assert readiness from a green checks list."
+    },
+    {
+      "situation": "Deciding whether a lane is Done",
+      "capability": "pnpm ops:truth-check",
+      "kind": "command",
+      "authority": "authoritative",
+      "notes": "The done-gate. Never self-certify Done. Use --dry-run to ask the question without changing the answer."
+    },
+    {
+      "situation": "Diagnosing a lane's closeability without mutating it",
+      "capability": "pnpm ops:truth-check <ID> --dry-run",
+      "kind": "command",
+      "authority": "advisory",
+      "notes": "Writes nothing and certifies nothing. A dry run cannot close a lane: it records no truth_check_history entry. Distinguish it mechanically by dry_run/certifies in --json output."
+    },
+    {
+      "situation": "Starting or closing a lane",
+      "capability": "pnpm ops:lane-start / pnpm ops:lane-close",
+      "kind": "command",
+      "authority": "authoritative",
+      "notes": "The only sanctioned lifecycle transitions."
+    },
+    {
+      "situation": "Lane manifests, Linear and GitHub have drifted apart",
+      "capability": "lane-reconciler",
+      "kind": "agent",
+      "authority": "advisory"
+    },
+    {
+      "situation": "Assessing risk on a PR before merge",
+      "capability": "pr-risk-reviewer",
+      "kind": "agent",
+      "authority": "advisory"
+    },
+    {
+      "situation": "Reviewing work returned by Codex",
+      "capability": "codex-return-reviewer",
+      "kind": "agent",
+      "authority": "advisory",
+      "notes": "Required by the separation-of-review rule before merging Codex-produced changes."
+    },
+    {
+      "situation": "Auditing a proof bundle or R-level evidence",
+      "capability": "proof-auditor",
+      "kind": "agent",
+      "authority": "advisory"
+    },
+    {
+      "situation": "Verifying runtime truth and CI evidence on the merge SHA",
+      "capability": "runtime-verifier",
+      "kind": "agent",
+      "authority": "advisory",
+      "notes": "Never rely on branch CI alone."
+    },
+    {
+      "situation": "Reviewing live-DB proof for a T1 evidence bundle",
+      "capability": "db-proof-reviewer",
+      "kind": "agent",
+      "authority": "advisory"
+    },
+    {
+      "situation": "Checking what automation exists and what is unwired",
+      "capability": "pnpm ops:automation-coverage-check",
+      "kind": "command",
+      "authority": "advisory",
+      "notes": "Run this before building any new script, agent or workflow."
+    },
+    {
+      "situation": "Current system state at the start of a session",
+      "capability": "pnpm ops:brief",
+      "kind": "command",
+      "authority": "advisory"
+    },
+    {
+      "situation": "Finding executable candidates for the day",
+      "capability": "pnpm ops:digest",
+      "kind": "command",
+      "authority": "advisory"
+    }
+  ]
+}

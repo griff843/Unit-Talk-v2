@@ -32,6 +32,12 @@ If verdict is FAIL: generate the missing artifacts listed in the output, then re
 Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
 ```
 
+**Step 1 — merge readiness (run it; do not assert it):**
+```
+Run: pnpm ops:merge-ready <PR#>
+```
+Running this is mandatory before any merge-ready claim. A green checks list is not the same question: `mergeStateStatus` reflects the whole rollup rather than the required subset, so a PR can read `BLOCKED` on an unrelated non-required check, and a required context that was never created reads as absent rather than failing.
+
 **All tiers:**
 - [ ] `pnpm type-check` — green
 - [ ] `pnpm test` — green, count did not decrease
@@ -49,7 +55,8 @@ Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
 - [ ] evidence bundle generated: `pnpm evidence:new UTV2-###`
 - [ ] evidence bundle validated: `pnpm evidence:validate <path>`
 - [ ] both `static_proof` and `runtime_proof` populated
-- [ ] `verifier.identity` distinct from implementing agent
+- [ ] `runtime_proof.queries` **and** `runtime_proof.row_counts` are non-empty — truth-check's R1/R2 fail on empty arrays even when `runtime_proof` itself exists, and this is the single most common cause of a lane that merges but cannot close
+- [ ] `verifier.identity` distinct from implementing agent — **check this by reading it**, not by trusting truth-check's P10, which compares against `manifest.created_by` (an owner string like `claude`) and therefore passes even when the verifier is the implementing lane's own branch
 
 **Migrations:**
 - [ ] serial migration number (no collision)

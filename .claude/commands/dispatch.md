@@ -64,7 +64,9 @@ If reconciliation does not pass, surface exactly one repair command from the fir
 Repair command: {first repair_plan action command | none available}
 ```
 
-After the executable gates pass, the operator may ask the lane-governor agent for a concise summary. This is advisory only; the scripts above are the authority.
+After the executable gates pass, **invoke the lane-governor agent. This is a step, not a suggestion** — a dispatch cycle that skipped it is incomplete, and the reason this is mandatory is that prose recommending it was repeatedly ignored while the agent sat unused.
+
+Its finding is **advisory**: the scripts above remain the authority, and lane-governor's approval is not a gate. Its objection is a signal to act on — if it reports no headroom or an active forbidden combination, do not dispatch on the strength of a green script alone; resolve the disagreement first and say which source you followed.
 
 ```typescript
 Agent({

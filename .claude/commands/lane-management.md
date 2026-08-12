@@ -41,10 +41,14 @@ pnpm ops:lane-start UTV2-### --tier T3 --branch <branch> --docs-only-fast-path -
 
 - [ ] Issue has tier label (T1/T2/T3)
 - [ ] Preflight token valid (current session)
-- [ ] `file_scope_lock[]` declared
-- [ ] No overlap with active lanes
+- [ ] `file_scope_lock[]` declared — including every file the lane will **create**, not only files it edits
+- [ ] No overlap with active lanes, checked across **both** populations:
+  - [ ] manifests — `pnpm ops:execution-state`
+  - [ ] **leases** — `pnpm ops:lease report`
 - [ ] `expected_proof_paths[]` set (non-empty for T1/T2)
 - [ ] No prior manifest for this issue (unless `done`)
+
+A manifest-only overlap check returns false all-clears. Leases are an independent authority: all six target files for a lane have been checked against manifests and reported FREE, and `ops:lane-start` then refused on `lease_conflict`. A terminal manifest does not currently guarantee its lease was released, so a merged-and-closed lane can still hold your paths.
 
 For the T3 docs-only fast path, replace this checklist with the two script validations above plus normal PR CI, branch discipline, lane authority, merge gate, tier label, and Linear auto-close. Do not create a manifest or sync file for a validated fast-path lane.
 
