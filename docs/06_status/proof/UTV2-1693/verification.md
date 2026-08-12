@@ -136,6 +136,16 @@ Flagged explicitly for PM review rather than quietly reinterpreted.
 
 ---
 
+## Remediation-path verification rule added post-review
+
+`/verification` gains one rule, added after this lane's independent review and after a defect that the rule would have caught:
+
+> **A refusal that names a remedy is not tested until the remedy has been executed and observed to succeed.**
+
+The evidence is UTV2-1700, found the same day. `ops:merge-wrapper main-sync` correctly refuses on a diverged branch and names `git-merge-main` as the safe remedy; `git-merge-main` runs `git merge --ff-only`, so it fails with the identical error in the only state that prescribes it. That shipped through careful implementation, independent review, mutation testing and PM approval — every one of which verified that the refusal fires, and none of which executed the remedy.
+
+It belongs in this lane because `/verification` is already in the declared file scope and because it is a standing rule about how proof is judged, not a procedure. It widens the content reviewed at head `ac409d4e`, so it is disclosed here rather than folded in silently.
+
 ## Independent review
 
 This lane was implemented by the orchestrator, on a document that governs the orchestrator. Per invariant 14 the implementer must not be the sole validator, so it was reviewed by `pr-risk-reviewer` at head `ac409d4e`.

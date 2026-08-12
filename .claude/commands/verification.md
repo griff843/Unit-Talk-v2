@@ -70,6 +70,22 @@ Running this is mandatory before any merge-ready claim. A green checks list is n
 - **Static proof** = verifiable without running merged code (CI, diffs, schema validation, grep guards)
 - **Runtime proof** = requires merged code against real infra (test:db, row counts, receipts, audit entries)
 - **T1 requires both.** Neither substitutes for the other.
+
+### Remediation-path verification
+
+**A refusal that names a remedy is not tested until the remedy has been executed and observed to succeed.**
+
+Whenever a control refuses, blocks, or fails closed *and* tells the operator what to run instead, the prescribed command is part of the control. Testing that the refusal fires is only half the work; the escape hatch must be walked end to end:
+
+```
+induce the condition → the control refuses → run the command it named → confirm it resolves the condition
+```
+
+This is not hypothetical. `ops:merge-wrapper main-sync` correctly refuses on a diverged branch and names `git-merge-main` as the safe remedy. `git-merge-main` runs `git merge --ff-only`, so it fails with the identical error on every branch that reaches it — the remedy cannot work in the only state that prescribes it. That defect shipped through careful implementation, independent review, mutation testing and PM approval, because every one of those verified the refusal and none executed the remedy.
+
+The failure mode it creates is worse than a broken command: an operator who trusts the message and finds it broken reaches for the destructive alternative the control was built to prevent.
+
+Applies equally to repair scaffolds, `--repair-merged` packets, blocking CI comments, and any error string containing "run" or "re-run". If the remedy cannot be executed in a test, say so explicitly in the proof rather than implying it was verified.
 - Proof must reference the merge SHA. Stale proof (pre-merge mtime or wrong SHA) is invalid.
 - A verification claim requires: ran in current session, output captured, output checked. Stale runs don't count.
 
