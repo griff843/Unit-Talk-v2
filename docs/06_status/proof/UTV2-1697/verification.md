@@ -1,8 +1,8 @@
 # PROOF: UTV2-1697
 
-MERGE_SHA: b092c93c0b52d7b3543ab848a8b901c45caf61fe
+MERGE_SHA: 7255dcd0c3bff0f3c9411e02f1c5e80ecb4b9550
 
-Verified implementation SHA: `b092c93c0b52d7b3543ab848a8b901c45caf61fe`
+Verified implementation SHA: `7255dcd0c3bff0f3c9411e02f1c5e80ecb4b9550`
 
 > Pre-merge, `MERGE_SHA` carries the verified implementation SHA. Post-merge closeout binds it to the authoritative merge SHA.
 
@@ -13,8 +13,9 @@ Verified implementation SHA: `b092c93c0b52d7b3543ab848a8b901c45caf61fe`
 | `pnpm exec tsx --test 'scripts/ci/capability-map-check.test.ts'` | PASS | 5 tests passed; 0 failed |
 | Exact UTV2-1693 map payload | PASS | 22 entries checked; 0 findings |
 | `pnpm type-check` | PASS | TypeScript project-reference check completed with exit code 0 |
-| `pnpm test` | Pending static gate | Executed as part of `pnpm verify:static` |
-| `pnpm verify:static` | Pending at proof write | Repository-wide static gate is running; final result is recorded before PR submission |
+| `pnpm test` | PASS | Root aggregate completed within `pnpm verify:static` |
+| `pnpm verify:static` | PASS | DB boundary, sync/alignment, env, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit code 0 |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | No R-level rules matched; no additional artifacts required |
 
 ## Issue-specific assertions
 
