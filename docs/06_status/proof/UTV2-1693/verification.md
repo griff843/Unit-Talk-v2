@@ -44,12 +44,17 @@ The section audit, the existence check, and the measured commands are recorded b
 
 ## Mandatory section audit
 
-Every section of the previous `CLAUDE.md` was classified before rewriting. Nothing was dropped silently.
+Every section of the previous `CLAUDE.md` was classified before rewriting.
+
+> **Corrected after independent review.** This section originally claimed "nothing was dropped silently."
+> That was false: the `Commands` row below covered three prose rules as well as the command list, and two
+> of them were dropped without a home — one of which another canonical doc cites by name. Both are now
+> restored to §12. See R4 under Independent review.
 
 | # | Previous section | Classification | Disposition |
 |---|---|---|---|
 | 1 | Mission | **UPDATE** | Became §1 Operating role. The previous text described Claude as "the execution orchestrator" working a backlog; it never said the orchestrator is not the sole implementer, which is the behaviour the role actually requires. |
-| 2 | Commands (15 lines of `pnpm` invocations) | **MOVE** | To `docs/05_operations/CAPABILITY_MAP.json`, keyed by *situation* rather than listed by name. A flat command list answers "what exists"; the failure mode being fixed is not knowing *when* to reach for one. |
+| 2 | Commands (15 lines of `pnpm` invocations **plus three prose rules**) | **MOVE + partial drop, now corrected** | Command list to `docs/05_operations/CAPABILITY_MAP.json`, keyed by *situation* rather than by name — a flat list answers "what exists", while the failure mode being fixed is not knowing *when* to reach for one. The section's three prose rules were initially mishandled: environment-load order survived, but the `sleep`-then-poll prohibition and the read-`database.types.ts`-before-SQL guard were dropped. Both restored to §12 after review. |
 | 3 | Truth hierarchy | **KEEP** | Retained verbatim as §5, plus the state-population model the old file lacked. |
 | 4 | Core invariants (11) | **UPDATE** | Retained 1–5 and 7–11 unchanged. **Invariant 6 was factually wrong and is corrected.** Three added: 12 (check existing capability first), 13 (a control is proven only by failing when removed), 14 (the implementer is never the sole validator). |
 | 5 | Build status — Phase 7A | **REMOVE** | Point-in-time status in a permanent-rules file. It goes stale by construction and `PROGRAM_STATUS.md` already owns it. |
@@ -131,4 +136,51 @@ Flagged explicitly for PM review rather than quietly reinterpreted.
 
 ## Independent review
 
-This lane was implemented by the orchestrator. Per invariant 14 the implementer must not be the sole validator of a governance change, so independent review is required before merge and is recorded here when complete.
+This lane was implemented by the orchestrator, on a document that governs the orchestrator. Per invariant 14 the implementer must not be the sole validator, so it was reviewed by `pr-risk-reviewer` at head `ac409d4e`.
+
+**Verdict: RISK HIGH. Do not merge as-is.** Four substantive findings, all valid, all now fixed. The review is the reason this bundle's earlier claim that "nothing was dropped silently" is corrected below rather than left standing.
+
+### R1 — an authority regression in §9 (most serious)
+
+§9 stated that the `t1-approved` label, a GitHub review approval and a `pm-verdict/v1` comment "must **originate** from the PM". That is false for T2 and it deletes a ratified mechanism.
+
+`main`'s CLAUDE.md carried the disambiguating sentence — *"For T2, the orchestrator's own `gh pr review --approve` after diff review satisfies the 'GitHub PR review approval' branch — no PM presence or PM_VERDICT comment is mechanically required, for any executor"* (ratified 2026-05-18 under UTV2-979). The rewrite dropped it while generalising the origination rule over all three artifacts.
+
+Corroborated by the reviewer against four independent sources: `.github/workflows/merge-gate.yml` (whose own comment cites CLAUDE.md as the source of the self-approval rule), `DELEGATION_POLICY.md:78,234`, `OPERATING_MODEL_SONNET5.md:58`, and `/three-brain` Rule 9.
+
+Left in, this would have forbidden the exact mechanism by which T2 lanes merge — a governance document silently revoking a ratified authority.
+
+**Fixed:** the origination rule is now scoped to *PM decisions*, and T2 self-approval is stated explicitly as the ratified exception, with what invariant 14 actually requires there (independent review first, then approve on the strength of it). `merge-gate.yml` is named as the tiebreaker.
+
+### R2 — a self-contradiction inside a file this lane edited
+
+`.claude/commands/lane-management.md:3` still opened with *"The lane manifest is the sole authority for active lane state"* — the precise claim this lane exists to correct — one section above the new paragraph explaining it is false.
+
+**Fixed:** the opening now distinguishes *declared* lane state (where the manifest is authoritative, over Linear and chat) from *whether a lane can run* (where leases, worktrees, locks, PR and CI state can each block independently).
+
+### R3 — a duplicated escalation list that had already drifted
+
+§9 paraphrased `/three-brain` Rule 9 as six items against its actual ten, with no cross-reference. `OPERATING_MODEL_SONNET5.md:56` warns against this by name, citing a prior incident where a duplicated copy listed a gate `merge-gate.yml` had removed.
+
+**Fixed:** §9 now points at Rule 9 as canonical and instructs that the list not be restated anywhere, citing the prior drift. This is invariant 11 applied to the constitution itself.
+
+### R4 — content dropped without a home, one of it load-bearing
+
+The audit table classified the old `## Commands` section as a single MOVE row. It actually held the command list **plus three prose rules**, and only the environment-load order survived.
+
+- **The `sleep`-then-poll prohibition** was dropped — and `RUNTIME_RELIABILITY_AGENT_CHARTER.md:56` cites it as living in "root `CLAUDE.md`", so the drop left a dangling cross-reference from another canonical doc.
+- **The "read `database.types.ts` before writing any SQL" guard** was dropped with no restatement in `/db-verify`, `/betting-domain` or `/code-structure`.
+
+**Fixed:** both restored to §12. The 18-row document table, which shrank to 9, now ends with a pointer to `docs_authority_map.md` as the index of everything not listed.
+
+### Correction to this bundle
+
+The audit section previously asserted "Nothing was dropped silently." That was **wrong**, and the review proved it. Two rules were dropped, one of them cited by another canonical document. The claim has been corrected in place; the audit's per-section classification stands, but its completeness claim did not survive contact with a reader who checked it.
+
+### Not accepted as blocking
+
+The reviewer flagged §12's "required by preflight" for `GITHUB_TOKEN` as slightly overstated, since preflight's check is waivable. Reworded rather than dropped: preflight's check is waivable, pre-merge authorization is not.
+
+### What the reviewer could not verify
+
+The "70 of 76 `ops:`/`ci:` scripts are referenced somewhere an agent reads" figure was taken on faith, and the per-item authority classifications in `CAPABILITY_MAP.json` were spot-checked rather than exhaustively audited. Both are recorded as unverified rather than presented as confirmed.

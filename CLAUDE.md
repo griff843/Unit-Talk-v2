@@ -146,7 +146,7 @@ Record the mutation result in the proof bundle.
 
 **Decide autonomously:** implementation order, executor selection, parallelization, technical approach, bug fixes, tooling choice, sequencing.
 
-**Escalate only:** business/product decisions · production activation · irreversible destructive operations · security boundaries · governance philosophy changes · required PM approval gates.
+**Escalate:** the stop conditions in `/three-brain` Rule 9, which is **canonical** — read it there rather than from a copy. Do not restate that list here or anywhere else: a duplicated copy has already drifted from the mechanical authority once, listing a gate `merge-gate.yml` had removed.
 
 Do not ask the PM to make ordinary engineering sequencing decisions.
 
@@ -158,9 +158,13 @@ Do not ask the PM to make ordinary engineering sequencing decisions.
 - **A passing test does not constitute authorization.**
 - **A PM artifact must represent an intentional human decision, not an executor action.**
 
-PM approval is never satisfied by a chat message — only by the `t1-approved` label, a GitHub review approval, or a `pm-verdict/v1` comment. Those artifacts must **originate** from the PM. Do not author, transcribe, or apply an approval artifact on the PM's behalf: a shared credential makes the result indistinguishable from a genuine decision, which destroys the audit trail the gate exists to create.
+PM approval is never satisfied by a chat message — only by the `t1-approved` label, a GitHub review approval, or a `pm-verdict/v1` comment.
 
-If the PM's intent is clear but the artifact is absent, the correct action is to **stop and request the artifact** — not to supply it.
+**Where a PM decision is required, its artifact must originate from the PM.** Do not author, transcribe, or apply one on the PM's behalf: a shared credential makes the result indistinguishable from a genuine decision, which destroys the audit trail the gate exists to create. If the PM's intent is clear but the artifact is absent, **stop and request it** — do not supply it.
+
+**T2 is the deliberate exception, and it is ratified.** For T2 the orchestrator's own `gh pr review --approve` after a real diff review satisfies the GitHub-review-approval branch — no PM presence and no `pm-verdict` comment is mechanically required, for any executor. That approval is the orchestrator's own review artifact, not a PM artifact stood in for. What invariant 14 requires there is that the *reviewer* not be the sole validator of a control-plane change: obtain independent review first, then approve on the strength of it.
+
+`merge-gate.yml` is the authority on which artifact satisfies which tier. If this section and that workflow ever disagree, the workflow wins.
 
 ---
 
@@ -186,7 +190,11 @@ Prefer mechanical enforcement over documentation. Prose in this file is the weak
 
 ## 12. Session start
 
-Environment loads `local.env` > `.env` > `.env.example` via `@unit-talk/config`. `GITHUB_TOKEN` is **not** in `local.env`; supply it with `gh auth token` (required by preflight and pre-merge authorization).
+Environment loads `local.env` > `.env` > `.env.example` via `@unit-talk/config`. `GITHUB_TOKEN` is **not** in `local.env`; supply it with `gh auth token`. Preflight's check for it is waivable, but pre-merge authorization fails hard without it.
+
+**Never `sleep`-then-poll for CI or merge status** — the harness blocks bare sleep chains before a check command. Use a background `Monitor` until-loop or `ScheduleWakeup`, and report results proactively rather than waiting to be asked. `.github/workflows/track-a-monitor.yml` is the durable replacement for ad hoc session cron — extend it rather than hand-rolling a new temporary one.
+
+**Before writing any SQL against Supabase**, read `packages/db/src/database.types.ts` (or run `mcp list_tables`) for real table and column names — never guess. Regenerate with `pnpm supabase:types` after a migration; stale types are worse than none.
 
 Before any work: `git fetch origin && git pull --ff-only origin main`. Run `/clear` at task boundaries; re-read this file after. The `UserPromptSubmit` hook injects system state and standing guardrails — invoke `/system-state-loader` only if that data looks stale.
 
@@ -209,6 +217,8 @@ Never self-certify Done. Never assert state from memory — verify against runti
 | Standing guardrails | `docs/05_operations/STANDING_GUARDRAILS.md` |
 | Architecture | `docs/CODEBASE_GUIDE.md` |
 | Schemas | `docs/05_operations/schemas/` |
+| Escalation stop conditions (canonical) | `/three-brain` Rule 9 |
+| **Anything not listed here** | `docs/05_operations/docs_authority_map.md` — the index of every canonical doc, including the execution map, modeling sequence, workflow spec, provider knowledge base, known debt and proof template |
 
 ## What this file is not
 

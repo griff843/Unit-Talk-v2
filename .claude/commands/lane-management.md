@@ -1,6 +1,6 @@
 # /lane-management
 
-Govern lane lifecycle. The lane manifest is the sole authority for active lane state — not Linear, not chat.
+Govern lane lifecycle. The lane manifest is authoritative for **declared** lane state — over Linear, over chat. It is **not** the sole authority for whether a lane can run: leases, worktrees, locks, PR state and CI state are separate populations, and any one of them can block a lane the manifest reports as clear. See the lane-start checklist below.
 
 **Done-gate / close checklist:** `/verification`
 **Specs:** `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/EXECUTION_TRUTH_MODEL.md`
