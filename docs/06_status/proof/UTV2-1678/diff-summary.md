@@ -1,6 +1,6 @@
 # UTV2-1678 — diff summary
 
-MERGE_SHA: 7a6466837d33ee898b30fbfdb9b4aa7d1e251e3b
+MERGE_SHA: 533f7c01dfd8c79849a2d0adc9803a1cd5fe41d0
 
 Verified implementation SHA: `7a6466837d33ee898b30fbfdb9b4aa7d1e251e3b`
 
