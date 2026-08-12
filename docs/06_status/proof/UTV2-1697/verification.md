@@ -6,6 +6,10 @@ Verified implementation SHA: `7255dcd0301892d945f4ff59564020a78ecc44bf`
 
 > Pre-merge, `MERGE_SHA` carries the verified implementation SHA. Post-merge closeout binds it to the authoritative merge SHA.
 
+## EVIDENCE:
+
+The measured commands, the mutation results, and the independent review findings are recorded below.
+
 ## Verification
 
 | Check | Result | Evidence |
@@ -17,7 +21,7 @@ Verified implementation SHA: `7255dcd0301892d945f4ff59564020a78ecc44bf`
 | `pnpm verify:static` | PASS | DB boundary, sync/alignment, env, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit code 0 |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | No R-level rules matched; no additional artifacts required |
 
-## Issue-specific assertions
+## ASSERTIONS:
 
 - A missing map or invalid JSON fails instead of silently treating the map as valid.
 - Every entry requires a supported schema version, declared authority level, unique non-empty situation, primary capability, kind, and fallback/null value.
