@@ -22,6 +22,7 @@ function validMap() {
     field_contract: { situation: 'trigger', capability: 'primary', kind: 'type', authority: 'level', fallback: 'backup' },
     situations: [
       { situation: 'Start of session', capability: 'pnpm ops:brief', kind: 'command', authority: 'authoritative', fallback: 'lane-governor' },
+      { situation: 'Before dispatch', capability: 'lane-governor', kind: 'agent', authority: 'advisory', fallback: 'pnpm ops:brief' },
       { situation: 'Proof review', capability: 'verification', kind: 'skill', authority: 'advisory', fallback: 'pnpm ops:truth-check <ID> --dry-run' },
     ],
   };
@@ -40,7 +41,7 @@ test('passes a complete map whose commands, agents, skills, and fallback command
   withFixture((root) => {
     const report = validateCapabilityMap(validMap(), { root });
     assert.equal(report.verdict, 'PASS', JSON.stringify(report.findings));
-    assert.equal(report.entries_checked, 2);
+    assert.equal(report.entries_checked, 3);
   });
 });
 
