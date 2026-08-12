@@ -95,3 +95,47 @@ test('requires the declared schema surfaces before accepting otherwise valid ent
     assert.ok(codes.includes('CAPABILITY_MAP_AUTHORITY_LEVELS'));
   });
 });
+
+// Acceptance criterion 2 names these two cases explicitly. They were previously
+// proven only by ad-hoc mutation against the real map during review, which is
+// evidence that expires the moment nobody repeats it by hand.
+
+test('fallback: null is valid, but an omitted fallback key is not', () => {
+  withFixture((root) => {
+    const withNull = validMap();
+    withNull.situations[0].fallback = null as unknown as string;
+    assert.equal(
+      validateCapabilityMap(withNull, { root }).verdict,
+      'PASS',
+      'null means "escalation is the only remaining step" and is a declared state',
+    );
+
+    const withoutKey = validMap();
+    delete (withoutKey.situations[0] as Record<string, unknown>).fallback;
+    const report = validateCapabilityMap(withoutKey, { root });
+    assert.equal(report.verdict, 'FAIL', 'an absent key is not the same as an explicit null');
+    assert.ok(
+      report.findings.some((finding) => finding.code === 'CAPABILITY_MAP_FALLBACK'),
+      `expected CAPABILITY_MAP_FALLBACK, got ${JSON.stringify(report.findings)}`,
+    );
+  });
+});
+
+test('both sides of a " / " two-alternative command are resolved', () => {
+  withFixture((root) => {
+    const bothReal = validMap();
+    bothReal.situations[0].capability = 'pnpm ops:brief / pnpm ops:truth-check';
+    assert.equal(validateCapabilityMap(bothReal, { root }).verdict, 'PASS');
+
+    // Corrupt only the SECOND alternative: a parser that validates the first
+    // token and stops would pass this, which is the whole point of the case.
+    const secondBroken = validMap();
+    secondBroken.situations[0].capability = 'pnpm ops:brief / pnpm ops:does-not-exist';
+    const report = validateCapabilityMap(secondBroken, { root });
+    assert.equal(report.verdict, 'FAIL', 'a non-existent second alternative must fail');
+    assert.ok(
+      report.findings.some((finding) => finding.code === 'CAPABILITY_MAP_UNRESOLVED_CAPABILITY'),
+      `expected CAPABILITY_MAP_UNRESOLVED_CAPABILITY, got ${JSON.stringify(report.findings)}`,
+    );
+  });
+});

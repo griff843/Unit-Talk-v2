@@ -7,6 +7,15 @@ on:
       - 'scripts/ci/capability-map-check.ts'
       - 'scripts/ci/capability-map-check.test.ts'
       - '.github/workflows/capability-map-check.yml'
+      # The map breaks far more often by a referenced agent or skill
+      # disappearing than by the map itself being edited badly. Without these,
+      # deleting .claude/agents/lane-governor.md never runs this workflow, and a
+      # path-filtered check that does not run counts as not-applicable rather
+      # than failing -- so the most likely real breakage would ship silently.
+      - '.claude/agents/**'
+      - '.claude/commands/**'
+      # Renaming a package.json script the map names breaks it the same way.
+      - 'package.json'
   push:
     branches: [main]
     paths:
@@ -14,6 +23,15 @@ on:
       - 'scripts/ci/capability-map-check.ts'
       - 'scripts/ci/capability-map-check.test.ts'
       - '.github/workflows/capability-map-check.yml'
+      # The map breaks far more often by a referenced agent or skill
+      # disappearing than by the map itself being edited badly. Without these,
+      # deleting .claude/agents/lane-governor.md never runs this workflow, and a
+      # path-filtered check that does not run counts as not-applicable rather
+      # than failing -- so the most likely real breakage would ship silently.
+      - '.claude/agents/**'
+      - '.claude/commands/**'
+      # Renaming a package.json script the map names breaks it the same way.
+      - 'package.json'
   workflow_dispatch:
 
 permissions:
@@ -26,6 +44,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Needed so the bootstrap check below can ask whether the map exists
+          # on the base branch, rather than trusting its absence here.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -43,9 +65,26 @@ jobs:
         run: pnpm exec tsx --test 'scripts/ci/capability-map-check.test.ts'
 
       - name: Validate committed capability map
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref || github.ref_name }}
         run: |
-          if [ ! -f docs/05_operations/CAPABILITY_MAP.json ]; then
-            echo '::notice title=Capability map::The map has not reached this branch yet; checker regression tests passed.'
-            exit 0
+          set -euo pipefail
+          MAP=docs/05_operations/CAPABILITY_MAP.json
+
+          if [ -f "$MAP" ]; then
+            pnpm exec tsx scripts/ci/capability-map-check.ts
+            exit $?
           fi
-          pnpm exec tsx scripts/ci/capability-map-check.ts
+
+          # The map is absent. That is legitimate ONLY during the bootstrap
+          # window, before the map has ever landed on the base branch. Once it
+          # exists on base, absence here means this PR deleted or renamed it,
+          # which must fail -- a bare `exit 0` on absence would make deletion
+          # the one way to silence this check permanently.
+          git fetch --no-tags --depth=1 origin "$BASE_REF" >/dev/null 2>&1 || true
+          if git cat-file -e "origin/${BASE_REF}:${MAP}" 2>/dev/null; then
+            echo "::error title=Capability map::${MAP} exists on ${BASE_REF} but is missing on this branch. Deleting or renaming the capability map is not permitted."
+            exit 1
+          fi
+
+          echo "::notice title=Capability map::Bootstrap: ${MAP} does not exist on ${BASE_REF} either, so there is nothing to validate yet. Checker regression tests passed. This branch of the condition retires itself the moment the map lands on ${BASE_REF}."
