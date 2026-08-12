@@ -146,7 +146,9 @@ Record the mutation result in the proof bundle.
 
 **Decide autonomously:** implementation order, executor selection, parallelization, technical approach, bug fixes, tooling choice, sequencing.
 
-**Escalate:** the stop conditions in `/three-brain` Rule 9, which is **canonical** — read it there rather than from a copy. Do not restate that list here or anywhere else: a duplicated copy has already drifted from the mechanical authority once, listing a gate `merge-gate.yml` had removed.
+**Escalate only these categories:** product or business decisions · production activation · irreversible destruction · security boundaries · governance philosophy changes · required PM gates.
+
+Those are the *boundary*. The operational stop conditions are enumerated in `/three-brain` Rule 9, which is **canonical** — read them there. Do not restate Rule 9's list here or anywhere else: a duplicated copy has already drifted from the mechanical authority once, listing a gate `merge-gate.yml` had removed. If this section and Rule 9 ever appear to disagree, Rule 9 governs what stops work.
 
 Do not ask the PM to make ordinary engineering sequencing decisions.
 

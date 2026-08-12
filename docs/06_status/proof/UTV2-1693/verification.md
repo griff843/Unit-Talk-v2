@@ -18,6 +18,8 @@ MERGE_SHA: ac409d4e50b1890ff64a5d2a9ef54b9dd7457722
 - [x] `/dispatch` and `/verification` invoke their tools as steps, not suggestions.
 - [x] `CLAUDE.md` remains thin and pointer-based; no procedural detail was added that belongs in a skill.
 - [x] Every command and agent named in the new files was verified to exist before being named.
+- [x] Every capability map entry carries situation, capability, kind, authority and fallback; all 22 capabilities and all fallbacks resolve to a real command or agent (0 problems).
+- [x] The escalation boundary states its categories and defers to `/three-brain` Rule 9 as canonical for stop conditions, rather than duplicating that list.
 
 ## EVIDENCE:
 
@@ -188,6 +190,25 @@ failed to create review: GraphQL: Review Can not approve your own pull request
 GitHub refuses self-approval on an own-authored PR, so the GitHub-review-approval branch is unavailable for exactly the PRs the orchestrator opens. `merge-gate.yml` accepts a third T2 artifact the rewrite never mentioned — an `executor-result/v1` self-attestation from a CODEOWNERS member — and that is what satisfied the gate on #1410.
 
 §9 now names all three T2 artifacts and states which one applies to an own-authored PR. Found by executing the rule rather than by reading it, which is the same standard invariant 13 sets for controls.
+
+### Alignment with the operating-system activation directive
+
+The eight required operating rules map to the file as follows, each verified rather than asserted:
+
+| Required rule | Where | Verified by |
+|---|---|---|
+| 1. Claude as Engineering Manager / Orchestrator, not default implementer | §1 | Role table plus the explicit rule that implementing directly is a choice to justify |
+| 2. Existing capability first | §2, invariant 12 | `ops:automation-coverage-check` named and confirmed to exist |
+| 3. Automatic subagent usage | §3 | All 8 agents confirmed present in `.claude/agents/`; situation table matches the directive's list |
+| 4. Implementation/review separation | invariant 14, §3 | Applied to this lane itself: independent review found four defects |
+| 5. Safety controls prove themselves | invariant 13, §8 | §8 states the assertion standard — assert the forbidden action never ran, not that an error was returned |
+| 6. State truth model across populations | invariant 6, §5 | Replaces the false "manifest is the sole authority" claim |
+| 7. Parallel execution | §7 | Capacity from `ops:execution-state`, never assumption; conflicting file scopes never parallelised |
+| 8. Human escalation boundary | §9 | Categories stated; Rule 9 kept canonical for stop conditions |
+
+The capability map now carries the directive's four-field contract — situation, capability, authority, **fallback** — for all 22 entries. A validation pass over the committed file confirms every capability and every fallback resolves to a real `package.json` script or an agent in `.claude/agents/`, with zero problems.
+
+**Not yet satisfied: machine validation in CI.** The directive requires the map be machine validated. The validation above was run against the committed file, but the checker is not itself checked in, because a new script and its test fall outside this lane's frozen `file_scope_lock`. Widening a frozen scope mid-lane is the failure mode that produced the scope-freeze deadlock previously recorded, so the checker is dispatched as its own lane rather than smuggled in here. Until it lands, the map's correctness rests on a one-time run, which is exactly the weaker control invariant 11 warns about — stated plainly rather than presented as done.
 
 ### Not accepted as blocking
 
