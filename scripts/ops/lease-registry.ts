@@ -18,6 +18,7 @@ import {
   parseArgs,
   relativeToRoot,
   requireIssueId,
+  readAllManifests,
   TERMINAL_STATUSES,
   SUCCESS_TERMINAL_STATUSES,
   type LaneManifestStatus,
@@ -696,10 +697,14 @@ export function findLeasesHeldByTerminalLanes(
 export function buildLeaseStaleReport(
   registryDir = LEASE_REGISTRY_DIR,
   now = new Date(),
+  laneStatusByIssue: ReadonlyMap<string, LaneManifestStatus> = new Map(
+    readAllManifests().map((manifest) => [manifest.issue_id.toUpperCase(), manifest.status]),
+  ),
 ): {
   schema_version: 1;
   run_at: string;
   stale_count: number;
+  orphaned_count: number;
   leases: Array<{
     issue_id: string;
     executor: LeaseExecutor;
@@ -712,15 +717,18 @@ export function buildLeaseStaleReport(
     owner: LeaseOwner;
     file_scope_lock: string[];
   }>;
+  orphaned_leases: OrphanedLeaseFinding[];
 } {
   const leases = readAllLeases(registryDir);
   const stale = markExpiredActiveLeases(leases, now, registryDir)
     .concat(leases.filter((lease) => lease.status === 'stale_reclaim_required'));
   const unique = new Map(stale.map((lease) => [lease.issue_id, lease]));
+  const orphanedLeases = findLeasesHeldByTerminalLanes(laneStatusByIssue, registryDir);
   return {
     schema_version: 1,
     run_at: now.toISOString(),
     stale_count: unique.size,
+    orphaned_count: orphanedLeases.length,
     leases: [...unique.values()].map((lease) => ({
       issue_id: lease.issue_id,
       executor: lease.executor,
@@ -733,7 +741,12 @@ export function buildLeaseStaleReport(
       owner: lease.owner,
       file_scope_lock: lease.file_scope_lock,
     })),
+    orphaned_leases: orphanedLeases,
   };
+}
+
+export function leaseReportExitCode(orphanedCount: number): 0 | 1 {
+  return orphanedCount > 0 ? 1 : 0;
 }
 
 export function validateLease(input: unknown): string[] {
@@ -949,14 +962,21 @@ function runCli(): void {
       if (bools.has('json')) {
         emitJson(report);
       } else {
-        console.log(`[ops:lease report] stale_count=${report.stale_count}`);
+        console.log(
+          `[ops:lease report] stale_count=${report.stale_count} orphaned_count=${report.orphaned_count}`,
+        );
         for (const lease of report.leases) {
           console.log(
             `  [STALE] ${lease.issue_id} ${lease.executor} ${lease.branch} heartbeat=${lease.heartbeat_at} cwd=${lease.cwd}`,
           );
         }
+        for (const finding of report.orphaned_leases) {
+          console.log(
+            `  [ORPHANED] ${finding.issue_id} lane_status=${finding.lane_status} lease_status=${finding.lease_status} scope=${finding.held_scope.join(', ')}`,
+          );
+        }
       }
-      process.exitCode = 0;
+      process.exitCode = leaseReportExitCode(report.orphaned_count);
       return;
     }
 

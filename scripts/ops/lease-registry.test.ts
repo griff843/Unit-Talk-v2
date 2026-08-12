@@ -8,6 +8,7 @@ import {
   type LeaseOwner,
   buildLeaseStaleReport,
   heartbeatLease,
+  leaseReportExitCode,
   leasePathForIssue,
   readAllLeases,
   reclaimLease,
@@ -410,6 +411,25 @@ test('stale report is idempotent and does not include released leases', () => {
     assert.deepStrictEqual(first.leases.map((lease) => lease.issue_id), ['UTV2-1056']);
     assert.strictEqual(second.stale_count, 1);
     assert.deepStrictEqual(second.leases.map((lease) => lease.issue_id), ['UTV2-1056']);
+  });
+});
+
+test('lease report exposes a fresh active lease held by a terminal lane separately from stale leases', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9105', ['scripts/ops/shared.ts'], '2026-05-18T16:00:00.000Z');
+
+    const report = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+      new Map([['UTV2-9105', 'done']]),
+    );
+
+    assert.equal(report.stale_count, 0);
+    assert.equal(report.orphaned_count, 1);
+    assert.equal(report.orphaned_leases[0]?.issue_id, 'UTV2-9105');
+    assert.equal(report.orphaned_leases[0]?.lane_status, 'done');
+    assert.equal(leaseReportExitCode(report.orphaned_count), 1);
+    assert.equal(leaseReportExitCode(report.stale_count), 0);
   });
 });
 
