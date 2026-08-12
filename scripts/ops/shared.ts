@@ -237,6 +237,24 @@ export interface TruthCheckResult {
   failures: string[];
   reopen_reasons: string[];
   manifest_path: string;
+  /**
+   * UTV2-1691 — machine-readable dry-run marker.
+   *
+   * `--json` is the automation interface, so a dry run MUST be distinguishable
+   * there, not only in the human-readable branch. Without this field a passing
+   * dry run is byte-indistinguishable from a certifying live run (same verdict,
+   * same exit code 0), and downstream triage tooling can record it as a real
+   * gate pass. Absent/false means the run persisted normally.
+   */
+  dry_run?: boolean;
+  /**
+   * UTV2-1691 — explicit certification flag. False on a dry run.
+   *
+   * `verdict: 'pass'` answers "would this lane close?"; `certifies` answers
+   * "did this run record anything?". They are different questions and conflating
+   * them is the misuse this capability had to guard against.
+   */
+  certifies?: boolean;
 }
 
 export interface CiDoctorResult {

@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1691",
+  "title": "Capacity and lock truth: one canonical status semantics definition, spec generated from code (increment 1: truth-check dry-run)",
+  "tier": "T1",
+  "status": "ci_staging_proof_pending",
+  "generated_at": "2026-08-12T01:05:00Z",
+  "sha_binding": {
+    "verified_source_sha": "9404838faf7242f62b5e1b243b032f936b3541b6",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-12T14:21:02.662Z",
+    "pr_number": null,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "claude/utv2-1691-truth-check-dry-run",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification. The orchestrator both implemented and reviewed this lane, so the T1 merge gate carries the independent-review burden."
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/truth-check-lib.ts",
+      "scripts/ops/truth-check.ts",
+      "scripts/ops/truth-check-lib.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1691/evidence.json",
+      "docs/06_status/proof/UTV2-1691/verification.md",
+      "docs/06_status/proof/UTV2-1691/diff-summary.md"
+    ],
+    "declared_but_untouched_increment_2_paths": [
+      "scripts/ops/shared.ts",
+      "scripts/ci/file-scope-guard.ts",
+      "docs/05_operations/LANE_MANIFEST_SPEC.md"
+    ],
+    "runtime_change": false,
+    "workflow_change": false,
+    "database_change": false,
+    "branch_protection_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts",
+      "status": "PASS",
+      "tests": 94,
+      "pass": 94,
+      "fail": 0,
+      "detail": "90 pre-existing plus 4 UTV2-1691 regressions: dry run never invokes persistence on the exit-4 reopen path; live path still persists and carries the real mutation; dry and live verdicts are identical; source-level guard against new write surfaces."
+    },
+    "verify_full": {
+      "command": "pnpm verify",
+      "status": "PASS_THROUGH_STATIC",
+      "tests": 4770,
+      "pass": 4770,
+      "fail": 0,
+      "detail": "env:check, lint, type-check, build and the full test tree completed with zero TypeScript errors and zero ESLint problems. Execution reached test:live-db, which refused on a non-staging target."
+    },
+    "mutation_test": {
+      "command": "inject an ungated writeManifest(updated) call, re-run the suite, then restore",
+      "status": "PASS",
+      "detail": "All four UTV2-1691 regressions failed on the injected regression, the source guard with the exact message 'found 1 ungated writeManifest(...) call site(s); persistence must go through the dryRun gate'. Suite reconfirmed at 94/94 after restore."
+    }
+  },
+  "write_audit": {
+    "conclusion": "The evaluation path performs exactly one mutation of any kind. Gating it is sufficient for the dry-run guarantee.",
+    "filesystem": "One write: writeManifest(updated) inside finalizeWithManifest. No proof writes, no scratch files, no directory creation. truth-check.ts has none.",
+    "linear": "One call: POST to api.linear.app/graphql carrying a GraphQL query (fetchLinearIssue). POST is transport, not a mutation. No mutation keyword in the module.",
+    "github": "Five endpoints, all GET (no explicit method): pulls/{n}, issues/{n}/comments, branches/main/protection/required_status_checks, commits/{sha}/statuses, commits/{sha}/check-runs.",
+    "shell": "No spawnSync, execSync or execFile anywhere in the module.",
+    "git_helper": "Used once: git(['show','-s',...]). Read-only.",
+    "stop_condition_fired": false
+  },
+  "runtime_proof": {
+    "status": "PENDING_CI_STAGING",
+    "classification": "Control-plane done-gate tooling only. No production runtime, database, deployment, secret, branch-protection or approval-policy mutation is part of this lane.",
+    "production_mutation_by_lane": false,
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "PENDING_CI_STAGING",
+      "local_result": "REFUSED_NON_STAGING_TARGET",
+      "detail": "[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. The staging-isolation guard operating correctly."
+    },
+    "queries": [],
+    "row_counts": []
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "A --dry-run mode performs the full evaluation and returns an identical verdict, check list and failure reasons while writing nothing.",
+      "status": "PASS",
+      "evidence": "dryRun gates only writeManifest; a regression compares verdict, checks, failures, exit code, merge SHA and PR URL across both modes and asserts equality."
+    },
+    {
+      "criterion": "Dry-run and live share one evaluation path so the verdict cannot drift.",
+      "status": "PASS",
+      "evidence": "Structural: `updated` and the result from finalizeResult are constructed above the gate. There is no second code path. Asserted by the verdict-equivalence regression."
+    },
+    {
+      "criterion": "A regression test asserts a dry run leaves the manifest byte-identical, including the exit-code-4 reopen path.",
+      "status": "PASS",
+      "evidence": "Implemented as an injected writer asserted never to be invoked, which is stronger than a before/after comparison: a no-op write would pass a checksum but fails a never-called assertion. Exit code 4 is the fixture."
+    },
+    {
+      "criterion": "--explain remains presentation-only and is documented as such.",
+      "status": "PASS",
+      "evidence": "Annotated at the CLI call site as presentation-only and explicitly not a safe mode; --dry-run is named as the safe mode."
+    },
+    {
+      "criterion": "No manifest writes, no proof writes, no Linear mutations, no GitHub mutations under dry-run.",
+      "status": "PASS",
+      "evidence": "Established by exhaustive audit (see write_audit) and enforced by a source-level regression guard that fails on any new write surface, remote write verb, shell-out, or ungated writeManifest call."
+    }
+  ],
+  "known_limitations": [
+    "The mandatory T1 staging DB proof and the full pnpm verify verdict remain pending until the governed PR CI run completes in the staging-ci environment.",
+    "This is increment 1 of the issue. The canonical status x semantics matrix, spec generation and the file-scope-guard duplicate assertion are not implemented here; their paths are declared in the lane scope but untouched.",
+    "The dry-run guarantee is scoped to the truth-check evaluation path audited here. It makes no claim about callers that invoke truth-check and then perform their own writes."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PENDING_CI_STAGING",
+    "ready_for_pm_review": true
+  }
+}

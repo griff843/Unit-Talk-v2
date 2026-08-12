@@ -18,6 +18,11 @@ import path from 'node:path';
 import {
   buildExtendedCommand,
   runExtendedMergeWrapper,
+  isNotFastForwardFailure,
+  classifyDroppedPaths,
+  PROTECTED_SYNC_PATH_PREFIXES,
+  buildHeadMoveInvalidation,
+  renderHeadMoveNotice,
   guardMergeLockHeld,
   runMergeTrain,
   evaluateStatusCheckRollup,
@@ -117,6 +122,14 @@ const STASH_PUSH_ARGS = [
 ];
 const STASH_PUSH_CALL = ['git', ...STASH_PUSH_ARGS];
 const STASH_POP_CALL = ['git', 'stash', 'pop'];
+
+// UTV2-1678: the sync path captures the pre-sync head immediately before the
+// sync verb runs, then diffs branch-only paths before/after to prove nothing
+// was dropped. With okRunner every command returns stdout 'ok', so the captured
+// pre-sync head is the literal string 'ok'.
+const HEAD_PROBE_CALL = ['git', 'rev-parse', 'HEAD'];
+const DIFF_BEFORE_CALL = ['git', 'diff', '--name-only', 'origin/main...ok'];
+const DIFF_AFTER_CALL = ['git', 'diff', '--name-only', 'origin/main..HEAD'];
 
 /**
  * main-sync (and the git-merge-main/git-rebase-main operations that bridge
@@ -264,31 +277,236 @@ test('main-sync succeeds on fast-forward without rebase', () => {
   });
 });
 
-test('main-sync falls back to rebase on not-possible-to-fast-forward error', () => {
+// UTV2-1678 replaces the former "main-sync falls back to rebase" test, which
+// asserted the defect: that a diverged main-sync silently succeeded by running
+// `git rebase origin/main`. The verb is now the caller's explicit choice.
+test('UTV2-1678: main-sync refuses on divergence and never invokes the rebase verb', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const calls: string[][] = [];
-    // Main command 0 is the ff-only pull (fails with a divergence error);
-    // main command 1 is the rebase fallback (succeeds). Stash push/pop calls
-    // are not "main commands" and always succeed via stashAwareRunner.
-    const divergedRunner = stashAwareRunner(calls, (mainCallIndex) =>
-      mainCallIndex === 0
-        ? { status: 128, stdout: '', stderr: 'fatal: Not possible to fast-forward, aborting.' }
-        : { status: 0, stdout: '', stderr: '' },
-    );
+    // Every main command fails with the divergence error. If any fallback path
+    // survived, a second main command (the rebase) would be attempted and would
+    // appear in `calls` -- which is precisely what this asserts cannot happen.
+    const divergedRunner = stashAwareRunner(calls, () => ({
+      status: 128,
+      stdout: '',
+      stderr: 'fatal: Not possible to fast-forward, aborting.',
+    }));
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'main-sync' },
       { lockPath, deferredDir, runner: divergedRunner },
     );
-    assert.strictEqual(result.ok, true, 'should succeed after rebase fallback');
+
+    assert.strictEqual(result.ok, false, 'a diverged main-sync must not report success');
+    assert.strictEqual(result.code, 'merge_wrapper_diverged_requires_explicit_sync');
+
+    // The refusal must be actionable: it names both explicit verbs, and says
+    // which one rewrites history.
+    assert.ok(result.message.includes('git-merge-main'), 'names the preserving verb');
+    assert.ok(result.message.includes('git-rebase-main'), 'names the rewriting verb');
+    assert.match(result.message, /REWRITES history/);
+
+    // The load-bearing assertion: the rebase command was never run. Asserting on
+    // the result code alone would still pass if the rebase had executed and then
+    // been reported as a refusal.
+    assert.ok(
+      !calls.some((call) => call.includes('rebase')),
+      `no rebase may be invoked; observed calls: ${JSON.stringify(calls)}`,
+    );
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
       ['git', 'pull', '--ff-only', 'origin', 'main'],
       STASH_POP_CALL,
-      STASH_PUSH_CALL,
-      ['git', 'rebase', 'origin/main'],
-      STASH_POP_CALL,
     ]);
   });
+});
+
+/**
+ * UTV2-1678 criterion 3, end to end: a sync that reports success but silently
+ * dropped a proof bundle must be converted into a refusal and the tree restored.
+ * Asserting only on `classifyDroppedPaths` would leave the wiring untested — the
+ * control has to be proven by making it fire.
+ */
+function droppingSyncRunner(calls: string[][], droppedPaths: string[]): CommandRunner {
+  return (command, args) => {
+    calls.push([command, ...args]);
+    const argv = args.join(' ');
+    const out = (text: string) => ({
+      status: 0,
+      stdout: Buffer.from(text),
+      stderr: Buffer.from(''),
+      error: undefined,
+    });
+    if (argv === 'rev-parse HEAD') return out('presync0000000000000000000000000000000\n');
+    // Pre-sync diff lists the branch-only paths; post-sync diff has lost them.
+    if (argv.startsWith('diff --name-only origin/main...presync')) return out(droppedPaths.join('\n'));
+    if (argv === 'diff --name-only origin/main..HEAD') return out('');
+    return out('ok');
+  };
+}
+
+test('UTV2-1678: a sync that drops a proof bundle is refused and the tree restored', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runExtendedMergeWrapper(
+      { ...BASE, operation: 'git-rebase-main' },
+      {
+        lockPath,
+        deferredDir,
+        runner: droppingSyncRunner(calls, [
+          'docs/06_status/proof/UTV2-1584/evidence.json',
+          'docs/06_status/proof/UTV2-1584/verification.md',
+        ]),
+      },
+    );
+
+    assert.strictEqual(result.ok, false, 'a sync that lost a proof bundle must not report success');
+    assert.strictEqual(result.code, 'merge_wrapper_sync_dropped_protected_paths');
+    assert.match(result.message, /evidence\.json/);
+    assert.match(result.message, /verification\.md/);
+
+    // The restore must actually have been attempted against the captured head.
+    assert.ok(
+      calls.some((c) => c.join(' ').startsWith('git reset --keep presync')),
+      `expected a restore to the pre-sync head; observed: ${JSON.stringify(calls)}`,
+    );
+    assert.match(result.message, /restored/i);
+  });
+});
+
+test('UTV2-1678: a sync that drops only non-governance paths succeeds with a warning', () => {
+  withTempOps(({ lockPath, deferredDir }) => {
+    const calls: string[][] = [];
+    const result = runExtendedMergeWrapper(
+      { ...BASE, operation: 'git-merge-main' },
+      { lockPath, deferredDir, runner: droppingSyncRunner(calls, ['scripts/ops/scratch.ts']) },
+    );
+
+    assert.strictEqual(result.ok, true, 'a non-governance drop is reported, not refused');
+    assert.match(result.stderr ?? '', /warning/i);
+    assert.match(result.stderr ?? '', /scripts\/ops\/scratch\.ts/);
+    assert.ok(
+      !calls.some((c) => c.join(' ').includes('reset --keep')),
+      'must not restore for a non-protected drop',
+    );
+  });
+});
+
+test('UTV2-1678: classifyDroppedPaths refuses proof and lane manifest loss, warns on the rest', () => {
+  const before = [
+    'docs/06_status/proof/UTV2-1584/evidence.json',
+    'docs/06_status/proof/UTV2-1584/verification.md',
+    'docs/06_status/lanes/UTV2-1584.json',
+    'scripts/ops/lane-start.ts',
+    'README.md',
+  ];
+  // The sync kept only the two source files; every governance artifact vanished
+  // — this is precisely the UTV2-1584 blast radius.
+  const after = ['scripts/ops/lane-start.ts', 'README.md'];
+
+  const c = classifyDroppedPaths(before, after);
+  assert.deepStrictEqual(c.protectedPaths, [
+    'docs/06_status/lanes/UTV2-1584.json',
+    'docs/06_status/proof/UTV2-1584/evidence.json',
+    'docs/06_status/proof/UTV2-1584/verification.md',
+  ]);
+  assert.deepStrictEqual(c.otherPaths, []);
+  assert.strictEqual(c.dropped.length, 3);
+});
+
+test('UTV2-1678: a non-governance drop is reported but not refusal-worthy', () => {
+  const c = classifyDroppedPaths(['scripts/ops/foo.ts', 'docs/README.md'], ['docs/README.md']);
+  assert.deepStrictEqual(c.protectedPaths, []);
+  assert.deepStrictEqual(c.otherPaths, ['scripts/ops/foo.ts']);
+});
+
+test('UTV2-1678: a lossless sync classifies nothing', () => {
+  const paths = ['docs/06_status/proof/UTV2-1678/verification.md', 'scripts/ops/x.ts'];
+  const c = classifyDroppedPaths(paths, [...paths, 'scripts/ops/added-by-main.ts']);
+  assert.deepStrictEqual(c.dropped, []);
+  assert.deepStrictEqual(c.protectedPaths, []);
+  assert.deepStrictEqual(c.otherPaths, []);
+});
+
+test('UTV2-1678: every protected prefix is actually covered by the classifier', () => {
+  // Guards against a prefix being added to the constant but not matching, and
+  // against the constant being silently emptied.
+  assert.ok(PROTECTED_SYNC_PATH_PREFIXES.length > 0);
+  for (const prefix of PROTECTED_SYNC_PATH_PREFIXES) {
+    const probe = `${prefix}UTV2-9999/probe.json`;
+    const c = classifyDroppedPaths([probe], []);
+    assert.deepStrictEqual(c.protectedPaths, [probe], `prefix not enforced: ${prefix}`);
+  }
+});
+
+test('UTV2-1678: a head-SHA move reports every invalidated artifact in re-authorization order', () => {
+  const inv = buildHeadMoveInvalidation('aaaaaaa', 'bbbbbbb');
+  assert.strictEqual(inv.headMoved, true);
+  // All three head-pinned artifacts must be named — omitting any one is how a
+  // sync silently invalidates an approval nobody re-requests.
+  const joined = inv.invalidatedArtifacts.join(' ');
+  assert.match(joined, /pm-verdict/);
+  assert.match(joined, /t1-approved/);
+  assert.match(joined, /EXECUTOR_RESULT/);
+
+  // Order is load-bearing: verify precedes the executor result, and the
+  // pm-verdict is last so it certifies the head that will actually merge.
+  const order = inv.reauthorizationOrder.join('\n');
+  assert.ok(
+    order.indexOf('verify') < order.indexOf('EXECUTOR_RESULT'),
+    'verify must precede re-posting the executor result',
+  );
+  assert.ok(
+    order.indexOf('EXECUTOR_RESULT') < order.indexOf('pm-verdict'),
+    'pm-verdict must come last',
+  );
+
+  const rendered = renderHeadMoveNotice(inv);
+  assert.match(rendered, /aaaaaaa -> bbbbbbb/);
+});
+
+test('UTV2-1678: a sync that does not move the head invalidates nothing', () => {
+  const same = buildHeadMoveInvalidation('aaaaaaa', 'aaaaaaa');
+  assert.strictEqual(same.headMoved, false);
+  assert.deepStrictEqual(same.invalidatedArtifacts, []);
+  assert.strictEqual(renderHeadMoveNotice(same), '', 'must be safe to append unconditionally');
+
+  // An unknown head (probe failed) must not be reported as a move.
+  assert.strictEqual(buildHeadMoveInvalidation('', 'bbbbbbb').headMoved, false);
+  assert.strictEqual(buildHeadMoveInvalidation('aaaaaaa', '').headMoved, false);
+});
+
+test('UTV2-1678: isNotFastForwardFailure only fires on a genuine divergence failure', () => {
+  const diverged = {
+    ok: false as const,
+    code: 'merge_wrapper_command_failed' as const,
+    message: 'x',
+    stderr: 'fatal: Not possible to fast-forward, aborting.',
+  };
+  assert.strictEqual(isNotFastForwardFailure(diverged), true);
+
+  // A different git failure must keep its own code rather than being presented
+  // as a routine divergence that invites re-running with a rewriting verb.
+  assert.strictEqual(
+    isNotFastForwardFailure({ ...diverged, stderr: 'fatal: unable to access remote' }),
+    false,
+  );
+  // A non-command failure is never a divergence.
+  assert.strictEqual(
+    isNotFastForwardFailure({ ...diverged, code: 'merge_wrapper_lock_held' as never }),
+    false,
+  );
+  // Success is never a divergence.
+  assert.strictEqual(
+    isNotFastForwardFailure({
+      ok: true,
+      code: 'merge_wrapper_completed',
+      issue_id: 'UTV2-1678',
+      operation: 'main-sync',
+      command: [],
+      lock: { ok: true } as never,
+    } as never),
+    false,
+  );
 });
 
 test('main-sync does not fall back to rebase on non-divergence error', () => {
@@ -416,6 +634,7 @@ test('git-merge-main releases the lock after command failure', () => {
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
+      HEAD_PROBE_CALL,
       ['git', 'merge', '--ff-only', 'origin/main'],
       STASH_POP_CALL,
     ]);
@@ -437,6 +656,7 @@ test('git-rebase-main releases the lock after command failure', () => {
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
+      HEAD_PROBE_CALL,
       ['git', 'rebase', 'origin/main'],
       STASH_POP_CALL,
     ]);
@@ -524,8 +744,13 @@ test('git-merge-main completes successfully and releases the lock', () => {
     assert.strictEqual(result.code, 'merge_wrapper_completed');
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
+      HEAD_PROBE_CALL,
       ['git', 'merge', '--ff-only', 'origin/main'],
       STASH_POP_CALL,
+      DIFF_BEFORE_CALL,
+      DIFF_AFTER_CALL,
+      // UTV2-1678 criterion 5: post-sync head is re-read to detect a SHA move.
+      HEAD_PROBE_CALL,
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
@@ -545,8 +770,13 @@ test('git-rebase-main completes successfully and releases the lock', () => {
     assert.strictEqual(result.code, 'merge_wrapper_completed');
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
+      HEAD_PROBE_CALL,
       ['git', 'rebase', 'origin/main'],
       STASH_POP_CALL,
+      DIFF_BEFORE_CALL,
+      DIFF_AFTER_CALL,
+      // UTV2-1678 criterion 5: post-sync head is re-read to detect a SHA move.
+      HEAD_PROBE_CALL,
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
   });
