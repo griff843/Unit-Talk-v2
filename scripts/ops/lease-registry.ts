@@ -720,10 +720,16 @@ export function buildLeaseStaleReport(
   orphaned_leases: OrphanedLeaseFinding[];
 } {
   const leases = readAllLeases(registryDir);
+  // Orphan classification MUST run before `markExpiredActiveLeases`. That call
+  // rewrites every TTL-expired `active` lease to `stale_reclaim_required` and
+  // persists it, and `findLeasesHeldByTerminalLanes` re-reads from disk and
+  // considers only `active` leases. Marking first therefore hides exactly the
+  // leases this report exists to surface: a lease held by a terminal lane long
+  // enough to have outlived its TTL -- which is every real leak observed so far.
+  const orphanedLeases = findLeasesHeldByTerminalLanes(laneStatusByIssue, registryDir);
   const stale = markExpiredActiveLeases(leases, now, registryDir)
     .concat(leases.filter((lease) => lease.status === 'stale_reclaim_required'));
   const unique = new Map(stale.map((lease) => [lease.issue_id, lease]));
-  const orphanedLeases = findLeasesHeldByTerminalLanes(laneStatusByIssue, registryDir);
   return {
     schema_version: 1,
     run_at: now.toISOString(),

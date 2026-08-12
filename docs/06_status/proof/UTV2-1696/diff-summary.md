@@ -1,5 +1,7 @@
 # UTV2-1696 Diff Summary
 
+MERGE_SHA: 5e0c14dadd2f77102dd863d66a5c8e1dce59b5c8
+
 `ops:lease report` now resolves lane-manifest statuses and reports active leases
 held by terminal lanes as `orphaned_leases`, independently of heartbeat expiry.
 It prints separate `stale_count` and `orphaned_count` values and exits non-zero

@@ -433,6 +433,32 @@ test('lease report exposes a fresh active lease held by a terminal lane separate
   });
 });
 
+// This is the case every real leak has been in, and the one the first
+// implementation missed: by the time anyone runs the report, the leaked lease
+// has also outlived its TTL. `markExpiredActiveLeases` rewrites such a lease to
+// `stale_reclaim_required` on disk, and orphan classification only considers
+// `active` leases -- so classifying after marking silently drops it to a plain
+// `[STALE]` row with exit 0. Every one of the five observed leaks (UTV2-1634,
+// 1682, 1680, 1689, 1694) is long past TTL, so a report that only catches
+// within-TTL orphans would have reported zero of them.
+test('lease report reports an EXPIRED lease held by a terminal lane as orphaned, not merely stale', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9106', ['scripts/ops/shared.ts'], '2026-05-18T11:00:00.000Z');
+
+    const report = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+      new Map([['UTV2-9106', 'done']]),
+    );
+
+    assert.equal(report.orphaned_count, 1, 'an expired lease on a terminal lane is still an orphan');
+    assert.equal(report.orphaned_leases[0]?.issue_id, 'UTV2-9106');
+    assert.equal(report.orphaned_leases[0]?.lane_status, 'done');
+    assert.equal(leaseReportExitCode(report.orphaned_count), 1, 'orphans must drive a non-zero exit');
+    assert.equal(report.stale_count, 1, 'it is also stale, and both counts report it independently');
+  });
+});
+
 test('stale lease blocks overlapping dispatch until explicit reclaim', () => {
   withTempRegistry((registryDir) => {
     reserve(
