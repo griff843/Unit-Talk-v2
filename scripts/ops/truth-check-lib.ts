@@ -89,6 +89,25 @@ interface RunTruthCheckOptions {
   noRuntime?: boolean;
   explain?: boolean;
   runner?: 'ops:lane-close' | 'ops:reconcile' | 'manual';
+  /**
+   * UTV2-1691 — evaluate without persisting anything.
+   *
+   * The gate answers "would this lane close, and why not?" by running the full
+   * evaluation and then writing the outcome back into the manifest. That write
+   * makes the question unaskable: diagnosing a lane appends a
+   * `truth_check_history` entry, bumps `heartbeat_at`, and on exit code 4 sets
+   * `status: 'reopened'` and rewrites `reopen_history`. Triaging a population of
+   * merged-but-unclosed lanes therefore mutates the exact population being
+   * triaged, and can reopen lanes that were merely unclosed.
+   *
+   * `dryRun` gates ONLY the persistence step. Every check, the verdict, the exit
+   * code and the returned result are produced by the same code in both modes --
+   * there is no second evaluation path to drift from the live one.
+   *
+   * This is a diagnosis, never a certification: a dry run cannot close a lane and
+   * records nothing. `--explain` is presentation-only and is NOT a safe mode.
+   */
+  dryRun?: boolean;
 }
 
 interface LinearIssueRecord {
@@ -726,6 +745,9 @@ export async function runTruthCheck(
   const failures = new Set<string>();
   const reopenReasons = new Set<string>();
   const explain = options.explain ?? false;
+  // UTV2-1691: gates persistence only. Read once here so every exit path below
+  // carries the same value; see RunTruthCheckOptions.dryRun.
+  const dryRun = options.dryRun ?? false;
   let manifest: LaneManifest | null = null;
   let tier: LaneTier = options.tierOverride ?? 'T3';
   let mergeSha: string | null = null;
@@ -851,6 +873,7 @@ export async function runTruthCheck(
       addCheck('L1', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY is required');
       return finalizeWithManifest({
         manifest,
+        dryRun,
         issueId,
         tier,
         checkedAt,
@@ -909,6 +932,7 @@ export async function runTruthCheck(
       addCheck('G1', 'fail', 'GITHUB_TOKEN is required');
       return finalizeWithManifest({
         manifest,
+        dryRun,
         issueId,
         tier,
         checkedAt,
@@ -925,6 +949,7 @@ export async function runTruthCheck(
     if (!prUrl) {
       return finalizeWithManifest({
         manifest,
+        dryRun,
         issueId,
         tier,
         checkedAt,
@@ -1319,6 +1344,7 @@ export async function runTruthCheck(
     const verdict = determineVerdict(exitCode);
     return finalizeWithManifest({
       manifest,
+      dryRun,
       issueId,
       tier,
       checkedAt,
@@ -1335,6 +1361,7 @@ export async function runTruthCheck(
     addCheck('INFRA', 'fail', error instanceof Error ? error.message : String(error));
     return finalizeWithManifest({
       manifest,
+      dryRun,
       issueId,
       tier,
       checkedAt,
@@ -1479,7 +1506,15 @@ function finalizeResult(input: {
   };
 }
 
-function finalizeWithManifest(input: {
+/**
+ * UTV2-1691 — exported so the dry-run guarantee can be asserted directly.
+ *
+ * `writeManifestFn` is injectable for the same reason: a test can prove the
+ * persistence step was never *invoked* under `dryRun`, which is a stronger
+ * statement than comparing a file before and after (a no-op write would pass a
+ * checksum comparison; a never-called writer cannot).
+ */
+export function finalizeWithManifest(input: {
   manifest: LaneManifest | null;
   issueId: string;
   tier: LaneTier;
@@ -1492,6 +1527,10 @@ function finalizeWithManifest(input: {
   verdict: Verdict;
   exitCode: 0 | 1 | 2 | 3 | 4;
   runner: TruthCheckHistoryEntry['runner'];
+  /** UTV2-1691: when true, evaluate and return identically but persist nothing. */
+  dryRun?: boolean;
+  /** UTV2-1691: injectable persistence, for asserting it is never called on a dry run. */
+  writeManifestFn?: (manifest: LaneManifest) => void;
 }): TruthCheckResult {
   const result = finalizeResult({
     issueId: input.issueId,
@@ -1505,6 +1544,15 @@ function finalizeWithManifest(input: {
     failures: input.failures,
     reopenReasons: input.reopenReasons,
   });
+
+  // UTV2-1691 (review finding P2-1): stamp the machine-readable markers BEFORE
+  // any return path. `--json` is the automation interface, so a dry run must be
+  // distinguishable there and not only in the human-readable output. Without
+  // this, a passing dry run is byte-identical to a certifying live run -- same
+  // verdict, same exit code 0 -- and downstream tooling can record it as a real
+  // gate pass. Stamped here rather than at the CLI so library callers get it too.
+  result.dry_run = input.dryRun === true;
+  result.certifies = input.dryRun !== true;
 
   if (!input.manifest || input.exitCode === 2 || input.exitCode === 3) {
     return result;
@@ -1545,7 +1593,23 @@ function finalizeWithManifest(input: {
     ];
   }
 
-  writeManifest(updated);
+  // UTV2-1691 — the ONLY persistence in the entire evaluation path.
+  //
+  // An exhaustive write audit of runTruthCheck confirmed this is the sole
+  // mutation of any kind: no other filesystem write exists in this module, the
+  // single Linear call is a GraphQL *query* (POST is transport, not a mutation),
+  // all five GitHub endpoints are GET, there is no spawnSync/execSync anywhere,
+  // and the one `git()` use is `git show -s`. Gating this line is therefore
+  // sufficient for a dry run to write nothing, mutate no Linear state, and
+  // mutate no GitHub state.
+  //
+  // Note what is NOT gated: `updated` above and `result` from finalizeResult are
+  // built identically in both modes, so the returned verdict, checks, failures
+  // and exit code cannot diverge between dry and live. That equivalence is
+  // asserted mechanically in truth-check-lib.test.ts, not assumed here.
+  if (!input.dryRun) {
+    (input.writeManifestFn ?? writeManifest)(updated);
+  }
   return result;
 }
 

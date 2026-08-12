@@ -25,10 +25,11 @@ import {
   type EvidenceBundleV1,
   type GitHubCheckRun,
   evaluateCloseEligibilityPreflight,
+  finalizeWithManifest,
 } from './truth-check-lib.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import { getRepoRoot } from './shared.js';
-import type { CheckResult, TruthCheckResult } from './shared.js';
+import type { CheckResult, LaneManifest, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
   manifestStatus: 'merged' | 'done',
@@ -1750,4 +1751,224 @@ test('CEP-12: every blocking finding names a category, so failures are actionabl
   for (const f of r.blocking) {
     assert.ok(['evidence', 'manifest', 'close', 'lifecycle'].includes(f.category), f.id);
   }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1691 — dry-run capability
+//
+// The done-gate could not answer "would this lane close?" without changing the
+// answer: finalizeWithManifest persisted a truth_check_history entry, bumped
+// heartbeat_at, and on exit code 4 flipped status to 'reopened'. Diagnosing a
+// population of merged-but-unclosed lanes therefore mutated that population.
+// ---------------------------------------------------------------------------
+
+function dryRunManifestFixture(): LaneManifest {
+  return {
+    schema_version: 2,
+    issue_id: 'UTV2-9999',
+    lane_type: 'governance',
+    executor: 'claude',
+    tier: 'T1',
+    branch: 'claude/utv2-9999-fixture',
+    base_branch: 'main',
+    status: 'in_review',
+    file_scope_lock: [],
+    blocked_by: [],
+    commit_sha: null,
+    pr_url: null,
+    closed_at: null,
+    truth_check_history: [],
+    reopen_history: [],
+  } as unknown as LaneManifest;
+}
+
+function finalizeInput(overrides: Record<string, unknown> = {}): never {
+  return {
+    manifest: dryRunManifestFixture(),
+    issueId: 'UTV2-9999',
+    tier: 'T1',
+    checkedAt: '2026-08-12T00:00:00.000Z',
+    checks: [{ id: 'G5', status: 'fail', detail: 'post-merge touch detected' }],
+    failures: new Set(['G5']),
+    reopenReasons: new Set(['post-merge touch detected']),
+    mergeSha: 'abc1234',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1',
+    verdict: 'reopened',
+    exitCode: 4,
+    runner: 'manual',
+    ...overrides,
+  } as never;
+}
+
+test('UTV2-1691: a dry run never invokes the persistence step, even on the exit-4 reopen path', () => {
+  const writes: LaneManifest[] = [];
+  const result = finalizeWithManifest(
+    finalizeInput({ dryRun: true, writeManifestFn: (m: LaneManifest) => writes.push(m) }),
+  );
+
+  // Exit code 4 is the branch with the largest side effect: it sets
+  // status:'reopened' and rewrites reopen_history. If any mode leaks a write,
+  // this is where it shows.
+  assert.strictEqual(result.exit_code, 4);
+  assert.strictEqual(
+    writes.length,
+    0,
+    `a dry run must not persist; writer was called ${writes.length} time(s)`,
+  );
+});
+
+test('UTV2-1691: the live path still persists — the dry-run flag must not disable the gate for everyone', () => {
+  const writes: LaneManifest[] = [];
+  finalizeWithManifest(
+    finalizeInput({ dryRun: false, writeManifestFn: (m: LaneManifest) => writes.push(m) }),
+  );
+  assert.strictEqual(writes.length, 1, 'live mode must still write exactly once');
+
+  // And the write must carry the real mutation, not an untouched copy.
+  const persisted = writes[0]!;
+  assert.strictEqual(persisted.status, 'reopened', 'exit 4 must reopen in live mode');
+  assert.strictEqual(persisted.truth_check_history.length, 1);
+  assert.strictEqual(persisted.heartbeat_at, '2026-08-12T00:00:00.000Z');
+});
+
+test('UTV2-1691: dry and live produce an identical verdict, check list and failure set', () => {
+  const dry = finalizeWithManifest(finalizeInput({ dryRun: true, writeManifestFn: () => {} }));
+  const live = finalizeWithManifest(finalizeInput({ dryRun: false, writeManifestFn: () => {} }));
+
+  // This is what makes "one shared evaluation path" mechanical rather than a
+  // claim in a comment. If a second path is ever introduced, this fails.
+  assert.deepStrictEqual(dry.checks, live.checks);
+  assert.deepStrictEqual(dry.failures, live.failures);
+  assert.strictEqual(dry.verdict, live.verdict);
+  assert.strictEqual(dry.exit_code, live.exit_code);
+  assert.strictEqual(dry.merge_sha, live.merge_sha);
+  assert.strictEqual(dry.pr_url, live.pr_url);
+});
+
+test('UTV2-1691: the dry-run guarantee holds only while one write site exists — guard the audit', () => {
+  // An exhaustive write audit established that the evaluation path performs
+  // exactly one mutation of any kind. `dryRun` gates that one site, so the
+  // guarantee ("no manifest writes, no proof writes, no Linear mutations, no
+  // GitHub mutations") is only true while that remains so. This test fails if a
+  // future edit adds a write surface, rather than letting the guarantee rot into
+  // a stale comment.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check-lib.ts'),
+    'utf8',
+  );
+
+  const writeSurfaces = [
+    /\bwriteFileSync\s*\(/g,
+    /\bappendFileSync\s*\(/g,
+    /\bcreateWriteStream\s*\(/g,
+    /\bmkdirSync\s*\(/g,
+    /\brmSync\s*\(/g,
+    /\bunlinkSync\s*\(/g,
+    /\brenameSync\s*\(/g,
+    /\bwriteJsonFile\s*\(/g,
+  ];
+  for (const pattern of writeSurfaces) {
+    assert.strictEqual(
+      source.match(pattern)?.length ?? 0,
+      0,
+      `unexpected filesystem write surface ${pattern} in truth-check-lib.ts — the dry-run guarantee no longer holds without gating it`,
+    );
+  }
+
+  // There must be NO direct `writeManifest(...)` invocation anywhere: the only
+  // permitted form is the gated, injectable one below. A future edit that calls
+  // writeManifest directly would be ungated, and fails here.
+  const directCalls = source.match(/\bwriteManifest\s*\(/g) ?? [];
+  assert.strictEqual(
+    directCalls.length,
+    0,
+    `found ${directCalls.length} ungated writeManifest(...) call site(s); persistence must go through the dryRun gate`,
+  );
+
+  // And the gated form must still be present — otherwise persistence was
+  // removed entirely and the live gate silently stopped recording.
+  assert.match(
+    source,
+    /if \(!input\.dryRun\) \{\s*\(input\.writeManifestFn \?\? writeManifest\)\(updated\);/,
+    'the sole persistence site must remain gated behind !input.dryRun',
+  );
+
+  // No Linear or GitHub mutation verbs.
+  assert.strictEqual(
+    /method:\s*'(PUT|PATCH|DELETE)'/.test(source),
+    false,
+    'no GitHub/Linear write verb may appear in the evaluation path',
+  );
+  assert.strictEqual(
+    /\bspawnSync\s*\(|\bexecSync\s*\(/.test(source),
+    false,
+    'no shell-out may appear in the evaluation path (it could invoke a write)',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1691 — independent review findings (Codex, exact head fdf1343d)
+// ---------------------------------------------------------------------------
+
+test('UTV2-1691 P2-1: a dry run is machine-distinguishable from a certifying live run', () => {
+  const dry = finalizeWithManifest(finalizeInput({ dryRun: true, writeManifestFn: () => {} }));
+  const live = finalizeWithManifest(finalizeInput({ dryRun: false, writeManifestFn: () => {} }));
+
+  // The defect: --json emitted an ordinary TruthCheckResult with no marker, so a
+  // passing dry run was byte-indistinguishable from a real gate pass (same
+  // verdict, same exit code). Automation consuming JSON could record it as a
+  // certified result.
+  assert.strictEqual(dry.dry_run, true, 'dry run must be flagged in the machine-readable result');
+  assert.strictEqual(dry.certifies, false, 'a dry run certifies nothing');
+  assert.strictEqual(live.dry_run, false);
+  assert.strictEqual(live.certifies, true);
+
+  // The verdict itself must stay identical -- the markers distinguish the RUN,
+  // not the answer. Collapsing those two would break the shared-path guarantee.
+  assert.strictEqual(dry.verdict, live.verdict);
+  assert.strictEqual(dry.exit_code, live.exit_code);
+  assert.deepStrictEqual(dry.checks, live.checks);
+
+  // And the two results must not be serialization-equal, which is exactly the
+  // property the reviewer said was missing.
+  const strip = (r: TruthCheckResult) => JSON.stringify({ ...r, dry_run: undefined, certifies: undefined });
+  assert.strictEqual(strip(dry), strip(live), 'everything except the markers is identical');
+  assert.notStrictEqual(JSON.stringify(dry), JSON.stringify(live), 'the markers must make them distinguishable');
+});
+
+test('UTV2-1691 P2-2: dry-run remediation text points at lane-close, not truth-check', () => {
+  // The defect: the message said re-running without --dry-run would "close the
+  // lane". A live truth-check only appends history and heartbeat; status=done,
+  // closed_at, the Linear transition and lock release belong to ops:lane-close.
+  // Following the old text left the lane merged and open.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
+    'utf8',
+  );
+
+  assert.match(source, /ops:lane-close/, 'remediation must name the command that actually closes a lane');
+  assert.doesNotMatch(
+    source,
+    /Re-run without --dry-run to close the lane/,
+    'the incorrect remediation text must not return',
+  );
+  assert.match(
+    source,
+    /does NOT close the lane/,
+    'the message must state plainly that truth-check does not close',
+  );
+});
+
+test('UTV2-1691 P2-1: the --json branch stamps the markers independently of the library', () => {
+  // Defence in depth: --json is the documented automation interface, so the CLI
+  // must not rely solely on the library having stamped the result.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /emitJson\(\{[\s\S]*dry_run:\s*bools\.has\('dry-run'\)[\s\S]*certifies:\s*!bools\.has\('dry-run'\)/,
+    'the --json branch must stamp dry_run and certifies itself',
+  );
 });
