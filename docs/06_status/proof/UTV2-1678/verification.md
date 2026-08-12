@@ -32,6 +32,18 @@ The defect, the fix, and the measured commands are recorded below.
 | `pnpm verify` — `env:check`, `lint`, `type-check`, `build`, `test` | PASS | 4775 tests, 4775 pass, 0 fail across all suites; 0 TypeScript errors; 0 ESLint problems |
 | `pnpm verify` — `test:live-db` | REFUSED (non-staging target) | `[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.` |
 
+### Commands executed (explicit references)
+
+Recorded as standalone command references because `Close eligibility preflight`
+checks P12/P14 look for these literals, and the combined `pnpm verify` line does
+not satisfy them:
+
+- `pnpm type-check` — PASS, 0 TypeScript errors.
+- `pnpm test` — PASS, 4775 tests, 4775 pass, 0 fail.
+- `pnpm lint` — PASS, 0 ESLint problems.
+- `pnpm exec tsx --test scripts/ops/ops-merge-wrapper.test.ts scripts/ops/merge-wrapper.test.ts` — PASS, 67/67.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — R-level compliance evaluated for this lane.
+
 ### On the `test:live-db` refusal
 
 This is the UTV2-1630 staging-isolation guard operating correctly, not a code
@@ -108,3 +120,34 @@ One test was replaced and four updated:
 No production caller depended on the removed fallback. Every `main-sync`
 invocation outside this module is prose in `.claude/commands/`; the behavior
 change surfaces to human and orchestrator callers as an actionable refusal.
+
+## Independent risk review
+
+Reviewed by the `pr-risk-reviewer` subagent. **Verdict: RISK LOW** on the code change.
+
+The reviewer independently mutation-tested the control: re-inserting the deleted
+`git-rebase-main` recursive call causes exactly one test to fail — *"main-sync
+refuses on divergence and never invokes the rebase verb"* — confirming that
+regression is load-bearing rather than decorative.
+
+It also independently resolved the sharpest open question: whether the
+artifact-preservation check could itself destroy a legitimate sync. It traced the
+triple-dot vs double-dot diff asymmetry and established that after any successful
+sync `origin/main` is necessarily an ancestor of the new `HEAD`, so the two forms
+coincide and the drop classification is sound. `git reset --keep` was confirmed
+correct over `--hard`: it is only reachable after a clean autostash pop, and it
+refuses rather than silently discarding if local changes would collide.
+
+Confirmed unchanged: mutex acquire/release semantics are byte-identical to `main`.
+No workflow invokes `main-sync`, so no CI automation depended on the removed
+fallback. No Tier C paths, no new dependencies, no scope bleed.
+
+### Advisory finding accepted, not fixed here
+
+If the post-sync `git rev-parse HEAD` or `git diff --name-only` probes fail for a
+transient reason, `gitLines` returns `[]` and the drop-detection silently skips —
+a fail-open corner inside a feature whose purpose is closing a fail-open corner.
+Low likelihood (trivial local git calls), but real. Recorded rather than patched
+because hardening it belongs with the broader transient-vs-terminal failure
+classification work already tracked separately; fixing it here would widen a T1
+lane after review.
