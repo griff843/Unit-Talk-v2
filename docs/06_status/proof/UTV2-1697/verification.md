@@ -1,8 +1,8 @@
 # PROOF: UTV2-1697
 
-MERGE_SHA: 7255dcd0c3bff0f3c9411e02f1c5e80ecb4b9550
+MERGE_SHA: 7255dcd0301892d945f4ff59564020a78ecc44bf
 
-Verified implementation SHA: `7255dcd0c3bff0f3c9411e02f1c5e80ecb4b9550`
+Verified implementation SHA: `7255dcd0301892d945f4ff59564020a78ecc44bf`
 
 > Pre-merge, `MERGE_SHA` carries the verified implementation SHA. Post-merge closeout binds it to the authoritative merge SHA.
 
