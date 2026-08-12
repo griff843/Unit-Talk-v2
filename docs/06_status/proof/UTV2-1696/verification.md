@@ -2,6 +2,8 @@
 
 ## Verification
 
+-Evidence commit SHA: `2a42601ba4b6737329e1211c1d684839c484a5e0`.
+
 - `pnpm type-check` passed.
 - `pnpm exec tsx --test 'scripts/ops/lease-registry.test.ts'` passed: 27 tests,
   including a fresh-heartbeat terminal-manifest orphan regression.
