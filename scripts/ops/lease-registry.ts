@@ -674,7 +674,17 @@ export function findLeasesHeldByTerminalLanes(
 ): OrphanedLeaseFinding[] {
   const findings: OrphanedLeaseFinding[] = [];
   for (const lease of readAllLeases(registryDir)) {
-    if (lease.status !== 'active') continue;
+    // A lease still HOLDS its file scope in both `active` and
+    // `stale_reclaim_required` -- the second only records that its TTL lapsed,
+    // not that it was given up. Gating on `active` alone made a lease
+    // permanently invisible to orphan detection the moment any earlier report
+    // run flipped it to `stale_reclaim_required`, even once its lane later
+    // reached a terminal state. `reclaimed` and `released` are genuinely
+    // surrendered and stay excluded.
+    // `ACTIVE_NON_RECLAIMED` is already the repo's definition of "this lease
+    // still holds its scope" -- reserveLease uses the same set to decide a
+    // conflict. Reusing it keeps one definition rather than a fourteenth shadow.
+    if (!ACTIVE_NON_RECLAIMED.has(lease.status)) continue;
     const laneStatus = laneStatusByIssue.get(lease.issue_id.toUpperCase());
     if (laneStatus === undefined) continue;
     if (!TERMINAL_STATUSES.has(laneStatus)) continue;

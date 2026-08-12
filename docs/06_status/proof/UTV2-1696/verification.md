@@ -10,7 +10,8 @@ MERGE_SHA: 5e0c14dadd2f77102dd863d66a5c8e1dce59b5c8
 
 ## ASSERTIONS:
 
-- [x] `ops:lease report` reports a lease held by a terminal-status manifest as orphaned **regardless of heartbeat age or TTL expiry**.
+- [x] `ops:lease report` reports a lease held by a terminal-status manifest as orphaned **regardless of heartbeat age, TTL expiry, or whether an earlier run already marked it `stale_reclaim_required`**.
+- [x] A lease that lapsed its TTL in a *previous* report run is still reported once its lane later reaches a terminal state.
 - [x] It exits non-zero when an orphan exists.
 - [x] `orphaned` and `stale` are separate counts; a lease that is both is reported in both, not dropped from either.
 - [x] The orphan predicate uses the canonical `TERMINAL_STATUSES` / `SUCCESS_TERMINAL_STATUSES` from `shared.ts` — no shadow status list.
@@ -18,6 +19,20 @@ MERGE_SHA: 5e0c14dadd2f77102dd863d66a5c8e1dce59b5c8
 - [x] The control is proven by mutation: reverting it fails the regression that covers it.
 
 ## EVIDENCE:
+
+The measured commands, both mutation results, and a run against the live lease registry are recorded below.
+
+## Verification
+
+| Check | Result | Evidence |
+|---|---|---|
+| `pnpm exec tsx --test scripts/ops/lease-registry.test.ts` | PASS | 29 tests, 29 pass, 0 fail |
+| `pnpm type-check` | PASS | 0 TypeScript errors |
+| `pnpm verify` | Deferred to PR CI | The `verify` job is authoritative for this lane and is green on this head; the local aggregate run was stopped in favour of it. |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | no R-level rules matched |
+| Mutation: ordering reverted | Regression fails | 27 pass, 1 fail — `not ok 18` |
+| Mutation: orphan gate reverted to `active`-only | Regression fails | 28 pass, 1 fail — `not ok 29` |
+| Live registry run | 2 real orphans found | `UTV2-1638` and `UTV2-1678`, both `lease.status=active`, `lane_status=done` |
 
 ### The defect this increment closes
 
@@ -78,7 +93,7 @@ A control that has never failed on the condition it names is unproven. This one 
 
 ### Commands executed (explicit references)
 
-- `pnpm exec tsx --test scripts/ops/lease-registry.test.ts` — PASS, 28 tests, 28 pass, 0 fail.
+- `pnpm exec tsx --test scripts/ops/lease-registry.test.ts` — PASS, 29 tests, 29 pass, 0 fail.
 - `pnpm type-check` — PASS, 0 TypeScript errors.
 - `pnpm test` — aggregate suite; deferred to PR CI, which is authoritative for this lane.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — R-level compliance evaluated for this lane; no rules matched.
@@ -110,3 +125,53 @@ Reviewed by `codex-return-reviewer` at head `2a42601b`. **Verdict: REJECT**, and
 The review also confirmed, and these were left unchanged: the orphan predicate uses canonical status sets from `shared.ts`; `stale_count` and `orphaned_count` are genuinely separate in both JSON and human output; the exit code does not regress legitimately-stale lanes with open PRs; scope is clean with `lane-close.ts` untouched; and all commits reference only UTV2-1696.
 
 Two re-dispatches after that rejection returned `SUCCESS` while changing no source at all — the checkpoint resumed from `closeout` and skipped `implement`. That defect is filed as UTV2-1698 and was caught only by diffing source between the reviewed head and the new head. The ordering fix and its regression in this bundle were therefore implemented by the orchestrator directly, as a failure-rescue after two executor attempts. Per invariant 14 the implementer must not be the sole validator, so this lane requires a further independent review before merge.
+
+---
+
+## Second independent review, and the gap it found
+
+Reviewed again by `pr-risk-reviewer` at head `5036a001`, because the ordering fix and its regression were written by the orchestrator — who had also rejected the version before it. **Verdict: RISK MEDIUM.**
+
+It reproduced the mutation independently in a disposable worktree and got the same numbers (27/1 mutated, 28/28 restored), and traced every caller of `buildLeaseStaleReport` to confirm the reorder is inert for `stale_count` and for `stale-lane-alerter.ts`, which reads only `report.leases`.
+
+### It ran the fix against the live registry
+
+The strongest evidence in this bundle, and not something the orchestrator had done:
+
+```
+stale_count=2, orphaned_count=2, exit=1
+  UTV2-1638  lease.status=active  lane_status=done
+  UTV2-1678  lease.status=active  lane_status=done
+```
+
+Two genuine orphans in production data right now. UTV2-1678 is the sharper of the two: `main` carries `e6a010db chore(lanes): close UTV2-1678`, so its lane was closed through the sanctioned path and its lease is still held.
+
+### The gap: a lease marked stale in an earlier run was invisible forever
+
+`findLeasesHeldByTerminalLanes` gated on `lease.status !== 'active'`. The ordering fix only protects a lease within a *single* invocation. Once any earlier run flipped a lease to `stale_reclaim_required` and persisted it, that lease could never be reported as an orphan again — even after its lane reached a terminal state in a later run.
+
+The reviewer constructed and ran that exact case, and confirmed the shape exists live: UTV2-1540 and UTV2-1545 are already `stale_reclaim_required` on disk, harmless today only because their manifests are missing rather than terminal.
+
+This made the ASSERTIONS claim of detection "regardless of heartbeat age or TTL expiry" true within a run and false across runs. That claim has been qualified, and the gap is fixed rather than deferred: it is the same defect this lane exists to close, one invocation removed.
+
+**Fix.** The gate now uses `ACTIVE_NON_RECLAIMED`, the set `reserveLease` already uses to decide whether a lease still holds its scope. `active` and `stale_reclaim_required` both hold scope; `reclaimed` and `released` are genuinely surrendered and stay excluded, as `ORPH-5` asserts. Reusing that set avoids adding a fourteenth shadow status definition.
+
+**Proven by mutation.** Reverting the gate to `active`-only:
+
+```
+not ok 29 - a lease already marked stale in an earlier run is still reported as orphaned once its lane goes terminal
+# tests 29
+# pass 28
+# fail 1
+```
+
+Exactly the new regression fails. Restored, the suite returns 29/29.
+
+### Proof-format failures it also caught
+
+Four gates were red on mechanical grounds while `verify` itself was green: the document lacked a `## Verification` header (required by both `Proof Auditor Gate` and `Runtime Verifier Gate`) and never contained the literal string `pnpm verify` (required by `CEP-E4/P13`, whose failure would also have stranded `ops:lane-close` post-merge). Both are fixed above. This is the recurring proof-format disagreement already tracked in UTV2-1690 D5 — the fifth lane in this session to pay it.
+
+### Confirmed correct and left unchanged
+
+The stale path and `stale_count` semantics; the expired-lease fixture genuinely representing an expired lease; missing manifests still skipped rather than assumed terminal; non-success terminal states (`failed`, `superseded`, `cancelled`) still included; `lane-close.ts` untouched so the lane stays T2; `pr_url` bound; all commits referencing only UTV2-1696.
+

@@ -693,3 +693,37 @@ test('ORPH-6: issue id matching is case-insensitive', () => {
     );
   });
 });
+
+// Found by independent review of the ordering fix. Gating orphan detection on
+// `active` alone made a lease permanently invisible the moment ANY earlier
+// report run flipped it to `stale_reclaim_required` -- so a lease that lapsed
+// its TTL before its lane reached a terminal state could never be reported,
+// no matter how many times the report ran afterwards. The within-run ordering
+// fix does not cover this, because the flip happened in a previous process.
+test('a lease already marked stale in an earlier run is still reported as orphaned once its lane goes terminal', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9107', ['scripts/ops/shared.ts'], '2026-05-18T11:00:00.000Z');
+
+    // Run 1: lane state unknown, so no orphan -- but the expired lease is
+    // marked `stale_reclaim_required` and that marking is persisted to disk.
+    const firstRun = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+      new Map(),
+    );
+    assert.equal(firstRun.orphaned_count, 0, 'unknown lane state must never be assumed terminal');
+
+    // Run 2: the lane has since reached a terminal state. The lease still holds
+    // its file scope, so it is still an orphan.
+    const secondRun = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T13:00:00.000Z'),
+      new Map([['UTV2-9107', 'failed']]),
+    );
+
+    assert.equal(secondRun.orphaned_count, 1, 'a previously-marked stale lease is still an orphan');
+    assert.equal(secondRun.orphaned_leases[0]?.issue_id, 'UTV2-9107');
+    assert.equal(secondRun.orphaned_leases[0]?.lease_status, 'stale_reclaim_required');
+    assert.equal(leaseReportExitCode(secondRun.orphaned_count), 1);
+  });
+});
