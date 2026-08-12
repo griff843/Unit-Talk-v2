@@ -1,6 +1,6 @@
 # PROOF: UTV2-1694
 
-MERGE_SHA: ee9a8845148b2f885a3b5f9fb33e564a63ec8b0a
+MERGE_SHA: be574484fa22bfdcd321daf0f8f5a192a21bd780
 
 Verified implementation SHA: `ee9a8845148b2f885a3b5f9fb33e564a63ec8b0a`
 
