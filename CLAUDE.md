@@ -162,7 +162,11 @@ PM approval is never satisfied by a chat message — only by the `t1-approved` l
 
 **Where a PM decision is required, its artifact must originate from the PM.** Do not author, transcribe, or apply one on the PM's behalf: a shared credential makes the result indistinguishable from a genuine decision, which destroys the audit trail the gate exists to create. If the PM's intent is clear but the artifact is absent, **stop and request it** — do not supply it.
 
-**T2 is the deliberate exception, and it is ratified.** For T2 the orchestrator's own `gh pr review --approve` after a real diff review satisfies the GitHub-review-approval branch — no PM presence and no `pm-verdict` comment is mechanically required, for any executor. That approval is the orchestrator's own review artifact, not a PM artifact stood in for. What invariant 14 requires there is that the *reviewer* not be the sole validator of a control-plane change: obtain independent review first, then approve on the strength of it.
+**T2 is the deliberate exception, and it is ratified.** `merge-gate.yml` accepts any one of three artifacts for T2: a `pm-verdict/v1` APPROVED comment from CODEOWNERS, a GitHub PR review approval, or an **`executor-result/v1` self-attestation from a CODEOWNERS member**. No PM presence is mechanically required, for any executor.
+
+The orchestrator's own `gh pr review --approve` after a real diff review satisfies the second branch — that is the orchestrator's own review artifact, not a PM artifact stood in for. **GitHub refuses self-approval on a PR you authored**, so on own-authored PRs the third branch is the one that applies; record the diff review as a comment and let the validated executor result carry the gate.
+
+What invariant 14 requires in either case is that the *reviewer* not be the sole validator of a control-plane change: obtain independent review first, then approve on the strength of it.
 
 `merge-gate.yml` is the authority on which artifact satisfies which tier. If this section and that workflow ever disagree, the workflow wins.
 

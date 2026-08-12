@@ -177,6 +177,18 @@ The audit table classified the old `## Commands` section as a single MOVE row. I
 
 The audit section previously asserted "Nothing was dropped silently." That was **wrong**, and the review proved it. Two rules were dropped, one of them cited by another canonical document. The claim has been corrected in place; the audit's per-section classification stands, but its completeness claim did not survive contact with a reader who checked it.
 
+### R1 follow-up — a third T2 path the rewrite also omitted
+
+Merging PR #1410 immediately afterwards proved the corrected §9 was still incomplete. `gh pr review --approve` returned:
+
+```
+failed to create review: GraphQL: Review Can not approve your own pull request
+```
+
+GitHub refuses self-approval on an own-authored PR, so the GitHub-review-approval branch is unavailable for exactly the PRs the orchestrator opens. `merge-gate.yml` accepts a third T2 artifact the rewrite never mentioned — an `executor-result/v1` self-attestation from a CODEOWNERS member — and that is what satisfied the gate on #1410.
+
+§9 now names all three T2 artifacts and states which one applies to an own-authored PR. Found by executing the rule rather than by reading it, which is the same standard invariant 13 sets for controls.
+
 ### Not accepted as blocking
 
 The reviewer flagged §12's "required by preflight" for `GITHUB_TOKEN` as slightly overstated, since preflight's check is waivable. Reworded rather than dropped: preflight's check is waivable, pre-merge authorization is not.
