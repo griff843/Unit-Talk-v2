@@ -1905,3 +1905,70 @@ test('UTV2-1691: the dry-run guarantee holds only while one write site exists â€
     'no shell-out may appear in the evaluation path (it could invoke a write)',
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1691 â€” independent review findings (Codex, exact head fdf1343d)
+// ---------------------------------------------------------------------------
+
+test('UTV2-1691 P2-1: a dry run is machine-distinguishable from a certifying live run', () => {
+  const dry = finalizeWithManifest(finalizeInput({ dryRun: true, writeManifestFn: () => {} }));
+  const live = finalizeWithManifest(finalizeInput({ dryRun: false, writeManifestFn: () => {} }));
+
+  // The defect: --json emitted an ordinary TruthCheckResult with no marker, so a
+  // passing dry run was byte-indistinguishable from a real gate pass (same
+  // verdict, same exit code). Automation consuming JSON could record it as a
+  // certified result.
+  assert.strictEqual(dry.dry_run, true, 'dry run must be flagged in the machine-readable result');
+  assert.strictEqual(dry.certifies, false, 'a dry run certifies nothing');
+  assert.strictEqual(live.dry_run, false);
+  assert.strictEqual(live.certifies, true);
+
+  // The verdict itself must stay identical -- the markers distinguish the RUN,
+  // not the answer. Collapsing those two would break the shared-path guarantee.
+  assert.strictEqual(dry.verdict, live.verdict);
+  assert.strictEqual(dry.exit_code, live.exit_code);
+  assert.deepStrictEqual(dry.checks, live.checks);
+
+  // And the two results must not be serialization-equal, which is exactly the
+  // property the reviewer said was missing.
+  const strip = (r: TruthCheckResult) => JSON.stringify({ ...r, dry_run: undefined, certifies: undefined });
+  assert.strictEqual(strip(dry), strip(live), 'everything except the markers is identical');
+  assert.notStrictEqual(JSON.stringify(dry), JSON.stringify(live), 'the markers must make them distinguishable');
+});
+
+test('UTV2-1691 P2-2: dry-run remediation text points at lane-close, not truth-check', () => {
+  // The defect: the message said re-running without --dry-run would "close the
+  // lane". A live truth-check only appends history and heartbeat; status=done,
+  // closed_at, the Linear transition and lock release belong to ops:lane-close.
+  // Following the old text left the lane merged and open.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
+    'utf8',
+  );
+
+  assert.match(source, /ops:lane-close/, 'remediation must name the command that actually closes a lane');
+  assert.doesNotMatch(
+    source,
+    /Re-run without --dry-run to close the lane/,
+    'the incorrect remediation text must not return',
+  );
+  assert.match(
+    source,
+    /does NOT close the lane/,
+    'the message must state plainly that truth-check does not close',
+  );
+});
+
+test('UTV2-1691 P2-1: the --json branch stamps the markers independently of the library', () => {
+  // Defence in depth: --json is the documented automation interface, so the CLI
+  // must not rely solely on the library having stamped the result.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /emitJson\(\{[\s\S]*dry_run:\s*bools\.has\('dry-run'\)[\s\S]*certifies:\s*!bools\.has\('dry-run'\)/,
+    'the --json branch must stamp dry_run and certifies itself',
+  );
+});

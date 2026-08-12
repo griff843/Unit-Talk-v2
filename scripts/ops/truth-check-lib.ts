@@ -1545,6 +1545,15 @@ export function finalizeWithManifest(input: {
     reopenReasons: input.reopenReasons,
   });
 
+  // UTV2-1691 (review finding P2-1): stamp the machine-readable markers BEFORE
+  // any return path. `--json` is the automation interface, so a dry run must be
+  // distinguishable there and not only in the human-readable output. Without
+  // this, a passing dry run is byte-identical to a certifying live run -- same
+  // verdict, same exit code 0 -- and downstream tooling can record it as a real
+  // gate pass. Stamped here rather than at the CLI so library callers get it too.
+  result.dry_run = input.dryRun === true;
+  result.certifies = input.dryRun !== true;
+
   if (!input.manifest || input.exitCode === 2 || input.exitCode === 3) {
     return result;
   }
