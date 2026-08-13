@@ -1,6 +1,6 @@
 # PROOF: UTV2-1698
 
-MERGE_SHA: 68ee1ff9139abdb0945d6d44698f229b6f5c1ae0
+MERGE_SHA: 8b97f49c9e5ae58566c882ed3b92fd36536cc46a
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
@@ -106,24 +106,24 @@ The fix corroborates the claim against the one signal the executor cannot fabric
 Three mutations, each failing only what it should.
 
 ```
-MUTATION A -- phase rule removed
+MUTATION A -- completed-phases rule removed
 not ok 25 - a run that terminates before the implementation boundary is not a completed execution
-# pass 26   # fail 1
+# tests 53   # pass 52   # fail 1
 
 MUTATION B -- rework rule removed
 not ok 22 - a rework with carried findings and no source diff exits non-success instead of reporting SUCCESS
-not ok 27 - the rework guard still fires independently of phase
-# pass 25   # fail 2
+not ok 28 - the rework guard still fires independently of phase
+# tests 53   # pass 51   # fail 2
 
 MUTATION C -- gate on checkpoint.phase instead of completed_phases
 not ok 25 - a run that terminates before the implementation boundary is not a completed execution
-# pass 26   # fail 1
+# tests 53   # pass 52   # fail 1
 
 MUTATION D -- self-attestation cross-check disabled
 not ok 26 - a self-reported implement phase with zero source changes is not a completed execution
-# pass 27   # fail 1
+# tests 53   # pass 52   # fail 1
 
-RESTORED (both changed modules)
+RESTORED (codex-exec.test.ts + execution-checkpoint.test.ts)
 # tests 53   # pass 53   # fail 0
 ```
 
@@ -143,7 +143,7 @@ A legitimate no-op run -- a lane that correctly concludes nothing needs implemen
 
 ### Commands executed (explicit references)
 
-- `pnpm exec tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, 52 tests, 52 pass, 0 fail.
+- `pnpm exec tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, 53 tests, 53 pass, 0 fail.
 - `pnpm type-check` — runs, but does NOT compile `scripts/ops/**`: `tsconfig.json` references only `packages/*` and `apps/*`. The earlier claim that it passed "with no errors in the changed modules" was technically true and substantively empty, because the command never reads these files. Corrected here after review. Tracked separately under its own ticket; deliberately not fixed in this lane.
 - `pnpm test` — full suite deferred to PR CI, which is authoritative for this lane.
 - `pnpm verify` — deferred to PR CI.
@@ -153,13 +153,13 @@ A legitimate no-op run -- a lane that correctly concludes nothing needs implemen
 
 | Check | Result | Evidence |
 |---|---|---|
-| Focused suites | PASS | 52 tests, 52 pass, 0 fail |
+| Focused suites | PASS | 53 tests, 53 pass, 0 fail |
 | `pnpm type-check` | Does not cover these files | `tsconfig.json` references only `packages/*` and `apps/*` — tracked under a separate ticket |
-| Mutation A: phase rule removed | Regression fails | 26 pass, 1 fail |
-| Mutation B: rework rule removed | Regression fails | 25 pass, 2 fail |
-| Mutation C: gate on `checkpoint.phase` | Regression fails | 26 pass, 1 fail |
-| Restored | PASS | 52/52 across both modules |
-| `pnpm verify` | Deferred to PR CI | authoritative for this lane |
+| Mutation A: completed-phases rule removed | Regression fails | `not ok 25` — 52 pass, 1 fail |
+| Mutation B: rework rule removed | Regression fails | `not ok 22`, `not ok 28` — 51 pass, 2 fail |
+| Mutation C: gate on `checkpoint.phase` | Regression fails | `not ok 25` — 52 pass, 1 fail |
+| Mutation D: self-attestation cross-check disabled | Regression fails | `not ok 26` — 52 pass, 1 fail |
+| Restored | PASS | 53 tests, 53 pass, 0 fail |
 
 ## Runtime Verification
 
@@ -173,5 +173,18 @@ The orchestrator therefore wrote part of the change and must not be its sole val
 
 ## SHA Binding
 
-Head SHA: 68ee1ff9139abdb0945d6d44698f229b6f5c1ae0
-Merge SHA: 68ee1ff9139abdb0945d6d44698f229b6f5c1ae0
+Head SHA: 8b97f49c9e5ae58566c882ed3b92fd36536cc46a
+Merge SHA: 8b97f49c9e5ae58566c882ed3b92fd36536cc46a
+
+## Proof-accuracy corrections made after final review
+
+Final independent review at `8b97f49c` confirmed the code correct on every functional check and rejected the bundle on evidence accuracy. All findings were authoring errors in this document, not defects in the change:
+
+- The restored total was recorded as **52/52**. It is **53/53**. `diff-summary.md` had it right and this file did not; the two disagreed with each other.
+- Mutation B was recorded as failing **`not ok 27`**. It fails **`not ok 28`**. Test 27 is *"a run that reached implementation or beyond is allowed to report success"* and stays green under that mutation — it must, since removing the rework rule should not affect it. The numbering shifted when the self-attestation regression was inserted as test 26, and the earlier figure was never re-derived.
+- Mutation D was missing from the verification table entirely, although the prose described the defect it covers at length.
+- **The SHA anchor pointed to `68ee1ff9`, a commit that contains only Rule 1.** This document describes all three rules. The anchor named a commit predating two of the three fixes it claims as evidence.
+
+All four numbers above were re-derived by running each mutation again at `8b97f49c` rather than reconciled against the previous text.
+
+The last of these is the one worth carrying forward. This repo's own invariant is that proof must tie to the merge SHA and stale proof is invalid — and `Proof Auditor Gate` **passed** at this SHA. That gate validates structural presence: required headings, a 40-hex token, literal command strings. It does not check that the SHA it finds actually contains the code the document describes, nor that the recorded counts match a real run. A proof bundle can therefore satisfy every automated proof gate while pointing at the wrong commit and reporting numbers from an earlier one. That gap was found by a human-directed reviewer, not by any gate.

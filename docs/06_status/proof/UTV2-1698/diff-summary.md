@@ -1,6 +1,6 @@
 # Diff summary: UTV2-1698
 
-MERGE_SHA: 6e50b6dbb9d8c32fb3a1fcc06f53a13f87c4235f
+MERGE_SHA: 8b97f49c9e5ae58566c882ed3b92fd36536cc46a
 
 Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or workflow-authority code.
 
@@ -29,10 +29,10 @@ Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or wor
 
 | Mutation | Result |
 |---|---|
-| A · phase rule removed | `not ok 25` — 26 pass / 1 fail |
-| B · rework rule removed | `not ok 22`, `not ok 27` — 25 pass / 2 fail |
-| C · gate on `checkpoint.phase` | `not ok 25` — 26 pass / 1 fail |
-| D · self-attestation cross-check disabled | `not ok 26` — 27 pass / 1 fail |
+| A · completed-phases rule removed | `not ok 25` — 52 pass / 1 fail |
+| B · rework rule removed | `not ok 22`, `not ok 28` — 51 pass / 2 fail |
+| C · gate on `checkpoint.phase` | `not ok 25` — 52 pass / 1 fail |
+| D · self-attestation cross-check disabled | `not ok 26` — 52 pass / 1 fail |
 | Restored | **53 / 53** across both modules |
 
 ## Known limitations, deliberately not addressed here

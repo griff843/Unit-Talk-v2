@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1698-execution-truth",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1417",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1698/diff-summary.md",
@@ -26,7 +26,7 @@
   ],
   "status": "started",
   "started_at": "2026-08-13T07:01:41.542Z",
-  "heartbeat_at": "2026-08-13T07:01:41.542Z",
+  "heartbeat_at": "2026-08-13T13:46:02.994Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1698-execution-truth.json",
