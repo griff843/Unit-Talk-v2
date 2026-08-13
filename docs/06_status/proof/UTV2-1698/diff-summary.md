@@ -1,13 +1,13 @@
 # Diff summary: UTV2-1698
 
-MERGE_SHA: 971d18226c73ae234537330f2a21c5e0577810f7
+MERGE_SHA: ae41936657472e31da0d795c551cb5d493047c30
 
 Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or workflow-authority code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/codex-exec.ts` | `evaluateExecutionTruth` gains three guards and loses its `phase` parameter. Takes `issueId` and reads the checkpoint itself, so a stale phase cannot be supplied by any caller. Rules 1 and 3 are scope-aware, with scope read from the base ref via `readAuthoritativeFileScope`. `shouldInvalidateForRework` extracted so dry-run purity is reachable from a regression. |
-| `scripts/ops/codex-exec.test.ts` | Regressions for all three rules, the scope trust boundary, fail-closed scope reads, conservative classification, dry-run purity, the production call site, and the assertion that a genuine run reaching implementation still succeeds. |
+| `scripts/ops/codex-exec.ts` | `evaluateExecutionTruth` gains three guards and loses its `phase` parameter. Takes `issueId` and reads the checkpoint itself, so a stale phase cannot be supplied by any caller. `shouldInvalidateForRework` extracted so dry-run purity is reachable from a regression. No scope, deliverable or proof-only input exists. |
+| `scripts/ops/codex-exec.test.ts` | Regressions for all three rules, dry-run purity, the production call site, the absence of the removed proof-only surface, and the assertion that a genuine run reaching implementation still succeeds. |
 | `scripts/ops/execution-checkpoint.ts` | Supporting checkpoint surface for the above. |
 | `scripts/ops/execution-checkpoint.test.ts` | Coverage for the checkpoint changes. |
 
@@ -19,13 +19,20 @@ Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or wor
 
 `countSourceFilesChanged` excludes `docs/` and `.ops/`: a proof-only or manifest-only commit is not implementation.
 
-Rules 1 and 3 are scope-aware. A lane whose **authoritative** `file_scope_lock` is entirely `docs/`/`.ops/` completes, and can be reworked, by changing that declared deliverable — proof rejected, proof rewritten, work done. Every other lane must change real source.
+**No proof-only or scope-aware exception exists.** Every lane must change real source. A lane whose declared deliverable is documentation fails closed here until UTV2-1710 supplies lifecycle-owned deliverable authority.
 
-## The scope trust boundary
+## Why the proof-only exception was removed rather than repaired
 
-Scope is read with `git show <base>:docs/06_status/lanes/<ID>.json`, never from the working tree. The working-tree manifest sits on the executor's own branch, so trusting it would let an executor rewrite its scope to docs-only and exempt itself — the self-attestation defect one level up. Missing, malformed or unreadable authoritative scope fails closed to source-required, which is the common case for a new lane whose manifest is not yet on `main`. Classification is conservative: every entry must be explicitly inside `docs/` or `.ops/`, so mixed scope, bare or leading globs, parent traversal, absolute paths, repository roots, `scripts/**`, `.github/**`, configuration and package files all stay source or control-plane required.
+It was attempted at bounce 1 and removed at bounce 2 by PM scope decision, after review found it had introduced two further false-success paths:
 
-A regression asserts the **production call site**, not only the function — the function being correct does not stop one line in `main()` from bypassing it, which is exactly how defect 1 shipped.
+- `declaredDeliverableChanged` was counted **after** `writeModelRoutingEvidence()` and `commitAndPushEvidence()`, so the runner's own mandatory artifact made the count positive even when the executor changed nothing. The guard was measuring its own harness.
+- `countDeclaredDeliverableChanged` used raw prefix matching, so an exact lock of `docs/result.md` also credited `docs/result.md.bak`, and stripping the glob from `dir/*` credited nested descendants the canonical scope matcher excludes.
+
+It was also unreachable for the lanes it claimed to serve: it required a trusted manifest on the base ref, which ordinary `ops:lane-start` never establishes for a new lane. The positive regressions manufactured that state; production could not reach it, while both defects above were reachable on any lane whose scope included its proof directory.
+
+Three attempts, three distinct false-success paths, all entering through the same door — a special case deciding when changing nothing is acceptable. A lane whose purpose is preventing false success may not have that door.
+
+A regression asserts the **production call site**, not only the functions — the function being correct does not stop one line in `main()` from bypassing it, which is exactly how defect 1 shipped. A second guard asserts the removed surface is absent rather than merely unused.
 
 ## Three defects found in review, all in the orchestrator's own addition
 
@@ -37,22 +44,20 @@ A regression asserts the **production call site**, not only the function — the
 
 | Mutation | Result |
 |---|---|
-| A · Rule 2, completed-phases removed | `not ok 25` — 64 pass / 1 fail |
-| B · Rule 1, rework removed | `not ok 22`, `28`, `34`, `36` — 61 pass / 4 fail |
-| C · gate on `checkpoint.phase` | `not ok 25` — 64 pass / 1 fail |
-| D · Rule 3, self-attestation cross-check removed | `not ok 26`, `32`, `33` — 62 pass / 3 fail |
-| E · dry-run purity removed | `not ok 29` — 64 pass / 1 fail |
-| F · Rule 3 declared-deliverable scope ignored | `not ok 31`, `35` — 63 pass / 2 fail |
-| G · source counting includes `docs/`, `.ops/` | `not ok 24` — 64 pass / 1 fail |
-| H · proof-only rework support removed | `not ok 35` — 64 pass / 1 fail |
-| I · scope read from branch working tree | `not ok 37` — 64 pass / 1 fail |
-| J · permissive fallback on missing scope | `not ok 38` — 64 pass / 1 fail |
-| K · call site wired to branch manifest | `not ok 40` — 64 pass / 1 fail |
-| Restored | **65 / 65** across both modules, 0 skipped |
+| A · Rule 2, completed-phases removed | `not ok 25` — 55 pass / 1 fail |
+| B · Rule 1, rework removed | `not ok 22`, `28` — 54 pass / 2 fail |
+| C · gate on `checkpoint.phase` | `not ok 25` — 55 pass / 1 fail |
+| D · Rule 3, self-attestation cross-check removed | `not ok 26` — 55 pass / 1 fail |
+| E · dry-run purity removed | `not ok 29` — 55 pass / 1 fail |
+| F · source counting includes `docs/`, `.ops/` | `not ok 24` — 55 pass / 1 fail |
+| G · call site stops passing `issueId` | `not ok 30` — 55 pass / 1 fail |
+| H · proof-only exemption reintroduced | `not ok 31` — 55 pass / 1 fail |
+| Restored | **56 / 56** across both modules, 0 skipped |
 
-Eleven groups, no survivors.
+Eight groups, no survivors.
 
 ## Known limitations, deliberately not addressed here
 
 - `pnpm type-check` does not compile `scripts/ops/**`; `tsconfig.json` references only `packages/*` and `apps/*`. Tracked under a separate ticket per PM sequencing.
 - A legitimate no-op run stays fail-closed per PM decision. A future `NO_CHANGE_REQUIRED` disposition with independent confirmation is required, and must never masquerade as SUCCESS.
+- A legitimately proof-only lane also fails closed here. That is a known, accepted cost until UTV2-1710 provides lifecycle-owned deliverable authority. A visible false failure is recoverable; a false success is not.
