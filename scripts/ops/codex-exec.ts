@@ -55,7 +55,6 @@ import {
   resolveExecutionTimeout,
   EXECUTION_PHASES,
   type ExecutionCheckpoint,
-  type ExecutionPhase,
   type ResumePlan,
   type TimeoutPolicyDecision,
 } from './execution-checkpoint.js';
@@ -75,6 +74,7 @@ interface CodexExecResult {
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'REWORK_NO_SOURCE_CHANGE'
     | 'INCOMPLETE_PHASE_PROGRESSION'
+    | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE'
     | 'DRY_RUN';
   issue_id: string;
   branch?: string;
@@ -115,7 +115,7 @@ export interface ExecutionSummary {
 
 export interface ExecutionTruthVerdict {
   ok: boolean;
-  code: 'SUCCESS' | 'REWORK_NO_SOURCE_CHANGE' | 'INCOMPLETE_PHASE_PROGRESSION';
+  code: 'SUCCESS' | 'REWORK_NO_SOURCE_CHANGE' | 'INCOMPLETE_PHASE_PROGRESSION' | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE';
   exit_code: 0 | 1;
   message: string;
 }
@@ -130,10 +130,19 @@ export interface ExecutionTruthVerdict {
  */
 const IMPLEMENTATION_BOUNDARY_INDEX = EXECUTION_PHASES.indexOf('implement');
 
+/**
+ * Takes the issue id and reads the checkpoint itself, rather than accepting a
+ * phase. Independent review found the first version accepted `phase` and `main`
+ * passed it a PRE-spawn snapshot -- always 'orient' on a fresh lane -- so every
+ * first attempt would have failed regardless of what Codex did. A test could
+ * not guard that: the call site is wrong, not the rule. Removing the parameter
+ * makes the stale value unrepresentable instead of merely tested against.
+ */
 export function evaluateExecutionTruth(input: {
   carriedFindings: number;
   sourceFilesChanged: number;
-  phase?: ExecutionPhase;
+  issueId?: string;
+  checkpointDir?: string;
 }): ExecutionTruthVerdict {
   if (input.carriedFindings > 0 && input.sourceFilesChanged === 0) {
     return {
@@ -151,16 +160,40 @@ export function evaluateExecutionTruth(input: {
   // live on UTV2-1701: attempt 1, resumed false, skipped_phases [], phase plan,
   // outcome completed, zero source files changed. Terminating before the
   // implementation boundary is never a completed execution.
-  if (input.phase !== undefined) {
-    const reached = EXECUTION_PHASES.indexOf(input.phase);
-    if (reached >= 0 && reached < IMPLEMENTATION_BOUNDARY_INDEX) {
+  // Gate on COMPLETED phases, not on `checkpoint.phase`. That field is the
+  // NEXT phase to work on (`recordPhaseComplete` sets it via `nextPhaseAfter`),
+  // so a run that finished `plan` and stopped carries phase 'implement' and
+  // would pass a naive check while having implemented nothing.
+  const checkpoint = input.issueId ? readCheckpoint(input.issueId, input.checkpointDir) : null;
+  if (checkpoint) {
+    const completed = new Set(checkpoint.completed_phases.map((entry) => entry.phase));
+    const boundary = EXECUTION_PHASES[IMPLEMENTATION_BOUNDARY_INDEX];
+    if (!completed.has(boundary)) {
+      const reached = [...completed].join(', ') || 'none';
       return {
         ok: false,
         code: 'INCOMPLETE_PHASE_PROGRESSION',
         exit_code: 1,
         message:
-          `execution terminated in phase "${input.phase}", before the implementation boundary ` +
-          `("${EXECUTION_PHASES[IMPLEMENTATION_BOUNDARY_INDEX]}"); deciding what to do is not doing it`,
+          `execution never completed the "${boundary}" phase (completed: ${reached}); ` +
+          'deciding what to do is not doing it',
+      };
+    }
+    // `completed_phases` is written by the executor itself, via
+    // `ops:exec-checkpoint phase-complete`. Taken alone it is a self-attestation:
+    // independent review demonstrated a fresh lane calling
+    // `phase-complete --phase implement` with zero source changes and receiving
+    // SUCCESS. The rework rule cannot catch that, because a fresh lane carries no
+    // findings. Claiming the implementation phase therefore has to be corroborated
+    // by a real diff -- the one signal the executor cannot fabricate by asserting it.
+    if (input.sourceFilesChanged === 0) {
+      return {
+        ok: false,
+        code: 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE',
+        exit_code: 1,
+        message:
+          `execution reported the "${boundary}" phase complete but changed zero source files; ` +
+          'a self-reported phase is not evidence of implementation',
       };
     }
   }
@@ -695,7 +728,13 @@ async function main(): Promise<void> {
   // stopped reporting progress entirely is called what it is.
   const timedOut =
     (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || child.signal === 'SIGTERM';
-  const liveness = classifyCheckpointLiveness(readCheckpoint(issueId));
+  // Read the checkpoint AFTER the spawn. `executionSummary.phase` is a
+  // pre-spawn snapshot taken at beginAttempt, where phase is the phase the
+  // attempt RESUMES FROM -- always 'orient' on a fresh lane. Gating execution
+  // truth on that value would fail every first attempt regardless of what
+  // Codex actually did (found by independent review of UTV2-1698).
+  const postSpawnCheckpoint = readCheckpoint(issueId);
+  const liveness = classifyCheckpointLiveness(postSpawnCheckpoint);
   const exitCode = child.status ?? 1;
   const sourceFilesChanged = countSourceFilesChanged(resolvedCwd, attemptStart.checkpoint.head_sha);
   const evidence = buildModelRoutingEvidence({
@@ -793,7 +832,7 @@ async function main(): Promise<void> {
   const truth = evaluateExecutionTruth({
     carriedFindings: executionSummary.carried_findings,
     sourceFilesChanged,
-    phase: executionSummary.phase,
+    issueId,
   });
   if (!truth.ok) {
     const closed = failVisiblyAndRelease({ issueId, outcome: 'failed', reason: truth.message });

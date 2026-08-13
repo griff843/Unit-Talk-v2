@@ -14,6 +14,12 @@ import {
   resolveExecModelRouting,
 } from './codex-exec.js';
 import { ROOT } from './shared.js';
+import {
+  beginAttempt,
+  recordPhaseComplete,
+  resolveExecutionTimeout,
+  type ExecutionPhase,
+} from './execution-checkpoint.js';
 
 // codex-exec.ts is an executable entry point — its `main()` process/spawn flow is
 // exercised via integration (pnpm ops:codex-exec --dry-run, which requires a live Codex
@@ -437,34 +443,64 @@ test('source-diff counting excludes proof and operational metadata but includes 
   }
 });
 
-// UTV2-1698, second rule. The rework guard keys on carried findings, so a FRESH
-// lane carries none and slips past it. Observed live on UTV2-1701: attempt 1,
-// resumed false, skipped_phases [], phase "plan", zero source files changed,
-// outcome "completed". Deciding what to do is not doing it.
+// UTV2-1698, second rule, and the wiring that feeds it.
+// evaluateExecutionTruth now READS the checkpoint rather than accepting a phase,
+// so these tests seed a real checkpoint dir. That is deliberate: independent
+// review found the earlier signature let `main` pass a PRE-spawn snapshot
+// (always 'orient' on a fresh lane), and no test could guard it because the rule
+// was right and only the call site was wrong.
+function seedCheckpoint(dir: string, issueId: string, phases: readonly ExecutionPhase[]): void {
+  const policy = resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'medium', phase: 'implement' });
+  beginAttempt({ issueId, branch: `codex/${issueId.toLowerCase()}`, worktree: dir, headSha: '9'.repeat(40), timeoutPolicy: policy, dir });
+  for (const phase of phases) recordPhaseComplete(issueId, phase, `did ${phase}`, { dir });
+}
+
 test('a run that terminates before the implementation boundary is not a completed execution', () => {
-  for (const phase of ['orient', 'plan'] as const) {
-    const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 0, phase });
-    assert.equal(verdict.ok, false, `phase ${phase} must not report success`);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-a-'));
+  try {
+    seedCheckpoint(dir, 'UTV2-9001', ['orient', 'plan']);
+    const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 0, issueId: 'UTV2-9001', checkpointDir: dir });
+    assert.equal(verdict.ok, false);
     assert.equal(verdict.code, 'INCOMPLETE_PHASE_PROGRESSION');
     assert.equal(verdict.exit_code, 1);
-    assert.match(verdict.message, new RegExp(phase));
-  }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a self-reported implement phase with zero source changes is not a completed execution', () => {
+  // Independent review demonstrated this exact path: a fresh lane calls
+  // `phase-complete --phase implement` and receives SUCCESS with no diff. The
+  // rework rule cannot catch it because a fresh lane carries no findings.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-selfattest-'));
+  try {
+    seedCheckpoint(dir, 'UTV2-9004', ['orient', 'plan', 'implement']);
+    const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 0, issueId: 'UTV2-9004', checkpointDir: dir });
+    assert.equal(verdict.ok, false, 'claiming implement with no diff must not report success');
+    assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE');
+    assert.equal(verdict.exit_code, 1);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a run that reached implementation or beyond is allowed to report success', () => {
-  // The guard must not become "always fail": a genuine run that reached the
-  // implementation boundary with no carried findings still succeeds.
-  for (const phase of ['implement', 'verify', 'closeout'] as const) {
-    const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 3, phase });
-    assert.equal(verdict.ok, true, `phase ${phase} should be allowed`);
-    assert.equal(verdict.code, 'SUCCESS');
+  // Stops the guard degrading into always-fail. This is also the assertion that
+  // now catches the stale-snapshot wiring bug: a run that genuinely reached
+  // closeout must pass, and it only can if the ENDING phase is what is read.
+  for (const phases of [['orient','plan','implement'], ['orient','plan','implement','verify'], ['orient','plan','implement','verify','closeout']] as const) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-b-'));
+    try {
+      seedCheckpoint(dir, 'UTV2-9002', phases as readonly ExecutionPhase[]);
+      const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 3, issueId: 'UTV2-9002', checkpointDir: dir });
+      assert.equal(verdict.ok, true, `phases ${phases.join('>')} should be allowed`);
+      assert.equal(verdict.code, 'SUCCESS');
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   }
 });
 
 test('the rework guard still fires independently of phase', () => {
-  // Both rules are live: a rework that reached closeout but changed nothing is
-  // still a false success, and must be caught by the FIRST rule not the second.
-  const verdict = evaluateExecutionTruth({ carriedFindings: 2, sourceFilesChanged: 0, phase: 'closeout' });
-  assert.equal(verdict.ok, false);
-  assert.equal(verdict.code, 'REWORK_NO_SOURCE_CHANGE');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-c-'));
+  try {
+    seedCheckpoint(dir, 'UTV2-9003', ['orient','plan','implement','verify','closeout']);
+    const verdict = evaluateExecutionTruth({ carriedFindings: 2, sourceFilesChanged: 0, issueId: 'UTV2-9003', checkpointDir: dir });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.code, 'REWORK_NO_SOURCE_CHANGE');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
