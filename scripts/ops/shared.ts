@@ -100,6 +100,32 @@ export type LaneManifestSchemaVersion = 1 | 2;
 export const LANE_MANIFEST_CURRENT_SCHEMA_VERSION: LaneManifestSchemaVersion = 2;
 const VALID_LANE_MANIFEST_SCHEMA_VERSIONS: readonly LaneManifestSchemaVersion[] = [1, 2];
 
+/**
+ * UTV2-1668: the durable record of a governed supersession.
+ *
+ * Written only by `scripts/ops/lane-supersede.ts`. Every field is mandatory
+ * because the point of the record is that a non-shipped terminal state can be
+ * audited later: who ended the lane, when, on what authority, and what took
+ * over. An optional field here would reappear as an unattributable terminal.
+ *
+ * This record asserts exactly one thing about shipping: that `source_pr` did
+ * not merge. It deliberately does NOT claim the work never landed elsewhere --
+ * equivalent content may well have shipped through a successor, and a record
+ * that implied otherwise would be a false claim of a different kind.
+ */
+export interface SupersessionRecord {
+  reason: string;
+  actor: string;
+  at: string;
+  source_pr: string;
+  source_branch: string;
+  rejected_head: string;
+  successor_issue_id: string;
+  /** Scope of the non-merge claim. Fixed string; never widened. */
+  claim: 'source_pr_did_not_merge';
+  transaction_id: string;
+}
+
 export interface LaneManifest {
   schema_version: LaneManifestSchemaVersion;
   issue_id: string;
@@ -141,6 +167,8 @@ export interface LaneManifest {
   task_packet_hash?: string;
   notes?: string;
   p0_protocol?: P0ProtocolBlock;
+  /** Present iff status is `superseded` via the governed path (UTV2-1668). */
+  supersession?: SupersessionRecord;
   /**
    * Deterministic Codex model-profile decision (UTV2-1526). Required for every
    * schema_version-2 Codex-executor manifest; forbidden on any Claude-executor manifest,
@@ -450,7 +478,11 @@ const TRANSITIONS: Record<LaneManifestStatus, LaneManifestStatus[]> = {
   started: ['in_progress', 'blocked', 'parked', 'reopened', 'started', ...NON_SUCCESS_TERMINALS],
   in_progress: ['in_review', 'blocked', 'parked', 'reopened', 'in_progress', ...NON_SUCCESS_TERMINALS],
   in_review: ['merged', 'blocked', 'parked', 'reopened', 'in_review', ...NON_SUCCESS_TERMINALS],
-  merged: ['done', 'reopened', 'merged', ...NON_SUCCESS_TERMINALS],
+  // UTV2-1668: a merged lane may NOT be relabelled non-shipped. Once work has
+  // landed on main, recording it as failed/superseded/cancelled would erase a
+  // true shipping claim, which is the mirror image of the fabrication this
+  // family of controls exists to prevent. `done` and `reopened` remain valid.
+  merged: ['done', 'reopened', 'merged'],
   done: ['done', 'reopened'],
   blocked: ['started', 'in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],
   parked: ['started', 'in_progress', 'blocked', 'parked', 'reopened', ...NON_SUCCESS_TERMINALS],

@@ -1,10 +1,8 @@
 version: 1
 approval:
-  allow_multiple_issues: false
-  skip_sync_required: false
+  status: approved
+  approver: griff843
+  note: T1 plan gate approved with corrections; governed supersession path
 entities:
   issues:
     - UTV2-1668
-  findings: []
-  controls: []
-  proofs: []

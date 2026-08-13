@@ -131,8 +131,57 @@ The manifest is a single JSON object. Unknown fields are preserved but not acted
 | `parent_lane` | string | for sub-lanes under a plan PR (future) |
 | `task_packet_hash` | string | for Codex lanes, hash of dispatched packet for scope-diff |
 | `notes` | string | human-readable commentary, non-authoritative |
+| `supersession` | `SupersessionRecord` | set **only** by `scripts/ops/lane-supersede.ts`; present iff `status` is `superseded` |
 
 Optional fields are additive. They do not change truth-check behavior unless explicitly referenced by spec.
+
+### 4.3.1 `supersession` (UTV2-1668)
+
+The durable record of a governed terminal supersession — a lane whose
+implementation will never merge. Every field is mandatory; an optional field
+here would reappear as an unattributable terminal.
+
+```json
+{
+  "reason": "bounce-cap fail/reframe; implementation approach rejected",
+  "actor": "griff843",
+  "at": "2026-08-13T20:00:00.000Z",
+  "source_pr": "#1417",
+  "source_branch": "codex/utv2-1698-execution-truth",
+  "rejected_head": "aa9a9711ffd58c51c4020360b47647c3f55a430f",
+  "successor_issue_id": "UTV2-1711",
+  "claim": "source_pr_did_not_merge",
+  "transaction_id": "<deterministic, derived from the inputs>"
+}
+```
+
+**`claim` is a fixed string and the only shipping assertion the record makes.**
+It says that `source_pr` did not merge. It deliberately does **not** claim that
+equivalent content never landed elsewhere — a successor may well ship the same
+behaviour, and a record implying otherwise would be a false claim of a different
+kind.
+
+**Writing this field by any path other than `lane-supersede` is a spec
+violation.** `ops:lane-manifest update --status superseded` refuses and names
+the governed command. The governed path verifies, in order: agreed PR identity
+between manifest and operator; GitHub PR `state=CLOSED`, `merged=false`,
+`mergedAt=null`; the rejected head equals the authoritative PR head; the head is
+**not** an ancestor of GitHub's *current* main SHA (not a local ref, which is
+only as fresh as the last fetch); and the declared actor matches the
+authenticated GitHub identity. Every one fails closed.
+
+`merged` may no longer transition to any non-success terminal. Once work has
+landed, relabelling it non-shipped would erase a true shipping claim.
+`merged → done` and `merged → reopened` are unchanged.
+
+Persistence is a staged transaction with a durable receipt under
+`.ops/supersession/<ISSUE>.json`, rooted at the **shared** git root so an
+interrupted run in one worktree is visible to a resume from any other. Stages
+are `verified → manifest_committed → lease_released → complete`. Success is
+withheld until lease release and exclusion from every capacity and lock set are
+verified at runtime. Repeating identical inputs is idempotent success; any
+differing input is a conflict and fails closed rather than overwriting a
+terminal record.
 
 ### 4.4 `truth_check_history[]` entry shape
 

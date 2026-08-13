@@ -169,6 +169,19 @@ function updateCommand(
 
   const nextStatus = getFlag(flags, 'status');
   if (nextStatus) {
+    // UTV2-1668: `superseded` is a terminal that asserts work did NOT ship.
+    // Reaching it through a raw status write verifies nothing -- no PR state,
+    // no actor, no successor, no lease release -- so the governed command owns
+    // it exclusively and this path refuses with the remedy named.
+    if (nextStatus === 'superseded') {
+      throw new Error(
+        'Refusing to set status "superseded" through ops:lane-manifest update: this terminal ' +
+        'requires verified PR state, a structured reason, actor and successor, and transactional ' +
+        'lease release. Use: npx tsx scripts/ops/lane-supersede.ts ' +
+        `${manifest.issue_id} --reason <text> --successor UTV2-### --source-pr <#> ` +
+        '--rejected-head <sha> --actor <id>',
+      );
+    }
     assertStatusTransition(manifest.status, nextStatus as LaneManifest['status']);
     next.status = nextStatus as LaneManifest['status'];
   }
