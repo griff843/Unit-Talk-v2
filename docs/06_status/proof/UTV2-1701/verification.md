@@ -17,7 +17,7 @@ result: not_run
 
 ## ASSERTIONS:
 
-- [x] A bundle produced by `ops:proof-generate` satisfies all four proof gates with zero manual edits.
+- [x] The document skeleton produced by `ops:proof-generate` satisfies all four proof gates with zero manual edits. Section *contents* remain the author's to write.
 - [x] The generator emits every literal token the gates require: `# PROOF:`, bare `MERGE_SHA:`, `ASSERTIONS:`, `EVIDENCE:`.
 - [x] The EVIDENCE section contains a fenced code block, which `Executor Result Validation` requires separately.
 - [x] The SHA anchor is a real 40-hex token pre-merge (`merge_sha ?? head_sha`), never a placeholder word.
@@ -28,10 +28,23 @@ result: not_run
 
 ## EVIDENCE:
 
-**This bundle is its own evidence.** It was produced by the fixed `ops:proof-generate`
-with no manual edits, and it carries every token the four gates require. Before this
-change the same command emitted `# UTV2-1701 Runtime Verification` and `Merge SHA: N/A`,
-which failed six of the eleven requirements.
+**This bundle's structure is its own evidence — its substance is not.** Stated precisely,
+because independent review caught the original wording overstating it:
+
+- **Generated, unedited:** the `# PROOF:` header, the bare `MERGE_SHA:` anchor with a real
+  40-hex value, the `## ASSERTIONS:` and `## EVIDENCE:` headings, the fenced block, the
+  `## Verification` section and its command literals. That is the whole of what the four
+  gates check, and it came out of `ops:proof-generate` with no manual edits.
+- **Hand-written:** the *contents* of the ASSERTIONS and EVIDENCE sections below — the
+  requirement table, the mutation transcript, this correction. The generator emits
+  placeholder text there (`- [ ] Replace with the acceptance criteria...`) and has no flag
+  that would inject narrative. It cannot, and should not: a generator that wrote its own
+  assertions would be manufacturing evidence.
+
+So the claim this bundle supports is the structural one: the generator now emits everything
+the gates require. It does not support, and no longer asserts, that the substance was
+machine-produced. Before this change the same command emitted `# UTV2-1701 Runtime
+Verification` and `Merge SHA: N/A`, failing six of the eleven requirements.
 
 Gate requirements and the source that enforces each:
 
@@ -121,3 +134,21 @@ validator, so this lane requires independent review before merge.
 The executor defect is filed as UTV2-1698 and is broader than first recorded: this was a
 fresh lane with `resumed: false` and `skipped_phases: []`, so incomplete phase progression
 reports success even without a stale checkpoint.
+
+### Review correction
+
+`proof-auditor` returned **VALID** and independently reproduced both mutations to the exact
+counts (83/2 and 84/1, restored 85/85), re-derived every cited gate line from source, and
+directly invoked `rebindMergeShaAnchorsInMarkdown` to confirm the bare `MERGE_SHA:` form is
+still rebound correctly post-merge — the regression that would have traded a pre-merge
+failure for a post-merge one.
+
+It also found that the original wording of this section overstated the demonstration,
+claiming the whole bundle was unedited generator output when only the skeleton is. That has
+been corrected above rather than argued with. An Evidence Truth lane whose own evidence
+overstates itself would be the exact failure this project exists to remove.
+
+One pre-existing unrelated failure was noted and confirmed present on `origin/main` before
+this change: `runtime-verifier-gate.test.ts:113` asserts a hard failure for a SHA mismatch,
+but the source downgraded that to a warning under UTV2-985 and the test was never updated.
+Out of scope here; recorded so it is not mistaken for a regression from this lane.
