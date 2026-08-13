@@ -327,8 +327,41 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
     'Generated foundation artifact. Replace or append command output when runtime proof is executed.',
   ];
 
+  // UTV2-1701: four gates read this document and each demands a different
+  // shape. Every requirement is a presence assertion -- none forbids anything --
+  // so the satisfying template is their strict union and no gate is weakened to
+  // reach it. Requirements, with the source that enforces each:
+  //
+  //   `# PROOF:`            executor-result-validator.yml:263; truth-check-lib.ts:507 (CEP-E3)
+  //   bare `MERGE_SHA:`     executor-result-validator.yml:266; truth-check-lib.ts:507
+  //   `ASSERTIONS:`         executor-result-validator.yml:303; truth-check-lib.ts:507
+  //   `EVIDENCE:`           executor-result-validator.yml:317; truth-check-lib.ts:507
+  //   fenced block in it    executor-result-validator.yml:325
+  //   any 40-hex SHA        runtime-verifier-gate.ts:132  (HARD fail when absent)
+  //   `## Verification`     runtime-verifier-gate.ts:121 AND proof-auditor-gate.ts:25
+  //   command literals      truth-check-lib.ts:676,682,689 (P12/P13/P14)
+  //
+  // `## Verification` satisfies both header checks, and the command literals
+  // already come from DEFAULT_VERIFICATION_COMMANDS, so the union is smaller
+  // than the four requirement lists suggest.
+  //
+  // The SHA anchor takes the merge SHA when it exists and the head SHA before
+  // merge. It must never be a placeholder word: runtime-verifier-gate hard-fails
+  // when the file contains no 40-hex token at all, and only *warns* when the
+  // token differs from the current head. Emitting `N/A` therefore failed the
+  // gate outright on every freshly generated bundle, which is why each lane
+  // repaired this line by hand. `N/A` survives only when neither SHA is known,
+  // where failing is the correct outcome.
+  const shaAnchor = gitTruth.merge_sha ?? gitTruth.head_sha ?? 'N/A';
+
   return [
-    `# ${manifest.issue_id} Runtime Verification`,
+    `# PROOF: ${manifest.issue_id}`,
+    '',
+    `MERGE_SHA: ${shaAnchor}`,
+    '',
+    '> Pre-merge this anchor carries the verified implementation SHA; the merge SHA does',
+    '> not exist yet. `post-merge-lane-close.yml` rebinds it to the authoritative merge',
+    '> SHA via `ops:proof-generate --merge-sha`.',
     '',
     `Generated at: ${input.generatedAt}`,
     `Issue: ${manifest.issue_id}`,
@@ -337,8 +370,22 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
     `Branch: ${manifest.branch}`,
     `PR URL: ${manifest.pr_url ?? 'N/A'}`,
     `Head SHA: ${gitTruth.head_sha ?? 'N/A'}`,
-    `Merge SHA: ${gitTruth.merge_sha ?? 'N/A'}`,
     `result: ${runtimeResult}`,
+    '',
+    '## ASSERTIONS:',
+    '',
+    '- [ ] Replace with the acceptance criteria this lane claims to satisfy, one per line.',
+    '- [ ] Every box left unchecked is an unmet criterion, not a formatting placeholder.',
+    '',
+    '## EVIDENCE:',
+    '',
+    'The measured commands are recorded below. Replace the block with real output',
+    'when the commands are executed; a fenced block is required and must not be empty.',
+    '',
+    '```',
+    ...commands.map((command) => `$ ${command}`),
+    '(not run by proof-generate)',
+    '```',
     '',
     '## Verification',
     ...commands.map((command) => `- [ ] \`${command}\`: not run by proof-generate`),
