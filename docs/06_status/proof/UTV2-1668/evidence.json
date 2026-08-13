@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1668",
+  "title": "Governed abandonment and supersession terminal path for unmerged lanes",
+  "tier": "T1",
+  "status": "static_proof_complete",
+  "generated_at": "2026-08-13T22:20:00Z",
+  "sha_binding": {
+    "verified_source_sha": "c22b231e1548fbd60175393902328f6afa713b32",
+    "verified_source_note": "Substantive implementation commit containing every control and regression described. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-13T22:20:00Z",
+    "pr_number": 1418,
+    "approved_head_sha": null
+  },
+  "verifier": {
+    "identity": "claude/utv2-1668-governed-supersession",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence. This is not PM approval or independent certification. The orchestrator implemented this lane, so the independent opposite-provider review recorded on the PR carries the validation burden."
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/lane-supersede.ts",
+      "scripts/ops/lane-supersede.test.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/lane-manifest.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1668/evidence.json",
+      "docs/06_status/proof/UTV2-1668/verification.md",
+      "docs/06_status/proof/UTV2-1668/diff-summary.md"
+    ],
+    "docs_paths": [
+      "docs/05_operations/LANE_MANIFEST_SPEC.md"
+    ]
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-supersede.test.ts",
+      "tests": 28,
+      "pass": 28,
+      "fail": 0,
+      "skipped": 0
+    },
+    "verify_full": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-supersede.test.ts scripts/ops/lane-manifest.test.ts scripts/ops/shared.test.ts",
+      "tests": 109,
+      "pass": 109,
+      "fail": 0,
+      "note": "pnpm verify is deferred to PR CI, which is authoritative for this lane."
+    },
+    "mutation_test": {
+      "groups": 18,
+      "survivors": 0,
+      "note": "Groups A-R. Each mutation fails only its own regression. Mutation K survived the first 13-group battery (post-condition release verification was not load-bearing) and was closed with a duplicated-lease regression before this bundle was written.",
+      "group_results": "See docs/06_status/proof/UTV2-1668/verification.md for the per-group failing test names and counts."
+    }
+  },
+  "write_audit": {
+    "database_writes": 0,
+    "note": "This lane performs no database access of any kind. It changes lane lifecycle control flow only."
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "reason": "This lane touches no runtime, domain, database or delivery surface. There is no live-DB behaviour to exercise: the command reads GitHub PR state, the current main SHA and the authenticated identity, and writes a lane manifest, a lease record and a transaction receipt on the local filesystem.",
+    "external_authorities": [
+      "GitHub PR state (state, merged, mergedAt, headRefOid)",
+      "GitHub current main SHA",
+      "GitHub authenticated identity"
+    ],
+    "authority_injection_note": "All three are injected in tests and read via the gh CLI in production, so every refusal path is exercised deterministically without network dependence.",
+    "escalation": "If the T1 proof gate requires a live-DB runtime_proof with no applicability exemption, this lane cannot satisfy it and the tier or the gate must be reconciled by PM decision. Flagged rather than worked around."
+  },
+  "acceptance_criteria_mapping": [
+    { "criterion": "Explicit non-shipped terminal state", "evidence": "status superseded with a mandatory supersession record; test 'a closed unmerged lane reaches a terminal non-shipped state with resources released'" },
+    { "criterion": "Verify authoritative PR is closed and unmerged", "evidence": "Mutations E, F, G, I; state/merged/mergedAt only, mergeCommit never consulted (Mutation L)" },
+    { "criterion": "Preserve branch, PR, review, proof and executor history", "evidence": "refuses_to_write_superseded_branch (Mutation Q); no branch or history is modified" },
+    { "criterion": "Structured reason, actor, timestamp, source PR/branch, successor", "evidence": "all mandatory (Mutation A); successor may not equal source (Mutation B)" },
+    { "criterion": "Successor binding", "evidence": "successor_issue_id required and conflict-protected (Mutation J)" },
+    { "criterion": "Release lease, capacity and file-scope locks transactionally", "evidence": "staged receipt; success withheld until verifyReleased passes (Mutation K)" },
+    { "criterion": "Never fabricate merge_sha, done, truth-check or shipped claims", "evidence": "Mutations C and M; claim fixed to source_pr_did_not_merge" },
+    { "criterion": "Fail closed on ambiguous PR or lane identity", "evidence": "Mutations E and I; pr_identity_unresolved and pr_identity_conflict" },
+    { "criterion": "Idempotent and crash-recoverable", "evidence": "deterministic transaction id; crash-resume regression; cross-worktree durable root (Mutation R)" },
+    { "criterion": "Lock and capacity evaluators exclude the superseded lane", "evidence": "verifyReleased asserts exclusion from ACTIVE_LOCK, TOTAL, EXECUTOR and TYPE capacity sets at runtime" },
+    { "criterion": "Mutation proof for every control, and refusal remedies executed", "evidence": "18 groups, 0 survivors; the lane-manifest bypass refusal is spawned as a real process and its named remedy then run to success" }
+  ],
+  "known_limitations": [
+    "pnpm type-check does not compile scripts/ops/**; tsconfig.json references only packages/* and apps/*. Tracked separately; deliberately not fixed here.",
+    "No pnpm ops:lane-supersede alias: package.json is a singleton path currently locked by another active lane. The command is production-wired as npx tsx scripts/ops/lane-supersede.ts, the same invocation form as tier-classifier and generate-preflight-token.",
+    "Applying this transition to the failed predecessor lane happens after this merges, per PM sequencing.",
+    "General abandonment without a successor is explicitly out of scope and tracked separately."
+  ],
+  "sign_off": {
+    "executor": "claude",
+    "self_certification": false,
+    "note": "The orchestrator wrote this change and is not its validator. Independent opposite-provider review is required before merge and is recorded on the PR."
+  }
+}

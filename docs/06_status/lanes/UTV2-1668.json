@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1668-governed-supersession",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1418",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1668.yml",
@@ -28,7 +28,7 @@
   ],
   "status": "started",
   "started_at": "2026-08-13T20:34:25.837Z",
-  "heartbeat_at": "2026-08-13T20:34:25.837Z",
+  "heartbeat_at": "2026-08-13T22:15:08.097Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1668-governed-supersession.json",
