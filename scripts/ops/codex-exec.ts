@@ -152,48 +152,30 @@ export function shouldInvalidateForRework(rework: boolean, dryRun: boolean): boo
 export function evaluateExecutionTruth(input: {
   carriedFindings: number;
   sourceFilesChanged: number;
-  /** Files changed inside the lane's own declared `file_scope_lock`. */
-  declaredDeliverableChanged?: number;
-  /** True when every declared scope entry is docs/ or .ops/. Manifest-derived. */
-  deliverableIsNonSource?: boolean;
   issueId?: string;
   checkpointDir?: string;
 }): ExecutionTruthVerdict {
-  if (input.carriedFindings > 0) {
-    // A lane whose authoritative deliverable is entirely docs/.ops can be
-    // legitimately reworked: review rejected its proof, it rewrote its proof,
-    // and that IS its declared work. This is not NO_CHANGE_REQUIRED -- work
-    // occurred and a declared deliverable changed. It is only valid because the
-    // scope came from trusted base state; an executor cannot reach this branch
-    // by editing its own manifest.
-    if (input.deliverableIsNonSource) {
-      if ((input.declaredDeliverableChanged ?? 0) === 0) {
-        return {
-          ok: false,
-          code: 'REWORK_NO_SOURCE_CHANGE',
-          exit_code: 1,
-          message:
-            `rework carried ${input.carriedFindings} finding(s) but changed nothing inside the lane's ` +
-            'declared deliverable scope',
-        };
-      }
-    } else if (input.sourceFilesChanged === 0) {
-      return {
-        ok: false,
-        code: 'REWORK_NO_SOURCE_CHANGE',
-        exit_code: 1,
-        message:
-          `rework carried ${input.carriedFindings} finding(s) but changed zero source files; ` +
-          'proof-only output cannot satisfy outstanding implementation feedback',
-      };
-    }
+  // UTV2-1698 is a false-success guard, so it is deliberately conservative:
+  // every lane must change real source. A lane whose declared deliverable is
+  // documentation therefore fails closed here until UTV2-1710 supplies a
+  // lifecycle-owned deliverable authority. Failing an honest proof-only lane is
+  // recoverable; admitting one more false-success path is not.
+  if (input.carriedFindings > 0 && input.sourceFilesChanged === 0) {
+    return {
+      ok: false,
+      code: 'REWORK_NO_SOURCE_CHANGE',
+      exit_code: 1,
+      message:
+        `rework carried ${input.carriedFindings} finding(s) but changed zero source files; ` +
+        'proof-only output cannot satisfy outstanding implementation feedback',
+    };
   }
-  // UTV2-1698, second rule. The first rule only fires on a rework, because it
-  // keys on carried findings. A FRESH lane carries none, so a run that stopped
-  // at `plan` having written nothing passed it and reported success -- observed
-  // live on UTV2-1701: attempt 1, resumed false, skipped_phases [], phase plan,
-  // outcome completed, zero source files changed. Terminating before the
-  // implementation boundary is never a completed execution.
+  // Second rule. The first only fires on a rework, because it keys on carried
+  // findings. A FRESH lane carries none, so a run that stopped at `plan` having
+  // written nothing passed it and reported success -- observed live on
+  // UTV2-1701: attempt 1, resumed false, skipped_phases [], phase plan, outcome
+  // completed, zero source files changed. Terminating before the implementation
+  // boundary is never a completed execution.
   // Gate on COMPLETED phases, not on `checkpoint.phase`. That field is the
   // NEXT phase to work on (`recordPhaseComplete` sets it via `nextPhaseAfter`),
   // so a run that finished `plan` and stopped carries phase 'implement' and
@@ -218,25 +200,10 @@ export function evaluateExecutionTruth(input: {
     // independent review demonstrated a fresh lane calling
     // `phase-complete --phase implement` with zero source changes and receiving
     // SUCCESS. The rework rule cannot catch that, because a fresh lane carries no
-    // findings. Claiming the implementation phase therefore has to be corroborated
-    // by a real diff -- the one signal the executor cannot fabricate by asserting it.
-    // What counts as "did the work" depends on what the lane DECLARED it would
-    // deliver, taken from the manifest's file_scope_lock -- not from anything the
-    // executor asserts about itself. A lane whose entire declared scope is
-    // docs/.ops legitimately completes by changing that scope; it simply may not
-    // claim source implementation. Every other lane must change real source.
-    if (input.deliverableIsNonSource) {
-      if ((input.declaredDeliverableChanged ?? 0) === 0) {
-        return {
-          ok: false,
-          code: 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE',
-          exit_code: 1,
-          message:
-            `execution reported the "${boundary}" phase complete but changed nothing inside the lane's ` +
-            'declared deliverable scope; a self-reported phase is not evidence of work',
-        };
-      }
-    } else if (input.sourceFilesChanged === 0) {
+    // findings. Claiming the implementation phase therefore has to be
+    // corroborated by a real diff -- the one signal the executor cannot
+    // fabricate by asserting it.
+    if (input.sourceFilesChanged === 0) {
       return {
         ok: false,
         code: 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE',
@@ -260,94 +227,10 @@ export function changedFilesSince(cwd: string, baseSha: string | null): string[]
 
 const NON_SOURCE_PREFIXES = ['docs/', '.ops/'];
 
-export interface AuthoritativeScope {
-  ok: boolean;
-  reason: string;
-  scope?: string[];
-}
-
-/**
- * The lane's declared file scope, read from TRUSTED state -- the manifest as it
- * exists on the base ref -- never from the working tree.
- *
- * The working-tree manifest lives on the executor's own branch, so an executor
- * could rewrite `file_scope_lock` to docs-only and thereby exempt itself from the
- * source-implementation requirement. That is the same self-attestation defect
- * this lane exists to close, one level down: the executor would be declaring what
- * counts as its own work. The pre-merge scope guard already resolves this by
- * reading from base, and this follows it.
- *
- * Fails CLOSED. A missing, unreadable or malformed authoritative manifest yields
- * `ok: false`, which callers must treat as "source required" -- never as
- * permission to be proof-only. A brand-new lane has no manifest on base at all,
- * and that case must not become an exemption.
- */
-export function readAuthoritativeFileScope(
-  cwd: string,
-  issueId: string,
-  baseRef = 'origin/main',
-): AuthoritativeScope {
-  const relPath = `docs/06_status/lanes/${issueId.toUpperCase()}.json`;
-  const show = spawnSync('git', ['show', `${baseRef}:${relPath}`], { cwd, stdio: 'pipe', encoding: 'utf8' });
-  if (show.status !== 0) {
-    return { ok: false, reason: `no authoritative manifest at ${baseRef}:${relPath}` };
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(show.stdout);
-  } catch {
-    return { ok: false, reason: `authoritative manifest at ${baseRef}:${relPath} is not valid JSON` };
-  }
-  const scope = (parsed as { file_scope_lock?: unknown }).file_scope_lock;
-  if (!Array.isArray(scope) || scope.some((entry) => typeof entry !== 'string')) {
-    return { ok: false, reason: 'authoritative manifest has no usable file_scope_lock' };
-  }
-  return { ok: true, reason: 'read from authoritative base manifest', scope: scope as string[] };
-}
-
 /** Source excludes docs and operational metadata; those cannot satisfy a source-implementation claim. */
 export function countSourceFilesChanged(cwd: string, baseSha: string | null): number {
   return changedFilesSince(cwd, baseSha).filter(
     (file) => !NON_SOURCE_PREFIXES.some((prefix) => file.startsWith(prefix)),
-  ).length;
-}
-
-/**
- * A lane whose ENTIRE declared deliverable is documentation or operational
- * metadata. Derived from the lane manifest's `file_scope_lock`, which is
- * authoritative: it is written at `ops:lane-start` and the pre-merge scope guard
- * reads it from the base, so an executor cannot widen or assert it mid-run.
- *
- * This is deliberately NOT a "proof-only" flag the executor can set, and NOT a
- * blanket docs exemption: a lane that declared source files in scope stays
- * subject to the source-implementation requirement even if it happens to change
- * only docs.
- */
-export function laneDeliverableIsNonSource(fileScopeLock: readonly string[] | undefined): boolean {
-  if (!fileScopeLock || fileScopeLock.length === 0) return false;
-  return fileScopeLock.every((entry) => {
-    const trimmed = entry.trim();
-    if (trimmed.length === 0) return false;
-    // Conservative by construction. A path must be EXPLICITLY inside docs/ or
-    // .ops/ to count. Anything that could reach outside -- a bare or leading
-    // glob, a parent traversal, an absolute path, a repository root -- is
-    // treated as source/control-plane required. Mixed scope fails here too,
-    // because `every` requires all entries to qualify.
-    if (trimmed.startsWith('/') || trimmed.startsWith('*') || trimmed.includes('..')) return false;
-    return NON_SOURCE_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
-  });
-}
-
-/** Files changed that fall inside the lane's own declared deliverable scope. */
-export function countDeclaredDeliverableChanged(
-  cwd: string,
-  baseSha: string | null,
-  fileScopeLock: readonly string[] | undefined,
-): number {
-  if (!fileScopeLock || fileScopeLock.length === 0) return 0;
-  const declared = fileScopeLock.map((entry) => entry.replace(/\*+$/, ''));
-  return changedFilesSince(cwd, baseSha).filter((file) =>
-    declared.some((entry) => file === entry || file.startsWith(entry)),
   ).length;
 }
 
@@ -984,18 +867,12 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const authoritativeScope = readAuthoritativeFileScope(resolvedCwd, issueId);
+  // `issueId` only -- never a phase. `evaluateExecutionTruth` reads the
+  // checkpoint itself so no caller can supply a stale pre-spawn snapshot, which
+  // is the defect this call site shipped once already.
   const truth = evaluateExecutionTruth({
     carriedFindings: executionSummary.carried_findings,
     sourceFilesChanged,
-    // Authoritative scope only. `manifest` here is the working-tree manifest on
-    // the executor's own branch and must NOT decide whether source is required.
-    declaredDeliverableChanged: countDeclaredDeliverableChanged(
-      resolvedCwd,
-      attemptStart.checkpoint.head_sha,
-      authoritativeScope.scope,
-    ),
-    deliverableIsNonSource: authoritativeScope.ok && laneDeliverableIsNonSource(authoritativeScope.scope),
     issueId,
   });
   if (!truth.ok) {

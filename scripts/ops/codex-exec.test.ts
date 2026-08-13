@@ -7,8 +7,6 @@ import { spawnSync } from 'node:child_process';
 import { buildCodexModelArgs, loadModelRoutingPolicy } from './model-routing.js';
 import {
   buildCodexPrompt,
-  laneDeliverableIsNonSource,
-  readAuthoritativeFileScope,
   shouldInvalidateForRework,
   buildModelRoutingEvidence,
   commitAndPushEvidence,
@@ -555,244 +553,52 @@ test('a rework dry run leaves the checkpoint and its .bak sidecar byte-identical
 // change as zero work, so a lane whose declared acceptance scope is legitimately
 // proof-only always failed. The distinction is derived from the manifest's
 // file_scope_lock, which the executor cannot assert about itself.
-test('a lane whose declared scope is entirely docs/.ops is recognised as non-source', () => {
-  assert.equal(laneDeliverableIsNonSource(['docs/06_status/proof/UTV2-1/verification.md']), true);
-  assert.equal(laneDeliverableIsNonSource(['docs/a.md', '.ops/sync/UTV2-1.yml']), true);
-  // A lane that declared ANY source file stays source-required.
-  assert.equal(laneDeliverableIsNonSource(['docs/a.md', 'scripts/ops/x.ts']), false);
-  // No declared scope is not a licence to do nothing.
-  assert.equal(laneDeliverableIsNonSource([]), false);
-  assert.equal(laneDeliverableIsNonSource(undefined), false);
-});
-
-test('an explicitly proof-only lane completes when it changed its declared deliverable', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-proofonly-'));
-  try {
-    seedCheckpoint(dir, 'UTV2-9102', ['orient', 'plan', 'implement']);
-    const verdict = evaluateExecutionTruth({
-      carriedFindings: 0,
-      sourceFilesChanged: 0,
-      declaredDeliverableChanged: 1,
-      deliverableIsNonSource: true,
-      issueId: 'UTV2-9102',
-      checkpointDir: dir,
-    });
-    assert.equal(verdict.ok, true, 'a proof-only lane that changed its declared scope has done its work');
-    assert.equal(verdict.code, 'SUCCESS');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('an implementation-required lane that changed only docs/.ops still fails', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-implreq-'));
-  try {
-    seedCheckpoint(dir, 'UTV2-9103', ['orient', 'plan', 'implement']);
-    const verdict = evaluateExecutionTruth({
-      carriedFindings: 0,
-      sourceFilesChanged: 0,
-      declaredDeliverableChanged: 3,
-      deliverableIsNonSource: false,
-      issueId: 'UTV2-9103',
-      checkpointDir: dir,
-    });
-    assert.equal(verdict.ok, false, 'a source-scoped lane may not complete on docs alone');
-    assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a proof-only lane that changed nothing in its declared scope still fails', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-proofnothing-'));
-  try {
-    seedCheckpoint(dir, 'UTV2-9104', ['orient', 'plan', 'implement']);
-    const verdict = evaluateExecutionTruth({
-      carriedFindings: 0,
-      sourceFilesChanged: 0,
-      declaredDeliverableChanged: 0,
-      deliverableIsNonSource: true,
-      issueId: 'UTV2-9104',
-      checkpointDir: dir,
-    });
-    assert.equal(verdict.ok, false);
-    assert.equal(verdict.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a rework on a source-required lane that changed only proof still fails', () => {
-  // The authoritative scope requires source, so proof-only output cannot satisfy
-  // review feedback no matter how much proof changed.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-reworksrc-'));
-  try {
-    seedCheckpoint(dir, 'UTV2-9105', ['orient', 'plan', 'implement']);
-    const verdict = evaluateExecutionTruth({
-      carriedFindings: 2,
-      sourceFilesChanged: 0,
-      declaredDeliverableChanged: 4,
-      deliverableIsNonSource: false,
-      issueId: 'UTV2-9105',
-      checkpointDir: dir,
-    });
-    assert.equal(verdict.ok, false, 'source-required rework may not be satisfied by proof');
-    assert.equal(verdict.code, 'REWORK_NO_SOURCE_CHANGE');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a proof-only lane reworked after rejection completes when its declared deliverable changed', () => {
-  // PM requirement: a legitimately proof-only lane stays valid after review
-  // rejection. Work occurred and a declared deliverable changed, so this is not
-  // NO_CHANGE_REQUIRED. Only reachable because scope came from trusted state.
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-proofrework-'));
-  try {
-    seedCheckpoint(dir, 'UTV2-9106', ['orient', 'plan', 'implement']);
-    const verdict = evaluateExecutionTruth({
-      carriedFindings: 3,
-      sourceFilesChanged: 0,
-      declaredDeliverableChanged: 1,
-      deliverableIsNonSource: true,
-      issueId: 'UTV2-9106',
-      checkpointDir: dir,
-    });
-    assert.equal(verdict.ok, true, 'a proof-only rework that rewrote its proof has done its declared work');
-    assert.equal(verdict.code, 'SUCCESS');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a proof-only lane reworked after rejection that changed nothing still fails', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-proofreworknil-'));
-  try {
-    seedCheckpoint(dir, 'UTV2-9107', ['orient', 'plan', 'implement']);
-    const verdict = evaluateExecutionTruth({
-      carriedFindings: 3,
-      sourceFilesChanged: 0,
-      declaredDeliverableChanged: 0,
-      deliverableIsNonSource: true,
-      issueId: 'UTV2-9107',
-      checkpointDir: dir,
-    });
-    assert.equal(verdict.ok, false);
-    assert.equal(verdict.code, 'REWORK_NO_SOURCE_CHANGE');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-// ── PM bounce 1, protection 2: scope trust boundary ──────────────────────────
-// The production path must read file_scope_lock from TRUSTED base state. The
-// working-tree manifest lives on the executor's own branch, so reading it would
-// let an executor rewrite its own scope to docs-only and exempt itself from the
-// source requirement — the same self-attestation defect one level down.
-function initRepoWithBaseManifest(root: string, issueId: string, baseScope: string[]): void {
-  const run = (...args: string[]) => spawnSync('git', args, { cwd: root, stdio: 'pipe' });
-  run('init', '-q');
-  run('config', 'user.email', 'test@example.com');
-  run('config', 'user.name', 'Test');
-  fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
-  fs.writeFileSync(
-    path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`),
-    JSON.stringify({ issue_id: issueId, file_scope_lock: baseScope }, null, 2),
-  );
-  run('add', '.');
-  run('commit', '-q', '-m', 'base');
-  run('branch', '-f', 'origin/main', 'HEAD');
-}
-
-test('authoritative scope is read from base, so a tampered branch manifest cannot grant proof-only', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-tamper-'));
-  try {
-    const issueId = 'UTV2-9201';
-    // Trusted/base scope REQUIRES source.
-    initRepoWithBaseManifest(root, issueId, ['scripts/ops/thing.ts', 'docs/06_status/proof/UTV2-9201/verification.md']);
-    // Executor rewrites the BRANCH manifest to docs-only.
-    fs.writeFileSync(
-      path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`),
-      JSON.stringify({ issue_id: issueId, file_scope_lock: ['docs/06_status/proof/UTV2-9201/verification.md'] }, null, 2),
-    );
-
-    const authoritative = readAuthoritativeFileScope(root, issueId, 'origin/main');
-    assert.equal(authoritative.ok, true, 'base manifest must be readable');
-    assert.equal(
-      laneDeliverableIsNonSource(authoritative.scope),
-      false,
-      'tampering with the branch manifest must not make the lane proof-only',
-    );
-    // And the branch manifest, if it were trusted, WOULD have flipped it — which
-    // is precisely why the production path must not read it.
-    const branchScope = JSON.parse(
-      fs.readFileSync(path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`), 'utf8'),
-    ).file_scope_lock as string[];
-    assert.equal(laneDeliverableIsNonSource(branchScope), true, 'the tampered scope would have granted proof-only');
-  } finally { fs.rmSync(root, { recursive: true, force: true }); }
-});
-
-test('missing, malformed or unreadable authoritative scope fails closed', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1698-failclosed-'));
-  try {
-    const run = (...args: string[]) => spawnSync('git', args, { cwd: root, stdio: 'pipe' });
-    run('init', '-q');
-    run('config', 'user.email', 'test@example.com');
-    run('config', 'user.name', 'Test');
-    fs.writeFileSync(path.join(root, 'seed.txt'), 'x\n');
-    run('add', '.'); run('commit', '-q', '-m', 'seed'); run('branch', '-f', 'origin/main', 'HEAD');
-
-    // Missing entirely — the case for every brand-new lane.
-    const missing = readAuthoritativeFileScope(root, 'UTV2-9202', 'origin/main');
-    assert.equal(missing.ok, false, 'a missing authoritative manifest must fail closed');
-    assert.equal(laneDeliverableIsNonSource(missing.scope), false, 'and must never yield proof-only');
-
-    // Malformed JSON.
-    fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'docs', '06_status', 'lanes', 'UTV2-9203.json'), '{ not json');
-    run('add', '.'); run('commit', '-q', '-m', 'bad'); run('branch', '-f', 'origin/main', 'HEAD');
-    const malformed = readAuthoritativeFileScope(root, 'UTV2-9203', 'origin/main');
-    assert.equal(malformed.ok, false, 'malformed authoritative manifest must fail closed');
-    assert.equal(laneDeliverableIsNonSource(malformed.scope), false);
-  } finally { fs.rmSync(root, { recursive: true, force: true }); }
-});
-
-test('classification is conservative: mixed scope, globs, roots and control-plane paths are source-required', () => {
-  for (const scope of [
-    ['docs/a.md', 'scripts/ops/x.ts'],          // mixed
-    ['**'],                                      // bare glob
-    ['*'],                                       // bare glob
-    ['/docs/a.md'],                              // absolute
-    ['docs/../scripts/x.ts'],                    // traversal
-    ['scripts/**'],                              // control plane
-    ['.github/workflows/ci.yml'],                // control plane
-    ['package.json'],                            // package file
-    ['tsconfig.json'],                           // configuration
-    [''],                                        // empty entry
-  ]) {
-    assert.equal(laneDeliverableIsNonSource(scope), false, `scope ${JSON.stringify(scope)} must stay source-required`);
-  }
-  // Only explicitly-inside-docs/.ops scopes qualify.
-  assert.equal(laneDeliverableIsNonSource(['docs/06_status/proof/UTV2-1/verification.md', '.ops/sync/UTV2-1.yml']), true);
-  assert.equal(laneDeliverableIsNonSource(['docs/06_status/proof/UTV2-1/**']), true);
-});
-
-test('the production call path derives scope from authoritative state, never from the branch manifest', () => {
-  // Guards the CALL SITE, not just the function. Defect 1 in this lane was a
-  // correct rule wired to a wrong caller, and the regression written for it
-  // passed with the wiring reverted. readAuthoritativeFileScope() can be
-  // perfect and still be bypassed by one line in main(). This asserts the
-  // production wiring itself.
-  const src = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
-  const call = src.slice(src.indexOf('const truth = evaluateExecutionTruth({'));
+test('the production call path passes issueId and a source-file count, and cannot supply a phase', () => {
+  // Guards the CALL SITE, not just the function. This lane already shipped a
+  // correct rule wired to a wrong caller -- main() fed a pre-spawn phase
+  // snapshot, always 'orient' on a fresh lane -- and the regression written for
+  // it passed with the wiring reverted. A test cannot fix a wrong call site, so
+  // the production wiring is asserted directly.
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const call = source.slice(source.indexOf('const truth = evaluateExecutionTruth({'));
   const args = call.slice(0, call.indexOf('});') + 3);
 
-  assert.match(
+  assert.match(args, /issueId,/, 'the verdict must be able to read checkpoint state itself');
+  assert.match(args, /sourceFilesChanged,/, 'the verdict must be given a real source-diff count');
+  assert.doesNotMatch(
     args,
-    /deliverableIsNonSource:\s*authoritativeScope\.ok\s*&&\s*laneDeliverableIsNonSource\(authoritativeScope\.scope\)/,
-    'deliverableIsNonSource must come from the authoritative base scope, gated on a successful read',
-  );
-  assert.match(
-    args,
-    /declaredDeliverableChanged:[\s\S]*?authoritativeScope\.scope/,
-    'the declared-deliverable count must be measured against authoritative scope',
+    /phase:/,
+    'no caller may supply a phase; a stale pre-spawn snapshot must stay unrepresentable',
   );
   assert.doesNotMatch(
     args,
-    /manifest\.file_scope_lock/,
-    'the working-tree manifest is executor-controlled and must not reach the truth evaluation',
+    /deliverableIsNonSource|declaredDeliverableChanged/,
+    'proof-only handling is owned by UTV2-1710; this lane must stay strictly source-required',
   );
-  assert.ok(
-    src.indexOf('const authoritativeScope = readAuthoritativeFileScope(') <
-      src.indexOf('const truth = evaluateExecutionTruth({'),
-    'scope must be resolved from base before the verdict is computed',
+
+  const sourceCount = source.slice(
+    source.indexOf('const sourceFilesChanged'),
+    source.indexOf('const truth = evaluateExecutionTruth({'),
   );
+  assert.match(
+    sourceCount,
+    /countSourceFilesChanged\(/,
+    'the count must come from the real git diff, not from anything the executor reports',
+  );
+});
+
+test('evaluateExecutionTruth exposes no scope or deliverable inputs', () => {
+  // The removed feature must be gone, not merely unused. An unused optional
+  // input is an invitation to rewire it, and the two false-success paths found
+  // in review both entered through those inputs.
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  for (const removed of [
+    'readAuthoritativeFileScope',
+    'laneDeliverableIsNonSource',
+    'countDeclaredDeliverableChanged',
+    'deliverableIsNonSource',
+    'declaredDeliverableChanged',
+  ]) {
+    assert.ok(!source.includes(removed), `${removed} must not exist in this lane`);
+  }
 });
