@@ -17,10 +17,12 @@ import {
   beginAttempt,
   buildResumeBrief,
   buildResumePlan,
+  clearCheckpoint,
   checkpointPath,
   classifyCheckpointLiveness,
   failVisiblyAndRelease,
   finishAttempt,
+  invalidatePhasesFrom,
   nextPhaseAfter,
   readCheckpoint,
   recordFinding,
@@ -191,6 +193,49 @@ test('a completed phase is not double-recorded if an attempt reports it twice', 
     const after = recordPhaseComplete(issueId, 'orient', 'again', { dir });
     assert.equal(after?.completed_phases.length, 1);
     assert.equal(after?.completed_phases[0]?.summary, 'first');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('rework invalidation keeps orient/plan but makes implement and later phases run again', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1698';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    beginAttempt({ issueId, timeoutPolicy, dir });
+    for (const phase of EXECUTION_PHASES) recordPhaseComplete(issueId, phase, `${phase} complete`, { dir });
+    recordFinding(issueId, { phase: 'implement', summary: 'review rejection requires a source fix' }, { dir });
+    finishAttempt({ issueId, outcome: 'completed', reason: 'first review', dir });
+
+    const invalidated = invalidatePhasesFrom(issueId, 'implement', { dir });
+    assert.deepEqual(invalidated?.completed_phases.map((entry) => entry.phase), ['orient', 'plan']);
+    assert.equal(invalidated?.phase, 'implement');
+
+    const redispatch = beginAttempt({ issueId, timeoutPolicy, dir });
+    assert.equal(redispatch.resume.carried_findings.length, 1);
+    assert.deepEqual(redispatch.resume.skipped_phases, ['orient', 'plan']);
+    assert.ok(!redispatch.resume.skipped_phases.includes('implement'));
+    assert.equal(redispatch.resume.resume_from_phase, 'implement');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('clearCheckpoint removes the primary checkpoint and its resume sidecar together', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1698';
+    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    recordHeartbeat(issueId, { dir });
+    const primary = checkpointPath(issueId, dir);
+    const sidecar = `${primary}.bak`;
+    assert.ok(fs.existsSync(primary));
+    assert.ok(fs.existsSync(sidecar));
+
+    const removed = clearCheckpoint(issueId, dir);
+    assert.deepEqual(removed.sort(), [primary, sidecar].sort());
+    assert.equal(readCheckpoint(issueId, dir), null);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

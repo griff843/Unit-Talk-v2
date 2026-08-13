@@ -9,6 +9,8 @@ import {
   buildCodexPrompt,
   buildModelRoutingEvidence,
   commitAndPushEvidence,
+  countSourceFilesChanged,
+  evaluateExecutionTruth,
   resolveExecModelRouting,
 } from './codex-exec.js';
 import { ROOT } from './shared.js';
@@ -393,4 +395,44 @@ test('operator cancellation is honoured before any codex process is spawned', ()
   assert.ok(cancelIndex >= 0, 'codex-exec must honour a cancellation request');
   assert.ok(cancelIndex < spawnIndex, 'cancellation must be checked before the spawn');
   assert.match(source.slice(cancelIndex, cancelIndex + 600), /EXECUTION_CANCELLED/);
+});
+
+test('a rework with carried findings and no source diff exits non-success instead of reporting SUCCESS', () => {
+  const verdict = evaluateExecutionTruth({ carriedFindings: 2, sourceFilesChanged: 0 });
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.code, 'REWORK_NO_SOURCE_CHANGE');
+  assert.equal(verdict.exit_code, 1);
+});
+
+test('the --rework dispatch path invalidates implementation before it calculates its resume plan', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const reworkIndex = source.indexOf("if (rework) {");
+  const invalidateIndex = source.indexOf("invalidatePhasesFrom(issueId, 'implement')", reworkIndex);
+  const readIndex = source.indexOf('const existingCheckpoint = readCheckpoint(issueId)', reworkIndex);
+  assert.ok(reworkIndex >= 0 && invalidateIndex > reworkIndex);
+  assert.ok(invalidateIndex < readIndex, 'rework must invalidate before resume state is read');
+});
+
+test('source-diff counting excludes proof and operational metadata but includes implementation files', () => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-source-diff-'));
+  try {
+    spawnSync('git', ['init'], { cwd: tmpRoot, stdio: 'pipe' });
+    spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: tmpRoot, stdio: 'pipe' });
+    spawnSync('git', ['config', 'user.name', 'Test'], { cwd: tmpRoot, stdio: 'pipe' });
+    fs.mkdirSync(path.join(tmpRoot, 'scripts', 'ops'), { recursive: true });
+    fs.mkdirSync(path.join(tmpRoot, 'docs', '06_status', 'proof', 'UTV2-1698'), { recursive: true });
+    fs.writeFileSync(path.join(tmpRoot, 'scripts', 'ops', 'control.ts'), 'before\n');
+    fs.writeFileSync(path.join(tmpRoot, 'docs', '06_status', 'proof', 'UTV2-1698', 'verification.md'), 'before\n');
+    spawnSync('git', ['add', '.'], { cwd: tmpRoot, stdio: 'pipe' });
+    spawnSync('git', ['commit', '-m', 'seed'], { cwd: tmpRoot, stdio: 'pipe' });
+    const base = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: tmpRoot, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
+    fs.writeFileSync(path.join(tmpRoot, 'scripts', 'ops', 'control.ts'), 'after\n');
+    fs.writeFileSync(path.join(tmpRoot, 'docs', '06_status', 'proof', 'UTV2-1698', 'verification.md'), 'after\n');
+    spawnSync('git', ['add', '.'], { cwd: tmpRoot, stdio: 'pipe' });
+    spawnSync('git', ['commit', '-m', 'change'], { cwd: tmpRoot, stdio: 'pipe' });
+
+    assert.equal(countSourceFilesChanged(tmpRoot, base), 1);
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
 });

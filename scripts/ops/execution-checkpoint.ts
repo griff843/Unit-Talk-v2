@@ -263,6 +263,23 @@ export function writeCheckpoint(checkpoint: ExecutionCheckpoint, dir: string = E
   return filePath;
 }
 
+/**
+ * Clear every durable artifact that participates in resume. Removing only the
+ * primary file is unsafe: readCheckpoint intentionally falls back to .bak
+ * after a corrupt write, so that sidecar would silently resurrect old phases.
+ */
+export function clearCheckpoint(issueId: string, dir: string = EXECUTION_CHECKPOINT_DIR): string[] {
+  const filePath = checkpointPath(issueId, dir);
+  const removed: string[] = [];
+  for (const candidate of [filePath, backupPath(filePath)]) {
+    if (fs.existsSync(candidate)) {
+      fs.rmSync(candidate, { force: true });
+      removed.push(candidate);
+    }
+  }
+  return removed;
+}
+
 function touch(checkpoint: ExecutionCheckpoint, now: string): ExecutionCheckpoint {
   return { ...checkpoint, updated_at: now, last_activity_at: now };
 }
@@ -542,6 +559,28 @@ export function recordPendingActions(
   }));
 }
 
+/**
+ * Reopen a completed suffix after rejection or other rework feedback. Earlier
+ * orient/plan evidence remains useful; implementation and every later phase
+ * are deliberately no longer eligible for resume-skipping.
+ */
+export function invalidatePhasesFrom(
+  issueId: string,
+  from: ExecutionPhase,
+  options: { dir?: string; now?: Date } = {},
+): ExecutionCheckpoint | null {
+  const firstInvalid = EXECUTION_PHASES.indexOf(from);
+  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), (checkpoint, nowIso) => {
+    const completed = checkpoint.completed_phases.filter((entry) => EXECUTION_PHASES.indexOf(entry.phase) < firstInvalid);
+    return {
+      ...checkpoint,
+      completed_phases: completed,
+      phase: nextPhaseAfter(completed.map((entry) => entry.phase)),
+      heartbeat_at: nowIso,
+    };
+  });
+}
+
 export function requestCancel(
   issueId: string,
   reason: string,
@@ -778,6 +817,29 @@ function runCli(): void {
         process.exitCode = checkpoint ? 0 : 1;
         return;
       }
+      case 'invalidate': {
+        const checkpoint = invalidatePhasesFrom(issueId, parsePhase(getFlag(flags, 'from')), { dir });
+        emitJson({
+          ok: Boolean(checkpoint),
+          code: checkpoint ? 'execution_checkpoint_invalidated' : 'execution_checkpoint_missing',
+          issue_id: issueId,
+          phase: checkpoint?.phase ?? null,
+          completed_phases: checkpoint?.completed_phases.map((entry) => entry.phase) ?? [],
+        });
+        process.exitCode = checkpoint ? 0 : 1;
+        return;
+      }
+      case 'clear': {
+        const removed = clearCheckpoint(issueId, dir);
+        emitJson({
+          ok: true,
+          code: 'execution_checkpoint_cleared',
+          issue_id: issueId,
+          removed,
+        });
+        process.exitCode = 0;
+        return;
+      }
       case 'cancel': {
         const checkpoint = requestCancel(issueId, getFlag(flags, 'reason') ?? 'operator cancellation', { dir });
         emitJson({
@@ -791,7 +853,7 @@ function runCli(): void {
       }
       default:
         throw new Error(
-          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>]',
+          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|invalidate|clear|cancel> --issue UTV2-### [--phase <phase>] [--from <phase>] [--summary <text>] [--reason <text>] [--action <text>]',
         );
     }
   } catch (error) {

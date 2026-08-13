@@ -50,6 +50,7 @@ import {
   classifyCheckpointLiveness,
   failVisiblyAndRelease,
   finishAttempt,
+  invalidatePhasesFrom,
   readCheckpoint,
   resolveExecutionTimeout,
   type ExecutionCheckpoint,
@@ -70,6 +71,7 @@ interface CodexExecResult {
     | 'EXECUTION_SILENT'
     | 'EXECUTION_CANCELLED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
+    | 'REWORK_NO_SOURCE_CHANGE'
     | 'DRY_RUN';
   issue_id: string;
   branch?: string;
@@ -84,6 +86,7 @@ interface CodexExecResult {
   legacy_compatibility_used?: boolean;
   codex_cli_version?: string | null;
   execution?: ExecutionSummary;
+  source_files_changed?: number;
 }
 
 /**
@@ -105,6 +108,42 @@ export interface ExecutionSummary {
   outcome?: string;
   heartbeat_state?: string;
   released_resources?: string[];
+}
+
+export interface ExecutionTruthVerdict {
+  ok: boolean;
+  code: 'SUCCESS' | 'REWORK_NO_SOURCE_CHANGE';
+  exit_code: 0 | 1;
+  message: string;
+}
+
+/** A rework that carries feedback must change source, never just its proof. */
+export function evaluateExecutionTruth(input: {
+  carriedFindings: number;
+  sourceFilesChanged: number;
+}): ExecutionTruthVerdict {
+  if (input.carriedFindings > 0 && input.sourceFilesChanged === 0) {
+    return {
+      ok: false,
+      code: 'REWORK_NO_SOURCE_CHANGE',
+      exit_code: 1,
+      message:
+        `rework carried ${input.carriedFindings} finding(s) but changed zero source files; ` +
+        'proof-only output cannot satisfy outstanding implementation feedback',
+    };
+  }
+  return { ok: true, code: 'SUCCESS', exit_code: 0, message: 'execution changed source as required' };
+}
+
+/** Source excludes docs and operational metadata; those cannot satisfy rework feedback. */
+export function countSourceFilesChanged(cwd: string, baseSha: string | null): number {
+  if (!baseSha) return 0;
+  const diff = spawnSync('git', ['diff', '--name-only', baseSha, 'HEAD'], { cwd, stdio: 'pipe', encoding: 'utf8' });
+  if (diff.status !== 0) return 0;
+  return diff.stdout
+    .split('\n')
+    .map((file) => file.trim())
+    .filter((file) => file.length > 0 && !file.startsWith('docs/') && !file.startsWith('.ops/')).length;
 }
 
 function buildExecutionSummary(
@@ -375,6 +414,7 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const issueId = getFlag(args.flags, 'issue');
   const dryRun = args.bools.has('dry-run');
+  const rework = args.bools.has('rework');
 
   if (!issueId) {
     emitJson({
@@ -468,6 +508,11 @@ async function main(): Promise<void> {
   // The timeout for this attempt is derived from tier + reasoning effort + the
   // phase we are actually resuming at -- never one fixed constant for every
   // lane and every phase.
+  // Rejection/rework is distinct from interruption. Preserve useful orient and
+  // plan evidence, but require implementation and later phases to run again.
+  if (rework) {
+    invalidatePhasesFrom(issueId, 'implement');
+  }
   const existingCheckpoint = readCheckpoint(issueId);
   const resumeBrief = buildResumeBrief(existingCheckpoint);
   const resumePlan = buildResumePlan(existingCheckpoint);
@@ -620,6 +665,7 @@ async function main(): Promise<void> {
     (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || child.signal === 'SIGTERM';
   const liveness = classifyCheckpointLiveness(readCheckpoint(issueId));
   const exitCode = child.status ?? 1;
+  const sourceFilesChanged = countSourceFilesChanged(resolvedCwd, attemptStart.checkpoint.head_sha);
   const evidence = buildModelRoutingEvidence({
     issueId,
     manifestSchemaVersion: manifest.schema_version,
@@ -712,6 +758,37 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const truth = evaluateExecutionTruth({
+    carriedFindings: executionSummary.carried_findings,
+    sourceFilesChanged,
+  });
+  if (!truth.ok) {
+    const closed = failVisiblyAndRelease({ issueId, outcome: 'failed', reason: truth.message });
+    emitJson({
+      ok: false,
+      code: truth.code,
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: truth.message,
+      codex_exit_code: truth.exit_code,
+      source_files_changed: sourceFilesChanged,
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
+      execution: {
+        ...executionSummary,
+        phase: closed.checkpoint?.phase ?? executionSummary.phase,
+        outcome: 'failed',
+        heartbeat_state: liveness.state,
+        released_resources: closed.released.map((record) => `verify-slot-${record.slot}:${record.state}`),
+      },
+    } satisfies CodexExecResult);
+    process.exit(truth.exit_code);
+  }
+
   const completed = finishAttempt({
     issueId,
     outcome: 'completed',
@@ -731,6 +808,7 @@ async function main(): Promise<void> {
     policy_version: modelRouting.policy_version,
     legacy_compatibility_used: routing.legacy_compatibility_used,
     codex_cli_version: health.version,
+    source_files_changed: sourceFilesChanged,
     execution: {
       ...executionSummary,
       phase: completed?.phase ?? executionSummary.phase,
