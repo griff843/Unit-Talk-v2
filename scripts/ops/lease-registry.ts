@@ -18,6 +18,7 @@ import {
   parseArgs,
   relativeToRoot,
   requireIssueId,
+  readAllManifests,
   TERMINAL_STATUSES,
   SUCCESS_TERMINAL_STATUSES,
   type LaneManifestStatus,
@@ -673,7 +674,17 @@ export function findLeasesHeldByTerminalLanes(
 ): OrphanedLeaseFinding[] {
   const findings: OrphanedLeaseFinding[] = [];
   for (const lease of readAllLeases(registryDir)) {
-    if (lease.status !== 'active') continue;
+    // A lease still HOLDS its file scope in both `active` and
+    // `stale_reclaim_required` -- the second only records that its TTL lapsed,
+    // not that it was given up. Gating on `active` alone made a lease
+    // permanently invisible to orphan detection the moment any earlier report
+    // run flipped it to `stale_reclaim_required`, even once its lane later
+    // reached a terminal state. `reclaimed` and `released` are genuinely
+    // surrendered and stay excluded.
+    // `ACTIVE_NON_RECLAIMED` is already the repo's definition of "this lease
+    // still holds its scope" -- reserveLease uses the same set to decide a
+    // conflict. Reusing it keeps one definition rather than a fourteenth shadow.
+    if (!ACTIVE_NON_RECLAIMED.has(lease.status)) continue;
     const laneStatus = laneStatusByIssue.get(lease.issue_id.toUpperCase());
     if (laneStatus === undefined) continue;
     if (!TERMINAL_STATUSES.has(laneStatus)) continue;
@@ -696,10 +707,14 @@ export function findLeasesHeldByTerminalLanes(
 export function buildLeaseStaleReport(
   registryDir = LEASE_REGISTRY_DIR,
   now = new Date(),
+  laneStatusByIssue: ReadonlyMap<string, LaneManifestStatus> = new Map(
+    readAllManifests().map((manifest) => [manifest.issue_id.toUpperCase(), manifest.status]),
+  ),
 ): {
   schema_version: 1;
   run_at: string;
   stale_count: number;
+  orphaned_count: number;
   leases: Array<{
     issue_id: string;
     executor: LeaseExecutor;
@@ -712,8 +727,16 @@ export function buildLeaseStaleReport(
     owner: LeaseOwner;
     file_scope_lock: string[];
   }>;
+  orphaned_leases: OrphanedLeaseFinding[];
 } {
   const leases = readAllLeases(registryDir);
+  // Orphan classification MUST run before `markExpiredActiveLeases`. That call
+  // rewrites every TTL-expired `active` lease to `stale_reclaim_required` and
+  // persists it, and `findLeasesHeldByTerminalLanes` re-reads from disk and
+  // considers only `active` leases. Marking first therefore hides exactly the
+  // leases this report exists to surface: a lease held by a terminal lane long
+  // enough to have outlived its TTL -- which is every real leak observed so far.
+  const orphanedLeases = findLeasesHeldByTerminalLanes(laneStatusByIssue, registryDir);
   const stale = markExpiredActiveLeases(leases, now, registryDir)
     .concat(leases.filter((lease) => lease.status === 'stale_reclaim_required'));
   const unique = new Map(stale.map((lease) => [lease.issue_id, lease]));
@@ -721,6 +744,7 @@ export function buildLeaseStaleReport(
     schema_version: 1,
     run_at: now.toISOString(),
     stale_count: unique.size,
+    orphaned_count: orphanedLeases.length,
     leases: [...unique.values()].map((lease) => ({
       issue_id: lease.issue_id,
       executor: lease.executor,
@@ -733,7 +757,12 @@ export function buildLeaseStaleReport(
       owner: lease.owner,
       file_scope_lock: lease.file_scope_lock,
     })),
+    orphaned_leases: orphanedLeases,
   };
+}
+
+export function leaseReportExitCode(orphanedCount: number): 0 | 1 {
+  return orphanedCount > 0 ? 1 : 0;
 }
 
 export function validateLease(input: unknown): string[] {
@@ -949,14 +978,21 @@ function runCli(): void {
       if (bools.has('json')) {
         emitJson(report);
       } else {
-        console.log(`[ops:lease report] stale_count=${report.stale_count}`);
+        console.log(
+          `[ops:lease report] stale_count=${report.stale_count} orphaned_count=${report.orphaned_count}`,
+        );
         for (const lease of report.leases) {
           console.log(
             `  [STALE] ${lease.issue_id} ${lease.executor} ${lease.branch} heartbeat=${lease.heartbeat_at} cwd=${lease.cwd}`,
           );
         }
+        for (const finding of report.orphaned_leases) {
+          console.log(
+            `  [ORPHANED] ${finding.issue_id} lane_status=${finding.lane_status} lease_status=${finding.lease_status} scope=${finding.held_scope.join(', ')}`,
+          );
+        }
       }
-      process.exitCode = 0;
+      process.exitCode = leaseReportExitCode(report.orphaned_count);
       return;
     }
 
