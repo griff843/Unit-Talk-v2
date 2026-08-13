@@ -436,3 +436,35 @@ test('source-diff counting excludes proof and operational metadata but includes 
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
 });
+
+// UTV2-1698, second rule. The rework guard keys on carried findings, so a FRESH
+// lane carries none and slips past it. Observed live on UTV2-1701: attempt 1,
+// resumed false, skipped_phases [], phase "plan", zero source files changed,
+// outcome "completed". Deciding what to do is not doing it.
+test('a run that terminates before the implementation boundary is not a completed execution', () => {
+  for (const phase of ['orient', 'plan'] as const) {
+    const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 0, phase });
+    assert.equal(verdict.ok, false, `phase ${phase} must not report success`);
+    assert.equal(verdict.code, 'INCOMPLETE_PHASE_PROGRESSION');
+    assert.equal(verdict.exit_code, 1);
+    assert.match(verdict.message, new RegExp(phase));
+  }
+});
+
+test('a run that reached implementation or beyond is allowed to report success', () => {
+  // The guard must not become "always fail": a genuine run that reached the
+  // implementation boundary with no carried findings still succeeds.
+  for (const phase of ['implement', 'verify', 'closeout'] as const) {
+    const verdict = evaluateExecutionTruth({ carriedFindings: 0, sourceFilesChanged: 3, phase });
+    assert.equal(verdict.ok, true, `phase ${phase} should be allowed`);
+    assert.equal(verdict.code, 'SUCCESS');
+  }
+});
+
+test('the rework guard still fires independently of phase', () => {
+  // Both rules are live: a rework that reached closeout but changed nothing is
+  // still a false success, and must be caught by the FIRST rule not the second.
+  const verdict = evaluateExecutionTruth({ carriedFindings: 2, sourceFilesChanged: 0, phase: 'closeout' });
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.code, 'REWORK_NO_SOURCE_CHANGE');
+});

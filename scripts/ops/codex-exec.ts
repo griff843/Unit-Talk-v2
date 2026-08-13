@@ -53,7 +53,9 @@ import {
   invalidatePhasesFrom,
   readCheckpoint,
   resolveExecutionTimeout,
+  EXECUTION_PHASES,
   type ExecutionCheckpoint,
+  type ExecutionPhase,
   type ResumePlan,
   type TimeoutPolicyDecision,
 } from './execution-checkpoint.js';
@@ -72,6 +74,7 @@ interface CodexExecResult {
     | 'EXECUTION_CANCELLED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'REWORK_NO_SOURCE_CHANGE'
+    | 'INCOMPLETE_PHASE_PROGRESSION'
     | 'DRY_RUN';
   issue_id: string;
   branch?: string;
@@ -112,15 +115,25 @@ export interface ExecutionSummary {
 
 export interface ExecutionTruthVerdict {
   ok: boolean;
-  code: 'SUCCESS' | 'REWORK_NO_SOURCE_CHANGE';
+  code: 'SUCCESS' | 'REWORK_NO_SOURCE_CHANGE' | 'INCOMPLETE_PHASE_PROGRESSION';
   exit_code: 0 | 1;
   message: string;
 }
 
-/** A rework that carries feedback must change source, never just its proof. */
+/**
+ * A rework that carries feedback must change source, never just its proof.
+ *
+ * Phases at or beyond which an attempt has actually entered implementation.
+ * Terminating in `orient` or `plan` means the run decided what to do and then
+ * stopped -- that is not a completed execution regardless of what exit code
+ * Codex returned.
+ */
+const IMPLEMENTATION_BOUNDARY_INDEX = EXECUTION_PHASES.indexOf('implement');
+
 export function evaluateExecutionTruth(input: {
   carriedFindings: number;
   sourceFilesChanged: number;
+  phase?: ExecutionPhase;
 }): ExecutionTruthVerdict {
   if (input.carriedFindings > 0 && input.sourceFilesChanged === 0) {
     return {
@@ -131,6 +144,25 @@ export function evaluateExecutionTruth(input: {
         `rework carried ${input.carriedFindings} finding(s) but changed zero source files; ` +
         'proof-only output cannot satisfy outstanding implementation feedback',
     };
+  }
+  // UTV2-1698, second rule. The first rule only fires on a rework, because it
+  // keys on carried findings. A FRESH lane carries none, so a run that stopped
+  // at `plan` having written nothing passed it and reported success -- observed
+  // live on UTV2-1701: attempt 1, resumed false, skipped_phases [], phase plan,
+  // outcome completed, zero source files changed. Terminating before the
+  // implementation boundary is never a completed execution.
+  if (input.phase !== undefined) {
+    const reached = EXECUTION_PHASES.indexOf(input.phase);
+    if (reached >= 0 && reached < IMPLEMENTATION_BOUNDARY_INDEX) {
+      return {
+        ok: false,
+        code: 'INCOMPLETE_PHASE_PROGRESSION',
+        exit_code: 1,
+        message:
+          `execution terminated in phase "${input.phase}", before the implementation boundary ` +
+          `("${EXECUTION_PHASES[IMPLEMENTATION_BOUNDARY_INDEX]}"); deciding what to do is not doing it`,
+      };
+    }
   }
   return { ok: true, code: 'SUCCESS', exit_code: 0, message: 'execution changed source as required' };
 }
@@ -761,6 +793,7 @@ async function main(): Promise<void> {
   const truth = evaluateExecutionTruth({
     carriedFindings: executionSummary.carried_findings,
     sourceFilesChanged,
+    phase: executionSummary.phase,
   });
   if (!truth.ok) {
     const closed = failVisiblyAndRelease({ issueId, outcome: 'failed', reason: truth.message });
