@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1691-truth-check-dry-run",
   "branch": "claude/utv2-1691-truth-check-dry-run",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "9404838faf7242f62b5e1b243b032f936b3541b6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1409",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,12 +22,12 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1691/evidence.json"
   ],
-  "status": "blocked",
+  "status": "done",
   "started_at": "2026-08-12T00:26:58.650Z",
-  "heartbeat_at": "2026-08-12T00:26:58.650Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-13T05:22:18.682Z",
+  "closed_at": "2026-08-13T05:22:18.682Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1691-truth-check-dry-run.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
     {
@@ -38,6 +38,13 @@
         "heartbeat_at 24.4h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-13T05:22:11.188Z",
+      "verdict": "pass",
+      "merge_sha": "9404838faf7242f62b5e1b243b032f936b3541b6",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
