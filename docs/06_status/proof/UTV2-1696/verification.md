@@ -1,6 +1,6 @@
 # PROOF: UTV2-1696
 
-MERGE_SHA: 5e0c14dadd2f77102dd863d66a5c8e1dce59b5c8
+MERGE_SHA: 2fcdfe853239c9b0281775ef70f4e5ac883c8b92
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `runtime-verifier-gate.ts` hard-fails when no 40-hex SHA is present
