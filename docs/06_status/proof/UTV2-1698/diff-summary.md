@@ -1,13 +1,13 @@
 # Diff summary: UTV2-1698
 
-MERGE_SHA: 8b97f49c9e5ae58566c882ed3b92fd36536cc46a
+MERGE_SHA: 971d18226c73ae234537330f2a21c5e0577810f7
 
 Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or workflow-authority code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/codex-exec.ts` | `evaluateExecutionTruth` gains three guards and loses its `phase` parameter. Takes `issueId` and reads the checkpoint itself, so a stale phase cannot be supplied by any caller. |
-| `scripts/ops/codex-exec.test.ts` | Regressions for all three rules, plus the assertion that a genuine run reaching implementation still succeeds. |
+| `scripts/ops/codex-exec.ts` | `evaluateExecutionTruth` gains three guards and loses its `phase` parameter. Takes `issueId` and reads the checkpoint itself, so a stale phase cannot be supplied by any caller. Rules 1 and 3 are scope-aware, with scope read from the base ref via `readAuthoritativeFileScope`. `shouldInvalidateForRework` extracted so dry-run purity is reachable from a regression. |
+| `scripts/ops/codex-exec.test.ts` | Regressions for all three rules, the scope trust boundary, fail-closed scope reads, conservative classification, dry-run purity, the production call site, and the assertion that a genuine run reaching implementation still succeeds. |
 | `scripts/ops/execution-checkpoint.ts` | Supporting checkpoint surface for the above. |
 | `scripts/ops/execution-checkpoint.test.ts` | Coverage for the checkpoint changes. |
 
@@ -19,6 +19,14 @@ Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or wor
 
 `countSourceFilesChanged` excludes `docs/` and `.ops/`: a proof-only or manifest-only commit is not implementation.
 
+Rules 1 and 3 are scope-aware. A lane whose **authoritative** `file_scope_lock` is entirely `docs/`/`.ops/` completes, and can be reworked, by changing that declared deliverable — proof rejected, proof rewritten, work done. Every other lane must change real source.
+
+## The scope trust boundary
+
+Scope is read with `git show <base>:docs/06_status/lanes/<ID>.json`, never from the working tree. The working-tree manifest sits on the executor's own branch, so trusting it would let an executor rewrite its scope to docs-only and exempt itself — the self-attestation defect one level up. Missing, malformed or unreadable authoritative scope fails closed to source-required, which is the common case for a new lane whose manifest is not yet on `main`. Classification is conservative: every entry must be explicitly inside `docs/` or `.ops/`, so mixed scope, bare or leading globs, parent traversal, absolute paths, repository roots, `scripts/**`, `.github/**`, configuration and package files all stay source or control-plane required.
+
+A regression asserts the **production call site**, not only the function — the function being correct does not stop one line in `main()` from bypassing it, which is exactly how defect 1 shipped.
+
 ## Three defects found in review, all in the orchestrator's own addition
 
 1. The rule was fed a **pre-spawn** phase snapshot, always `orient` on a fresh lane, so every first-attempt dispatch would have failed. Fixed by removing the parameter, not by adding a test — a test could not guard a wrong call site.
@@ -29,11 +37,20 @@ Execution-truth guards for `codex-exec`. No runtime, domain, DB, delivery or wor
 
 | Mutation | Result |
 |---|---|
-| A · completed-phases rule removed | `not ok 25` — 52 pass / 1 fail |
-| B · rework rule removed | `not ok 22`, `not ok 28` — 51 pass / 2 fail |
-| C · gate on `checkpoint.phase` | `not ok 25` — 52 pass / 1 fail |
-| D · self-attestation cross-check disabled | `not ok 26` — 52 pass / 1 fail |
-| Restored | **53 / 53** across both modules |
+| A · Rule 2, completed-phases removed | `not ok 25` — 64 pass / 1 fail |
+| B · Rule 1, rework removed | `not ok 22`, `28`, `34`, `36` — 61 pass / 4 fail |
+| C · gate on `checkpoint.phase` | `not ok 25` — 64 pass / 1 fail |
+| D · Rule 3, self-attestation cross-check removed | `not ok 26`, `32`, `33` — 62 pass / 3 fail |
+| E · dry-run purity removed | `not ok 29` — 64 pass / 1 fail |
+| F · Rule 3 declared-deliverable scope ignored | `not ok 31`, `35` — 63 pass / 2 fail |
+| G · source counting includes `docs/`, `.ops/` | `not ok 24` — 64 pass / 1 fail |
+| H · proof-only rework support removed | `not ok 35` — 64 pass / 1 fail |
+| I · scope read from branch working tree | `not ok 37` — 64 pass / 1 fail |
+| J · permissive fallback on missing scope | `not ok 38` — 64 pass / 1 fail |
+| K · call site wired to branch manifest | `not ok 40` — 64 pass / 1 fail |
+| Restored | **65 / 65** across both modules, 0 skipped |
+
+Eleven groups, no survivors.
 
 ## Known limitations, deliberately not addressed here
 
