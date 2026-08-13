@@ -22,14 +22,24 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1691/evidence.json"
   ],
-  "status": "started",
+  "status": "blocked",
   "started_at": "2026-08-12T00:26:58.650Z",
   "heartbeat_at": "2026-08-12T00:26:58.650Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1691-truth-check-dry-run.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-13T00:52:46.103Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 24.4h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
