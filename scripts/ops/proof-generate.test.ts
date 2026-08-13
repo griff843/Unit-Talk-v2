@@ -136,6 +136,51 @@ test('generated verification.md satisfies truth-check-lib P13/P14 requirements',
   assert.match(content, /\bscripts\/ci\/r-level-check\.ts\b/i);
 });
 
+// UTV2-1701: four gates read verification.md and each demands a different shape.
+// These assertions mirror the ACTUAL predicate each gate applies, taken from its
+// source, rather than a fixture of what the gates were believed to want.
+test('generated verification.md satisfies Executor Result Validation and CEP-E3 literal tokens', () => {
+  const content = buildRuntimeVerification(input());
+  // executor-result-validator.yml:263,266,303,317; truth-check-lib.ts:507
+  for (const token of ['# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:']) {
+    assert.ok(content.includes(token), `missing required literal token: ${token}`);
+  }
+});
+
+test('generated verification.md EVIDENCE section contains a fenced code block', () => {
+  const content = buildRuntimeVerification(input());
+  // executor-result-validator.yml:325 -- the fence must be INSIDE the EVIDENCE section.
+  const start = content.indexOf('EVIDENCE:');
+  assert.ok(start >= 0, 'EVIDENCE: section missing');
+  const rest = content.slice(start);
+  const nextHeading = rest.indexOf('\n## ', 1);
+  const section = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
+  assert.match(section, /```/, 'EVIDENCE section has no fenced code block');
+});
+
+test('generated verification.md carries a 40-hex SHA anchor, never a placeholder word', () => {
+  const content = buildRuntimeVerification(input());
+  // runtime-verifier-gate.ts:132 HARD-fails when no 40-hex token is present anywhere.
+  assert.match(content, /\b[0-9a-fA-F]{40}\b/);
+  assert.doesNotMatch(content, /^MERGE_SHA:\s*N\/A\s*$/m, 'MERGE_SHA must not be a placeholder');
+});
+
+test('pre-merge, the SHA anchor falls back to the head SHA rather than N/A', () => {
+  // The pre-merge case failed every lane: proof-generate ran before a merge SHA
+  // existed and emitted a placeholder, which fails runtime-verifier-gate outright.
+  const preMerge = { ...input(), gitTruth: gitTruth({ merge_sha: null }) };
+  const content = buildRuntimeVerification(preMerge);
+  assert.match(content, /^MERGE_SHA: 1111111111111111111111111111111111111111$/m);
+});
+
+test('generated verification.md satisfies Runtime Verifier and Proof Auditor section checks', () => {
+  const content = buildRuntimeVerification(input());
+  // runtime-verifier-gate.ts:121 accepts ## Pre-merge | ## Runtime Verification | ## Verification
+  assert.ok(['## Pre-merge', '## Runtime Verification', '## Verification'].some((h) => content.includes(h)));
+  // proof-auditor-gate.ts:25 accepts ## Summary | ## Evidence | ## Verification
+  assert.ok(['## Summary', '## Evidence', '## Verification'].some((h) => content.includes(h)));
+});
+
 /**
  * UTV2-1631: this test previously asserted that existing artifacts missing the
  * current SHA are REPLACED wholesale with a generated template. That assertion
