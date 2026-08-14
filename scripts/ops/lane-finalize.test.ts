@@ -692,6 +692,21 @@ test('resolveLaneFinalizeInput rejects an explicit PR that conflicts with manife
   );
 });
 
+test('resolveLaneFinalizeInput rejects an explicitly supplied PR after base mismatch invalidation', () => {
+  assert.throws(
+    () =>
+      resolveLaneFinalizeInput({
+        manifest: manifest({
+          status: 'blocked',
+          pr_url: null,
+          blocked_by: ['pr-base-mismatch'],
+        }),
+        pr: '854',
+      }),
+    /base-branch mismatch.*refusing finalization/,
+  );
+});
+
 test('CLI accepts positional issue identity after pnpm forwards its separator', () => {
   assert.equal(
     parseLaneFinalizeCliArgs(['--', 'UTV2-1073', '--dry-run', '--json'])

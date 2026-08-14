@@ -28,6 +28,7 @@ import {
 } from './shared.js';
 
 const PR_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
+export const PR_BASE_MISMATCH_BLOCKER = 'pr-base-mismatch';
 
 type LaneLinkResult = {
   ok: boolean;
@@ -312,6 +313,29 @@ export function main(argv = process.argv.slice(2)): number {
       return 1;
     }
     if (githubEvent && manifest.base_branch !== baseBranch) {
+      const invalidatesExistingBinding =
+        manifest.branch === branch &&
+        manifest.pr_url === prUrl &&
+        manifest.status === 'in_review';
+      if (invalidatesExistingBinding) {
+        manifest.pr_url = null;
+        manifest.status = 'blocked';
+        manifest.blocked_by = [
+          ...new Set([...manifest.blocked_by, PR_BASE_MISMATCH_BLOCKER]),
+        ];
+        manifest.heartbeat_at = new Date().toISOString();
+        writeBoundManifest(manifest, true);
+        emitJson({
+          ok: true,
+          code: 'pr_binding_invalidated',
+          message: `Invalidated ${issueId} PR binding because pull request base ${baseBranch} no longer matches manifest base ${manifest.base_branch}`,
+          issue_id: issueId,
+          branch,
+          status: manifest.status,
+          heartbeat_at: manifest.heartbeat_at,
+        } satisfies LaneLinkResult);
+        return 0;
+      }
       emitJson({
         ok: false,
         code: 'base_branch_mismatch',

@@ -579,6 +579,99 @@ test('GitHub event binding fails closed when the PR base differs from manifest t
   }
 });
 
+test('retargeting a bound PR invalidates lifecycle truth and blocks wrong-base closeout', () => {
+  const issueId = 'UTV2-99118';
+  const branch = `codex/${issueId.toLowerCase()}-receive`;
+  const prUrl = 'https://github.com/example/unit-talk/pull/136';
+  try {
+    const manifestPath = withManifest(issueId, 'started', 'codex-cli');
+    const githubEventEnv = {
+      ...process.env,
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'pull_request_target',
+    };
+
+    const bound = runLaneLinkPr(
+      [
+        '--branch',
+        branch,
+        '--base',
+        'main',
+        '--pr',
+        prUrl,
+        '--github-event',
+      ],
+      githubEventEnv,
+    );
+    assert.strictEqual(bound.status, 0, bound.stderr || bound.stdout);
+
+    // GitHub emits an edited event when the already-bound PR is retargeted.
+    // Treat the later wrong-base merge as external truth: the durable lane
+    // binding must already be gone before finalize is attempted.
+    const retargeted = runLaneLinkPr(
+      [
+        '--branch',
+        branch,
+        '--base',
+        'release-candidate',
+        '--pr',
+        prUrl,
+        '--github-event',
+      ],
+      githubEventEnv,
+    );
+    assert.strictEqual(retargeted.status, 0, retargeted.stderr || retargeted.stdout);
+    const retargetedPayload = JSON.parse(retargeted.stdout) as {
+      ok: boolean;
+      code: string;
+      status: string;
+    };
+    assert.strictEqual(retargetedPayload.ok, true);
+    assert.strictEqual(retargetedPayload.code, 'pr_binding_invalidated');
+    assert.strictEqual(retargetedPayload.status, 'blocked');
+
+    const invalidated = JSON.parse(
+      fs.readFileSync(manifestPath, 'utf8'),
+    ) as LaneManifest;
+    assert.strictEqual(invalidated.pr_url, null);
+    assert.strictEqual(invalidated.status, 'blocked');
+    assert.deepStrictEqual(invalidated.blocked_by, ['pr-base-mismatch']);
+
+    const finalize = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+        'scripts/ops/lane-finalize.ts',
+        '--issue',
+        issueId,
+        '--pr',
+        prUrl,
+        '--dry-run',
+        '--json',
+      ],
+      { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
+    );
+    assert.strictEqual(finalize.status, 1, finalize.stderr || finalize.stdout);
+    const finalizePayload = JSON.parse(finalize.stdout) as {
+      ok: boolean;
+      code: string;
+      message: string;
+    };
+    assert.strictEqual(finalizePayload.ok, false);
+    assert.strictEqual(finalizePayload.code, 'lane_finalize_failed');
+    assert.match(finalizePayload.message, /base-branch mismatch.*refusing finalization/);
+
+    const afterFinalize = JSON.parse(
+      fs.readFileSync(manifestPath, 'utf8'),
+    ) as LaneManifest;
+    assert.strictEqual(afterFinalize.status, 'blocked');
+    assert.strictEqual(afterFinalize.commit_sha, null);
+    assert.strictEqual(afterFinalize.closed_at, null);
+  } finally {
+    cleanup(issueId);
+  }
+});
+
 test('GitHub event binding requires an explicit PR base', () => {
   const issueId = 'UTV2-99116';
   try {

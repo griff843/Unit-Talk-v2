@@ -25,6 +25,7 @@ import {
   releaseMergeLock,
   type MergeLockOwner,
 } from './merge-mutex.js';
+import { PR_BASE_MISMATCH_BLOCKER } from './lane-link-pr.js';
 
 export interface LaneFinalizeStep {
   id:
@@ -256,6 +257,14 @@ export function resolveLaneFinalizeInput(input: {
   if (issueId !== input.manifest.issue_id) {
     throw new Error(
       `Issue ${issueId} does not match manifest issue ${input.manifest.issue_id}.`,
+    );
+  }
+  if (
+    input.manifest.status === 'blocked' &&
+    input.manifest.blocked_by.includes(PR_BASE_MISMATCH_BLOCKER)
+  ) {
+    throw new Error(
+      `Lane ${issueId} PR binding was invalidated after a base-branch mismatch; refusing finalization.`,
     );
   }
   const explicitPr = extractPrNumber(input.pr ?? null);
