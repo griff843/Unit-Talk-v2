@@ -1,6 +1,6 @@
 # PROOF: UTV2-1711
 
-MERGE_SHA: b2b419fdb2295a482dd705c88177852d0d48fe13
+MERGE_SHA: 3e70c304ffbbfe2ca20310f72380a94483242e0c
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
@@ -16,6 +16,7 @@ MERGE_SHA: b2b419fdb2295a482dd705c88177852d0d48fe13
 - [x] Missing or corrupt post-spawn state returns `EXECUTION_STATE_UNAVAILABLE`; evaluation is never skipped.
 - [x] Sidecar recovery is identity/epoch/attempt/checksum bound; a mismatched sidecar fails closed.
 - [x] Executor mutations carry their originating epoch, attempt, and minimum revision; delayed rejected work cannot validate a rework epoch.
+- [x] Executor mutations require that originating attempt to remain open and `in_progress`; delayed work from a closed attempt cannot create phase validity for a later resume.
 - [x] Attempt start, checkpoint mutation, and clear operations share one exclusive transition lock.
 - [x] The production call site cannot supply a phase or baseline snapshot.
 - [x] Proof-only completion remains fail-closed and out of scope.
@@ -49,7 +50,7 @@ making a zero-diff rework valid.
 
 ### Controls proven by making them fail
 
-Eight load-bearing mutations, each killed by a production-path regression:
+Nine load-bearing mutations, each killed by a production-path regression:
 
 ```
 M1 resume overwrites the epoch baseline
@@ -76,6 +77,10 @@ M5 production call site bypasses authoritative state identity
    not ok 24 - production call path evaluates mandatory post-spawn epoch state without caller-supplied phase or baseline
    # tests 56   # pass 55   # fail 1
 
+M9 closed-attempt guard removed from authoritative state reads
+   not ok 1 - a delayed phase completion cannot mutate a closed originating attempt or leak into its resume
+   # tests 1   # pass 0   # fail 1
+
 RESTORED
    # tests 56   # pass 56   # fail 0   # skipped 0
 ```
@@ -99,11 +104,26 @@ implementation SHA `d09b50700f9bb956cf48e568a1ad02ffc3b0d874`:
   missing state. Newly written state cannot be deleted by a stale clear decision.
 
 Production-path regressions cover divergent Git history, child identity transport,
-delayed rejected-epoch completion, and clear/start lock contention.
+delayed rejected-epoch completion, closed-attempt fencing, and clear/start lock contention.
+
+### Closed-attempt correction
+
+Follow-up exact-head review found that an identity could remain structurally valid
+after its attempt closed. A delayed or backgrounded `phase-complete` could therefore
+write phase validity into a failed attempt before the next resume, and that resume
+would inherit the false completion. Authoritative identity reads now also require the
+originating attempt record to have `ended_at === null` while the checkpoint remains
+`in_progress`.
+
+The production-path regression closes the attempt, submits its delayed phase write,
+asserts the named `execution_checkpoint_unavailable` result, proves the checkpoint
+revision and completed phases did not change, and then proves a resume inherits no
+phase validity. Mutation M9 removes only the open-attempt predicate and fails that
+regression at its first assertion.
 
 ### Commands executed (explicit references)
 
-- `pnpm exec tsx --test 'scripts/ops/codex-exec.test.ts' 'scripts/ops/execution-checkpoint.test.ts'` — PASS, 60 tests, 60 pass, 0 fail, 0 skipped.
+- `pnpm exec tsx --test 'scripts/ops/codex-exec.test.ts' 'scripts/ops/execution-checkpoint.test.ts'` — PASS, 61 tests, 61 pass, 0 fail, 0 skipped.
 - `pnpm verify:static` — PASS, including lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command checks.
 - `pnpm lint` — PASS, no output.
 - `pnpm type-check` — PASS. This project-reference check does not directly compile `scripts/ops/**`; the focused `tsx --test` run compiles and executes the changed tooling files.
@@ -121,10 +141,10 @@ any writable DB test, preserving the required fail-closed posture.
 
 | Check | Result | Evidence |
 |---|---|---|
-| Focused suites | PASS | 60 tests, 60 pass, 0 fail, 0 skipped |
+| Focused suites | PASS | 61 tests, 61 pass, 0 fail, 0 skipped |
 | `pnpm verify:static` | PASS | lint, type-check, build, full test, Smart Form, command checks |
 | `pnpm verify` | BLOCKED/DEFERRED | static PASS; writable DB refused because staging identity was unresolved |
-| Mutation M1–M8 | Each regression fails | **8 groups, 0 survivors** |
+| Mutation M1–M9 | Each regression fails | **9 groups, 0 survivors** |
 | Restored | PASS | 56 / 56 |
 | Scope compliance | PASS | changed files ⊆ `file_scope_lock` |
 | Test wiring | PASS | both suites already required-reachable via `test:ops` |
@@ -166,4 +186,4 @@ mutation battery; independent exact-head review is recorded on the PR.
 
 ## SHA Binding
 
-Verified implementation SHA: `d09b50700f9bb956cf48e568a1ad02ffc3b0d874`
+Verified implementation SHA: `3e70c304ffbbfe2ca20310f72380a94483242e0c`
