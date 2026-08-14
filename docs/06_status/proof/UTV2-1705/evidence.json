@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1705",
+  "title": "Bind lane PR URLs automatically across executors",
+  "tier": "T1",
+  "status": "ci_staging_proof_pending",
+  "generated_at": "2026-08-14T14:45:38Z",
+  "sha_binding": {
+    "verified_source_sha": "aa5cac276b57914ecc0bca31df00fd2b2aba0caa",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "implementation_sha",
+    "merge_sha": null,
+    "pr_number": null
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1705-lifecycle-pr-binding",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; T1 approval and independent PM verdict remain external merge-gate requirements."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/lane-pr-binding.yml",
+      "scripts/ops/lane-link-pr.ts",
+      "scripts/ops/lane-link-pr.test.ts"
+    ],
+    "runtime_change": false,
+    "workflow_change": true,
+    "database_change": false,
+    "domain_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "aggregate_tests": 2175,
+      "pass": 2175,
+      "fail": 0,
+      "detail": "Environment, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit 0."
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
+      "status": "PASS",
+      "tests": 23,
+      "pass": 23,
+      "fail": 0
+    },
+    "mutation_tests": [
+      {
+        "control": "executor-neutral binding",
+        "mutation": "restored isCodexLane gate",
+        "result": "KILLED",
+        "observed": "3 targeted Claude/event/closeout regressions failed; suite restored to 23/23"
+      },
+      {
+        "control": "automatic PR-open invocation",
+        "mutation": "removed ops:lane-link-pr workflow command",
+        "result": "KILLED",
+        "observed": "workflow-wiring regression failed; suite restored to 23/23"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+    "required_project": "xskgrzbteyqdufktjrjx",
+    "local_guard_observation": "REFUSED before DB execution: host=127.0.0.1 ref=unidentified",
+    "packet_disposition": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "queries": [],
+    "row_counts": []
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "ops:lane-link-pr succeeds on a Claude lane",
+      "status": "PASS",
+      "evidence": "Claude-lane regression passes and fails when the executor gate is restored."
+    },
+    {
+      "criterion": "Opening a PR from a lane branch binds pr_url with no manual step",
+      "status": "PASS",
+      "evidence": "PR opened/reopened workflow invokes the canonical binder using event branch and URL; missing-token event regression passes."
+    },
+    {
+      "criterion": "Lane creation through PR creation, merge, and closeout needs zero manual metadata repair",
+      "status": "PASS",
+      "evidence": "Lifecycle regression reads the bound manifest, resolves lane-finalize input without an explicit PR argument, and executes every planned closeout step."
+    },
+    {
+      "criterion": "Second bind is idempotent and conflicting bind fails closed",
+      "status": "PASS",
+      "evidence": "Existing same-URL and pr_url_mismatch regressions remain green."
+    },
+    {
+      "criterion": "Each control is proven by mutation",
+      "status": "PASS",
+      "evidence": "Executor-gate and workflow-invocation mutations were both killed and restored."
+    },
+    {
+      "criterion": "Any named remedy is executed by a test",
+      "status": "PASS",
+      "evidence": "The workflow's event-mode path, including missing ephemeral preflight state, is directly executed by regression coverage."
+    }
+  ],
+  "known_limitations": [
+    "Writable DB proof is pending the governed staging-ci job because local target identity is not the required staging project.",
+    "The PR-open workflow intentionally skips non-UTV2 branches and external-fork heads; it fails closed on malformed or conflicting lane manifests."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PENDING_CI_STAGING",
+    "ready_for_pm_review": true
+  }
+}
