@@ -87,7 +87,8 @@ the scenario the previous design could not express.
 - `pnpm exec eslint scripts/ops/codex-exec.ts scripts/ops/execution-checkpoint.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, no output.
 - `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2` — derived T2, mechanical minimum T3, `escalated: false`.
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — R-level compliance evaluated for this lane.
-- `pnpm type-check` — does NOT compile `scripts/ops/**`; tracked separately, deliberately not fixed here.
+- `pnpm type-check` — does NOT compile `scripts/ops/**`: `tsconfig.json` references only `packages/*` and `apps/*`, so it cannot type-check the files this lane changes. Tracked separately; deliberately not fixed here.
+- `pnpm test` — full repository suite; executed by PR CI under `verify`, which is authoritative for this lane. The two suites this lane changes (`codex-exec.test.ts`, `execution-checkpoint.test.ts`) are already enumerated in `test:ops` and therefore run inside `pnpm test`.
 - `pnpm verify` — deferred to PR CI, which is authoritative for this lane.
 
 ## Verification
