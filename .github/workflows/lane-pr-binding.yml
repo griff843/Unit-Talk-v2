@@ -2,7 +2,7 @@ name: Lane PR Binding
 
 on:
   pull_request_target:
-    types: [opened, reopened]
+    types: [opened, reopened, edited]
 
 permissions:
   contents: write
@@ -22,13 +22,13 @@ jobs:
       BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
       PR_URL: ${{ github.event.pull_request.html_url }}
     steps:
-      - name: Checkout trusted binding implementation
+      - name: Checkout trusted default-branch binding implementation
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
           path: trusted
           persist-credentials: false
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Checkout lane data without executing it
         uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
         working-directory: trusted
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Bind PR URL using trusted base-ref code
+      - name: Bind PR URL using trusted default-branch code
         if: steps.lane.outputs.bind == 'true'
         working-directory: lane
         env:

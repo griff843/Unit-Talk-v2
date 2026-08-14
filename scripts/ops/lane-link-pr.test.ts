@@ -172,6 +172,45 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
   }
 });
 
+test('missing-token recovery fails closed when only the PR head ref differs', () => {
+  const manifest = recoveryManifest('UTV2-99117');
+  const tokenPath = preflightTokenPathForBranch(manifest.branch);
+  fs.rmSync(tokenPath, { force: true });
+  let tokenWritten = false;
+  try {
+    assert.throws(
+      () =>
+        recoverMissingPreflightToken(
+          manifest,
+          manifest.branch,
+          'https://github.com/example/unit-talk/pull/136',
+          {
+            cwd: ROOT,
+            currentBranch: () => manifest.branch,
+            currentHead: () => 'a'.repeat(40),
+            isClean: () => true,
+            dependenciesReady: () => true,
+            readPullRequest: () => ({
+              url: 'https://github.com/example/unit-talk/pull/136',
+              headRefName: 'codex/utv2-99117-other-ref',
+              headRefOid: 'a'.repeat(40),
+              baseRefName: 'main',
+              state: 'OPEN',
+            }),
+            activeManifests: () => [manifest],
+            writeToken: () => {
+              tokenWritten = true;
+            },
+          },
+        ),
+      /does not match the open lane branch, base, and current HEAD/,
+    );
+    assert.equal(tokenWritten, false);
+  } finally {
+    fs.rmSync(tokenPath, { force: true });
+  }
+});
+
 test('missing-token recovery fails closed on a foreign active scope collision', () => {
   const manifest = recoveryManifest('UTV2-99111');
   const foreign = {
@@ -566,12 +605,15 @@ test('GitHub event binding requires an explicit PR base', () => {
   }
 });
 
-test('pull request workflow binds opened and reopened lane PRs automatically', () => {
+test('pull request workflow binds and revalidates lane PRs automatically', () => {
   const workflow = fs.readFileSync(
     path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'),
     'utf8',
   );
-  assert.match(workflow, /pull_request_target:\s*\n\s*types:\s*\[opened, reopened\]/);
+  assert.match(
+    workflow,
+    /pull_request_target:\s*\n\s*types:\s*\[opened, reopened, edited\]/,
+  );
   assert.match(workflow, /id: lane/);
   assert.match(
     workflow,
@@ -582,6 +624,10 @@ test('pull request workflow binds opened and reopened lane PRs automatically', (
     /PR_URL: \$\{\{ github\.event\.pull_request\.html_url \}\}/,
   );
   assert.match(
+    workflow,
+    /ref: \$\{\{ github\.event\.repository\.default_branch \}\}/,
+  );
+  assert.doesNotMatch(
     workflow,
     /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/,
   );

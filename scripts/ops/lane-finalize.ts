@@ -21,6 +21,7 @@ import {
   acquireMergeLock,
   defaultMergeLockOwner,
   isProcessAlive,
+  MERGE_LOCK_PATH,
   releaseMergeLock,
   type MergeLockOwner,
 } from './merge-mutex.js';
@@ -257,7 +258,17 @@ export function resolveLaneFinalizeInput(input: {
       `Issue ${issueId} does not match manifest issue ${input.manifest.issue_id}.`,
     );
   }
-  const pr = input.pr ?? extractPrNumber(input.manifest.pr_url);
+  const explicitPr = extractPrNumber(input.pr ?? null);
+  const manifestPr = extractPrNumber(input.manifest.pr_url);
+  if (input.pr && !explicitPr) {
+    throw new Error(`Invalid pull request identity: ${input.pr}.`);
+  }
+  if (explicitPr && manifestPr && explicitPr !== manifestPr) {
+    throw new Error(
+      `Explicit PR ${explicitPr} does not match manifest PR ${manifestPr}; refusing to rebind finalized lifecycle truth.`,
+    );
+  }
+  const pr = explicitPr ?? manifestPr;
   if (!pr) {
     throw new Error(
       'Missing required --pr and manifest.pr_url does not contain a PR number.',
@@ -269,6 +280,7 @@ export function resolveLaneFinalizeInput(input: {
 
 function extractPrNumber(prUrl: string | null): string | null {
   if (!prUrl) return null;
+  if (/^\d+$/.test(prUrl.trim())) return prUrl.trim();
   const match = prUrl.match(/\/pull\/(\d+)(?:$|[/?#])/);
   return match?.[1] ?? null;
 }
@@ -480,16 +492,6 @@ export async function applyLinearTierLabel(input: {
   }
 
   const currentLabels = current.data.issue.labels.nodes;
-  if (verifiedTier(currentLabels) === tier) {
-    return {
-      ok: true,
-      code: 'linear_tier_label_already_applied',
-      issue_id: issueId,
-      tier,
-      changed: false,
-      labels: currentLabels.map((label) => label.name),
-    };
-  }
 
   const availableLabels = [
     ...current.data.issueLabels.nodes,
@@ -510,22 +512,74 @@ export async function applyLinearTierLabel(input: {
       `Linear workspace does not contain a label for tier:${tier}.`,
     );
   }
+  const currentTierLabels = currentLabels.filter(
+    (label) => tierFromLabel(label.name) !== null,
+  );
+  if (
+    currentTierLabels.length === 1 &&
+    currentTierLabels[0]?.id === target.id &&
+    verifiedTier(currentLabels) === tier
+  ) {
+    return {
+      ok: true,
+      code: 'linear_tier_label_already_applied',
+      issue_id: issueId,
+      tier,
+      changed: false,
+      labels: currentLabels.map((label) => label.name),
+    };
+  }
 
-  // Linear's issueUpdate.labelIds is replace-style. Refresh immediately before
-  // constructing that replacement so labels added after the discovery query
-  // are preserved instead of being silently erased from a stale snapshot.
-  const refreshed = await query<{
+  let changed = false;
+  if (!currentLabels.some((label) => label.id === target.id)) {
+    const added = await query<{
+      issueAddLabel: { success: boolean };
+    }>(
+      `
+        mutation LaneFinalizeAddTierLabel($issueId: String!, $labelId: String!) {
+          issueAddLabel(id: $issueId, labelId: $labelId) { success }
+        }
+      `,
+      { issueId: current.data.issue.id, labelId: target.id },
+      { token: input.token, userAgent: 'unit-talk-lane-finalize' },
+    );
+    if (!added.ok || added.data?.issueAddLabel.success !== true) {
+      throw new Error(
+        `Unable to add Linear tier:${tier} to ${issueId}: ${added.error ?? 'mutation did not succeed'}`,
+      );
+    }
+    changed = true;
+  }
+
+  for (const label of currentTierLabels) {
+    if (label.id === target.id) continue;
+    const removed = await query<{
+      issueRemoveLabel: { success: boolean };
+    }>(
+      `
+        mutation LaneFinalizeRemoveConflictingTierLabel($issueId: String!, $labelId: String!) {
+          issueRemoveLabel(id: $issueId, labelId: $labelId) { success }
+        }
+      `,
+      { issueId: current.data.issue.id, labelId: label.id },
+      { token: input.token, userAgent: 'unit-talk-lane-finalize' },
+    );
+    if (!removed.ok || removed.data?.issueRemoveLabel.success !== true) {
+      throw new Error(
+        `Unable to remove conflicting Linear tier label ${label.name} from ${issueId}: ${removed.error ?? 'mutation did not succeed'}`,
+      );
+    }
+    changed = true;
+  }
+
+  const verified = await query<{
     issue: {
-      id: string;
-      identifier: string;
       labels: { nodes: LinearLabelNode[] };
     } | null;
   }>(
     `
-      query LaneFinalizeRefreshTierLabels($issueId: String!) {
+      query LaneFinalizeVerifyTierLabel($issueId: String!) {
         issue(id: $issueId) {
-          id
-          identifier
           labels(first: 100) { nodes { id name } }
         }
       }
@@ -533,66 +587,20 @@ export async function applyLinearTierLabel(input: {
     { issueId },
     { token: input.token, userAgent: 'unit-talk-lane-finalize' },
   );
-  if (!refreshed.ok || !refreshed.data?.issue) {
-    throw new Error(
-      `Unable to refresh Linear tier labels for ${issueId}: ${refreshed.error ?? 'issue not found'}`,
-    );
-  }
-  const refreshedLabels = refreshed.data.issue.labels.nodes;
-  if (verifiedTier(refreshedLabels) === tier) {
-    return {
-      ok: true,
-      code: 'linear_tier_label_already_applied',
-      issue_id: issueId,
-      tier,
-      changed: false,
-      labels: refreshedLabels.map((label) => label.name),
-    };
-  }
-
-  const labelIds = [
-    ...refreshedLabels
-      .filter((label) => tierFromLabel(label.name) === null)
-      .map((label) => label.id),
-    target.id,
-  ];
-  const updated = await query<{
-    issueUpdate: {
-      success: boolean;
-      issue: {
-        identifier: string;
-        labels: { nodes: LinearLabelNode[] };
-      } | null;
-    };
-  }>(
-    `
-      mutation LaneFinalizeApplyTierLabel($issueId: String!, $labelIds: [String!]!) {
-        issueUpdate(id: $issueId, input: { labelIds: $labelIds }) {
-          success
-          issue {
-            identifier
-            labels(first: 100) { nodes { id name } }
-          }
-        }
-      }
-    `,
-    { issueId: current.data.issue.id, labelIds },
-    { token: input.token, userAgent: 'unit-talk-lane-finalize' },
+  const verifiedLabels = verified.data?.issue?.labels.nodes;
+  const verifiedTierLabels = verifiedLabels?.filter(
+    (label) => tierFromLabel(label.name) !== null,
   );
-  const updatedIssue = updated.data?.issueUpdate.issue;
   if (
-    !updated.ok ||
-    updated.data?.issueUpdate.success !== true ||
-    !updatedIssue
+    !verified.ok ||
+    !verifiedLabels ||
+    verifiedTierLabels?.length !== 1 ||
+    verifiedTierLabels[0]?.id !== target.id ||
+    verifiedTier(verifiedLabels) !== tier
   ) {
     throw new Error(
-      `Unable to apply Linear tier:${tier} to ${issueId}: ${updated.error ?? 'mutation did not succeed'}`,
-    );
-  }
-  if (verifiedTier(updatedIssue.labels.nodes) !== tier) {
-    throw new Error(
       `Linear tier label verification failed for ${issueId}; observed ${
-        updatedIssue.labels.nodes.map((label) => label.name).join(', ') ||
+        verifiedLabels?.map((label) => label.name).join(', ') ||
         'no labels'
       }.`,
     );
@@ -603,8 +611,8 @@ export async function applyLinearTierLabel(input: {
     code: 'linear_tier_label_applied',
     issue_id: issueId,
     tier,
-    changed: true,
-    labels: updatedIssue.labels.nodes.map((label) => label.name),
+    changed,
+    labels: verifiedLabels.map((label) => label.name),
   };
 }
 
@@ -614,6 +622,55 @@ function progressPath(issueId: string, root = ROOT): string {
 
 function finalizeJournalLockPath(issueId: string, root = ROOT): string {
   return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.lock`);
+}
+
+function acquireMergeMutexGuard(
+  lockPath: string,
+  owner: MergeLockOwner,
+): () => void {
+  const guardPath = `${lockPath}.acquire.lock`;
+  fs.mkdirSync(path.dirname(guardPath), { recursive: true });
+  let fd: number | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      fd = fs.openSync(guardPath, 'wx');
+      fs.writeFileSync(
+        fd,
+        `${JSON.stringify({ pid: owner.pid, host: owner.host, session_id: owner.session_id })}\n`,
+        'utf8',
+      );
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      let staleLocalOwner = false;
+      try {
+        const existing = JSON.parse(fs.readFileSync(guardPath, 'utf8')) as {
+          pid?: number;
+          host?: string;
+        };
+        staleLocalOwner =
+          existing.host === owner.host &&
+          typeof existing.pid === 'number' &&
+          !isProcessAlive(existing.pid);
+      } catch {
+        staleLocalOwner = false;
+      }
+      if (attempt === 0 && staleLocalOwner) {
+        fs.rmSync(guardPath, { force: true });
+        continue;
+      }
+      throw new Error(
+        'Lane finalize merge mutex acquisition is already in progress; refusing a concurrent cross-lane acquisition.',
+      );
+    }
+  }
+  if (fd === undefined) {
+    throw new Error('Unable to acquire the lane finalize merge mutex guard.');
+  }
+  return () => {
+    fs.closeSync(fd);
+    fs.rmSync(guardPath, { force: true });
+  };
 }
 
 /**
@@ -629,6 +686,7 @@ export function withLaneFinalizeMergeLock<T>(
     root?: string;
     mergeLockPath?: string;
     owner?: MergeLockOwner;
+    acquire?: typeof acquireMergeLock;
   } = {},
 ): T {
   const root = options.root ?? ROOT;
@@ -675,17 +733,29 @@ export function withLaneFinalizeMergeLock<T>(
     throw new Error(`Unable to acquire lane finalize journal for ${plan.issue_id}.`);
   }
 
-  const lock = acquireMergeLock(
-    {
-      issue_id: plan.issue_id,
-      branch: plan.branch,
-      pr: normalizePrUrl(plan.pr),
-      cwd: root,
-      reason: 'ops:lane-finalize',
-      owner,
-    },
-    { lockPath: options.mergeLockPath },
-  );
+  const mergeLockPath = options.mergeLockPath ?? MERGE_LOCK_PATH;
+  let releaseAcquisitionGuard: (() => void) | undefined;
+  let lock: ReturnType<typeof acquireMergeLock>;
+  try {
+    releaseAcquisitionGuard = acquireMergeMutexGuard(mergeLockPath, owner);
+    lock = (options.acquire ?? acquireMergeLock)(
+      {
+        issue_id: plan.issue_id,
+        branch: plan.branch,
+        pr: normalizePrUrl(plan.pr),
+        cwd: root,
+        reason: 'ops:lane-finalize',
+        owner,
+      },
+      { lockPath: mergeLockPath },
+    );
+  } catch (error) {
+    fs.closeSync(journalFd);
+    fs.rmSync(journalLock, { force: true });
+    throw error;
+  } finally {
+    releaseAcquisitionGuard?.();
+  }
   if (!lock.ok) {
     fs.closeSync(journalFd);
     fs.rmSync(journalLock, { force: true });
@@ -702,7 +772,7 @@ export function withLaneFinalizeMergeLock<T>(
     // legitimately acquired the mutex after terminal cleanup.
     releaseMergeLock(
       { issue_id: plan.issue_id, branch: plan.branch },
-      { lockPath: options.mergeLockPath },
+      { lockPath: mergeLockPath },
     );
     fs.closeSync(journalFd);
     fs.rmSync(journalLock, { force: true });

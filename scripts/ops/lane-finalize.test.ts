@@ -15,7 +15,7 @@ import {
   type LaneFinalizeRunner,
   type LinearTierQuery,
 } from './lane-finalize.js';
-import { readMergeLock } from './merge-mutex.js';
+import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import type { LaneManifest } from './shared.js';
 
 function manifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -309,9 +309,9 @@ test('Linear tier label writer is idempotent when the authoritative label is alr
 
 test('Linear tier label writer replaces conflicting tier labels, preserves other labels, and verifies the write', async () => {
   const variables: Array<Record<string, unknown>> = [];
-  const query: LinearTierQuery = async <T>(_query, input) => {
+  const query: LinearTierQuery = async <T>(document, input) => {
     variables.push(input);
-    if (variables.length === 1) {
+    if (document.includes('LaneFinalizeTierLabels')) {
       return {
         ok: true,
         data: {
@@ -342,38 +342,30 @@ test('Linear tier label writer replaces conflicting tier labels, preserves other
         } as T,
       };
     }
-    if (variables.length === 2) {
+    if (document.includes('LaneFinalizeAddTierLabel')) {
       return {
         ok: true,
-        data: {
-          issue: {
-            id: 'issue-id',
-            identifier: 'UTV2-1073',
-            labels: {
-              nodes: [
-                { id: 'area-ops', name: 'area:tooling' },
-                { id: 'priority-p1', name: 'priority:1' },
-                { id: 'tier-t2', name: 'tier:T2' },
-              ],
-            },
-          },
-        } as T,
+        data: { issueAddLabel: { success: true } } as T,
+      };
+    }
+    if (document.includes('LaneFinalizeRemoveConflictingTierLabel')) {
+      return {
+        ok: true,
+        data: { issueRemoveLabel: { success: true } } as T,
       };
     }
     return {
       ok: true,
       data: {
-        issueUpdate: {
-          success: true,
-          issue: {
-            identifier: 'UTV2-1073',
-            labels: {
-              nodes: [
-                { id: 'area-ops', name: 'area:tooling' },
-                { id: 'priority-p1', name: 'priority:1' },
-                { id: 'tier-t1', name: 'tier:T1' },
-              ],
-            },
+        issue: {
+          labels: {
+            nodes: [
+              { id: 'area-ops', name: 'area:tooling' },
+              // Added concurrently after the discovery query. Relation-specific
+              // mutations must preserve it without a read/replace race.
+              { id: 'priority-p1', name: 'priority:1' },
+              { id: 'tier-t1', name: 'tier:T1' },
+            ],
           },
         },
       } as T,
@@ -389,19 +381,40 @@ test('Linear tier label writer replaces conflicting tier labels, preserves other
 
   assert.equal(result.code, 'linear_tier_label_applied');
   assert.equal(result.changed, true);
+  assert.deepEqual(variables[1], {
+    issueId: 'issue-id',
+    labelId: 'tier-t1',
+  });
   assert.deepEqual(variables[2], {
     issueId: 'issue-id',
-    labelIds: ['area-ops', 'priority-p1', 'tier-t1'],
+    labelId: 'tier-t2',
   });
+  assert.deepEqual(result.labels, [
+    'area:tooling',
+    'priority:1',
+    'tier:T1',
+  ]);
 });
 
 test('Linear tier label writer fails closed when the mutation response does not verify the requested tier', async () => {
   let calls = 0;
-  const query: LinearTierQuery = async <T>() => {
+  const query: LinearTierQuery = async <T>(document) => {
     calls += 1;
+    if (document.includes('LaneFinalizeAddTierLabel')) {
+      return {
+        ok: true,
+        data: { issueAddLabel: { success: true } } as T,
+      };
+    }
+    if (document.includes('LaneFinalizeRemoveConflictingTierLabel')) {
+      return {
+        ok: true,
+        data: { issueRemoveLabel: { success: true } } as T,
+      };
+    }
     return {
       ok: true,
-      data: (calls <= 2
+      data: (document.includes('LaneFinalizeTierLabels')
         ? {
             issue: {
               id: 'issue-id',
@@ -411,15 +424,16 @@ test('Linear tier label writer fails closed when the mutation response does not 
                 labels: { nodes: [{ id: 'tier-t1', name: 'tier:T1' }] },
               },
             },
-            issueLabels: { nodes: [] },
+            issueLabels: {
+              nodes: [
+                { id: 'tier-t1', name: 'tier:T1' },
+                { id: 'tier-t2', name: 'tier:T2' },
+              ],
+            },
           }
         : {
-            issueUpdate: {
-              success: true,
-              issue: {
-                identifier: 'UTV2-1073',
-                labels: { nodes: [{ id: 'tier-t2', name: 'tier:T2' }] },
-              },
+            issue: {
+              labels: { nodes: [{ id: 'tier-t2', name: 'tier:T2' }] },
             },
           }) as T,
     };
@@ -434,6 +448,7 @@ test('Linear tier label writer fails closed when the mutation response does not 
     }),
     /verification failed.*tier:T2/,
   );
+  assert.equal(calls, 4);
 });
 
 test('a partial finalize durably resumes without repeating completed steps', () => {
@@ -538,6 +553,55 @@ test('lane finalize serializes journal mutation under the merge mutex', () => {
   }
 });
 
+test('lane finalize atomically serializes merge-mutex acquisition across different issues', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-finalize-acquire-'));
+  const mergeLockPath = path.join(root, 'merge-lock.json');
+  const first = buildLaneFinalizePlan({ manifest: manifest(), pr: '456' });
+  const second = buildLaneFinalizePlan({
+    manifest: manifest({
+      issue_id: 'UTV2-1074',
+      branch: 'codex/utv2-1074-closeout',
+    }),
+    pr: '457',
+  });
+  let secondAcquireCalls = 0;
+  try {
+    withLaneFinalizeMergeLock(first, () => undefined, {
+      root,
+      mergeLockPath,
+      acquire: (input, options) => {
+        assert.throws(
+          () =>
+            withLaneFinalizeMergeLock(second, () => undefined, {
+              root,
+              mergeLockPath,
+              acquire: (nestedInput, nestedOptions) => {
+                secondAcquireCalls += 1;
+                return acquireMergeLock(nestedInput, nestedOptions);
+              },
+            }),
+          /merge mutex acquisition is already in progress/,
+        );
+        assert.equal(
+          fs.existsSync(
+            path.join(root, '.out', 'ops', 'lane-finalize', 'UTV2-1074.lock'),
+          ),
+          false,
+          'a refused cross-lane acquisition must release its issue journal',
+        );
+        return acquireMergeLock(input, options);
+      },
+    });
+    assert.equal(
+      secondAcquireCalls,
+      0,
+      'a competing issue must not enter the released-to-held transition',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('lane finalize reclaims an orphaned local journal lock', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-finalize-orphan-'));
   const mergeLockPath = path.join(root, 'merge-lock.json');
@@ -613,6 +677,19 @@ test('resolveLaneFinalizeInput falls back to manifest PR URL', () => {
   });
 
   assert.deepStrictEqual(resolved, { issueId: 'UTV2-1073', pr: '853' });
+});
+
+test('resolveLaneFinalizeInput rejects an explicit PR that conflicts with manifest truth', () => {
+  assert.throws(
+    () =>
+      resolveLaneFinalizeInput({
+        manifest: manifest({
+          pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/853',
+        }),
+        pr: '854',
+      }),
+    /Explicit PR 854 does not match manifest PR 853/,
+  );
 });
 
 test('CLI accepts positional issue identity after pnpm forwards its separator', () => {
