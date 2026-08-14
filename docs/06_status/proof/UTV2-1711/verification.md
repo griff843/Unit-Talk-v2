@@ -35,7 +35,12 @@ Each controlled mutation was applied locally, the targeted tests were run, and t
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 
+### R-level compliance
+
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS.
+- Changed files reported: 11 (including lane-start metadata already committed on this branch).
+- Rules matched: none. No R-level artifacts are required because no lifecycle, promotion, settlement, strategy, operator-UI, Discord-delivery, or ingestor-provider paths changed.
+
 ### Pending closeout evidence
 
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: pending committed head.
 - Merge SHA: pending PR approval and merge.
