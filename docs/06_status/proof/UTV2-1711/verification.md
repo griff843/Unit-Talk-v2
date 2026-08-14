@@ -1,6 +1,6 @@
 # PROOF: UTV2-1711
 
-MERGE_SHA: 4b74008920a3bc52b22f14507d60ba0232d5d439
+MERGE_SHA: d09b50700f9bb956cf48e568a1ad02ffc3b0d874
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
@@ -12,8 +12,11 @@ MERGE_SHA: 4b74008920a3bc52b22f14507d60ba0232d5d439
 - [x] Rework creates a new epoch bound to the exact rejected head and cannot inherit rejected phase validity.
 - [x] A rejected epoch's source diff cannot satisfy a rework.
 - [x] Corroboration measures cumulative diff from the epoch baseline, so a verification-only resume may legitimately succeed with zero attempt-local diff.
+- [x] Git corroboration requires the epoch baseline to be an ancestor of `HEAD`; divergent history returns `EXECUTION_BASELINE_NOT_ANCESTOR`.
 - [x] Missing or corrupt post-spawn state returns `EXECUTION_STATE_UNAVAILABLE`; evaluation is never skipped.
 - [x] Sidecar recovery is identity/epoch/attempt/checksum bound; a mismatched sidecar fails closed.
+- [x] Executor mutations carry their originating epoch, attempt, and minimum revision; delayed rejected work cannot validate a rework epoch.
+- [x] Attempt start, checkpoint mutation, and clear operations share one exclusive transition lock.
 - [x] The production call site cannot supply a phase or baseline snapshot.
 - [x] Proof-only completion remains fail-closed and out of scope.
 - [x] Each load-bearing control is proven by mutation, not by a passing suite beside it.
@@ -81,22 +84,46 @@ M4 is the load-bearing one for the model choice: reverting cumulative corroborat
 an attempt-local diff fails precisely the verification-only-resume regression, which is
 the scenario the previous design could not express.
 
+### Resumed-review corrections
+
+Exact-head review found three additional transition-boundary defects, all corrected in
+implementation SHA `d09b50700f9bb956cf48e568a1ad02ffc3b0d874`:
+
+- `git merge-base --is-ancestor <epoch-baseline> HEAD` now precedes diff evaluation, so
+  an older or unrelated checkout cannot manufacture corroborating source paths.
+- `codex-exec` injects the started epoch/attempt/revision identity into the child
+  environment. Heartbeat, phase, finding, pending-action, and finish mutations validate
+  it against durable state; a delayed rejected executor is refused.
+- A per-issue exclusive checkpoint-transition lock serializes attempt start, mutations,
+  and clear. If resume wins, clear sees the active attempt; if clear wins, resume sees
+  missing state. Newly written state cannot be deleted by a stale clear decision.
+
+Production-path regressions cover divergent Git history, child identity transport,
+delayed rejected-epoch completion, and clear/start lock contention.
+
 ### Commands executed (explicit references)
 
-- `pnpm exec tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, 56 tests, 56 pass, 0 fail, 0 skipped.
-- `pnpm exec eslint scripts/ops/codex-exec.ts scripts/ops/execution-checkpoint.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, no output.
+- `pnpm exec tsx --test 'scripts/ops/codex-exec.test.ts' 'scripts/ops/execution-checkpoint.test.ts'` — PASS, 60 tests, 60 pass, 0 fail, 0 skipped.
+- `pnpm verify:static` — PASS, including lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command checks.
+- `pnpm lint` — PASS, no output.
+- `pnpm type-check` — PASS. This project-reference check does not directly compile `scripts/ops/**`; the focused `tsx --test` run compiles and executes the changed tooling files.
 - `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2` — derived T2, mechanical minimum T3, `escalated: false`.
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — R-level compliance evaluated for this lane.
-- `pnpm type-check` — does NOT compile `scripts/ops/**`: `tsconfig.json` references only `packages/*` and `apps/*`, so it cannot type-check the files this lane changes. Tracked separately; deliberately not fixed here.
-- `pnpm test` — full repository suite; executed by PR CI under `verify`, which is authoritative for this lane. The two suites this lane changes (`codex-exec.test.ts`, `execution-checkpoint.test.ts`) are already enumerated in `test:ops` and therefore run inside `pnpm test`.
-- `pnpm verify` — deferred to PR CI, which is authoritative for this lane.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; 9 changed files, no rules matched, no R-level artifacts required.
+- `pnpm test` — PASS inside `pnpm verify:static`; both changed suites remain required-reachable through `test:ops`.
+- `pnpm verify` — static gate PASS; writable live-DB stage blocked/deferred by the staging identity guard.
+
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+
+The local guard observed `host=127.0.0.1 ref=unidentified` and refused execution before
+any writable DB test, preserving the required fail-closed posture.
 
 ## Verification
 
 | Check | Result | Evidence |
 |---|---|---|
-| Focused suites | PASS | 56 tests, 56 pass, 0 fail, 0 skipped |
-| `pnpm exec eslint` | PASS | no output |
+| Focused suites | PASS | 60 tests, 60 pass, 0 fail, 0 skipped |
+| `pnpm verify:static` | PASS | lint, type-check, build, full test, Smart Form, command checks |
+| `pnpm verify` | BLOCKED/DEFERRED | static PASS; writable DB refused because staging identity was unresolved |
 | Mutation M1–M5 | Each regression fails | 5 groups, **0 survivors** |
 | Restored | PASS | 56 / 56 |
 | Scope compliance | PASS | changed files ⊆ `file_scope_lock` |
@@ -115,4 +142,4 @@ mutation battery; independent exact-head review is recorded on the PR.
 
 ## SHA Binding
 
-Verified implementation SHA: `4b74008920a3bc52b22f14507d60ba0232d5d439`
+Verified implementation SHA: `d09b50700f9bb956cf48e568a1ad02ffc3b0d874`
