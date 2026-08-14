@@ -4,9 +4,9 @@
   "title": "Bind lane PR URLs automatically across executors",
   "tier": "T1",
   "status": "ci_staging_proof_pending",
-  "generated_at": "2026-08-14T20:05:00Z",
+  "generated_at": "2026-08-14T20:48:53Z",
   "sha_binding": {
-    "verified_source_sha": "5c2e34ce846b8005c34dacac2226a05c98c644d1",
+    "verified_source_sha": "660a49075bcca7ef89b2613b05c01d2dabea72b0",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -45,8 +45,8 @@
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
       "status": "PASS",
-      "tests": 41,
-      "pass": 41,
+      "tests": 44,
+      "pass": 44,
       "fail": 0
     },
     "mutation_tests": [
@@ -91,6 +91,18 @@
         "mutation": "disabled the pr-base-mismatch finalize guard",
         "result": "KILLED",
         "observed": "production-path retarget regression failed and exposed a successful seven-step wrong-base closeout plan; guard restored and regression green"
+      },
+      {
+        "control": "canonical-main PR base validation",
+        "mutation": "disabled the live GitHub base comparison before finalization",
+        "result": "KILLED",
+        "observed": "direct guard and actual CLI-path wrong-base regressions both failed; comparison restored and suite green"
+      },
+      {
+        "control": "reopened-lane finalize generation",
+        "mutation": "reused a completed journal after reopen generation changed",
+        "result": "KILLED",
+        "observed": "reopen regression inherited all seven stale completed steps instead of an empty journal; generation guard restored and suite green"
       }
     ]
   },
@@ -136,7 +148,7 @@
     {
       "criterion": "Each control is proven by mutation",
       "status": "PASS",
-      "evidence": "Executor, workflow invocation, head-ref identity, default-branch trust, atomic acquisition, and Linear relation mutations were killed and restored."
+      "evidence": "Executor, workflow invocation, head-ref identity, default-branch trust, atomic acquisition, Linear relation, canonical-base, and reopen-generation mutations were killed and restored."
     },
     {
       "criterion": "Privileged PR automation executes only protected default-branch code and validates PR base identity",
@@ -146,12 +158,12 @@
     {
       "criterion": "A PR retargeted away from manifest.base_branch cannot record or finalize a wrong-base merge",
       "status": "PASS",
-      "evidence": "Production-path regression binds on main, processes the edited event on release-candidate, verifies durable blocked/pr_url-null state, then proves an explicit-PR lane-finalize attempt fails without commit_sha or closed_at. The load-bearing finalize guard mutation is killed."
+      "evidence": "Production-path regressions prove both defenses: the edited event persists blocked/pr_url-null state on the lane branch, and canonical-main lane-finalize independently queries GitHub and refuses a merged PR whose current base is release-candidate even when the manifest has no blocker. Both load-bearing mutations are killed."
     },
     {
       "criterion": "Finalize retries are serialized and preserve concurrent Linear labels",
       "status": "PASS",
-      "evidence": "Focused tests prove atomic cross-issue acquisition, merge-mutex/journal exclusion, refused-acquisition cleanup, orphaned journal recovery, repeatable reconciliation, and relation-specific tier writes that retain a concurrently added non-tier label."
+      "evidence": "Focused tests prove atomic cross-issue acquisition, merge-mutex/journal exclusion, refused-acquisition cleanup, orphaned journal recovery, reopen-generation invalidation of completed steps, repeatable reconciliation, and relation-specific tier writes that retain a concurrently added non-tier label."
     },
     {
       "criterion": "Any named remedy is executed by a test",
