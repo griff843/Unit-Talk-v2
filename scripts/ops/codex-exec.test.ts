@@ -6,11 +6,22 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildCodexModelArgs, loadModelRoutingPolicy } from './model-routing.js';
 import {
+  buildCodexChildEnv,
   buildCodexPrompt,
   buildModelRoutingEvidence,
   commitAndPushEvidence,
+  evaluateExecutionTruth,
   resolveExecModelRouting,
 } from './codex-exec.js';
+import {
+  beginAttempt,
+  checkpointPath,
+  checkpointRecoveryPath,
+  finishAttempt,
+  recordPhaseComplete,
+  resolveExecutionTimeout,
+  type ExecutionStateIdentity,
+} from './execution-checkpoint.js';
 import { ROOT } from './shared.js';
 
 // codex-exec.ts is an executable entry point — its `main()` process/spawn flow is
@@ -20,8 +31,277 @@ import { ROOT } from './shared.js';
 
 const REAL_POLICY_VERSION = loadModelRoutingPolicy().policy_version;
 
+function initTruthRepo(): { dir: string; checkpointDir: string; baseline: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1711-truth-'));
+  const checkpointDir = path.join(dir, 'checkpoints');
+  spawnSync('git', ['init', '--initial-branch=main'], { cwd: dir, stdio: 'pipe' });
+  spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir, stdio: 'pipe' });
+  spawnSync('git', ['config', 'user.name', 'Test'], { cwd: dir, stdio: 'pipe' });
+  fs.writeFileSync(path.join(dir, 'README.md'), 'seed\n');
+  spawnSync('git', ['add', 'README.md'], { cwd: dir, stdio: 'pipe' });
+  spawnSync('git', ['commit', '-m', 'seed'], { cwd: dir, stdio: 'pipe' });
+  const baseline = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
+  return { dir, checkpointDir, baseline };
+}
+
+function commitTruthFile(repo: string, relativePath: string, content: string): string {
+  const filePath = path.join(repo, relativePath);
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content);
+  spawnSync('git', ['add', relativePath], { cwd: repo, stdio: 'pipe' });
+  spawnSync('git', ['commit', '-m', `change ${relativePath}`], { cwd: repo, stdio: 'pipe' });
+  return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
+}
+
+function completeSuccessPhases(issueId: string, checkpointDir: string, identity: ExecutionStateIdentity): void {
+  recordPhaseComplete(issueId, 'implement', 'implementation complete', { dir: checkpointDir, identity });
+  recordPhaseComplete(issueId, 'verify', 'verification complete', { dir: checkpointDir, identity });
+  recordPhaseComplete(issueId, 'closeout', 'closeout complete', { dir: checkpointDir, identity });
+}
+
 test('codex-exec module imports without error', async () => {
   assert.ok(true, 'module structure valid');
+});
+
+test('production truth path fails a zero-diff fresh claim and succeeds after real current-epoch source work', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const started = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+
+    const noChange = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: started.identity,
+    });
+    assert.equal(noChange.code, 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE');
+    assert.equal(noChange.ok, false);
+
+    commitTruthFile(repo.dir, 'scripts/source-change.ts', 'export const changed = true;\n');
+    const changed = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: started.identity,
+    });
+    assert.equal(changed.code, 'SUCCESS');
+    assert.equal(changed.source_files_changed, 1);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('execution truth rejects an epoch baseline that is not an ancestor of HEAD', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const futureBaseline = commitTruthFile(repo.dir, 'scripts/future-baseline.ts', 'export const future = true;\n');
+    spawnSync('git', ['checkout', '--detach', repo.baseline], { cwd: repo.dir, stdio: 'pipe' });
+    const started = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: futureBaseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+    const verdict = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: started.identity,
+    });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.code, 'EXECUTION_BASELINE_NOT_ANCESTOR');
+    assert.match(verdict.message, /not an ancestor of HEAD/);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('Codex child environment carries the originating checkpoint identity', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1711-child-env-'));
+  try {
+    const env = buildCodexChildEnv(dir, { epoch_id: 'epoch-1', attempt: 2, minimum_revision: 7 });
+    assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
+    assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
+    assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('verification-only resume succeeds from cumulative epoch diff without overwriting the baseline', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' });
+    const first = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    recordPhaseComplete(issueId, 'implement', 'source implementation committed', {
+      dir: repo.checkpointDir,
+      identity: first.identity,
+    });
+    const implementedHead = commitTruthFile(repo.dir, 'scripts/resumed-source.ts', 'export const resumed = true;\n');
+    finishAttempt({ issueId, outcome: 'timed_out', reason: 'interrupted in verify', dir: repo.checkpointDir, identity: first.identity });
+
+    const resumed = beginAttempt({
+      kind: 'resume',
+      issueId,
+      attemptStartSha: implementedHead,
+      timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    recordPhaseComplete(issueId, 'verify', 'focused tests passed', { dir: repo.checkpointDir, identity: resumed.identity });
+    recordPhaseComplete(issueId, 'closeout', 'proof complete', { dir: repo.checkpointDir, identity: resumed.identity });
+    const verdict = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: resumed.identity,
+    });
+    assert.equal(verdict.code, 'SUCCESS');
+    assert.equal(resumed.checkpoint.epoch.epoch_id, first.checkpoint.epoch.epoch_id);
+    assert.equal(resumed.checkpoint.epoch.implementation_baseline_sha, repo.baseline);
+    assert.equal(resumed.checkpoint.attempts.at(-1)?.attempt_start_sha, implementedHead);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('rework resets rejected truth: old source and proof-only edits fail, then a new source correction succeeds', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' });
+    const initial = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    commitTruthFile(repo.dir, 'scripts/rejected-source.ts', 'export const rejected = true;\n');
+    completeSuccessPhases(issueId, repo.checkpointDir, initial.identity);
+    finishAttempt({ issueId, outcome: 'failed', reason: 'review rejected', dir: repo.checkpointDir, identity: initial.identity });
+    const rejectedHead = spawnSync('git', ['rev-parse', 'HEAD'], {
+      cwd: repo.dir,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    }).stdout.trim();
+
+    const rework = beginAttempt({
+      kind: 'rework',
+      issueId,
+      rejectedHeadSha: rejectedHead,
+      objectiveIdentity: `issue:${issueId}`,
+      findingsIdentity: 'review-round-1',
+      authority: 'codex-exec',
+      timeoutPolicy,
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, rework.identity);
+    commitTruthFile(repo.dir, 'docs/proof-only.md', 'proof changed\n');
+    const proofOnly = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: rework.identity,
+    });
+    assert.equal(proofOnly.code, 'REWORK_NO_SOURCE_CHANGE');
+    assert.equal(rework.checkpoint.completed_phases.length, 0, 'rejected phase validity must not enter the new epoch');
+
+    commitTruthFile(repo.dir, 'scripts/rework-source.ts', 'export const corrected = true;\n');
+    const corrected = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: rework.identity,
+    });
+    assert.equal(corrected.code, 'SUCCESS');
+    assert.equal(corrected.source_files_changed, 1);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('missing post-spawn primary and sidecar state returns EXECUTION_STATE_UNAVAILABLE', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const started = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    fs.rmSync(checkpointPath(issueId, repo.checkpointDir), { force: true });
+    fs.rmSync(checkpointRecoveryPath(issueId, repo.checkpointDir), { force: true });
+    const verdict = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: started.identity,
+    });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.code, 'EXECUTION_STATE_UNAVAILABLE');
+    assert.match(verdict.message, /primary and sidecar are both missing/);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('corrupt primary with a valid matching sidecar recovers explicitly and follows normal evaluation', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const started = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: repo.baseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+    commitTruthFile(repo.dir, 'scripts/recovered.ts', 'export const recovered = true;\n');
+    fs.writeFileSync(checkpointPath(issueId, repo.checkpointDir), '{corrupt primary', 'utf8');
+    const verdict = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: started.identity,
+    });
+    assert.equal(verdict.code, 'SUCCESS');
+    assert.equal(verdict.checkpoint_provenance, 'sidecar');
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
 });
 
 test('resolveExecModelRouting validates a manifest that already carries model_routing', () => {
@@ -327,7 +607,7 @@ test('codex-exec no longer hard-codes a 30-minute timeout for every lane', () =>
 
 test('codex-exec resumes from the checkpoint before it builds the prompt', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
-  const readIndex = source.indexOf('readCheckpoint(issueId)');
+  const readIndex = source.indexOf('readCheckpointState(issueId)');
   const briefIndex = source.indexOf('buildResumeBrief(existingCheckpoint)');
   const promptIndex = source.indexOf('buildCodexPrompt(packet, resumeBrief)');
   assert.ok(readIndex >= 0 && briefIndex > readIndex, 'the prior checkpoint must be read and turned into a brief');
@@ -364,6 +644,22 @@ test('codex-exec opens a durable attempt immediately before the spawn', () => {
   const spawnIndex = source.indexOf("spawnSync('codex', codexArgs");
   assert.ok(beginIndex >= 0, 'codex-exec must open a checkpoint attempt');
   assert.ok(beginIndex < spawnIndex, 'the attempt must exist before the process that could die');
+});
+
+test('production call path evaluates mandatory post-spawn epoch state without caller-supplied phase or baseline', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'), 'utf8');
+  const spawnIndex = source.indexOf("spawnSync('codex', codexArgs");
+  const postSpawnReadIndex = source.indexOf('readCheckpointState(issueId, undefined, attemptStart.identity)', spawnIndex);
+  const truthCallIndex = source.indexOf('evaluateExecutionTruth({ issueId, cwd: resolvedCwd, stateIdentity: attemptStart.identity })');
+  const successIndex = source.lastIndexOf("code: 'SUCCESS'");
+  assert.ok(spawnIndex >= 0 && postSpawnReadIndex > spawnIndex, 'state must be re-read after the executor returns');
+  assert.ok(truthCallIndex > postSpawnReadIndex, 'Git corroboration must use the validated post-spawn state identity');
+  assert.ok(truthCallIndex < successIndex, 'no SUCCESS emission may precede execution-truth evaluation');
+  assert.doesNotMatch(
+    source.slice(truthCallIndex, truthCallIndex + 180),
+    /phase:|baseline:/,
+    'the caller must not be able to inject a stale phase or baseline into truth evaluation',
+  );
 });
 
 test('a timeout, a silent run and a plain failure are reported as three different outcomes', () => {
