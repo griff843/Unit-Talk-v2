@@ -1,6 +1,6 @@
 # Diff summary: UTV2-1668
 
-MERGE_SHA: c22b231e1548fbd60175393902328f6afa713b32
+MERGE_SHA: 6009998c1708d6d5c7c38d6acc2139aa334c26f6
 
 Governed terminal supersession for unmerged lanes. No runtime, domain, DB or delivery code.
 
@@ -41,7 +41,7 @@ Governed terminal supersession for unmerged lanes. No runtime, domain, DB or del
 | R · receipt root per-worktree | `not ok 26`, `29` — 107 / 2 |
 | Restored | **109 / 109**, 0 skipped |
 
-Eighteen groups, no survivors. Mutation K survived the first battery and was closed; see the proof bundle.
+Twenty-seven groups, no survivors. Mutation K survived the first battery and was closed; see the proof bundle.
 
 ## Known limitations, deliberately not addressed here
 
