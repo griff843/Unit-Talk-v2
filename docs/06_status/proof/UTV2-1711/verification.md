@@ -1,6 +1,6 @@
 # PROOF: UTV2-1711
 
-MERGE_SHA: d09b50700f9bb956cf48e568a1ad02ffc3b0d874
+MERGE_SHA: b2b419fdb2295a482dd705c88177852d0d48fe13
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
@@ -49,7 +49,7 @@ making a zero-diff rework valid.
 
 ### Controls proven by making them fail
 
-Five load-bearing mutations, each killed by a production-path regression:
+Eight load-bearing mutations, each killed by a production-path regression:
 
 ```
 M1 resume overwrites the epoch baseline
@@ -124,7 +124,7 @@ any writable DB test, preserving the required fail-closed posture.
 | Focused suites | PASS | 60 tests, 60 pass, 0 fail, 0 skipped |
 | `pnpm verify:static` | PASS | lint, type-check, build, full test, Smart Form, command checks |
 | `pnpm verify` | BLOCKED/DEFERRED | static PASS; writable DB refused because staging identity was unresolved |
-| Mutation M1–M5 | Each regression fails | 5 groups, **0 survivors** |
+| Mutation M1–M8 | Each regression fails | **8 groups, 0 survivors** |
 | Restored | PASS | 56 / 56 |
 | Scope compliance | PASS | changed files ⊆ `file_scope_lock` |
 | Test wiring | PASS | both suites already required-reachable via `test:ops` |
@@ -134,6 +134,30 @@ any writable DB test, preserving the required fail-closed posture.
 - No runtime, domain, DB or delivery surface is touched. This lane changes executor
   execution-state modelling only. Git is the corroborating authority and is exercised
   through real repository fixtures in the production call path.
+
+### Correction cycle: three findings from independent review
+
+Independent exact-head review found two P1 false-success paths and one P2, all
+within this issue's stated behaviour. All three were fixed inside this issue.
+
+**Epoch baseline had to be an ancestor.** `git diff --name-only <baseline> HEAD`
+exits zero and reports paths even when HEAD does not descend from the baseline, so
+an executor that checked out an older or unrelated commit fabricated corroboration.
+Corroboration now requires `git merge-base --is-ancestor` and fails closed
+otherwise (M6).
+
+**Phase completion had to be bound to the originating epoch.** A delayed
+`phase-complete` from a still-alive rejected executor stamped its completion into
+the *new* rework epoch, letting rejected work validate a fresh one. The caller now
+presents the epoch/attempt identity it started under and a mismatch is refused (M7).
+
+**Clear and attempt-start had to share one exclusive lock.** A resume beginning
+between the open-attempt check and the removal loop could have its freshly written
+primary and sidecar deleted. Both now take one exclusive mutation lock (M8).
+
+The first two are the same shape as this system's recurring defect class: the
+control was correct and its boundary was not — corroboration trusted a diff without
+checking lineage, and epoch identity was enforced on read but not on write.
 
 ## Independent review
 
