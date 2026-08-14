@@ -4,9 +4,9 @@
   "title": "Bind lane PR URLs automatically across executors",
   "tier": "T1",
   "status": "ci_staging_proof_pending",
-  "generated_at": "2026-08-14T16:44:47Z",
+  "generated_at": "2026-08-14T20:05:00Z",
   "sha_binding": {
-    "verified_source_sha": "88e8791189280b0fec5536500da98d7cd2c7699c",
+    "verified_source_sha": "5c2e34ce846b8005c34dacac2226a05c98c644d1",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -37,16 +37,16 @@
     "verify_static": {
       "command": "pnpm verify:static",
       "status": "PASS",
-      "aggregate_tests": 2191,
-      "pass": 2191,
+      "aggregate_tests": 2193,
+      "pass": 2193,
       "fail": 0,
       "detail": "Environment, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit 0."
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
       "status": "PASS",
-      "tests": 39,
-      "pass": 39,
+      "tests": 41,
+      "pass": 41,
       "fail": 0
     },
     "mutation_tests": [
@@ -85,6 +85,12 @@
         "mutation": "skipped conflicting-tier removal",
         "result": "KILLED",
         "observed": "label-specific mutation regression failed; suite restored to green"
+      },
+      {
+        "control": "retargeted PR binding invalidation",
+        "mutation": "disabled the pr-base-mismatch finalize guard",
+        "result": "KILLED",
+        "observed": "production-path retarget regression failed and exposed a successful seven-step wrong-base closeout plan; guard restored and regression green"
       }
     ]
   },
@@ -135,7 +141,12 @@
     {
       "criterion": "Privileged PR automation executes only protected default-branch code and validates PR base identity",
       "status": "PASS",
-      "evidence": "Workflow regression requires default-branch checkout, pull_request_target, ignored install scripts, explicit --base validation, edited-event revalidation, and bounded branch-update retries; event tests reject missing and mismatched bases."
+      "evidence": "Workflow regression requires default-branch checkout, pull_request_target, ignored install scripts, explicit --base validation, edited-event revalidation, and bounded branch-update retries; event tests reject unbound mismatched bases and invalidate an exact existing binding after retargeting."
+    },
+    {
+      "criterion": "A PR retargeted away from manifest.base_branch cannot record or finalize a wrong-base merge",
+      "status": "PASS",
+      "evidence": "Production-path regression binds on main, processes the edited event on release-candidate, verifies durable blocked/pr_url-null state, then proves an explicit-PR lane-finalize attempt fails without commit_sha or closed_at. The load-bearing finalize guard mutation is killed."
     },
     {
       "criterion": "Finalize retries are serialized and preserve concurrent Linear labels",

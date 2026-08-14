@@ -1,6 +1,6 @@
 # PROOF: UTV2-1705
 
-MERGE_SHA: 88e8791189280b0fec5536500da98d7cd2c7699c
+MERGE_SHA: 5c2e34ce846b8005c34dacac2226a05c98c644d1
 
 Pre-merge, this anchor is the verified implementation commit. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
@@ -8,6 +8,7 @@ Pre-merge, this anchor is the verified implementation commit. Post-merge closeou
 
 - [x] The canonical lane PR binder accepts both Codex and Claude lane executors.
 - [x] Pull-request `opened`, `reopened`, and `edited` events bind or revalidate the PR URL without a manual metadata repair.
+- [x] Retargeting the exact bound PR away from `manifest.base_branch` clears the binding, blocks the lane with `pr-base-mismatch`, and prevents explicit-PR finalization from bypassing the invalidation.
 - [x] Privileged event handling executes protected default-branch code only, validates the declared PR base, and retries non-fast-forward persistence without force-pushing.
 - [x] Rebinding the same URL is idempotent, while a different URL fails closed.
 - [x] A bound manifest supplies `lane-finalize` with its PR identity when no explicit PR argument is provided.
@@ -16,8 +17,8 @@ Pre-merge, this anchor is the verified implementation commit. Post-merge closeou
 ## EVIDENCE:
 
 ```text
-Focused tests: 39 passed, 0 failed
-Static verification: PASS, including 2,191 root tests
+Focused tests: 41 passed, 0 failed
+Static verification: PASS, including 2,193 root tests
 R-level compliance: PASS, no matching rules
 Staging writable DB proof: delegated to staging-ci as required for T1
 Live Linear integration: tier:T1 applied and verified; immediate replay was an idempotent no-op
@@ -27,8 +28,8 @@ Live Linear integration: tier:T1 applied and verified; immediate replay was an i
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | DB-client boundary, sync, system-alignment, automation-coverage, environment, lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command verification completed with exit 0; 2,191 root tests passed. |
-| `pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts` | PASS | 39 tests passed, 0 failed. |
+| `pnpm verify:static` | PASS | DB-client boundary, sync, system-alignment, automation-coverage, environment, lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command verification completed with exit 0; 2,193 root tests passed. |
+| `pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts` | PASS | 41 tests passed, 0 failed. |
 | `pnpm test:db` | BLOCKED / DEFERRED | The staging-isolation guard refused before DB execution: local target `host=127.0.0.1 ref=unidentified`; writable DB verification requires `xskgrzbteyqdufktjrjx` through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. Packet disposition: writable live-DB proof is blocked/deferred because target identity could not be resolved from its URL (`host=unparseable`). |
 | Linear tier-label integration | PASS | First live invocation returned `linear_tier_label_applied`, `changed: true`, and labels `["tier:T1"]`; the updated relation-specific writer replayed live as `linear_tier_label_already_applied` with `changed: false`. |
 | Positional closeout dry-run | PASS | `pnpm ops:lane-finalize -- UTV2-1705 --dry-run --json` resolved PR `1420` from `manifest.pr_url` and planned the complete closeout without writes. |
@@ -41,6 +42,7 @@ Live Linear integration: tier:T1 applied and verified; immediate replay was an i
 | Default-branch trust mutation | PASS | Temporarily restoring the privileged checkout to `base.sha` made the workflow boundary regression fail; restored suite passed. |
 | Atomic acquisition mutation | PASS | Temporarily bypassing the exclusive cross-lane acquisition guard made the two-issue mutex regression fail; restored suite passed. |
 | Linear relation mutation | PASS | Temporarily skipping conflicting-tier removal made the label-specific mutation regression fail; restored suite passed. |
+| Retargeted-binding mutation | PASS | Temporarily disabling the `pr-base-mismatch` finalize guard made the production-path retarget regression fail and exposed a successful seven-step wrong-base closeout plan; the restored guard makes the scenario pass. |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Changed files: 11; no R-level rules matched and no R-level artifacts were required. |
 
 ### Acceptance coverage
@@ -55,6 +57,7 @@ Live Linear integration: tier:T1 applied and verified; immediate replay was an i
 - Rebinding the same URL is a no-op; a different URL remains `pr_url_mismatch` and fails closed.
 - Both executor neutrality and automatic invocation were proven by mutation.
 - Event-driven binding is executable without an ephemeral preflight token, restricted to GitHub PR event contexts, and validates the manifest-declared base before mutation.
+- An edited event that retargets the exact bound PR away from the declared base durably removes `pr_url`, transitions the lane to `blocked`, records `pr-base-mismatch`, and rejects a later explicit-PR finalize attempt without writing merge or terminal state.
 - Privileged workflow execution comes from the protected repository default branch; both PR head and PR base contents are treated only as data and are never installed or executed.
 
 ### Runtime proof disposition
