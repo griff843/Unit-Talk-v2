@@ -17,6 +17,13 @@ import {
   requireIssueId,
   type LaneManifest,
 } from './shared.js';
+import {
+  acquireMergeLock,
+  defaultMergeLockOwner,
+  isProcessAlive,
+  releaseMergeLock,
+  type MergeLockOwner,
+} from './merge-mutex.js';
 
 export interface LaneFinalizeStep {
   id:
@@ -204,20 +211,30 @@ export function buildLaneFinalizePlan(input: {
         required: true,
       });
     }
+    // Reconcile while this parent still owns the merge mutex. lane-close is
+    // deliberately last because a successful close releases that mutex as
+    // part of its terminal cleanup. Callers that need a post-close refresh may
+    // safely run orchestration-reconcile again; this step is always repeatable.
+    steps.push({
+      id: 'reconcile_current',
+      command: 'pnpm',
+      args: ['ops:orchestration-reconcile', '--current', '--json'],
+      required: true,
+    });
     steps.push({
       id: 'close_lane',
       command: 'pnpm',
       args: ['ops:lane-close', issueId, '--acquire-lock'],
       required: true,
     });
+  } else {
+    steps.push({
+      id: 'reconcile_current',
+      command: 'pnpm',
+      args: ['ops:orchestration-reconcile', '--current', '--json'],
+      required: true,
+    });
   }
-
-  steps.push({
-    id: 'reconcile_current',
-    command: 'pnpm',
-    args: ['ops:orchestration-reconcile', '--current', '--json'],
-    required: true,
-  });
 
   return {
     issue_id: issueId,
@@ -311,7 +328,8 @@ export function runLaneFinalizePlan(
   }
 
   for (const step of plan.steps) {
-    if (previouslyCompleted.has(step.id)) {
+    const alwaysRun = step.id === 'reconcile_current';
+    if (previouslyCompleted.has(step.id) && !alwaysRun) {
       steps.push({
         ...step,
         status: 'skipped',
@@ -493,8 +511,47 @@ export async function applyLinearTierLabel(input: {
     );
   }
 
+  // Linear's issueUpdate.labelIds is replace-style. Refresh immediately before
+  // constructing that replacement so labels added after the discovery query
+  // are preserved instead of being silently erased from a stale snapshot.
+  const refreshed = await query<{
+    issue: {
+      id: string;
+      identifier: string;
+      labels: { nodes: LinearLabelNode[] };
+    } | null;
+  }>(
+    `
+      query LaneFinalizeRefreshTierLabels($issueId: String!) {
+        issue(id: $issueId) {
+          id
+          identifier
+          labels(first: 100) { nodes { id name } }
+        }
+      }
+    `,
+    { issueId },
+    { token: input.token, userAgent: 'unit-talk-lane-finalize' },
+  );
+  if (!refreshed.ok || !refreshed.data?.issue) {
+    throw new Error(
+      `Unable to refresh Linear tier labels for ${issueId}: ${refreshed.error ?? 'issue not found'}`,
+    );
+  }
+  const refreshedLabels = refreshed.data.issue.labels.nodes;
+  if (verifiedTier(refreshedLabels) === tier) {
+    return {
+      ok: true,
+      code: 'linear_tier_label_already_applied',
+      issue_id: issueId,
+      tier,
+      changed: false,
+      labels: refreshedLabels.map((label) => label.name),
+    };
+  }
+
   const labelIds = [
-    ...currentLabels
+    ...refreshedLabels
       .filter((label) => tierFromLabel(label.name) === null)
       .map((label) => label.id),
     target.id,
@@ -553,6 +610,103 @@ export async function applyLinearTierLabel(input: {
 
 function progressPath(issueId: string, root = ROOT): string {
   return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.json`);
+}
+
+function finalizeJournalLockPath(issueId: string, root = ROOT): string {
+  return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.lock`);
+}
+
+/**
+ * Serializes the complete durable finalize transaction. The repository merge
+ * mutex protects cross-lane merge/closeout state, while the issue-local
+ * exclusive journal lock remains held through lane-close's terminal mutex
+ * release so two retries cannot read the same progress snapshot concurrently.
+ */
+export function withLaneFinalizeMergeLock<T>(
+  plan: LaneFinalizePlan,
+  action: () => T,
+  options: {
+    root?: string;
+    mergeLockPath?: string;
+    owner?: MergeLockOwner;
+  } = {},
+): T {
+  const root = options.root ?? ROOT;
+  const journalLock = finalizeJournalLockPath(plan.issue_id, root);
+  const owner = options.owner ?? defaultMergeLockOwner();
+  fs.mkdirSync(path.dirname(journalLock), { recursive: true });
+  let journalFd: number | undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      journalFd = fs.openSync(journalLock, 'wx');
+      fs.writeFileSync(
+        journalFd,
+        `${JSON.stringify({ pid: owner.pid, host: owner.host, session_id: owner.session_id })}\n`,
+        'utf8',
+      );
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error;
+      }
+      let staleLocalOwner = false;
+      try {
+        const existing = JSON.parse(fs.readFileSync(journalLock, 'utf8')) as {
+          pid?: number;
+          host?: string;
+        };
+        staleLocalOwner =
+          existing.host === owner.host &&
+          typeof existing.pid === 'number' &&
+          !isProcessAlive(existing.pid);
+      } catch {
+        staleLocalOwner = false;
+      }
+      if (attempt === 0 && staleLocalOwner) {
+        fs.rmSync(journalLock, { force: true });
+        continue;
+      }
+      throw new Error(
+        `Lane finalize is already in progress for ${plan.issue_id}; refusing a concurrent journal mutation.`,
+      );
+    }
+  }
+  if (journalFd === undefined) {
+    throw new Error(`Unable to acquire lane finalize journal for ${plan.issue_id}.`);
+  }
+
+  const lock = acquireMergeLock(
+    {
+      issue_id: plan.issue_id,
+      branch: plan.branch,
+      pr: normalizePrUrl(plan.pr),
+      cwd: root,
+      reason: 'ops:lane-finalize',
+      owner,
+    },
+    { lockPath: options.mergeLockPath },
+  );
+  if (!lock.ok) {
+    fs.closeSync(journalFd);
+    fs.rmSync(journalLock, { force: true });
+    throw new Error(
+      `Lane finalize merge mutex unavailable: ${lock.code} ${lock.message}`,
+    );
+  }
+
+  try {
+    return action();
+  } finally {
+    // lane-close normally releases this lock as its terminal action. Releasing
+    // again is idempotent; owner mismatch is left untouched if another lane
+    // legitimately acquired the mutex after terminal cleanup.
+    releaseMergeLock(
+      { issue_id: plan.issue_id, branch: plan.branch },
+      { lockPath: options.mergeLockPath },
+    );
+    fs.closeSync(journalFd);
+    fs.rmSync(journalLock, { force: true });
+  }
 }
 
 export function readLaneFinalizeProgress(
@@ -656,25 +810,31 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     dryRun: bools.has('dry-run') || bools.has('explain'),
     mergeSha: getFlag(flags, 'merge-sha') ?? null,
   });
-  const progress = readLaneFinalizeProgress(plan);
-  const result = runLaneFinalizePlan(plan, {
-    completedStepIds: progress.completed_step_ids,
-    onStepCompleted: (step) => {
-      if (!progress.completed_step_ids.includes(step.id)) {
-        progress.completed_step_ids.push(step.id);
-      }
-      progress.status = 'in_progress';
-      progress.last_failure = null;
+  const execute = (): LaneFinalizeResult => {
+    const progress = readLaneFinalizeProgress(plan);
+    const result = runLaneFinalizePlan(plan, {
+      completedStepIds: progress.completed_step_ids,
+      onStepCompleted: (step) => {
+        if (!progress.completed_step_ids.includes(step.id)) {
+          progress.completed_step_ids.push(step.id);
+        }
+        progress.status = 'in_progress';
+        progress.last_failure = null;
+        progress.updated_at = new Date().toISOString();
+        writeLaneFinalizeProgress(progress);
+      },
+    });
+    if (!plan.dry_run) {
+      progress.status = result.ok ? 'complete' : 'incomplete';
+      progress.last_failure = result.ok ? null : result.message;
       progress.updated_at = new Date().toISOString();
       writeLaneFinalizeProgress(progress);
-    },
-  });
-  if (!plan.dry_run) {
-    progress.status = result.ok ? 'complete' : 'incomplete';
-    progress.last_failure = result.ok ? null : result.message;
-    progress.updated_at = new Date().toISOString();
-    writeLaneFinalizeProgress(progress);
-  }
+    }
+    return result;
+  };
+  const result = plan.dry_run
+    ? execute()
+    : withLaneFinalizeMergeLock(plan, execute);
   if (json) {
     emitJson(result);
   } else {

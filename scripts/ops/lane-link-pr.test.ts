@@ -450,8 +450,8 @@ test('PR binding feeds merge closeout without manual metadata repair', () => {
         'apply_tier_label',
         'apply_linear_tier_label',
         'generate_proof',
-        'close_lane',
         'reconcile_current',
+        'close_lane',
       ],
     );
     assert.strictEqual(
@@ -486,6 +486,8 @@ test('GitHub pull_request binding does not depend on an ephemeral preflight toke
       [
         '--branch',
         `claude/${issueId.toLowerCase()}-event-binding`,
+        '--base',
+        'main',
         '--pr',
         'https://github.com/example/unit-talk/pull/133',
         '--github-event',
@@ -493,7 +495,7 @@ test('GitHub pull_request binding does not depend on an ephemeral preflight toke
       {
         ...process.env,
         GITHUB_ACTIONS: 'true',
-        GITHUB_EVENT_NAME: 'pull_request',
+        GITHUB_EVENT_NAME: 'pull_request_target',
       },
     );
     assert.strictEqual(result.status, 0, result.stderr || result.stdout);
@@ -510,12 +512,66 @@ test('GitHub pull_request binding does not depend on an ephemeral preflight toke
   }
 });
 
+test('GitHub event binding fails closed when the PR base differs from manifest truth', () => {
+  const issueId = 'UTV2-99115';
+  try {
+    withManifest(issueId, 'started', 'codex-cli');
+    const result = runLaneLinkPr(
+      [
+        '--branch',
+        `codex/${issueId.toLowerCase()}-receive`,
+        '--base',
+        'release-candidate',
+        '--pr',
+        'https://github.com/example/unit-talk/pull/134',
+        '--github-event',
+      ],
+      {
+        ...process.env,
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'pull_request_target',
+      },
+    );
+    assert.strictEqual(result.status, 1);
+    const payload = JSON.parse(result.stdout) as { code: string };
+    assert.strictEqual(payload.code, 'base_branch_mismatch');
+  } finally {
+    cleanup(issueId);
+  }
+});
+
+test('GitHub event binding requires an explicit PR base', () => {
+  const issueId = 'UTV2-99116';
+  try {
+    withManifest(issueId, 'started', 'codex-cli');
+    const result = runLaneLinkPr(
+      [
+        '--branch',
+        `codex/${issueId.toLowerCase()}-receive`,
+        '--pr',
+        'https://github.com/example/unit-talk/pull/135',
+        '--github-event',
+      ],
+      {
+        ...process.env,
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'pull_request_target',
+      },
+    );
+    assert.strictEqual(result.status, 1);
+    const payload = JSON.parse(result.stdout) as { code: string };
+    assert.strictEqual(payload.code, 'base_branch_required');
+  } finally {
+    cleanup(issueId);
+  }
+});
+
 test('pull request workflow binds opened and reopened lane PRs automatically', () => {
   const workflow = fs.readFileSync(
     path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'),
     'utf8',
   );
-  assert.match(workflow, /types:\s*\[opened, reopened\]/);
+  assert.match(workflow, /pull_request_target:\s*\n\s*types:\s*\[opened, reopened\]/);
   assert.match(workflow, /id: lane/);
   assert.match(
     workflow,
@@ -527,7 +583,12 @@ test('pull request workflow binds opened and reopened lane PRs automatically', (
   );
   assert.match(
     workflow,
-    /pnpm ops:lane-link-pr -- --branch "\$BRANCH" --pr "\$PR_URL" --github-event/,
+    /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/,
   );
-  assert.match(workflow, /git push origin "HEAD:\$BRANCH"/);
+  assert.match(workflow, /working-directory: lane/);
+  assert.match(workflow, /--base "\$BASE_BRANCH"/);
+  assert.match(workflow, /--ignore-scripts/);
+  assert.match(workflow, /for attempt in 1 2 3/);
+  assert.match(workflow, /git rebase "origin\/\$BRANCH"/);
+  assert.doesNotMatch(workflow, /working-directory: lane[\s\S]*?pnpm install/);
 });

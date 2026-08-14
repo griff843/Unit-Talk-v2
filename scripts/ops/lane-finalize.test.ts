@@ -10,10 +10,12 @@ import {
   readLaneFinalizeProgress,
   resolveLaneFinalizeInput,
   runLaneFinalizePlan,
+  withLaneFinalizeMergeLock,
   writeLaneFinalizeProgress,
   type LaneFinalizeRunner,
   type LinearTierQuery,
 } from './lane-finalize.js';
+import { readMergeLock } from './merge-mutex.js';
 import type { LaneManifest } from './shared.js';
 
 function manifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -58,8 +60,8 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
       'apply_linear_tier_label',
       'generate_proof',
       'generate_t2_proof_bundle',
-      'close_lane',
       'reconcile_current',
+      'close_lane',
     ],
   );
   assert.deepEqual(plan.steps[0]?.args, [
@@ -117,8 +119,8 @@ test('lane finalize leaves runtime T2 proof generation to the existing proof pat
       'apply_tier_label',
       'apply_linear_tier_label',
       'generate_proof',
-      'close_lane',
       'reconcile_current',
+      'close_lane',
     ],
   );
 });
@@ -340,6 +342,24 @@ test('Linear tier label writer replaces conflicting tier labels, preserves other
         } as T,
       };
     }
+    if (variables.length === 2) {
+      return {
+        ok: true,
+        data: {
+          issue: {
+            id: 'issue-id',
+            identifier: 'UTV2-1073',
+            labels: {
+              nodes: [
+                { id: 'area-ops', name: 'area:tooling' },
+                { id: 'priority-p1', name: 'priority:1' },
+                { id: 'tier-t2', name: 'tier:T2' },
+              ],
+            },
+          },
+        } as T,
+      };
+    }
     return {
       ok: true,
       data: {
@@ -350,6 +370,7 @@ test('Linear tier label writer replaces conflicting tier labels, preserves other
             labels: {
               nodes: [
                 { id: 'area-ops', name: 'area:tooling' },
+                { id: 'priority-p1', name: 'priority:1' },
                 { id: 'tier-t1', name: 'tier:T1' },
               ],
             },
@@ -368,9 +389,9 @@ test('Linear tier label writer replaces conflicting tier labels, preserves other
 
   assert.equal(result.code, 'linear_tier_label_applied');
   assert.equal(result.changed, true);
-  assert.deepEqual(variables[1], {
+  assert.deepEqual(variables[2], {
     issueId: 'issue-id',
-    labelIds: ['area-ops', 'tier-t1'],
+    labelIds: ['area-ops', 'priority-p1', 'tier-t1'],
   });
 });
 
@@ -380,7 +401,7 @@ test('Linear tier label writer fails closed when the mutation response does not 
     calls += 1;
     return {
       ok: true,
-      data: (calls === 1
+      data: (calls <= 2
         ? {
             issue: {
               id: 'issue-id',
@@ -461,6 +482,88 @@ test('a partial finalize durably resumes without repeating completed steps', () 
     ),
     false,
   );
+});
+
+test('current-state reconciliation is always rerun even when the journal recorded it', () => {
+  const plan = buildLaneFinalizePlan({
+    manifest: manifest({
+      status: 'done',
+      closed_at: '2026-05-19T13:00:00.000Z',
+    }),
+    pr: '456',
+  });
+  let calls = 0;
+  const result = runLaneFinalizePlan(plan, {
+    completedStepIds: ['reconcile_current'],
+    runner: (() => {
+      calls += 1;
+      return { status: 0, stdout: '', stderr: '' };
+    }) as LaneFinalizeRunner,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls, 1);
+  assert.equal(result.steps[0]?.id, 'reconcile_current');
+  assert.equal(result.steps[0]?.status, 'passed');
+});
+
+test('lane finalize serializes journal mutation under the merge mutex', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-finalize-lock-'));
+  const mergeLockPath = path.join(root, 'merge-lock.json');
+  const plan = buildLaneFinalizePlan({ manifest: manifest(), pr: '456' });
+  try {
+    withLaneFinalizeMergeLock(
+      plan,
+      () => {
+        const held = readMergeLock(mergeLockPath);
+        assert.equal(held.ok, true);
+        if (held.ok) assert.equal(held.lock.status, 'held');
+        assert.throws(
+          () =>
+            withLaneFinalizeMergeLock(plan, () => undefined, {
+              root,
+              mergeLockPath,
+            }),
+          /already in progress/,
+        );
+      },
+      { root, mergeLockPath },
+    );
+
+    const released = readMergeLock(mergeLockPath);
+    assert.equal(released.ok, true);
+    if (released.ok) assert.equal(released.lock.status, 'released');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('lane finalize reclaims an orphaned local journal lock', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-finalize-orphan-'));
+  const mergeLockPath = path.join(root, 'merge-lock.json');
+  const journalDir = path.join(root, '.out', 'ops', 'lane-finalize');
+  const journalLock = path.join(journalDir, 'UTV2-1073.lock');
+  const plan = buildLaneFinalizePlan({ manifest: manifest(), pr: '456' });
+  try {
+    fs.mkdirSync(journalDir, { recursive: true });
+    fs.writeFileSync(
+      journalLock,
+      `${JSON.stringify({ pid: 2_147_483_647, host: os.hostname(), session_id: 'dead' })}\n`,
+      'utf8',
+    );
+    let ran = false;
+    withLaneFinalizeMergeLock(
+      plan,
+      () => {
+        ran = true;
+      },
+      { root, mergeLockPath },
+    );
+    assert.equal(ran, true);
+    assert.equal(fs.existsSync(journalLock), false);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('merged manifest truth skips an already-recorded merge without requiring a progress journal', () => {

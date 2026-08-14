@@ -250,6 +250,7 @@ export function recoverMissingPreflightToken(
 export function main(argv = process.argv.slice(2)): number {
   const { positionals, flags, bools } = parseArgs(argv);
   const branch = getFlag(flags, 'branch') ?? '';
+  const baseBranch = getFlag(flags, 'base') ?? '';
   const prUrl = getFlag(flags, 'pr') ?? '';
   const issueIdRaw =
     positionals[0] ??
@@ -281,13 +282,15 @@ export function main(argv = process.argv.slice(2)): number {
     if (
       githubEvent &&
       (process.env['GITHUB_ACTIONS'] !== 'true' ||
-        process.env['GITHUB_EVENT_NAME'] !== 'pull_request')
+        !['pull_request', 'pull_request_target'].includes(
+          process.env['GITHUB_EVENT_NAME'] ?? '',
+        ))
     ) {
       emitJson({
         ok: false,
         code: 'github_event_context_required',
         message:
-          '--github-event is restricted to a GitHub Actions pull_request run',
+          '--github-event is restricted to a GitHub Actions pull_request or pull_request_target run',
         issue_id: issueId,
         branch,
         pr_url: prUrl,
@@ -297,6 +300,30 @@ export function main(argv = process.argv.slice(2)): number {
 
     let preflightRecovered = false;
     let manifest = readManifest(issueId);
+    if (githubEvent && !baseBranch) {
+      emitJson({
+        ok: false,
+        code: 'base_branch_required',
+        message: '--github-event requires the pull request base via --base',
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+      } satisfies LaneLinkResult);
+      return 1;
+    }
+    if (githubEvent && manifest.base_branch !== baseBranch) {
+      emitJson({
+        ok: false,
+        code: 'base_branch_mismatch',
+        message: `Manifest base ${manifest.base_branch} does not match pull request base ${baseBranch}`,
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+        status: manifest.status,
+        heartbeat_at: manifest.heartbeat_at,
+      } satisfies LaneLinkResult);
+      return 1;
+    }
     const manifestErrors = validateManifest(
       manifest,
       issueToManifestPath(issueId),
