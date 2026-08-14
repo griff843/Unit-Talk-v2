@@ -7,6 +7,7 @@ import {
   type LaneManifest,
   type PreflightToken,
   ROOT,
+  TERMINAL_STATUSES,
   activeManifestOverlap,
   currentHeadSha,
   emitJson,
@@ -318,7 +319,9 @@ export function main(argv = process.argv.slice(2)): number {
         manifest.pr_url === prUrl;
       if (invalidatesExistingBinding) {
         manifest.pr_url = null;
-        manifest.status = 'blocked';
+        if (!TERMINAL_STATUSES.has(manifest.status)) {
+          manifest.status = 'blocked';
+        }
         manifest.blocked_by = [
           ...new Set([...manifest.blocked_by, PR_BASE_MISMATCH_BLOCKER]),
         ];

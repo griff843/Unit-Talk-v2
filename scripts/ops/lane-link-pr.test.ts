@@ -36,14 +36,7 @@ function runLaneLinkPr(args: string[], env: NodeJS.ProcessEnv = process.env) {
 
 function withManifest(
   issueId: string,
-  status:
-    | 'started'
-    | 'in_progress'
-    | 'in_review'
-    | 'merged'
-    | 'done'
-    | 'blocked'
-    | 'reopened',
+  status: LaneManifest['status'],
   laneType: 'codex-cli' | 'claude' | 'codex-cloud' = 'codex-cli',
   mutate?: (manifest: Record<string, unknown>) => void,
 ): string {
@@ -755,6 +748,107 @@ test('retargeting invalidates a bound PR while preserving unrelated lane blocker
     );
   } finally {
     cleanup(issueId);
+  }
+});
+
+test('retargeting clears terminal PR bindings without rewriting terminal lifecycle truth', () => {
+  const terminalStatuses: LaneManifest['status'][] = [
+    'failed',
+    'superseded',
+    'cancelled',
+    'merged',
+    'done',
+  ];
+  const githubEventEnv = {
+    ...process.env,
+    GITHUB_ACTIONS: 'true',
+    GITHUB_EVENT_NAME: 'pull_request_target',
+  };
+
+  for (const [index, terminalStatus] of terminalStatuses.entries()) {
+    const issueId = `UTV2-${99120 + index}`;
+    const branch = `codex/${issueId.toLowerCase()}-receive`;
+    const prUrl = `https://github.com/example/unit-talk/pull/${140 + index}`;
+    try {
+      const manifestPath = withManifest(
+        issueId,
+        terminalStatus,
+        'codex-cli',
+        (manifest) => {
+          manifest['pr_url'] = prUrl;
+          manifest['blocked_by'] = ['postmortem-recorded'];
+        },
+      );
+
+      const retargeted = runLaneLinkPr(
+        [
+          '--branch',
+          branch,
+          '--base',
+          'release-candidate',
+          '--pr',
+          prUrl,
+          '--github-event',
+        ],
+        githubEventEnv,
+      );
+      assert.strictEqual(
+        retargeted.status,
+        0,
+        `${terminalStatus}: ${retargeted.stderr || retargeted.stdout}`,
+      );
+      const payload = JSON.parse(retargeted.stdout) as {
+        ok: boolean;
+        code: string;
+        status: string;
+      };
+      assert.strictEqual(payload.ok, true);
+      assert.strictEqual(payload.code, 'pr_binding_invalidated');
+      assert.strictEqual(payload.status, terminalStatus);
+
+      const invalidated = JSON.parse(
+        fs.readFileSync(manifestPath, 'utf8'),
+      ) as LaneManifest;
+      assert.strictEqual(invalidated.pr_url, null);
+      assert.strictEqual(invalidated.status, terminalStatus);
+      assert.deepStrictEqual(invalidated.blocked_by, [
+        'postmortem-recorded',
+        'pr-base-mismatch',
+      ]);
+
+      const finalize = spawnSync(
+        process.execPath,
+        [
+          path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+          'scripts/ops/lane-finalize.ts',
+          '--issue',
+          issueId,
+          '--pr',
+          prUrl,
+          '--dry-run',
+          '--json',
+        ],
+        { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
+      );
+      assert.strictEqual(
+        finalize.status,
+        1,
+        `${terminalStatus}: ${finalize.stderr || finalize.stdout}`,
+      );
+      const finalizePayload = JSON.parse(finalize.stdout) as {
+        ok: boolean;
+        code: string;
+        message: string;
+      };
+      assert.strictEqual(finalizePayload.ok, false);
+      assert.strictEqual(finalizePayload.code, 'lane_finalize_failed');
+      assert.match(
+        finalizePayload.message,
+        /base-branch mismatch.*refusing finalization/,
+      );
+    } finally {
+      cleanup(issueId);
+    }
   }
 });
 

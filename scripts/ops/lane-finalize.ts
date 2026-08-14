@@ -270,7 +270,6 @@ export function resolveLaneFinalizeInput(input: {
     );
   }
   if (
-    input.manifest.status === 'blocked' &&
     input.manifest.blocked_by.includes(PR_BASE_MISMATCH_BLOCKER)
   ) {
     throw new Error(
