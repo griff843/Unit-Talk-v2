@@ -491,12 +491,22 @@ export function readCheckpointState(
     };
   }
 
-  if (
-    expected &&
-    (checkpoint.epoch.epoch_id !== expected.epoch_id ||
-      checkpoint.attempt !== expected.attempt ||
-      checkpoint.state_revision < expected.minimum_revision)
-  ) {
+  const identityMatches =
+    !expected ||
+    (checkpoint.epoch.epoch_id === expected.epoch_id &&
+      checkpoint.attempt === expected.attempt &&
+      checkpoint.state_revision >= expected.minimum_revision);
+  const originatingAttemptIsOpen =
+    !expected ||
+    (checkpoint.status === 'in_progress' &&
+      checkpoint.attempts.some(
+        (attempt) =>
+          attempt.epoch_id === expected.epoch_id &&
+          attempt.attempt === expected.attempt &&
+          attempt.ended_at === null,
+      ));
+
+  if (expected && (!identityMatches || !originatingAttemptIsOpen)) {
     return {
       ok: false,
       code: 'execution_checkpoint_unavailable',
@@ -509,9 +519,10 @@ export function readCheckpointState(
         epoch_id: null,
         attempt: null,
       },
-      reason:
-        `validated ${source} state does not match expected epoch/attempt/revision ` +
-        `${expected.epoch_id}/${expected.attempt}/${expected.minimum_revision}`,
+      reason: !identityMatches
+        ? `validated ${source} state does not match expected epoch/attempt/revision ` +
+          `${expected.epoch_id}/${expected.attempt}/${expected.minimum_revision}`
+        : `validated ${source} state matches ${expected.epoch_id}/${expected.attempt} but that attempt is not open and in progress`,
     };
   }
 

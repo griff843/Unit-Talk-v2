@@ -302,6 +302,37 @@ test('a delayed executor cannot stamp phase completion into a newer rework epoch
   }
 });
 
+test('a delayed phase completion cannot mutate a closed originating attempt or leak into its resume', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const started = beginNext({ issueId, timeoutPolicy, dir });
+    finishAttempt({ issueId, outcome: 'failed', reason: 'executor exited before its delayed write', dir });
+    const closedRevision = readCheckpoint(issueId, dir)?.state_revision;
+
+    const delayed = recordPhaseComplete(issueId, 'implement', 'background completion after close', {
+      dir,
+      identity: started.identity,
+    });
+    assert.equal(delayed, null, 'a closed attempt must reject executor mutations');
+
+    const rejected = readCheckpointState(issueId, dir, started.identity);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, 'execution_checkpoint_unavailable');
+    assert.match(rejected.reason, /attempt is not open and in progress/);
+
+    const persisted = readCheckpoint(issueId, dir);
+    assert.equal(persisted?.state_revision, closedRevision, 'a rejected delayed mutation must not write state');
+    assert.deepEqual(persisted?.completed_phases, []);
+
+    const resumed = beginNext({ issueId, timeoutPolicy, dir });
+    assert.deepEqual(resumed.resume.skipped_phases, [], 'resume must not inherit validity from the closed attempt');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('resume and rework fail closed when no validated epoch state exists', () => {
   const dir = tmpDir();
   try {
