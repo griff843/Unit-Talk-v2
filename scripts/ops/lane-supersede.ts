@@ -40,8 +40,19 @@ import {
   type SupersessionRecord,
 } from './shared.js';
 import { releaseLease, readAllLeases } from './lease-registry.js';
+import { acquireMergeLock, releaseMergeLock, defaultMergeLockOwner } from './merge-mutex.js';
 
 export const SUPERSESSION_TX_DIR = '.ops/supersession';
+
+/**
+ * A lease still HOLDS its file scope in both of these states.
+ *
+ * Mirrors `ACTIVE_NON_RECLAIMED` in `lease-registry.ts`, which is module-private
+ * there. Checking only `active` would report a lane released while a
+ * `stale_reclaim_required` lease keeps blocking new work -- the reservation path
+ * treats both as held, so the release post-condition must too.
+ */
+export const LEASE_STATES_STILL_HELD: ReadonlySet<string> = new Set(['active', 'stale_reclaim_required']);
 
 /** Ordered stages. A crash leaves the receipt at the last completed stage. */
 export const TX_STAGES = ['verified', 'manifest_committed', 'lease_released', 'complete'] as const;
@@ -142,6 +153,29 @@ export function normalizePrNumber(value: string): string {
   if (url) return url[1] as string;
   const bare = value.match(/^#?(\d+)$/);
   return bare ? (bare[1] as string) : value;
+}
+
+/**
+ * `owner/repo` from a PR URL, or null when the value carries no repository.
+ *
+ * A bare number is repository-relative, so comparing numbers alone lets a
+ * manifest URL pointing at ANOTHER repository agree with `--source-pr 123`,
+ * while `gh pr view 123` then attests PR #123 in THIS repository. An unrelated
+ * closed PR would authorize the supersession.
+ */
+export function prRepoFromUrl(value: string): string | null {
+  const m = value.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/\d+/);
+  return m ? `${m[1]}/${m[2]}` : null;
+}
+
+/** `owner/repo` of the checkout the command is acting in. */
+export function currentRepoSlug(
+  runner: (args: string[]) => { status: number | null; stdout: string } = defaultGh,
+): string | null {
+  const r = runner(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner']);
+  if (r.status !== 0) return null;
+  const slug = (r.stdout ?? '').trim();
+  return slug.length > 0 ? slug : null;
 }
 
 // ── GitHub authority ─────────────────────────────────────────────────────────
@@ -252,6 +286,28 @@ function defaultCurrentBranch(): string {
   return r.status === 0 ? (r.stdout ?? '').trim() : '';
 }
 
+/**
+ * A named, resolvable branch -- never a detached HEAD.
+ *
+ * `git rev-parse --abbrev-ref HEAD` yields the literal string `HEAD` when
+ * detached and the resolver yields `''` when the command fails. Neither can
+ * equal the superseded lane's branch, so a bare inequality check silently
+ * PASSES for a detached checkout: the terminal record would be written into a
+ * checkout no branch carries, the shared lease released, and success reported
+ * with nothing persisted anywhere a reviewer can see. The acting branch must be
+ * positively established, not merely different.
+ */
+export function resolveActingBranch(branch: string): { ok: boolean; branch?: string; reason: string } {
+  const value = branch.trim();
+  if (value.length === 0) {
+    return { ok: false, reason: 'unable to resolve the current branch; refusing to write a terminal record from an unknown checkout' };
+  }
+  if (value === 'HEAD') {
+    return { ok: false, reason: 'HEAD is detached; a terminal record must be written from a named acting-lane branch' };
+  }
+  return { ok: true, branch: value, reason: 'named acting branch resolved' };
+}
+
 function defaultGh(args: string[]): { status: number | null; stdout: string } {
   const r = spawnSync('gh', args, { encoding: 'utf8', stdio: 'pipe' });
   return { status: r.status, stdout: r.stdout ?? '' };
@@ -350,7 +406,7 @@ export function verifyReleased(
     asserts_no_success: !SUCCESS_TERMINAL_STATUSES.has(manifest.status),
     no_merge_sha_claim: manifest.merge_sha == null,
     lease_not_active: !leases.some(
-      (lease) => lease.issue_id === manifest.issue_id && lease.status === 'active',
+      (lease) => lease.issue_id === manifest.issue_id && LEASE_STATES_STILL_HELD.has(String(lease.status)),
     ),
   };
   const failures = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
@@ -363,6 +419,9 @@ export interface SupersedeDeps {
   root?: string;
   /** Current checkout branch; used to refuse writing from the superseded lane's own branch. */
   currentBranch?: () => string;
+  /** Injected serialization for tests; production uses the shared merge mutex. */
+  acquireLock?: () => { ok: boolean; code?: string };
+  releaseLock?: () => void;
   gh?: (args: string[]) => { status: number | null; stdout: string };
   gitStatus?: (args: string[]) => number | null;
   leaseRegistryDir?: string;
@@ -422,8 +481,12 @@ export function supersedeLane(raw: Partial<SupersedeInputs>, deps: SupersedeDeps
   // by writing to the superseded lane's own branch -- that branch belongs to a
   // closed PR and is preserved as failure evidence. Running from it would
   // rewrite the very history this command exists to keep intact.
-  const branchNow = (deps.currentBranch ?? defaultCurrentBranch)();
-  if (branchNow && manifest.branch && branchNow === manifest.branch) {
+  const acting = resolveActingBranch((deps.currentBranch ?? defaultCurrentBranch)());
+  if (!acting.ok) {
+    return { ok: false, code: 'acting_branch_unresolved', message: acting.reason, exit_code: 1 };
+  }
+  const branchNow = acting.branch as string;
+  if (manifest.branch && branchNow === manifest.branch) {
     return {
       ok: false,
       code: 'refuses_to_write_superseded_branch',
@@ -462,6 +525,27 @@ export function supersedeLane(raw: Partial<SupersedeInputs>, deps: SupersedeDeps
       ok: false,
       code: 'pr_identity_conflict',
       message: `Manifest PR #${manifestPr} disagrees with --source-pr #${input.sourcePr}; refusing on ambiguous identity`,
+      exit_code: 1,
+    };
+  }
+  // A bare PR number is repository-relative. `gh pr view <n>` attests the PR in
+  // THIS repository, so a manifest URL pointing elsewhere would let an
+  // unrelated closed PR authorize the supersession.
+  const manifestRepo = manifest.pr_url ? prRepoFromUrl(manifest.pr_url) : null;
+  const actingRepo = currentRepoSlug(deps.gh);
+  if (!manifestRepo || !actingRepo) {
+    return {
+      ok: false,
+      code: 'pr_repo_unresolved',
+      message: `unable to establish repository identity (manifest=${manifestRepo ?? 'none'}, checkout=${actingRepo ?? 'none'}); refusing to authorize from a number alone`,
+      exit_code: 1,
+    };
+  }
+  if (manifestRepo.toLowerCase() !== actingRepo.toLowerCase()) {
+    return {
+      ok: false,
+      code: 'pr_repo_conflict',
+      message: `manifest PR belongs to ${manifestRepo} but this checkout is ${actingRepo}; a PR number alone may not authorize supersession`,
       exit_code: 1,
     };
   }
@@ -504,6 +588,73 @@ export function supersedeLane(raw: Partial<SupersedeInputs>, deps: SupersedeDeps
       ok: false,
       code: 'rejected_head_on_main',
       message: `${input.rejectedHead} is an ancestor of GitHub main ${remoteMain.sha}; this work shipped and cannot be superseded`,
+      exit_code: 1,
+    };
+  }
+
+  // FINDING 1: validation and the terminal write must be one serialized
+  // critical section. GitHub state is a SNAPSHOT: between reading it and
+  // committing `superseded`, the PR can be reopened and merged, or its head can
+  // land on main -- and the local post-condition never re-reads GitHub, so that
+  // ordering reports success for work that shipped. Two concurrent invocations
+  // could likewise both pass the receipt check and overwrite each other.
+  const lock = deps.acquireLock
+    ? deps.acquireLock()
+    : acquireMergeLock({
+        issue_id: input.issueId,
+        branch: branchNow,
+        pr: `#${input.sourcePr}`,
+        cwd: root,
+        reason: `supersede ${input.issueId}`,
+        owner: defaultMergeLockOwner(),
+      });
+  if (!lock.ok) {
+    return {
+      ok: false,
+      code: 'merge_mutex_unavailable',
+      message: `refusing to supersede without the serialized merge lock: ${lock.code ?? 'unavailable'}`,
+      exit_code: 1,
+    };
+  }
+  try {
+    return commitSupersession(input, manifest, pr, txId, root, now, deps, remoteMain.sha as string);
+  } finally {
+    if (deps.releaseLock) deps.releaseLock();
+    else releaseMergeLock({ issue_id: input.issueId, branch: branchNow });
+  }
+}
+
+/** The serialized critical section: re-verify, then commit and release. */
+function commitSupersession(
+  input: SupersedeInputs,
+  manifest: LaneManifest,
+  pr: PrTruth,
+  txId: string,
+  root: string,
+  now: () => string,
+  deps: SupersedeDeps,
+  mainSha: string,
+): SupersedeResult {
+  // Re-read PR state INSIDE the lock. The pre-lock read decided whether to
+  // bother; this one is the decision of record.
+  const confirmed = readPrTruth(input.sourcePr, deps.gh);
+  if (!confirmed.ok) {
+    return { ok: false, code: 'pr_state_unverifiable', message: confirmed.reason, exit_code: 1 };
+  }
+  if (confirmed.state !== 'CLOSED' || confirmed.merged === true || confirmed.mergedAt != null) {
+    return {
+      ok: false,
+      code: 'pr_not_closed_unmerged',
+      message: `PR #${input.sourcePr} changed under the lock to state=${confirmed.state} merged=${confirmed.merged}; refusing`,
+      exit_code: 1,
+    };
+  }
+  const reAncestry = isAncestorOfBase(root, input.rejectedHead, mainSha, deps.gitStatus);
+  if (!reAncestry.ok || reAncestry.ancestor) {
+    return {
+      ok: false,
+      code: 'rejected_head_on_main',
+      message: `${input.rejectedHead} landed on main before the terminal write; this work shipped and cannot be superseded`,
       exit_code: 1,
     };
   }

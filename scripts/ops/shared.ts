@@ -1524,6 +1524,41 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   if (!MANIFEST_STATUSES.has(manifest.status)) {
     errors.push(`${sourcePath}: status is invalid`);
   }
+  // UTV2-1668: `superseded` asserts that work did NOT ship, and reaching it
+  // requires verified PR state, attested actor authority, ancestry against
+  // current main and a transactional lease release. Enforcing that only in
+  // `ops:lane-manifest update` leaves every other writer open -- notably the
+  // repair-packet path, which writes an arbitrary VALIDATED manifest, so a
+  // packet carrying a superseded proposed_manifest would reach the terminal
+  // with none of those checks. The invariant therefore lives here, in the
+  // shared validator every writer already goes through.
+  if (manifest.status === 'superseded') {
+    const record = manifest.supersession;
+    if (!record) {
+      errors.push(
+        `${sourcePath}: status "superseded" requires a supersession record; write it via ` +
+        'scripts/ops/lane-supersede.ts, which is the only governed path to this terminal',
+      );
+    } else {
+      for (const field of ['reason', 'actor', 'at', 'source_pr', 'source_branch', 'rejected_head', 'successor_issue_id', 'transaction_id'] as const) {
+        if (typeof record[field] !== 'string' || record[field].trim().length === 0) {
+          errors.push(`${sourcePath}: supersession.${field} is required`);
+        }
+      }
+      if (record.claim !== 'source_pr_did_not_merge') {
+        errors.push(
+          `${sourcePath}: supersession.claim must be exactly "source_pr_did_not_merge"; ` +
+          'the record may not assert that equivalent content never landed elsewhere',
+        );
+      }
+      if (record.successor_issue_id === manifest.issue_id) {
+        errors.push(`${sourcePath}: supersession.successor_issue_id may not equal the superseded issue`);
+      }
+    }
+  }
+  if (manifest.status !== 'superseded' && manifest.supersession) {
+    errors.push(`${sourcePath}: supersession record is only valid on status "superseded"`);
+  }
   const VALID_LANE_TYPES = new Set([
     'runtime', 'modeling', 'verification', 'hygiene', 'migration',
     'governance', 'delivery-ui', 'data-canonical',
