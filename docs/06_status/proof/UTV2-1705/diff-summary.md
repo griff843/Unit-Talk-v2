@@ -1,5 +1,7 @@
 # UTV2-1705 Diff Summary
 
+MERGE_SHA: aa5cac276b57914ecc0bca31df00fd2b2aba0caa
+
 Verified implementation SHA: `aa5cac276b57914ecc0bca31df00fd2b2aba0caa`
 
 - `ops:lane-link-pr` now accepts any canonical lane executor and can derive the issue ID from the lane branch.

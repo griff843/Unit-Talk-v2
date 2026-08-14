@@ -4,6 +4,22 @@ MERGE_SHA: aa5cac276b57914ecc0bca31df00fd2b2aba0caa
 
 Pre-merge, this anchor is the verified implementation commit. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
+## ASSERTIONS:
+
+- The canonical lane PR binder accepts both Codex and Claude lane executors.
+- Pull-request `opened` and `reopened` events bind the PR URL without a manual metadata repair.
+- Rebinding the same URL is idempotent, while a different URL fails closed.
+- A bound manifest supplies `lane-finalize` with its PR identity when no explicit PR argument is provided.
+
+## EVIDENCE:
+
+```text
+Focused tests: 23 passed, 0 failed
+Static verification: 2,175 passed, 0 failed
+R-level compliance: PASS, no matching rules
+Staging writable DB proof: delegated to staging-ci as required for T1
+```
+
 ## Verification
 
 | Check | Result | Evidence |
