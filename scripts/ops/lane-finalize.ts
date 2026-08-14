@@ -1,10 +1,18 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import {
+  linearQuery,
+  type LinearQueryOptions,
+  type LinearQueryResult,
+} from './linear-client.js';
 import {
   ROOT,
   emitJson,
   getFlag,
   parseArgs,
+  readConfiguredEnvValue,
   readManifest,
   requireIssueId,
   type LaneManifest,
@@ -14,6 +22,7 @@ export interface LaneFinalizeStep {
   id:
     | 'record_merge'
     | 'apply_tier_label'
+    | 'apply_linear_tier_label'
     | 'generate_proof'
     | 'generate_t2_proof_bundle'
     | 'close_lane'
@@ -34,20 +43,67 @@ export interface LaneFinalizePlan {
 
 export interface LaneFinalizeResult {
   ok: boolean;
-  code: 'lane_finalize_dry_run' | 'lane_finalized' | 'lane_already_finalized' | 'lane_finalize_failed';
+  code:
+    | 'lane_finalize_dry_run'
+    | 'lane_finalized'
+    | 'lane_already_finalized'
+    | 'lane_finalize_failed';
   issue_id: string;
   branch: string;
   pr: string;
   dry_run: boolean;
-  steps: Array<LaneFinalizeStep & { status: 'planned' | 'passed' | 'skipped' | 'failed'; stdout?: string; stderr?: string }>;
+  resumed: boolean;
+  completed_step_ids: LaneFinalizeStep['id'][];
+  steps: Array<
+    LaneFinalizeStep & {
+      status: 'planned' | 'passed' | 'skipped' | 'failed';
+      stdout?: string;
+      stderr?: string;
+    }
+  >;
   message: string;
+}
+
+export interface LaneFinalizeProgress {
+  schema_version: 1;
+  issue_id: string;
+  branch: string;
+  pr_url: string;
+  status: 'in_progress' | 'incomplete' | 'complete';
+  completed_step_ids: LaneFinalizeStep['id'][];
+  last_failure: string | null;
+  updated_at: string;
 }
 
 export type LaneFinalizeRunner = (
   command: string,
   args: string[],
   options: { cwd: string; encoding: 'utf8'; stdio: 'pipe' },
-) => { status: number | null; stdout?: string | Buffer | null; stderr?: string | Buffer | null };
+) => {
+  status: number | null;
+  stdout?: string | Buffer | null;
+  stderr?: string | Buffer | null;
+};
+
+export type LinearTierQuery = <T>(
+  query: string,
+  variables: Record<string, unknown>,
+  options: LinearQueryOptions,
+) => Promise<LinearQueryResult<T>>;
+
+interface LinearLabelNode {
+  id: string;
+  name: string;
+}
+
+export interface ApplyLinearTierLabelResult {
+  ok: true;
+  code: 'linear_tier_label_applied' | 'linear_tier_label_already_applied';
+  issue_id: string;
+  tier: 'T1' | 'T2' | 'T3';
+  changed: boolean;
+  labels: string[];
+}
 
 export function buildLaneFinalizePlan(input: {
   manifest: LaneManifest;
@@ -57,21 +113,54 @@ export function buildLaneFinalizePlan(input: {
   mergeSha?: string | null;
 }): LaneFinalizePlan {
   const alreadyClosed = input.manifest.status === 'done';
+  const mergeAlreadyRecorded =
+    (input.manifest.status === 'merged' || alreadyClosed) &&
+    Boolean(input.manifest.commit_sha);
   const issueId = input.manifest.issue_id;
   const steps: LaneFinalizeStep[] = [];
 
   if (!alreadyClosed) {
-    steps.push({
-      id: 'record_merge',
-      command: 'pnpm',
-      args: ['ops:lane-manifest', 'record-merge', issueId, '--pr', input.pr, '--json'],
-      required: true,
-    });
+    if (!mergeAlreadyRecorded) {
+      steps.push({
+        id: 'record_merge',
+        command: 'pnpm',
+        args: [
+          'ops:lane-manifest',
+          'record-merge',
+          issueId,
+          '--pr',
+          input.pr,
+          '--json',
+        ],
+        required: true,
+      });
+    }
     if (input.manifest.tier) {
       steps.push({
         id: 'apply_tier_label',
         command: 'gh',
-        args: ['pr', 'edit', normalizePrUrl(input.pr), '--add-label', `tier:${input.manifest.tier}`],
+        args: [
+          'pr',
+          'edit',
+          normalizePrUrl(input.pr),
+          '--add-label',
+          `tier:${input.manifest.tier}`,
+        ],
+        required: true,
+      });
+      steps.push({
+        id: 'apply_linear_tier_label',
+        command: 'pnpm',
+        args: [
+          'exec',
+          'tsx',
+          'scripts/ops/lane-finalize.ts',
+          '--issue',
+          issueId,
+          '--apply-linear-tier-label',
+          input.manifest.tier,
+          '--json',
+        ],
         required: true,
       });
     }
@@ -147,11 +236,15 @@ export function resolveLaneFinalizeInput(input: {
 }): { issueId: string; pr: string } {
   const issueId = requireIssueId(input.issueId ?? input.manifest.issue_id);
   if (issueId !== input.manifest.issue_id) {
-    throw new Error(`Issue ${issueId} does not match manifest issue ${input.manifest.issue_id}.`);
+    throw new Error(
+      `Issue ${issueId} does not match manifest issue ${input.manifest.issue_id}.`,
+    );
   }
   const pr = input.pr ?? extractPrNumber(input.manifest.pr_url);
   if (!pr) {
-    throw new Error('Missing required --pr and manifest.pr_url does not contain a PR number.');
+    throw new Error(
+      'Missing required --pr and manifest.pr_url does not contain a PR number.',
+    );
   }
 
   return { issueId, pr };
@@ -169,7 +262,10 @@ function normalizePrUrl(pr: string): string {
     : `https://github.com/griff843/Unit-Talk-v2/pull/${pr}`;
 }
 
-function standardProofPath(issueId: string, fileName: 'diff-summary.md' | 'runtime-verification.md'): string {
+function standardProofPath(
+  issueId: string,
+  fileName: 'diff-summary.md' | 'runtime-verification.md',
+): string {
   return `docs/06_status/proof/${issueId}/${fileName}`;
 }
 
@@ -177,17 +273,27 @@ function shouldGenerateT2ProofBundle(manifest: LaneManifest): boolean {
   if (manifest.tier !== 'T2') {
     return false;
   }
-  return ['governance', 'hygiene', 'verification', 'delivery-ui', 'codex-cli'].includes(
-    manifest.lane_type,
-  );
+  return [
+    'governance',
+    'hygiene',
+    'verification',
+    'delivery-ui',
+    'codex-cli',
+  ].includes(manifest.lane_type);
 }
 
 export function runLaneFinalizePlan(
   plan: LaneFinalizePlan,
-  options: { runner?: LaneFinalizeRunner } = {},
+  options: {
+    runner?: LaneFinalizeRunner;
+    completedStepIds?: Iterable<LaneFinalizeStep['id']>;
+    onStepCompleted?: (step: LaneFinalizeStep) => void;
+  } = {},
 ): LaneFinalizeResult {
   const runner = options.runner ?? spawnSync;
   const steps: LaneFinalizeResult['steps'] = [];
+  const previouslyCompleted = new Set(options.completedStepIds ?? []);
+  const completedStepIds = new Set(previouslyCompleted);
 
   if (plan.dry_run) {
     return {
@@ -197,12 +303,23 @@ export function runLaneFinalizePlan(
       branch: plan.branch,
       pr: plan.pr,
       dry_run: true,
+      resumed: false,
+      completed_step_ids: [],
       steps: plan.steps.map((step) => ({ ...step, status: 'planned' })),
       message: 'Lane finalize dry-run only; no closeout commands executed.',
     };
   }
 
   for (const step of plan.steps) {
+    if (previouslyCompleted.has(step.id)) {
+      steps.push({
+        ...step,
+        status: 'skipped',
+        stdout: 'Previously completed; skipped from durable finalize progress.',
+        stderr: '',
+      });
+      continue;
+    }
     const result = runner(step.command, step.args, {
       cwd: ROOT,
       encoding: 'utf8',
@@ -226,11 +343,36 @@ export function runLaneFinalizePlan(
         branch: plan.branch,
         pr: plan.pr,
         dry_run: false,
+        resumed: previouslyCompleted.size > 0,
+        completed_step_ids: [...completedStepIds],
         steps,
-        message: `Lane finalize failed at ${step.id}.`,
+        message: `Lane finalize is incomplete: failed at ${step.id} after completing ${
+          completedStepIds.size > 0
+            ? [...completedStepIds].join(', ')
+            : 'no steps'
+        }. Re-run the same command to resume.`,
       };
     }
     steps.push({ ...step, status: 'passed', ...output });
+    completedStepIds.add(step.id);
+    try {
+      options.onStepCompleted?.(step);
+    } catch (error) {
+      return {
+        ok: false,
+        code: 'lane_finalize_failed',
+        issue_id: plan.issue_id,
+        branch: plan.branch,
+        pr: plan.pr,
+        dry_run: false,
+        resumed: previouslyCompleted.size > 0,
+        completed_step_ids: [...completedStepIds],
+        steps,
+        message: `Lane finalize completed ${step.id}, but could not persist resume progress: ${
+          error instanceof Error ? error.message : String(error)
+        }. Re-run is safe because completed commands are idempotent.`,
+      };
+    }
   }
 
   return {
@@ -240,6 +382,8 @@ export function runLaneFinalizePlan(
     branch: plan.branch,
     pr: plan.pr,
     dry_run: false,
+    resumed: previouslyCompleted.size > 0,
+    completed_step_ids: [...completedStepIds],
     steps,
     message: plan.already_closed
       ? 'Lane was already closed; reconciliation completed.'
@@ -247,14 +391,261 @@ export function runLaneFinalizePlan(
   };
 }
 
-function main(argv = process.argv.slice(2)): number {
-  const { flags, bools } = parseArgs(argv);
-  const rawIssueId = getFlag(flags, 'issue') ?? '';
+function normalizeTier(value: string): 'T1' | 'T2' | 'T3' {
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/^TIER:/, '');
+  if (normalized !== 'T1' && normalized !== 'T2' && normalized !== 'T3') {
+    throw new Error(`Unsupported tier label: ${value}`);
+  }
+  return normalized;
+}
+
+function tierFromLabel(label: string): 'T1' | 'T2' | 'T3' | null {
+  const normalized = label
+    .trim()
+    .toUpperCase()
+    .replace(/^TIER:/, '');
+  return normalized === 'T1' || normalized === 'T2' || normalized === 'T3'
+    ? normalized
+    : null;
+}
+
+function verifiedTier(labels: LinearLabelNode[]): 'T1' | 'T2' | 'T3' | null {
+  const tiers = [
+    ...new Set(
+      labels
+        .map((label) => tierFromLabel(label.name))
+        .filter((tier): tier is 'T1' | 'T2' | 'T3' => tier !== null),
+    ),
+  ];
+  return tiers.length === 1 ? tiers[0] : null;
+}
+
+export async function applyLinearTierLabel(input: {
+  issueId: string;
+  tier: string;
+  token: string;
+  query?: LinearTierQuery;
+}): Promise<ApplyLinearTierLabelResult> {
+  const issueId = requireIssueId(input.issueId);
+  const tier = normalizeTier(input.tier);
+  const query = input.query ?? linearQuery;
+  const current = await query<{
+    issue: {
+      id: string;
+      identifier: string;
+      labels: { nodes: LinearLabelNode[] };
+      team: { labels: { nodes: LinearLabelNode[] } } | null;
+    } | null;
+    issueLabels: { nodes: LinearLabelNode[] };
+  }>(
+    `
+      query LaneFinalizeTierLabels($issueId: String!) {
+        issue(id: $issueId) {
+          id
+          identifier
+          labels(first: 100) { nodes { id name } }
+          team { labels(first: 250) { nodes { id name } } }
+        }
+        issueLabels(first: 250) { nodes { id name } }
+      }
+    `,
+    { issueId },
+    { token: input.token, userAgent: 'unit-talk-lane-finalize' },
+  );
+  if (!current.ok || !current.data?.issue) {
+    throw new Error(
+      `Unable to read Linear tier labels for ${issueId}: ${current.error ?? 'issue not found'}`,
+    );
+  }
+
+  const currentLabels = current.data.issue.labels.nodes;
+  if (verifiedTier(currentLabels) === tier) {
+    return {
+      ok: true,
+      code: 'linear_tier_label_already_applied',
+      issue_id: issueId,
+      tier,
+      changed: false,
+      labels: currentLabels.map((label) => label.name),
+    };
+  }
+
+  const availableLabels = [
+    ...current.data.issueLabels.nodes,
+    ...(current.data.issue.team?.labels.nodes ?? []),
+  ].filter(
+    (label, index, labels) =>
+      labels.findIndex((candidate) => candidate.id === label.id) === index,
+  );
+  const targetCandidates = availableLabels.filter(
+    (label) => tierFromLabel(label.name) === tier,
+  );
+  const target =
+    targetCandidates.find(
+      (label) => label.name.toUpperCase() === `TIER:${tier}`,
+    ) ?? targetCandidates[0];
+  if (!target) {
+    throw new Error(
+      `Linear workspace does not contain a label for tier:${tier}.`,
+    );
+  }
+
+  const labelIds = [
+    ...currentLabels
+      .filter((label) => tierFromLabel(label.name) === null)
+      .map((label) => label.id),
+    target.id,
+  ];
+  const updated = await query<{
+    issueUpdate: {
+      success: boolean;
+      issue: {
+        identifier: string;
+        labels: { nodes: LinearLabelNode[] };
+      } | null;
+    };
+  }>(
+    `
+      mutation LaneFinalizeApplyTierLabel($issueId: String!, $labelIds: [String!]!) {
+        issueUpdate(id: $issueId, input: { labelIds: $labelIds }) {
+          success
+          issue {
+            identifier
+            labels(first: 100) { nodes { id name } }
+          }
+        }
+      }
+    `,
+    { issueId: current.data.issue.id, labelIds },
+    { token: input.token, userAgent: 'unit-talk-lane-finalize' },
+  );
+  const updatedIssue = updated.data?.issueUpdate.issue;
+  if (
+    !updated.ok ||
+    updated.data?.issueUpdate.success !== true ||
+    !updatedIssue
+  ) {
+    throw new Error(
+      `Unable to apply Linear tier:${tier} to ${issueId}: ${updated.error ?? 'mutation did not succeed'}`,
+    );
+  }
+  if (verifiedTier(updatedIssue.labels.nodes) !== tier) {
+    throw new Error(
+      `Linear tier label verification failed for ${issueId}; observed ${
+        updatedIssue.labels.nodes.map((label) => label.name).join(', ') ||
+        'no labels'
+      }.`,
+    );
+  }
+
+  return {
+    ok: true,
+    code: 'linear_tier_label_applied',
+    issue_id: issueId,
+    tier,
+    changed: true,
+    labels: updatedIssue.labels.nodes.map((label) => label.name),
+  };
+}
+
+function progressPath(issueId: string, root = ROOT): string {
+  return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.json`);
+}
+
+export function readLaneFinalizeProgress(
+  plan: LaneFinalizePlan,
+  root = ROOT,
+): LaneFinalizeProgress {
+  const file = progressPath(plan.issue_id, root);
+  if (!fs.existsSync(file)) {
+    return {
+      schema_version: 1,
+      issue_id: plan.issue_id,
+      branch: plan.branch,
+      pr_url: normalizePrUrl(plan.pr),
+      status: 'in_progress',
+      completed_step_ids: [],
+      last_failure: null,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  const parsed = JSON.parse(
+    fs.readFileSync(file, 'utf8'),
+  ) as LaneFinalizeProgress;
+  if (
+    parsed.schema_version !== 1 ||
+    parsed.issue_id !== plan.issue_id ||
+    parsed.branch !== plan.branch ||
+    parsed.pr_url !== normalizePrUrl(plan.pr)
+  ) {
+    throw new Error(
+      `Finalize progress identity mismatch at ${file}; refusing to reuse stale completed steps.`,
+    );
+  }
+  return parsed;
+}
+
+export function writeLaneFinalizeProgress(
+  progress: LaneFinalizeProgress,
+  root = ROOT,
+): void {
+  const file = progressPath(progress.issue_id, root);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(temporary, `${JSON.stringify(progress, null, 2)}\n`, 'utf8');
+  fs.renameSync(temporary, file);
+}
+
+export function parseLaneFinalizeCliArgs(argv: string[]): {
+  issueId: string;
+  flags: Map<string, string[]>;
+  bools: Set<string>;
+} {
+  const { positionals, flags, bools } = parseArgs(
+    argv.filter((argument) => argument !== '--'),
+  );
+  return {
+    issueId: getFlag(flags, 'issue') ?? positionals[0] ?? '',
+    flags,
+    bools,
+  };
+}
+
+async function main(argv = process.argv.slice(2)): Promise<number> {
+  const { issueId: rawIssueId, flags, bools } = parseLaneFinalizeCliArgs(argv);
   const json = bools.has('json');
+  const linearTier = getFlag(flags, 'apply-linear-tier-label');
+  if (linearTier) {
+    const token =
+      readConfiguredEnvValue('LINEAR_API_TOKEN') ||
+      readConfiguredEnvValue('LINEAR_API_KEY');
+    if (!token) {
+      throw new Error(
+        'LINEAR_API_TOKEN or LINEAR_API_KEY is required to apply the Linear tier label.',
+      );
+    }
+    const result = await applyLinearTierLabel({
+      issueId: rawIssueId,
+      tier: linearTier,
+      token,
+    });
+    if (json) emitJson(result);
+    else
+      process.stdout.write(
+        `${result.code}: ${result.issue_id} tier:${result.tier}\n`,
+      );
+    return 0;
+  }
   const manifest = readManifest(requireIssueId(rawIssueId));
   const { pr } = resolveLaneFinalizeInput({
     issueId: rawIssueId,
-    pr: getFlag(flags, 'pr') ?? getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr-number'),
+    pr:
+      getFlag(flags, 'pr') ??
+      getFlag(flags, 'pr-url') ??
+      getFlag(flags, 'pr-number'),
     manifest,
   });
 
@@ -265,27 +656,52 @@ function main(argv = process.argv.slice(2)): number {
     dryRun: bools.has('dry-run') || bools.has('explain'),
     mergeSha: getFlag(flags, 'merge-sha') ?? null,
   });
-  const result = runLaneFinalizePlan(plan);
+  const progress = readLaneFinalizeProgress(plan);
+  const result = runLaneFinalizePlan(plan, {
+    completedStepIds: progress.completed_step_ids,
+    onStepCompleted: (step) => {
+      if (!progress.completed_step_ids.includes(step.id)) {
+        progress.completed_step_ids.push(step.id);
+      }
+      progress.status = 'in_progress';
+      progress.last_failure = null;
+      progress.updated_at = new Date().toISOString();
+      writeLaneFinalizeProgress(progress);
+    },
+  });
+  if (!plan.dry_run) {
+    progress.status = result.ok ? 'complete' : 'incomplete';
+    progress.last_failure = result.ok ? null : result.message;
+    progress.updated_at = new Date().toISOString();
+    writeLaneFinalizeProgress(progress);
+  }
   if (json) {
     emitJson(result);
   } else {
     process.stdout.write(`${result.message}\n`);
     for (const step of result.steps) {
-      process.stdout.write(`${step.status}: ${step.command} ${step.args.join(' ')}\n`);
+      process.stdout.write(
+        `${step.status}: ${step.command} ${step.args.join(' ')}\n`,
+      );
     }
   }
   return result.ok ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try {
-    process.exitCode = main();
-  } catch (error) {
-    emitJson({
-      ok: false,
-      code: 'lane_finalize_failed',
-      message: error instanceof Error ? error.message : String(error),
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  void main()
+    .then((exitCode) => {
+      process.exitCode = exitCode;
+    })
+    .catch((error) => {
+      emitJson({
+        ok: false,
+        code: 'lane_finalize_failed',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      process.exitCode = 1;
     });
-    process.exitCode = 1;
-  }
 }

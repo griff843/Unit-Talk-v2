@@ -448,6 +448,7 @@ test('PR binding feeds merge closeout without manual metadata repair', () => {
       [
         'record_merge',
         'apply_tier_label',
+        'apply_linear_tier_label',
         'generate_proof',
         'close_lane',
         'reconcile_current',
