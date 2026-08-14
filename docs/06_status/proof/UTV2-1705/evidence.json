@@ -4,9 +4,9 @@
   "title": "Bind lane PR URLs automatically across executors",
   "tier": "T1",
   "status": "ci_staging_proof_pending",
-  "generated_at": "2026-08-14T20:48:53Z",
+  "generated_at": "2026-08-14T22:46:09Z",
   "sha_binding": {
-    "verified_source_sha": "660a49075bcca7ef89b2613b05c01d2dabea72b0",
+    "verified_source_sha": "a6173d9cdf15426459949d156ee2df359e6fa630",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -37,16 +37,16 @@
     "verify_static": {
       "command": "pnpm verify:static",
       "status": "PASS",
-      "aggregate_tests": 2193,
-      "pass": 2193,
+      "aggregate_tests": 2194,
+      "pass": 2194,
       "fail": 0,
       "detail": "Environment, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit 0."
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
       "status": "PASS",
-      "tests": 44,
-      "pass": 44,
+      "tests": 45,
+      "pass": 45,
       "fail": 0
     },
     "mutation_tests": [
@@ -91,6 +91,12 @@
         "mutation": "disabled the pr-base-mismatch finalize guard",
         "result": "KILLED",
         "observed": "production-path retarget regression failed and exposed a successful seven-step wrong-base closeout plan; guard restored and regression green"
+      },
+      {
+        "control": "status-independent retarget invalidation",
+        "mutation": "restored the status === 'in_review' restriction",
+        "result": "KILLED",
+        "observed": "exactly the blocked-lane production-path regression failed; predicate correction restored and focused suite green at 45/45"
       },
       {
         "control": "canonical-main PR base validation",
@@ -148,17 +154,17 @@
     {
       "criterion": "Each control is proven by mutation",
       "status": "PASS",
-      "evidence": "Executor, workflow invocation, head-ref identity, default-branch trust, atomic acquisition, Linear relation, canonical-base, and reopen-generation mutations were killed and restored."
+      "evidence": "Executor, workflow invocation, head-ref identity, default-branch trust, atomic acquisition, Linear relation, retargeted-binding, blocked-lane invalidation, canonical-base, and reopen-generation mutations were killed and restored."
     },
     {
       "criterion": "Privileged PR automation executes only protected default-branch code and validates PR base identity",
       "status": "PASS",
-      "evidence": "Workflow regression requires default-branch checkout, pull_request_target, ignored install scripts, explicit --base validation, edited-event revalidation, and bounded branch-update retries; event tests reject unbound mismatched bases and invalidate an exact existing binding after retargeting."
+      "evidence": "Workflow regression requires default-branch checkout, pull_request_target, ignored install scripts, explicit --base validation, edited-event revalidation, and bounded branch-update retries; event tests reject unbound mismatched bases and invalidate an exact existing binding after retargeting even when the lane is already blocked."
     },
     {
       "criterion": "A PR retargeted away from manifest.base_branch cannot record or finalize a wrong-base merge",
       "status": "PASS",
-      "evidence": "Production-path regressions prove both defenses: the edited event persists blocked/pr_url-null state on the lane branch, and canonical-main lane-finalize independently queries GitHub and refuses a merged PR whose current base is release-candidate even when the manifest has no blocker. Both load-bearing mutations are killed."
+      "evidence": "Production-path regressions prove both defenses: the edited event persists blocked/pr_url-null state on the lane branch regardless of current lane status while preserving unrelated blockers, and canonical-main lane-finalize independently queries GitHub and refuses a merged PR whose current base is release-candidate even when the manifest has no blocker. All load-bearing mutations are killed."
     },
     {
       "criterion": "Finalize retries are serialized and preserve concurrent Linear labels",
