@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -10,13 +11,14 @@ import {
   readLaneFinalizeProgress,
   resolveLaneFinalizeInput,
   runLaneFinalizePlan,
+  validateLaneFinalizePullRequest,
   withLaneFinalizeMergeLock,
   writeLaneFinalizeProgress,
   type LaneFinalizeRunner,
   type LinearTierQuery,
 } from './lane-finalize.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
-import type { LaneManifest } from './shared.js';
+import { issueToManifestPath, ROOT, type LaneManifest } from './shared.js';
 
 function manifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
   return {
@@ -666,6 +668,177 @@ test('finalize progress is atomic, reloadable, and bound to lane identity', () =
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a reopened lane starts a fresh finalize generation instead of skipping completed closeout steps', () => {
+  const root = fs.mkdtempSync(
+    path.join(os.tmpdir(), 'lane-finalize-reopened-progress-'),
+  );
+  try {
+    const originalPlan = buildLaneFinalizePlan({
+      manifest: manifest({
+        status: 'done',
+        closed_at: '2026-05-19T13:00:00.000Z',
+        commit_sha: 'a'.repeat(40),
+      }),
+      pr: '456',
+    });
+    const completed = readLaneFinalizeProgress(originalPlan, root);
+    completed.status = 'complete';
+    completed.completed_step_ids = [
+      'record_merge',
+      'apply_tier_label',
+      'apply_linear_tier_label',
+      'generate_proof',
+      'generate_t2_proof_bundle',
+      'reconcile_current',
+      'close_lane',
+    ];
+    writeLaneFinalizeProgress(completed, root);
+
+    const reopenedPlan = buildLaneFinalizePlan({
+      manifest: manifest({
+        status: 'reopened',
+        closed_at: null,
+        commit_sha: 'a'.repeat(40),
+        reopen_history: [
+          {
+            timestamp: '2026-05-20T09:00:00.000Z',
+            reasons: ['post-close truth drift'],
+            detected_by: 'ops:reconcile',
+          },
+        ],
+      }),
+      pr: '456',
+    });
+    const reset = readLaneFinalizeProgress(reopenedPlan, root);
+    assert.deepEqual(reset.completed_step_ids, []);
+    assert.equal(reset.status, 'in_progress');
+    assert.equal(reset.reopen_generation, '1:2026-05-20T09:00:00.000Z');
+
+    const executed: string[] = [];
+    const result = runLaneFinalizePlan(reopenedPlan, {
+      completedStepIds: reset.completed_step_ids,
+      runner: ((command, args) => {
+        executed.push(`${command} ${args.join(' ')}`);
+        return { status: 0, stdout: '', stderr: '' };
+      }) as LaneFinalizeRunner,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(
+      executed.some((command) => command.includes('ops:lane-close')),
+      true,
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('lane finalize validates current GitHub base and merged state', () => {
+  const plan = buildLaneFinalizePlan({ manifest: manifest(), pr: '456' });
+  assert.throws(
+    () =>
+      validateLaneFinalizePullRequest(
+        plan,
+        (() => ({
+          status: 0,
+          stdout: JSON.stringify({
+            baseRefName: 'release-candidate',
+            state: 'MERGED',
+          }),
+          stderr: '',
+        })) as LaneFinalizeRunner,
+      ),
+    /targets base release-candidate; expected main.*Refusing finalization/,
+  );
+  assert.throws(
+    () =>
+      validateLaneFinalizePullRequest(
+        plan,
+        (() => ({
+          status: 0,
+          stdout: JSON.stringify({ baseRefName: 'main', state: 'OPEN' }),
+          stderr: '',
+        })) as LaneFinalizeRunner,
+      ),
+    /is OPEN; finalization requires MERGED state/,
+  );
+});
+
+test('CLI refuses wrong-base merged PR truth even when canonical manifest has no invalidation blocker', () => {
+  const issueId = 'UTV2-99119';
+  const manifestPath = issueToManifestPath(issueId);
+  const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'lane-finalize-gh-'));
+  const progressFile = path.join(
+    ROOT,
+    '.out',
+    'ops',
+    'lane-finalize',
+    `${issueId}.json`,
+  );
+  try {
+    fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+    fs.writeFileSync(
+      manifestPath,
+      `${JSON.stringify(
+        manifest({
+          issue_id: issueId,
+          branch: 'codex/utv2-99119-closeout',
+          pr_url: null,
+        }),
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    const fakeGh = path.join(fakeBin, 'gh');
+    fs.writeFileSync(
+      fakeGh,
+      '#!/bin/sh\nprintf \'%s\\n\' \'{"baseRefName":"release-candidate","state":"MERGED"}\'\n',
+      'utf8',
+    );
+    fs.chmodSync(fakeGh, 0o755);
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+        'scripts/ops/lane-finalize.ts',
+        '--issue',
+        issueId,
+        '--pr',
+        '456',
+        '--dry-run',
+        '--json',
+      ],
+      {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: 'pipe',
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ''}`,
+        },
+      },
+    );
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean;
+      code: string;
+      message: string;
+    };
+    assert.equal(payload.ok, false);
+    assert.equal(payload.code, 'lane_finalize_failed');
+    assert.match(
+      payload.message,
+      /targets base release-candidate; expected main.*Refusing finalization/,
+    );
+    assert.equal(fs.existsSync(progressFile), false);
+  } finally {
+    fs.rmSync(manifestPath, { force: true });
+    fs.rmSync(progressFile, { force: true });
+    fs.rmSync(fakeBin, { recursive: true, force: true });
   }
 });
 

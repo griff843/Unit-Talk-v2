@@ -44,7 +44,9 @@ export interface LaneFinalizeStep {
 export interface LaneFinalizePlan {
   issue_id: string;
   branch: string;
+  base_branch: string;
   pr: string;
+  reopen_generation: string;
   dry_run: boolean;
   already_closed: boolean;
   steps: LaneFinalizeStep[];
@@ -78,6 +80,7 @@ export interface LaneFinalizeProgress {
   issue_id: string;
   branch: string;
   pr_url: string;
+  reopen_generation: string;
   status: 'in_progress' | 'incomplete' | 'complete';
   completed_step_ids: LaneFinalizeStep['id'][];
   last_failure: string | null;
@@ -241,11 +244,18 @@ export function buildLaneFinalizePlan(input: {
   return {
     issue_id: issueId,
     branch: input.manifest.branch,
+    base_branch: input.manifest.base_branch,
     pr: input.pr,
+    reopen_generation: laneReopenGeneration(input.manifest),
     dry_run: input.dryRun ?? false,
     already_closed: alreadyClosed,
     steps,
   };
+}
+
+function laneReopenGeneration(manifest: LaneManifest): string {
+  const latest = manifest.reopen_history.at(-1);
+  return `${manifest.reopen_history.length}:${latest?.timestamp ?? 'initial'}`;
 }
 
 export function resolveLaneFinalizeInput(input: {
@@ -298,6 +308,54 @@ function normalizePrUrl(pr: string): string {
   return pr.startsWith('http')
     ? pr
     : `https://github.com/griff843/Unit-Talk-v2/pull/${pr}`;
+}
+
+export function validateLaneFinalizePullRequest(
+  plan: LaneFinalizePlan,
+  runner: LaneFinalizeRunner = spawnSync,
+): void {
+  const result = runner(
+    'gh',
+    ['pr', 'view', normalizePrUrl(plan.pr), '--json', 'baseRefName,state'],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    },
+  );
+  if (result.status !== 0) {
+    throw new Error(
+      `Unable to verify pull request ${plan.pr} before finalization: ${String(
+        result.stderr ?? result.stdout ?? 'gh pr view failed',
+      ).trim()}`,
+    );
+  }
+
+  let pullRequest: { baseRefName?: unknown; state?: unknown };
+  try {
+    pullRequest = JSON.parse(String(result.stdout ?? '')) as {
+      baseRefName?: unknown;
+      state?: unknown;
+    };
+  } catch {
+    throw new Error(
+      `Unable to parse pull request ${plan.pr} base/state before finalization.`,
+    );
+  }
+  if (pullRequest.baseRefName !== plan.base_branch) {
+    throw new Error(
+      `Pull request ${plan.pr} targets base ${String(
+        pullRequest.baseRefName ?? 'unknown',
+      )}; expected ${plan.base_branch}. Refusing finalization.`,
+    );
+  }
+  if (!plan.dry_run && pullRequest.state !== 'MERGED') {
+    throw new Error(
+      `Pull request ${plan.pr} is ${String(
+        pullRequest.state ?? 'unknown',
+      )}; finalization requires MERGED state.`,
+    );
+  }
 }
 
 function standardProofPath(
@@ -629,6 +687,22 @@ function progressPath(issueId: string, root = ROOT): string {
   return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.json`);
 }
 
+function newLaneFinalizeProgress(
+  plan: LaneFinalizePlan,
+): LaneFinalizeProgress {
+  return {
+    schema_version: 1,
+    issue_id: plan.issue_id,
+    branch: plan.branch,
+    pr_url: normalizePrUrl(plan.pr),
+    reopen_generation: plan.reopen_generation,
+    status: 'in_progress',
+    completed_step_ids: [],
+    last_failure: null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 function finalizeJournalLockPath(issueId: string, root = ROOT): string {
   return path.join(root, '.out', 'ops', 'lane-finalize', `${issueId}.lock`);
 }
@@ -794,16 +868,7 @@ export function readLaneFinalizeProgress(
 ): LaneFinalizeProgress {
   const file = progressPath(plan.issue_id, root);
   if (!fs.existsSync(file)) {
-    return {
-      schema_version: 1,
-      issue_id: plan.issue_id,
-      branch: plan.branch,
-      pr_url: normalizePrUrl(plan.pr),
-      status: 'in_progress',
-      completed_step_ids: [],
-      last_failure: null,
-      updated_at: new Date().toISOString(),
-    };
+    return newLaneFinalizeProgress(plan);
   }
   const parsed = JSON.parse(
     fs.readFileSync(file, 'utf8'),
@@ -818,6 +883,11 @@ export function readLaneFinalizeProgress(
       `Finalize progress identity mismatch at ${file}; refusing to reuse stale completed steps.`,
     );
   }
+  const recordedGeneration = parsed.reopen_generation ?? '0:initial';
+  if (recordedGeneration !== plan.reopen_generation) {
+    return newLaneFinalizeProgress(plan);
+  }
+  parsed.reopen_generation = recordedGeneration;
   return parsed;
 }
 
@@ -890,6 +960,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     mergeSha: getFlag(flags, 'merge-sha') ?? null,
   });
   const execute = (): LaneFinalizeResult => {
+    validateLaneFinalizePullRequest(plan);
     const progress = readLaneFinalizeProgress(plan);
     const result = runLaneFinalizePlan(plan, {
       completedStepIds: progress.completed_step_ids,
