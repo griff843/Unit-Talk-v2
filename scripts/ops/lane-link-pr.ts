@@ -315,8 +315,7 @@ export function main(argv = process.argv.slice(2)): number {
     if (githubEvent && manifest.base_branch !== baseBranch) {
       const invalidatesExistingBinding =
         manifest.branch === branch &&
-        manifest.pr_url === prUrl &&
-        manifest.status === 'in_review';
+        manifest.pr_url === prUrl;
       if (invalidatesExistingBinding) {
         manifest.pr_url = null;
         manifest.status = 'blocked';
