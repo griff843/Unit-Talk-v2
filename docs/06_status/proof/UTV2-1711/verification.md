@@ -1,6 +1,6 @@
 # PROOF: UTV2-1711
 
-MERGE_SHA: 3e70c304ffbbfe2ca20310f72380a94483242e0c
+MERGE_SHA: 54c171ae1859e2807b7af178afba3f295fe41e05
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
@@ -178,6 +178,36 @@ primary and sidecar deleted. Both now take one exclusive mutation lock (M8).
 The first two are the same shape as this system's recurring defect class: the
 control was correct and its boundary was not — corroboration trusted a diff without
 checking lineage, and epoch identity was enforced on read but not on write.
+
+### Second correction: closed-attempt mutations
+
+A second independent review round found four further issues. The PM accepted three
+as outside the launch threat model (`git replace --graft` ancestry forgery, the
+stale-lock read/delete race, and interrupted lock-owner publication) and authorised
+one narrow correction.
+
+**A delayed `phase-complete` could mutate a CLOSED originating attempt.** The
+epoch/attempt identity check passed because the checkpoint still carried the same
+epoch and attempt with a higher acceptable revision, so phase validity from a
+finished attempt leaked into live state. Unlike the deferred three, this is
+reachable by ordinary backgrounded execution rather than by deliberate forgery.
+
+The guard now additionally requires the originating attempt to still be open —
+`status === 'in_progress'` and a matching attempt with `ended_at === null`.
+Regression: `a delayed phase completion cannot mutate a closed originating attempt
+or leak into its resume`. Mutation M9 drops the open-attempt condition and kills
+only that regression.
+
+### Deferred findings, accepted for this milestone
+
+Recorded, not fixed, per PM decision; no issues opened and no adjacent hardening:
+
+1. `git replace --graft` can make a non-descendant baseline appear ancestral.
+2. Stale-lock takeover is read-then-delete rather than compare-and-delete.
+3. A crash between lock creation and owner publication leaves an unreclaimable lock.
+
+All three require deliberate history forgery or narrow multi-process timing against
+a checkout the executor already controls.
 
 ## Independent review
 
